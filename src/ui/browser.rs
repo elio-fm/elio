@@ -320,10 +320,7 @@ fn render_tile(
         .modified
         .map(format_time_ago)
         .unwrap_or_else(|| "unknown".to_string());
-    let mut lines = vec![Line::from(Span::styled(
-        entry.detail_label(),
-        Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
-    ))];
+    let mut lines = Vec::new();
     if spec.show_kind_hint {
         lines.push(Line::from(Span::styled(
             if entry.is_dir() {

@@ -96,22 +96,6 @@ pub(crate) enum FileClass {
 }
 
 impl FileClass {
-    pub fn detail_label(self) -> &'static str {
-        match self {
-            Self::Directory => "Folder",
-            Self::Code => "Code file",
-            Self::Config => "Config file",
-            Self::Document => "Document",
-            Self::Image => "Image file",
-            Self::Audio => "Audio file",
-            Self::Video => "Video file",
-            Self::Archive => "Archive file",
-            Self::Font => "Font file",
-            Self::Data => "Data file",
-            Self::File => "File",
-        }
-    }
-
     pub fn badge(self) -> &'static str {
         match self {
             Self::Directory => "󰉋 DIR",
@@ -151,10 +135,6 @@ impl Entry {
             EntryKind::Directory => "Folder",
             EntryKind::File => "File",
         }
-    }
-
-    pub fn detail_label(&self) -> &'static str {
-        crate::appearance::classify_path(&self.path, self.kind).detail_label()
     }
 
     pub fn badge(&self) -> &'static str {
