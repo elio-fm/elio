@@ -56,9 +56,9 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(4),
+            Constraint::Length(3),
             Constraint::Min(10),
-            Constraint::Length(2),
+            Constraint::Length(1),
         ])
         .split(area);
 
@@ -82,23 +82,15 @@ fn render_toolbar(
 ) {
     let block = Block::default()
         .style(Style::default().bg(palette.chrome).fg(palette.text))
-        .borders(Borders::BOTTOM)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(palette.border));
     frame.render_widget(block, area);
 
     let inner = area.inner(Margin {
         horizontal: 1,
-        vertical: 0,
+        vertical: 1,
     });
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
-        .split(inner);
-
     let control_row = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -106,7 +98,7 @@ fn render_toolbar(
             Constraint::Min(2),
             Constraint::Length(39),
         ])
-        .split(rows[1]);
+        .split(inner);
     let nav_buttons = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
