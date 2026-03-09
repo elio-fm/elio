@@ -101,13 +101,13 @@ Example:
 
 ```toml
 [palette]
-bg = "#0a0e14"
-chrome = "#10151e"
-panel = "#121923"
-text = "#eef3f8"
-muted = "#9eacbd"
-accent = "#7cc4ff"
-selected_bg = "#294764"
+bg = "#02050c"
+chrome = "#070d16"
+panel = "#09101b"
+text = "#edf4ff"
+muted = "#8ea2bf"
+accent = "#7ec4ff"
+selected_bg = "#204064"
 
 [classes.config]
 icon = "󰒓"
