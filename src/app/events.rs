@@ -107,16 +107,17 @@ impl App {
                 self.clear_wheel_scroll();
                 self.help_open = true;
             }
+            KeyCode::Tab => self.step_pinned_place(1)?,
+            KeyCode::BackTab => self.step_pinned_place(-1)?,
             KeyCode::Up | KeyCode::Char('k') => self.move_vertical(-1),
             KeyCode::Down | KeyCode::Char('j') => self.move_vertical(1),
-            KeyCode::Left => {
+            KeyCode::Left | KeyCode::Char('h') => {
                 if self.view_mode == ViewMode::Grid {
                     self.move_by(-1);
                 } else {
                     self.go_parent()?;
                 }
             }
-            KeyCode::Char('h') => self.go_home()?,
             KeyCode::Right | KeyCode::Char('l') => {
                 if self.view_mode == ViewMode::Grid {
                     self.move_by(1);

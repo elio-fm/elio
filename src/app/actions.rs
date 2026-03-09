@@ -1,6 +1,6 @@
 use super::*;
 use anyhow::{Result, bail};
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 
 impl App {
     pub fn reload(&mut self) -> Result<()> {
@@ -237,11 +237,29 @@ impl App {
         self.set_dir(parent.to_path_buf())
     }
 
-    pub(super) fn go_home(&mut self) -> Result<()> {
-        let home = env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("/"));
-        self.set_dir(home)
+    pub(super) fn step_pinned_place(&mut self, delta: isize) -> Result<()> {
+        if self.sidebar.is_empty() {
+            return Ok(());
+        }
+
+        let current = self.sidebar.iter().position(|item| item.path == self.cwd);
+        let next = if delta >= 0 {
+            current
+                .map(|index| (index + 1) % self.sidebar.len())
+                .unwrap_or(0)
+        } else {
+            current
+                .map(|index| {
+                    if index == 0 {
+                        self.sidebar.len() - 1
+                    } else {
+                        index - 1
+                    }
+                })
+                .unwrap_or(self.sidebar.len() - 1)
+        };
+
+        self.set_dir(self.sidebar[next].path.clone())
     }
 
     pub(super) fn go_back(&mut self) -> Result<()> {

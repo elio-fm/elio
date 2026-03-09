@@ -130,6 +130,7 @@ There is also a fuller example in [examples/theme.toml](/home/regueiro/elio/exam
 - `Enter`: open the selected folder or file
 - `Backspace`: go to the parent directory
 - `Arrows` or `h/j/k/l`: navigate the main browser
+- `Tab` / `Shift+Tab`: jump through pinned places
 - `Alt+Left` / `Alt+Right`: go back or forward in history
 - `v`: toggle grid/list view
 - `.`: show or hide dotfiles
