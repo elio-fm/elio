@@ -1,0 +1,57 @@
+# Copy to ~/.config/elio/theme.toml to override the built-in theme.
+#
+# Supported sections:
+# [palette]                 -> UI chrome colors
+# [classes.<name>]          -> default icon/color per file class
+# [extensions.<ext>]        -> class/icon/color override for a file extension
+# [files."<exact-name>"]    -> class/icon/color override for an exact file name
+# [directories."<exact-name>"] -> class/icon/color override for an exact directory name
+#
+# Colors use #RRGGBB.
+
+[palette]
+accent = "#7cc4ff"
+selected_bg = "#294764"
+
+[classes.directory]
+icon = "󰉋"
+color = "#4ea1ff"
+
+[classes.config]
+icon = "󰒓"
+color = "#90c6ff"
+
+[classes.document]
+icon = "󰈙"
+color = "#88c27a"
+
+[extensions.lock]
+class = "data"
+icon = "󰌾"
+color = "#d9b36c"
+
+[extensions.toml]
+class = "config"
+
+[files."Cargo.toml"]
+class = "config"
+icon = "󰣖"
+
+[files."Cargo.lock"]
+class = "data"
+icon = "󰌾"
+color = "#d9b36c"
+
+[files."package.json"]
+class = "config"
+icon = ""
+color = "#e2b450"
+
+[files."Dockerfile"]
+class = "config"
+icon = "󰡨"
+color = "#5ea2e3"
+
+[directories.".git"]
+icon = "󰊢"
+color = "#e89958"

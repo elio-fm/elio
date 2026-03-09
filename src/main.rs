@@ -1,4 +1,5 @@
 mod app;
+mod appearance;
 mod search;
 mod ui;
 
@@ -17,6 +18,7 @@ const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const ACTIVE_SCROLL_POLL_INTERVAL: Duration = Duration::from_millis(16);
 
 fn main() -> Result<()> {
+    appearance::initialize();
     let mut terminal = init_terminal()?;
     let result = run(&mut terminal);
     restore_terminal(&mut terminal)?;

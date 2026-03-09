@@ -15,7 +15,8 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
-pub(crate) use self::support::{classify_path, folder_color, format_size, format_time_ago, rect_contains};
+pub(crate) use crate::appearance::folder_color;
+pub(crate) use self::support::{format_size, format_time_ago, rect_contains};
 
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(450);
 const WHEEL_SCROLL_INTERVAL_HORIZONTAL: Duration = Duration::from_millis(36);
@@ -79,7 +80,7 @@ pub enum EntryKind {
     File,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub(crate) enum FileClass {
     Directory,
     Code,
@@ -153,11 +154,11 @@ impl Entry {
     }
 
     pub fn detail_label(&self) -> &'static str {
-        support::classify_path(&self.path, self.kind).detail_label()
+        crate::appearance::classify_path(&self.path, self.kind).detail_label()
     }
 
     pub fn badge(&self) -> &'static str {
-        support::classify_path(&self.path, self.kind).badge()
+        crate::appearance::classify_path(&self.path, self.kind).badge()
     }
 }
 
