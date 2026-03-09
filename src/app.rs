@@ -23,8 +23,10 @@ use std::{
 };
 
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(450);
-const GRID_SCROLL_COOLDOWN_HORIZONTAL: Duration = Duration::from_millis(90);
-const GRID_SCROLL_COOLDOWN_VERTICAL: Duration = Duration::from_millis(110);
+const WHEEL_SCROLL_INTERVAL_HORIZONTAL: Duration = Duration::from_millis(36);
+const WHEEL_SCROLL_INTERVAL_VERTICAL: Duration = Duration::from_millis(42);
+const WHEEL_SCROLL_INTERVAL_SEARCH: Duration = Duration::from_millis(38);
+const WHEEL_SCROLL_QUEUE_LIMIT: isize = 8;
 const PREVIEW_LIMIT_BYTES: usize = 8 * 1024;
 const PREVIEW_MAX_LINES: usize = 24;
 const SEARCH_MATCH_LIMIT: usize = 250;
@@ -48,28 +50,6 @@ impl ViewMode {
         match self {
             Self::Grid => "Grid",
             Self::List => "List",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ThemeMode {
-    Dark,
-    Light,
-}
-
-impl ThemeMode {
-    pub fn toggle(self) -> Self {
-        match self {
-            Self::Dark => Self::Light,
-            Self::Light => Self::Dark,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Dark => "Dark",
-            Self::Light => "Light",
         }
     }
 }
@@ -178,7 +158,6 @@ pub struct FrameState {
     pub parent_button: Option<Rect>,
     pub refresh_button: Option<Rect>,
     pub hidden_button: Option<Rect>,
-    pub theme_button: Option<Rect>,
     pub view_button: Option<Rect>,
     pub metrics: ViewMetrics,
     pub search_rows_visible: usize,
@@ -224,8 +203,16 @@ struct ClickState {
 }
 
 #[derive(Clone, Debug)]
+struct ScrollLane {
+    pending: isize,
+    last_step_at: Option<Instant>,
+}
+
+#[derive(Clone, Debug)]
 struct ScrollState {
-    at: Instant,
+    horizontal: ScrollLane,
+    vertical: ScrollLane,
+    search: ScrollLane,
 }
 
 #[derive(Clone, Debug)]
@@ -309,7 +296,6 @@ pub struct App {
     pub scroll_row: usize,
     pub view_mode: ViewMode,
     pub zoom_level: u8,
-    pub theme_mode: ThemeMode,
     pub sort_mode: SortMode,
     pub show_hidden: bool,
     pub status: String,
@@ -326,7 +312,7 @@ pub struct App {
     search_request_tx: mpsc::Sender<SearchRequest>,
     search_rx: mpsc::Receiver<SearchBuild>,
     last_click: Option<ClickState>,
-    last_grid_scroll: Option<ScrollState>,
+    wheel_scroll: ScrollState,
 }
 
 impl App {
@@ -347,7 +333,6 @@ impl App {
             scroll_row: 0,
             view_mode: ViewMode::Grid,
             zoom_level: 1,
-            theme_mode: ThemeMode::Dark,
             sort_mode: SortMode::Name,
             show_hidden: false,
             status: String::new(),
@@ -364,7 +349,20 @@ impl App {
             search_request_tx,
             search_rx,
             last_click: None,
-            last_grid_scroll: None,
+            wheel_scroll: ScrollState {
+                horizontal: ScrollLane {
+                    pending: 0,
+                    last_step_at: None,
+                },
+                vertical: ScrollLane {
+                    pending: 0,
+                    last_step_at: None,
+                },
+                search: ScrollLane {
+                    pending: 0,
+                    last_step_at: None,
+                },
+            },
         };
         app.reload()?;
         Ok(app)
@@ -397,6 +395,7 @@ impl App {
         self.sync_scroll();
         self.refresh_preview();
         self.prewarm_search_index();
+        self.clear_wheel_scroll();
         Ok(())
     }
 
@@ -456,6 +455,32 @@ impl App {
         }
 
         dirty
+    }
+
+    pub fn process_pending_scroll(&mut self) -> bool {
+        let mut dirty = false;
+
+        if self.search.is_some() {
+            self.wheel_scroll.vertical.pending = 0;
+            self.wheel_scroll.horizontal.pending = 0;
+            dirty |= self.flush_search_scroll();
+        } else {
+            self.wheel_scroll.search.pending = 0;
+            dirty |= self.flush_entry_vertical_scroll();
+            if self.view_mode == ViewMode::Grid {
+                dirty |= self.flush_entry_horizontal_scroll();
+            } else {
+                self.wheel_scroll.horizontal.pending = 0;
+            }
+        }
+
+        dirty
+    }
+
+    pub fn has_pending_scroll(&self) -> bool {
+        self.wheel_scroll.vertical.pending != 0
+            || self.wheel_scroll.horizontal.pending != 0
+            || self.wheel_scroll.search.pending != 0
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
@@ -520,7 +545,10 @@ impl App {
 
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
-            KeyCode::Char('?') => self.help_open = true,
+            KeyCode::Char('?') => {
+                self.clear_wheel_scroll();
+                self.help_open = true;
+            }
             KeyCode::Up | KeyCode::Char('k') => self.move_vertical(-1),
             KeyCode::Down | KeyCode::Char('j') => self.move_vertical(1),
             KeyCode::Left => {
@@ -547,13 +575,10 @@ impl App {
             KeyCode::Enter => self.open_selected()?,
             KeyCode::Backspace => self.go_parent()?,
             KeyCode::Char('v') => {
+                self.clear_wheel_scroll();
                 self.view_mode = self.view_mode.toggle();
                 self.sync_scroll();
                 self.status = format!("Switched to {} view", self.view_mode.label());
-            }
-            KeyCode::Char('t') => {
-                self.theme_mode = self.theme_mode.toggle();
-                self.status = format!("Switched to {} mode", self.theme_mode.label());
             }
             KeyCode::Char('s') => {
                 self.sort_mode = self.sort_mode.cycle();
@@ -591,6 +616,7 @@ impl App {
 
         if self.help_open {
             if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+                self.clear_wheel_scroll();
                 self.help_open = false;
             }
             return Ok(());
@@ -632,16 +658,10 @@ impl App {
                     };
                     return Ok(());
                 }
-                if let Some(rect) = self.frame_state.theme_button
-                    && rect_contains(rect, mouse.column, mouse.row)
-                {
-                    self.theme_mode = self.theme_mode.toggle();
-                    self.status = format!("Switched to {} mode", self.theme_mode.label());
-                    return Ok(());
-                }
                 if let Some(rect) = self.frame_state.view_button
                     && rect_contains(rect, mouse.column, mouse.row)
                 {
+                    self.clear_wheel_scroll();
                     self.view_mode = self.view_mode.toggle();
                     self.sync_scroll();
                     self.status = format!("Switched to {} view", self.view_mode.label());
@@ -679,38 +699,30 @@ impl App {
             MouseEventKind::ScrollDown => {
                 if self.view_mode == ViewMode::Grid {
                     if mouse.modifiers.contains(KeyModifiers::SHIFT) {
-                        if self.consume_grid_scroll(GRID_SCROLL_COOLDOWN_HORIZONTAL) {
-                            self.move_by(1);
-                        }
-                    } else if self.consume_grid_scroll(GRID_SCROLL_COOLDOWN_VERTICAL) {
-                        self.move_vertical(-1);
+                        Self::queue_scroll(&mut self.wheel_scroll.horizontal, 1);
+                    } else {
+                        Self::queue_scroll(&mut self.wheel_scroll.vertical, 1);
                     }
                 } else {
-                    self.move_vertical(1);
+                    Self::queue_scroll(&mut self.wheel_scroll.vertical, 1);
                 }
             }
             MouseEventKind::ScrollUp => {
                 if self.view_mode == ViewMode::Grid {
                     if mouse.modifiers.contains(KeyModifiers::SHIFT) {
-                        if self.consume_grid_scroll(GRID_SCROLL_COOLDOWN_HORIZONTAL) {
-                            self.move_by(-1);
-                        }
-                    } else if self.consume_grid_scroll(GRID_SCROLL_COOLDOWN_VERTICAL) {
-                        self.move_vertical(1);
+                        Self::queue_scroll(&mut self.wheel_scroll.horizontal, -1);
+                    } else {
+                        Self::queue_scroll(&mut self.wheel_scroll.vertical, -1);
                     }
                 } else {
-                    self.move_vertical(-1);
+                    Self::queue_scroll(&mut self.wheel_scroll.vertical, -1);
                 }
             }
             MouseEventKind::ScrollLeft if self.view_mode == ViewMode::Grid => {
-                if self.consume_grid_scroll(GRID_SCROLL_COOLDOWN_HORIZONTAL) {
-                    self.move_by(1);
-                }
+                Self::queue_scroll(&mut self.wheel_scroll.horizontal, -1);
             }
             MouseEventKind::ScrollRight if self.view_mode == ViewMode::Grid => {
-                if self.consume_grid_scroll(GRID_SCROLL_COOLDOWN_HORIZONTAL) {
-                    self.move_by(-1);
-                }
+                Self::queue_scroll(&mut self.wheel_scroll.horizontal, 1);
             }
             _ => {}
         }
@@ -903,6 +915,7 @@ impl App {
     }
 
     fn open_fuzzy_finder(&mut self, scope: SearchScope) -> Result<()> {
+        self.clear_wheel_scroll();
         self.help_open = false;
         let cached = self
             .search_cache
@@ -938,6 +951,7 @@ impl App {
     fn handle_search_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.search = None;
+            self.clear_wheel_scroll();
             self.status.clear();
             return Ok(());
         }
@@ -945,6 +959,7 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 self.search = None;
+                self.clear_wheel_scroll();
                 self.status.clear();
             }
             KeyCode::Enter => self.confirm_search_selection()?,
@@ -1003,11 +1018,12 @@ impl App {
                     .is_none_or(|rect| !rect_contains(rect, mouse.column, mouse.row))
                 {
                     self.search = None;
+                    self.clear_wheel_scroll();
                     self.status.clear();
                 }
             }
-            MouseEventKind::ScrollDown => self.move_search_selection(1),
-            MouseEventKind::ScrollUp => self.move_search_selection(-1),
+            MouseEventKind::ScrollDown => Self::queue_scroll(&mut self.wheel_scroll.search, 1),
+            MouseEventKind::ScrollUp => Self::queue_scroll(&mut self.wheel_scroll.search, -1),
             _ => {}
         }
         Ok(())
@@ -1195,16 +1211,81 @@ impl App {
         self.sync_scroll();
     }
 
-    fn consume_grid_scroll(&mut self, cooldown: Duration) -> bool {
+    fn queue_scroll(lane: &mut ScrollLane, delta: isize) {
+        lane.pending = (lane.pending + delta).clamp(-WHEEL_SCROLL_QUEUE_LIMIT, WHEEL_SCROLL_QUEUE_LIMIT);
+    }
+
+    fn consume_scroll_step(lane: &mut ScrollLane, cooldown: Duration) -> Option<isize> {
         let now = Instant::now();
-        let allowed = self
-            .last_grid_scroll
-            .as_ref()
-            .is_none_or(|scroll| now.duration_since(scroll.at) >= cooldown);
-        if allowed {
-            self.last_grid_scroll = Some(ScrollState { at: now });
+        if lane.pending == 0 {
+            return None;
         }
-        allowed
+        if lane
+            .last_step_at
+            .is_some_and(|at| now.duration_since(at) < cooldown)
+        {
+            return None;
+        }
+
+        let step = lane.pending.signum();
+        lane.pending -= step;
+        lane.last_step_at = Some(now);
+        Some(step)
+    }
+
+    fn flush_entry_vertical_scroll(&mut self) -> bool {
+        let Some(step) = Self::consume_scroll_step(
+            &mut self.wheel_scroll.vertical,
+            WHEEL_SCROLL_INTERVAL_VERTICAL,
+        ) else {
+            return false;
+        };
+
+        let previous = self.selected;
+        self.move_vertical(step);
+        previous != self.selected
+    }
+
+    fn flush_entry_horizontal_scroll(&mut self) -> bool {
+        let Some(step) = Self::consume_scroll_step(
+            &mut self.wheel_scroll.horizontal,
+            WHEEL_SCROLL_INTERVAL_HORIZONTAL,
+        ) else {
+            return false;
+        };
+
+        let previous = self.selected;
+        self.move_by(step);
+        previous != self.selected
+    }
+
+    fn flush_search_scroll(&mut self) -> bool {
+        let Some(step) = Self::consume_scroll_step(
+            &mut self.wheel_scroll.search,
+            WHEEL_SCROLL_INTERVAL_SEARCH,
+        ) else {
+            return false;
+        };
+
+        let previous = self
+            .search
+            .as_ref()
+            .map(|search| search.selected)
+            .unwrap_or(0);
+        self.move_search_selection(step);
+        self.search
+            .as_ref()
+            .map(|search| search.selected != previous)
+            .unwrap_or(false)
+    }
+
+    fn clear_wheel_scroll(&mut self) {
+        self.wheel_scroll.vertical.pending = 0;
+        self.wheel_scroll.vertical.last_step_at = None;
+        self.wheel_scroll.horizontal.pending = 0;
+        self.wheel_scroll.horizontal.last_step_at = None;
+        self.wheel_scroll.search.pending = 0;
+        self.wheel_scroll.search.last_step_at = None;
     }
 
     fn select_index(&mut self, index: usize) {

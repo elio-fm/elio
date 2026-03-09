@@ -1,6 +1,5 @@
 use crate::app::{
-    App, Entry, EntryHit, FrameState, PathHit, SearchHit, ThemeMode, ViewMetrics, folder_color,
-    format_size,
+    App, Entry, EntryHit, FrameState, PathHit, SearchHit, ViewMetrics, folder_color, format_size,
 };
 use ratatui::{
     Frame,
@@ -35,7 +34,7 @@ struct Palette {
 }
 
 pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
-    let palette = palette(app.theme_mode);
+    let palette = palette();
 
     state.sidebar_hits.clear();
     state.entry_hits.clear();
@@ -46,7 +45,6 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     state.parent_button = None;
     state.refresh_button = None;
     state.hidden_button = None;
-    state.theme_button = None;
     state.view_button = None;
 
     let area = frame.area();
@@ -127,7 +125,6 @@ fn render_toolbar(
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Length(13),
-            Constraint::Length(11),
             Constraint::Length(10),
             Constraint::Min(0),
         ])
@@ -138,8 +135,7 @@ fn render_toolbar(
     state.parent_button = Some(nav_buttons[2]);
     state.refresh_button = Some(nav_buttons[3]);
     state.hidden_button = Some(toggles[0]);
-    state.theme_button = Some(toggles[1]);
-    state.view_button = Some(toggles[2]);
+    state.view_button = Some(toggles[1]);
 
     render_button(
         frame,
@@ -161,7 +157,7 @@ fn render_toolbar(
     render_button(frame, nav_buttons[3], "Refresh", "󰑐", true, palette);
     frame.render_widget(
         Paragraph::new("").style(Style::default().bg(palette.chrome).fg(palette.text)),
-        toggles[3],
+        toggles[2],
     );
     render_button(
         frame,
@@ -175,15 +171,7 @@ fn render_toolbar(
         true,
         palette,
     );
-    render_button(
-        frame,
-        toggles[1],
-        app.theme_mode.label(),
-        "󰔎",
-        true,
-        palette,
-    );
-    render_button(frame, toggles[2], app.view_mode.label(), "󰕮", true, palette);
+    render_button(frame, toggles[1], app.view_mode.label(), "󰕮", true, palette);
 }
 
 fn render_body(
@@ -258,7 +246,7 @@ fn render_sidebar(
     );
 
     let mut y = inner.y.saturating_add(2);
-    let row_height = 2u16;
+    let row_height = 1u16;
     for item in &app.sidebar {
         if y.saturating_add(row_height) > inner.y.saturating_add(inner.height) {
             break;
@@ -295,20 +283,8 @@ fn render_sidebar(
                     .add_modifier(Modifier::BOLD),
             ),
         ]);
-        let bottom_line = Line::from(vec![
-            Span::raw("   "),
-            Span::styled(
-                if active {
-                    "Current location"
-                } else {
-                    "Pinned place"
-                },
-                Style::default().fg(palette.muted),
-            ),
-        ]);
         frame.render_widget(
-            Paragraph::new(vec![top_line, bottom_line])
-                .style(Style::default().bg(bg).fg(palette.text)),
+            Paragraph::new(vec![top_line]).style(Style::default().bg(bg).fg(palette.text)),
             row,
         );
         state.sidebar_hits.push(PathHit {
@@ -528,11 +504,7 @@ fn render_tile(
         width: inner.width,
         height: inner.height.saturating_sub(1),
     };
-    let detail = if entry.is_dir() {
-        "Folder".to_string()
-    } else {
-        format_size(entry.size)
-    };
+    let detail = (!entry.is_dir()).then(|| format_size(entry.size));
     let modified = entry
         .modified
         .map(crate::app::format_time_ago)
@@ -551,10 +523,12 @@ fn render_tile(
             Style::default().fg(icon_color),
         )));
     }
-    lines.push(Line::from(Span::styled(
-        detail,
-        Style::default().fg(palette.muted),
-    )));
+    if let Some(detail) = detail {
+        lines.push(Line::from(Span::styled(
+            detail,
+            Style::default().fg(palette.muted),
+        )));
+    }
     lines.push(Line::from(Span::styled(
         modified,
         Style::default().fg(palette.muted),
@@ -978,36 +952,125 @@ fn render_search_overlay(
 }
 
 fn render_help(frame: &mut Frame<'_>, area: Rect, palette: Palette) {
-    let popup = centered_rect(area, 72, 21);
+    let popup = centered_rect(area, 82, 19);
+    frame.render_widget(
+        Block::default().style(Style::default().bg(palette.bg).fg(palette.text)),
+        area,
+    );
     frame.render_widget(Clear, popup);
-    frame.render_widget(panel_block(" Controls ", palette.panel_alt, palette), popup);
+    frame.render_widget(panel_block(" Controls ", palette.chrome_alt, palette), popup);
     let inner = inner_with_padding(popup);
-    let help = vec![
-        Line::from("Arrows / jkl   move selection"),
-        Line::from("h              jump to home"),
-        Line::from("Enter          open folder or file"),
-        Line::from("Alt+Left       previous folder"),
-        Line::from("Alt+Right      next folder"),
-        Line::from("Backspace      parent directory"),
-        Line::from("f              search folders"),
-        Line::from("Ctrl+F         search files"),
-        Line::from("Mouse click    select item"),
-        Line::from("Double click   open folder or file"),
-        Line::from("Mouse wheel    scroll selection"),
-        Line::from("t              toggle dark/light theme"),
-        Line::from("v              toggle grid/list view"),
-        Line::from(".              show or hide dotfiles"),
-        Line::from("s              cycle sort mode"),
-        Line::from("r / Ctrl+R     refresh current folder"),
-        Line::from("o              open selected item externally"),
-        Line::from("? / Esc        close help or quit"),
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(8),
+            Constraint::Length(1),
+        ])
+        .split(inner);
+
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled(
+                    "󰘳",
+                    Style::default()
+                        .fg(palette.accent)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    "Keyboard and mouse controls",
+                    Style::default()
+                        .fg(palette.text)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Line::from(vec![
+                chip_span("navigate", palette.accent_soft, palette.accent_text, true),
+                Span::raw(" "),
+                chip_span("search", palette.accent_soft, palette.accent_text, true),
+                Span::raw(" "),
+                chip_span("mouse", palette.accent_soft, palette.accent_text, true),
+                Span::raw(" "),
+                chip_span("view", palette.accent_soft, palette.accent_text, true),
+            ]),
+        ])
+        .style(Style::default().bg(palette.chrome_alt).fg(palette.text)),
+        rows[0],
+    );
+
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(rows[1]);
+
+    let left = vec![
+        Line::from(vec![
+            Span::styled("Navigation", Style::default().fg(palette.accent).add_modifier(Modifier::BOLD)),
+        ]),
+        help_row("Arrows / jkl", "move selection", palette),
+        help_row("Enter", "open folder or file", palette),
+        help_row("Backspace", "parent directory", palette),
+        help_row("Alt+Left", "previous folder", palette),
+        help_row("Alt+Right", "next folder", palette),
+        help_row("h", "jump to home", palette),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("Search", Style::default().fg(palette.accent).add_modifier(Modifier::BOLD)),
+        ]),
+        help_row("f", "search folders", palette),
+        help_row("Ctrl+F", "search files", palette),
     ];
     frame.render_widget(
-        Paragraph::new(help)
-            .style(Style::default().bg(palette.panel_alt).fg(palette.text))
+        Paragraph::new(left)
+            .style(Style::default().bg(palette.chrome_alt).fg(palette.text))
             .wrap(Wrap { trim: false }),
-        inner,
+        cols[0],
     );
+
+    let right = vec![
+        Line::from(vec![
+            Span::styled("Mouse + View", Style::default().fg(palette.accent).add_modifier(Modifier::BOLD)),
+        ]),
+        help_row("Click", "select item", palette),
+        help_row("Double click", "open folder or file", palette),
+        help_row("Wheel", "scroll selection", palette),
+        help_row("v", "toggle grid/list view", palette),
+        help_row(".", "show or hide dotfiles", palette),
+        help_row("s", "cycle sort mode", palette),
+        help_row("r / Ctrl+R", "refresh current folder", palette),
+        help_row("o", "open selected item externally", palette),
+    ];
+    frame.render_widget(
+        Paragraph::new(right)
+            .style(Style::default().bg(palette.chrome_alt).fg(palette.text))
+            .wrap(Wrap { trim: false }),
+        cols[1],
+    );
+
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled("? / Esc", Style::default().fg(palette.accent).add_modifier(Modifier::BOLD)),
+            Span::raw(" "),
+            Span::styled("close help or quit", Style::default().fg(palette.muted)),
+        ]))
+        .alignment(Alignment::Right)
+        .style(Style::default().bg(palette.chrome_alt).fg(palette.muted)),
+        rows[2],
+    );
+}
+
+fn help_row(key: &str, action: &str, palette: Palette) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(
+            format!("{key:<12}"),
+            Style::default()
+                .fg(palette.accent_text)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(action.to_string(), Style::default().fg(palette.muted)),
+    ])
 }
 
 fn render_empty_state(frame: &mut Frame<'_>, area: Rect, label: &str, palette: Palette) {
@@ -1069,50 +1132,27 @@ fn panel_block<'a>(title: &'a str, bg: Color, palette: Palette) -> Block<'a> {
         .border_style(Style::default().fg(palette.border))
 }
 
-fn palette(theme: ThemeMode) -> Palette {
-    match theme {
-        ThemeMode::Dark => Palette {
-            bg: Color::Rgb(10, 14, 20),
-            chrome: Color::Rgb(16, 21, 30),
-            chrome_alt: Color::Rgb(24, 32, 43),
-            panel: Color::Rgb(18, 25, 35),
-            panel_alt: Color::Rgb(14, 20, 28),
-            surface: Color::Rgb(22, 30, 41),
-            elevated: Color::Rgb(27, 37, 50),
-            border: Color::Rgb(49, 67, 87),
-            text: Color::Rgb(238, 243, 248),
-            muted: Color::Rgb(158, 172, 189),
-            accent: Color::Rgb(102, 186, 255),
-            accent_soft: Color::Rgb(34, 57, 79),
-            accent_text: Color::Rgb(207, 234, 255),
-            selected_bg: Color::Rgb(36, 56, 78),
-            selected_border: Color::Rgb(112, 196, 255),
-            sidebar_active: Color::Rgb(31, 47, 65),
-            button_bg: Color::Rgb(29, 39, 52),
-            button_disabled_bg: Color::Rgb(20, 27, 37),
-            path_bg: Color::Rgb(28, 37, 49),
-        },
-        ThemeMode::Light => Palette {
-            bg: Color::Rgb(236, 240, 236),
-            chrome: Color::Rgb(221, 228, 223),
-            chrome_alt: Color::Rgb(229, 235, 230),
-            panel: Color::Rgb(231, 237, 232),
-            panel_alt: Color::Rgb(241, 245, 241),
-            surface: Color::Rgb(237, 242, 238),
-            elevated: Color::Rgb(224, 230, 226),
-            border: Color::Rgb(166, 177, 170),
-            text: Color::Rgb(31, 43, 39),
-            muted: Color::Rgb(88, 101, 96),
-            accent: Color::Rgb(43, 112, 148),
-            accent_soft: Color::Rgb(205, 221, 229),
-            accent_text: Color::Rgb(27, 79, 106),
-            selected_bg: Color::Rgb(198, 215, 224),
-            selected_border: Color::Rgb(43, 112, 148),
-            sidebar_active: Color::Rgb(209, 223, 230),
-            button_bg: Color::Rgb(233, 238, 234),
-            button_disabled_bg: Color::Rgb(223, 228, 224),
-            path_bg: Color::Rgb(243, 246, 243),
-        },
+fn palette() -> Palette {
+    Palette {
+        bg: Color::Rgb(10, 14, 20),
+        chrome: Color::Rgb(16, 21, 30),
+        chrome_alt: Color::Rgb(24, 32, 43),
+        panel: Color::Rgb(18, 25, 35),
+        panel_alt: Color::Rgb(14, 20, 28),
+        surface: Color::Rgb(22, 30, 41),
+        elevated: Color::Rgb(27, 37, 50),
+        border: Color::Rgb(49, 67, 87),
+        text: Color::Rgb(238, 243, 248),
+        muted: Color::Rgb(158, 172, 189),
+        accent: Color::Rgb(102, 186, 255),
+        accent_soft: Color::Rgb(34, 57, 79),
+        accent_text: Color::Rgb(207, 234, 255),
+        selected_bg: Color::Rgb(36, 56, 78),
+        selected_border: Color::Rgb(112, 196, 255),
+        sidebar_active: Color::Rgb(31, 47, 65),
+        button_bg: Color::Rgb(29, 39, 52),
+        button_disabled_bg: Color::Rgb(20, 27, 37),
+        path_bg: Color::Rgb(28, 37, 49),
     }
 }
 
@@ -1232,10 +1272,7 @@ fn stable_path_label(path: &Path, max_chars: usize) -> String {
 }
 
 fn path_is_active(current: &Path, candidate: &Path) -> bool {
-    if candidate == Path::new("/") {
-        return current == candidate;
-    }
-    current == candidate || current.starts_with(candidate)
+    current == candidate
 }
 
 fn truncate_path_tail(path: &str, max_chars: usize) -> String {

@@ -13,6 +13,7 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{io, time::Duration};
 
 const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const ACTIVE_SCROLL_POLL_INTERVAL: Duration = Duration::from_millis(16);
 
 fn main() -> Result<()> {
     let mut terminal = init_terminal()?;
@@ -51,6 +52,10 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             dirty = true;
         }
 
+        if app.process_pending_scroll() {
+            dirty = true;
+        }
+
         if dirty {
             let mut frame_state = app::FrameState::default();
             terminal.draw(|frame| ui::render(frame, &app, &mut frame_state))?;
@@ -61,7 +66,13 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             break;
         }
 
-        if event::poll(IDLE_POLL_INTERVAL)? {
+        let poll_interval = if app.has_pending_scroll() {
+            ACTIVE_SCROLL_POLL_INTERVAL
+        } else {
+            IDLE_POLL_INTERVAL
+        };
+
+        if event::poll(poll_interval)? {
             let event = event::read()?;
             if matches!(event, Event::Resize(_, _)) {
                 dirty = true;
