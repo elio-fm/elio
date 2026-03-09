@@ -6,7 +6,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
 };
 use std::{env, path::Path};
 
@@ -99,17 +99,14 @@ fn render_toolbar(
         ])
         .split(inner);
 
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![Span::styled(
-            "elio",
-            Style::default()
-                .fg(palette.accent)
-                .add_modifier(Modifier::BOLD),
-        )]))
-        .style(Style::default().bg(palette.chrome).fg(palette.text)),
-        rows[0],
-    );
-
+    let control_row = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(34),
+            Constraint::Min(2),
+            Constraint::Length(39),
+        ])
+        .split(rows[1]);
     let nav_buttons = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -117,25 +114,23 @@ fn render_toolbar(
             Constraint::Length(8),
             Constraint::Length(7),
             Constraint::Length(11),
-            Constraint::Min(4),
         ])
-        .split(rows[1]);
-
-    let toggles = Layout::default()
+        .split(control_row[0]);
+    let meta = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
+            Constraint::Length(16),
             Constraint::Length(13),
             Constraint::Length(10),
-            Constraint::Min(0),
         ])
-        .split(rows[2]);
+        .split(control_row[2]);
 
     state.back_button = Some(nav_buttons[0]);
     state.forward_button = Some(nav_buttons[1]);
     state.parent_button = Some(nav_buttons[2]);
     state.refresh_button = Some(nav_buttons[3]);
-    state.hidden_button = Some(toggles[0]);
-    state.view_button = Some(toggles[1]);
+    state.hidden_button = Some(meta[1]);
+    state.view_button = Some(meta[2]);
 
     render_button(
         frame,
@@ -156,12 +151,19 @@ fn render_toolbar(
     render_button(frame, nav_buttons[2], "Up", "󰁝", true, palette);
     render_button(frame, nav_buttons[3], "Refresh", "󰑐", true, palette);
     frame.render_widget(
-        Paragraph::new("").style(Style::default().bg(palette.chrome).fg(palette.text)),
-        toggles[2],
+        Paragraph::new(Line::from(vec![chip_span(
+            &format!("Sort: {}", app.sort_mode.label()),
+            palette.button_bg,
+            palette.text,
+            true,
+        )]))
+        .alignment(Alignment::Right)
+        .style(Style::default().bg(palette.chrome).fg(palette.text)),
+        meta[0],
     );
     render_button(
         frame,
-        toggles[0],
+        meta[1],
         if app.show_hidden {
             "Hidden On"
         } else {
@@ -171,7 +173,7 @@ fn render_toolbar(
         true,
         palette,
     );
-    render_button(frame, toggles[1], app.view_mode.label(), "󰕮", true, palette);
+    render_button(frame, meta[2], app.view_mode.label(), "󰕮", true, palette);
 }
 
 fn render_body(
@@ -309,12 +311,16 @@ fn render_entries(
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1),
-            Constraint::Length(2),
+            Constraint::Length(1),
             Constraint::Min(4),
         ])
         .split(inner);
 
-    let path_text = stable_path_label(&app.cwd, rows[0].width.saturating_sub(4) as usize);
+    let path_text = stable_path_label(&app.cwd, rows[0].width.saturating_sub(6) as usize);
+    frame.render_widget(
+        Block::default().style(Style::default().bg(palette.path_bg).fg(palette.text)),
+        rows[0],
+    );
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
@@ -324,40 +330,21 @@ fn render_entries(
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(" "),
-            Span::styled(path_text, Style::default().fg(palette.muted)),
+            Span::styled(
+                path_text,
+                Style::default()
+                    .fg(palette.accent_text)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]))
-        .style(Style::default().bg(palette.panel_alt).fg(palette.text)),
-        rows[0],
+        .style(Style::default().bg(palette.path_bg).fg(palette.text)),
+        rows[0].inner(Margin {
+            horizontal: 1,
+            vertical: 0,
+        }),
     );
-
     frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            chip_span(
-                &format!("{} items", app.entries.len()),
-                palette.chrome_alt,
-                palette.text,
-                true,
-            ),
-            Span::raw(" "),
-            chip_span("sorted", palette.accent_soft, palette.accent_text, false),
-            Span::raw(" "),
-            chip_span(
-                app.sort_mode.label(),
-                palette.chrome_alt,
-                palette.text,
-                true,
-            ),
-            Span::raw(" "),
-            chip_span("view", palette.accent_soft, palette.accent_text, false),
-            Span::raw(" "),
-            chip_span(
-                app.view_mode.label(),
-                palette.chrome_alt,
-                palette.text,
-                true,
-            ),
-        ]))
-        .style(Style::default().bg(palette.panel_alt).fg(palette.text)),
+        Block::default().style(Style::default().bg(palette.panel_alt).fg(palette.text)),
         rows[1],
     );
 
@@ -1128,6 +1115,7 @@ fn panel_block<'a>(title: &'a str, bg: Color, palette: Palette) -> Block<'a> {
                 .add_modifier(Modifier::BOLD),
         ))
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .style(Style::default().bg(bg).fg(palette.text))
         .border_style(Style::default().fg(palette.border))
 }
