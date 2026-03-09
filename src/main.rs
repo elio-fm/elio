@@ -5,6 +5,7 @@ mod ui;
 use crate::app::App;
 use anyhow::Result;
 use crossterm::{
+    cursor::SetCursorStyle,
     event::{self, Event},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -36,6 +37,7 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
+        SetCursorStyle::DefaultUserShape,
         LeaveAlternateScreen,
         event::DisableMouseCapture
     )?;
@@ -46,6 +48,7 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
 fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     let mut app = App::new()?;
     let mut dirty = true;
+    let mut search_cursor_active = false;
 
     loop {
         if app.process_background_jobs() {
@@ -60,6 +63,19 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             let mut frame_state = app::FrameState::default();
             terminal.draw(|frame| ui::render(frame, &app, &mut frame_state))?;
             dirty = app.set_frame_state(frame_state);
+        }
+
+        let wants_search_cursor = app.search_is_open();
+        if wants_search_cursor != search_cursor_active {
+            execute!(
+                terminal.backend_mut(),
+                if wants_search_cursor {
+                    SetCursorStyle::SteadyBar
+                } else {
+                    SetCursorStyle::DefaultUserShape
+                }
+            )?;
+            search_cursor_active = wants_search_cursor;
         }
 
         if app.should_quit {

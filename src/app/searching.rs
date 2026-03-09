@@ -134,6 +134,7 @@ impl App {
         self.search = Some(SearchOverlay {
             scope,
             query: String::new(),
+            query_cursor: 0,
             candidates,
             matches,
             cached_matches: HashMap::from([(String::new(), base_matches)]),
@@ -161,12 +162,14 @@ impl App {
                 self.status.clear();
             }
             KeyCode::Enter => self.confirm_search_selection()?,
+            KeyCode::Left => self.move_search_cursor(-1),
+            KeyCode::Right => self.move_search_cursor(1),
             KeyCode::Up => self.move_search_selection(-1),
             KeyCode::Down => self.move_search_selection(1),
             KeyCode::PageUp => self.page_search(-1),
             KeyCode::PageDown => self.page_search(1),
-            KeyCode::Home => self.select_search_index(0),
-            KeyCode::End => self.select_last_search_result(),
+            KeyCode::Home => self.move_search_cursor_to(0),
+            KeyCode::End => self.move_search_cursor_to_end(),
             KeyCode::Backspace => {
                 let previous_query = self
                     .search
@@ -174,7 +177,18 @@ impl App {
                     .map(|search| search.query.clone())
                     .unwrap_or_default();
                 if let Some(search) = &mut self.search {
-                    search.query.pop();
+                    remove_char_before_cursor(&mut search.query, &mut search.query_cursor);
+                }
+                self.refresh_search_matches(&previous_query);
+            }
+            KeyCode::Delete => {
+                let previous_query = self
+                    .search
+                    .as_ref()
+                    .map(|search| search.query.clone())
+                    .unwrap_or_default();
+                if let Some(search) = &mut self.search {
+                    remove_char_at_cursor(&mut search.query, search.query_cursor);
                 }
                 self.refresh_search_matches(&previous_query);
             }
@@ -189,7 +203,7 @@ impl App {
                     .map(|search| search.query.clone())
                     .unwrap_or_default();
                 if let Some(search) = &mut self.search {
-                    search.query.push(ch);
+                    insert_char_at_cursor(&mut search.query, &mut search.query_cursor, ch);
                 }
                 self.refresh_search_matches(&previous_query);
             }
@@ -231,6 +245,7 @@ impl App {
         let Some(search) = &mut self.search else {
             return;
         };
+        search.query_cursor = search.query_cursor.min(search.query.chars().count());
 
         let next_query = search.query.clone();
         if let Some(cached) = search.cached_matches.get(&next_query).cloned() {
@@ -279,6 +294,35 @@ impl App {
         self.sync_search_scroll();
     }
 
+    pub fn search_query_cursor(&self) -> usize {
+        self.search
+            .as_ref()
+            .map(|search| search.query_cursor.min(search.query.chars().count()))
+            .unwrap_or(0)
+    }
+
+    fn move_search_cursor(&mut self, delta: isize) {
+        let Some(search) = &mut self.search else {
+            return;
+        };
+        let max = search.query.chars().count() as isize;
+        search.query_cursor = (search.query_cursor as isize + delta).clamp(0, max) as usize;
+    }
+
+    fn move_search_cursor_to(&mut self, index: usize) {
+        let Some(search) = &mut self.search else {
+            return;
+        };
+        search.query_cursor = index.min(search.query.chars().count());
+    }
+
+    fn move_search_cursor_to_end(&mut self) {
+        let Some(search) = &mut self.search else {
+            return;
+        };
+        search.query_cursor = search.query.chars().count();
+    }
+
     fn page_search(&mut self, direction: isize) {
         let visible = self.frame_state.search_rows_visible.max(1) as isize;
         self.move_search_selection(direction * visible);
@@ -295,14 +339,6 @@ impl App {
         }
         search.selected = index.min(search.matches.len().saturating_sub(1));
         self.sync_search_scroll();
-    }
-
-    fn select_last_search_result(&mut self) {
-        let Some(search) = &self.search else {
-            return;
-        };
-        let last = search.matches.len().saturating_sub(1);
-        self.select_search_index(last);
     }
 
     fn confirm_search_selection(&mut self) -> Result<()> {
@@ -540,6 +576,7 @@ mod tests {
         app.search = Some(SearchOverlay {
             scope: SearchScope::Folders,
             query: "f".to_string(),
+            query_cursor: 1,
             candidates: Arc::new(candidates),
             matches: Vec::new(),
             cached_matches: HashMap::from([(String::new(), (0..301).collect())]),
@@ -571,4 +608,70 @@ mod tests {
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
+
+    #[test]
+    fn search_query_cursor_inserts_and_deletes_in_place() {
+        let root = temp_path("cursor-edit");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.search = Some(SearchOverlay {
+            scope: SearchScope::Folders,
+            query: "fatch".to_string(),
+            query_cursor: 2,
+            candidates: Arc::new(Vec::new()),
+            matches: Vec::new(),
+            cached_matches: HashMap::from([(String::new(), Vec::new())]),
+            selected: 0,
+            scroll: 0,
+            loading: false,
+            error: None,
+        });
+
+        app.handle_search_key(KeyEvent::from(KeyCode::Char('s')))
+            .expect("typing should work");
+        assert_eq!(app.search_query(), "fastch");
+        assert_eq!(app.search_query_cursor(), 3);
+
+        app.handle_search_key(KeyEvent::from(KeyCode::Left))
+            .expect("moving cursor should work");
+        app.handle_search_key(KeyEvent::from(KeyCode::Delete))
+            .expect("delete should work");
+        assert_eq!(app.search_query(), "fatch");
+        assert_eq!(app.search_query_cursor(), 2);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+}
+
+fn char_to_byte_index(text: &str, char_index: usize) -> usize {
+    text.char_indices()
+        .nth(char_index)
+        .map(|(index, _)| index)
+        .unwrap_or(text.len())
+}
+
+fn insert_char_at_cursor(text: &mut String, cursor: &mut usize, ch: char) {
+    let byte_index = char_to_byte_index(text, *cursor);
+    text.insert(byte_index, ch);
+    *cursor += 1;
+}
+
+fn remove_char_before_cursor(text: &mut String, cursor: &mut usize) {
+    if *cursor == 0 {
+        return;
+    }
+    let start = char_to_byte_index(text, cursor.saturating_sub(1));
+    let end = char_to_byte_index(text, *cursor);
+    text.replace_range(start..end, "");
+    *cursor -= 1;
+}
+
+fn remove_char_at_cursor(text: &mut String, cursor: usize) {
+    let start = char_to_byte_index(text, cursor);
+    if start >= text.len() {
+        return;
+    }
+    let end = char_to_byte_index(text, cursor + 1);
+    text.replace_range(start..end, "");
 }

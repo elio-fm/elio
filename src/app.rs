@@ -212,6 +212,7 @@ struct ScrollState {
 struct SearchOverlay {
     scope: SearchScope,
     query: String,
+    query_cursor: usize,
     candidates: Arc<Vec<SearchCandidate>>,
     matches: Vec<usize>,
     cached_matches: HashMap<String, Vec<usize>>,

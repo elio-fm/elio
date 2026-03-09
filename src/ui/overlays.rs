@@ -84,18 +84,34 @@ pub(super) fn render_search_overlay(
             .fg(palette.text)
             .add_modifier(Modifier::BOLD)
     };
+    let query_area = rows[1].inner(Margin {
+        horizontal: 2,
+        vertical: 1,
+    });
+    let (query_line, cursor_x) = if app.search_query().is_empty() {
+        (
+            Line::from(vec![
+                Span::styled("󰍉", Style::default().fg(palette.accent)),
+                Span::raw("  "),
+                Span::styled(query, query_style),
+            ]),
+            query_area.x.saturating_add(3),
+        )
+    } else {
+        render_query_line(
+            app.search_query(),
+            app.search_query_cursor(),
+            query_area.width,
+            query_area.x,
+            palette,
+        )
+    };
     frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("󰍉", Style::default().fg(palette.accent)),
-            Span::raw("  "),
-            Span::styled(query, query_style),
-        ]))
+        Paragraph::new(query_line)
         .style(Style::default().bg(palette.path_bg).fg(palette.text)),
-        rows[1].inner(Margin {
-            horizontal: 2,
-            vertical: 1,
-        }),
+        query_area,
     );
+    frame.set_cursor_position((cursor_x, query_area.y));
 
     let results_area = rows[2];
     let row_height = 2u16;
@@ -212,10 +228,6 @@ pub(super) fn render_search_overlay(
 
 pub(super) fn render_help(frame: &mut Frame<'_>, area: Rect, palette: Palette) {
     let popup = helpers::centered_rect(area, 82, 19);
-    frame.render_widget(
-        Block::default().style(Style::default().bg(palette.bg).fg(palette.text)),
-        area,
-    );
     frame.render_widget(Clear, popup);
     frame.render_widget(
         helpers::panel_block(" Controls ", palette.chrome_alt, palette),
@@ -335,4 +347,50 @@ pub(super) fn render_help(frame: &mut Frame<'_>, area: Rect, palette: Palette) {
         .style(Style::default().bg(palette.chrome_alt).fg(palette.muted)),
         rows[2],
     );
+}
+
+fn render_query_line(
+    query: &str,
+    cursor: usize,
+    width: u16,
+    origin_x: u16,
+    palette: Palette,
+) -> (Line<'static>, u16) {
+    let chars = query.chars().collect::<Vec<_>>();
+    let cursor = cursor.min(chars.len());
+    let available = width.saturating_sub(3) as usize;
+
+    let mut start = 0usize;
+    if cursor > available {
+        start = cursor - available;
+    }
+    let mut visible = chars
+        .iter()
+        .skip(start)
+        .take(available)
+        .collect::<String>();
+    if start > 0 && !visible.is_empty() {
+        visible.remove(0);
+        visible.insert(0, '…');
+    }
+
+    let visible_chars = visible.chars().collect::<Vec<_>>();
+    let visible_cursor = cursor.saturating_sub(start).min(visible_chars.len());
+
+    let mut spans = vec![
+        Span::styled("󰍉", Style::default().fg(palette.accent)),
+        Span::raw("  "),
+    ];
+    spans.push(Span::styled(
+        visible,
+        Style::default()
+            .fg(palette.text)
+            .add_modifier(Modifier::BOLD),
+    ));
+
+    let cursor_x = origin_x
+        .saturating_add(3)
+        .saturating_add(visible_cursor as u16)
+        .min(origin_x.saturating_add(width.saturating_sub(1)));
+    (Line::from(spans), cursor_x)
 }
