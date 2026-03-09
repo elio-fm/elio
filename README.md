@@ -21,7 +21,7 @@ cargo run
 
 ## Theme
 
-`elio` ships with a built-in default theme, but you can override file icons, file colors, and UI palette values by creating:
+`elio` ships with a built-in default theme, but you can override file icons, file colors, and the full app chrome palette by creating:
 
 ```bash
 ~/.config/elio/theme.toml
@@ -29,15 +29,86 @@ cargo run
 
 Supported sections:
 
-- `[palette]` for UI chrome colors
+- `[palette]` for app-wide TUI colors
 - `[classes.<name>]` for default icon/color per file class
 - `[extensions.<ext>]` for file-extension overrides
 - `[files."<exact-name>"]` for exact file-name overrides
 - `[directories."<exact-name>"]` for exact directory-name overrides
 
+How theme loading works:
+
+- if `~/.config/elio/theme.toml` exists and parses, `elio` layers it on top of the built-in default theme
+- any key you omit falls back to the built-in default theme
+- if the file does not exist, `elio` uses the built-in default theme
+- if the file exists but fails to read or parse, `elio` falls back to the built-in default theme and prints an error to `stderr`
+
+The current app UI colors all come from `[palette]`. That includes:
+
+- `bg`, `text`, `muted`
+- `chrome`, `chrome_alt`
+- `panel`, `panel_alt`
+- `surface`, `elevated`
+- `border`
+- `accent`, `accent_soft`, `accent_text`
+- `selected_bg`, `selected_border`
+- `sidebar_active`
+- `button_bg`, `button_disabled_bg`
+- `path_bg`
+
+The built-in file classes you can override under `[classes.<name>]` are:
+
+- `directory`
+- `code`
+- `config`
+- `document`
+- `image`
+- `audio`
+- `video`
+- `archive`
+- `font`
+- `data`
+- `file`
+
+Rule matching is case-insensitive and trims surrounding whitespace. Resolution order is:
+
+- exact file or directory name
+- file extension
+- built-in file classification fallback
+
+The built-in theme already includes exact-name rules for a small set of common files:
+
+- `Cargo.toml`
+- `Cargo.lock`
+- `package.json`
+- `package-lock.json`
+- `Dockerfile`
+- `compose.yml`
+- `compose.yaml`
+- `README.md`
+- `LICENSE`
+- `.gitignore`
+- `.env`
+
+Class names accept a few aliases:
+
+- `directory`, `dir`, `folder`
+- `document`, `doc`, `text`
+- `image`, `img`
+- `archive`, `compressed`
+- `file`, `plain`
+
 Example:
 
 ```toml
+[palette]
+bg = "#0a0e14"
+chrome = "#10151e"
+panel = "#121923"
+text = "#eef3f8"
+muted = "#9eacbd"
+accent = "#7cc4ff"
+selected_bg = "#294764"
+
 [classes.config]
 icon = "󰒓"
 color = "#90c6ff"

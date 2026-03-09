@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::{
     collections::HashMap,
     env, fs,
+    io,
     path::{Path, PathBuf},
     sync::OnceLock,
 };
@@ -138,8 +139,13 @@ fn load_theme_from_disk() -> Theme {
     let Some(path) = theme_path() else {
         return Theme::default_theme();
     };
-    let Ok(contents) = fs::read_to_string(&path) else {
-        return Theme::default_theme();
+    let contents = match fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Theme::default_theme(),
+        Err(error) => {
+            eprintln!("elio: failed to read theme from {}: {error}", path.display());
+            return Theme::default_theme();
+        }
     };
 
     match Theme::from_config_str(&contents) {
@@ -572,13 +578,52 @@ fn parse_rule_override(value: RuleOverrideDef) -> anyhow::Result<RuleOverride> {
 }
 
 fn default_class_style(class: FileClass) -> ClassStyle {
-    Theme::default_theme()
-        .classes
-        .remove(&class)
-        .unwrap_or(ClassStyle {
+    match class {
+        FileClass::Directory => ClassStyle {
+            icon: "󰉋".to_string(),
+            color: rgb(65, 143, 222),
+        },
+        FileClass::Code => ClassStyle {
+            icon: "󰆍".to_string(),
+            color: rgb(87, 196, 155),
+        },
+        FileClass::Config => ClassStyle {
+            icon: "󰒓".to_string(),
+            color: rgb(121, 188, 255),
+        },
+        FileClass::Document => ClassStyle {
+            icon: "󰈙".to_string(),
+            color: rgb(112, 182, 117),
+        },
+        FileClass::Image => ClassStyle {
+            icon: "󰋩".to_string(),
+            color: rgb(86, 156, 214),
+        },
+        FileClass::Audio => ClassStyle {
+            icon: "󰎆".to_string(),
+            color: rgb(138, 110, 214),
+        },
+        FileClass::Video => ClassStyle {
+            icon: "󰈫".to_string(),
+            color: rgb(204, 112, 79),
+        },
+        FileClass::Archive => ClassStyle {
+            icon: "󰗄".to_string(),
+            color: rgb(191, 142, 74),
+        },
+        FileClass::Font => ClassStyle {
+            icon: "󰛖".to_string(),
+            color: rgb(196, 148, 92),
+        },
+        FileClass::Data => ClassStyle {
+            icon: "󰆼".to_string(),
+            color: rgb(92, 192, 201),
+        },
+        FileClass::File => ClassStyle {
             icon: "󰈔".to_string(),
             color: rgb(98, 109, 122),
-        })
+        },
+    }
 }
 
 fn rule_class(class: FileClass) -> RuleOverride {
@@ -702,5 +747,53 @@ icon = "L"
         let resolved = theme.resolve(Path::new("poetry.lock"), EntryKind::File);
         assert_eq!(resolved.class, FileClass::Data);
         assert_eq!(resolved.icon, "L");
+    }
+
+    #[test]
+    fn exact_name_rules_win_over_extension_rules() {
+        let theme = Theme::from_config_str(
+            r##"
+[extensions.toml]
+class = "data"
+icon = "E"
+
+[files."Cargo.toml"]
+class = "config"
+icon = "F"
+"##,
+        )
+        .expect("theme should parse");
+
+        let resolved = theme.resolve(Path::new("Cargo.toml"), EntryKind::File);
+        assert_eq!(resolved.class, FileClass::Config);
+        assert_eq!(resolved.icon, "F");
+    }
+
+    #[test]
+    fn matching_is_case_insensitive_and_trimmed() {
+        let theme = Theme::from_config_str(
+            r##"
+[classes." folder "]
+icon = "D"
+color = "#010203"
+
+[extensions." LOCK "]
+class = "data"
+icon = "L"
+
+[files." cargo.lock "]
+class = "data"
+icon = "F"
+"##,
+        )
+        .expect("theme should parse");
+
+        let dir = theme.resolve(Path::new("projects"), EntryKind::Directory);
+        assert_eq!(dir.class, FileClass::Directory);
+        assert_eq!(theme.classes.get(&FileClass::Directory).unwrap().icon, "D");
+
+        let file = theme.resolve(Path::new("CARGO.LOCK"), EntryKind::File);
+        assert_eq!(file.class, FileClass::Data);
+        assert_eq!(file.icon, "F");
     }
 }
