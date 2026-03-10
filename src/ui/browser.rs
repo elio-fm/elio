@@ -582,23 +582,12 @@ fn render_preview_details(
             },
             palette,
         ),
-        preview_stat_line(
-            "Hidden",
-            if entry.hidden {
-                "yes".to_string()
-            } else {
-                "no".to_string()
-            },
-            palette,
-        ),
     ];
 
     if entry.is_dir()
-        && let Some((items, folders, files)) = app.preview_directory_counts()
+        && let Some((items, _folders, _files)) = app.preview_directory_counts()
     {
         lines[1] = preview_stat_line("Items", items.to_string(), palette);
-        lines.push(preview_stat_line("Folders", folders.to_string(), palette));
-        lines.push(preview_stat_line("Files", files.to_string(), palette));
     }
 
     frame.render_widget(
@@ -641,7 +630,7 @@ fn render_preview_body(
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
-                format!(" {}", app.preview_section_label()),
+                app.preview_section_label().to_string(),
                 Style::default()
                     .fg(palette.accent)
                     .add_modifier(Modifier::BOLD),

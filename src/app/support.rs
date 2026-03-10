@@ -144,7 +144,6 @@ pub(super) fn read_entries(dir: &Path, show_hidden: bool) -> Result<Vec<Entry>> 
             size: details.size,
             modified: details.modified,
             readonly: details.readonly,
-            hidden,
         });
     }
     Ok(entries)
@@ -343,7 +342,6 @@ mod tests {
                 size: 10,
                 modified: None,
                 readonly: false,
-                hidden: false,
             },
             Entry {
                 path: PathBuf::from("alpha"),
@@ -353,7 +351,6 @@ mod tests {
                 size: 0,
                 modified: None,
                 readonly: false,
-                hidden: false,
             },
         ];
 

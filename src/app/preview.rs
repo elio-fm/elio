@@ -151,7 +151,7 @@ impl PreviewContent {
 
     pub(super) fn header_detail(&self, offset: usize, visible_rows: usize) -> Option<String> {
         if self.kind == PreviewKind::Directory {
-            return self.detail.clone();
+            return None;
         }
 
         let mut parts = Vec::new();
@@ -510,7 +510,6 @@ mod tests {
             size: 0,
             modified: None,
             readonly: false,
-            hidden: false,
         }
     }
 

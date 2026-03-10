@@ -108,7 +108,6 @@ pub struct Entry {
     pub size: u64,
     pub modified: Option<SystemTime>,
     pub readonly: bool,
-    pub hidden: bool,
 }
 
 impl Entry {
@@ -332,7 +331,7 @@ impl App {
             sidebar: Vec::new(),
             selected: 0,
             scroll_row: 0,
-            view_mode: ViewMode::Grid,
+            view_mode: ViewMode::List,
             zoom_level: 1,
             sort_mode: SortMode::Name,
             show_hidden: false,
