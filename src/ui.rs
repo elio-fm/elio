@@ -17,13 +17,16 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     state.back_button = None;
     state.forward_button = None;
     state.parent_button = None;
-    state.refresh_button = None;
     state.hidden_button = None;
     state.view_button = None;
 
     let area = frame.area();
     frame.render_widget(
-        Block::default().style(ratatui::style::Style::default().bg(palette.bg).fg(palette.text)),
+        Block::default().style(
+            ratatui::style::Style::default()
+                .bg(palette.bg)
+                .fg(palette.text),
+        ),
         area,
     );
 

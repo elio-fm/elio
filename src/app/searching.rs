@@ -26,8 +26,10 @@ impl App {
                         && search.scope == build.scope
                     {
                         search.candidates = candidates;
-                        search.cached_matches =
-                            HashMap::from([(String::new(), (0..search.candidates.len()).collect())]);
+                        search.cached_matches = HashMap::from([(
+                            String::new(),
+                            (0..search.candidates.len()).collect(),
+                        )]);
                         search.loading = false;
                         search.error = None;
                     }
@@ -234,22 +236,18 @@ impl App {
                     self.status.clear();
                 }
             }
-            MouseEventKind::ScrollDown => {
-                Self::queue_scroll(
-                    &mut self.wheel_scroll.search,
-                    1,
-                    self.wheel_step_divisor,
-                    WHEEL_SCROLL_QUEUE_LIMIT_SEARCH,
-                )
-            }
-            MouseEventKind::ScrollUp => {
-                Self::queue_scroll(
-                    &mut self.wheel_scroll.search,
-                    -1,
-                    self.wheel_step_divisor,
-                    WHEEL_SCROLL_QUEUE_LIMIT_SEARCH,
-                )
-            }
+            MouseEventKind::ScrollDown => Self::queue_scroll(
+                &mut self.wheel_scroll.search,
+                1,
+                self.wheel_step_divisor,
+                WHEEL_SCROLL_QUEUE_LIMIT_SEARCH,
+            ),
+            MouseEventKind::ScrollUp => Self::queue_scroll(
+                &mut self.wheel_scroll.search,
+                -1,
+                self.wheel_step_divisor,
+                WHEEL_SCROLL_QUEUE_LIMIT_SEARCH,
+            ),
             _ => {}
         }
         Ok(())
@@ -392,7 +390,7 @@ impl App {
         previous != search.scroll
     }
 
-    fn prewarm_search_index(&mut self, scope: SearchScope) {
+    pub(crate) fn prewarm_search_index(&mut self, scope: SearchScope) {
         self.search_token = self.search_token.wrapping_add(1);
         self.search_loading = true;
         self.search_cache = None;
@@ -451,11 +449,7 @@ pub(super) fn spawn_search_worker(
                 request = next_request;
             }
 
-            let SearchRequest {
-                token,
-                cwd,
-                scope,
-            } = request;
+            let SearchRequest { token, cwd, scope } = request;
             let result = crate::search::collect_candidates(&cwd, true, scope.candidate_scope())
                 .map(Arc::new)
                 .map_err(|error| error.to_string());
@@ -555,7 +549,10 @@ mod tests {
             .expect("failed to open search");
 
         assert_eq!(app.search_candidate_count(), 1);
-        assert_eq!(app.search_rows(10).first().map(|row| row.relative.as_str()), Some(".hidden-root/needle"));
+        assert_eq!(
+            app.search_rows(10).first().map(|row| row.relative.as_str()),
+            Some(".hidden-root/needle")
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp tree");
     }
@@ -603,14 +600,20 @@ mod tests {
         let fastfetch_index = app
             .search
             .as_ref()
-            .and_then(|search| search.candidates.iter().position(|candidate| candidate.relative == "fastfetch"))
+            .and_then(|search| {
+                search
+                    .candidates
+                    .iter()
+                    .position(|candidate| candidate.relative == "fastfetch")
+            })
             .expect("fastfetch candidate should exist");
-        assert!(!app
-            .search
-            .as_ref()
-            .expect("search should be open")
-            .matches
-            .contains(&fastfetch_index));
+        assert!(
+            !app.search
+                .as_ref()
+                .expect("search should be open")
+                .matches
+                .contains(&fastfetch_index)
+        );
 
         if let Some(search) = &mut app.search {
             search.query = "fastfetch".to_string();

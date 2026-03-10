@@ -8,6 +8,8 @@ impl App {
         self.entries = support::read_entries(&self.cwd, self.show_hidden)?;
         support::sort_entries(&mut self.entries, self.sort_mode);
         self.sidebar = support::build_sidebar_items();
+        self.directory_fingerprint = support::entries_fingerprint(&self.entries);
+        self.last_auto_reload_at = Instant::now();
 
         self.selected = match previous_name {
             Some(name) => self
@@ -22,6 +24,37 @@ impl App {
         self.refresh_preview();
         self.clear_wheel_scroll();
         Ok(())
+    }
+
+    pub fn process_auto_reload(&mut self) -> Result<bool> {
+        while let Ok(event) = self.directory_watch_rx.try_recv() {
+            match event {
+                watching::DirectoryWatchEvent::Changed(paths)
+                    if !watching::event_affects_visible_entries(&paths, self.show_hidden) => {}
+                _ => {
+                    self.pending_directory_reload_at =
+                        Some(Instant::now() + watching::directory_watch_debounce());
+                }
+            }
+        }
+
+        if let Some(deadline) = self.pending_directory_reload_at {
+            if Instant::now() < deadline {
+                return Ok(false);
+            }
+            self.pending_directory_reload_at = None;
+            return self.reload_if_directory_changed();
+        }
+
+        if !self.use_polling_reload {
+            return Ok(false);
+        }
+
+        if self.last_auto_reload_at.elapsed() < AUTO_RELOAD_INTERVAL {
+            return Ok(false);
+        }
+        self.last_auto_reload_at = Instant::now();
+        self.reload_if_directory_changed()
     }
 
     pub fn preview_lines(&self, max_lines: usize) -> Vec<Line<'static>> {
@@ -208,7 +241,11 @@ impl App {
         self.set_dir_with_history(path, true)
     }
 
-    pub(super) fn set_dir_with_history(&mut self, path: PathBuf, record_history: bool) -> Result<()> {
+    pub(super) fn set_dir_with_history(
+        &mut self,
+        path: PathBuf,
+        record_history: bool,
+    ) -> Result<()> {
         if !path.is_dir() {
             bail!("{} is not a directory", path.display());
         }
@@ -225,6 +262,7 @@ impl App {
         self.selected = 0;
         self.scroll_row = 0;
         self.reload()?;
+        self.reset_directory_watch();
         self.status.clear();
         Ok(())
     }
@@ -303,5 +341,164 @@ impl App {
             }
         }
         Ok(())
+    }
+
+    pub(super) fn reset_directory_watch(&mut self) {
+        self.directory_watch = None;
+        self.pending_directory_reload_at = None;
+        while self.directory_watch_rx.try_recv().is_ok() {}
+
+        match watching::start_directory_watcher(&self.cwd, &self.directory_watch_tx) {
+            Ok(watcher) => {
+                self.directory_watch = Some(watcher);
+                self.use_polling_reload = false;
+            }
+            Err(_) => {
+                self.use_polling_reload = true;
+            }
+        }
+    }
+
+    fn reload_if_directory_changed(&mut self) -> Result<bool> {
+        let fingerprint = match support::scan_directory_fingerprint(&self.cwd, self.show_hidden) {
+            Ok(fingerprint) => fingerprint,
+            Err(_) => return Ok(false),
+        };
+        if fingerprint == self.directory_fingerprint {
+            return Ok(false);
+        }
+
+        self.reload()?;
+        self.refresh_search_after_directory_reload();
+        Ok(true)
+    }
+
+    fn refresh_search_after_directory_reload(&mut self) {
+        let Some(scope) = self.search.as_ref().map(|search| search.scope) else {
+            return;
+        };
+
+        if let Some(search) = &mut self.search {
+            search.candidates = Arc::new(Vec::new());
+            search.matches.clear();
+            search.cached_matches = HashMap::from([(String::new(), Vec::new())]);
+            search.selected = 0;
+            search.scroll = 0;
+            search.loading = true;
+            search.error = None;
+        }
+        self.prewarm_search_index(scope);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{Duration, SystemTime, UNIX_EPOCH},
+    };
+
+    fn temp_path(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("elio-actions-{label}-{unique}"))
+    }
+
+    fn make_auto_reload_ready(app: &mut App) {
+        app.last_auto_reload_at = Instant::now() - AUTO_RELOAD_INTERVAL - Duration::from_millis(1);
+    }
+
+    #[test]
+    fn watcher_reload_detects_new_visible_entries() {
+        let root = temp_path("auto-reload-visible");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("one.txt"), "hello").expect("failed to write first file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        assert_eq!(app.entries.len(), 1);
+
+        let second = root.join("two.txt");
+        fs::write(&second, "world").expect("failed to write second file");
+        app.directory_watch_tx
+            .send(watching::DirectoryWatchEvent::Changed(vec![second]))
+            .expect("failed to queue watch event");
+
+        assert!(
+            !app.process_auto_reload()
+                .expect("watch processing should succeed"),
+            "watch processing should debounce before reloading",
+        );
+        app.pending_directory_reload_at = Some(Instant::now() - Duration::from_millis(1));
+
+        assert!(
+            app.process_auto_reload()
+                .expect("auto reload should succeed"),
+            "watch-driven reload should report a change",
+        );
+        assert_eq!(app.entries.len(), 2);
+        assert!(app.entries.iter().any(|entry| entry.name == "two.txt"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn watcher_reload_ignores_hidden_entries_when_hidden_files_are_off() {
+        let root = temp_path("auto-reload-hidden");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("visible.txt"), "hello").expect("failed to write visible file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        assert!(!app.show_hidden);
+        assert_eq!(app.entries.len(), 1);
+
+        let hidden = root.join(".secret");
+        fs::write(&hidden, "hidden").expect("failed to write hidden file");
+        app.directory_watch_tx
+            .send(watching::DirectoryWatchEvent::Changed(vec![hidden]))
+            .expect("failed to queue watch event");
+
+        assert!(
+            !app.process_auto_reload()
+                .expect("watch processing should succeed"),
+            "hidden-only changes should not trigger a reload schedule",
+        );
+        assert!(app.pending_directory_reload_at.is_none());
+        assert_eq!(app.entries.len(), 1);
+        assert_eq!(app.entries[0].name, "visible.txt");
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn polling_fallback_respects_its_throttle_window() {
+        let root = temp_path("auto-reload-throttle");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("one.txt"), "hello").expect("failed to write first file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.directory_watch = None;
+        app.use_polling_reload = true;
+        fs::write(root.join("two.txt"), "world").expect("failed to write second file");
+
+        assert!(
+            !app.process_auto_reload()
+                .expect("auto reload should succeed"),
+            "reload should stay idle inside the throttle window",
+        );
+        assert_eq!(app.entries.len(), 1);
+
+        make_auto_reload_ready(&mut app);
+        assert!(
+            app.process_auto_reload()
+                .expect("auto reload should succeed"),
+            "reload should run once the throttle window has elapsed",
+        );
+        assert_eq!(app.entries.len(), 2);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
     }
 }

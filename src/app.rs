@@ -2,6 +2,7 @@ mod actions;
 mod events;
 mod searching;
 mod support;
+mod watching;
 
 use self::searching::spawn_search_worker;
 use crate::search::SearchCandidate;
@@ -15,8 +16,8 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
-pub(crate) use crate::appearance::folder_color;
 pub(crate) use self::support::{format_size, format_time_ago, rect_contains};
+pub(crate) use crate::appearance::folder_color;
 
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(450);
 const WHEEL_SCROLL_INTERVAL_HORIZONTAL: Duration = Duration::from_millis(36);
@@ -26,6 +27,7 @@ const WHEEL_SCROLL_QUEUE_LIMIT: isize = 8;
 const WHEEL_SCROLL_QUEUE_LIMIT_SEARCH: isize = 2;
 const SEARCH_MATCH_LIMIT: usize = 250;
 const SEARCH_CACHE_LIMIT: usize = 32;
+const AUTO_RELOAD_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ViewMode {
@@ -158,7 +160,6 @@ pub struct FrameState {
     pub back_button: Option<Rect>,
     pub forward_button: Option<Rect>,
     pub parent_button: Option<Rect>,
-    pub refresh_button: Option<Rect>,
     pub hidden_button: Option<Rect>,
     pub view_button: Option<Rect>,
     pub metrics: ViewMetrics,
@@ -315,9 +316,16 @@ pub struct App {
     search_token: u64,
     search_request_tx: mpsc::Sender<SearchRequest>,
     search_rx: mpsc::Receiver<SearchBuild>,
+    directory_watch_tx: mpsc::Sender<watching::DirectoryWatchEvent>,
+    directory_watch_rx: mpsc::Receiver<watching::DirectoryWatchEvent>,
+    directory_watch: Option<watching::DirectoryWatcher>,
+    pending_directory_reload_at: Option<Instant>,
+    use_polling_reload: bool,
     last_click: Option<ClickState>,
     wheel_scroll: ScrollState,
     wheel_step_divisor: isize,
+    directory_fingerprint: support::DirectoryFingerprint,
+    last_auto_reload_at: Instant,
 }
 
 impl App {
@@ -329,6 +337,7 @@ impl App {
     pub fn new_at(cwd: PathBuf) -> Result<Self> {
         let (search_request_tx, search_request_rx) = mpsc::channel();
         let (search_tx, search_rx) = mpsc::channel();
+        let (directory_watch_tx, directory_watch_rx) = mpsc::channel();
         spawn_search_worker(search_request_rx, search_tx);
         let mut app = Self {
             cwd,
@@ -353,6 +362,11 @@ impl App {
             search_token: 0,
             search_request_tx,
             search_rx,
+            directory_watch_tx,
+            directory_watch_rx,
+            directory_watch: None,
+            pending_directory_reload_at: None,
+            use_polling_reload: true,
             last_click: None,
             wheel_scroll: ScrollState {
                 horizontal: ScrollLane {
@@ -372,8 +386,11 @@ impl App {
                 },
             },
             wheel_step_divisor: wheel_step_divisor(),
+            directory_fingerprint: support::DirectoryFingerprint::default(),
+            last_auto_reload_at: Instant::now(),
         };
         app.reload()?;
+        app.reset_directory_watch();
         Ok(app)
     }
 
@@ -384,6 +401,10 @@ impl App {
 
     pub fn selected_entry(&self) -> Option<&Entry> {
         self.entries.get(self.selected)
+    }
+
+    pub fn has_pending_auto_reload(&self) -> bool {
+        self.pending_directory_reload_at.is_some()
     }
 }
 

@@ -334,7 +334,7 @@ pub(super) fn render_help(frame: &mut Frame<'_>, area: Rect, palette: Palette) {
         helpers::help_row("v", "toggle grid/list view", palette),
         helpers::help_row(".", "show or hide dotfiles", palette),
         helpers::help_row("s", "cycle sort mode", palette),
-        helpers::help_row("r / Ctrl+R", "refresh current folder", palette),
+        helpers::help_row("auto", "current folder reloads itself", palette),
         helpers::help_row("o", "open selected item externally", palette),
     ];
     frame.render_widget(

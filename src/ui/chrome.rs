@@ -30,7 +30,7 @@ pub(super) fn render_toolbar(
     let control_row = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(34),
+            Constraint::Length(23),
             Constraint::Min(2),
             Constraint::Length(39),
         ])
@@ -41,7 +41,6 @@ pub(super) fn render_toolbar(
             Constraint::Length(8),
             Constraint::Length(8),
             Constraint::Length(7),
-            Constraint::Length(11),
         ])
         .split(control_row[0]);
     let meta = Layout::default()
@@ -56,7 +55,6 @@ pub(super) fn render_toolbar(
     state.back_button = Some(nav_buttons[0]);
     state.forward_button = Some(nav_buttons[1]);
     state.parent_button = Some(nav_buttons[2]);
-    state.refresh_button = Some(nav_buttons[3]);
     state.hidden_button = Some(meta[1]);
     state.view_button = Some(meta[2]);
 
@@ -77,7 +75,6 @@ pub(super) fn render_toolbar(
         palette,
     );
     helpers::render_button(frame, nav_buttons[2], "Up", "󰁝", true, palette);
-    helpers::render_button(frame, nav_buttons[3], "Refresh", "󰑐", true, palette);
     frame.render_widget(
         Paragraph::new(Line::from(vec![helpers::chip_span(
             &format!("Sort: {}", app.sort_mode.label()),

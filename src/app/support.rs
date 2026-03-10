@@ -7,17 +7,35 @@ use ratatui::{
 };
 use std::{
     cmp::Ordering,
+    collections::hash_map::DefaultHasher,
     env,
     ffi::OsStr,
     fs::{self, File},
+    hash::{Hash, Hasher},
+    io,
     io::Read,
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    time::SystemTime,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 const PREVIEW_LIMIT_BYTES: usize = 8 * 1024;
 const PREVIEW_MAX_LINES: usize = 24;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(super) struct DirectoryFingerprint {
+    pub digest: u64,
+    pub entries: usize,
+}
+
+#[derive(Clone, Debug)]
+struct FingerprintPart {
+    name: String,
+    kind: EntryKind,
+    size: u64,
+    modified: Option<(u64, u32)>,
+    readonly: bool,
+}
 
 pub(super) fn build_preview(entry: &Entry) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
@@ -199,7 +217,11 @@ pub(super) fn read_entries(dir: &Path, show_hidden: bool) -> Result<Vec<Entry>> 
         } else {
             EntryKind::File
         };
-        let size = if metadata.is_file() { metadata.len() } else { 0 };
+        let size = if metadata.is_file() {
+            metadata.len()
+        } else {
+            0
+        };
         entries.push(Entry {
             path,
             name,
@@ -212,6 +234,56 @@ pub(super) fn read_entries(dir: &Path, show_hidden: bool) -> Result<Vec<Entry>> 
         });
     }
     Ok(entries)
+}
+
+pub(super) fn entries_fingerprint(entries: &[Entry]) -> DirectoryFingerprint {
+    let mut parts = entries
+        .iter()
+        .map(|entry| FingerprintPart {
+            name: entry.name_key.clone(),
+            kind: entry.kind,
+            size: entry.size,
+            modified: fingerprint_time(entry.modified),
+            readonly: entry.readonly,
+        })
+        .collect::<Vec<_>>();
+    fingerprint_from_parts(&mut parts)
+}
+
+pub(super) fn scan_directory_fingerprint(
+    dir: &Path,
+    show_hidden: bool,
+) -> Result<DirectoryFingerprint> {
+    let mut parts = Vec::new();
+    for item in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
+        let item = item?;
+        let file_name = item.file_name();
+        if is_hidden(file_name.as_os_str()) && !show_hidden {
+            continue;
+        }
+
+        let metadata = match fs::symlink_metadata(item.path()) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error.into()),
+        };
+        parts.push(FingerprintPart {
+            name: file_name.to_string_lossy().to_lowercase(),
+            kind: if metadata.is_dir() {
+                EntryKind::Directory
+            } else {
+                EntryKind::File
+            },
+            size: if metadata.is_file() {
+                metadata.len()
+            } else {
+                0
+            },
+            modified: fingerprint_time(metadata.modified().ok()),
+            readonly: metadata.permissions().readonly(),
+        });
+    }
+    Ok(fingerprint_from_parts(&mut parts))
 }
 
 pub(super) fn sort_entries(entries: &mut [Entry], mode: SortMode) {
@@ -234,6 +306,35 @@ pub(super) fn sort_entries(entries: &mut [Entry], mode: SortMode) {
 
 fn is_hidden(file_name: &OsStr) -> bool {
     file_name.to_string_lossy().starts_with('.')
+}
+
+fn fingerprint_from_parts(parts: &mut [FingerprintPart]) -> DirectoryFingerprint {
+    parts.sort_by(|left, right| left.name.cmp(&right.name));
+
+    let mut hasher = DefaultHasher::new();
+    for part in parts.iter() {
+        part.name.hash(&mut hasher);
+        match part.kind {
+            EntryKind::Directory => 0u8.hash(&mut hasher),
+            EntryKind::File => 1u8.hash(&mut hasher),
+        }
+        part.size.hash(&mut hasher);
+        part.modified.hash(&mut hasher);
+        part.readonly.hash(&mut hasher);
+    }
+
+    DirectoryFingerprint {
+        digest: hasher.finish(),
+        entries: parts.len(),
+    }
+}
+
+fn fingerprint_time(time: Option<SystemTime>) -> Option<(u64, u32)> {
+    time.and_then(|time| {
+        time.duration_since(UNIX_EPOCH)
+            .ok()
+            .map(|duration| (duration.as_secs(), duration.subsec_nanos()))
+    })
 }
 
 pub(super) fn detached_open(program: &str, args: &[&str], target: &Path) -> std::io::Result<()> {
@@ -330,10 +431,25 @@ mod tests {
     }
 
     #[test]
-    fn lockfiles_remain_plain_files() {
+    fn fingerprint_changes_when_visible_directory_entries_change() {
+        let root = temp_path("fingerprint");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("one.txt"), "hello").expect("failed to write first file");
+
+        let first = scan_directory_fingerprint(&root, false).expect("failed to fingerprint");
+        fs::write(root.join("two.txt"), "world").expect("failed to write second file");
+        let second = scan_directory_fingerprint(&root, false).expect("failed to fingerprint");
+
+        assert_ne!(first, second);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn lockfiles_are_classified_as_data() {
         assert_eq!(
             crate::appearance::classify_path(Path::new("poetry.lock"), EntryKind::File),
-            FileClass::File
+            FileClass::Data
         );
     }
 

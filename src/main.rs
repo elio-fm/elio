@@ -61,6 +61,10 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             dirty = true;
         }
 
+        if app.process_auto_reload()? {
+            dirty = true;
+        }
+
         if dirty {
             let mut frame_state = app::FrameState::default();
             terminal.draw(|frame| ui::render(frame, &app, &mut frame_state))?;
@@ -84,7 +88,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             break;
         }
 
-        let poll_interval = if app.has_pending_scroll() {
+        let poll_interval = if app.has_pending_scroll() || app.has_pending_auto_reload() {
             ACTIVE_SCROLL_POLL_INTERVAL
         } else {
             IDLE_POLL_INTERVAL

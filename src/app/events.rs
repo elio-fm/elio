@@ -80,11 +80,6 @@ impl App {
                     self.adjust_zoom(-1);
                     return Ok(());
                 }
-                KeyCode::Char('r') => {
-                    self.reload()?;
-                    self.status = "Refreshed".to_string();
-                    return Ok(());
-                }
                 KeyCode::Char('0') => {
                     self.reset_zoom();
                     return Ok(());
@@ -153,10 +148,6 @@ impl App {
                     "Hidden files hidden".to_string()
                 };
             }
-            KeyCode::Char('r') => {
-                self.reload()?;
-                self.status = "Refreshed".to_string();
-            }
             KeyCode::Char('f') => {
                 if let Err(error) = self.open_fuzzy_finder(SearchScope::Folders) {
                     self.status = format!("Search unavailable: {error}");
@@ -197,13 +188,6 @@ impl App {
                     && rect_contains(rect, mouse.column, mouse.row)
                 {
                     return self.go_parent();
-                }
-                if let Some(rect) = self.frame_state.refresh_button
-                    && rect_contains(rect, mouse.column, mouse.row)
-                {
-                    self.reload()?;
-                    self.status = "Refreshed".to_string();
-                    return Ok(());
                 }
                 if let Some(rect) = self.frame_state.hidden_button
                     && rect_contains(rect, mouse.column, mouse.row)
@@ -403,10 +387,9 @@ impl App {
     }
 
     fn flush_search_scroll(&mut self) -> bool {
-        let Some(step) = Self::consume_scroll_step(
-            &mut self.wheel_scroll.search,
-            WHEEL_SCROLL_INTERVAL_SEARCH,
-        ) else {
+        let Some(step) =
+            Self::consume_scroll_step(&mut self.wheel_scroll.search, WHEEL_SCROLL_INTERVAL_SEARCH)
+        else {
             return false;
         };
 
