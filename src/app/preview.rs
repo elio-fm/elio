@@ -222,6 +222,7 @@ pub(super) fn build_preview(entry: &Entry) -> PreviewContent {
     let line_truncated = source_line_count > PREVIEW_RENDER_LINE_LIMIT;
     let truncation_note = truncation_note(text_preview.bytes_truncated, line_truncated);
     let syntax_hint = syntax::preview_syntax_hint(&entry.path);
+    let fallback_syntax = fallback::preview_fallback_syntax(&entry.path);
 
     if is_markdown_path(&entry.path) {
         let preview = PreviewContent::new(
@@ -233,6 +234,22 @@ pub(super) fn build_preview(entry: &Entry) -> PreviewContent {
             source_line_count,
             text_preview.bytes_truncated,
             truncation_note,
+        );
+    }
+
+    if let Some(fallback_syntax) = fallback_syntax
+        && matches!(fallback_syntax, fallback::FallbackSyntax::DesktopEntry)
+    {
+        let preview = PreviewContent::new(
+            PreviewKind::Code,
+            fallback::render_fallback_code_preview(&text_preview.text, fallback_syntax, true),
+        )
+        .with_detail(fallback_syntax.detail_label());
+        return finalize_text_preview(
+            preview,
+            source_line_count,
+            text_preview.bytes_truncated,
+            truncation_note.clone(),
         );
     }
 
@@ -250,7 +267,7 @@ pub(super) fn build_preview(entry: &Entry) -> PreviewContent {
         );
     }
 
-    if let Some(fallback_syntax) = fallback::preview_fallback_syntax(&entry.path) {
+    if let Some(fallback_syntax) = fallback_syntax {
         let preview = PreviewContent::new(
             PreviewKind::Code,
             fallback::render_fallback_code_preview(&text_preview.text, fallback_syntax, true),
@@ -702,6 +719,37 @@ mod tests {
                 .detail
                 .as_deref()
                 .is_some_and(|detail| detail.contains("TOML"))
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn desktop_preview_uses_code_renderer() {
+        let root = temp_path("desktop-entry");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("app.desktop");
+        fs::write(
+            &path,
+            "[Desktop Entry]\nName=エリオ\nName[ja]=エリオ\nExec=elio\nTerminal=false\n",
+        )
+        .expect("failed to write desktop entry");
+
+        let preview = build_preview(&file_entry(path));
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(
+            preview
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail == "Desktop Entry (best-effort)")
+        );
+        assert!(
+            preview
+                .lines
+                .iter()
+                .flat_map(|line| line.spans.iter())
+                .any(|span| span.content.contains("エリオ"))
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");

@@ -98,6 +98,11 @@ class = "config"
 class = "config"
 color = "#7db0ff"
 
+[extensions.desktop]
+class = "config"
+icon = "󰍹"
+color = "#7db0ff"
+
 [extensions.mjs]
 class = "code"
 icon = ""

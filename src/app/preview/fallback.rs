@@ -13,6 +13,8 @@ pub(super) enum FallbackSyntax {
     Toml,
     Json,
     Yaml,
+    Ini,
+    DesktopEntry,
 }
 
 impl FallbackSyntax {
@@ -22,6 +24,8 @@ impl FallbackSyntax {
             Self::Toml => "TOML",
             Self::Json => "JSON",
             Self::Yaml => "YAML",
+            Self::Ini => "INI",
+            Self::DesktopEntry => "Desktop Entry",
         }
     }
 
@@ -39,6 +43,8 @@ pub(super) fn preview_fallback_syntax(path: &Path) -> Option<FallbackSyntax> {
         "toml" => Some(FallbackSyntax::Toml),
         "json" | "jsonc" => Some(FallbackSyntax::Json),
         "yaml" | "yml" => Some(FallbackSyntax::Yaml),
+        "ini" | "conf" | "cfg" => Some(FallbackSyntax::Ini),
+        "desktop" => Some(FallbackSyntax::DesktopEntry),
         _ => match name.as_str() {
             "cargo.lock" | "poetry.lock" => Some(FallbackSyntax::Toml),
             "package.json" | "package-lock.json" | "tsconfig.json" | "deno.json" | "deno.jsonc" => {
@@ -81,6 +87,9 @@ pub(super) fn render_fallback_code_preview(
             FallbackSyntax::Toml => highlight_toml_line(line, code_palette),
             FallbackSyntax::Json => highlight_json_line(line, code_palette),
             FallbackSyntax::Yaml => highlight_yaml_line(line, code_palette),
+            FallbackSyntax::Ini | FallbackSyntax::DesktopEntry => {
+                highlight_ini_line(line, code_palette, syntax == FallbackSyntax::DesktopEntry)
+            }
         };
         spans.extend(body);
         rendered.push(Line::from(spans));
@@ -90,6 +99,56 @@ pub(super) fn render_fallback_code_preview(
         rendered.push(Line::from("File is empty"));
     }
     rendered
+}
+
+fn highlight_ini_line(
+    line: &str,
+    palette: appearance::CodePreviewPalette,
+    desktop_entry_mode: bool,
+) -> Vec<Span<'static>> {
+    let trimmed = line.trim_start();
+    let indent = &line[..line.len().saturating_sub(trimmed.len())];
+
+    if trimmed.starts_with('#') || trimmed.starts_with(';') {
+        return vec![
+            Span::raw(indent.to_string()),
+            styled_text(trimmed, palette.comment, Modifier::ITALIC),
+        ];
+    }
+
+    if trimmed.starts_with('[') && trimmed.ends_with(']') {
+        let color = if desktop_entry_mode && trimmed == "[Desktop Entry]" {
+            palette.keyword
+        } else {
+            palette.r#type
+        };
+        return vec![
+            Span::raw(indent.to_string()),
+            styled_text(trimmed, color, Modifier::BOLD),
+        ];
+    }
+
+    if let Some((left, right)) = split_unquoted_once(trimmed, '=') {
+        let key = left.trim_end();
+        let key_color = if desktop_entry_mode
+            && matches!(key, "Name" | "Exec" | "Icon" | "Type" | "Terminal" | "Categories")
+        {
+            palette.function
+        } else {
+            palette.parameter
+        };
+        let mut spans = vec![
+            Span::raw(indent.to_string()),
+            styled_text(key, key_color, Modifier::BOLD),
+            styled_text("=", palette.operator, Modifier::empty()),
+        ];
+        if !right.is_empty() {
+            spans.extend(highlight_value_fragment(right, palette));
+        }
+        return spans;
+    }
+
+    highlight_value_fragment(line, palette)
 }
 
 fn highlight_js_like_line(
@@ -364,16 +423,17 @@ fn highlight_token_stream(
     input: &str,
     palette: appearance::CodePreviewPalette,
 ) -> Vec<Span<'static>> {
-    let bytes = input.as_bytes();
     let mut spans = Vec::new();
     let mut index = 0usize;
 
-    while index < bytes.len() {
-        let ch = bytes[index] as char;
+    while let Some(ch) = input[index..].chars().next() {
         if ch.is_whitespace() {
             let start = index;
-            while index < bytes.len() && (bytes[index] as char).is_whitespace() {
-                index += 1;
+            while let Some(current) = input[index..].chars().next() {
+                if !current.is_whitespace() {
+                    break;
+                }
+                index += current.len_utf8();
             }
             spans.push(Span::raw(input[start..index].to_string()));
             continue;
@@ -391,18 +451,18 @@ fn highlight_token_stream(
         }
 
         if "[]{}(),:".contains(ch) {
+            let end = index + ch.len_utf8();
             spans.push(styled_text(
-                &input[index..index + 1],
+                &input[index..end],
                 palette.operator,
                 Modifier::empty(),
             ));
-            index += 1;
+            index = end;
             continue;
         }
 
         let start = index;
-        while index < bytes.len() {
-            let current = bytes[index] as char;
+        while let Some(current) = input[index..].chars().next() {
             if current.is_whitespace()
                 || "[]{}(),:#".contains(current)
                 || current == '"'
@@ -410,7 +470,7 @@ fn highlight_token_stream(
             {
                 break;
             }
-            index += 1;
+            index += current.len_utf8();
         }
         spans.extend(highlight_scalar_token(&input[start..index], palette));
     }
@@ -510,27 +570,25 @@ fn split_unquoted_once(input: &str, needle: char) -> Option<(&str, &str)> {
 }
 
 fn scan_quoted_segment(input: &str, start: usize) -> usize {
-    let bytes = input.as_bytes();
-    let quote = bytes[start] as char;
-    let mut index = start + 1;
+    let quote = input[start..].chars().next().unwrap_or('"');
+    let mut index = start + quote.len_utf8();
     let mut escape = false;
 
-    while index < bytes.len() {
-        let ch = bytes[index] as char;
+    while let Some(ch) = input[index..].chars().next() {
         if escape {
             escape = false;
-            index += 1;
+            index += ch.len_utf8();
             continue;
         }
         if ch == '\\' && quote == '"' {
             escape = true;
-            index += 1;
+            index += ch.len_utf8();
             continue;
         }
         if ch == quote {
-            return index + 1;
+            return index + ch.len_utf8();
         }
-        index += 1;
+        index += ch.len_utf8();
     }
 
     input.len()
@@ -712,6 +770,30 @@ mod tests {
         assert_eq!(
             preview_fallback_syntax(Path::new("deno.jsonc")),
             Some(FallbackSyntax::Json)
+        );
+    }
+
+    #[test]
+    fn desktop_file_can_use_fallback_highlighting() {
+        assert_eq!(
+            preview_fallback_syntax(Path::new("app.desktop")),
+            Some(FallbackSyntax::DesktopEntry)
+        );
+    }
+
+    #[test]
+    fn desktop_fallback_renderer_handles_unicode_values() {
+        let lines = render_fallback_code_preview(
+            "[Desktop Entry]\nName=エリオ\nName[ja]=日本語アプリ\n",
+            FallbackSyntax::DesktopEntry,
+            true,
+        );
+
+        assert!(
+            lines
+                .iter()
+                .flat_map(|line| line.spans.iter())
+                .any(|span| span.content.contains("日本語アプリ"))
         );
     }
 }

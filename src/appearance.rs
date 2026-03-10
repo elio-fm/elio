@@ -346,6 +346,7 @@ impl Theme {
             ("ini".to_string(), rule_class(FileClass::Config)),
             ("conf".to_string(), rule_class(FileClass::Config)),
             ("cfg".to_string(), rule_class(FileClass::Config)),
+            ("desktop".to_string(), rule_class(FileClass::Config)),
             ("ron".to_string(), rule_class(FileClass::Config)),
             ("env".to_string(), rule_class(FileClass::Config)),
             ("md".to_string(), rule_class(FileClass::Document)),
@@ -798,7 +799,8 @@ fn builtin_classify_path(path: &Path, kind: EntryKind) -> FileClass {
     match ext.as_str() {
         "rs" | "js" | "ts" | "tsx" | "jsx" | "py" | "go" | "c" | "cpp" | "h" | "hpp" | "java"
         | "lua" | "php" | "rb" | "swift" | "kt" | "sh" | "bash" | "zsh" | "fish" => FileClass::Code,
-        "json" | "toml" | "yaml" | "yml" | "ini" | "conf" | "cfg" | "ron" | "env" => {
+        "json" | "toml" | "yaml" | "yml" | "ini" | "conf" | "cfg" | "desktop" | "ron"
+        | "env" => {
             FileClass::Config
         }
         "md" | "txt" | "rst" | "pdf" | "doc" | "docx" | "odt" => FileClass::Document,
