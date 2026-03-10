@@ -21,6 +21,26 @@ button_bg = "#12171d"
 button_disabled_bg = "#0b0e13"
 path_bg = "#0d1218"
 
+[preview.code]
+fg = "#d7e3f4"
+bg = "#0a0d12"
+selection_bg = "#122a3f"
+selection_fg = "#f2f7ff"
+caret = "#12d2ff"
+line_highlight = "#10151f"
+line_number = "#7b90a7"
+comment = "#6f8399"
+string = "#79e7d5"
+constant = "#ffa657"
+keyword = "#7aaeff"
+function = "#36d7ff"
+type = "#b38cff"
+parameter = "#ffd866"
+tag = "#59de94"
+operator = "#8ae7ff"
+macro = "#ff8f40"
+invalid = "#ff8585"
+
 [classes.directory]
 icon = "󰉋"
 color = "#5ba8ff"
@@ -78,6 +98,26 @@ class = "config"
 class = "config"
 color = "#7db0ff"
 
+[extensions.mjs]
+class = "code"
+icon = ""
+color = "#67b0ff"
+
+[extensions.cjs]
+class = "code"
+icon = ""
+color = "#67b0ff"
+
+[extensions.mts]
+class = "code"
+icon = ""
+color = "#5aa8ff"
+
+[extensions.cts]
+class = "code"
+icon = ""
+color = "#5aa8ff"
+
 [extensions.lock]
 class = "data"
 icon = "󰌾"
@@ -90,31 +130,162 @@ color = "#ff8f40"
 
 [extensions.ts]
 class = "code"
+icon = ""
 color = "#5aa8ff"
 
 [extensions.tsx]
 class = "code"
+icon = "󰜈"
 color = "#6dc4ff"
 
 [extensions.js]
 class = "code"
+icon = ""
 color = "#67b0ff"
 
 [extensions.jsx]
 class = "code"
+icon = "󰜈"
 color = "#82cbff"
+
+[extensions.py]
+class = "code"
+icon = ""
+color = "#ffd866"
+
+[extensions.go]
+class = "code"
+icon = ""
+color = "#66d9ef"
+
+[extensions.sh]
+class = "code"
+icon = ""
+color = "#8ddf6d"
+
+[extensions.bash]
+class = "code"
+icon = ""
+color = "#8ddf6d"
+
+[extensions.zsh]
+class = "code"
+icon = ""
+color = "#8ddf6d"
+
+[extensions.fish]
+class = "code"
+icon = ""
+color = "#8ddf6d"
+
+[extensions.c]
+class = "code"
+icon = ""
+color = "#79b8ff"
+
+[extensions.cpp]
+class = "code"
+icon = ""
+color = "#8cb8ff"
+
+[extensions.h]
+class = "code"
+icon = ""
+color = "#79b8ff"
+
+[extensions.hpp]
+class = "code"
+icon = ""
+color = "#8cb8ff"
+
+[extensions.java]
+class = "code"
+icon = ""
+color = "#ff8f61"
+
+[extensions.lua]
+class = "code"
+icon = ""
+color = "#7aaeff"
+
+[extensions.php]
+class = "code"
+icon = ""
+color = "#b38cff"
+
+[extensions.rb]
+class = "code"
+icon = ""
+color = "#ff7b72"
+
+[extensions.swift]
+class = "code"
+icon = ""
+color = "#ff9b61"
+
+[extensions.kt]
+class = "code"
+icon = ""
+color = "#c792ea"
+
+[extensions.vue]
+class = "code"
+icon = ""
+color = "#59de94"
+
+[extensions.svelte]
+class = "code"
+icon = ""
+color = "#ff9b61"
+
+[extensions.astro]
+class = "code"
+icon = ""
+color = "#d6def0"
+
+[extensions.html]
+class = "code"
+icon = ""
+color = "#ff9b61"
+
+[extensions.htm]
+class = "code"
+icon = ""
+color = "#ff9b61"
 
 [extensions.css]
 class = "code"
+icon = ""
 color = "#2fe1c8"
 
 [extensions.scss]
 class = "code"
+icon = ""
 color = "#cf88ff"
 
 [extensions.md]
 class = "document"
 color = "#8ddf6d"
+
+[extensions.sql]
+class = "data"
+icon = ""
+color = "#59de94"
+
+[extensions.nix]
+class = "config"
+icon = ""
+color = "#7aaeff"
+
+[extensions.dart]
+class = "code"
+icon = ""
+color = "#38d5ff"
+
+[extensions.zig]
+class = "code"
+icon = ""
+color = "#f7c85e"
 
 [files."Cargo.toml"]
 class = "config"
@@ -128,7 +299,7 @@ color = "#59de94"
 
 [files."package.json"]
 class = "config"
-icon = ""
+icon = "󰏗"
 color = "#7db0ff"
 
 [files."package-lock.json"]
@@ -152,6 +323,16 @@ icon = "󰡨"
 color = "#28d5c2"
 
 [files."compose.yaml"]
+class = "config"
+icon = "󰡨"
+color = "#28d5c2"
+
+[files."docker-compose.yml"]
+class = "config"
+icon = "󰡨"
+color = "#28d5c2"
+
+[files."docker-compose.yaml"]
 class = "config"
 icon = "󰡨"
 color = "#28d5c2"
@@ -211,6 +392,21 @@ class = "config"
 icon = ""
 color = "#ffb86b"
 
+[files."bunfig.toml"]
+class = "config"
+icon = ""
+color = "#f7c85e"
+
+[files."biome.json"]
+class = "config"
+icon = "󰏗"
+color = "#4ecfff"
+
+[files."turbo.json"]
+class = "config"
+icon = "󰐷"
+color = "#d6def0"
+
 [files."deno.json"]
 class = "config"
 icon = ""
@@ -256,12 +452,27 @@ class = "config"
 icon = ""
 color = "#d78eff"
 
+[files."vite.config.mjs"]
+class = "config"
+icon = ""
+color = "#d78eff"
+
+[files."vite.config.mts"]
+class = "config"
+icon = ""
+color = "#d78eff"
+
 [files."tailwind.config.ts"]
 class = "config"
 icon = "󱏿"
 color = "#38d5ff"
 
 [files."tailwind.config.js"]
+class = "config"
+icon = "󱏿"
+color = "#38d5ff"
+
+[files."tailwind.config.mjs"]
 class = "config"
 icon = "󱏿"
 color = "#38d5ff"
@@ -275,6 +486,76 @@ color = "#b38cff"
 class = "config"
 icon = "󰱺"
 color = "#b38cff"
+
+[files."eslint.config.ts"]
+class = "config"
+icon = "󰱺"
+color = "#b38cff"
+
+[files."prettier.config.js"]
+class = "config"
+icon = ""
+color = "#ff86d8"
+
+[files."prettier.config.mjs"]
+class = "config"
+icon = ""
+color = "#ff86d8"
+
+[files."prettier.config.ts"]
+class = "config"
+icon = ""
+color = "#ff86d8"
+
+[files."postcss.config.js"]
+class = "config"
+icon = ""
+color = "#2fe1c8"
+
+[files."postcss.config.cjs"]
+class = "config"
+icon = ""
+color = "#2fe1c8"
+
+[files."jest.config.js"]
+class = "config"
+icon = "󰙨"
+color = "#f7c85e"
+
+[files."jest.config.ts"]
+class = "config"
+icon = "󰙨"
+color = "#f7c85e"
+
+[files."vitest.config.ts"]
+class = "config"
+icon = "󰙨"
+color = "#8ddf6d"
+
+[files."vitest.config.js"]
+class = "config"
+icon = "󰙨"
+color = "#8ddf6d"
+
+[files."svelte.config.js"]
+class = "config"
+icon = ""
+color = "#ff9b61"
+
+[files."astro.config.mjs"]
+class = "config"
+icon = ""
+color = "#d6def0"
+
+[files."nuxt.config.ts"]
+class = "config"
+icon = "󱄆"
+color = "#59de94"
+
+[files."nuxt.config.js"]
+class = "config"
+icon = "󱄆"
+color = "#59de94"
 
 [files.".prettierrc"]
 class = "config"
@@ -306,6 +587,66 @@ class = "config"
 icon = ""
 color = "#5ba8ff"
 
+[files.".dockerignore"]
+class = "config"
+icon = "󰡨"
+color = "#4ecfff"
+
+[files.".gitattributes"]
+class = "config"
+icon = "󰊢"
+color = "#d78eff"
+
+[files.".gitmodules"]
+class = "config"
+icon = "󰊢"
+color = "#d78eff"
+
+[files.".node-version"]
+class = "config"
+icon = "󰏗"
+color = "#8ddf6d"
+
+[files.".nvmrc"]
+class = "config"
+icon = "󰏗"
+color = "#8ddf6d"
+
+[files.".python-version"]
+class = "config"
+icon = ""
+color = "#ffd866"
+
+[files."Pipfile"]
+class = "config"
+icon = ""
+color = "#ffd866"
+
+[files."Pipfile.lock"]
+class = "data"
+icon = "󰌾"
+color = "#59de94"
+
+[files."uv.lock"]
+class = "data"
+icon = "󰌾"
+color = "#59de94"
+
+[files."go.work"]
+class = "config"
+icon = ""
+color = "#4ecfff"
+
+[files."go.work.sum"]
+class = "data"
+icon = ""
+color = "#66e39a"
+
+[files."rust-toolchain.toml"]
+class = "config"
+icon = ""
+color = "#ff8f40"
+
 [files."next.config.js"]
 class = "config"
 icon = ""
@@ -336,9 +677,41 @@ color = "#5ba8ff"
 icon = ""
 color = "#ff86d8"
 
+[directories.".cargo"]
+icon = ""
+color = "#ff8f40"
+
+[directories.".ssh"]
+icon = "󰢬"
+color = "#d6def0"
+
+[directories.".cache"]
+icon = "󰪺"
+color = "#8a92a8"
+
+[directories.".npm"]
+icon = "󰏗"
+color = "#8ddf6d"
+
+[directories.".yarn"]
+icon = ""
+color = "#24d9b8"
+
+[directories.".pnpm-store"]
+icon = ""
+color = "#ffb86b"
+
+[directories.".venv"]
+icon = ""
+color = "#ffd866"
+
+[directories."venv"]
+icon = ""
+color = "#ffd866"
+
 [directories."node_modules"]
-icon = ""
-color = "#7db0ff"
+icon = "󰏗"
+color = "#8ddf6d"
 
 [directories."tests"]
 icon = "󰙨"
@@ -357,12 +730,28 @@ icon = "󰉋"
 color = "#38d5ff"
 
 [directories."build"]
-icon = "󰉏"
+icon = "󰉋"
 color = "#ff9b61"
 
 [directories."dist"]
-icon = "󰉏"
+icon = "󰉋"
 color = "#ff9b61"
+
+[directories.".next"]
+icon = ""
+color = "#d6def0"
+
+[directories.".nuxt"]
+icon = "󱄆"
+color = "#59de94"
+
+[directories.".svelte-kit"]
+icon = ""
+color = "#ff9b61"
+
+[directories.".astro"]
+icon = ""
+color = "#d6def0"
 
 [directories."public"]
 icon = "󰉋"
@@ -503,6 +892,22 @@ color = "#7db0ff"
 [directories."assets"]
 icon = "󰉏"
 color = "#24d9b8"
+
+[directories."coverage"]
+icon = "󰙨"
+color = "#8ddf6d"
+
+[directories."tmp"]
+icon = "󰪺"
+color = "#8a92a8"
+
+[directories."temp"]
+icon = "󰪺"
+color = "#8a92a8"
+
+[directories."out"]
+icon = "󰉋"
+color = "#ff9b61"
 
 [directories."target"]
 icon = "󰓾"

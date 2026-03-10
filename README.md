@@ -8,7 +8,7 @@
 - Grid view by default, plus a denser list view
 - Mouse click, double click, and wheel support
 - Directory navigation, back/forward history, hidden-file toggle, sort cycling, instant auto-reload, and external open via `xdg-open`
-- Lightweight text preview for readable files
+- Rich details pane with metadata plus folder, text, markdown, and code previews
 - Folder search with `f` and file search with `Ctrl+F`, both scoped to the current directory tree
 - Type-aware icons and colors for folders, config files, documents, code, archives, media, fonts, data files, and plain files
 - Configurable appearance rules from `~/.config/elio/theme.toml`
@@ -30,6 +30,7 @@ cargo run
 Supported sections:
 
 - `[palette]` for app-wide TUI colors
+- `[preview.code]` for code preview syntax colors
 - `[classes.<name>]` for default icon/color per file class
 - `[extensions.<ext>]` for file-extension overrides
 - `[files."<exact-name>"]` for exact file-name overrides
@@ -56,6 +57,15 @@ The current app UI colors all come from `[palette]`. That includes:
 - `sidebar_active`
 - `button_bg`, `button_disabled_bg`
 - `path_bg`
+
+Code preview syntax colors can be customized under `[preview.code]`. The available keys are:
+
+- `fg`, `bg`
+- `selection_bg`, `selection_fg`
+- `caret`, `line_highlight`, `line_number`
+- `comment`, `string`, `constant`, `keyword`
+- `function`, `type`, `parameter`
+- `tag`, `operator`, `macro`, `invalid`
 
 The built-in file classes you can override under `[classes.<name>]` are:
 
@@ -121,6 +131,13 @@ muted = "#8c97a8"
 accent = "#7aaeff"
 selected_bg = "#243758"
 
+[preview.code]
+keyword = "#ff78c6"
+function = "#36d7ff"
+type = "#b38cff"
+string = "#79e7d5"
+comment = "#6f8399"
+
 [classes.config]
 icon = "󰒓"
 color = "#b38cff"
@@ -155,6 +172,8 @@ There are fuller examples in [examples/default/theme.toml](/home/regueiro/1Proje
 - `q` or `Esc`: quit
 
 The current directory reloads automatically when its contents change. Elio uses filesystem watching when available and falls back to throttled polling if watching is unavailable.
+
+The details pane supports its own mouse-wheel scrolling. Text, markdown, and code previews report real source line counts, while folder previews show item counts and a compact folder/file breakdown.
 
 ## Fuzzy Finder
 

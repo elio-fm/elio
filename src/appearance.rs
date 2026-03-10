@@ -33,6 +33,33 @@ pub(crate) struct Palette {
     pub path_bg: Color,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct CodePreviewPalette {
+    pub fg: Color,
+    pub bg: Color,
+    pub selection_bg: Color,
+    pub selection_fg: Color,
+    pub caret: Color,
+    pub line_highlight: Color,
+    pub line_number: Color,
+    pub comment: Color,
+    pub string: Color,
+    pub constant: Color,
+    pub keyword: Color,
+    pub function: Color,
+    pub r#type: Color,
+    pub parameter: Color,
+    pub tag: Color,
+    pub operator: Color,
+    pub r#macro: Color,
+    pub invalid: Color,
+}
+
+#[derive(Clone, Copy)]
+struct PreviewTheme {
+    code: CodePreviewPalette,
+}
+
 #[derive(Clone)]
 struct ClassStyle {
     icon: String,
@@ -49,6 +76,7 @@ struct RuleOverride {
 #[derive(Clone)]
 struct Theme {
     palette: Palette,
+    preview: PreviewTheme,
     classes: HashMap<FileClass, ClassStyle>,
     extensions: HashMap<String, RuleOverride>,
     files: HashMap<String, RuleOverride>,
@@ -64,6 +92,7 @@ pub(crate) struct ResolvedAppearance<'a> {
 #[derive(Deserialize, Default)]
 struct ThemeFile {
     palette: Option<PaletteOverride>,
+    preview: Option<PreviewOverride>,
     classes: Option<HashMap<String, ClassStyleOverride>>,
     extensions: Option<HashMap<String, RuleOverrideDef>>,
     files: Option<HashMap<String, RuleOverrideDef>>,
@@ -94,6 +123,33 @@ struct PaletteOverride {
 }
 
 #[derive(Deserialize, Default)]
+struct PreviewOverride {
+    code: Option<CodePreviewOverride>,
+}
+
+#[derive(Deserialize, Default)]
+struct CodePreviewOverride {
+    fg: Option<String>,
+    bg: Option<String>,
+    selection_bg: Option<String>,
+    selection_fg: Option<String>,
+    caret: Option<String>,
+    line_highlight: Option<String>,
+    line_number: Option<String>,
+    comment: Option<String>,
+    string: Option<String>,
+    constant: Option<String>,
+    keyword: Option<String>,
+    function: Option<String>,
+    r#type: Option<String>,
+    parameter: Option<String>,
+    tag: Option<String>,
+    operator: Option<String>,
+    r#macro: Option<String>,
+    invalid: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
 struct ClassStyleOverride {
     icon: Option<String>,
     color: Option<String>,
@@ -116,6 +172,10 @@ pub(crate) fn initialize() {
 
 pub(crate) fn palette() -> Palette {
     active_theme().palette
+}
+
+pub(crate) fn code_preview_palette() -> CodePreviewPalette {
+    active_theme().preview.code
 }
 
 pub(crate) fn classify_path(path: &Path, kind: EntryKind) -> FileClass {
@@ -444,6 +504,28 @@ impl Theme {
                 button_disabled_bg: rgb(8, 16, 27),
                 path_bg: rgb(12, 19, 32),
             },
+            preview: PreviewTheme {
+                code: CodePreviewPalette {
+                    fg: rgb(215, 227, 244),
+                    bg: rgb(10, 13, 18),
+                    selection_bg: rgb(18, 42, 63),
+                    selection_fg: rgb(242, 247, 255),
+                    caret: rgb(18, 210, 255),
+                    line_highlight: rgb(16, 21, 31),
+                    line_number: rgb(123, 144, 167),
+                    comment: rgb(111, 131, 153),
+                    string: rgb(121, 231, 213),
+                    constant: rgb(255, 166, 87),
+                    keyword: rgb(255, 120, 198),
+                    function: rgb(54, 215, 255),
+                    r#type: rgb(179, 140, 255),
+                    parameter: rgb(255, 216, 102),
+                    tag: rgb(89, 222, 148),
+                    operator: rgb(138, 231, 255),
+                    r#macro: rgb(255, 143, 64),
+                    invalid: rgb(255, 133, 133),
+                },
+            },
             classes,
             extensions,
             files,
@@ -464,6 +546,9 @@ impl Theme {
     fn apply_overrides(&mut self, parsed: ThemeFile) -> anyhow::Result<()> {
         if let Some(palette) = parsed.palette {
             apply_palette_overrides(&mut self.palette, palette)?;
+        }
+        if let Some(preview) = parsed.preview {
+            apply_preview_overrides(&mut self.preview, preview)?;
         }
 
         if let Some(classes) = parsed.classes {
@@ -573,6 +658,41 @@ fn apply_palette_color(target: &mut Color, value: Option<String>) -> anyhow::Res
     if let Some(value) = value {
         *target = parse_color(&value)?;
     }
+    Ok(())
+}
+
+fn apply_preview_overrides(
+    preview: &mut PreviewTheme,
+    overrides: PreviewOverride,
+) -> anyhow::Result<()> {
+    if let Some(code) = overrides.code {
+        apply_code_preview_overrides(&mut preview.code, code)?;
+    }
+    Ok(())
+}
+
+fn apply_code_preview_overrides(
+    code: &mut CodePreviewPalette,
+    overrides: CodePreviewOverride,
+) -> anyhow::Result<()> {
+    apply_palette_color(&mut code.fg, overrides.fg)?;
+    apply_palette_color(&mut code.bg, overrides.bg)?;
+    apply_palette_color(&mut code.selection_bg, overrides.selection_bg)?;
+    apply_palette_color(&mut code.selection_fg, overrides.selection_fg)?;
+    apply_palette_color(&mut code.caret, overrides.caret)?;
+    apply_palette_color(&mut code.line_highlight, overrides.line_highlight)?;
+    apply_palette_color(&mut code.line_number, overrides.line_number)?;
+    apply_palette_color(&mut code.comment, overrides.comment)?;
+    apply_palette_color(&mut code.string, overrides.string)?;
+    apply_palette_color(&mut code.constant, overrides.constant)?;
+    apply_palette_color(&mut code.keyword, overrides.keyword)?;
+    apply_palette_color(&mut code.function, overrides.function)?;
+    apply_palette_color(&mut code.r#type, overrides.r#type)?;
+    apply_palette_color(&mut code.parameter, overrides.parameter)?;
+    apply_palette_color(&mut code.tag, overrides.tag)?;
+    apply_palette_color(&mut code.operator, overrides.operator)?;
+    apply_palette_color(&mut code.r#macro, overrides.r#macro)?;
+    apply_palette_color(&mut code.invalid, overrides.invalid)?;
     Ok(())
 }
 
@@ -778,6 +898,37 @@ icon = "L"
         let resolved = theme.resolve(Path::new("custom.lock"), EntryKind::File);
         assert_eq!(resolved.class, FileClass::Data);
         assert_eq!(resolved.icon, "L");
+    }
+
+    #[test]
+    fn code_preview_colors_can_be_overridden_from_config() {
+        let theme = Theme::from_config_str(
+            r##"
+[preview.code]
+keyword = "#123456"
+function = "#abcdef"
+macro = "#fedcba"
+"##,
+        )
+        .expect("theme should parse");
+
+        assert_eq!(theme.preview.code.keyword, rgb(0x12, 0x34, 0x56));
+        assert_eq!(theme.preview.code.function, rgb(0xab, 0xcd, 0xef));
+        assert_eq!(theme.preview.code.r#macro, rgb(0xfe, 0xdc, 0xba));
+    }
+
+    #[test]
+    fn default_theme_assigns_specific_icons_for_common_dev_paths() {
+        let theme = Theme::default_theme();
+
+        let ts = theme.resolve(Path::new("main.ts"), EntryKind::File);
+        assert_eq!(ts.icon, "");
+
+        let package = theme.resolve(Path::new("package.json"), EntryKind::File);
+        assert_eq!(package.icon, "󰏗");
+
+        let modules = theme.resolve(Path::new("node_modules"), EntryKind::Directory);
+        assert_eq!(modules.icon, "󰏗");
     }
 
     #[test]
