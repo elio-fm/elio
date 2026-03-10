@@ -513,6 +513,13 @@ mod tests {
         }
     }
 
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>()
+    }
+
     #[test]
     fn markdown_preview_formats_headings_and_lists() {
         let root = temp_path("markdown");
@@ -567,7 +574,7 @@ mod tests {
             preview
                 .lines
                 .iter()
-                .any(|line| line.spans.iter().any(|span| span.content == "fn main() {}"))
+                .any(|line| line_text(line).contains("fn main() {}"))
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -590,6 +597,23 @@ mod tests {
             .find(|span| span.content == "elio")
             .expect("link label should be rendered");
         assert!(link_span.style.add_modifier.contains(Modifier::UNDERLINED));
+        assert!(line_text(line).contains("(https://example.com)"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn markdown_preview_adds_spacing_between_blocks() {
+        let root = temp_path("markdown-spacing");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("README.md");
+        fs::write(&path, "# Heading\nParagraph text\n\n```rust\nlet x = 1;\n```\n")
+            .expect("failed to write markdown");
+
+        let preview = build_preview(&file_entry(path));
+
+        assert_eq!(preview.kind, PreviewKind::Markdown);
+        assert!(preview.lines.iter().any(|line| line.spans.is_empty()));
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

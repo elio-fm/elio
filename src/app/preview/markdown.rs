@@ -5,6 +5,7 @@ use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
 };
+use std::path::Path;
 
 #[derive(Clone, Debug, Default)]
 struct ListContext {
@@ -24,6 +25,12 @@ struct CodeBlockContext {
     text: String,
 }
 
+#[derive(Clone, Debug)]
+struct InlineTarget {
+    destination: String,
+    is_image: bool,
+}
+
 struct MarkdownRenderer {
     palette: appearance::Palette,
     lines: Vec<Line<'static>>,
@@ -34,7 +41,7 @@ struct MarkdownRenderer {
     blockquote_depth: usize,
     heading_level: Option<HeadingLevel>,
     code_block: Option<CodeBlockContext>,
-    in_image: bool,
+    inline_targets: Vec<InlineTarget>,
     pending_table_cell_separator: bool,
 }
 
@@ -67,13 +74,14 @@ impl MarkdownRenderer {
             blockquote_depth: 0,
             heading_level: None,
             code_block: None,
-            in_image: false,
+            inline_targets: Vec::new(),
             pending_table_cell_separator: false,
         }
     }
 
     fn finish(mut self) -> Vec<Line<'static>> {
         self.flush_line_if_content();
+        self.trim_trailing_blank_lines();
         if self.lines.is_empty() {
             self.lines.push(Line::from("File is empty"));
         }
@@ -91,6 +99,7 @@ impl MarkdownRenderer {
                 Event::End(TagEnd::CodeBlock) => {
                     let code_block = self.code_block.take().expect("code block should exist");
                     self.render_code_block(code_block);
+                    self.push_blank_line();
                 }
                 Event::Text(text)
                 | Event::Code(text)
@@ -123,17 +132,21 @@ impl MarkdownRenderer {
 
     fn start_tag(&mut self, tag: Tag<'_>) {
         match tag {
-            Tag::Paragraph => {}
+            Tag::Paragraph => {
+                if self.current_item.is_none() {
+                    self.ensure_block_gap();
+                }
+            }
             Tag::Heading { level, .. } => {
-                self.flush_line_if_content();
+                self.ensure_block_gap();
                 self.heading_level = Some(level);
             }
             Tag::BlockQuote(_) => {
-                self.flush_line_if_content();
+                self.ensure_block_gap();
                 self.blockquote_depth += 1;
             }
             Tag::List(start) => {
-                self.flush_line_if_content();
+                self.ensure_block_gap();
                 self.list_stack.push(ListContext { next_index: start });
             }
             Tag::Item => {
@@ -141,7 +154,7 @@ impl MarkdownRenderer {
                 self.current_item = Some(self.make_item_context());
             }
             Tag::CodeBlock(kind) => {
-                self.flush_line_if_content();
+                self.ensure_block_gap();
                 self.code_block = Some(CodeBlockContext {
                     language: code_block_label(kind),
                     text: String::new(),
@@ -156,22 +169,31 @@ impl MarkdownRenderer {
             Tag::Strikethrough => self
                 .styles
                 .push(Style::default().add_modifier(Modifier::CROSSED_OUT)),
-            Tag::Link { .. } => self.styles.push(
-                Style::default()
-                    .fg(self.palette.accent)
-                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-            ),
-            Tag::Image { .. } => {
-                self.in_image = true;
+            Tag::Link { dest_url, .. } => {
+                self.styles.push(
+                    Style::default()
+                        .fg(self.palette.accent)
+                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                );
+                self.inline_targets.push(InlineTarget {
+                    destination: dest_url.to_string(),
+                    is_image: false,
+                });
+            }
+            Tag::Image { dest_url, .. } => {
                 self.push_styled_text("image: ", Style::default().fg(self.palette.muted));
                 self.styles.push(
                     Style::default()
                         .fg(self.palette.accent)
                         .add_modifier(Modifier::ITALIC),
                 );
+                self.inline_targets.push(InlineTarget {
+                    destination: dest_url.to_string(),
+                    is_image: true,
+                });
             }
             Tag::Table(_) => {
-                self.flush_line_if_content();
+                self.ensure_block_gap();
                 self.pending_table_cell_separator = false;
             }
             Tag::TableHead | Tag::TableRow => {
@@ -190,17 +212,26 @@ impl MarkdownRenderer {
 
     fn end_tag(&mut self, tag: TagEnd) {
         match tag {
-            TagEnd::Paragraph | TagEnd::Heading(_) => {
+            TagEnd::Paragraph => {
+                self.flush_line_if_content();
+                if self.current_item.is_none() {
+                    self.push_blank_line();
+                }
+            }
+            TagEnd::Heading(_) => {
                 self.flush_line_if_content();
                 self.heading_level = None;
+                self.push_blank_line();
             }
             TagEnd::BlockQuote(_) => {
                 self.flush_line_if_content();
                 self.blockquote_depth = self.blockquote_depth.saturating_sub(1);
+                self.push_blank_line();
             }
             TagEnd::List(_) => {
                 self.flush_line_if_content();
                 self.list_stack.pop();
+                self.push_blank_line();
             }
             TagEnd::Item => {
                 self.flush_line_if_content();
@@ -212,13 +243,16 @@ impl MarkdownRenderer {
             | TagEnd::Link
             | TagEnd::Image => {
                 self.styles.pop();
-                if matches!(tag, TagEnd::Image) {
-                    self.in_image = false;
+                if let Some(target) = self.inline_targets.pop() {
+                    self.push_inline_destination(&target);
                 }
             }
             TagEnd::Table | TagEnd::TableHead | TagEnd::TableRow => {
                 self.flush_line_if_content();
                 self.pending_table_cell_separator = false;
+                if matches!(tag, TagEnd::Table) {
+                    self.push_blank_line();
+                }
             }
             TagEnd::TableCell => {}
             _ => {}
@@ -259,11 +293,12 @@ impl MarkdownRenderer {
     }
 
     fn push_rule(&mut self) {
-        self.flush_line_if_content();
+        self.ensure_block_gap();
         self.push_line(Line::from(Span::styled(
             "────────────────",
             Style::default().fg(self.palette.border),
         )));
+        self.push_blank_line();
     }
 
     fn push_inline_code(&mut self, text: &str) {
@@ -299,6 +334,9 @@ impl MarkdownRenderer {
         if let Some(level) = self.heading_level {
             style = style.patch(heading_style(level, self.palette));
         }
+        if self.blockquote_depth > 0 {
+            style = style.patch(Style::default().fg(self.palette.muted));
+        }
         for extra in &self.styles {
             style = style.patch(*extra);
         }
@@ -329,6 +367,53 @@ impl MarkdownRenderer {
                 ));
             }
         }
+    }
+
+    fn ensure_block_gap(&mut self) {
+        self.flush_line_if_content();
+        self.push_blank_line();
+    }
+
+    fn push_blank_line(&mut self) {
+        if self.lines.is_empty() || self.last_line_is_blank() {
+            return;
+        }
+        self.push_line(Line::from(String::new()));
+    }
+
+    fn last_line_is_blank(&self) -> bool {
+        self.lines
+            .last()
+            .is_some_and(|line| line.spans.iter().all(|span| span.content.is_empty()))
+    }
+
+    fn trim_trailing_blank_lines(&mut self) {
+        while self.last_line_is_blank() {
+            self.lines.pop();
+        }
+    }
+
+    fn push_inline_destination(&mut self, target: &InlineTarget) {
+        let destination = target.destination.trim();
+        if destination.is_empty() {
+            return;
+        }
+
+        self.push_styled_text(" ", Style::default().fg(self.palette.muted));
+        self.push_styled_text(
+            &format!("({destination})"),
+            Style::default()
+                .fg(if target.is_image {
+                    self.palette.muted
+                } else {
+                    self.palette.accent
+                })
+                .add_modifier(if target.is_image {
+                    Modifier::ITALIC
+                } else {
+                    Modifier::UNDERLINED
+                }),
+        );
     }
 
     fn line_break(&mut self) {
@@ -371,36 +456,24 @@ impl MarkdownRenderer {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                code_block.language,
+                code_block.language.clone(),
                 Style::default()
                     .fg(self.palette.muted)
                     .add_modifier(Modifier::ITALIC),
             ),
         ]));
 
-        let mut rendered_any = false;
-        for line in code_block.text.lines() {
+        let rendered = super::syntax::render_code_preview(
+            Path::new("markdown-fence"),
+            &code_block.text,
+            Some(&code_block.language),
+            false,
+        );
+        for line in rendered {
             if self.is_full() {
                 break;
             }
-            rendered_any = true;
-            self.push_line(Line::from(vec![
-                Span::styled("│ ", Style::default().fg(self.palette.border)),
-                Span::styled(
-                    super::expand_tabs(line),
-                    Style::default().fg(self.palette.text),
-                ),
-            ]));
-        }
-
-        if !rendered_any && !self.is_full() {
-            self.push_line(Line::from(vec![
-                Span::styled("│ ", Style::default().fg(self.palette.border)),
-                Span::styled(
-                    "Code block is empty",
-                    Style::default().fg(self.palette.muted),
-                ),
-            ]));
+            self.push_line(line);
         }
     }
 }
