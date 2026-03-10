@@ -21,6 +21,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     state.hidden_button = None;
     state.view_button = None;
     state.preview_rows_visible = 0;
+    state.preview_cols_visible = 0;
 
     let area = frame.area();
     frame.render_widget(

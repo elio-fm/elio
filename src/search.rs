@@ -146,9 +146,8 @@ where
     for index in pool {
         let candidate = &candidates[index];
         let exact_name_bonus = (candidate.name_key == query_key) as i64 * 220;
-        let name_score = fuzzy_score_bytes(needle, candidate.name_key.as_bytes()).map(|score| {
-            score + 80 + i64::from(candidate.is_dir) * 12 + exact_name_bonus
-        });
+        let name_score = fuzzy_score_bytes(needle, candidate.name_key.as_bytes())
+            .map(|score| score + 80 + i64::from(candidate.is_dir) * 12 + exact_name_bonus);
         let path_score = fuzzy_score_bytes(needle, candidate.relative_key.as_bytes());
         let score = match (name_score, path_score) {
             (Some(name), Some(path)) => name.max(path),
@@ -304,33 +303,33 @@ mod tests {
         fs::create_dir_all(root.join(".hidden-root/needle")).expect("failed to create hidden dir");
         fs::create_dir_all(root.join("projects/needle")).expect("failed to create visible dir");
 
-        let hidden_off = collect_candidates_with_limits(
-            &root,
-            false,
-            SearchCandidateScope::Folders,
-            100,
-            1_000,
-        )
-        .expect("failed to collect visible candidates");
-        assert!(hidden_off.iter().any(|candidate| candidate.relative == "projects"));
-        assert!(hidden_off
-            .iter()
-            .any(|candidate| candidate.relative == "projects/needle"));
-        assert!(!hidden_off
-            .iter()
-            .any(|candidate| candidate.relative == ".hidden-root/needle"));
+        let hidden_off =
+            collect_candidates_with_limits(&root, false, SearchCandidateScope::Folders, 100, 1_000)
+                .expect("failed to collect visible candidates");
+        assert!(
+            hidden_off
+                .iter()
+                .any(|candidate| candidate.relative == "projects")
+        );
+        assert!(
+            hidden_off
+                .iter()
+                .any(|candidate| candidate.relative == "projects/needle")
+        );
+        assert!(
+            !hidden_off
+                .iter()
+                .any(|candidate| candidate.relative == ".hidden-root/needle")
+        );
 
-        let hidden_on = collect_candidates_with_limits(
-            &root,
-            true,
-            SearchCandidateScope::Folders,
-            100,
-            1_000,
-        )
-        .expect("failed to collect hidden candidates");
-        assert!(hidden_on
-            .iter()
-            .any(|candidate| candidate.relative == ".hidden-root/needle"));
+        let hidden_on =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
+                .expect("failed to collect hidden candidates");
+        assert!(
+            hidden_on
+                .iter()
+                .any(|candidate| candidate.relative == ".hidden-root/needle")
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp tree");
     }
@@ -343,22 +342,19 @@ mod tests {
         fs::create_dir_all(root.join("beta")).expect("failed to create beta dir");
         fs::create_dir_all(root.join("gamma")).expect("failed to create gamma dir");
 
-        let candidates = collect_candidates_with_limits(
-            &root,
-            true,
-            SearchCandidateScope::Folders,
-            6,
-            1_000,
-        )
-        .expect("failed to collect candidates");
+        let candidates =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 6, 1_000)
+                .expect("failed to collect candidates");
 
         assert_eq!(candidates[0].relative, ".hidden-root");
         assert_eq!(candidates[1].relative, "alpha");
         assert_eq!(candidates[2].relative, "beta");
         assert_eq!(candidates[3].relative, "gamma");
-        assert!(candidates
-            .iter()
-            .any(|candidate| candidate.relative == ".hidden-root/needle"));
+        assert!(
+            candidates
+                .iter()
+                .any(|candidate| candidate.relative == ".hidden-root/needle")
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp tree");
     }

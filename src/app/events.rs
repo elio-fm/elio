@@ -22,11 +22,13 @@ impl App {
             self.wheel_scroll.vertical.pending = 0;
             self.wheel_scroll.horizontal.pending = 0;
             self.wheel_scroll.preview.pending = 0;
+            self.wheel_scroll.preview_horizontal.pending = 0;
             dirty |= self.flush_search_scroll();
         } else {
             self.wheel_scroll.search.pending = 0;
             dirty |= self.flush_entry_vertical_scroll();
             dirty |= self.flush_preview_scroll();
+            dirty |= self.flush_preview_horizontal_scroll();
             if self.view_mode == ViewMode::Grid {
                 dirty |= self.flush_entry_horizontal_scroll();
             } else {
@@ -41,6 +43,7 @@ impl App {
         self.wheel_scroll.vertical.pending != 0
             || self.wheel_scroll.horizontal.pending != 0
             || self.wheel_scroll.preview.pending != 0
+            || self.wheel_scroll.preview_horizontal.pending != 0
             || self.wheel_scroll.search.pending != 0
     }
 
@@ -249,12 +252,23 @@ impl App {
                     .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
                 {
                     self.focus_preview_scroll();
-                    Self::queue_scroll(
-                        &mut self.wheel_scroll.preview,
-                        1,
-                        self.wheel_step_divisor,
-                        WHEEL_SCROLL_QUEUE_LIMIT,
-                    );
+                    if mouse.modifiers.contains(KeyModifiers::SHIFT)
+                        && self.preview_allows_horizontal_scroll()
+                    {
+                        Self::queue_scroll(
+                            &mut self.wheel_scroll.preview_horizontal,
+                            1,
+                            self.wheel_step_divisor,
+                            WHEEL_SCROLL_QUEUE_LIMIT_HORIZONTAL,
+                        );
+                    } else {
+                        Self::queue_scroll(
+                            &mut self.wheel_scroll.preview,
+                            1,
+                            self.wheel_step_divisor,
+                            WHEEL_SCROLL_QUEUE_LIMIT,
+                        );
+                    }
                     return Ok(());
                 }
                 self.focus_entry_scroll();
@@ -290,12 +304,23 @@ impl App {
                     .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
                 {
                     self.focus_preview_scroll();
-                    Self::queue_scroll(
-                        &mut self.wheel_scroll.preview,
-                        -1,
-                        self.wheel_step_divisor,
-                        WHEEL_SCROLL_QUEUE_LIMIT,
-                    );
+                    if mouse.modifiers.contains(KeyModifiers::SHIFT)
+                        && self.preview_allows_horizontal_scroll()
+                    {
+                        Self::queue_scroll(
+                            &mut self.wheel_scroll.preview_horizontal,
+                            -1,
+                            self.wheel_step_divisor,
+                            WHEEL_SCROLL_QUEUE_LIMIT_HORIZONTAL,
+                        );
+                    } else {
+                        Self::queue_scroll(
+                            &mut self.wheel_scroll.preview,
+                            -1,
+                            self.wheel_step_divisor,
+                            WHEEL_SCROLL_QUEUE_LIMIT,
+                        );
+                    }
                     return Ok(());
                 }
                 self.focus_entry_scroll();
@@ -331,6 +356,14 @@ impl App {
                     .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
                 {
                     self.focus_preview_scroll();
+                    if self.preview_allows_horizontal_scroll() {
+                        Self::queue_scroll(
+                            &mut self.wheel_scroll.preview_horizontal,
+                            -1,
+                            self.wheel_step_divisor,
+                            WHEEL_SCROLL_QUEUE_LIMIT_HORIZONTAL,
+                        );
+                    }
                     return Ok(());
                 }
                 self.focus_entry_scroll();
@@ -348,6 +381,14 @@ impl App {
                     .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
                 {
                     self.focus_preview_scroll();
+                    if self.preview_allows_horizontal_scroll() {
+                        Self::queue_scroll(
+                            &mut self.wheel_scroll.preview_horizontal,
+                            1,
+                            self.wheel_step_divisor,
+                            WHEEL_SCROLL_QUEUE_LIMIT_HORIZONTAL,
+                        );
+                    }
                     return Ok(());
                 }
                 self.focus_entry_scroll();
@@ -418,6 +459,7 @@ impl App {
 
     fn focus_entry_scroll(&mut self) {
         Self::reset_scroll_lane(&mut self.wheel_scroll.preview);
+        Self::reset_scroll_lane(&mut self.wheel_scroll.preview_horizontal);
     }
 
     fn reset_scroll_lane(lane: &mut ScrollLane) {
@@ -490,6 +532,25 @@ impl App {
         previous != self.preview_scroll
     }
 
+    fn flush_preview_horizontal_scroll(&mut self) -> bool {
+        let Some(step) = Self::consume_scroll_step(
+            &mut self.wheel_scroll.preview_horizontal,
+            WHEEL_SCROLL_INTERVAL_HORIZONTAL,
+        ) else {
+            return false;
+        };
+
+        let previous = self.preview_horizontal_scroll;
+        let delta = self.preview_scroll_step();
+        if step < 0 {
+            self.preview_horizontal_scroll = self.preview_horizontal_scroll.saturating_sub(delta);
+        } else {
+            self.preview_horizontal_scroll = self.preview_horizontal_scroll.saturating_add(delta);
+        }
+        self.sync_preview_scroll();
+        previous != self.preview_horizontal_scroll
+    }
+
     fn preview_scroll_step(&self) -> usize {
         self.frame_state
             .preview_rows_visible
@@ -499,14 +560,16 @@ impl App {
 
     pub(super) fn sync_preview_scroll(&mut self) -> bool {
         let previous = self.preview_scroll;
-        let visible = self.frame_state.preview_rows_visible;
+        let previous_horizontal = self.preview_horizontal_scroll;
+        let visible_rows = self.frame_state.preview_rows_visible;
+        let visible_cols = self.frame_state.preview_cols_visible;
         let max_scroll = self
-            .preview_cache
-            .lines
-            .len()
-            .saturating_sub(visible.max(1));
+            .preview_total_lines(visible_cols)
+            .saturating_sub(visible_rows.max(1));
         self.preview_scroll = self.preview_scroll.min(max_scroll);
-        previous != self.preview_scroll
+        let max_horizontal = self.preview_max_horizontal_scroll(visible_cols);
+        self.preview_horizontal_scroll = self.preview_horizontal_scroll.min(max_horizontal);
+        previous != self.preview_scroll || previous_horizontal != self.preview_horizontal_scroll
     }
 
     pub(super) fn clear_wheel_scroll(&mut self) {
@@ -519,6 +582,9 @@ impl App {
         self.wheel_scroll.preview.pending = 0;
         self.wheel_scroll.preview.remainder = 0;
         self.wheel_scroll.preview.last_step_at = None;
+        self.wheel_scroll.preview_horizontal.pending = 0;
+        self.wheel_scroll.preview_horizontal.remainder = 0;
+        self.wheel_scroll.preview_horizontal.last_step_at = None;
         self.wheel_scroll.search.pending = 0;
         self.wheel_scroll.search.remainder = 0;
         self.wheel_scroll.search.last_step_at = None;

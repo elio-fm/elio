@@ -145,6 +145,7 @@ pub struct FrameState {
     pub view_button: Option<Rect>,
     pub metrics: ViewMetrics,
     pub preview_rows_visible: usize,
+    pub preview_cols_visible: usize,
     pub search_rows_visible: usize,
 }
 
@@ -199,6 +200,7 @@ struct ScrollState {
     horizontal: ScrollLane,
     vertical: ScrollLane,
     preview: ScrollLane,
+    preview_horizontal: ScrollLane,
     search: ScrollLane,
 }
 
@@ -287,6 +289,7 @@ pub struct App {
     pub sort_mode: SortMode,
     pub show_hidden: bool,
     pub preview_scroll: usize,
+    pub preview_horizontal_scroll: usize,
     pub status: String,
     pub help_open: bool,
     pub should_quit: bool,
@@ -334,6 +337,7 @@ impl App {
             sort_mode: SortMode::Name,
             show_hidden: false,
             preview_scroll: 0,
+            preview_horizontal_scroll: 0,
             status: String::new(),
             help_open: false,
             should_quit: false,
@@ -365,6 +369,11 @@ impl App {
                     last_step_at: None,
                 },
                 preview: ScrollLane {
+                    pending: 0,
+                    remainder: 0,
+                    last_step_at: None,
+                },
+                preview_horizontal: ScrollLane {
                     pending: 0,
                     remainder: 0,
                     last_step_at: None,

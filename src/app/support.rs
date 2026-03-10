@@ -29,6 +29,14 @@ struct FingerprintPart {
     readonly: bool,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct EntryDetails {
+    kind: EntryKind,
+    size: u64,
+    modified: Option<SystemTime>,
+    readonly: bool,
+}
+
 pub(crate) fn rect_contains(rect: Rect, x: u16, y: u16) -> bool {
     x >= rect.x
         && x < rect.x.saturating_add(rect.width)
@@ -37,18 +45,26 @@ pub(crate) fn rect_contains(rect: Rect, x: u16, y: u16) -> bool {
 }
 
 pub(crate) fn format_size(size: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    const UNITS: [&str; 5] = ["B", "kB", "MB", "GB", "TB"];
+    if size < 1000 {
+        return format!("{} B", format_with_grouping(size));
+    }
+
     let mut value = size as f64;
     let mut unit = 0usize;
-    while value >= 1024.0 && unit < UNITS.len() - 1 {
-        value /= 1024.0;
+    while value >= 1000.0 && unit < UNITS.len() - 1 {
+        value /= 1000.0;
         unit += 1;
     }
-    if unit == 0 {
-        format!("{} {}", size, UNITS[unit])
+
+    let precision = if value < 10.0 {
+        2
+    } else if value < 100.0 {
+        1
     } else {
-        format!("{value:.1} {}", UNITS[unit])
-    }
+        0
+    };
+    format!("{} {}", format_decimal(value, precision), UNITS[unit])
 }
 
 pub(crate) fn format_time_ago(time: SystemTime) -> String {
@@ -119,24 +135,15 @@ pub(super) fn read_entries(dir: &Path, show_hidden: bool) -> Result<Vec<Entry>> 
 
         let metadata = fs::symlink_metadata(&path)
             .with_context(|| format!("failed to read metadata for {}", path.display()))?;
-        let kind = if metadata.is_dir() {
-            EntryKind::Directory
-        } else {
-            EntryKind::File
-        };
-        let size = if metadata.is_file() {
-            metadata.len()
-        } else {
-            0
-        };
+        let details = entry_details(&path, &metadata);
         entries.push(Entry {
             path,
             name,
             name_key,
-            kind,
-            size,
-            modified: metadata.modified().ok(),
-            readonly: metadata.permissions().readonly(),
+            kind: details.kind,
+            size: details.size,
+            modified: details.modified,
+            readonly: details.readonly,
             hidden,
         });
     }
@@ -174,20 +181,13 @@ pub(super) fn scan_directory_fingerprint(
             Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
             Err(error) => return Err(error.into()),
         };
+        let details = entry_details(&item.path(), &metadata);
         parts.push(FingerprintPart {
             name: file_name.to_string_lossy().to_lowercase(),
-            kind: if metadata.is_dir() {
-                EntryKind::Directory
-            } else {
-                EntryKind::File
-            },
-            size: if metadata.is_file() {
-                metadata.len()
-            } else {
-                0
-            },
-            modified: fingerprint_time(metadata.modified().ok()),
-            readonly: metadata.permissions().readonly(),
+            kind: details.kind,
+            size: details.size,
+            modified: fingerprint_time(details.modified),
+            readonly: details.readonly,
         });
     }
     Ok(fingerprint_from_parts(&mut parts))
@@ -213,6 +213,56 @@ pub(super) fn sort_entries(entries: &mut [Entry], mode: SortMode) {
 
 fn is_hidden(file_name: &OsStr) -> bool {
     file_name.to_string_lossy().starts_with('.')
+}
+
+fn entry_details(path: &Path, metadata: &fs::Metadata) -> EntryDetails {
+    let resolved = metadata
+        .file_type()
+        .is_symlink()
+        .then(|| fs::metadata(path).ok())
+        .flatten();
+    let metadata = resolved.as_ref().unwrap_or(metadata);
+    EntryDetails {
+        kind: if metadata.is_dir() {
+            EntryKind::Directory
+        } else {
+            EntryKind::File
+        },
+        size: if metadata.is_file() {
+            metadata.len()
+        } else {
+            0
+        },
+        modified: metadata.modified().ok(),
+        readonly: metadata.permissions().readonly(),
+    }
+}
+
+fn format_with_grouping(value: u64) -> String {
+    let digits = value.to_string();
+    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
+    for (index, ch) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+    grouped
+}
+
+fn format_decimal(value: f64, precision: usize) -> String {
+    let mut formatted = format!("{value:.precision$}");
+    if precision == 0 {
+        return formatted;
+    }
+
+    while formatted.ends_with('0') {
+        formatted.pop();
+    }
+    if formatted.ends_with('.') {
+        formatted.pop();
+    }
+    formatted
 }
 
 fn fingerprint_from_parts(parts: &mut [FingerprintPart]) -> DirectoryFingerprint {
@@ -315,7 +365,54 @@ mod tests {
     #[test]
     fn size_format_is_human_readable() {
         assert_eq!(format_size(512), "512 B");
-        assert_eq!(format_size(2048), "2.0 KB");
+        assert_eq!(format_size(2_048), "2.05 kB");
+        assert_eq!(format_size(5_488), "5.49 kB");
+        assert_eq!(format_size(12_345_678), "12.3 MB");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlinked_file_uses_target_size() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("symlink-file");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let target = root.join("target.txt");
+        fs::write(&target, "hello world").expect("failed to write target file");
+        symlink(&target, root.join("linked.txt")).expect("failed to create symlink");
+
+        let entries = read_entries(&root, false).expect("failed to read entries");
+        let linked = entries
+            .iter()
+            .find(|entry| entry.name == "linked.txt")
+            .expect("linked file should be present");
+
+        assert_eq!(linked.kind, EntryKind::File);
+        assert_eq!(linked.size, 11);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlinked_directory_uses_target_kind() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("symlink-dir");
+        let target = root.join("target-dir");
+        fs::create_dir_all(&target).expect("failed to create target dir");
+        symlink(&target, root.join("linked-dir")).expect("failed to create directory symlink");
+
+        let entries = read_entries(&root, false).expect("failed to read entries");
+        let linked = entries
+            .iter()
+            .find(|entry| entry.name == "linked-dir")
+            .expect("linked dir should be present");
+
+        assert!(linked.is_dir());
+        assert_eq!(linked.size, 0);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
     }
 
     #[test]

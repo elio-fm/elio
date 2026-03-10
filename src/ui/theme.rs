@@ -34,11 +34,19 @@ pub(super) fn entry_symbol(entry: &Entry) -> &'static str {
 
 pub(super) fn path_color(path: &Path, is_dir: bool, palette: Palette) -> Color {
     let _ = palette;
-    let kind = if is_dir { crate::app::EntryKind::Directory } else { crate::app::EntryKind::File };
+    let kind = if is_dir {
+        crate::app::EntryKind::Directory
+    } else {
+        crate::app::EntryKind::File
+    };
     appearance::resolve_path(path, kind).color
 }
 
 pub(super) fn path_symbol(path: &Path, is_dir: bool) -> &'static str {
-    let kind = if is_dir { crate::app::EntryKind::Directory } else { crate::app::EntryKind::File };
+    let kind = if is_dir {
+        crate::app::EntryKind::Directory
+    } else {
+        crate::app::EntryKind::File
+    };
     appearance::resolve_path(path, kind).icon
 }

@@ -5,6 +5,8 @@ use ratatui::{
 };
 use std::path::Path;
 
+// These renderers are intentionally heuristic. They provide a readable backup
+// when syntect has no syntax for a file, but they are not meant to be exact.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum FallbackSyntax {
     JsLike,
@@ -22,6 +24,10 @@ impl FallbackSyntax {
             Self::Yaml => "YAML",
         }
     }
+
+    pub(super) fn detail_label(self) -> String {
+        format!("{} (best-effort)", self.label())
+    }
 }
 
 pub(super) fn preview_fallback_syntax(path: &Path) -> Option<FallbackSyntax> {
@@ -29,9 +35,7 @@ pub(super) fn preview_fallback_syntax(path: &Path) -> Option<FallbackSyntax> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
 
     match ext.as_str() {
-        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => {
-            Some(FallbackSyntax::JsLike)
-        }
+        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => Some(FallbackSyntax::JsLike),
         "toml" => Some(FallbackSyntax::Toml),
         "json" | "jsonc" => Some(FallbackSyntax::Json),
         "yaml" | "yml" => Some(FallbackSyntax::Yaml),
@@ -111,7 +115,11 @@ fn highlight_js_like_line(
 
         if matches!(ch, '"' | '\'' | '`') {
             let end = scan_string(body, index, ch);
-            spans.push(styled_text(&body[index..end], palette.string, Modifier::empty()));
+            spans.push(styled_text(
+                &body[index..end],
+                palette.string,
+                Modifier::empty(),
+            ));
             index = end;
             last_word = None;
             continue;
@@ -141,7 +149,10 @@ fn highlight_js_like_line(
                     | Some("enum")
                     | Some("namespace")
             ) {
-                if matches!(last_word.as_deref(), Some("class" | "interface" | "type" | "enum" | "namespace")) {
+                if matches!(
+                    last_word.as_deref(),
+                    Some("class" | "interface" | "type" | "enum" | "namespace")
+                ) {
                     palette.r#type
                 } else {
                     palette.function
@@ -184,8 +195,12 @@ fn highlight_js_like_line(
 
         let end = consume_operator(body, index);
         let token = &body[index..end];
-        let color = if token == "=>" || token == "::" || token == "?."
-            || token == "??" || token == "&&" || token == "||"
+        let color = if token == "=>"
+            || token == "::"
+            || token == "?."
+            || token == "??"
+            || token == "&&"
+            || token == "||"
         {
             palette.operator
         } else if token == "<" || token == ">" || token == "</" || token == "/>" {
@@ -579,7 +594,11 @@ fn split_line_comment(input: &str) -> (&str, Option<&str>) {
             continue;
         }
 
-        if ch == '/' && bytes.get(index + 1).is_some_and(|next| *next as char == '/') {
+        if ch == '/'
+            && bytes
+                .get(index + 1)
+                .is_some_and(|next| *next as char == '/')
+        {
             return (&input[..index], Some(&input[index..]));
         }
 
@@ -602,7 +621,12 @@ fn consume_operator(input: &str, start: usize) -> usize {
             return start + token.len();
         }
     }
-    start + input[start..].chars().next().map(char::len_utf8).unwrap_or(1)
+    start
+        + input[start..]
+            .chars()
+            .next()
+            .map(char::len_utf8)
+            .unwrap_or(1)
 }
 
 fn is_js_keyword(token: &str) -> bool {
@@ -671,4 +695,23 @@ fn styled_text(text: &str, color: Color, modifier: Modifier) -> Span<'static> {
         text.to_string(),
         Style::default().fg(color).add_modifier(modifier),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn fallback_detail_label_marks_best_effort() {
+        assert_eq!(FallbackSyntax::Json.detail_label(), "JSON (best-effort)");
+    }
+
+    #[test]
+    fn jsonc_file_can_use_fallback_highlighting() {
+        assert_eq!(
+            preview_fallback_syntax(Path::new("deno.jsonc")),
+            Some(FallbackSyntax::Json)
+        );
+    }
 }

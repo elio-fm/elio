@@ -37,12 +37,25 @@ impl PreviewKind {
             Self::Binary | Self::Unavailable => "Preview",
         }
     }
+
+    pub(super) fn wraps_in_preview(self) -> bool {
+        matches!(
+            self,
+            Self::Markdown | Self::Text | Self::Binary | Self::Unavailable
+        )
+    }
+
+    pub(super) fn allows_horizontal_scroll(self) -> bool {
+        self == Self::Code
+    }
 }
 
 #[derive(Clone, Debug)]
 pub(super) struct PreviewContent {
     pub kind: PreviewKind,
     pub detail: Option<String>,
+    pub truncated: bool,
+    pub truncation_note: Option<String>,
     pub source_lines: Option<usize>,
     pub item_count: Option<usize>,
     pub folder_count: Option<usize>,
@@ -50,11 +63,18 @@ pub(super) struct PreviewContent {
     pub lines: Vec<Line<'static>>,
 }
 
+struct TextPreview {
+    text: String,
+    bytes_truncated: bool,
+}
+
 impl PreviewContent {
     pub(super) fn new(kind: PreviewKind, lines: Vec<Line<'static>>) -> Self {
         Self {
             kind,
             detail: None,
+            truncated: false,
+            truncation_note: None,
             source_lines: None,
             item_count: None,
             folder_count: None,
@@ -80,6 +100,12 @@ impl PreviewContent {
         self
     }
 
+    pub(super) fn with_truncation(mut self, note: impl Into<String>) -> Self {
+        self.truncated = true;
+        self.truncation_note = Some(note.into());
+        self
+    }
+
     pub(super) fn with_directory_counts(
         mut self,
         item_count: usize,
@@ -100,13 +126,27 @@ impl PreviewContent {
         self.lines.len()
     }
 
-    pub(super) fn lines_for_viewport(&self, offset: usize, max_lines: usize) -> Vec<Line<'static>> {
+    pub(super) fn lines(&self) -> Vec<Line<'static>> {
+        self.lines.clone()
+    }
+
+    pub(super) fn visual_line_count(&self, width: usize) -> usize {
+        if !self.kind.wraps_in_preview() {
+            return self.total_lines();
+        }
+        let width = width.max(1);
         self.lines
             .iter()
-            .skip(offset)
-            .take(max_lines)
-            .cloned()
-            .collect()
+            .map(|line| {
+                let line_width = preview_line_width(line);
+                line_width.max(1).div_ceil(width)
+            })
+            .sum::<usize>()
+            .max(1)
+    }
+
+    pub(super) fn max_line_width(&self) -> usize {
+        self.lines.iter().map(preview_line_width).max().unwrap_or(0)
     }
 
     pub(super) fn header_detail(&self, offset: usize, visible_rows: usize) -> Option<String> {
@@ -114,12 +154,23 @@ impl PreviewContent {
             return self.detail.clone();
         }
 
+        let mut parts = Vec::new();
+        if let Some(detail) = &self.detail
+            && !detail.is_empty()
+        {
+            parts.push(detail.clone());
+        }
+
         if let Some(source_lines) = self.source_lines {
-            let summary = format!("{source_lines} lines");
-            return match &self.detail {
-                Some(detail) if !detail.is_empty() => Some(format!("{detail}  •  {summary}")),
-                _ => Some(summary),
-            };
+            parts.push(format!("{source_lines} lines"));
+        }
+
+        if let Some(note) = &self.truncation_note {
+            parts.push(note.clone());
+        }
+
+        if !parts.is_empty() {
+            return Some(parts.join("  •  "));
         }
 
         let rendered_total = self.total_lines();
@@ -142,6 +193,13 @@ impl PreviewContent {
     }
 }
 
+fn preview_line_width(line: &Line<'_>) -> usize {
+    line.spans
+        .iter()
+        .map(|span| span.content.chars().count())
+        .sum()
+}
+
 fn status_preview(
     kind: PreviewKind,
     detail: impl Into<String>,
@@ -155,42 +213,67 @@ pub(super) fn build_preview(entry: &Entry) -> PreviewContent {
         return build_directory_preview(entry);
     }
 
-    let text = match read_text_preview(&entry.path) {
+    let text_preview = match read_text_preview(&entry.path) {
         Ok(Some(text)) => text,
         Ok(None) => return binary_preview(),
         Err(_) => return unavailable_preview("The file could not be read"),
     };
-    let source_line_count = count_source_lines(&text);
+    let source_line_count = count_source_lines(&text_preview.text);
+    let line_truncated = source_line_count > PREVIEW_RENDER_LINE_LIMIT;
+    let truncation_note = truncation_note(text_preview.bytes_truncated, line_truncated);
     let syntax_hint = syntax::preview_syntax_hint(&entry.path);
 
     if is_markdown_path(&entry.path) {
-        return PreviewContent::new(
+        let preview = PreviewContent::new(
             PreviewKind::Markdown,
-            markdown::render_markdown_preview(&text),
-        )
-        .with_source_lines(source_line_count);
+            markdown::render_markdown_preview(&text_preview.text),
+        );
+        return finalize_text_preview(
+            preview,
+            source_line_count,
+            text_preview.bytes_truncated,
+            truncation_note,
+        );
     }
 
     if let Some(syntax) = syntax::preview_code_syntax(entry, syntax::syntax_set(), syntax_hint) {
-        return PreviewContent::new(
+        let preview = PreviewContent::new(
             PreviewKind::Code,
-            syntax::render_code_preview(&entry.path, &text, syntax_hint, true),
+            syntax::render_code_preview(&entry.path, &text_preview.text, syntax_hint, true),
         )
-        .with_detail(syntax.name.clone())
-        .with_source_lines(source_line_count);
+        .with_detail(syntax.name.clone());
+        return finalize_text_preview(
+            preview,
+            source_line_count,
+            text_preview.bytes_truncated,
+            truncation_note,
+        );
     }
 
     if let Some(fallback_syntax) = fallback::preview_fallback_syntax(&entry.path) {
-        return PreviewContent::new(
+        let preview = PreviewContent::new(
             PreviewKind::Code,
-            fallback::render_fallback_code_preview(&text, fallback_syntax, true),
+            fallback::render_fallback_code_preview(&text_preview.text, fallback_syntax, true),
         )
-        .with_detail(fallback_syntax.label())
-        .with_source_lines(source_line_count);
+        .with_detail(fallback_syntax.detail_label());
+        return finalize_text_preview(
+            preview,
+            source_line_count,
+            text_preview.bytes_truncated,
+            truncation_note,
+        );
     }
 
-    PreviewContent::new(PreviewKind::Text, render_plain_text_preview(&text))
-        .with_source_lines(source_line_count)
+    let preview = PreviewContent::new(
+        PreviewKind::Text,
+        render_plain_text_preview(&text_preview.text),
+    );
+    finalize_text_preview(
+        preview,
+        source_line_count,
+        text_preview.bytes_truncated,
+        truncation_note,
+    )
 }
 
 fn build_directory_preview(entry: &Entry) -> PreviewContent {
@@ -281,6 +364,36 @@ fn count_source_lines(text: &str) -> usize {
     text.lines().count().max(1)
 }
 
+fn finalize_text_preview(
+    mut preview: PreviewContent,
+    source_line_count: usize,
+    bytes_truncated: bool,
+    truncation_note: Option<String>,
+) -> PreviewContent {
+    if !bytes_truncated {
+        preview = preview.with_source_lines(source_line_count);
+    }
+    if let Some(note) = truncation_note {
+        preview = preview.with_truncation(note);
+    }
+    preview
+}
+
+fn truncation_note(bytes_truncated: bool, line_truncated: bool) -> Option<String> {
+    let mut parts = Vec::new();
+    if bytes_truncated {
+        parts.push("truncated to 64 KiB".to_string());
+    }
+    if line_truncated {
+        parts.push(format!("showing first {PREVIEW_RENDER_LINE_LIMIT} lines"));
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("  •  "))
+    }
+}
+
 fn binary_preview() -> PreviewContent {
     status_preview(
         PreviewKind::Binary,
@@ -307,21 +420,40 @@ fn trim_trailing_line_endings(line: &str) -> String {
     line.trim_end_matches(['\n', '\r']).to_string()
 }
 
-fn read_text_preview(path: &Path) -> anyhow::Result<Option<String>> {
-    let mut file = File::open(path)?;
-    let mut buffer = vec![0; PREVIEW_LIMIT_BYTES];
-    let count = file.read(&mut buffer)?;
-    buffer.truncate(count);
+fn read_text_preview(path: &Path) -> anyhow::Result<Option<TextPreview>> {
+    let file = File::open(path)?;
+    let mut buffer = Vec::with_capacity(PREVIEW_LIMIT_BYTES + 1);
+    file.take(PREVIEW_LIMIT_BYTES as u64 + 1)
+        .read_to_end(&mut buffer)?;
+    let bytes_truncated = buffer.len() > PREVIEW_LIMIT_BYTES;
+    if bytes_truncated {
+        buffer.truncate(PREVIEW_LIMIT_BYTES);
+    }
 
     if buffer.is_empty() {
-        return Ok(Some(String::new()));
+        return Ok(Some(TextPreview {
+            text: String::new(),
+            bytes_truncated,
+        }));
     }
     if buffer.contains(&0) {
         return Ok(None);
     }
 
     match String::from_utf8(buffer) {
-        Ok(text) => Ok(Some(text)),
+        Ok(text) => Ok(Some(TextPreview {
+            text,
+            bytes_truncated,
+        })),
+        Err(error) if bytes_truncated && error.utf8_error().error_len().is_none() => {
+            let valid_up_to = error.utf8_error().valid_up_to();
+            let bytes = error.into_bytes();
+            let text = String::from_utf8(bytes[..valid_up_to].to_vec()).ok();
+            Ok(text.map(|text| TextPreview {
+                text,
+                bytes_truncated: true,
+            }))
+        }
         Err(_) => Ok(None),
     }
 }
@@ -354,6 +486,7 @@ fn is_markdown_path(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::style::Modifier;
     use std::{
         fs,
         path::PathBuf,
@@ -397,6 +530,120 @@ mod tests {
                 .lines
                 .iter()
                 .any(|line| line.spans.iter().any(|span| span.content == "inline"))
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn markdown_preview_formats_inline_emphasis_mid_line() {
+        let root = temp_path("markdown-inline");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("README.md");
+        fs::write(&path, "hello **bold** world\n").expect("failed to write markdown");
+
+        let preview = build_preview(&file_entry(path));
+        let line = &preview.lines[0];
+
+        assert_eq!(preview.kind, PreviewKind::Markdown);
+        assert!(line.spans.iter().any(|span| span.content == "hello "));
+        assert!(line.spans.iter().any(|span| span.content == "bold"));
+        assert!(line.spans.iter().any(|span| span.content == " world"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn markdown_preview_renders_fenced_code_blocks() {
+        let root = temp_path("markdown-fence");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("README.md");
+        fs::write(&path, "```rust\nfn main() {}\n```\n").expect("failed to write markdown");
+
+        let preview = build_preview(&file_entry(path));
+
+        assert_eq!(preview.kind, PreviewKind::Markdown);
+        assert_eq!(preview.lines[0].spans[1].content, "rust");
+        assert!(
+            preview
+                .lines
+                .iter()
+                .any(|line| line.spans.iter().any(|span| span.content == "fn main() {}"))
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn markdown_preview_renders_links() {
+        let root = temp_path("markdown-links");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("README.md");
+        fs::write(&path, "open [elio](https://example.com)\n").expect("failed to write markdown");
+
+        let preview = build_preview(&file_entry(path));
+        let line = &preview.lines[0];
+
+        assert_eq!(preview.kind, PreviewKind::Markdown);
+        let link_span = line
+            .spans
+            .iter()
+            .find(|span| span.content == "elio")
+            .expect("link label should be rendered");
+        assert!(link_span.style.add_modifier.contains(Modifier::UNDERLINED));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn markdown_preview_renders_nested_emphasis() {
+        let root = temp_path("markdown-nested");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("README.md");
+        fs::write(&path, "**bold and *italic***\n").expect("failed to write markdown");
+
+        let preview = build_preview(&file_entry(path));
+        let line = &preview.lines[0];
+
+        assert_eq!(preview.kind, PreviewKind::Markdown);
+        let italic_span = line
+            .spans
+            .iter()
+            .find(|span| span.content == "italic")
+            .expect("nested italic content should be rendered");
+        assert!(italic_span.style.add_modifier.contains(Modifier::BOLD));
+        assert!(italic_span.style.add_modifier.contains(Modifier::ITALIC));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn markdown_preview_renders_mixed_lists() {
+        let root = temp_path("markdown-mixed-lists");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("README.md");
+        fs::write(&path, "1. first\n   - nested\n2. second\n").expect("failed to write markdown");
+
+        let preview = build_preview(&file_entry(path));
+
+        assert_eq!(preview.kind, PreviewKind::Markdown);
+        assert!(
+            preview
+                .lines
+                .iter()
+                .any(|line| line.spans.iter().any(|span| span.content == "1. "))
+        );
+        assert!(
+            preview
+                .lines
+                .iter()
+                .any(|line| line.spans.iter().any(|span| span.content.contains("• ")))
+        );
+        assert!(
+            preview
+                .lines
+                .iter()
+                .any(|line| line.spans.iter().any(|span| span.content == "2. "))
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -457,8 +704,11 @@ mod tests {
         let root = temp_path("tsx");
         fs::create_dir_all(&root).expect("failed to create temp root");
         let path = root.join("App.tsx");
-        fs::write(&path, "export function App() { return <div>Hello</div>; }\n")
-            .expect("failed to write tsx");
+        fs::write(
+            &path,
+            "export function App() { return <div>Hello</div>; }\n",
+        )
+        .expect("failed to write tsx");
 
         let preview = build_preview(&file_entry(path));
 
@@ -519,6 +769,99 @@ mod tests {
 
         assert_eq!(preview.kind, PreviewKind::Text);
         assert!(preview.lines.len() >= 80);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn utf8_preview_trims_to_last_valid_boundary() {
+        let root = temp_path("utf8-boundary");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("unicode.txt");
+        let bytes = [
+            "a".repeat(PREVIEW_LIMIT_BYTES - 1).into_bytes(),
+            "é".as_bytes().to_vec(),
+        ]
+        .concat();
+        fs::write(&path, bytes).expect("failed to write unicode text");
+
+        let preview = read_text_preview(&path)
+            .expect("preview read should succeed")
+            .expect("utf8 text should stay text");
+
+        assert!(preview.bytes_truncated);
+        assert_eq!(preview.text.len(), PREVIEW_LIMIT_BYTES - 1);
+        assert!(preview.text.chars().all(|ch| ch == 'a'));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn utf8_text_file_is_not_mislabeled_as_binary() {
+        let root = temp_path("utf8-text-kind");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("unicode.txt");
+        let bytes = [
+            "a".repeat(PREVIEW_LIMIT_BYTES - 1).into_bytes(),
+            "é".as_bytes().to_vec(),
+        ]
+        .concat();
+        fs::write(&path, bytes).expect("failed to write unicode text");
+
+        let preview = build_preview(&file_entry(path));
+
+        assert_eq!(preview.kind, PreviewKind::Text);
+        assert!(preview.truncated);
+        assert!(preview.lines.iter().all(|line| {
+            line.spans
+                .iter()
+                .all(|span| span.content != "No text preview available")
+        }));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn byte_truncated_preview_reports_truncation_without_fake_line_totals() {
+        let root = temp_path("byte-truncated");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("notes.txt");
+        fs::write(&path, "a".repeat(PREVIEW_LIMIT_BYTES + 32)).expect("failed to write text");
+
+        let preview = build_preview(&file_entry(path));
+        let header = preview
+            .header_detail(0, 20)
+            .expect("header detail should be present");
+
+        assert_eq!(preview.kind, PreviewKind::Text);
+        assert!(preview.truncated);
+        assert!(preview.source_lines.is_none());
+        assert!(header.contains("truncated to 64 KiB"));
+        assert!(!header.contains("lines"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn line_truncated_preview_reports_visible_limit() {
+        let root = temp_path("line-truncated");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("long.txt");
+        let text = (1..=300)
+            .map(|index| format!("line {index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&path, text).expect("failed to write long text");
+
+        let preview = build_preview(&file_entry(path));
+        let header = preview
+            .header_detail(0, 20)
+            .expect("header detail should be present");
+
+        assert!(preview.truncated);
+        assert_eq!(preview.source_lines, Some(300));
+        assert!(header.contains("300 lines"));
+        assert!(header.contains("showing first 240 lines"));
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

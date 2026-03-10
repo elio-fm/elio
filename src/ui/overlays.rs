@@ -331,6 +331,7 @@ pub(super) fn render_help(frame: &mut Frame<'_>, area: Rect, palette: Palette) {
         helpers::help_row("Click", "select item", palette),
         helpers::help_row("Double click", "open folder or file", palette),
         helpers::help_row("Wheel", "scroll selection", palette),
+        helpers::help_row("Shift+Wheel", "scroll code preview sideways", palette),
         helpers::help_row("v", "toggle grid/list view", palette),
         helpers::help_row(".", "show or hide dotfiles", palette),
         helpers::help_row("s", "cycle sort mode", palette),

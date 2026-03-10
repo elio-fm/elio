@@ -12,10 +12,14 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::{io, time::Duration};
+use std::{
+    io,
+    time::{Duration, Instant},
+};
 
 const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const ACTIVE_SCROLL_POLL_INTERVAL: Duration = Duration::from_millis(16);
+const RELATIVE_TIME_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
 fn main() -> Result<()> {
     appearance::initialize();
@@ -51,8 +55,14 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     let mut app = App::new()?;
     let mut dirty = true;
     let mut search_cursor_active = false;
+    let mut last_relative_time_refresh_at = Instant::now();
 
     loop {
+        if last_relative_time_refresh_at.elapsed() >= RELATIVE_TIME_REFRESH_INTERVAL {
+            dirty = true;
+            last_relative_time_refresh_at = Instant::now();
+        }
+
         if app.process_background_jobs() {
             dirty = true;
         }

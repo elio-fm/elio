@@ -19,19 +19,21 @@ pub(super) fn render_body(
     palette: Palette,
 ) {
     let columns = if area.width >= 126 {
-        Layout::default()
+        let outer = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length(24),
-                Constraint::Min(44),
-                Constraint::Length(42),
-            ])
-            .split(area)
+            .constraints([Constraint::Length(24), Constraint::Min(80)])
+            .split(area);
+        let content = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(54), Constraint::Percentage(46)])
+            .split(outer[1]);
+        vec![outer[0], content[0], content[1]]
     } else {
         Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Length(22), Constraint::Min(42)])
             .split(area)
+            .to_vec()
     };
 
     render_sidebar(frame, columns[0], app, state, palette);
@@ -541,7 +543,7 @@ fn render_preview(
     render_preview_details(frame, sections[0], app, entry, palette);
     if sections[1].height > 0 {
         state.preview_rows_visible = sections[1].height.saturating_sub(1) as usize;
-        render_preview_body(frame, sections[1], app, entry, palette);
+        render_preview_body(frame, sections[1], app, state, entry, palette);
     }
 }
 
@@ -611,6 +613,7 @@ fn render_preview_body(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
+    state: &mut FrameState,
     _entry: &Entry,
     palette: Palette,
 ) {
@@ -632,6 +635,7 @@ fn render_preview_body(
     let text_area = body[0];
     let scrollbar_area = body.get(1).copied();
     let visible_rows = text_area.height as usize;
+    state.preview_cols_visible = text_area.width as usize;
     let header_detail = app.preview_header_detail(visible_rows);
 
     frame.render_widget(
@@ -652,14 +656,27 @@ fn render_preview_body(
         sections[0],
     );
 
-    frame.render_widget(
-        Paragraph::new(app.preview_lines(visible_rows))
-            .style(Style::default().bg(palette.panel).fg(palette.text)),
-        text_area,
-    );
+    let mut paragraph = Paragraph::new(app.preview_lines())
+        .style(Style::default().bg(palette.panel).fg(palette.text))
+        .scroll((
+            app.preview_scroll_offset().min(u16::MAX as usize) as u16,
+            app.preview_horizontal_scroll_offset()
+                .min(u16::MAX as usize) as u16,
+        ));
+    if app.preview_wraps() {
+        paragraph = paragraph.wrap(Wrap { trim: false });
+    }
+    frame.render_widget(paragraph, text_area);
 
     if let Some(scrollbar_area) = scrollbar_area {
-        render_preview_scrollbar(frame, scrollbar_area, app, visible_rows, palette);
+        render_preview_scrollbar(
+            frame,
+            scrollbar_area,
+            app,
+            visible_rows,
+            text_area.width as usize,
+            palette,
+        );
     }
 }
 
@@ -675,9 +692,10 @@ fn render_preview_scrollbar(
     area: Rect,
     app: &App,
     visible_rows: usize,
+    visible_cols: usize,
     palette: Palette,
 ) {
-    let total = app.preview_total_lines();
+    let total = app.preview_total_lines(visible_cols);
     if area.height == 0 || total <= visible_rows.max(1) {
         frame.render_widget(
             Paragraph::new(" ").style(Style::default().bg(palette.panel).fg(palette.border)),

@@ -57,9 +57,8 @@ impl App {
         self.reload_if_directory_changed()
     }
 
-    pub fn preview_lines(&self, max_lines: usize) -> Vec<Line<'static>> {
-        self.preview_cache
-            .lines_for_viewport(self.preview_scroll, max_lines)
+    pub fn preview_lines(&self) -> Vec<Line<'static>> {
+        self.preview_cache.lines()
     }
 
     pub fn preview_section_label(&self) -> &'static str {
@@ -70,8 +69,29 @@ impl App {
         self.preview_scroll
     }
 
-    pub fn preview_total_lines(&self) -> usize {
-        self.preview_cache.total_lines()
+    pub fn preview_horizontal_scroll_offset(&self) -> usize {
+        self.preview_horizontal_scroll
+    }
+
+    pub fn preview_total_lines(&self, visible_cols: usize) -> usize {
+        self.preview_cache.visual_line_count(visible_cols)
+    }
+
+    pub fn preview_wraps(&self) -> bool {
+        self.preview_cache.kind.wraps_in_preview()
+    }
+
+    pub fn preview_allows_horizontal_scroll(&self) -> bool {
+        self.preview_cache.kind.allows_horizontal_scroll()
+    }
+
+    pub fn preview_max_horizontal_scroll(&self, visible_cols: usize) -> usize {
+        if !self.preview_allows_horizontal_scroll() {
+            return 0;
+        }
+        self.preview_cache
+            .max_line_width()
+            .saturating_sub(visible_cols.max(1))
     }
 
     pub fn preview_directory_counts(&self) -> Option<(usize, usize, usize)> {
@@ -93,6 +113,7 @@ impl App {
             None => preview::PreviewContent::placeholder("No selection"),
         };
         self.preview_scroll = 0;
+        self.preview_horizontal_scroll = 0;
     }
 
     pub fn selection_summary(&self) -> String {
@@ -463,6 +484,38 @@ mod tests {
             app.process_auto_reload()
                 .expect("auto reload should succeed"),
             "watch-driven reload should report a change",
+        );
+        assert_eq!(app.entries.len(), 2);
+        assert!(app.entries.iter().any(|entry| entry.name == "two.txt"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn watcher_rescan_event_triggers_reload() {
+        let root = temp_path("auto-reload-rescan");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("one.txt"), "hello").expect("failed to write first file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        assert_eq!(app.entries.len(), 1);
+
+        fs::write(root.join("two.txt"), "world").expect("failed to write second file");
+        app.directory_watch_tx
+            .send(watching::DirectoryWatchEvent::Rescan)
+            .expect("failed to queue rescan event");
+
+        assert!(
+            !app.process_auto_reload()
+                .expect("watch processing should succeed"),
+            "watch processing should debounce before reloading",
+        );
+        app.pending_directory_reload_at = Some(Instant::now() - Duration::from_millis(1));
+
+        assert!(
+            app.process_auto_reload()
+                .expect("auto reload should succeed"),
+            "rescan-driven reload should report a change",
         );
         assert_eq!(app.entries.len(), 2);
         assert!(app.entries.iter().any(|entry| entry.name == "two.txt"));
