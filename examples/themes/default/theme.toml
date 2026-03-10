@@ -103,6 +103,156 @@ class = "config"
 icon = "󰍹"
 color = "#7db0ff"
 
+[extensions.xcf]
+class = "image"
+icon = ""
+color = "#ff9f7a"
+
+[extensions.pdf]
+class = "document"
+icon = "󰈙"
+color = "#ff6b6b"
+
+[extensions.ico]
+class = "image"
+icon = "󰋩"
+color = "#79c6ff"
+
+[extensions.iso]
+class = "archive"
+icon = "󰗮"
+color = "#b8bec8"
+
+[extensions.rpm]
+class = "archive"
+icon = "󱄛"
+color = "#8b1e2d"
+
+[extensions.torrent]
+class = "data"
+icon = "󰍇"
+color = "#7fd46a"
+
+[extensions.hash]
+class = "data"
+icon = ""
+color = "#8dd6ff"
+
+[extensions.sha1]
+class = "data"
+icon = "󰈖"
+color = "#8ddf6d"
+
+[extensions.sha256]
+class = "data"
+icon = "󰈖"
+color = "#8ddf6d"
+
+[extensions.sha512]
+class = "data"
+icon = "󰈖"
+color = "#8ddf6d"
+
+[extensions.md5]
+class = "data"
+icon = "󰈖"
+color = "#8ddf6d"
+
+[extensions.log]
+class = "document"
+icon = ""
+color = "#8c97a8"
+
+[extensions.srt]
+class = "document"
+icon = "󰈙"
+color = "#8ddf6d"
+
+[extensions.keys]
+class = "config"
+icon = "󰌆"
+color = "#ffd866"
+
+[extensions.p12]
+class = "config"
+icon = "󰄤"
+color = "#e0b45b"
+
+[extensions.pfx]
+class = "config"
+icon = "󰄤"
+color = "#e0b45b"
+
+[extensions.pem]
+class = "config"
+icon = "󰄤"
+color = "#dcb85f"
+
+[extensions.crt]
+class = "config"
+icon = "󰄤"
+color = "#dcb85f"
+
+[extensions.cer]
+class = "config"
+icon = "󰄤"
+color = "#dcb85f"
+
+[extensions.csr]
+class = "config"
+icon = "󰄤"
+color = "#c9ae6c"
+
+[extensions.key]
+class = "config"
+icon = "󰌆"
+color = "#ffd866"
+
+[extensions.deb]
+class = "archive"
+icon = ""
+color = "#ff6b86"
+
+[extensions.apk]
+class = "archive"
+icon = ""
+color = "#67d46f"
+
+[extensions.aab]
+class = "archive"
+icon = ""
+color = "#56c7d9"
+
+[extensions.apkg]
+class = "archive"
+icon = "󰘸"
+color = "#5aa8ff"
+
+[extensions.zst]
+class = "archive"
+icon = ""
+color = "#c8a86a"
+
+[extensions.zest]
+class = "archive"
+icon = ""
+color = "#ffb86b"
+
+[extensions.appimage]
+class = "archive"
+icon = "󰏗"
+color = "#66bbff"
+
+[extensions.exe]
+class = "file"
+icon = ""
+color = "#7db0ff"
+
+[extensions.jar]
+class = "archive"
+icon = ""
+color = "#ff8f61"
+
 [extensions.mjs]
 class = "code"
 icon = ""
@@ -581,6 +731,11 @@ color = "#d6def0"
 class = "config"
 icon = ""
 color = "#ff9b61"
+
+[files."PKGBUILD"]
+class = "config"
+icon = ""
+color = "#66bbff"
 
 [files."justfile"]
 class = "config"

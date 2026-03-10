@@ -189,6 +189,66 @@ pub(crate) fn resolve_path(path: &Path, kind: EntryKind) -> ResolvedAppearance<'
     active_theme().resolve(path, kind)
 }
 
+pub(crate) fn type_label_for_path(path: &Path, kind: EntryKind) -> &'static str {
+    specific_type_label(path, kind).unwrap_or(match kind {
+        EntryKind::Directory => "Folder",
+        EntryKind::File => "File",
+    })
+}
+
+pub(crate) fn specific_type_label(path: &Path, kind: EntryKind) -> Option<&'static str> {
+    if kind == EntryKind::Directory {
+        return None;
+    }
+
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(normalize_key)
+        .unwrap_or_default();
+    if name == "pkgbuild" {
+        return Some("Arch build script");
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(normalize_key)
+        .unwrap_or_default();
+
+    match ext.as_str() {
+        "desktop" => Some("Desktop Entry"),
+        "xcf" => Some("GIMP image"),
+        "ico" => Some("Icon image"),
+        "iso" => Some("ISO disk image"),
+        "rpm" => Some("RPM package"),
+        "torrent" => Some("BitTorrent file"),
+        "hash" => Some("Hash file"),
+        "sha1" => Some("SHA-1 checksum"),
+        "sha256" => Some("SHA-256 checksum"),
+        "sha512" => Some("SHA-512 checksum"),
+        "md5" => Some("MD5 checksum"),
+        "log" => Some("Log file"),
+        "srt" => Some("SubRip subtitles"),
+        "keys" => Some("Keys file"),
+        "p12" | "pfx" => Some("PKCS#12 certificate"),
+        "pem" => Some("PEM certificate"),
+        "crt" | "cer" => Some("Certificate"),
+        "csr" => Some("Certificate signing request"),
+        "key" => Some("Private key"),
+        "deb" => Some("Debian package"),
+        "apk" => Some("Android package"),
+        "aab" => Some("Android App Bundle"),
+        "apkg" => Some("Anki package"),
+        "zst" => Some("Zstandard archive"),
+        "zest" => Some("Zest archive"),
+        "appimage" => Some("AppImage bundle"),
+        "exe" => Some("Windows executable"),
+        "jar" => Some("Java archive"),
+        _ => None,
+    }
+}
+
 fn active_theme() -> &'static Theme {
     ACTIVE_THEME.get_or_init(Theme::default_theme)
 }
@@ -363,6 +423,8 @@ impl Theme {
             ("svg".to_string(), rule_class(FileClass::Image)),
             ("webp".to_string(), rule_class(FileClass::Image)),
             ("avif".to_string(), rule_class(FileClass::Image)),
+            ("xcf".to_string(), rule_class(FileClass::Image)),
+            ("ico".to_string(), rule_class(FileClass::Image)),
             ("mp3".to_string(), rule_class(FileClass::Audio)),
             ("wav".to_string(), rule_class(FileClass::Audio)),
             ("flac".to_string(), rule_class(FileClass::Audio)),
@@ -379,6 +441,16 @@ impl Theme {
             ("xz".to_string(), rule_class(FileClass::Archive)),
             ("bz2".to_string(), rule_class(FileClass::Archive)),
             ("7z".to_string(), rule_class(FileClass::Archive)),
+            ("iso".to_string(), rule_class(FileClass::Archive)),
+            ("rpm".to_string(), rule_class(FileClass::Archive)),
+            ("deb".to_string(), rule_class(FileClass::Archive)),
+            ("apk".to_string(), rule_class(FileClass::Archive)),
+            ("aab".to_string(), rule_class(FileClass::Archive)),
+            ("apkg".to_string(), rule_class(FileClass::Archive)),
+            ("zst".to_string(), rule_class(FileClass::Archive)),
+            ("jar".to_string(), rule_class(FileClass::Archive)),
+            ("zest".to_string(), rule_class(FileClass::Archive)),
+            ("appimage".to_string(), rule_class(FileClass::Archive)),
             ("ttf".to_string(), rule_class(FileClass::Font)),
             ("otf".to_string(), rule_class(FileClass::Font)),
             ("woff".to_string(), rule_class(FileClass::Font)),
@@ -389,6 +461,23 @@ impl Theme {
             ("sqlite".to_string(), rule_class(FileClass::Data)),
             ("db".to_string(), rule_class(FileClass::Data)),
             ("parquet".to_string(), rule_class(FileClass::Data)),
+            ("torrent".to_string(), rule_class(FileClass::Data)),
+            ("hash".to_string(), rule_class(FileClass::Data)),
+            ("sha1".to_string(), rule_class(FileClass::Data)),
+            ("sha256".to_string(), rule_class(FileClass::Data)),
+            ("sha512".to_string(), rule_class(FileClass::Data)),
+            ("md5".to_string(), rule_class(FileClass::Data)),
+            ("log".to_string(), rule_class(FileClass::Document)),
+            ("srt".to_string(), rule_class(FileClass::Document)),
+            ("keys".to_string(), rule_class(FileClass::Config)),
+            ("p12".to_string(), rule_class(FileClass::Config)),
+            ("pfx".to_string(), rule_class(FileClass::Config)),
+            ("pem".to_string(), rule_class(FileClass::Config)),
+            ("crt".to_string(), rule_class(FileClass::Config)),
+            ("cer".to_string(), rule_class(FileClass::Config)),
+            ("csr".to_string(), rule_class(FileClass::Config)),
+            ("key".to_string(), rule_class(FileClass::Config)),
+            ("exe".to_string(), rule_class(FileClass::File)),
         ]);
 
         let files = HashMap::from([
@@ -478,6 +567,14 @@ impl Theme {
                     class: Some(FileClass::Config),
                     icon: Some("󰒓".to_string()),
                     color: Some(rgb(144, 192, 121)),
+                },
+            ),
+            (
+                normalize_key("PKGBUILD"),
+                RuleOverride {
+                    class: Some(FileClass::Config),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(102, 187, 255)),
                 },
             ),
         ]);
@@ -791,6 +888,15 @@ fn builtin_classify_path(path: &Path, kind: EntryKind) -> FileClass {
         return FileClass::Directory;
     }
 
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(normalize_key)
+        .unwrap_or_default();
+    if name == "pkgbuild" {
+        return FileClass::Config;
+    }
+
     let ext = path
         .extension()
         .and_then(|ext| ext.to_str())
@@ -799,17 +905,21 @@ fn builtin_classify_path(path: &Path, kind: EntryKind) -> FileClass {
     match ext.as_str() {
         "rs" | "js" | "ts" | "tsx" | "jsx" | "py" | "go" | "c" | "cpp" | "h" | "hpp" | "java"
         | "lua" | "php" | "rb" | "swift" | "kt" | "sh" | "bash" | "zsh" | "fish" => FileClass::Code,
-        "json" | "toml" | "yaml" | "yml" | "ini" | "conf" | "cfg" | "desktop" | "ron"
-        | "env" => {
-            FileClass::Config
+        "json" | "toml" | "yaml" | "yml" | "ini" | "conf" | "cfg" | "desktop" | "ron" | "env"
+        | "keys" | "p12" | "pfx" | "pem" | "crt" | "cer" | "csr" | "key" => FileClass::Config,
+        "md" | "txt" | "rst" | "pdf" | "doc" | "docx" | "odt" | "srt" | "log" => {
+            FileClass::Document
         }
-        "md" | "txt" | "rst" | "pdf" | "doc" | "docx" | "odt" => FileClass::Document,
-        "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "avif" => FileClass::Image,
+        "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "avif" | "xcf" | "ico" => {
+            FileClass::Image
+        }
         "mp3" | "wav" | "flac" | "ogg" | "m4a" => FileClass::Audio,
         "mp4" | "mkv" | "mov" | "webm" | "avi" => FileClass::Video,
-        "zip" | "tar" | "gz" | "xz" | "bz2" | "7z" => FileClass::Archive,
+        "zip" | "tar" | "gz" | "xz" | "bz2" | "7z" | "iso" | "rpm" | "deb" | "apk" | "aab"
+        | "apkg" | "zst" | "jar" | "zest" | "appimage" => FileClass::Archive,
         "ttf" | "otf" | "woff" | "woff2" => FileClass::Font,
-        "csv" | "tsv" | "sql" | "sqlite" | "db" | "parquet" => FileClass::Data,
+        "csv" | "tsv" | "sql" | "sqlite" | "db" | "parquet" | "torrent" | "hash" | "sha1"
+        | "sha256" | "sha512" | "md5" => FileClass::Data,
         _ => FileClass::File,
     }
 }
@@ -978,5 +1088,249 @@ icon = "F"
         let file = theme.resolve(Path::new("CARGO.LOCK"), EntryKind::File);
         assert_eq!(file.class, FileClass::Data);
         assert_eq!(file.icon, "F");
+    }
+
+    #[test]
+    fn type_labels_cover_supported_special_files() {
+        assert_eq!(
+            specific_type_label(Path::new("cover.xcf"), EntryKind::File),
+            Some("GIMP image")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("disk.iso"), EntryKind::File),
+            Some("ISO disk image")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("package.rpm"), EntryKind::File),
+            Some("RPM package")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("ubuntu.torrent"), EntryKind::File),
+            Some("BitTorrent file")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("signatures.hash"), EntryKind::File),
+            Some("Hash file")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("release.sha1"), EntryKind::File),
+            Some("SHA-1 checksum")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("release.sha256"), EntryKind::File),
+            Some("SHA-256 checksum")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("release.sha512"), EntryKind::File),
+            Some("SHA-512 checksum")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("release.md5"), EntryKind::File),
+            Some("MD5 checksum")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("server.log"), EntryKind::File),
+            Some("Log file")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("movie.srt"), EntryKind::File),
+            Some("SubRip subtitles")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("bindings.keys"), EntryKind::File),
+            Some("Keys file")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("identity.p12"), EntryKind::File),
+            Some("PKCS#12 certificate")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("identity.pfx"), EntryKind::File),
+            Some("PKCS#12 certificate")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("fullchain.pem"), EntryKind::File),
+            Some("PEM certificate")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("server.crt"), EntryKind::File),
+            Some("Certificate")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("server.cer"), EntryKind::File),
+            Some("Certificate")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("server.csr"), EntryKind::File),
+            Some("Certificate signing request")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("id_ed25519.key"), EntryKind::File),
+            Some("Private key")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("package.deb"), EntryKind::File),
+            Some("Debian package")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("app.apk"), EntryKind::File),
+            Some("Android package")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("bundle.aab"), EntryKind::File),
+            Some("Android App Bundle")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("deck.apkg"), EntryKind::File),
+            Some("Anki package")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("archive.zst"), EntryKind::File),
+            Some("Zstandard archive")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("theme.zest"), EntryKind::File),
+            Some("Zest archive")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("Elio.AppImage"), EntryKind::File),
+            Some("AppImage bundle")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("PKGBUILD"), EntryKind::File),
+            Some("Arch build script")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("setup.exe"), EntryKind::File),
+            Some("Windows executable")
+        );
+        assert_eq!(
+            specific_type_label(Path::new("app.jar"), EntryKind::File),
+            Some("Java archive")
+        );
+    }
+
+    #[test]
+    fn builtin_classification_covers_new_special_file_types() {
+        assert_eq!(
+            builtin_classify_path(Path::new("cover.xcf"), EntryKind::File),
+            FileClass::Image
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("favicon.ico"), EntryKind::File),
+            FileClass::Image
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("disk.iso"), EntryKind::File),
+            FileClass::Archive
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("package.rpm"), EntryKind::File),
+            FileClass::Archive
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("package.deb"), EntryKind::File),
+            FileClass::Archive
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("app.apk"), EntryKind::File),
+            FileClass::Archive
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("bundle.aab"), EntryKind::File),
+            FileClass::Archive
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("deck.apkg"), EntryKind::File),
+            FileClass::Archive
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("archive.zst"), EntryKind::File),
+            FileClass::Archive
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("app.jar"), EntryKind::File),
+            FileClass::Archive
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("archive.zest"), EntryKind::File),
+            FileClass::Archive
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("Elio.AppImage"), EntryKind::File),
+            FileClass::Archive
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("ubuntu.torrent"), EntryKind::File),
+            FileClass::Data
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("signatures.hash"), EntryKind::File),
+            FileClass::Data
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("release.sha1"), EntryKind::File),
+            FileClass::Data
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("release.sha256"), EntryKind::File),
+            FileClass::Data
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("release.sha512"), EntryKind::File),
+            FileClass::Data
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("release.md5"), EntryKind::File),
+            FileClass::Data
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("server.log"), EntryKind::File),
+            FileClass::Document
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("movie.srt"), EntryKind::File),
+            FileClass::Document
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("bindings.keys"), EntryKind::File),
+            FileClass::Config
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("identity.p12"), EntryKind::File),
+            FileClass::Config
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("identity.pfx"), EntryKind::File),
+            FileClass::Config
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("fullchain.pem"), EntryKind::File),
+            FileClass::Config
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("server.crt"), EntryKind::File),
+            FileClass::Config
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("server.cer"), EntryKind::File),
+            FileClass::Config
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("server.csr"), EntryKind::File),
+            FileClass::Config
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("id_ed25519.key"), EntryKind::File),
+            FileClass::Config
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("PKGBUILD"), EntryKind::File),
+            FileClass::Config
+        );
+        assert_eq!(
+            builtin_classify_path(Path::new("setup.exe"), EntryKind::File),
+            FileClass::File
+        );
     }
 }

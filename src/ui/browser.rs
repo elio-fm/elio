@@ -3,6 +3,7 @@ use super::{helpers, theme};
 use crate::app::{
     App, Entry, EntryHit, FrameState, PathHit, ViewMetrics, format_size, format_time_ago,
 };
+use crate::appearance;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
@@ -555,7 +556,11 @@ fn render_preview_details(
     palette: Palette,
 ) {
     let mut lines = vec![
-        preview_stat_line("Type", entry.kind_label().to_string(), palette),
+        preview_stat_line(
+            "Type",
+            appearance::type_label_for_path(&entry.path, entry.kind).to_string(),
+            palette,
+        ),
         preview_stat_line(
             "Size",
             if entry.is_dir() {
@@ -584,9 +589,7 @@ fn render_preview_details(
         ),
     ];
 
-    if entry.is_dir()
-        && let Some((items, _folders, _files)) = app.preview_directory_counts()
-    {
+    if let Some((items, _folders, _files)) = app.preview_directory_counts() {
         lines[1] = preview_stat_line("Items", items.to_string(), palette);
     }
 

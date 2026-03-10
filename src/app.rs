@@ -116,13 +116,6 @@ impl Entry {
     pub fn is_dir(&self) -> bool {
         self.kind == EntryKind::Directory
     }
-
-    pub fn kind_label(&self) -> &'static str {
-        match self.kind {
-            EntryKind::Directory => "Folder",
-            EntryKind::File => "File",
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
