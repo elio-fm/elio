@@ -7,7 +7,7 @@
 - Nautilus-like shell with a top toolbar, places sidebar, main file area, and details pane
 - Grid view by default, plus a denser list view
 - Mouse click, double click, and wheel support
-- Directory navigation, back/forward history, hidden-file toggle, sort cycling, refresh, and external open via `xdg-open`
+- Directory navigation, back/forward history, hidden-file toggle, sort cycling, instant auto-reload, and external open via `xdg-open`
 - Lightweight text preview for readable files
 - Folder search with `f` and file search with `Ctrl+F`, both scoped to the current directory tree
 - Type-aware icons and colors for folders, config files, documents, code, archives, media, fonts, data files, and plain files
@@ -42,6 +42,8 @@ How theme loading works:
 - if the file does not exist, `elio` uses the built-in default theme
 - if the file exists but fails to read or parse, `elio` falls back to the built-in default theme and prints an error to `stderr`
 
+The built-in default theme is mirrored in [examples/default/theme.toml](/home/regueiro/1Projects/elio/examples/default/theme.toml). The older blue-heavy variant is kept in [examples/navi/theme.toml](/home/regueiro/1Projects/elio/examples/navi/theme.toml).
+
 The current app UI colors all come from `[palette]`. That includes:
 
 - `bg`, `text`, `muted`
@@ -75,7 +77,7 @@ Rule matching is case-insensitive and trims surrounding whitespace. Resolution o
 - file extension
 - built-in file classification fallback
 
-The built-in theme already includes exact-name rules for a small set of common files:
+The built-in theme already includes exact-name rules for many common files and folders, including:
 
 - `Cargo.toml`
 - `Cargo.lock`
@@ -88,6 +90,16 @@ The built-in theme already includes exact-name rules for a small set of common f
 - `LICENSE`
 - `.gitignore`
 - `.env`
+- `.config`
+- `.github`
+- `node_modules`
+- `src`
+- `target`
+- `Documents`
+- `Downloads`
+- `Pictures`
+- `Music`
+- `Videos`
 
 Class names accept a few aliases:
 
@@ -101,26 +113,27 @@ Example:
 
 ```toml
 [palette]
-bg = "#02050c"
-chrome = "#070d16"
-panel = "#09101b"
-text = "#edf4ff"
-muted = "#8ea2bf"
-accent = "#7ec4ff"
-selected_bg = "#204064"
+bg = "#020304"
+chrome = "#07090c"
+panel = "#101419"
+text = "#e7edf5"
+muted = "#8c97a8"
+accent = "#7aaeff"
+selected_bg = "#243758"
 
 [classes.config]
 icon = "󰒓"
-color = "#90c6ff"
+color = "#b38cff"
 
 [extensions.lock]
 class = "data"
 icon = "󰌾"
-color = "#d9b36c"
+color = "#59de94"
 
 [files."Cargo.toml"]
 class = "config"
-icon = "󰣖"
+icon = ""
+color = "#ff8f40"
 ```
 
 There are fuller examples in [examples/default/theme.toml](/home/regueiro/1Projects/elio/examples/default/theme.toml) and [examples/navi/theme.toml](/home/regueiro/1Projects/elio/examples/navi/theme.toml).
@@ -135,12 +148,13 @@ There are fuller examples in [examples/default/theme.toml](/home/regueiro/1Proje
 - `v`: toggle grid/list view
 - `.`: show or hide dotfiles
 - `s`: cycle sort mode
-- `r`: refresh the current directory
 - `o`: open the selected file with `xdg-open`
 - `f`: fuzzy-find folders in the current directory tree
 - `Ctrl+F`: fuzzy-find files in the current directory tree
 - `?`: open the help overlay
 - `q` or `Esc`: quit
+
+The current directory reloads automatically when its contents change. Elio uses filesystem watching when available and falls back to throttled polling if watching is unavailable.
 
 ## Fuzzy Finder
 
