@@ -96,6 +96,23 @@ pub(crate) fn describe_io_error(error: &io::Error) -> &'static str {
     }
 }
 
+pub(crate) fn sanitize_terminal_text(text: &str) -> String {
+    let mut sanitized = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '\t' => sanitized.push_str("    "),
+            '\u{0000}'..='\u{001f}' => {
+                sanitized.push('^');
+                sanitized.push((b'@' + ch as u8) as char);
+            }
+            '\u{007f}' => sanitized.push_str("^?"),
+            ch if ch.is_control() => sanitized.push_str(&format!("\\u{{{:x}}}", ch as u32)),
+            ch => sanitized.push(ch),
+        }
+    }
+    sanitized
+}
+
 pub(super) fn build_sidebar_items() -> Vec<SidebarItem> {
     let mut items = Vec::new();
     let home = env::var_os("HOME")
@@ -500,5 +517,13 @@ mod tests {
         assert_eq!(app.zoom_level, 0);
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn terminal_text_is_sanitized_before_rendering() {
+        assert_eq!(
+            sanitize_terminal_text("bad\rname\t\u{1b}"),
+            "bad^Mname    ^["
+        );
     }
 }

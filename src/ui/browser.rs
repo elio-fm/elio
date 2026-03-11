@@ -122,7 +122,15 @@ fn render_entries(
 ) {
     let path_text = helpers::stable_path_label(&app.cwd, area.width.saturating_sub(10) as usize);
     let block = Block::default()
-        .title(Line::from(vec![
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .style(Style::default().bg(palette.panel_alt).fg(palette.text))
+        .border_style(Style::default().fg(palette.border));
+    frame.render_widget(&block, area);
+    helpers::render_panel_title(
+        frame,
+        area,
+        Line::from(vec![
             Span::styled(
                 " 󰉖 ",
                 Style::default()
@@ -136,12 +144,10 @@ fn render_entries(
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(" "),
-        ]))
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .style(Style::default().bg(palette.panel_alt).fg(palette.text))
-        .border_style(Style::default().fg(palette.border));
-    frame.render_widget(&block, area);
+        ]),
+        palette.panel_alt,
+        palette.text,
+    );
     let inner = block.inner(area);
     helpers::fill_area(frame, inner, palette.panel_alt, palette.text);
 
@@ -527,12 +533,12 @@ fn render_preview(
         ])
     };
     let block = Block::default()
-        .title(title_line)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .style(Style::default().bg(palette.panel).fg(palette.text))
         .border_style(Style::default().fg(palette.border));
     frame.render_widget(block, area);
+    helpers::render_panel_title(frame, area, title_line, palette.panel, palette.text);
     let inner = helpers::inner_with_padding(area);
     helpers::fill_area(frame, inner, palette.panel, palette.text);
 
@@ -749,4 +755,111 @@ fn render_preview_scrollbar(
         .style(Style::default().bg(palette.panel)),
         thumb,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui;
+    use crossterm::event::{Event, KeyCode, KeyEvent};
+    use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn temp_path(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("elio-browser-{label}-{unique}"))
+    }
+
+    fn draw_ui(terminal: &mut Terminal<TestBackend>, app: &mut App) -> FrameState {
+        let mut frame_state = FrameState::default();
+        terminal
+            .draw(|frame| ui::render(frame, app, &mut frame_state))
+            .expect("ui should render");
+        app.set_frame_state(frame_state.clone());
+        frame_state
+    }
+
+    fn row_text(buffer: &Buffer, y: u16) -> String {
+        (0..buffer.area.width)
+            .map(|x| buffer[(x, y)].symbol())
+            .collect::<String>()
+    }
+
+    fn buffer_text(buffer: &Buffer) -> String {
+        (0..buffer.area.height)
+            .map(|y| row_text(buffer, y))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn preview_title_row_is_cleared_when_switching_to_shorter_names() {
+        let root = temp_path("preview-title");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(
+            root.join("a-this-is-a-very-long-preview-marker-name.txt"),
+            "first\n",
+        )
+        .expect("failed to write long file");
+        fs::write(root.join("b.txt"), "second\n").expect("failed to write short file");
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+
+        let initial_state = draw_ui(&mut terminal, &mut app);
+        let preview_panel = initial_state
+            .preview_panel
+            .expect("preview panel should be rendered");
+        let initial_title = row_text(terminal.backend().buffer(), preview_panel.y);
+        assert!(
+            initial_title.contains("preview-marker-name"),
+            "expected initial preview title row to show the long file name, got: {initial_title:?}"
+        );
+
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Down)))
+            .expect("selection change should succeed");
+        let second_state = draw_ui(&mut terminal, &mut app);
+        let second_title = row_text(
+            terminal.backend().buffer(),
+            second_state.preview_panel.unwrap().y,
+        );
+
+        assert!(
+            second_title.contains("b.txt"),
+            "expected second preview title row to show the shorter file name, got: {second_title:?}"
+        );
+        assert!(
+            !second_title.contains("preview-marker-name"),
+            "stale preview title text remained after rerender: {second_title:?}"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn filenames_with_control_characters_are_rendered_safely() {
+        let root = temp_path("control-char-name");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("bad\rname.c"), "int main(void) { return 0; }\n")
+            .expect("failed to write control-char file");
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+
+        draw_ui(&mut terminal, &mut app);
+        let rendered = buffer_text(terminal.backend().buffer());
+        assert!(
+            rendered.contains("bad^Mname.c"),
+            "expected control characters to be sanitized in the UI, got: {rendered:?}"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
 }

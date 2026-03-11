@@ -7,6 +7,11 @@ use ratatui::{
 use serde_json::Value as JsonValue;
 use serde_yaml::Value as YamlValue;
 
+const INLINE_ARRAY_LIMIT: usize = 4;
+const INLINE_OBJECT_LIMIT: usize = 3;
+const INLINE_RENDER_LIMIT: usize = 64;
+const STRING_PREVIEW_LIMIT: usize = 72;
+
 pub(super) fn render_json_preview(text: &str, detail: &'static str) -> Option<StructuredPreview> {
     serde_json::from_str::<JsonValue>(text)
         .ok()
@@ -65,6 +70,8 @@ impl TreeRenderer {
     }
 
     fn render_root(&mut self, value: &TreeValue) {
+        self.push_line(self.root_summary_line(value));
+        self.push_line(vec![Span::raw(String::new())]);
         match value {
             TreeValue::Object(entries) => self.render_object(entries, 0),
             TreeValue::Array(items) => self.render_array(items, 0),
@@ -78,13 +85,18 @@ impl TreeRenderer {
                 return;
             }
 
+            if let Some(inline) = self.inline_value(value) {
+                self.push_line(self.inline_key_line(indent, key, inline));
+                continue;
+            }
+
             match value {
                 TreeValue::Object(children) => {
-                    self.push_line(self.key_line(indent, key, "{}"));
+                    self.push_line(self.key_line(indent, key, &container_summary(value)));
                     self.render_object(children, indent + 2);
                 }
                 TreeValue::Array(items) => {
-                    self.push_line(self.key_line(indent, key, "[]"));
+                    self.push_line(self.key_line(indent, key, &container_summary(value)));
                     self.render_array(items, indent + 2);
                 }
                 _ => self.push_line(self.scalar_line(indent, Some(key), value)),
@@ -93,23 +105,64 @@ impl TreeRenderer {
     }
 
     fn render_array(&mut self, items: &[TreeValue], indent: usize) {
-        for value in items {
+        for (index, value) in items.iter().enumerate() {
             if self.truncated {
                 return;
             }
 
+            if let Some(inline) = self.inline_value(value) {
+                self.push_line(self.array_scalar_line(indent, index, inline));
+                continue;
+            }
+
             match value {
                 TreeValue::Object(children) => {
-                    self.push_line(self.array_prefix_line(indent, "{}"));
+                    self.push_line(self.array_prefix_line(
+                        indent,
+                        index,
+                        &container_summary(value),
+                    ));
                     self.render_object(children, indent + 2);
                 }
                 TreeValue::Array(nested) => {
-                    self.push_line(self.array_prefix_line(indent, "[]"));
+                    self.push_line(self.array_prefix_line(
+                        indent,
+                        index,
+                        &container_summary(value),
+                    ));
                     self.render_array(nested, indent + 2);
                 }
-                _ => self.push_line(self.array_scalar_line(indent, value)),
+                _ => self.push_line(self.array_scalar_line(
+                    indent,
+                    index,
+                    value_spans(value, self.palette),
+                )),
             }
         }
+    }
+
+    fn root_summary_line(&self, value: &TreeValue) -> Vec<Span<'static>> {
+        let stats = value.stats();
+        let mut spans = vec![
+            styled("root", self.palette.parameter, Modifier::BOLD),
+            styled(": ", self.palette.operator, Modifier::empty()),
+            styled(value.kind_label(), self.palette.r#type, Modifier::empty()),
+            Span::raw("  ".to_string()),
+            Span::raw(value.root_extent_label()),
+        ];
+        if stats.max_depth > 1 {
+            spans.push(Span::raw("  ".to_string()));
+            spans.push(styled("depth", self.palette.parameter, Modifier::BOLD));
+            spans.push(styled(": ", self.palette.operator, Modifier::empty()));
+            spans.push(Span::raw(stats.max_depth.to_string()));
+        }
+        if stats.objects + stats.arrays > 1 {
+            spans.push(Span::raw("  ".to_string()));
+            spans.push(styled("containers", self.palette.parameter, Modifier::BOLD));
+            spans.push(styled(": ", self.palette.operator, Modifier::empty()));
+            spans.push(Span::raw((stats.objects + stats.arrays).to_string()));
+        }
+        spans
     }
 
     fn key_line(&self, indent: usize, key: &str, suffix: &str) -> Vec<Span<'static>> {
@@ -117,7 +170,7 @@ impl TreeRenderer {
             Span::raw(" ".repeat(indent)),
             styled(key, self.palette.function, Modifier::BOLD),
             styled(": ", self.palette.operator, Modifier::empty()),
-            styled(suffix, self.palette.operator, Modifier::empty()),
+            styled(suffix, self.palette.r#type, Modifier::empty()),
         ]
     }
 
@@ -136,21 +189,61 @@ impl TreeRenderer {
         spans
     }
 
-    fn array_prefix_line(&self, indent: usize, suffix: &str) -> Vec<Span<'static>> {
+    fn inline_key_line(
+        &self,
+        indent: usize,
+        key: &str,
+        inline_value: Vec<Span<'static>>,
+    ) -> Vec<Span<'static>> {
+        let mut spans = vec![Span::raw(" ".repeat(indent))];
+        spans.push(styled(key, self.palette.function, Modifier::BOLD));
+        spans.push(styled(": ", self.palette.operator, Modifier::empty()));
+        spans.extend(inline_value);
+        spans
+    }
+
+    fn array_prefix_line(&self, indent: usize, index: usize, suffix: &str) -> Vec<Span<'static>> {
         vec![
             Span::raw(" ".repeat(indent)),
-            styled("- ", self.palette.operator, Modifier::empty()),
-            styled(suffix, self.palette.operator, Modifier::empty()),
+            styled(
+                &format!("[{index}]"),
+                self.palette.parameter,
+                Modifier::BOLD,
+            ),
+            styled(": ", self.palette.operator, Modifier::empty()),
+            styled(suffix, self.palette.r#type, Modifier::empty()),
         ]
     }
 
-    fn array_scalar_line(&self, indent: usize, value: &TreeValue) -> Vec<Span<'static>> {
+    fn array_scalar_line(
+        &self,
+        indent: usize,
+        index: usize,
+        value_spans: Vec<Span<'static>>,
+    ) -> Vec<Span<'static>> {
         let mut spans = vec![
             Span::raw(" ".repeat(indent)),
-            styled("- ", self.palette.operator, Modifier::empty()),
+            styled(
+                &format!("[{index}]"),
+                self.palette.parameter,
+                Modifier::BOLD,
+            ),
+            styled(": ", self.palette.operator, Modifier::empty()),
         ];
-        spans.extend(value_spans(value, self.palette));
+        spans.extend(value_spans);
         spans
+    }
+
+    fn inline_value(&self, value: &TreeValue) -> Option<Vec<Span<'static>>> {
+        let rendered = render_inline_value(value)?;
+        if rendered.chars().count() > INLINE_RENDER_LIMIT {
+            return None;
+        }
+        Some(vec![styled(
+            &rendered,
+            self.palette.r#type,
+            Modifier::empty(),
+        )])
     }
 }
 
@@ -168,6 +261,84 @@ fn render_tree_preview(value: TreeValue, detail: &'static str) -> StructuredPrev
         truncation_note: renderer
             .truncated
             .then(|| format!("showing first {LINE_LIMIT} lines")),
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct TreeStats {
+    objects: usize,
+    arrays: usize,
+    scalars: usize,
+    max_depth: usize,
+}
+
+impl TreeValue {
+    fn stats(&self) -> TreeStats {
+        match self {
+            Self::Null | Self::Bool(_) | Self::Number(_) | Self::String(_) => TreeStats {
+                scalars: 1,
+                max_depth: 1,
+                ..TreeStats::default()
+            },
+            Self::Array(values) => {
+                let mut stats = TreeStats {
+                    arrays: 1,
+                    max_depth: 1,
+                    ..TreeStats::default()
+                };
+                for value in values {
+                    let child = value.stats();
+                    stats.objects += child.objects;
+                    stats.arrays += child.arrays;
+                    stats.scalars += child.scalars;
+                    stats.max_depth = stats.max_depth.max(child.max_depth + 1);
+                }
+                stats
+            }
+            Self::Object(values) => {
+                let mut stats = TreeStats {
+                    objects: 1,
+                    max_depth: 1,
+                    ..TreeStats::default()
+                };
+                for (_, value) in values {
+                    let child = value.stats();
+                    stats.objects += child.objects;
+                    stats.arrays += child.arrays;
+                    stats.scalars += child.scalars;
+                    stats.max_depth = stats.max_depth.max(child.max_depth + 1);
+                }
+                stats
+            }
+        }
+    }
+
+    fn kind_label(&self) -> &'static str {
+        match self {
+            Self::Null => "null",
+            Self::Bool(_) => "boolean",
+            Self::Number(_) => "number",
+            Self::String(_) => "string",
+            Self::Array(_) => "array",
+            Self::Object(_) => "object",
+        }
+    }
+
+    fn root_extent_label(&self) -> String {
+        match self {
+            Self::Object(values) => format!("{} keys", values.len()),
+            Self::Array(values) => format!("{} items", values.len()),
+            Self::String(value) => format!("{} chars", value.chars().count()),
+            _ => "scalar".to_string(),
+        }
+    }
+}
+
+fn container_summary(value: &TreeValue) -> String {
+    match value {
+        TreeValue::Object(values) => format!("{{{} keys}}", values.len()),
+        TreeValue::Array(values) => format!("[{} items]", values.len()),
+        _ => value.kind_label().to_string(),
     }
 }
 
@@ -248,11 +419,23 @@ fn value_spans(value: &TreeValue, palette: appearance::CodePreviewPalette) -> Ve
             Modifier::empty(),
         )],
         TreeValue::Number(value) => vec![styled(value, palette.constant, Modifier::empty())],
-        TreeValue::String(value) => vec![styled(
-            &format!("\"{value}\""),
-            palette.string,
-            Modifier::empty(),
-        )],
+        TreeValue::String(value) => {
+            let truncated = truncate_string(value, STRING_PREVIEW_LIMIT);
+            let mut spans = vec![styled(
+                &format!("\"{}\"", escaped_string(&truncated)),
+                palette.string,
+                Modifier::empty(),
+            )];
+            if truncated != *value {
+                spans.push(Span::raw(" ".to_string()));
+                spans.push(styled(
+                    &format!("({} chars)", value.chars().count()),
+                    palette.comment,
+                    Modifier::empty(),
+                ));
+            }
+            spans
+        }
         TreeValue::Array(values) => vec![styled(
             &format!("[{} items]", values.len()),
             palette.r#type,
@@ -264,4 +447,81 @@ fn value_spans(value: &TreeValue, palette: appearance::CodePreviewPalette) -> Ve
             Modifier::empty(),
         )],
     }
+}
+
+fn render_inline_value(value: &TreeValue) -> Option<String> {
+    match value {
+        TreeValue::Null => Some("null".to_string()),
+        TreeValue::Bool(value) => Some(value.to_string()),
+        TreeValue::Number(value) => Some(value.clone()),
+        TreeValue::String(value) => {
+            if value.chars().count() > 24 {
+                return None;
+            }
+            Some(format!("\"{}\"", escaped_string(value)))
+        }
+        TreeValue::Array(values) => {
+            if values.len() > INLINE_ARRAY_LIMIT
+                || values.iter().any(|value| !is_inline_scalar(value))
+            {
+                return None;
+            }
+            let rendered = values
+                .iter()
+                .map(render_inline_value)
+                .collect::<Option<Vec<_>>>()?
+                .join(", ");
+            Some(format!("[{rendered}]"))
+        }
+        TreeValue::Object(values) => {
+            if values.len() > INLINE_OBJECT_LIMIT
+                || values.iter().any(|(_, value)| !is_inline_scalar(value))
+            {
+                return None;
+            }
+            let rendered = values
+                .iter()
+                .map(|(key, value)| {
+                    render_inline_value(value).map(|value| format!("{key}: {value}"))
+                })
+                .collect::<Option<Vec<_>>>()?
+                .join(", ");
+            Some(format!("{{{rendered}}}"))
+        }
+    }
+}
+
+fn is_inline_scalar(value: &TreeValue) -> bool {
+    matches!(
+        value,
+        TreeValue::Null | TreeValue::Bool(_) | TreeValue::Number(_) | TreeValue::String(_)
+    )
+}
+
+fn truncate_string(value: &str, max_chars: usize) -> String {
+    let char_count = value.chars().count();
+    if char_count <= max_chars {
+        return value.to_string();
+    }
+    let kept = value
+        .chars()
+        .take(max_chars.saturating_sub(1))
+        .collect::<String>();
+    format!("{kept}…")
+}
+
+fn escaped_string(value: &str) -> String {
+    let mut escaped = String::new();
+    for ch in value.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            ch if ch.is_control() => escaped.push_str(&format!("\\u{{{:x}}}", ch as u32)),
+            ch => escaped.push(ch),
+        }
+    }
+    escaped
 }

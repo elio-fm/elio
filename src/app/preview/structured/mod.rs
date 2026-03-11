@@ -41,7 +41,7 @@ pub(super) fn render_structured_preview(
         StructuredFormat::Toml => tree::render_toml_preview(text, format.detail_label()),
         StructuredFormat::Yaml => tree::render_yaml_preview(text, format.detail_label()),
         StructuredFormat::Dotenv => Some(kv::render_dotenv_preview(text)),
-        StructuredFormat::Log => Some(logs::render_log_preview(text)),
+        StructuredFormat::Log => logs::render_log_preview(text),
     };
 
     StructuredPreviewAttempt {

@@ -32,6 +32,12 @@ impl DocumentFormat {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum FallbackSyntax {
     JsLike,
+    CLike,
+    Python,
+    Make,
+    Shell,
+    Nix,
+    CMake,
     Markup,
     Css,
     Toml,
@@ -47,6 +53,12 @@ impl FallbackSyntax {
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::JsLike => "TypeScript",
+            Self::CLike => "C",
+            Self::Python => "Python",
+            Self::Make => "Makefile",
+            Self::Shell => "Shell",
+            Self::Nix => "Nix",
+            Self::CMake => "CMake",
             Self::Markup => "Markup",
             Self::Css => "CSS",
             Self::Toml => "TOML",
@@ -223,11 +235,44 @@ fn inspect_exact_name(name: &str) -> Option<FileFacts> {
         "pkgbuild" => Some(FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("Arch build script"),
-            preview: PreviewSpec::source(Some("bash"), None, None),
+            preview: PreviewSpec::source(Some("bash"), Some(FallbackSyntax::Shell), None),
         }),
+        "makefile" | "gnumakefile" | "bsdmakefile" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Makefile"),
+            preview: PreviewSpec::source(Some("make"), Some(FallbackSyntax::Make), None),
+        }),
+        "cmakelists.txt" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("CMake project"),
+            preview: PreviewSpec::forced_fallback(FallbackSyntax::CMake),
+        }),
+        ".bashrc" | ".bash_profile" | ".bash_login" | ".bash_logout" | ".bash_aliases" => {
+            Some(shell_file_facts(FileClass::Config, "Bash config", "bash"))
+        }
+        ".profile" | ".xprofile" | ".xsessionrc" | ".envrc" => {
+            Some(shell_file_facts(FileClass::Config, "Shell config", "sh"))
+        }
+        ".zshrc" | ".zprofile" | ".zshenv" | ".zlogin" | ".zlogout" => {
+            Some(shell_file_facts(FileClass::Config, "Zsh config", "zsh"))
+        }
+        ".kshrc" | ".mkshrc" => Some(shell_file_facts(
+            FileClass::Config,
+            "KornShell config",
+            "ksh",
+        )),
         "cargo.lock" | "poetry.lock" => Some(FileFacts {
             builtin_class: FileClass::Data,
             specific_type_label: None,
+            preview: PreviewSpec::source(
+                Some("toml"),
+                Some(FallbackSyntax::Toml),
+                Some(StructuredFormat::Toml),
+            ),
+        }),
+        "uv.lock" => Some(FileFacts {
+            builtin_class: FileClass::Data,
+            specific_type_label: Some("Lockfile"),
             preview: PreviewSpec::source(
                 Some("toml"),
                 Some(FallbackSyntax::Toml),
@@ -251,6 +296,20 @@ fn inspect_exact_name(name: &str) -> Option<FileFacts> {
                 Some(FallbackSyntax::Json),
                 Some(StructuredFormat::Json),
             ),
+        }),
+        "composer.lock" | "pipfile.lock" | "flake.lock" => Some(FileFacts {
+            builtin_class: FileClass::Data,
+            specific_type_label: Some("Lockfile"),
+            preview: PreviewSpec::source(
+                Some("json"),
+                Some(FallbackSyntax::Json),
+                Some(StructuredFormat::Json),
+            ),
+        }),
+        "gemfile.lock" | "bun.lock" => Some(FileFacts {
+            builtin_class: FileClass::Data,
+            specific_type_label: Some("Lockfile"),
+            preview: PreviewSpec::source(None, Some(FallbackSyntax::Ini), None),
         }),
         "deno.jsonc" => Some(FileFacts {
             builtin_class: FileClass::Config,
@@ -408,10 +467,15 @@ fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("Less stylesheet"),
             preview: PreviewSpec::source(Some("css"), Some(FallbackSyntax::Css), None),
         },
-        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => FileFacts {
-            builtin_class: FileClass::Code,
-            specific_type_label: None,
-            preview: PreviewSpec::source(None, Some(FallbackSyntax::JsLike), None),
+        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => {
+            js_like_file_facts(FileClass::Code, None)
+        }
+        "nix" => nix_file_facts(FileClass::Config, "Nix expression"),
+        "cmake" => cmake_file_facts(FileClass::Config, "CMake script"),
+        "lock" => FileFacts {
+            builtin_class: FileClass::Data,
+            specific_type_label: Some("Lockfile"),
+            preview: PreviewSpec::source(None, Some(FallbackSyntax::Ini), None),
         },
         "ini" | "conf" | "cfg" | "keys" => FileFacts {
             builtin_class: FileClass::Config,
@@ -467,8 +531,19 @@ fn inspect_extension(ext: &str) -> FileFacts {
         "appimage" => plain(FileClass::Archive, Some("AppImage bundle")),
         "exe" => plain(FileClass::File, Some("Windows executable")),
         "jar" => plain(FileClass::Archive, Some("Java archive")),
-        "rs" | "py" | "go" | "c" | "cpp" | "h" | "hpp" | "java" | "lua" | "php" | "rb"
-        | "swift" | "kt" | "sh" | "bash" | "zsh" | "fish" => {
+        "c" => c_like_file_facts(FileClass::Code, "C source file", "c"),
+        "h" => c_like_file_facts(FileClass::Code, "C header", "c"),
+        "cpp" | "cc" | "cxx" => c_like_file_facts(FileClass::Code, "C++ source file", "cpp"),
+        "hpp" | "hh" | "hxx" => c_like_file_facts(FileClass::Code, "C++ header", "cpp"),
+        "mk" | "mak" => source_only(FileClass::Config, Some("Makefile"), Some("make"))
+            .with_fallback(FallbackSyntax::Make),
+        "sh" => shell_file_facts(FileClass::Code, "Shell script", "sh"),
+        "bash" => shell_file_facts(FileClass::Code, "Bash script", "bash"),
+        "zsh" => shell_file_facts(FileClass::Code, "Zsh script", "zsh"),
+        "ksh" => shell_file_facts(FileClass::Code, "KornShell script", "ksh"),
+        "fish" => shell_file_facts(FileClass::Code, "Fish script", "fish"),
+        "py" | "pyi" | "pyw" | "pyx" => python_file_facts(FileClass::Code, None),
+        "rs" | "go" | "java" | "lua" | "php" | "rb" | "swift" | "kt" => {
             source_only(FileClass::Code, None, None)
         }
         "ron" => source_only(FileClass::Config, None, None),
@@ -530,6 +605,68 @@ const fn source_only(
     }
 }
 
+const fn shell_file_facts(
+    class: FileClass,
+    specific_type_label: &'static str,
+    syntax_hint: &'static str,
+) -> FileFacts {
+    source_only(class, Some(specific_type_label), Some(syntax_hint))
+        .with_fallback(FallbackSyntax::Shell)
+        .prefer_fallback()
+}
+
+const fn c_like_file_facts(
+    class: FileClass,
+    specific_type_label: &'static str,
+    syntax_hint: &'static str,
+) -> FileFacts {
+    source_only(class, Some(specific_type_label), Some(syntax_hint))
+        .with_fallback(FallbackSyntax::CLike)
+        .prefer_fallback()
+}
+
+const fn python_file_facts(
+    class: FileClass,
+    specific_type_label: Option<&'static str>,
+) -> FileFacts {
+    source_only(class, specific_type_label, Some("python"))
+        .with_fallback(FallbackSyntax::Python)
+        .prefer_fallback()
+}
+
+const fn js_like_file_facts(
+    class: FileClass,
+    specific_type_label: Option<&'static str>,
+) -> FileFacts {
+    source_only(class, specific_type_label, None)
+        .with_fallback(FallbackSyntax::JsLike)
+        .prefer_fallback()
+}
+
+const fn nix_file_facts(class: FileClass, specific_type_label: &'static str) -> FileFacts {
+    source_only(class, Some(specific_type_label), Some("nix"))
+        .with_fallback(FallbackSyntax::Nix)
+        .prefer_fallback()
+}
+
+const fn cmake_file_facts(class: FileClass, specific_type_label: &'static str) -> FileFacts {
+    source_only(class, Some(specific_type_label), Some("cmake"))
+        .with_fallback(FallbackSyntax::CMake)
+        .prefer_fallback()
+}
+
+impl FileFacts {
+    const fn with_fallback(mut self, fallback_syntax: FallbackSyntax) -> Self {
+        self.preview.fallback_syntax = Some(fallback_syntax);
+        self
+    }
+
+    const fn prefer_fallback(mut self) -> Self {
+        self.preview.force_fallback = true;
+        self
+    }
+}
+
 fn is_env_name(name: &str) -> bool {
     name == ".env" || name.starts_with(".env.")
 }
@@ -552,6 +689,29 @@ mod tests {
             Some(StructuredFormat::Json)
         );
         assert_eq!(facts.preview.fallback_syntax, Some(FallbackSyntax::Json));
+    }
+
+    #[test]
+    fn lockfile_variants_get_targeted_preview_support() {
+        let uv = inspect_path(Path::new("uv.lock"), EntryKind::File);
+        let flake = inspect_path(Path::new("flake.lock"), EntryKind::File);
+        let gem = inspect_path(Path::new("Gemfile.lock"), EntryKind::File);
+        let generic = inspect_path(Path::new("deps.lock"), EntryKind::File);
+
+        assert_eq!(uv.preview.structured_format, Some(StructuredFormat::Toml));
+        assert_eq!(uv.preview.fallback_syntax, Some(FallbackSyntax::Toml));
+
+        assert_eq!(
+            flake.preview.structured_format,
+            Some(StructuredFormat::Json)
+        );
+        assert_eq!(flake.preview.fallback_syntax, Some(FallbackSyntax::Json));
+
+        assert_eq!(gem.specific_type_label, Some("Lockfile"));
+        assert_eq!(gem.preview.fallback_syntax, Some(FallbackSyntax::Ini));
+
+        assert_eq!(generic.specific_type_label, Some("Lockfile"));
+        assert_eq!(generic.preview.fallback_syntax, Some(FallbackSyntax::Ini));
     }
 
     #[test]
@@ -590,6 +750,129 @@ mod tests {
         assert_eq!(css.builtin_class, FileClass::Code);
         assert_eq!(css.preview.syntax_hint, Some("css"));
         assert_eq!(css.preview.fallback_syntax, Some(FallbackSyntax::Css));
+    }
+
+    #[test]
+    fn nix_and_cmake_files_use_code_preview_support() {
+        let nix = inspect_path(Path::new("flake.nix"), EntryKind::File);
+        let cmake = inspect_path(Path::new("toolchain.cmake"), EntryKind::File);
+        let cmakelists = inspect_path(Path::new("CMakeLists.txt"), EntryKind::File);
+
+        assert_eq!(nix.builtin_class, FileClass::Config);
+        assert_eq!(nix.specific_type_label, Some("Nix expression"));
+        assert_eq!(nix.preview.syntax_hint, Some("nix"));
+
+        assert_eq!(cmake.builtin_class, FileClass::Config);
+        assert_eq!(cmake.specific_type_label, Some("CMake script"));
+        assert_eq!(cmake.preview.fallback_syntax, Some(FallbackSyntax::CMake));
+        assert!(cmake.preview.force_fallback);
+
+        assert_eq!(cmakelists.builtin_class, FileClass::Config);
+        assert_eq!(cmakelists.specific_type_label, Some("CMake project"));
+        assert_eq!(
+            cmakelists.preview.fallback_syntax,
+            Some(FallbackSyntax::CMake)
+        );
+        assert!(cmakelists.preview.force_fallback);
+    }
+
+    #[test]
+    fn make_and_c_files_get_targeted_preview_support() {
+        let makefile = inspect_path(Path::new("Makefile"), EntryKind::File);
+        let c_source = inspect_path(Path::new("main.c"), EntryKind::File);
+        let c_header = inspect_path(Path::new("app.h"), EntryKind::File);
+
+        assert_eq!(makefile.builtin_class, FileClass::Config);
+        assert_eq!(makefile.specific_type_label, Some("Makefile"));
+        assert_eq!(makefile.preview.syntax_hint, Some("make"));
+        assert_eq!(makefile.preview.fallback_syntax, Some(FallbackSyntax::Make));
+
+        assert_eq!(c_source.builtin_class, FileClass::Code);
+        assert_eq!(c_source.specific_type_label, Some("C source file"));
+        assert_eq!(c_source.preview.syntax_hint, Some("c"));
+        assert_eq!(
+            c_source.preview.fallback_syntax,
+            Some(FallbackSyntax::CLike)
+        );
+        assert!(c_source.preview.force_fallback);
+
+        assert_eq!(c_header.builtin_class, FileClass::Code);
+        assert_eq!(c_header.specific_type_label, Some("C header"));
+        assert_eq!(c_header.preview.syntax_hint, Some("c"));
+        assert_eq!(
+            c_header.preview.fallback_syntax,
+            Some(FallbackSyntax::CLike)
+        );
+        assert!(c_header.preview.force_fallback);
+    }
+
+    #[test]
+    fn shell_files_and_dotfiles_get_targeted_preview_support() {
+        let shell = inspect_path(Path::new("deploy.sh"), EntryKind::File);
+        let bashrc = inspect_path(Path::new(".bashrc"), EntryKind::File);
+        let zsh = inspect_path(Path::new("prompt.zsh"), EntryKind::File);
+        let fish = inspect_path(Path::new("config.fish"), EntryKind::File);
+        let zshrc = inspect_path(Path::new(".zshrc"), EntryKind::File);
+
+        assert_eq!(shell.builtin_class, FileClass::Code);
+        assert_eq!(shell.specific_type_label, Some("Shell script"));
+        assert_eq!(shell.preview.syntax_hint, Some("sh"));
+        assert_eq!(shell.preview.fallback_syntax, Some(FallbackSyntax::Shell));
+        assert!(shell.preview.force_fallback);
+
+        assert_eq!(bashrc.builtin_class, FileClass::Config);
+        assert_eq!(bashrc.specific_type_label, Some("Bash config"));
+        assert_eq!(bashrc.preview.syntax_hint, Some("bash"));
+        assert_eq!(bashrc.preview.fallback_syntax, Some(FallbackSyntax::Shell));
+        assert!(bashrc.preview.force_fallback);
+
+        assert_eq!(zsh.builtin_class, FileClass::Code);
+        assert_eq!(zsh.specific_type_label, Some("Zsh script"));
+        assert_eq!(zsh.preview.syntax_hint, Some("zsh"));
+        assert_eq!(zsh.preview.fallback_syntax, Some(FallbackSyntax::Shell));
+        assert!(zsh.preview.force_fallback);
+
+        assert_eq!(fish.builtin_class, FileClass::Code);
+        assert_eq!(fish.specific_type_label, Some("Fish script"));
+        assert_eq!(fish.preview.syntax_hint, Some("fish"));
+        assert_eq!(fish.preview.fallback_syntax, Some(FallbackSyntax::Shell));
+        assert!(fish.preview.force_fallback);
+
+        assert_eq!(zshrc.builtin_class, FileClass::Config);
+        assert_eq!(zshrc.specific_type_label, Some("Zsh config"));
+        assert_eq!(zshrc.preview.syntax_hint, Some("zsh"));
+        assert_eq!(zshrc.preview.fallback_syntax, Some(FallbackSyntax::Shell));
+        assert!(zshrc.preview.force_fallback);
+    }
+
+    #[test]
+    fn js_like_files_prefer_targeted_fallback_support() {
+        let js = inspect_path(Path::new("main.js"), EntryKind::File);
+        let tsx = inspect_path(Path::new("App.tsx"), EntryKind::File);
+
+        assert_eq!(js.builtin_class, FileClass::Code);
+        assert_eq!(js.preview.fallback_syntax, Some(FallbackSyntax::JsLike));
+        assert!(js.preview.force_fallback);
+
+        assert_eq!(tsx.builtin_class, FileClass::Code);
+        assert_eq!(tsx.preview.fallback_syntax, Some(FallbackSyntax::JsLike));
+        assert!(tsx.preview.force_fallback);
+    }
+
+    #[test]
+    fn python_family_files_prefer_targeted_fallback_support() {
+        let py = inspect_path(Path::new("main.py"), EntryKind::File);
+        let pyi = inspect_path(Path::new("types.pyi"), EntryKind::File);
+
+        assert_eq!(py.builtin_class, FileClass::Code);
+        assert_eq!(py.preview.syntax_hint, Some("python"));
+        assert_eq!(py.preview.fallback_syntax, Some(FallbackSyntax::Python));
+        assert!(py.preview.force_fallback);
+
+        assert_eq!(pyi.builtin_class, FileClass::Code);
+        assert_eq!(pyi.preview.syntax_hint, Some("python"));
+        assert_eq!(pyi.preview.fallback_syntax, Some(FallbackSyntax::Python));
+        assert!(pyi.preview.force_fallback);
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use super::theme::Palette;
+use crate::app::sanitize_terminal_text;
 use ratatui::{
     Frame,
     layout::{Alignment, Margin, Rect},
@@ -21,6 +22,30 @@ pub(super) fn render_empty_state(frame: &mut Frame<'_>, area: Rect, label: &str,
 pub(super) fn fill_area(frame: &mut Frame<'_>, area: Rect, bg: Color, fg: Color) {
     frame.render_widget(Clear, area);
     frame.render_widget(Block::default().style(Style::default().bg(bg).fg(fg)), area);
+}
+
+pub(super) fn render_panel_title(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    line: Line<'static>,
+    bg: Color,
+    fg: Color,
+) {
+    if area.width <= 2 || area.height == 0 {
+        return;
+    }
+
+    let title_area = Rect {
+        x: area.x.saturating_add(1),
+        y: area.y,
+        width: area.width.saturating_sub(2),
+        height: 1,
+    };
+    fill_area(frame, title_area, bg, fg);
+    frame.render_widget(
+        Paragraph::new(line).style(Style::default().bg(bg).fg(fg)),
+        title_area,
+    );
 }
 
 pub(super) fn render_button(
@@ -201,8 +226,9 @@ pub(super) fn path_is_active(current: &Path, candidate: &Path) -> bool {
 }
 
 fn truncate_path_tail(path: &str, max_chars: usize) -> String {
+    let path = sanitize_terminal_text(path);
     if path.chars().count() <= max_chars {
-        return path.to_string();
+        return path;
     }
 
     let prefix = if path.starts_with("~/") {
@@ -225,20 +251,21 @@ fn truncate_path_tail(path: &str, max_chars: usize) -> String {
     let last = parts.last().copied().unwrap_or_default();
     let reserve = prefix.chars().count() + last.chars().count() + 4;
     if reserve >= max_chars {
-        return truncate_middle(path, max_chars);
+        return truncate_middle(&path, max_chars);
     }
 
     let mut result = format!("{prefix}…/{last}");
     if result.chars().count() > max_chars {
-        result = truncate_middle(path, max_chars);
+        result = truncate_middle(&path, max_chars);
     }
     result
 }
 
 pub(super) fn truncate_middle(text: &str, max_chars: usize) -> String {
+    let text = sanitize_terminal_text(text);
     let chars = text.chars().collect::<Vec<_>>();
     if chars.len() <= max_chars {
-        return text.to_string();
+        return text;
     }
     if max_chars <= 1 {
         return "…".to_string();
@@ -255,9 +282,10 @@ pub(super) fn truncate_middle(text: &str, max_chars: usize) -> String {
 }
 
 pub(super) fn clamp_label(label: &str, max_chars: usize) -> String {
+    let label = sanitize_terminal_text(label);
     let count = label.chars().count();
     if count <= max_chars {
-        return label.to_string();
+        return label;
     }
     if max_chars <= 1 {
         return "…".to_string();

@@ -1,3 +1,5 @@
+#[path = "preview/container.rs"]
+mod container;
 mod document;
 mod fallback;
 mod markdown;
@@ -15,9 +17,7 @@ use std::{
     fs::{self, File},
     io::Read,
     path::Path,
-    process::Command,
 };
-use zip::ZipArchive;
 
 const PREVIEW_LIMIT_BYTES: usize = 64 * 1024;
 const PREVIEW_RENDER_LINE_LIMIT: usize = 240;
@@ -84,14 +84,39 @@ struct TextPreview {
     bytes_truncated: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Utf16Endian {
+    Little,
+    Big,
+}
+
 #[derive(Default)]
 struct TorrentMetadata {
     name: Option<String>,
     announce: Option<String>,
+    announce_tiers: Vec<Vec<String>>,
     comment: Option<String>,
     created_by: Option<String>,
+    piece_length: Option<u64>,
+    piece_count: Option<usize>,
+    private: Option<bool>,
+    mode: Option<TorrentMode>,
     file_count: usize,
     total_size: Option<u64>,
+    files: Vec<TorrentFileEntry>,
+    file_sample_truncated: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TorrentMode {
+    SingleFile,
+    MultiFile,
+}
+
+#[derive(Clone, Debug)]
+struct TorrentFileEntry {
+    path: String,
+    length: u64,
 }
 
 #[derive(Default)]
@@ -170,7 +195,7 @@ impl PreviewContent {
             item_count: None,
             folder_count: None,
             file_count: None,
-            lines,
+            lines: sanitize_preview_lines(lines),
         }
     }
 
@@ -250,13 +275,13 @@ impl PreviewContent {
         if let Some(detail) = &self.detail
             && !detail.is_empty()
         {
-            parts.push(detail.clone());
+            parts.push(support::sanitize_terminal_text(detail));
         }
 
         if let Some(note) = &self.status_note
             && !note.is_empty()
         {
-            parts.push(note.clone());
+            parts.push(support::sanitize_terminal_text(note));
         }
 
         if let Some(source_lines) = self.source_lines {
@@ -264,7 +289,7 @@ impl PreviewContent {
         }
 
         if let Some(note) = &self.truncation_note {
-            parts.push(note.clone());
+            parts.push(support::sanitize_terminal_text(note));
         }
 
         if !parts.is_empty() {
@@ -298,8 +323,24 @@ impl PreviewContent {
 fn preview_line_width(line: &Line<'_>) -> usize {
     line.spans
         .iter()
-        .map(|span| span.content.chars().count())
+        .map(|span| {
+            support::sanitize_terminal_text(span.content.as_ref())
+                .chars()
+                .count()
+        })
         .sum()
+}
+
+fn sanitize_preview_lines(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
+    lines.into_iter().map(sanitize_preview_line).collect()
+}
+
+fn sanitize_preview_line(mut line: Line<'static>) -> Line<'static> {
+    for span in &mut line.spans {
+        let sanitized = support::sanitize_terminal_text(span.content.as_ref());
+        span.content = sanitized.into();
+    }
+    line
 }
 
 fn status_preview(
@@ -355,17 +396,17 @@ pub(super) fn build_preview(entry: &Entry) -> PreviewContent {
     let preview_spec = facts.preview;
     let type_detail = facts.specific_type_label;
     if preview_spec.kind == file_facts::PreviewKind::Iso
-        && let Some(preview) = build_iso_preview(&entry.path)
+        && let Some(preview) = container::build_iso_preview(&entry.path)
     {
         return preview;
     }
     if preview_spec.kind == file_facts::PreviewKind::Torrent
-        && let Some(preview) = build_torrent_preview(&entry.path)
+        && let Some(preview) = container::build_torrent_preview(&entry.path)
     {
         return preview;
     }
     if facts.builtin_class == FileClass::Archive
-        && let Some(preview) = build_archive_preview(&entry.path, type_detail)
+        && let Some(preview) = container::build_archive_preview(&entry.path, type_detail)
     {
         return preview;
     }
@@ -552,1119 +593,6 @@ fn build_directory_preview(entry: &Entry) -> PreviewContent {
     }
 }
 
-fn build_iso_preview(path: &Path) -> Option<PreviewContent> {
-    let metadata = read_iso_metadata(path);
-    let entries = collect_iso_entries(path);
-    if metadata.is_none() && entries.is_none() {
-        return None;
-    }
-
-    Some(render_iso_preview(
-        metadata.unwrap_or_default(),
-        entries.unwrap_or_default(),
-    ))
-}
-
-fn build_archive_preview(path: &Path, type_detail: Option<&'static str>) -> Option<PreviewContent> {
-    let format = detect_archive_format(path);
-    if let Some(preview) = build_zip_archive_preview(path, format, type_detail) {
-        return Some(preview);
-    }
-    build_external_archive_preview(path, format, type_detail)
-}
-
-fn build_torrent_preview(path: &Path) -> Option<PreviewContent> {
-    const TORRENT_PREVIEW_LIMIT_BYTES: u64 = 1024 * 1024;
-
-    let mut bytes = Vec::with_capacity(TORRENT_PREVIEW_LIMIT_BYTES as usize);
-    File::open(path)
-        .ok()?
-        .take(TORRENT_PREVIEW_LIMIT_BYTES)
-        .read_to_end(&mut bytes)
-        .ok()?;
-
-    let mut index = 0usize;
-    let mut metadata = TorrentMetadata::default();
-    parse_torrent_root(&bytes, &mut index, &mut metadata)?;
-
-    let mut lines = Vec::new();
-    push_preview_line(
-        &mut lines,
-        "Name",
-        metadata.name.unwrap_or_else(|| "unknown".to_string()),
-    );
-    if let Some(tracker) = metadata.announce {
-        push_preview_line(&mut lines, "Tracker", tracker);
-    }
-    let files = if metadata.file_count > 0 {
-        metadata.file_count
-    } else {
-        1
-    };
-    push_preview_line(&mut lines, "Files", files.to_string());
-    if let Some(total_size) = metadata.total_size {
-        push_preview_line(&mut lines, "Size", crate::app::format_size(total_size));
-    }
-    if let Some(created_by) = metadata.created_by {
-        push_preview_line(&mut lines, "Created", created_by);
-    }
-    if let Some(comment) = metadata.comment {
-        push_preview_line(&mut lines, "Comment", comment);
-    }
-
-    let file_count = files;
-    Some(
-        PreviewContent::new(PreviewKind::Text, lines)
-            .with_detail("BitTorrent file")
-            .with_directory_counts(file_count, 0, file_count),
-    )
-}
-
-fn detect_archive_format(path: &Path) -> ArchiveFormat {
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| name.to_ascii_lowercase())
-        .unwrap_or_default();
-    if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
-        return ArchiveFormat::TarGzip;
-    }
-    if name.ends_with(".tar.xz") || name.ends_with(".txz") {
-        return ArchiveFormat::TarXz;
-    }
-    if name.ends_with(".tar.bz2") || name.ends_with(".tbz2") || name.ends_with(".tbz") {
-        return ArchiveFormat::TarBzip2;
-    }
-    if name.ends_with(".tar.zst") || name.ends_with(".tzst") {
-        return ArchiveFormat::TarZstd;
-    }
-
-    match path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("zip" | "jar" | "apk" | "aab" | "apkg") => ArchiveFormat::Zip,
-        Some("7z") => ArchiveFormat::SevenZip,
-        Some("tar") => ArchiveFormat::Tar,
-        Some("gz") => ArchiveFormat::Gzip,
-        Some("xz") => ArchiveFormat::Xz,
-        Some("bz2") => ArchiveFormat::Bzip2,
-        Some("zst") => ArchiveFormat::Zstd,
-        Some("deb") => ArchiveFormat::Deb,
-        Some("rpm") => ArchiveFormat::Rpm,
-        Some("appimage") => ArchiveFormat::AppImage,
-        _ => ArchiveFormat::Unknown,
-    }
-}
-
-fn archive_default_label(format: ArchiveFormat) -> &'static str {
-    match format {
-        ArchiveFormat::Zip => "ZIP archive",
-        ArchiveFormat::SevenZip => "7z archive",
-        ArchiveFormat::Tar => "TAR archive",
-        ArchiveFormat::TarGzip => "TAR.GZ archive",
-        ArchiveFormat::TarXz => "TAR.XZ archive",
-        ArchiveFormat::TarBzip2 => "TAR.BZ2 archive",
-        ArchiveFormat::TarZstd => "TAR.ZST archive",
-        ArchiveFormat::Gzip => "Gzip archive",
-        ArchiveFormat::Xz => "XZ archive",
-        ArchiveFormat::Bzip2 => "Bzip2 archive",
-        ArchiveFormat::Zstd => "Zstandard archive",
-        ArchiveFormat::Deb => "Debian package",
-        ArchiveFormat::Rpm => "RPM package",
-        ArchiveFormat::AppImage => "AppImage bundle",
-        ArchiveFormat::Unknown => "Archive",
-    }
-}
-
-fn archive_format_name(format: ArchiveFormat) -> &'static str {
-    match format {
-        ArchiveFormat::Zip => "ZIP",
-        ArchiveFormat::SevenZip => "7z",
-        ArchiveFormat::Tar => "TAR",
-        ArchiveFormat::TarGzip => "TAR.GZ",
-        ArchiveFormat::TarXz => "TAR.XZ",
-        ArchiveFormat::TarBzip2 => "TAR.BZ2",
-        ArchiveFormat::TarZstd => "TAR.ZST",
-        ArchiveFormat::Gzip => "Gzip",
-        ArchiveFormat::Xz => "XZ",
-        ArchiveFormat::Bzip2 => "Bzip2",
-        ArchiveFormat::Zstd => "Zstandard",
-        ArchiveFormat::Deb => "DEB",
-        ArchiveFormat::Rpm => "RPM",
-        ArchiveFormat::AppImage => "AppImage",
-        ArchiveFormat::Unknown => "Archive",
-    }
-}
-
-fn build_zip_archive_preview(
-    path: &Path,
-    format: ArchiveFormat,
-    type_detail: Option<&'static str>,
-) -> Option<PreviewContent> {
-    if format != ArchiveFormat::Zip {
-        return None;
-    }
-
-    let file = File::open(path).ok()?;
-    let mut archive = ZipArchive::new(file).ok()?;
-    let total_entries = archive.len();
-    let mut entries = Vec::with_capacity(total_entries.min(ARCHIVE_ENTRY_SCAN_LIMIT));
-    let mut metadata = ArchiveMetadata {
-        format_label: Some(archive_format_name(format).to_string()),
-        ..ArchiveMetadata::default()
-    };
-    let mut manifest = ZipManifestMetadata::default();
-
-    for index in 0..total_entries.min(ARCHIVE_ENTRY_SCAN_LIMIT) {
-        let entry = archive.by_index(index).ok()?;
-        let is_dir = entry.is_dir();
-        let name = entry.name().to_string();
-        if let Some(path) = normalize_archive_path(&name, false) {
-            entries.push(ArchiveEntry { path, is_dir });
-        }
-        metadata.unpacked_size = Some(
-            metadata
-                .unpacked_size
-                .unwrap_or(0)
-                .saturating_add(entry.size()),
-        );
-        metadata.compressed_size = Some(
-            metadata
-                .compressed_size
-                .unwrap_or(0)
-                .saturating_add(entry.compressed_size()),
-        );
-
-        if manifest.is_empty()
-            && !is_dir
-            && name.eq_ignore_ascii_case("META-INF/MANIFEST.MF")
-            && entry.size() <= ZIP_MANIFEST_LIMIT_BYTES
-        {
-            let mut contents = String::new();
-            if entry
-                .take(ZIP_MANIFEST_LIMIT_BYTES)
-                .read_to_string(&mut contents)
-                .is_ok()
-            {
-                manifest = parse_zip_manifest(&contents);
-            }
-        }
-    }
-
-    let comment = String::from_utf8_lossy(archive.comment());
-    let comment = comment.trim();
-    if !comment.is_empty() {
-        metadata.comment = Some(comment.to_string());
-    }
-
-    let detail = type_detail.unwrap_or(archive_default_label(format));
-    let scan_truncated = total_entries > ARCHIVE_ENTRY_SCAN_LIMIT;
-    Some(render_archive_preview(ArchiveRenderConfig {
-        detail: detail.to_string(),
-        metadata,
-        entries: Some(entries),
-        total_entries_hint: Some(total_entries),
-        empty_label: archive_is_empty_label(format),
-        unavailable_label: "Unable to read archive contents",
-        extra_sections: zip_manifest_sections(&manifest),
-        scan_truncated,
-    }))
-}
-
-fn build_external_archive_preview(
-    path: &Path,
-    format: ArchiveFormat,
-    type_detail: Option<&'static str>,
-) -> Option<PreviewContent> {
-    let detail = type_detail.unwrap_or(archive_default_label(format));
-    if let Some((metadata, entries)) = collect_archive_listing_with_7z(path) {
-        return Some(render_archive_preview(ArchiveRenderConfig {
-            detail: detail.to_string(),
-            metadata,
-            entries: Some(entries),
-            total_entries_hint: None,
-            empty_label: archive_is_empty_label(format),
-            unavailable_label: "Unable to read archive contents",
-            extra_sections: Vec::new(),
-            scan_truncated: false,
-        }));
-    }
-
-    let entries = collect_archive_entries_with_bsdtar(path)
-        .or_else(|| collect_archive_entries_with_tar(path))
-        .or_else(|| collect_archive_entries_with_unzip(path))?;
-
-    Some(render_archive_preview(ArchiveRenderConfig {
-        detail: detail.to_string(),
-        metadata: ArchiveMetadata {
-            format_label: Some(archive_format_name(format).to_string()),
-            ..ArchiveMetadata::default()
-        },
-        entries: Some(entries),
-        total_entries_hint: None,
-        empty_label: archive_is_empty_label(format),
-        unavailable_label: "Unable to read archive contents",
-        extra_sections: Vec::new(),
-        scan_truncated: false,
-    }))
-}
-
-fn read_iso_metadata(path: &Path) -> Option<IsoMetadata> {
-    let mut bytes = Vec::with_capacity(ISO_METADATA_SCAN_BYTES as usize);
-    File::open(path)
-        .ok()?
-        .take(ISO_METADATA_SCAN_BYTES)
-        .read_to_end(&mut bytes)
-        .ok()?;
-    parse_iso_metadata(&bytes)
-}
-
-fn parse_iso_metadata(bytes: &[u8]) -> Option<IsoMetadata> {
-    let mut metadata = IsoMetadata::default();
-    let mut found_descriptor = false;
-    let start = ISO_DESCRIPTOR_START_SECTOR * ISO_SECTOR_SIZE;
-    if bytes.len() < start + ISO_SECTOR_SIZE {
-        return None;
-    }
-
-    for descriptor in bytes[start..].chunks_exact(ISO_SECTOR_SIZE) {
-        if descriptor.get(1..6) != Some(b"CD001".as_slice()) {
-            continue;
-        }
-
-        found_descriptor = true;
-        match descriptor[0] {
-            0 => {
-                let boot_id = parse_iso_text_field(descriptor, 7, 39);
-                if boot_id
-                    .as_deref()
-                    .is_some_and(|value| value.eq_ignore_ascii_case(ISO_BOOT_SYSTEM_ID))
-                {
-                    metadata.bootable = true;
-                }
-            }
-            1 => {
-                metadata.system_id = parse_iso_text_field(descriptor, 8, 40);
-                metadata.volume_id = parse_iso_text_field(descriptor, 40, 72);
-                metadata.publisher_id = parse_iso_text_field(descriptor, 318, 446);
-                metadata.preparer_id = parse_iso_text_field(descriptor, 446, 574);
-                metadata.application_id = parse_iso_text_field(descriptor, 574, 702);
-                metadata.created_at = parse_iso_datetime_field(descriptor, 813, 830);
-                metadata.modified_at = parse_iso_datetime_field(descriptor, 830, 847);
-                metadata.effective_at = parse_iso_datetime_field(descriptor, 864, 881);
-
-                let volume_blocks = parse_iso_u32_le(descriptor, 80);
-                let block_size = parse_iso_u16_le(descriptor, 128);
-                metadata.total_size = volume_blocks
-                    .zip(block_size)
-                    .map(|(blocks, block_size)| u64::from(blocks) * u64::from(block_size));
-            }
-            255 => break,
-            _ => {}
-        }
-    }
-
-    found_descriptor.then_some(metadata)
-}
-
-fn collect_iso_entries(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    collect_iso_entries_with_bsdtar(path).or_else(|| collect_iso_entries_with_isoinfo(path))
-}
-
-fn collect_iso_entries_with_bsdtar(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    let output = Command::new("bsdtar").arg("-tf").arg(path).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(normalize_archive_entries(
-        String::from_utf8_lossy(&output.stdout).lines(),
-        true,
-    ))
-}
-
-fn collect_iso_entries_with_isoinfo(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    let output = Command::new("isoinfo")
-        .arg("-i")
-        .arg(path)
-        .arg("-f")
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(normalize_archive_entries(
-        String::from_utf8_lossy(&output.stdout).lines(),
-        true,
-    ))
-}
-
-fn normalize_archive_entries<'a>(
-    items: impl IntoIterator<Item = &'a str>,
-    strip_version_suffix: bool,
-) -> Vec<ArchiveEntry> {
-    let mut normalized = BTreeMap::<String, bool>::new();
-    for item in items {
-        let Some(entry) = normalize_archive_entry(item, strip_version_suffix) else {
-            continue;
-        };
-        insert_archive_entry(&mut normalized, &entry.path, entry.is_dir);
-    }
-
-    normalized
-        .into_iter()
-        .map(|(path, is_dir)| ArchiveEntry { path, is_dir })
-        .collect()
-}
-
-fn expand_archive_entries(entries: Vec<ArchiveEntry>) -> Vec<ArchiveEntry> {
-    let mut normalized = BTreeMap::<String, bool>::new();
-    for entry in entries {
-        insert_archive_entry(&mut normalized, &entry.path, entry.is_dir);
-    }
-    normalized
-        .into_iter()
-        .map(|(path, is_dir)| ArchiveEntry { path, is_dir })
-        .collect()
-}
-
-fn normalize_archive_entry(item: &str, strip_version_suffix: bool) -> Option<ArchiveEntry> {
-    let trimmed = trim_trailing_line_endings(item);
-    let trimmed = trimmed.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    let is_dir = trimmed.ends_with('/') || trimmed.ends_with('\\');
-    let trimmed = trimmed
-        .trim_start_matches("./")
-        .trim_start_matches('/')
-        .trim_end_matches(['/', '\\']);
-    if trimmed.is_empty() || trimmed == "." {
-        return None;
-    }
-
-    let mut segments = Vec::new();
-    for segment in trimmed.split(['/', '\\']) {
-        let segment = if strip_version_suffix {
-            strip_iso_version_suffix(segment.trim())
-        } else {
-            segment.trim()
-        };
-        if segment.is_empty() || segment == "." {
-            continue;
-        }
-        if segment == ".." {
-            return None;
-        }
-        segments.push(segment.to_string());
-    }
-
-    if segments.is_empty() {
-        return None;
-    }
-
-    Some(ArchiveEntry {
-        path: segments.join("/"),
-        is_dir,
-    })
-}
-
-fn insert_archive_entry(entries: &mut BTreeMap<String, bool>, path: &str, is_dir: bool) {
-    let mut built = String::new();
-    let parts = path.split('/').collect::<Vec<_>>();
-    for (index, segment) in parts.iter().enumerate() {
-        if !built.is_empty() {
-            built.push('/');
-        }
-        built.push_str(segment);
-        let current_is_dir = index < parts.len().saturating_sub(1) || is_dir;
-        entries
-            .entry(built.clone())
-            .and_modify(|existing| *existing |= current_is_dir)
-            .or_insert(current_is_dir);
-    }
-}
-
-fn render_iso_preview(metadata: IsoMetadata, entries: Vec<ArchiveEntry>) -> PreviewContent {
-    let palette = appearance::palette();
-    let mut lines = Vec::new();
-    let total_items = entries.len();
-    let folder_count = entries.iter().filter(|entry| entry.is_dir).count();
-    let file_count = total_items.saturating_sub(folder_count);
-
-    let summary = vec![
-        ("Volume", metadata.volume_id.clone()),
-        ("System", metadata.system_id.clone()),
-        (
-            "Image Size",
-            metadata.total_size.map(crate::app::format_size),
-        ),
-        (
-            "Bootable",
-            metadata
-                .bootable
-                .then(|| "El Torito".to_string())
-                .or_else(|| (total_items > 0).then(|| "No".to_string())),
-        ),
-        (
-            "Entries",
-            (total_items > 0).then(|| format!("{total_items} total")),
-        ),
-        (
-            "Folders",
-            (folder_count > 0).then(|| format!("{folder_count}")),
-        ),
-        ("Files", (file_count > 0).then(|| format!("{file_count}"))),
-        ("Publisher", metadata.publisher_id.clone()),
-        ("Prepared By", metadata.preparer_id.clone()),
-        ("Application", metadata.application_id.clone()),
-        ("Created", metadata.created_at.clone()),
-        ("Modified", metadata.modified_at.clone()),
-        ("Effective", metadata.effective_at.clone()),
-    ];
-
-    push_preview_section(&mut lines, "Image", &summary, palette);
-
-    let mut rendered_items = 0usize;
-    let mut tree_truncated = false;
-    if !lines.is_empty() {
-        lines.push(Line::from(""));
-    }
-    lines.push(section_line("Contents", palette));
-
-    if entries.is_empty() {
-        lines.push(Line::from("Unable to read ISO contents"));
-    } else {
-        let mut root = ArchiveTreeNode::default();
-        for entry in &entries {
-            insert_archive_tree_entry(&mut root, entry);
-        }
-        let available_lines = PREVIEW_RENDER_LINE_LIMIT.saturating_sub(lines.len());
-        let mut remaining = available_lines;
-        if remaining == 0 {
-            tree_truncated = true;
-        } else {
-            let children = ordered_archive_children(&root.children);
-            render_archive_tree(
-                &children,
-                "",
-                &mut remaining,
-                &mut rendered_items,
-                &mut lines,
-                palette,
-            );
-            tree_truncated = rendered_items < total_items;
-        }
-    }
-
-    let mut preview =
-        PreviewContent::new(PreviewKind::Archive, lines).with_detail("ISO disk image");
-    let truncation_note = match (tree_truncated, total_items, rendered_items) {
-        (true, total, rendered) if total > 0 && rendered > 0 => {
-            Some(format!("showing first {rendered} of {total} entries"))
-        }
-        (true, total, _) if total > 0 => {
-            Some(format!("showing first {PREVIEW_RENDER_LINE_LIMIT} lines"))
-        }
-        _ => None,
-    };
-    if let Some(note) = truncation_note {
-        preview = preview.with_truncation(note);
-    }
-    preview
-}
-
-fn render_archive_preview(config: ArchiveRenderConfig) -> PreviewContent {
-    let palette = appearance::palette();
-    let mut lines = Vec::new();
-    let entries = expand_archive_entries(config.entries.unwrap_or_default());
-    let total_items = entries.len().max(config.total_entries_hint.unwrap_or(0));
-    let folder_count = entries.iter().filter(|entry| entry.is_dir).count();
-    let file_count = total_items.saturating_sub(folder_count);
-
-    let summary = vec![
-        ("Format", config.metadata.format_label),
-        (
-            "Entries",
-            (total_items > 0).then(|| format!("{total_items} total")),
-        ),
-        (
-            "Folders",
-            (folder_count > 0).then(|| folder_count.to_string()),
-        ),
-        ("Files", (file_count > 0).then(|| file_count.to_string())),
-        (
-            "Packed",
-            config.metadata.compressed_size.map(crate::app::format_size),
-        ),
-        (
-            "Unpacked",
-            config.metadata.unpacked_size.map(crate::app::format_size),
-        ),
-        (
-            "Archive Size",
-            config.metadata.physical_size.map(crate::app::format_size),
-        ),
-        ("Comment", config.metadata.comment),
-    ];
-    push_preview_section(&mut lines, "Archive", &summary, palette);
-
-    for (title, fields) in config.extra_sections {
-        push_preview_values_section(&mut lines, title, &fields, palette);
-    }
-
-    let mut rendered_items = 0usize;
-    let mut tree_truncated = false;
-    if !lines.is_empty() {
-        lines.push(Line::from(""));
-    }
-    lines.push(section_line("Contents", palette));
-
-    if entries.is_empty() {
-        lines.push(Line::from(if total_items == 0 {
-            config.empty_label.to_string()
-        } else {
-            config.unavailable_label.to_string()
-        }));
-    } else {
-        let mut root = ArchiveTreeNode::default();
-        for entry in &entries {
-            insert_archive_tree_entry(&mut root, entry);
-        }
-        let available_lines = PREVIEW_RENDER_LINE_LIMIT.saturating_sub(lines.len());
-        let mut remaining = available_lines;
-        if remaining == 0 {
-            tree_truncated = true;
-        } else {
-            let children = ordered_archive_children(&root.children);
-            render_archive_tree(
-                &children,
-                "",
-                &mut remaining,
-                &mut rendered_items,
-                &mut lines,
-                palette,
-            );
-            tree_truncated = rendered_items < entries.len();
-        }
-    }
-
-    let mut notes = Vec::new();
-    if config.scan_truncated {
-        notes.push(format!(
-            "scanned first {} of {} entries",
-            entries.len(),
-            total_items
-        ));
-    }
-    if tree_truncated {
-        notes.push(format!(
-            "showing first {} of {} entries",
-            rendered_items.max(entries.len().min(PREVIEW_RENDER_LINE_LIMIT)),
-            total_items
-        ));
-    }
-
-    let mut preview = PreviewContent::new(PreviewKind::Archive, lines)
-        .with_detail(config.detail)
-        .with_directory_counts(total_items, folder_count, file_count);
-    if !notes.is_empty() {
-        preview = preview.with_truncation(notes.join("  •  "));
-    }
-    preview
-}
-
-struct ArchiveRenderConfig {
-    detail: String,
-    metadata: ArchiveMetadata,
-    entries: Option<Vec<ArchiveEntry>>,
-    total_entries_hint: Option<usize>,
-    empty_label: &'static str,
-    unavailable_label: &'static str,
-    extra_sections: Vec<(&'static str, Vec<(&'static str, String)>)>,
-    scan_truncated: bool,
-}
-
-fn archive_is_empty_label(format: ArchiveFormat) -> &'static str {
-    match format {
-        ArchiveFormat::Zip => "Archive is empty",
-        ArchiveFormat::SevenZip => "Archive is empty",
-        ArchiveFormat::Tar
-        | ArchiveFormat::TarGzip
-        | ArchiveFormat::TarXz
-        | ArchiveFormat::TarBzip2
-        | ArchiveFormat::TarZstd
-        | ArchiveFormat::Gzip
-        | ArchiveFormat::Xz
-        | ArchiveFormat::Bzip2
-        | ArchiveFormat::Zstd
-        | ArchiveFormat::Deb
-        | ArchiveFormat::Rpm
-        | ArchiveFormat::AppImage
-        | ArchiveFormat::Unknown => "Archive is empty",
-    }
-}
-
-fn collect_archive_entries_with_bsdtar(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    let output = Command::new("bsdtar").arg("-tf").arg(path).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(normalize_archive_entries(
-        String::from_utf8_lossy(&output.stdout).lines(),
-        false,
-    ))
-}
-
-fn collect_archive_entries_with_tar(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    let output = Command::new("tar").arg("-tf").arg(path).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(normalize_archive_entries(
-        String::from_utf8_lossy(&output.stdout).lines(),
-        false,
-    ))
-}
-
-fn collect_archive_entries_with_unzip(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    let output = Command::new("unzip").arg("-Z1").arg(path).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(normalize_archive_entries(
-        String::from_utf8_lossy(&output.stdout).lines(),
-        false,
-    ))
-}
-
-fn collect_archive_listing_with_7z(path: &Path) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>)> {
-    let output = Command::new("7z")
-        .arg("l")
-        .arg("-slt")
-        .arg(path)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    parse_7z_listing(&String::from_utf8_lossy(&output.stdout))
-}
-
-fn parse_7z_listing(output: &str) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>)> {
-    let mut metadata = ArchiveMetadata::default();
-    let mut entries = Vec::new();
-    let mut in_entries = false;
-    let mut current = BTreeMap::<String, String>::new();
-
-    for raw_line in output.lines() {
-        let line = raw_line.trim_end();
-        if line == "----------" {
-            in_entries = true;
-            continue;
-        }
-
-        if !in_entries {
-            if let Some((key, value)) = parse_key_value_line(line) {
-                match key {
-                    "Type" => metadata.format_label = Some(value.to_string()),
-                    "Physical Size" => metadata.physical_size = parse_u64(value),
-                    "Comment" if !value.is_empty() => metadata.comment = Some(value.to_string()),
-                    _ => {}
-                }
-            }
-            continue;
-        }
-
-        if line.is_empty() {
-            push_7z_entry(&mut current, &mut entries, &mut metadata);
-            continue;
-        }
-
-        if let Some((key, value)) = parse_key_value_line(line) {
-            current.insert(key.to_string(), value.to_string());
-        }
-    }
-    push_7z_entry(&mut current, &mut entries, &mut metadata);
-
-    if entries.is_empty()
-        && metadata.format_label.is_none()
-        && metadata.physical_size.is_none()
-        && metadata.comment.is_none()
-    {
-        None
-    } else {
-        Some((metadata, entries))
-    }
-}
-
-fn push_7z_entry(
-    current: &mut BTreeMap<String, String>,
-    entries: &mut Vec<ArchiveEntry>,
-    metadata: &mut ArchiveMetadata,
-) {
-    if current.is_empty() {
-        return;
-    }
-
-    let path = current.get("Path").cloned();
-    let is_dir = current.get("Folder").is_some_and(|value| value == "+")
-        || current
-            .get("Attributes")
-            .is_some_and(|value| value.starts_with('D'));
-
-    if let Some(path) = path.and_then(|path| normalize_archive_path(&path, false)) {
-        entries.push(ArchiveEntry { path, is_dir });
-    }
-
-    if let Some(size) = current.get("Size").and_then(|value| parse_u64(value)) {
-        metadata.unpacked_size = Some(metadata.unpacked_size.unwrap_or(0).saturating_add(size));
-    }
-    if let Some(size) = current
-        .get("Packed Size")
-        .and_then(|value| parse_u64(value))
-    {
-        metadata.compressed_size = Some(metadata.compressed_size.unwrap_or(0).saturating_add(size));
-    }
-    current.clear();
-}
-
-fn parse_key_value_line(line: &str) -> Option<(&str, &str)> {
-    let (key, value) = line.split_once(" = ")?;
-    Some((key.trim(), value.trim()))
-}
-
-fn parse_u64(value: &str) -> Option<u64> {
-    value.trim().parse().ok()
-}
-
-fn normalize_archive_path(item: &str, strip_version_suffix: bool) -> Option<String> {
-    normalize_archive_entry(item, strip_version_suffix).map(|entry| entry.path)
-}
-
-fn parse_zip_manifest(contents: &str) -> ZipManifestMetadata {
-    let mut fields = BTreeMap::<String, String>::new();
-    let mut current_key: Option<String> = None;
-
-    for line in contents.lines() {
-        let line = line.trim_end_matches('\r');
-        if let Some(rest) = line.strip_prefix(' ') {
-            if let Some(key) = &current_key
-                && let Some(value) = fields.get_mut(key)
-            {
-                value.push_str(rest);
-            }
-            continue;
-        }
-
-        let Some((key, value)) = line.split_once(':') else {
-            current_key = None;
-            continue;
-        };
-        let key = key.trim().to_string();
-        let value = value.trim().to_string();
-        current_key = Some(key.clone());
-        fields.insert(key, value);
-    }
-
-    ZipManifestMetadata {
-        title: fields
-            .get("Implementation-Title")
-            .cloned()
-            .or_else(|| fields.get("Bundle-Name").cloned()),
-        version: fields
-            .get("Implementation-Version")
-            .cloned()
-            .or_else(|| fields.get("Bundle-Version").cloned()),
-        main_class: fields.get("Main-Class").cloned(),
-        created_by: fields.get("Created-By").cloned(),
-        automatic_module: fields.get("Automatic-Module-Name").cloned(),
-    }
-}
-
-impl ZipManifestMetadata {
-    fn is_empty(&self) -> bool {
-        self.title.is_none()
-            && self.version.is_none()
-            && self.main_class.is_none()
-            && self.created_by.is_none()
-            && self.automatic_module.is_none()
-    }
-}
-
-fn zip_manifest_sections(
-    manifest: &ZipManifestMetadata,
-) -> Vec<(&'static str, Vec<(&'static str, String)>)> {
-    if manifest.is_empty() {
-        return Vec::new();
-    }
-
-    let mut fields = Vec::new();
-    if let Some(value) = &manifest.title {
-        fields.push(("Title", value.clone()));
-    }
-    if let Some(value) = &manifest.version {
-        fields.push(("Version", value.clone()));
-    }
-    if let Some(value) = &manifest.main_class {
-        fields.push(("Main-Class", value.clone()));
-    }
-    if let Some(value) = &manifest.automatic_module {
-        fields.push(("Module", value.clone()));
-    }
-    if let Some(value) = &manifest.created_by {
-        fields.push(("Created By", value.clone()));
-    }
-    vec![("Manifest", fields)]
-}
-
-fn insert_archive_tree_entry(root: &mut ArchiveTreeNode, entry: &ArchiveEntry) {
-    let mut current = root;
-    let mut built = String::new();
-    let parts = entry.path.split('/').collect::<Vec<_>>();
-    for (index, part) in parts.iter().enumerate() {
-        if !built.is_empty() {
-            built.push('/');
-        }
-        built.push_str(part);
-        let is_last = index == parts.len().saturating_sub(1);
-        current = current
-            .children
-            .entry((*part).to_string())
-            .or_insert_with(|| ArchiveTreeNode {
-                path: built.clone(),
-                is_dir: !is_last || entry.is_dir,
-                children: BTreeMap::new(),
-            });
-        current.path = built.clone();
-        current.is_dir |= !is_last || entry.is_dir;
-    }
-}
-
-fn ordered_archive_children(
-    children: &BTreeMap<String, ArchiveTreeNode>,
-) -> Vec<(&String, &ArchiveTreeNode)> {
-    let mut ordered = children.iter().collect::<Vec<_>>();
-    ordered.sort_by(|(left_name, left), (right_name, right)| {
-        right
-            .is_dir
-            .cmp(&left.is_dir)
-            .then_with(|| left_name.to_lowercase().cmp(&right_name.to_lowercase()))
-    });
-    ordered
-}
-
-fn render_archive_tree(
-    children: &[(&String, &ArchiveTreeNode)],
-    prefix: &str,
-    remaining: &mut usize,
-    rendered_items: &mut usize,
-    lines: &mut Vec<Line<'static>>,
-    palette: appearance::Palette,
-) {
-    for (index, (name, node)) in children.iter().enumerate() {
-        if *remaining == 0 {
-            return;
-        }
-
-        let is_last = index == children.len().saturating_sub(1);
-        lines.push(render_archive_tree_line(
-            prefix, name, node, is_last, palette,
-        ));
-        *remaining = remaining.saturating_sub(1);
-        *rendered_items += 1;
-
-        if node.is_dir && !node.children.is_empty() {
-            let mut next_prefix = prefix.to_string();
-            next_prefix.push_str(if is_last { "    " } else { "│   " });
-            let nested = ordered_archive_children(&node.children);
-            render_archive_tree(
-                &nested,
-                &next_prefix,
-                remaining,
-                rendered_items,
-                lines,
-                palette,
-            );
-            if *remaining == 0 {
-                return;
-            }
-        }
-    }
-}
-
-fn render_archive_tree_line(
-    prefix: &str,
-    name: &str,
-    node: &ArchiveTreeNode,
-    is_last: bool,
-    palette: appearance::Palette,
-) -> Line<'static> {
-    let connector = if is_last { "└── " } else { "├── " };
-    let appearance = appearance::resolve_path(
-        Path::new(&node.path),
-        if node.is_dir {
-            EntryKind::Directory
-        } else {
-            EntryKind::File
-        },
-    );
-    let mut display_name = name.to_string();
-    if node.is_dir {
-        display_name.push('/');
-    }
-
-    Line::from(vec![
-        Span::styled(
-            format!("{prefix}{connector}"),
-            Style::default().fg(palette.muted),
-        ),
-        Span::styled(
-            format!("{} ", appearance.icon),
-            Style::default()
-                .fg(appearance.color)
-                .add_modifier(ratatui::style::Modifier::BOLD),
-        ),
-        Span::styled(display_name, Style::default().fg(palette.text)),
-    ])
-}
-
-fn push_preview_section(
-    lines: &mut Vec<Line<'static>>,
-    title: &str,
-    fields: &[(&str, Option<String>)],
-    palette: appearance::Palette,
-) {
-    let visible_fields = fields
-        .iter()
-        .filter_map(|(label, value)| value.as_deref().map(|value| (*label, value)))
-        .collect::<Vec<_>>();
-    if visible_fields.is_empty() {
-        return;
-    }
-
-    if !lines.is_empty() {
-        lines.push(Line::from(""));
-    }
-    lines.push(section_line(title, palette));
-    let label_width = visible_fields
-        .iter()
-        .map(|(label, _)| label.len())
-        .max()
-        .unwrap_or(6);
-    for (label, value) in visible_fields {
-        lines.push(preview_field_line(label, value, label_width, palette));
-    }
-}
-
-fn push_preview_values_section(
-    lines: &mut Vec<Line<'static>>,
-    title: &str,
-    fields: &[(&str, String)],
-    palette: appearance::Palette,
-) {
-    if fields.is_empty() {
-        return;
-    }
-
-    if !lines.is_empty() {
-        lines.push(Line::from(""));
-    }
-    lines.push(section_line(title, palette));
-    let label_width = fields
-        .iter()
-        .map(|(label, _)| label.len())
-        .max()
-        .unwrap_or(6);
-    for (label, value) in fields {
-        lines.push(preview_field_line(label, value, label_width, palette));
-    }
-}
-
-fn section_line(title: &str, palette: appearance::Palette) -> Line<'static> {
-    Line::from(Span::styled(
-        title.to_string(),
-        Style::default().fg(palette.accent),
-    ))
-}
-
-fn preview_field_line(
-    label: &str,
-    value: &str,
-    label_width: usize,
-    palette: appearance::Palette,
-) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(
-            format!("{label:<width$} ", width = label_width + 1),
-            Style::default().fg(palette.muted),
-        ),
-        Span::styled(value.to_string(), Style::default().fg(palette.text)),
-    ])
-}
-
-fn parse_iso_text_field(bytes: &[u8], start: usize, end: usize) -> Option<String> {
-    let field = bytes.get(start..end)?;
-    let text = String::from_utf8_lossy(field);
-    let trimmed = text.trim_matches(char::from(0)).trim();
-    (!trimmed.is_empty()).then(|| trimmed.to_string())
-}
-
-fn parse_iso_datetime_field(bytes: &[u8], start: usize, end: usize) -> Option<String> {
-    let raw = parse_iso_text_field(bytes, start, end)?;
-    format_iso_datetime(&raw)
-}
-
-fn format_iso_datetime(value: &str) -> Option<String> {
-    let digits = value.as_bytes();
-    if digits.len() != 17 || digits[..16].iter().any(|byte| !byte.is_ascii_digit()) {
-        return None;
-    }
-    if digits[..16].iter().all(|byte| *byte == b'0') {
-        return None;
-    }
-
-    let year = &value[0..4];
-    let month = &value[4..6];
-    let day = &value[6..8];
-    let hour = &value[8..10];
-    let minute = &value[10..12];
-    let second = &value[12..14];
-    Some(format!("{year}-{month}-{day} {hour}:{minute}:{second}"))
-}
-
-fn parse_iso_u32_le(bytes: &[u8], offset: usize) -> Option<u32> {
-    let raw = bytes.get(offset..offset + 4)?;
-    Some(u32::from_le_bytes(raw.try_into().ok()?))
-}
-
-fn parse_iso_u16_le(bytes: &[u8], offset: usize) -> Option<u16> {
-    let raw = bytes.get(offset..offset + 2)?;
-    Some(u16::from_le_bytes(raw.try_into().ok()?))
-}
-
-fn strip_iso_version_suffix(segment: &str) -> &str {
-    let Some((base, suffix)) = segment.rsplit_once(';') else {
-        return segment;
-    };
-    if !base.is_empty() && !suffix.is_empty() && suffix.chars().all(|ch| ch.is_ascii_digit()) {
-        base
-    } else {
-        segment
-    }
-}
-
-fn push_preview_line(lines: &mut Vec<Line<'static>>, label: &str, value: String) {
-    let palette = appearance::palette();
-    lines.push(Line::from(vec![
-        Span::styled(format!("{label:<8}"), Style::default().fg(palette.muted)),
-        Span::styled(value, Style::default().fg(palette.text)),
-    ]));
-}
-
 fn render_plain_text_preview(text: &str) -> Vec<Line<'static>> {
     let palette = appearance::palette();
     let mut rendered = Vec::new();
@@ -1814,6 +742,12 @@ fn read_text_preview(path: &Path) -> anyhow::Result<Option<TextPreview>> {
             bytes_truncated,
         }));
     }
+    if let Some(text) = decode_utf16_preview(&buffer) {
+        return Ok(Some(TextPreview {
+            text,
+            bytes_truncated,
+        }));
+    }
     if buffer.contains(&0) {
         return Ok(None);
     }
@@ -1836,6 +770,29 @@ fn read_text_preview(path: &Path) -> anyhow::Result<Option<TextPreview>> {
     }
 }
 
+fn decode_utf16_preview(buffer: &[u8]) -> Option<String> {
+    let (endian, content) = match buffer {
+        [0xFF, 0xFE, rest @ ..] => (Utf16Endian::Little, rest),
+        [0xFE, 0xFF, rest @ ..] => (Utf16Endian::Big, rest),
+        _ => return None,
+    };
+
+    let unit_len = content.len() / 2;
+    if unit_len == 0 {
+        return Some(String::new());
+    }
+
+    let units = content[..unit_len * 2]
+        .chunks_exact(2)
+        .map(|chunk| match endian {
+            Utf16Endian::Little => u16::from_le_bytes([chunk[0], chunk[1]]),
+            Utf16Endian::Big => u16::from_be_bytes([chunk[0], chunk[1]]),
+        })
+        .collect::<Vec<_>>();
+
+    Some(String::from_utf16_lossy(&units))
+}
+
 fn line_number_span(number: usize, width: usize) -> Span<'static> {
     let preview = appearance::code_preview_palette();
     Span::styled(
@@ -1849,181 +806,20 @@ fn line_number_width(lines: usize) -> usize {
 }
 
 fn expand_tabs(text: &str) -> String {
-    text.replace('\t', "    ")
-}
-
-fn parse_torrent_root(
-    bytes: &[u8],
-    index: &mut usize,
-    metadata: &mut TorrentMetadata,
-) -> Option<()> {
-    expect_byte(bytes, index, b'd')?;
-    while peek_byte(bytes, *index)? != b'e' {
-        let key = parse_bencode_bytes(bytes, index)?;
-        match key {
-            b"announce" => metadata.announce = parse_bencode_string(bytes, index),
-            b"comment" => metadata.comment = parse_bencode_string(bytes, index),
-            b"created by" => metadata.created_by = parse_bencode_string(bytes, index),
-            b"info" => parse_torrent_info(bytes, index, metadata)?,
-            _ => skip_bencode_value(bytes, index)?,
-        }
-    }
-    expect_byte(bytes, index, b'e')
-}
-
-fn parse_torrent_info(
-    bytes: &[u8],
-    index: &mut usize,
-    metadata: &mut TorrentMetadata,
-) -> Option<()> {
-    expect_byte(bytes, index, b'd')?;
-    while peek_byte(bytes, *index)? != b'e' {
-        let key = parse_bencode_bytes(bytes, index)?;
-        match key {
-            b"name" => metadata.name = parse_bencode_string(bytes, index),
-            b"length" => {
-                let length = parse_bencode_int(bytes, index)?;
-                if length >= 0 {
-                    metadata.total_size = Some(length as u64);
-                    if metadata.file_count == 0 {
-                        metadata.file_count = 1;
-                    }
-                }
-            }
-            b"files" => parse_torrent_files(bytes, index, metadata)?,
-            _ => skip_bencode_value(bytes, index)?,
-        }
-    }
-    expect_byte(bytes, index, b'e')
-}
-
-fn parse_torrent_files(
-    bytes: &[u8],
-    index: &mut usize,
-    metadata: &mut TorrentMetadata,
-) -> Option<()> {
-    expect_byte(bytes, index, b'l')?;
-    let mut file_count = 0usize;
-    let mut total_size = 0u64;
-    while peek_byte(bytes, *index)? != b'e' {
-        let length = parse_torrent_file_entry(bytes, index)?;
-        file_count += 1;
-        total_size = total_size.saturating_add(length);
-    }
-    expect_byte(bytes, index, b'e')?;
-    metadata.file_count = file_count;
-    metadata.total_size = Some(total_size);
-    Some(())
-}
-
-fn parse_torrent_file_entry(bytes: &[u8], index: &mut usize) -> Option<u64> {
-    expect_byte(bytes, index, b'd')?;
-    let mut length = 0u64;
-    while peek_byte(bytes, *index)? != b'e' {
-        let key = parse_bencode_bytes(bytes, index)?;
-        if key == b"length" {
-            let value = parse_bencode_int(bytes, index)?;
-            if value >= 0 {
-                length = value as u64;
-            }
-        } else {
-            skip_bencode_value(bytes, index)?;
-        }
-    }
-    expect_byte(bytes, index, b'e')?;
-    Some(length)
-}
-
-fn skip_bencode_value(bytes: &[u8], index: &mut usize) -> Option<()> {
-    match peek_byte(bytes, *index)? {
-        b'd' => {
-            *index += 1;
-            while peek_byte(bytes, *index)? != b'e' {
-                parse_bencode_bytes(bytes, index)?;
-                skip_bencode_value(bytes, index)?;
-            }
-            *index += 1;
-            Some(())
-        }
-        b'l' => {
-            *index += 1;
-            while peek_byte(bytes, *index)? != b'e' {
-                skip_bencode_value(bytes, index)?;
-            }
-            *index += 1;
-            Some(())
-        }
-        b'i' => {
-            parse_bencode_int(bytes, index)?;
-            Some(())
-        }
-        b'0'..=b'9' => {
-            parse_bencode_bytes(bytes, index)?;
-            Some(())
-        }
-        _ => None,
-    }
-}
-
-fn parse_bencode_string(bytes: &[u8], index: &mut usize) -> Option<String> {
-    let value = parse_bencode_bytes(bytes, index)?;
-    Some(String::from_utf8_lossy(value).into_owned())
-}
-
-fn parse_bencode_bytes<'a>(bytes: &'a [u8], index: &mut usize) -> Option<&'a [u8]> {
-    let start = *index;
-    while peek_byte(bytes, *index)?.is_ascii_digit() {
-        *index += 1;
-    }
-    let colon = *index;
-    expect_byte(bytes, index, b':')?;
-    let len = std::str::from_utf8(&bytes[start..colon])
-        .ok()?
-        .parse::<usize>()
-        .ok()?;
-    let end = (*index).checked_add(len)?;
-    let slice = bytes.get(*index..end)?;
-    *index = end;
-    Some(slice)
-}
-
-fn parse_bencode_int(bytes: &[u8], index: &mut usize) -> Option<i64> {
-    expect_byte(bytes, index, b'i')?;
-    let start = *index;
-    while peek_byte(bytes, *index)? != b'e' {
-        *index += 1;
-    }
-    let value = std::str::from_utf8(bytes.get(start..*index)?)
-        .ok()?
-        .parse()
-        .ok()?;
-    expect_byte(bytes, index, b'e')?;
-    Some(value)
-}
-
-fn peek_byte(bytes: &[u8], index: usize) -> Option<u8> {
-    bytes.get(index).copied()
-}
-
-fn expect_byte(bytes: &[u8], index: &mut usize, expected: u8) -> Option<()> {
-    if peek_byte(bytes, *index)? == expected {
-        *index += 1;
-        Some(())
-    } else {
-        None
-    }
+    support::sanitize_terminal_text(text)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::style::Modifier;
+    use ratatui::style::{Color, Modifier};
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     use std::{
         fs,
         io::Write,
         path::{Path, PathBuf},
+        process::Command,
         time::{SystemTime, UNIX_EPOCH},
     };
     use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
@@ -2065,6 +861,50 @@ mod tests {
             .iter()
             .map(|span| span.content.as_ref())
             .collect::<String>()
+    }
+
+    fn span_color<'a>(line: &'a Line<'a>, token: &str) -> Option<Color> {
+        line.spans
+            .iter()
+            .find(|span| span.content.contains(token))
+            .and_then(|span| span.style.fg)
+    }
+
+    fn line_has_color(line: &Line<'_>, color: Color) -> bool {
+        line.spans.iter().any(|span| span.style.fg == Some(color))
+    }
+
+    fn bencode_bytes(value: &[u8]) -> Vec<u8> {
+        let mut encoded = format!("{}:", value.len()).into_bytes();
+        encoded.extend_from_slice(value);
+        encoded
+    }
+
+    fn bencode_str(value: &str) -> Vec<u8> {
+        bencode_bytes(value.as_bytes())
+    }
+
+    fn bencode_int(value: i64) -> Vec<u8> {
+        format!("i{value}e").into_bytes()
+    }
+
+    fn bencode_list(values: Vec<Vec<u8>>) -> Vec<u8> {
+        let mut encoded = vec![b'l'];
+        for value in values {
+            encoded.extend(value);
+        }
+        encoded.push(b'e');
+        encoded
+    }
+
+    fn bencode_dict(entries: Vec<(&str, Vec<u8>)>) -> Vec<u8> {
+        let mut encoded = vec![b'd'];
+        for (key, value) in entries {
+            encoded.extend(bencode_str(key));
+            encoded.extend(value);
+        }
+        encoded.push(b'e');
+        encoded
     }
 
     fn write_iso_field(bytes: &mut [u8], start: usize, end: usize, value: &str) {
@@ -2295,6 +1135,248 @@ mod tests {
 
         assert_eq!(preview.kind, PreviewKind::Code);
         assert!(preview.lines[0].spans[0].content.contains("1"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn c_preview_uses_code_renderer() {
+        let root = temp_path("c");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("main.c");
+        fs::write(
+            &path,
+            "#include <stdio.h>\nint main(void) {\n    printf(\"hello\\n\");\n}\n",
+        )
+        .expect("failed to write c source");
+
+        let preview = build_preview(&file_entry(path));
+        let code_palette = appearance::code_preview_palette();
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(preview.detail.is_some_and(|detail| detail.contains('C')));
+        assert!(
+            preview
+                .lines
+                .iter()
+                .flat_map(|line| line.spans.iter())
+                .any(|span| span.content.contains("printf"))
+        );
+        assert_eq!(
+            span_color(&preview.lines[0], "#"),
+            Some(code_palette.r#macro)
+        );
+        assert_eq!(
+            span_color(&preview.lines[1], "int"),
+            Some(code_palette.r#type)
+        );
+        assert_ne!(
+            span_color(&preview.lines[2], "printf"),
+            Some(code_palette.fg)
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn python_preview_uses_code_renderer_with_colors() {
+        let root = temp_path("python");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("main.py");
+        fs::write(
+            &path,
+            "@decorator\nclass Greeter:\n    async def greet(self, name: str) -> str:\n        \"\"\"Return greeting.\"\"\"\n        return f\"hi {name}\"\n",
+        )
+        .expect("failed to write python source");
+
+        let preview = build_preview(&file_entry(path));
+        let code_palette = appearance::code_preview_palette();
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(preview.detail.is_some());
+        assert_eq!(
+            span_color(&preview.lines[0], "@"),
+            Some(code_palette.r#macro)
+        );
+        assert_eq!(
+            span_color(&preview.lines[1], "class"),
+            Some(code_palette.keyword)
+        );
+        assert_eq!(
+            span_color(&preview.lines[1], "Greeter"),
+            Some(code_palette.r#type)
+        );
+        assert_eq!(
+            span_color(&preview.lines[2], "async"),
+            Some(code_palette.keyword)
+        );
+        assert_eq!(
+            span_color(&preview.lines[2], "greet"),
+            Some(code_palette.function)
+        );
+        assert_ne!(
+            span_color(&preview.lines[4], "return"),
+            Some(code_palette.fg)
+        );
+        assert_ne!(
+            span_color(&preview.lines[4], "f\"hi {name}\""),
+            Some(code_palette.fg)
+        );
+        assert!(line_has_color(&preview.lines[3], code_palette.string));
+        assert!(line_has_color(&preview.lines[4], code_palette.string));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn javascript_preview_uses_code_renderer_with_colors() {
+        let root = temp_path("javascript");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("main.js");
+        fs::write(
+            &path,
+            "export class Greeter {\n  greet(name) { return console.log(`hi ${name}`); }\n}\n",
+        )
+        .expect("failed to write javascript source");
+
+        let preview = build_preview(&file_entry(path));
+        let code_palette = appearance::code_preview_palette();
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(
+            preview
+                .detail
+                .is_some_and(|detail| detail.contains("TypeScript"))
+        );
+        assert_eq!(
+            span_color(&preview.lines[0], "export"),
+            Some(code_palette.keyword)
+        );
+        assert_eq!(
+            span_color(&preview.lines[0], "Greeter"),
+            Some(code_palette.r#type)
+        );
+        assert_eq!(
+            span_color(&preview.lines[1], "return"),
+            Some(code_palette.keyword)
+        );
+        assert!(line_has_color(&preview.lines[1], code_palette.string));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn nix_preview_uses_code_renderer() {
+        let root = temp_path("nix");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("flake.nix");
+        fs::write(
+            &path,
+            "{ description = \"elio\"; outputs = { self }: { packages.x86_64-linux.default = self; }; }\n",
+        )
+        .expect("failed to write nix source");
+
+        let preview = build_preview(&file_entry(path));
+        let code_palette = appearance::code_preview_palette();
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(preview.detail.is_some_and(|detail| detail.contains("Nix")));
+        assert_eq!(
+            span_color(&preview.lines[0], "description"),
+            Some(code_palette.parameter)
+        );
+        assert!(line_has_color(&preview.lines[0], code_palette.string));
+        assert!(
+            preview
+                .lines
+                .iter()
+                .flat_map(|line| line.spans.iter())
+                .any(|span| span.content.contains("description"))
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn cmake_preview_uses_code_renderer() {
+        let root = temp_path("cmake");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("CMakeLists.txt");
+        fs::write(
+            &path,
+            "cmake_minimum_required(VERSION 3.28)\nproject(elio)\nadd_executable(elio main.cpp)\n",
+        )
+        .expect("failed to write cmake source");
+
+        let preview = build_preview(&file_entry(path));
+        let code_palette = appearance::code_preview_palette();
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(
+            preview
+                .detail
+                .is_some_and(|detail| detail.contains("CMake"))
+        );
+        assert_ne!(
+            span_color(&preview.lines[2], "add_executable"),
+            Some(code_palette.fg)
+        );
+        assert!(
+            preview
+                .lines
+                .iter()
+                .flat_map(|line| line.spans.iter())
+                .any(|span| span.content.contains("add_executable"))
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn generic_lockfile_uses_code_renderer() {
+        let root = temp_path("lock");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("deps.lock");
+        fs::write(&path, "[packages]\nelio=1.0.0\n").expect("failed to write lockfile");
+
+        let preview = build_preview(&file_entry(path));
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(preview.detail.is_some_and(|detail| detail.contains("INI")));
+        assert!(
+            preview
+                .lines
+                .iter()
+                .flat_map(|line| line.spans.iter())
+                .any(|span| span.content.contains("elio"))
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn makefile_preview_uses_code_renderer() {
+        let root = temp_path("makefile");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("Makefile");
+        fs::write(
+            &path,
+            "CC := clang\n.PHONY: build\nbuild: main.o util.o\n\t$(CC) -o app main.o util.o\n",
+        )
+        .expect("failed to write makefile");
+
+        let preview = build_preview(&file_entry(path));
+        let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(
+            preview
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains("Make"))
+        );
+        assert!(line_texts.iter().any(|text| text.contains(".PHONY")));
+        assert!(line_texts.iter().any(|text| text.contains("$(CC)")));
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -2593,6 +1675,104 @@ mod tests {
     }
 
     #[test]
+    fn shell_script_preview_uses_code_renderer() {
+        let root = temp_path("shell");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("deploy.sh");
+        fs::write(
+            &path,
+            "#!/usr/bin/env bash\nNAME=elio\nif [ -n \"$NAME\" ]; then\n  printf '%s\\n' \"$(whoami)\"\nfi\n",
+        )
+        .expect("failed to write shell script");
+
+        let preview = build_preview(&file_entry(path));
+        let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+        let code_palette = appearance::code_preview_palette();
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(
+            preview
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains("Shell"))
+        );
+        assert!(line_texts.iter().any(|text| text.contains("printf")));
+        assert!(line_texts.iter().any(|text| text.contains("$(whoami)")));
+        assert_eq!(
+            span_color(&preview.lines[2], "if"),
+            Some(code_palette.keyword)
+        );
+        assert_ne!(
+            span_color(&preview.lines[3], "printf"),
+            Some(code_palette.fg)
+        );
+        assert_ne!(
+            span_color(&preview.lines[3], "$(whoami)"),
+            Some(code_palette.fg)
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn shell_dotfile_preview_uses_code_renderer() {
+        let root = temp_path("shell-dotfile");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join(".bashrc");
+        fs::write(
+            &path,
+            "export PATH=\"$HOME/bin:$PATH\"\nalias ll='ls -la'\n",
+        )
+        .expect("failed to write shell dotfile");
+
+        let preview = build_preview(&file_entry(path));
+        let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+        let code_palette = appearance::code_preview_palette();
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(
+            preview
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains("Shell"))
+        );
+        assert!(line_texts.iter().any(|text| text.contains("export")));
+        assert!(line_texts.iter().any(|text| text.contains("alias")));
+        assert_ne!(
+            span_color(&preview.lines[0], "export"),
+            Some(code_palette.fg)
+        );
+        assert_ne!(
+            span_color(&preview.lines[1], "alias"),
+            Some(code_palette.fg)
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn zsh_preview_uses_shell_specific_support() {
+        let root = temp_path("zsh");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("prompt.zsh");
+        fs::write(
+            &path,
+            "autoload -U colors && colors\nprompt_elio() {\n  print -P '%F{blue}%~%f'\n}\n",
+        )
+        .expect("failed to write zsh script");
+
+        let preview = build_preview(&file_entry(path));
+        let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(preview.detail.is_some());
+        assert!(line_texts.iter().any(|text| text.contains("autoload")));
+        assert!(line_texts.iter().any(|text| text.contains("prompt_elio")));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn keys_preview_uses_fallback_renderer() {
         let root = temp_path("keys");
         fs::create_dir_all(&root).expect("failed to create temp root");
@@ -2646,31 +1826,212 @@ mod tests {
     }
 
     #[test]
-    fn torrent_preview_shows_basic_metadata() {
+    fn multiline_log_preview_keeps_stack_trace_context() {
+        let root = temp_path("log-multiline");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("server.log");
+        fs::write(
+            &path,
+            "2026-03-10T12:00:00Z ERROR request_id=42 msg=\"request failed\"\n\
+             \tat service.handle (/srv/app.js:10)\n\
+             Caused by: timeout\n\
+             2026-03-10T12:00:01Z INFO request_id=42 recovered\n",
+        )
+        .expect("failed to write log");
+
+        let preview = build_preview(&file_entry(path));
+        let rendered = preview
+            .lines
+            .iter()
+            .map(Line::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert_eq!(preview.detail.as_deref(), Some("Log (structured)"));
+        assert!(rendered.contains("request failed"));
+        assert!(rendered.contains("Caused by: timeout"));
+        assert!(rendered.contains("recovered"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn unstructured_log_preview_falls_back_to_best_effort_renderer() {
+        let root = temp_path("log-fallback");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("notes.log");
+        fs::write(
+            &path,
+            "starting application\nloading configuration\nready\n",
+        )
+        .expect("failed to write log");
+
+        let preview = build_preview(&file_entry(path));
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert_eq!(preview.detail.as_deref(), Some("Log (best-effort)"));
+        assert!(
+            preview
+                .lines
+                .iter()
+                .flat_map(|line| line.spans.iter())
+                .any(|span| span.content.contains("starting application"))
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn torrent_preview_shows_single_file_metadata_and_trackers() {
         let root = temp_path("torrent");
         fs::create_dir_all(&root).expect("failed to create temp root");
         let path = root.join("sample.torrent");
-        let bytes = b"d8:announce20:https://tracker.test7:comment12:test torrent10:created by4:elio4:infod6:lengthi12345e4:name8:file.txt12:piece lengthi262144e6:pieces20:12345678901234567890ee";
+        let bytes = bencode_dict(vec![
+            ("announce", bencode_str("https://tracker.test")),
+            (
+                "announce-list",
+                bencode_list(vec![bencode_list(vec![
+                    bencode_str("https://tracker.test"),
+                    bencode_str("https://backup.test"),
+                ])]),
+            ),
+            ("comment", bencode_str("test torrent")),
+            ("created by", bencode_str("elio")),
+            (
+                "info",
+                bencode_dict(vec![
+                    ("length", bencode_int(12_345)),
+                    ("name", bencode_str("file.txt")),
+                    ("piece length", bencode_int(262_144)),
+                    ("pieces", bencode_bytes(b"12345678901234567890")),
+                    ("private", bencode_int(1)),
+                ]),
+            ),
+        ]);
         fs::write(&path, bytes).expect("failed to write torrent");
 
         let preview = build_preview(&file_entry(path));
+        let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+        assert_eq!(preview.kind, PreviewKind::Text);
+        assert_eq!(preview.detail.as_deref(), Some("BitTorrent file"));
+        assert_eq!(line_texts.first().map(String::as_str), Some("Torrent"));
+        assert!(
+            line_texts
+                .iter()
+                .any(|text| text.contains("Name") && text.contains("file.txt"))
+        );
+        assert!(
+            line_texts
+                .iter()
+                .any(|text| text.contains("Mode") && text.contains("Single-file"))
+        );
+        assert!(line_texts.iter().any(|text| text.contains("Private")));
+        assert!(
+            line_texts
+                .iter()
+                .any(|text| text.contains("Trackers") && text.contains("2 across 1 tier"))
+        );
+        assert!(line_texts.iter().any(|text| text == "Trackers"));
+        assert!(line_texts.iter().any(|text| {
+            text.contains("Tier 1") && text.contains("tracker.test") && text.contains("backup.test")
+        }));
+        assert!(line_texts.iter().any(|text| text == "Contents"));
+        assert!(line_texts.iter().any(|text| text.contains("file.txt")));
+        assert!(!preview.truncated);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn torrent_preview_shows_multifile_contents_tree() {
+        let root = temp_path("torrent-multifile");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("series.torrent");
+        let bytes = bencode_dict(vec![
+            (
+                "announce-list",
+                bencode_list(vec![
+                    bencode_list(vec![
+                        bencode_str("https://tracker.one"),
+                        bencode_str("https://tracker.two"),
+                    ]),
+                    bencode_list(vec![bencode_str("https://backup.tld/announce")]),
+                ]),
+            ),
+            ("created by", bencode_str("elio")),
+            (
+                "info",
+                bencode_dict(vec![
+                    (
+                        "files",
+                        bencode_list(vec![
+                            bencode_dict(vec![
+                                ("length", bencode_int(100)),
+                                (
+                                    "path",
+                                    bencode_list(vec![
+                                        bencode_str("season-01"),
+                                        bencode_str("ep1.mkv"),
+                                    ]),
+                                ),
+                            ]),
+                            bencode_dict(vec![
+                                ("length", bencode_int(200)),
+                                (
+                                    "path.utf-8",
+                                    bencode_list(vec![
+                                        bencode_str("season-01"),
+                                        bencode_str("ep2.mkv"),
+                                    ]),
+                                ),
+                            ]),
+                        ]),
+                    ),
+                    ("name", bencode_str("series")),
+                    ("piece length", bencode_int(65_536)),
+                    (
+                        "pieces",
+                        bencode_bytes(b"1234567890123456789012345678901234567890"),
+                    ),
+                    ("private", bencode_int(0)),
+                ]),
+            ),
+        ]);
+        fs::write(&path, bytes).expect("failed to write torrent");
+
+        let preview = build_preview(&file_entry(path));
+        let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
 
         assert_eq!(preview.kind, PreviewKind::Text);
         assert_eq!(preview.detail.as_deref(), Some("BitTorrent file"));
         assert!(
-            preview
-                .lines
+            line_texts
                 .iter()
-                .flat_map(|line| line.spans.iter())
-                .any(|span| span.content.contains("file.txt"))
+                .any(|text| text.contains("Mode") && text.contains("Multi-file"))
         );
         assert!(
-            preview
-                .lines
+            line_texts
                 .iter()
-                .flat_map(|line| line.spans.iter())
-                .any(|span| span.content.contains("tracker.test"))
+                .any(|text| text.contains("Files") && text.contains("2"))
         );
+        assert!(
+            line_texts
+                .iter()
+                .any(|text| text.contains("Trackers") && text.contains("3 across 2 tiers"))
+        );
+        assert!(line_texts.iter().any(|text| text.contains("Tier 2")));
+        assert!(line_texts.iter().any(|text| text.contains("series/")));
+        assert!(line_texts.iter().any(|text| text.contains("season-01/")));
+        assert!(line_texts.iter().any(|text| text.contains("ep1.mkv")));
+        assert!(line_texts.iter().any(|text| text.contains("ep2.mkv")));
+        assert!(
+            line_texts
+                .iter()
+                .any(|text| text.contains("Privacy") && text.contains("Public"))
+        );
+        assert!(!preview.truncated);
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -2695,7 +2056,7 @@ mod tests {
         let root = temp_path("iso");
         fs::create_dir_all(&root).expect("failed to create temp root");
         let path = root.join("disk.iso");
-        fs::write(&path, [0xff, 0xfe, 0x00, 0x81]).expect("failed to write iso");
+        fs::write(&path, [0x00, 0x81, 0xFE, 0xFF]).expect("failed to write iso");
 
         let preview = build_preview(&file_entry(path));
 
@@ -2707,8 +2068,8 @@ mod tests {
 
     #[test]
     fn iso_metadata_parser_reads_primary_volume_descriptor() {
-        let metadata =
-            parse_iso_metadata(&sample_iso_descriptors()).expect("sample descriptors should parse");
+        let metadata = container::parse_iso_metadata(&sample_iso_descriptors())
+            .expect("sample descriptors should parse");
 
         assert_eq!(metadata.system_id.as_deref(), Some("ELIO_SYS"));
         assert_eq!(metadata.volume_id.as_deref(), Some("ELIO_INSTALL"));
@@ -2727,7 +2088,7 @@ mod tests {
 
     #[test]
     fn iso_entry_normalization_reconstructs_parents_and_strips_versions() {
-        let entries = normalize_archive_entries(
+        let entries = container::normalize_archive_entries(
             ["/docs/readme.txt;1", "./EFI/BOOT/", "boot.catalog;1"],
             true,
         );
@@ -2761,7 +2122,7 @@ mod tests {
 
     #[test]
     fn iso_preview_renders_metadata_and_tree() {
-        let preview = render_iso_preview(
+        let preview = container::render_iso_preview(
             IsoMetadata {
                 volume_id: Some("ELIO_INSTALL".to_string()),
                 system_id: Some("ELIO_SYS".to_string()),
@@ -2770,7 +2131,7 @@ mod tests {
                 created_at: Some("2026-03-11 09:00:00".to_string()),
                 ..IsoMetadata::default()
             },
-            normalize_archive_entries(
+            container::normalize_archive_entries(
                 ["boot/", "boot/grub/", "boot/grub/grub.cfg", "README.txt"],
                 true,
             ),
@@ -2804,12 +2165,12 @@ mod tests {
         let items = (0..320)
             .map(|index| format!("dir/file-{index:03}.txt"))
             .collect::<Vec<_>>();
-        let preview = render_iso_preview(
+        let preview = container::render_iso_preview(
             IsoMetadata {
                 volume_id: Some("BIG_IMAGE".to_string()),
                 ..IsoMetadata::default()
             },
-            normalize_archive_entries(items.iter().map(String::as_str), true),
+            container::normalize_archive_entries(items.iter().map(String::as_str), true),
         );
         let header = preview
             .header_detail(0, 20)
@@ -3017,6 +2378,78 @@ mod tests {
     }
 
     #[test]
+    fn json_preview_adds_root_summary_and_array_indexes() {
+        let root = temp_path("json-summary");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("data.json");
+        fs::write(&path, "{\"items\":[{\"id\":1},{\"id\":2}],\"ok\":true}\n")
+            .expect("failed to write json");
+
+        let preview = build_preview(&file_entry(path));
+        let rendered = preview
+            .lines
+            .iter()
+            .map(Line::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(rendered.contains("root: object"));
+        assert!(rendered.contains("2 keys"));
+        assert!(rendered.contains("[0]: {id: 1}"));
+        assert!(rendered.contains("[1]: {id: 2}"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn json_preview_inlines_small_scalar_structures() {
+        let root = temp_path("json-inline");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("data.json");
+        fs::write(
+            &path,
+            "{\"meta\":{\"id\":1,\"env\":\"dev\"},\"ports\":[80,443]}\n",
+        )
+        .expect("failed to write json");
+
+        let preview = build_preview(&file_entry(path));
+        let rendered = preview
+            .lines
+            .iter()
+            .map(Line::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(rendered.contains("meta: {env: \"dev\", id: 1}"));
+        assert!(rendered.contains("ports: [80, 443]"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn json_preview_truncates_long_strings_with_length_hint() {
+        let root = temp_path("json-long-string");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("data.json");
+        fs::write(&path, format!("{{\"token\":\"{}\"}}\n", "a".repeat(120)))
+            .expect("failed to write json");
+
+        let preview = build_preview(&file_entry(path));
+        let rendered = preview
+            .lines
+            .iter()
+            .map(Line::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(rendered.contains("token: "));
+        assert!(rendered.contains("(120 chars)"));
+        assert!(rendered.contains("…"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn truncated_json_preview_reports_why_formatting_was_skipped() {
         let root = temp_path("json-truncated");
         fs::create_dir_all(&root).expect("failed to create temp root");
@@ -3196,6 +2629,24 @@ mod tests {
     }
 
     #[test]
+    fn code_preview_sanitizes_control_characters() {
+        let root = temp_path("control-char-code");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("main.c");
+        let contents = "int main(void) {\n    puts(\"hello \u{1b} world\");\n    return 0;\n}\n";
+        fs::write(&path, contents).expect("failed to write control-char source");
+
+        let preview = build_preview(&file_entry(path));
+        let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+        assert!(
+            line_texts.iter().any(|line| line.contains("^[ world")),
+            "expected control characters to be rendered safely, got: {line_texts:?}"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn utf8_text_file_is_not_mislabeled_as_binary() {
         let root = temp_path("utf8-text-kind");
         fs::create_dir_all(&root).expect("failed to create temp root");
@@ -3216,6 +2667,63 @@ mod tests {
                 .iter()
                 .all(|span| span.content != "No text preview available")
         }));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn utf16le_bom_text_file_is_not_mislabeled_as_binary() {
+        let root = temp_path("utf16le-text-kind");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("unicode.txt");
+        let text = "Thu Jan 15 21:36:25 2026\r\nHello from UTF-16\r\n";
+        let mut bytes = vec![0xFF, 0xFE];
+        for unit in text.encode_utf16() {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        fs::write(&path, bytes).expect("failed to write utf16 text");
+
+        let preview = build_preview(&file_entry(path));
+        let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+        assert_ne!(preview.kind, PreviewKind::Binary);
+        assert!(
+            line_texts
+                .iter()
+                .any(|line| line.contains("Hello from UTF-16"))
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn utf16_log_preview_uses_decoded_text() {
+        let root = temp_path("utf16-log");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("socialclub.log");
+        let text = "[00000000] Thu Jan 15 21:36:25 2026 INFO launcher started\r\n\
+             [00000001] Thu Jan 15 21:36:26 2026 ERROR request_id=42 failed\r\n";
+        let mut bytes = vec![0xFF, 0xFE];
+        for unit in text.encode_utf16() {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        fs::write(&path, bytes).expect("failed to write utf16 log");
+
+        let preview = build_preview(&file_entry(path));
+        let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+        assert_ne!(preview.kind, PreviewKind::Binary);
+        assert!(
+            line_texts
+                .iter()
+                .any(|line| line.contains("launcher started") || line.contains("request_id=42"))
+        );
+        assert!(
+            preview
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains("Log"))
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
