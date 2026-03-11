@@ -112,15 +112,19 @@ impl App {
         self.preview_token = self.preview_token.wrapping_add(1);
         self.preview_cache = match self.selected_entry().cloned() {
             Some(entry) if preview::should_build_preview_in_background(&entry) => {
-                let placeholder = preview::loading_preview_for(&entry);
-                let request = PreviewRequest {
-                    token: self.preview_token,
-                    entry,
-                };
-                if self.preview_request_tx.send(request).is_err() {
-                    preview::PreviewContent::placeholder("Preview worker unavailable")
+                if let Some(preview) = self.cached_preview_for(&entry) {
+                    preview
                 } else {
-                    placeholder
+                    let placeholder = preview::loading_preview_for(&entry);
+                    let request = PreviewRequest {
+                        token: self.preview_token,
+                        entry,
+                    };
+                    if self.preview_request_tx.send(request).is_err() {
+                        preview::PreviewContent::placeholder("Preview worker unavailable")
+                    } else {
+                        placeholder
+                    }
                 }
             }
             Some(entry) => preview::build_preview(&entry),
@@ -128,6 +132,38 @@ impl App {
         };
         self.preview_scroll = 0;
         self.preview_horizontal_scroll = 0;
+    }
+
+    fn cached_preview_for(&self, entry: &Entry) -> Option<preview::PreviewContent> {
+        let cached = self.preview_result_cache.get(&entry.path)?;
+        if cached.size == entry.size && cached.modified == entry.modified {
+            Some(cached.preview.clone())
+        } else {
+            None
+        }
+    }
+
+    pub(super) fn cache_preview_result(
+        &mut self,
+        entry: &Entry,
+        preview: &preview::PreviewContent,
+    ) {
+        self.preview_result_cache.insert(
+            entry.path.clone(),
+            CachedPreview {
+                size: entry.size,
+                modified: entry.modified,
+                preview: preview.clone(),
+            },
+        );
+        self.preview_result_order.retain(|path| path != &entry.path);
+        self.preview_result_order.push_back(entry.path.clone());
+
+        while self.preview_result_order.len() > PREVIEW_CACHE_LIMIT {
+            if let Some(stale_path) = self.preview_result_order.pop_front() {
+                self.preview_result_cache.remove(&stale_path);
+            }
+        }
     }
 
     pub fn selection_summary(&self) -> String {

@@ -1,5 +1,5 @@
 use super::*;
-use std::{collections::HashMap, path::PathBuf, sync::{Arc, mpsc}, thread};
+use std::{collections::HashMap, sync::{Arc, mpsc}, thread};
 
 impl App {
     pub fn process_background_jobs(&mut self) -> bool {
@@ -51,9 +51,14 @@ impl App {
         }
 
         while let Ok(build) = self.preview_rx.try_recv() {
+            self.cache_preview_result(&build.entry, &build.result);
             let is_current_entry = self
                 .selected_entry()
-                .map(|entry| entry.path == build.path)
+                .map(|entry| {
+                    entry.path == build.entry.path
+                        && entry.modified == build.entry.modified
+                        && entry.size == build.entry.size
+                })
                 .unwrap_or(false);
             if build.token != self.preview_token || !is_current_entry {
                 continue;
@@ -78,12 +83,11 @@ pub(super) fn spawn_preview_worker(
             }
 
             let PreviewRequest { token, entry } = request;
-            let path: PathBuf = entry.path.clone();
             let result = preview::build_preview(&entry);
             if result_tx
                 .send(PreviewBuild {
                     token,
-                    path,
+                    entry,
                     result,
                 })
                 .is_err()
@@ -200,6 +204,38 @@ mod tests {
             app.preview_lines()
                 .iter()
                 .any(|line| line.to_string().contains("plain text"))
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn archive_preview_is_reused_from_cache_on_reselection() {
+        let root = temp_path("archive-cache");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let archive = root.join("a.zip");
+        write_zip_entries(&archive, &[("docs/readme.txt", "hello")]);
+        let text = root.join("z.txt");
+        fs::write(&text, "plain text").expect("failed to write text file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        wait_for_background_preview(&mut app);
+
+        app.set_selected(1);
+        assert_eq!(app.preview_section_label(), "Text");
+
+        app.set_selected(0);
+        assert_eq!(app.preview_section_label(), "Archive");
+        assert_eq!(app.preview_header_detail(10).as_deref(), Some("ZIP archive"));
+        assert!(
+            app.preview_lines()
+                .iter()
+                .any(|line| line.to_string().contains("docs/"))
+        );
+        assert!(
+            app.preview_lines()
+                .iter()
+                .all(|line| !line.to_string().contains("Loading preview"))
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");

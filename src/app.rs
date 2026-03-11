@@ -12,7 +12,7 @@ use crate::search::SearchCandidate;
 use anyhow::{Context, Result};
 use ratatui::{layout::Rect, text::Line};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     env,
     path::PathBuf,
     sync::{Arc, mpsc},
@@ -33,6 +33,7 @@ const WHEEL_SCROLL_QUEUE_LIMIT_PREVIEW_HORIZONTAL: isize = 10;
 const WHEEL_SCROLL_QUEUE_LIMIT_SEARCH: isize = 2;
 const SEARCH_MATCH_LIMIT: usize = 250;
 const SEARCH_CACHE_LIMIT: usize = 32;
+const PREVIEW_CACHE_LIMIT: usize = 24;
 const AUTO_RELOAD_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -277,7 +278,7 @@ struct SearchRequest {
 #[derive(Debug)]
 struct PreviewBuild {
     token: u64,
-    path: PathBuf,
+    entry: Entry,
     result: preview::PreviewContent,
 }
 
@@ -285,6 +286,13 @@ struct PreviewBuild {
 struct PreviewRequest {
     token: u64,
     entry: Entry,
+}
+
+#[derive(Clone, Debug)]
+struct CachedPreview {
+    size: u64,
+    modified: Option<SystemTime>,
+    preview: preview::PreviewContent,
 }
 
 pub struct App {
@@ -315,6 +323,8 @@ pub struct App {
     preview_token: u64,
     preview_request_tx: mpsc::Sender<PreviewRequest>,
     preview_rx: mpsc::Receiver<PreviewBuild>,
+    preview_result_cache: HashMap<PathBuf, CachedPreview>,
+    preview_result_order: VecDeque<PathBuf>,
     directory_watch_tx: mpsc::Sender<watching::DirectoryWatchEvent>,
     directory_watch_rx: mpsc::Receiver<watching::DirectoryWatchEvent>,
     directory_watch: Option<watching::DirectoryWatcher>,
@@ -369,6 +379,8 @@ impl App {
             preview_token: 0,
             preview_request_tx,
             preview_rx,
+            preview_result_cache: HashMap::new(),
+            preview_result_order: VecDeque::new(),
             directory_watch_tx,
             directory_watch_rx,
             directory_watch: None,
