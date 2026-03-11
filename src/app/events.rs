@@ -629,6 +629,8 @@ mod tests {
     use std::{
         env, fs,
         path::PathBuf,
+        thread,
+        time::Duration,
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -638,6 +640,17 @@ mod tests {
             .expect("system time should be after unix epoch")
             .as_nanos();
         env::temp_dir().join(format!("elio-events-{label}-{unique}"))
+    }
+
+    fn wait_for_directory_load(app: &mut App) {
+        for _ in 0..100 {
+            let _ = app.process_background_jobs();
+            if app.pending_directory_load.is_none() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        panic!("timed out waiting for directory load");
     }
 
     #[test]
@@ -682,6 +695,7 @@ mod tests {
             KeyModifiers::NONE,
         )))
         .expect("right arrow should be handled");
+        wait_for_directory_load(&mut app);
 
         assert_eq!(app.cwd, child);
 
@@ -701,9 +715,11 @@ mod tests {
         app.select_index(1);
         app.open_selected()
             .expect("opening selected directory should succeed");
+        wait_for_directory_load(&mut app);
 
         app.handle_event(Event::Key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)))
             .expect("left arrow should be handled");
+        wait_for_directory_load(&mut app);
 
         assert_eq!(app.cwd, root);
         assert_eq!(
@@ -727,8 +743,10 @@ mod tests {
         app.select_index(1);
         app.open_selected()
             .expect("opening selected directory should succeed");
+        wait_for_directory_load(&mut app);
 
         app.go_back().expect("go back should succeed");
+        wait_for_directory_load(&mut app);
 
         assert_eq!(app.cwd, root);
         assert_eq!(
@@ -750,12 +768,132 @@ mod tests {
         app.select_index(0);
         app.open_selected()
             .expect("opening selected directory should succeed");
+        wait_for_directory_load(&mut app);
         app.go_back().expect("go back should succeed");
+        wait_for_directory_load(&mut app);
 
         app.go_forward().expect("go forward should succeed");
+        wait_for_directory_load(&mut app);
 
         assert_eq!(app.cwd, child);
         assert!(app.selected_entry().is_none());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn go_forward_restores_last_selected_entry_in_directory() {
+        let root = temp_path("history-forward-restore-selection");
+        let child = root.join("child");
+        let alpha = child.join("alpha.txt");
+        let beta = child.join("beta.txt");
+        fs::create_dir_all(&child).expect("failed to create child dir");
+        fs::write(&alpha, "alpha").expect("failed to write alpha");
+        fs::write(&beta, "beta").expect("failed to write beta");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.view_mode = ViewMode::List;
+        app.select_index(0);
+        app.open_selected()
+            .expect("opening selected directory should succeed");
+        wait_for_directory_load(&mut app);
+
+        app.select_index(1);
+        assert_eq!(
+            app.selected_entry().map(|entry| entry.path.as_path()),
+            Some(beta.as_path())
+        );
+
+        app.go_back().expect("go back should succeed");
+        wait_for_directory_load(&mut app);
+
+        app.go_forward().expect("go forward should succeed");
+        wait_for_directory_load(&mut app);
+
+        assert_eq!(app.cwd, child);
+        assert_eq!(
+            app.selected_entry().map(|entry| entry.path.as_path()),
+            Some(beta.as_path())
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn reopening_directory_restores_last_selected_entry() {
+        let root = temp_path("reopen-directory-selection");
+        let child = root.join("child");
+        let alpha = child.join("alpha.txt");
+        let beta = child.join("beta.txt");
+        fs::create_dir_all(&child).expect("failed to create child dir");
+        fs::write(&alpha, "alpha").expect("failed to write alpha");
+        fs::write(&beta, "beta").expect("failed to write beta");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.view_mode = ViewMode::List;
+        app.select_index(0);
+        app.open_selected()
+            .expect("opening selected directory should succeed");
+        wait_for_directory_load(&mut app);
+
+        app.select_index(1);
+        assert_eq!(
+            app.selected_entry().map(|entry| entry.path.as_path()),
+            Some(beta.as_path())
+        );
+
+        app.go_parent().expect("go parent should succeed");
+        wait_for_directory_load(&mut app);
+        app.open_selected()
+            .expect("reopening selected directory should succeed");
+        wait_for_directory_load(&mut app);
+
+        assert_eq!(app.cwd, child);
+        assert_eq!(
+            app.selected_entry().map(|entry| entry.path.as_path()),
+            Some(beta.as_path())
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn reopening_parent_restores_last_selected_child_directory() {
+        let root = temp_path("reopen-parent-selection");
+        let home = root.join("home");
+        let aaa = home.join("aaa");
+        let regueiro = home.join("regueiro");
+        fs::create_dir_all(&aaa).expect("failed to create aaa dir");
+        fs::create_dir_all(&regueiro).expect("failed to create regueiro dir");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.view_mode = ViewMode::List;
+        app.select_index(0);
+        app.open_selected().expect("opening home should succeed");
+        wait_for_directory_load(&mut app);
+
+        app.select_index(1);
+        assert_eq!(
+            app.selected_entry().map(|entry| entry.path.as_path()),
+            Some(regueiro.as_path())
+        );
+
+        app.open_selected()
+            .expect("opening regueiro should succeed");
+        wait_for_directory_load(&mut app);
+        app.go_parent().expect("go parent to home should succeed");
+        wait_for_directory_load(&mut app);
+        app.go_parent().expect("go parent to root should succeed");
+        wait_for_directory_load(&mut app);
+
+        app.open_selected().expect("reopening home should succeed");
+        wait_for_directory_load(&mut app);
+
+        assert_eq!(app.cwd, home);
+        assert_eq!(
+            app.selected_entry().map(|entry| entry.path.as_path()),
+            Some(regueiro.as_path())
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -835,6 +973,7 @@ mod tests {
             KeyModifiers::NONE,
         )))
         .expect("protected directory open should be handled");
+        wait_for_directory_load(&mut app);
 
         assert_eq!(app.cwd, root);
         assert!(app.status_message().contains("Permission denied"));

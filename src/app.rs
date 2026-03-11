@@ -1,13 +1,15 @@
 mod actions;
 mod events;
+mod jobs;
 mod preview;
 mod previewing;
 mod searching;
 mod support;
 mod watching;
 
-use self::previewing::spawn_preview_worker;
-use self::searching::spawn_search_worker;
+#[cfg(test)]
+use self::jobs::SchedulerMetricsSnapshot;
+use self::jobs::{JobScheduler, PreviewPriority, PreviewRequest, SearchRequest};
 use crate::search::SearchCandidate;
 use anyhow::{Context, Result};
 use ratatui::{layout::Rect, text::Line};
@@ -15,7 +17,7 @@ use std::{
     collections::{HashMap, VecDeque},
     env,
     path::PathBuf,
-    sync::{Arc, mpsc},
+    sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
 
@@ -34,6 +36,7 @@ const WHEEL_SCROLL_QUEUE_LIMIT_SEARCH: isize = 2;
 const SEARCH_MATCH_LIMIT: usize = 250;
 const SEARCH_CACHE_LIMIT: usize = 32;
 const PREVIEW_CACHE_LIMIT: usize = 24;
+const PREVIEW_PREFETCH_LIMIT: usize = 2;
 const AUTO_RELOAD_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -58,7 +61,7 @@ impl ViewMode {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum SortMode {
     Name,
     Modified,
@@ -215,7 +218,7 @@ struct SearchOverlay {
     error: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum SearchScope {
     Folders,
     Files,
@@ -260,39 +263,74 @@ struct SearchCache {
     candidates: Arc<Vec<SearchCandidate>>,
 }
 
-#[derive(Debug)]
-struct SearchBuild {
-    token: u64,
-    cwd: PathBuf,
-    scope: SearchScope,
-    result: Result<Arc<Vec<SearchCandidate>>, String>,
-}
-
-#[derive(Debug)]
-struct SearchRequest {
-    token: u64,
-    cwd: PathBuf,
-    scope: SearchScope,
-}
-
-#[derive(Debug)]
-struct PreviewBuild {
-    token: u64,
-    entry: Entry,
-    result: preview::PreviewContent,
-}
-
-#[derive(Debug)]
-struct PreviewRequest {
-    token: u64,
-    entry: Entry,
-}
-
 #[derive(Clone, Debug)]
 struct CachedPreview {
     size: u64,
     modified: Option<SystemTime>,
     preview: preview::PreviewContent,
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PreviewMetricsSnapshot {
+    pub cache_hits: u64,
+    pub cache_misses: u64,
+    pub applied_results: u64,
+    pub stale_results_dropped: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct PreviewMetrics {
+    cache_hits: u64,
+    cache_misses: u64,
+    applied_results: u64,
+    stale_results_dropped: u64,
+}
+
+impl PreviewMetrics {
+    #[cfg(test)]
+    fn snapshot(self) -> PreviewMetricsSnapshot {
+        PreviewMetricsSnapshot {
+            cache_hits: self.cache_hits,
+            cache_misses: self.cache_misses,
+            applied_results: self.applied_results,
+            stale_results_dropped: self.stale_results_dropped,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum DirectoryHistoryMode {
+    None,
+    PushCurrent,
+    GoBack,
+    GoForward,
+}
+
+#[derive(Clone, Debug)]
+enum DirectoryLoadCompletion {
+    Keep,
+    Clear,
+    Status(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct HistoryEntry {
+    cwd: PathBuf,
+    selected_path: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug)]
+struct PendingDirectoryLoad {
+    token: u64,
+    target_cwd: PathBuf,
+    previous_cwd: PathBuf,
+    previous_selected_path: Option<PathBuf>,
+    previous_selection_name: Option<String>,
+    reselect_path: Option<PathBuf>,
+    history_mode: DirectoryHistoryMode,
+    refresh_search: bool,
+    completion: DirectoryLoadCompletion,
 }
 
 pub struct App {
@@ -310,25 +348,26 @@ pub struct App {
     pub status: String,
     pub help_open: bool,
     pub should_quit: bool,
-    back_history: Vec<PathBuf>,
-    forward_history: Vec<PathBuf>,
+    back_history: Vec<HistoryEntry>,
+    forward_history: Vec<HistoryEntry>,
     preview_cache: preview::PreviewContent,
     frame_state: FrameState,
     search: Option<SearchOverlay>,
     search_cache: Option<SearchCache>,
     search_loading: bool,
     search_token: u64,
-    search_request_tx: mpsc::Sender<SearchRequest>,
-    search_rx: mpsc::Receiver<SearchBuild>,
+    directory_token: u64,
     preview_token: u64,
-    preview_request_tx: mpsc::Sender<PreviewRequest>,
-    preview_rx: mpsc::Receiver<PreviewBuild>,
+    scheduler: JobScheduler,
+    preview_metrics: PreviewMetrics,
     preview_result_cache: HashMap<PathBuf, CachedPreview>,
     preview_result_order: VecDeque<PathBuf>,
-    directory_watch_tx: mpsc::Sender<watching::DirectoryWatchEvent>,
-    directory_watch_rx: mpsc::Receiver<watching::DirectoryWatchEvent>,
+    directory_selection_memory: HashMap<PathBuf, PathBuf>,
+    directory_watch_tx: std::sync::mpsc::Sender<watching::DirectoryWatchEvent>,
+    directory_watch_rx: std::sync::mpsc::Receiver<watching::DirectoryWatchEvent>,
     directory_watch: Option<watching::DirectoryWatcher>,
     pending_directory_reload_at: Option<Instant>,
+    pending_directory_load: Option<PendingDirectoryLoad>,
     use_polling_reload: bool,
     last_click: Option<ClickState>,
     wheel_scroll: ScrollState,
@@ -344,13 +383,8 @@ impl App {
     }
 
     pub fn new_at(cwd: PathBuf) -> Result<Self> {
-        let (search_request_tx, search_request_rx) = mpsc::channel();
-        let (search_tx, search_rx) = mpsc::channel();
-        let (preview_request_tx, preview_request_rx) = mpsc::channel();
-        let (preview_tx, preview_rx) = mpsc::channel();
-        let (directory_watch_tx, directory_watch_rx) = mpsc::channel();
-        spawn_search_worker(search_request_rx, search_tx);
-        spawn_preview_worker(preview_request_rx, preview_tx);
+        let scheduler = JobScheduler::new();
+        let (directory_watch_tx, directory_watch_rx) = std::sync::mpsc::channel();
         let mut app = Self {
             cwd,
             entries: Vec::new(),
@@ -374,17 +408,18 @@ impl App {
             search_cache: None,
             search_loading: false,
             search_token: 0,
-            search_request_tx,
-            search_rx,
+            directory_token: 0,
             preview_token: 0,
-            preview_request_tx,
-            preview_rx,
+            scheduler,
+            preview_metrics: PreviewMetrics::default(),
             preview_result_cache: HashMap::new(),
             preview_result_order: VecDeque::new(),
+            directory_selection_memory: HashMap::new(),
             directory_watch_tx,
             directory_watch_rx,
             directory_watch: None,
             pending_directory_reload_at: None,
+            pending_directory_load: None,
             use_polling_reload: true,
             last_click: None,
             wheel_scroll: ScrollState {
@@ -418,7 +453,13 @@ impl App {
             directory_fingerprint: support::DirectoryFingerprint::default(),
             last_auto_reload_at: Instant::now(),
         };
-        app.reload()?;
+        let snapshot = support::load_directory_snapshot(&app.cwd, app.show_hidden, app.sort_mode)?;
+        app.sidebar = support::build_sidebar_items();
+        app.entries = snapshot.entries;
+        app.directory_fingerprint = snapshot.fingerprint;
+        app.clamp_selection();
+        app.remember_current_directory_selection();
+        app.refresh_preview();
         app.reset_directory_watch();
         Ok(app)
     }
@@ -434,6 +475,20 @@ impl App {
 
     pub fn has_pending_auto_reload(&self) -> bool {
         self.pending_directory_reload_at.is_some()
+    }
+
+    pub fn has_pending_background_work(&self) -> bool {
+        self.scheduler.has_pending_work()
+    }
+
+    #[cfg(test)]
+    pub fn scheduler_metrics(&self) -> SchedulerMetricsSnapshot {
+        self.scheduler.metrics_snapshot()
+    }
+
+    #[cfg(test)]
+    pub fn preview_metrics(&self) -> PreviewMetricsSnapshot {
+        self.preview_metrics.snapshot()
     }
 
     pub fn report_runtime_error(&mut self, context: &str, error: &anyhow::Error) {

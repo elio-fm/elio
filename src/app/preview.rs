@@ -299,22 +299,38 @@ fn status_preview(
 
 pub(super) fn should_build_preview_in_background(entry: &Entry) -> bool {
     let facts = file_facts::inspect_path(&entry.path, entry.kind);
-    facts.builtin_class == FileClass::Archive
+    facts.builtin_class == FileClass::Archive || facts.preview.document_format.is_some()
 }
 
 pub(super) fn loading_preview_for(entry: &Entry) -> PreviewContent {
-    let detail = file_facts::inspect_path(&entry.path, entry.kind)
+    let facts = file_facts::inspect_path(&entry.path, entry.kind);
+    let detail = facts
         .specific_type_label
-        .unwrap_or("Archive")
+        .or_else(|| {
+            facts
+                .preview
+                .document_format
+                .map(|format| format.detail_label())
+        })
+        .unwrap_or("Preview")
         .to_string();
-    PreviewContent::new(
-        PreviewKind::Unavailable,
+    let lines = if facts.builtin_class == FileClass::Archive {
         vec![
             Line::from("Loading preview"),
             Line::from("Inspecting archive contents in background"),
-        ],
-    )
-    .with_detail(detail)
+        ]
+    } else if facts.preview.document_format.is_some() {
+        vec![
+            Line::from("Loading preview"),
+            Line::from("Extracting document metadata in background"),
+        ]
+    } else {
+        vec![
+            Line::from("Loading preview"),
+            Line::from("Preparing file preview in background"),
+        ]
+    };
+    PreviewContent::new(PreviewKind::Unavailable, lines).with_detail(detail)
 }
 
 pub(super) fn build_preview(entry: &Entry) -> PreviewContent {
@@ -514,9 +530,8 @@ fn build_directory_preview(entry: &Entry) -> PreviewContent {
                 .with_detail(format!("{total_items} items"))
                 .with_directory_counts(total_items, folder_count, file_count);
             if line_truncated {
-                preview = preview.with_truncation(format!(
-                    "showing first {PREVIEW_RENDER_LINE_LIMIT} items"
-                ));
+                preview = preview
+                    .with_truncation(format!("showing first {PREVIEW_RENDER_LINE_LIMIT} items"));
             }
             preview
         }
@@ -734,16 +749,16 @@ fn build_zip_archive_preview(
 
     let detail = type_detail.unwrap_or(archive_default_label(format));
     let scan_truncated = total_entries > ARCHIVE_ENTRY_SCAN_LIMIT;
-    Some(render_archive_preview(
-        detail,
+    Some(render_archive_preview(ArchiveRenderConfig {
+        detail: detail.to_string(),
         metadata,
-        Some(entries),
-        Some(total_entries),
-        archive_is_empty_label(format),
-        "Unable to read archive contents",
-        zip_manifest_sections(&manifest),
+        entries: Some(entries),
+        total_entries_hint: Some(total_entries),
+        empty_label: archive_is_empty_label(format),
+        unavailable_label: "Unable to read archive contents",
+        extra_sections: zip_manifest_sections(&manifest),
         scan_truncated,
-    ))
+    }))
 }
 
 fn build_external_archive_preview(
@@ -753,35 +768,35 @@ fn build_external_archive_preview(
 ) -> Option<PreviewContent> {
     let detail = type_detail.unwrap_or(archive_default_label(format));
     if let Some((metadata, entries)) = collect_archive_listing_with_7z(path) {
-        return Some(render_archive_preview(
-            detail,
+        return Some(render_archive_preview(ArchiveRenderConfig {
+            detail: detail.to_string(),
             metadata,
-            Some(entries),
-            None,
-            archive_is_empty_label(format),
-            "Unable to read archive contents",
-            Vec::new(),
-            false,
-        ));
+            entries: Some(entries),
+            total_entries_hint: None,
+            empty_label: archive_is_empty_label(format),
+            unavailable_label: "Unable to read archive contents",
+            extra_sections: Vec::new(),
+            scan_truncated: false,
+        }));
     }
 
     let entries = collect_archive_entries_with_bsdtar(path)
         .or_else(|| collect_archive_entries_with_tar(path))
         .or_else(|| collect_archive_entries_with_unzip(path))?;
 
-    Some(render_archive_preview(
-        detail,
-        ArchiveMetadata {
+    Some(render_archive_preview(ArchiveRenderConfig {
+        detail: detail.to_string(),
+        metadata: ArchiveMetadata {
             format_label: Some(archive_format_name(format).to_string()),
             ..ArchiveMetadata::default()
         },
-        Some(entries),
-        None,
-        archive_is_empty_label(format),
-        "Unable to read archive contents",
-        Vec::new(),
-        false,
-    ))
+        entries: Some(entries),
+        total_entries_hint: None,
+        empty_label: archive_is_empty_label(format),
+        unavailable_label: "Unable to read archive contents",
+        extra_sections: Vec::new(),
+        scan_truncated: false,
+    }))
 }
 
 fn read_iso_metadata(path: &Path) -> Option<IsoMetadata> {
@@ -970,7 +985,10 @@ fn render_iso_preview(metadata: IsoMetadata, entries: Vec<ArchiveEntry>) -> Prev
     let summary = vec![
         ("Volume", metadata.volume_id.clone()),
         ("System", metadata.system_id.clone()),
-        ("Image Size", metadata.total_size.map(crate::app::format_size)),
+        (
+            "Image Size",
+            metadata.total_size.map(crate::app::format_size),
+        ),
         (
             "Bootable",
             metadata
@@ -1029,12 +1047,15 @@ fn render_iso_preview(metadata: IsoMetadata, entries: Vec<ArchiveEntry>) -> Prev
         }
     }
 
-    let mut preview = PreviewContent::new(PreviewKind::Archive, lines).with_detail("ISO disk image");
+    let mut preview =
+        PreviewContent::new(PreviewKind::Archive, lines).with_detail("ISO disk image");
     let truncation_note = match (tree_truncated, total_items, rendered_items) {
         (true, total, rendered) if total > 0 && rendered > 0 => {
             Some(format!("showing first {rendered} of {total} entries"))
         }
-        (true, total, _) if total > 0 => Some(format!("showing first {PREVIEW_RENDER_LINE_LIMIT} lines")),
+        (true, total, _) if total > 0 => {
+            Some(format!("showing first {PREVIEW_RENDER_LINE_LIMIT} lines"))
+        }
         _ => None,
     };
     if let Some(note) = truncation_note {
@@ -1043,25 +1064,16 @@ fn render_iso_preview(metadata: IsoMetadata, entries: Vec<ArchiveEntry>) -> Prev
     preview
 }
 
-fn render_archive_preview(
-    detail: &str,
-    metadata: ArchiveMetadata,
-    entries: Option<Vec<ArchiveEntry>>,
-    total_entries_hint: Option<usize>,
-    empty_label: &str,
-    unavailable_label: &str,
-    extra_sections: Vec<(&'static str, Vec<(&'static str, String)>)>,
-    scan_truncated: bool,
-) -> PreviewContent {
+fn render_archive_preview(config: ArchiveRenderConfig) -> PreviewContent {
     let palette = appearance::palette();
     let mut lines = Vec::new();
-    let entries = expand_archive_entries(entries.unwrap_or_default());
-    let total_items = entries.len().max(total_entries_hint.unwrap_or(0));
+    let entries = expand_archive_entries(config.entries.unwrap_or_default());
+    let total_items = entries.len().max(config.total_entries_hint.unwrap_or(0));
     let folder_count = entries.iter().filter(|entry| entry.is_dir).count();
     let file_count = total_items.saturating_sub(folder_count);
 
     let summary = vec![
-        ("Format", metadata.format_label),
+        ("Format", config.metadata.format_label),
         (
             "Entries",
             (total_items > 0).then(|| format!("{total_items} total")),
@@ -1073,21 +1085,21 @@ fn render_archive_preview(
         ("Files", (file_count > 0).then(|| file_count.to_string())),
         (
             "Packed",
-            metadata.compressed_size.map(crate::app::format_size),
+            config.metadata.compressed_size.map(crate::app::format_size),
         ),
         (
             "Unpacked",
-            metadata.unpacked_size.map(crate::app::format_size),
+            config.metadata.unpacked_size.map(crate::app::format_size),
         ),
         (
             "Archive Size",
-            metadata.physical_size.map(crate::app::format_size),
+            config.metadata.physical_size.map(crate::app::format_size),
         ),
-        ("Comment", metadata.comment),
+        ("Comment", config.metadata.comment),
     ];
     push_preview_section(&mut lines, "Archive", &summary, palette);
 
-    for (title, fields) in extra_sections {
+    for (title, fields) in config.extra_sections {
         push_preview_values_section(&mut lines, title, &fields, palette);
     }
 
@@ -1100,9 +1112,9 @@ fn render_archive_preview(
 
     if entries.is_empty() {
         lines.push(Line::from(if total_items == 0 {
-            empty_label.to_string()
+            config.empty_label.to_string()
         } else {
-            unavailable_label.to_string()
+            config.unavailable_label.to_string()
         }));
     } else {
         let mut root = ArchiveTreeNode::default();
@@ -1128,7 +1140,7 @@ fn render_archive_preview(
     }
 
     let mut notes = Vec::new();
-    if scan_truncated {
+    if config.scan_truncated {
         notes.push(format!(
             "scanned first {} of {} entries",
             entries.len(),
@@ -1144,12 +1156,23 @@ fn render_archive_preview(
     }
 
     let mut preview = PreviewContent::new(PreviewKind::Archive, lines)
-        .with_detail(detail)
+        .with_detail(config.detail)
         .with_directory_counts(total_items, folder_count, file_count);
     if !notes.is_empty() {
         preview = preview.with_truncation(notes.join("  •  "));
     }
     preview
+}
+
+struct ArchiveRenderConfig {
+    detail: String,
+    metadata: ArchiveMetadata,
+    entries: Option<Vec<ArchiveEntry>>,
+    total_entries_hint: Option<usize>,
+    empty_label: &'static str,
+    unavailable_label: &'static str,
+    extra_sections: Vec<(&'static str, Vec<(&'static str, String)>)>,
+    scan_truncated: bool,
 }
 
 fn archive_is_empty_label(format: ArchiveFormat) -> &'static str {
@@ -1275,9 +1298,7 @@ fn push_7z_entry(
     }
 
     let path = current.get("Path").cloned();
-    let is_dir = current
-        .get("Folder")
-        .is_some_and(|value| value == "+")
+    let is_dir = current.get("Folder").is_some_and(|value| value == "+")
         || current
             .get("Attributes")
             .is_some_and(|value| value.starts_with('D'));
@@ -1289,7 +1310,10 @@ fn push_7z_entry(
     if let Some(size) = current.get("Size").and_then(|value| parse_u64(value)) {
         metadata.unpacked_size = Some(metadata.unpacked_size.unwrap_or(0).saturating_add(size));
     }
-    if let Some(size) = current.get("Packed Size").and_then(|value| parse_u64(value)) {
+    if let Some(size) = current
+        .get("Packed Size")
+        .and_then(|value| parse_u64(value))
+    {
         metadata.compressed_size = Some(metadata.compressed_size.unwrap_or(0).saturating_add(size));
     }
     current.clear();
@@ -1394,11 +1418,14 @@ fn insert_archive_tree_entry(root: &mut ArchiveTreeNode, entry: &ArchiveEntry) {
         }
         built.push_str(part);
         let is_last = index == parts.len().saturating_sub(1);
-        current = current.children.entry((*part).to_string()).or_insert_with(|| ArchiveTreeNode {
-            path: built.clone(),
-            is_dir: !is_last || entry.is_dir,
-            children: BTreeMap::new(),
-        });
+        current = current
+            .children
+            .entry((*part).to_string())
+            .or_insert_with(|| ArchiveTreeNode {
+                path: built.clone(),
+                is_dir: !is_last || entry.is_dir,
+                children: BTreeMap::new(),
+            });
         current.path = built.clone();
         current.is_dir |= !is_last || entry.is_dir;
     }
@@ -1431,7 +1458,9 @@ fn render_archive_tree(
         }
 
         let is_last = index == children.len().saturating_sub(1);
-        lines.push(render_archive_tree_line(prefix, name, node, is_last, palette));
+        lines.push(render_archive_tree_line(
+            prefix, name, node, is_last, palette,
+        ));
         *remaining = remaining.saturating_sub(1);
         *rendered_items += 1;
 
@@ -1439,7 +1468,14 @@ fn render_archive_tree(
             let mut next_prefix = prefix.to_string();
             next_prefix.push_str(if is_last { "    " } else { "│   " });
             let nested = ordered_archive_children(&node.children);
-            render_archive_tree(&nested, &next_prefix, remaining, rendered_items, lines, palette);
+            render_archive_tree(
+                &nested,
+                &next_prefix,
+                remaining,
+                rendered_items,
+                lines,
+                palette,
+            );
             if *remaining == 0 {
                 return;
             }
@@ -2658,8 +2694,8 @@ mod tests {
 
     #[test]
     fn iso_metadata_parser_reads_primary_volume_descriptor() {
-        let metadata = parse_iso_metadata(&sample_iso_descriptors())
-            .expect("sample descriptors should parse");
+        let metadata =
+            parse_iso_metadata(&sample_iso_descriptors()).expect("sample descriptors should parse");
 
         assert_eq!(metadata.system_id.as_deref(), Some("ELIO_SYS"));
         assert_eq!(metadata.volume_id.as_deref(), Some("ELIO_INSTALL"));
@@ -2668,27 +2704,41 @@ mod tests {
         assert_eq!(metadata.application_id.as_deref(), Some("Elio Image Tool"));
         assert_eq!(metadata.created_at.as_deref(), Some("2026-03-11 09:00:00"));
         assert_eq!(metadata.modified_at.as_deref(), Some("2026-03-11 10:15:00"));
-        assert_eq!(metadata.effective_at.as_deref(), Some("2026-03-12 00:00:00"));
+        assert_eq!(
+            metadata.effective_at.as_deref(),
+            Some("2026-03-12 00:00:00")
+        );
         assert_eq!(metadata.total_size, Some(640 * ISO_SECTOR_SIZE as u64));
         assert!(metadata.bootable);
     }
 
     #[test]
     fn iso_entry_normalization_reconstructs_parents_and_strips_versions() {
-        let entries = normalize_archive_entries([
-            "/docs/readme.txt;1",
-            "./EFI/BOOT/",
-            "boot.catalog;1",
-        ], true);
+        let entries = normalize_archive_entries(
+            ["/docs/readme.txt;1", "./EFI/BOOT/", "boot.catalog;1"],
+            true,
+        );
 
-        assert!(entries.iter().any(|entry| entry.path == "docs" && entry.is_dir));
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "docs" && entry.is_dir)
+        );
         assert!(
             entries
                 .iter()
                 .any(|entry| entry.path == "docs/readme.txt" && !entry.is_dir)
         );
-        assert!(entries.iter().any(|entry| entry.path == "EFI" && entry.is_dir));
-        assert!(entries.iter().any(|entry| entry.path == "EFI/BOOT" && entry.is_dir));
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "EFI" && entry.is_dir)
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "EFI/BOOT" && entry.is_dir)
+        );
         assert!(
             entries
                 .iter()
@@ -2707,12 +2757,10 @@ mod tests {
                 created_at: Some("2026-03-11 09:00:00".to_string()),
                 ..IsoMetadata::default()
             },
-            normalize_archive_entries([
-                "boot/",
-                "boot/grub/",
-                "boot/grub/grub.cfg",
-                "README.txt",
-            ], true),
+            normalize_archive_entries(
+                ["boot/", "boot/grub/", "boot/grub/grub.cfg", "README.txt"],
+                true,
+            ),
         );
         let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
         let header = preview

@@ -107,7 +107,10 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             break;
         }
 
-        let poll_interval = if app.has_pending_scroll() || app.has_pending_auto_reload() {
+        let poll_interval = if app.has_pending_scroll()
+            || app.has_pending_auto_reload()
+            || app.has_pending_background_work()
+        {
             ACTIVE_SCROLL_POLL_INTERVAL
         } else {
             IDLE_POLL_INTERVAL

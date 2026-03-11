@@ -1,7 +1,7 @@
 use super::*;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use std::{collections::HashMap, ffi::OsStr, path::PathBuf, sync::Arc, thread};
+use std::{collections::HashMap, ffi::OsStr, path::PathBuf, sync::Arc};
 
 impl App {
     pub fn search_is_open(&self) -> bool {
@@ -351,7 +351,7 @@ impl App {
             cwd: self.cwd.clone(),
             scope,
         };
-        if self.search_request_tx.send(request).is_err() {
+        if !self.scheduler.submit_search(request) {
             self.search_loading = false;
             if let Some(search) = &mut self.search
                 && search.scope == scope
@@ -364,9 +364,12 @@ impl App {
 
     fn reveal_path(&mut self, path: PathBuf) -> Result<()> {
         if path.is_dir() {
-            self.set_dir(path)?;
-            self.status = "Opened folder from search".to_string();
-            return Ok(());
+            return self.set_dir_transition(
+                path,
+                DirectoryHistoryMode::PushCurrent,
+                None,
+                DirectoryLoadCompletion::Status("Opened folder from search".to_string()),
+            );
         }
 
         let Some(parent) = path.parent() else {
@@ -378,46 +381,13 @@ impl App {
             .and_then(OsStr::to_str)
             .map(str::to_string)
             .unwrap_or_default();
-        self.set_dir(parent.to_path_buf())?;
-        if let Some(index) = self
-            .entries
-            .iter()
-            .position(|entry| entry.name == file_name)
-        {
-            self.select_index(index);
-        }
-        self.status = format!("Located {}", file_name);
-        Ok(())
+        self.set_dir_transition(
+            parent.to_path_buf(),
+            DirectoryHistoryMode::PushCurrent,
+            Some(path),
+            DirectoryLoadCompletion::Status(format!("Located {}", file_name)),
+        )
     }
-}
-
-pub(super) fn spawn_search_worker(
-    request_rx: mpsc::Receiver<SearchRequest>,
-    result_tx: mpsc::Sender<SearchBuild>,
-) {
-    thread::spawn(move || {
-        while let Ok(mut request) = request_rx.recv() {
-            while let Ok(next_request) = request_rx.try_recv() {
-                request = next_request;
-            }
-
-            let SearchRequest { token, cwd, scope } = request;
-            let result = crate::search::collect_candidates(&cwd, true, scope.candidate_scope())
-                .map(Arc::new)
-                .map_err(|error| error.to_string());
-            if result_tx
-                .send(SearchBuild {
-                    token,
-                    cwd,
-                    scope,
-                    result,
-                })
-                .is_err()
-            {
-                break;
-            }
-        }
-    });
 }
 
 fn prune_search_cache(cached_matches: &mut HashMap<String, Vec<usize>>, active_query: &str) {
