@@ -1,6 +1,7 @@
 mod app;
-mod config;
 mod appearance;
+mod config;
+mod file_facts;
 mod search;
 mod ui;
 
@@ -73,8 +74,14 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             dirty = true;
         }
 
-        if app.process_auto_reload()? {
-            dirty = true;
+        match app.process_auto_reload() {
+            Ok(changed) => {
+                dirty |= changed;
+            }
+            Err(error) => {
+                app.report_runtime_error("Auto-reload failed", &error);
+                dirty = true;
+            }
         }
 
         if dirty {
@@ -112,8 +119,13 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
                 dirty = true;
                 continue;
             }
-            app.handle_event(event)?;
-            dirty = true;
+            match app.handle_event(event) {
+                Ok(()) => dirty = true,
+                Err(error) => {
+                    app.report_runtime_error("Action failed", &error);
+                    dirty = true;
+                }
+            }
         }
     }
 

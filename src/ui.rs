@@ -8,7 +8,10 @@ use crate::{
     app::{App, FrameState},
     config,
 };
-use ratatui::{Frame, widgets::Block};
+use ratatui::{
+    Frame,
+    widgets::{Block, Clear},
+};
 
 pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     let palette = theme::palette();
@@ -28,6 +31,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     state.preview_cols_visible = 0;
 
     let area = frame.area();
+    frame.render_widget(Clear, area);
     frame.render_widget(
         Block::default().style(
             ratatui::style::Style::default()

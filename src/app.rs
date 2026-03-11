@@ -399,6 +399,10 @@ impl App {
     pub fn has_pending_auto_reload(&self) -> bool {
         self.pending_directory_reload_at.is_some()
     }
+
+    pub fn report_runtime_error(&mut self, context: &str, error: &anyhow::Error) {
+        self.status = format!("{context}: {error}");
+    }
 }
 
 fn wheel_step_divisor() -> isize {

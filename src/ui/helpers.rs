@@ -4,17 +4,23 @@ use ratatui::{
     layout::{Alignment, Margin, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 use std::{env, path::Path};
 
 pub(super) fn render_empty_state(frame: &mut Frame<'_>, area: Rect, label: &str, palette: Palette) {
+    fill_area(frame, area, palette.panel_alt, palette.muted);
     frame.render_widget(
         Paragraph::new(label)
             .alignment(Alignment::Center)
             .style(Style::default().bg(palette.panel_alt).fg(palette.muted)),
         area,
     );
+}
+
+pub(super) fn fill_area(frame: &mut Frame<'_>, area: Rect, bg: Color, fg: Color) {
+    frame.render_widget(Clear, area);
+    frame.render_widget(Block::default().style(Style::default().bg(bg).fg(fg)), area);
 }
 
 pub(super) fn render_button(

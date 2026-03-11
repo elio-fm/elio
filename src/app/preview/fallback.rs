@@ -1,69 +1,8 @@
-use crate::appearance;
+use crate::{appearance, file_facts::FallbackSyntax};
 use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
 };
-use std::path::Path;
-
-// These renderers are intentionally heuristic. They provide a readable backup
-// when syntect has no syntax for a file, but they are not meant to be exact.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum FallbackSyntax {
-    JsLike,
-    Toml,
-    Json,
-    Yaml,
-    Log,
-    Ini,
-    DesktopEntry,
-}
-
-impl FallbackSyntax {
-    pub(super) fn label(self) -> &'static str {
-        match self {
-            Self::JsLike => "TypeScript",
-            Self::Toml => "TOML",
-            Self::Json => "JSON",
-            Self::Yaml => "YAML",
-            Self::Log => "Log",
-            Self::Ini => "INI",
-            Self::DesktopEntry => "Desktop Entry",
-        }
-    }
-
-    pub(super) fn detail_label(self) -> String {
-        format!("{} (best-effort)", self.label())
-    }
-}
-
-pub(super) fn preview_fallback_syntax(path: &Path) -> Option<FallbackSyntax> {
-    let name = path.file_name()?.to_str()?.to_ascii_lowercase();
-    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
-
-    match ext.as_str() {
-        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => Some(FallbackSyntax::JsLike),
-        "toml" => Some(FallbackSyntax::Toml),
-        "json" | "jsonc" => Some(FallbackSyntax::Json),
-        "yaml" | "yml" => Some(FallbackSyntax::Yaml),
-        "log" => Some(FallbackSyntax::Log),
-        "ini" | "conf" | "cfg" => Some(FallbackSyntax::Ini),
-        "keys" => Some(FallbackSyntax::Ini),
-        "desktop" => Some(FallbackSyntax::DesktopEntry),
-        _ => match name.as_str() {
-            "cargo.lock" | "poetry.lock" => Some(FallbackSyntax::Toml),
-            "package.json" | "package-lock.json" | "tsconfig.json" | "deno.json" | "deno.jsonc" => {
-                Some(FallbackSyntax::Json)
-            }
-            "compose.yml"
-            | "compose.yaml"
-            | "docker-compose.yml"
-            | "docker-compose.yaml"
-            | "pnpm-lock.yaml"
-            | "pnpm-workspace.yaml" => Some(FallbackSyntax::Yaml),
-            _ => None,
-        },
-    }
-}
 
 pub(super) fn render_fallback_code_preview(
     text: &str,
@@ -74,6 +13,9 @@ pub(super) fn render_fallback_code_preview(
     let source_lines = super::collect_preview_lines(text);
     let number_width = super::line_number_width(source_lines.len());
     let mut rendered = Vec::new();
+    let mut jsonc_block_comment = false;
+    let mut markup_block_comment = false;
+    let mut css_block_comment = false;
 
     for (index, line) in source_lines.iter().enumerate() {
         let mut spans = Vec::new();
@@ -88,8 +30,15 @@ pub(super) fn render_fallback_code_preview(
 
         let body = match syntax {
             FallbackSyntax::JsLike => highlight_js_like_line(line, code_palette),
+            FallbackSyntax::Markup => {
+                highlight_markup_line(line, code_palette, &mut markup_block_comment)
+            }
+            FallbackSyntax::Css => highlight_css_line(line, code_palette, &mut css_block_comment),
             FallbackSyntax::Toml => highlight_toml_line(line, code_palette),
             FallbackSyntax::Json => highlight_json_line(line, code_palette),
+            FallbackSyntax::Jsonc => {
+                highlight_jsonc_line(line, code_palette, &mut jsonc_block_comment)
+            }
             FallbackSyntax::Yaml => highlight_yaml_line(line, code_palette),
             FallbackSyntax::Log => highlight_log_line(line, code_palette),
             FallbackSyntax::Ini | FallbackSyntax::DesktopEntry => {
@@ -339,6 +288,302 @@ fn log_level_color(level: &str, palette: appearance::CodePreviewPalette) -> Colo
     }
 }
 
+fn highlight_markup_line(
+    line: &str,
+    palette: appearance::CodePreviewPalette,
+    in_block_comment: &mut bool,
+) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+
+    for (is_comment, segment) in split_markup_segments(line, in_block_comment) {
+        if is_comment {
+            spans.push(styled_text(segment, palette.comment, Modifier::ITALIC));
+        } else {
+            spans.extend(highlight_markup_segment(segment, palette));
+        }
+    }
+
+    spans
+}
+
+fn highlight_markup_segment(
+    input: &str,
+    palette: appearance::CodePreviewPalette,
+) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let mut index = 0usize;
+
+    while index < input.len() {
+        let Some(offset) = input[index..].find('<') else {
+            spans.push(Span::raw(input[index..].to_string()));
+            break;
+        };
+        let tag_start = index + offset;
+        if tag_start > index {
+            spans.push(Span::raw(input[index..tag_start].to_string()));
+        }
+
+        let tag_end = scan_markup_tag_end(input, tag_start);
+        spans.extend(highlight_markup_tag(&input[tag_start..tag_end], palette));
+        index = tag_end;
+    }
+
+    if spans.is_empty() {
+        spans.push(Span::raw(String::new()));
+    }
+    spans
+}
+
+fn highlight_markup_tag(tag: &str, palette: appearance::CodePreviewPalette) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let mut index = 0usize;
+
+    let opener = if tag.starts_with("</") {
+        "</"
+    } else if tag.starts_with("<?") {
+        "<?"
+    } else if tag.starts_with("<!") {
+        "<!"
+    } else {
+        "<"
+    };
+    spans.push(styled_text(opener, palette.operator, Modifier::empty()));
+    index += opener.len();
+
+    let name_start = index;
+    while index < tag.len() {
+        let ch = tag[index..].chars().next().unwrap_or('>');
+        if ch.is_whitespace() || matches!(ch, '/' | '>' | '?' | '=') {
+            break;
+        }
+        index += ch.len_utf8();
+    }
+    if index > name_start {
+        let name = &tag[name_start..index];
+        let color = if opener == "<!" {
+            palette.keyword
+        } else {
+            palette.tag
+        };
+        let modifier = if opener == "<!" {
+            Modifier::BOLD
+        } else {
+            Modifier::empty()
+        };
+        spans.push(styled_text(name, color, modifier));
+    }
+
+    while index < tag.len() {
+        let ch = tag[index..].chars().next().unwrap_or('>');
+        if ch.is_whitespace() {
+            let start = index;
+            while index < tag.len() {
+                let current = tag[index..].chars().next().unwrap_or('>');
+                if !current.is_whitespace() {
+                    break;
+                }
+                index += current.len_utf8();
+            }
+            spans.push(Span::raw(tag[start..index].to_string()));
+            continue;
+        }
+
+        if tag[index..].starts_with("/>") || tag[index..].starts_with("?>") {
+            spans.push(styled_text(
+                &tag[index..index + 2],
+                palette.operator,
+                Modifier::empty(),
+            ));
+            index += 2;
+            continue;
+        }
+
+        if matches!(ch, '>' | '/' | '?' | '=') {
+            let end = index + ch.len_utf8();
+            spans.push(styled_text(
+                &tag[index..end],
+                palette.operator,
+                Modifier::empty(),
+            ));
+            index = end;
+            continue;
+        }
+
+        if matches!(ch, '"' | '\'') {
+            let end = scan_quoted_segment(tag, index);
+            spans.push(styled_text(
+                &tag[index..end],
+                palette.string,
+                Modifier::empty(),
+            ));
+            index = end;
+            continue;
+        }
+
+        let start = index;
+        while index < tag.len() {
+            let current = tag[index..].chars().next().unwrap_or('>');
+            if current.is_whitespace() || matches!(current, '/' | '>' | '?' | '=' | '"' | '\'') {
+                break;
+            }
+            index += current.len_utf8();
+        }
+        spans.push(styled_text(
+            &tag[start..index],
+            palette.parameter,
+            Modifier::BOLD,
+        ));
+    }
+
+    spans
+}
+
+fn scan_markup_tag_end(input: &str, start: usize) -> usize {
+    let mut index = start + 1;
+    let mut quote = '\0';
+
+    while let Some(ch) = input[index..].chars().next() {
+        if quote != '\0' {
+            if ch == quote {
+                quote = '\0';
+            }
+            index += ch.len_utf8();
+            continue;
+        }
+
+        if matches!(ch, '"' | '\'') {
+            quote = ch;
+            index += ch.len_utf8();
+            continue;
+        }
+
+        index += ch.len_utf8();
+        if ch == '>' {
+            return index;
+        }
+    }
+
+    input.len()
+}
+
+fn highlight_css_line(
+    line: &str,
+    palette: appearance::CodePreviewPalette,
+    in_block_comment: &mut bool,
+) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+
+    for (is_comment, segment) in split_block_comment_segments(line, in_block_comment, "/*", "*/") {
+        if is_comment {
+            spans.push(styled_text(segment, palette.comment, Modifier::ITALIC));
+        } else {
+            spans.extend(highlight_css_segment(segment, palette));
+        }
+    }
+
+    spans
+}
+
+fn highlight_css_segment(
+    input: &str,
+    palette: appearance::CodePreviewPalette,
+) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let mut index = 0usize;
+
+    while index < input.len() {
+        let ch = input[index..].chars().next().unwrap_or(' ');
+        if ch.is_whitespace() {
+            let start = index;
+            while index < input.len() {
+                let current = input[index..].chars().next().unwrap_or(' ');
+                if !current.is_whitespace() {
+                    break;
+                }
+                index += current.len_utf8();
+            }
+            spans.push(Span::raw(input[start..index].to_string()));
+            continue;
+        }
+
+        if matches!(ch, '"' | '\'') {
+            let end = scan_quoted_segment(input, index);
+            spans.push(styled_text(
+                &input[index..end],
+                palette.string,
+                Modifier::empty(),
+            ));
+            index = end;
+            continue;
+        }
+
+        if ch.is_ascii_digit() {
+            let start = index;
+            index += ch.len_utf8();
+            while index < input.len() {
+                let current = input[index..].chars().next().unwrap_or(' ');
+                if current.is_ascii_alphanumeric() || matches!(current, '.' | '%' | '-' | '_') {
+                    index += current.len_utf8();
+                } else {
+                    break;
+                }
+            }
+            spans.push(styled_text(
+                &input[start..index],
+                palette.constant,
+                Modifier::empty(),
+            ));
+            continue;
+        }
+
+        if "{}[]():;,@".contains(ch) {
+            let end = index + ch.len_utf8();
+            let color = if ch == '@' {
+                palette.keyword
+            } else {
+                palette.operator
+            };
+            let modifier = if ch == '@' {
+                Modifier::BOLD
+            } else {
+                Modifier::empty()
+            };
+            spans.push(styled_text(&input[index..end], color, modifier));
+            index = end;
+            continue;
+        }
+
+        let start = index;
+        while index < input.len() {
+            let current = input[index..].chars().next().unwrap_or(' ');
+            if current.is_whitespace() || "{}[]():;,@\"'".contains(current) {
+                break;
+            }
+            index += current.len_utf8();
+        }
+        let token = &input[start..index];
+        let color = if token.starts_with('@') {
+            palette.keyword
+        } else if next_non_whitespace_char(input, index) == Some(':') {
+            palette.parameter
+        } else if next_non_whitespace_char(input, index) == Some('(') {
+            palette.function
+        } else if token.starts_with('.') || token.starts_with('#') {
+            palette.tag
+        } else {
+            palette.fg
+        };
+        let modifier = if color == palette.parameter || color == palette.keyword {
+            Modifier::BOLD
+        } else {
+            Modifier::empty()
+        };
+        spans.push(styled_text(token, color, modifier));
+    }
+
+    spans
+}
+
 fn highlight_js_like_line(
     line: &str,
     palette: appearance::CodePreviewPalette,
@@ -555,6 +800,24 @@ fn highlight_json_line(line: &str, palette: appearance::CodePreviewPalette) -> V
     spans
 }
 
+fn highlight_jsonc_line(
+    line: &str,
+    palette: appearance::CodePreviewPalette,
+    in_block_comment: &mut bool,
+) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+
+    for (is_comment, segment) in split_jsonc_segments(line, in_block_comment) {
+        if is_comment {
+            spans.push(styled_text(segment, palette.comment, Modifier::ITALIC));
+        } else {
+            spans.extend(highlight_json_line(segment, palette));
+        }
+    }
+
+    spans
+}
+
 fn highlight_yaml_line(line: &str, palette: appearance::CodePreviewPalette) -> Vec<Span<'static>> {
     let (body, comment) = split_comment(line);
     let trimmed = body.trim_start();
@@ -757,6 +1020,165 @@ fn split_unquoted_once(input: &str, needle: char) -> Option<(&str, &str)> {
     None
 }
 
+fn split_jsonc_segments<'a>(line: &'a str, in_block_comment: &mut bool) -> Vec<(bool, &'a str)> {
+    let mut segments = Vec::new();
+    let mut cursor = 0usize;
+
+    while cursor < line.len() {
+        if *in_block_comment {
+            let comment_start = cursor;
+            if let Some(offset) = line[cursor..].find("*/") {
+                let end = cursor + offset + 2;
+                segments.push((true, &line[comment_start..end]));
+                *in_block_comment = false;
+                cursor = end;
+            } else {
+                segments.push((true, &line[comment_start..]));
+                return segments;
+            }
+            continue;
+        }
+
+        let code_start = cursor;
+        let mut index = cursor;
+        let mut in_string = false;
+        let mut escape = false;
+
+        while index < line.len() {
+            let ch = line[index..].chars().next().expect("valid utf-8 char");
+            let next = index + ch.len_utf8();
+
+            if in_string {
+                if escape {
+                    escape = false;
+                    index = next;
+                    continue;
+                }
+                if ch == '\\' {
+                    escape = true;
+                    index = next;
+                    continue;
+                }
+                if ch == '"' {
+                    in_string = false;
+                }
+                index = next;
+                continue;
+            }
+
+            if ch == '"' {
+                in_string = true;
+                index = next;
+                continue;
+            }
+
+            if ch == '/'
+                && let Some(next_char) = line[next..].chars().next()
+            {
+                if next_char == '/' {
+                    if code_start < index {
+                        segments.push((false, &line[code_start..index]));
+                    }
+                    segments.push((true, &line[index..]));
+                    return segments;
+                }
+
+                if next_char == '*' {
+                    if code_start < index {
+                        segments.push((false, &line[code_start..index]));
+                    }
+
+                    let comment_start = index;
+                    let search_start = next + next_char.len_utf8();
+                    if let Some(offset) = line[search_start..].find("*/") {
+                        let end = search_start + offset + 2;
+                        segments.push((true, &line[comment_start..end]));
+                        cursor = end;
+                    } else {
+                        segments.push((true, &line[comment_start..]));
+                        *in_block_comment = true;
+                        return segments;
+                    }
+                    break;
+                }
+            }
+
+            index = next;
+        }
+
+        if cursor == index {
+            segments.push((false, &line[cursor..]));
+            return segments;
+        }
+
+        if index >= line.len() {
+            segments.push((false, &line[code_start..]));
+            return segments;
+        }
+    }
+
+    if segments.is_empty() {
+        segments.push((false, line));
+    }
+    segments
+}
+
+fn split_markup_segments<'a>(line: &'a str, in_block_comment: &mut bool) -> Vec<(bool, &'a str)> {
+    split_block_comment_segments(line, in_block_comment, "<!--", "-->")
+}
+
+fn split_block_comment_segments<'a>(
+    line: &'a str,
+    in_block_comment: &mut bool,
+    start_delim: &str,
+    end_delim: &str,
+) -> Vec<(bool, &'a str)> {
+    let mut segments = Vec::new();
+    let mut cursor = 0usize;
+
+    while cursor < line.len() {
+        if *in_block_comment {
+            let comment_start = cursor;
+            if let Some(offset) = line[cursor..].find(end_delim) {
+                let end = cursor + offset + end_delim.len();
+                segments.push((true, &line[comment_start..end]));
+                *in_block_comment = false;
+                cursor = end;
+            } else {
+                segments.push((true, &line[comment_start..]));
+                return segments;
+            }
+            continue;
+        }
+
+        if let Some(offset) = line[cursor..].find(start_delim) {
+            let start = cursor + offset;
+            if start > cursor {
+                segments.push((false, &line[cursor..start]));
+            }
+
+            let search_start = start + start_delim.len();
+            if let Some(close_offset) = line[search_start..].find(end_delim) {
+                let end = search_start + close_offset + end_delim.len();
+                segments.push((true, &line[start..end]));
+                cursor = end;
+            } else {
+                segments.push((true, &line[start..]));
+                *in_block_comment = true;
+                return segments;
+            }
+        } else {
+            segments.push((false, &line[cursor..]));
+            return segments;
+        }
+    }
+
+    if segments.is_empty() {
+        segments.push((false, line));
+    }
+    segments
+}
+
 fn scan_quoted_segment(input: &str, start: usize) -> usize {
     let quote = input[start..].chars().next().unwrap_or('"');
     let mut index = start + quote.len_utf8();
@@ -946,7 +1368,6 @@ fn styled_text(text: &str, color: Color, modifier: Modifier) -> Span<'static> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn fallback_detail_label_marks_best_effort() {
@@ -954,27 +1375,54 @@ mod tests {
     }
 
     #[test]
-    fn jsonc_file_can_use_fallback_highlighting() {
+    fn markup_detail_label_marks_best_effort() {
         assert_eq!(
-            preview_fallback_syntax(Path::new("deno.jsonc")),
-            Some(FallbackSyntax::Json)
+            FallbackSyntax::Markup.detail_label(),
+            "Markup (best-effort)"
         );
     }
 
     #[test]
-    fn desktop_file_can_use_fallback_highlighting() {
-        assert_eq!(
-            preview_fallback_syntax(Path::new("app.desktop")),
-            Some(FallbackSyntax::DesktopEntry)
+    fn jsonc_fallback_renderer_keeps_comments() {
+        let lines = render_fallback_code_preview(
+            "{\n  // comment\n  \"name\": \"elio\"\n}\n",
+            FallbackSyntax::Jsonc,
+            true,
+        );
+
+        assert!(
+            lines[1]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("// comment"))
         );
     }
 
     #[test]
-    fn log_file_can_use_fallback_highlighting() {
-        assert_eq!(
-            preview_fallback_syntax(Path::new("server.log")),
-            Some(FallbackSyntax::Log)
+    fn jsonc_fallback_renderer_keeps_multiline_block_comments() {
+        let lines = render_fallback_code_preview(
+            "{\n  /* first line\n     second line */\n  \"name\": \"elio\"\n}\n",
+            FallbackSyntax::Jsonc,
+            true,
         );
+
+        assert!(
+            lines[1]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("/* first line"))
+        );
+        assert!(
+            lines[2]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("second line */"))
+        );
+    }
+
+    #[test]
+    fn jsonc_detail_label_marks_best_effort() {
+        assert_eq!(FallbackSyntax::Jsonc.detail_label(), "JSONC (best-effort)");
     }
 
     #[test]
@@ -1012,6 +1460,84 @@ mod tests {
                 .spans
                 .iter()
                 .any(|span| span.content.contains("request_id"))
+        );
+    }
+
+    #[test]
+    fn markup_fallback_renderer_highlights_tags_attributes_and_comments() {
+        let lines = render_fallback_code_preview(
+            "<!-- note -->\n<div class=\"app\" data-id=\"42\">elio</div>\n",
+            FallbackSyntax::Markup,
+            true,
+        );
+
+        assert!(
+            lines[0]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("<!-- note -->"))
+        );
+        assert!(
+            lines[1]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("div"))
+        );
+        assert!(
+            lines[1]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("class"))
+        );
+        assert!(
+            lines[1]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("\"app\""))
+        );
+    }
+
+    #[test]
+    fn markup_fallback_renderer_keeps_multiline_comments() {
+        let lines = render_fallback_code_preview(
+            "<!-- first line\nsecond line -->\n<section />\n",
+            FallbackSyntax::Markup,
+            true,
+        );
+
+        assert!(
+            lines[0]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("<!-- first line"))
+        );
+        assert!(
+            lines[1]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("second line -->"))
+        );
+    }
+
+    #[test]
+    fn css_fallback_renderer_highlights_properties_and_values() {
+        let lines = render_fallback_code_preview(
+            ".app {\n  color: #fff;\n  margin: 12px;\n}\n",
+            FallbackSyntax::Css,
+            true,
+        );
+
+        assert!(
+            lines[1]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("color"))
+        );
+        assert!(
+            lines[2]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("12px"))
         );
     }
 }

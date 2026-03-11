@@ -21,6 +21,12 @@ pub(super) struct DirectoryFingerprint {
 }
 
 #[derive(Clone, Debug)]
+pub(super) struct DirectorySnapshot {
+    pub entries: Vec<Entry>,
+    pub fingerprint: DirectoryFingerprint,
+}
+
+#[derive(Clone, Debug)]
 struct FingerprintPart {
     name: String,
     kind: EntryKind,
@@ -81,6 +87,15 @@ pub(crate) fn format_time_ago(time: SystemTime) -> String {
     }
 }
 
+pub(crate) fn describe_io_error(error: &io::Error) -> &'static str {
+    match error.kind() {
+        io::ErrorKind::PermissionDenied => "Permission denied",
+        io::ErrorKind::NotFound => "Not found",
+        io::ErrorKind::Unsupported => "Unsupported location",
+        _ => "Read error",
+    }
+}
+
 pub(super) fn build_sidebar_items() -> Vec<SidebarItem> {
     let mut items = Vec::new();
     let home = env::var_os("HOME")
@@ -123,7 +138,10 @@ pub(super) fn build_sidebar_items() -> Vec<SidebarItem> {
 pub(super) fn read_entries(dir: &Path, show_hidden: bool) -> Result<Vec<Entry>> {
     let mut entries = Vec::new();
     for item in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
-        let item = item?;
+        let item = match item {
+            Ok(item) => item,
+            Err(_) => continue,
+        };
         let path = item.path();
         let file_name = item.file_name();
         let name = file_name.to_string_lossy().to_string();
@@ -133,8 +151,10 @@ pub(super) fn read_entries(dir: &Path, show_hidden: bool) -> Result<Vec<Entry>> 
             continue;
         }
 
-        let metadata = fs::symlink_metadata(&path)
-            .with_context(|| format!("failed to read metadata for {}", path.display()))?;
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(_) => continue,
+        };
         let details = entry_details(&path, &metadata);
         entries.push(Entry {
             path,
@@ -147,6 +167,20 @@ pub(super) fn read_entries(dir: &Path, show_hidden: bool) -> Result<Vec<Entry>> 
         });
     }
     Ok(entries)
+}
+
+pub(super) fn load_directory_snapshot(
+    dir: &Path,
+    show_hidden: bool,
+    sort_mode: SortMode,
+) -> Result<DirectorySnapshot> {
+    let mut entries = read_entries(dir, show_hidden)?;
+    sort_entries(&mut entries, sort_mode);
+    let fingerprint = entries_fingerprint(&entries);
+    Ok(DirectorySnapshot {
+        entries,
+        fingerprint,
+    })
 }
 
 pub(super) fn entries_fingerprint(entries: &[Entry]) -> DirectoryFingerprint {
@@ -169,7 +203,10 @@ pub(super) fn scan_directory_fingerprint(
 ) -> Result<DirectoryFingerprint> {
     let mut parts = Vec::new();
     for item in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
-        let item = item?;
+        let item = match item {
+            Ok(item) => item,
+            Err(_) => continue,
+        };
         let file_name = item.file_name();
         if is_hidden(file_name.as_os_str()) && !show_hidden {
             continue;
@@ -178,7 +215,7 @@ pub(super) fn scan_directory_fingerprint(
         let metadata = match fs::symlink_metadata(item.path()) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(error.into()),
+            Err(_) => continue,
         };
         let details = entry_details(&item.path(), &metadata);
         parts.push(FingerprintPart {

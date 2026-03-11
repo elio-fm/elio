@@ -62,6 +62,7 @@ fn render_sidebar(
     let block = helpers::panel_block(" Places ", palette.panel, palette);
     frame.render_widget(block, area);
     let inner = helpers::inner_with_padding(area);
+    helpers::fill_area(frame, inner, palette.panel, palette.text);
     let mut y = inner.y;
     let row_height = 1u16;
     for item in &app.sidebar {
@@ -142,6 +143,7 @@ fn render_entries(
         .border_style(Style::default().fg(palette.border));
     frame.render_widget(&block, area);
     let inner = block.inner(area);
+    helpers::fill_area(frame, inner, palette.panel_alt, palette.text);
 
     if app.view_mode == crate::app::ViewMode::Grid {
         render_grid(frame, inner, app, state, palette);
@@ -157,6 +159,7 @@ fn render_grid(
     state: &mut FrameState,
     palette: Palette,
 ) {
+    helpers::fill_area(frame, area, palette.panel_alt, palette.text);
     let spec = helpers::grid_zoom_spec(app.zoom_level);
     let gap_x = spec.gap_x;
     let gap_y = spec.gap_y;
@@ -321,6 +324,7 @@ fn render_list(
     state: &mut FrameState,
     palette: Palette,
 ) {
+    helpers::fill_area(frame, area, palette.panel_alt, palette.text);
     let row_height = helpers::list_row_height(app.zoom_level);
     state.metrics = ViewMetrics {
         cols: 1,
@@ -530,6 +534,7 @@ fn render_preview(
         .border_style(Style::default().fg(palette.border));
     frame.render_widget(block, area);
     let inner = helpers::inner_with_padding(area);
+    helpers::fill_area(frame, inner, palette.panel, palette.text);
 
     let Some(entry) = app.selected_entry() else {
         helpers::render_empty_state(frame, inner, "Nothing selected", palette);
@@ -555,6 +560,7 @@ fn render_preview_details(
     entry: &Entry,
     palette: Palette,
 ) {
+    helpers::fill_area(frame, area, palette.panel, palette.text);
     let mut lines = vec![
         preview_stat_line(
             "Type",
@@ -613,6 +619,10 @@ fn render_preview_body(
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(1), Constraint::Min(0)])
         .split(area);
+    helpers::fill_area(frame, sections[0], palette.panel, palette.text);
+    if sections[1].height > 0 {
+        helpers::fill_area(frame, sections[1], palette.panel, palette.text);
+    }
     let body = if sections[1].width >= 6 {
         Layout::default()
             .direction(Direction::Horizontal)
@@ -626,6 +636,10 @@ fn render_preview_body(
     };
     let text_area = body[0];
     let scrollbar_area = body.get(1).copied();
+    helpers::fill_area(frame, text_area, palette.panel, palette.text);
+    if let Some(scrollbar_area) = scrollbar_area {
+        helpers::fill_area(frame, scrollbar_area, palette.panel, palette.border);
+    }
     let visible_rows = text_area.height as usize;
     state.preview_cols_visible = text_area.width as usize;
     let header_detail = app.preview_header_detail(visible_rows);

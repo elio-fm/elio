@@ -1,6 +1,6 @@
 use crate::{
     app::{EntryKind, FileClass},
-    config,
+    config, file_facts,
 };
 use ratatui::style::Color;
 use serde::Deserialize;
@@ -87,6 +87,7 @@ struct Theme {
 }
 
 pub(crate) struct ResolvedAppearance<'a> {
+    #[cfg(test)]
     pub class: FileClass,
     pub icon: &'a str,
     pub color: Color,
@@ -181,6 +182,7 @@ pub(crate) fn code_preview_palette() -> CodePreviewPalette {
     active_theme().preview.code
 }
 
+#[cfg(test)]
 pub(crate) fn classify_path(path: &Path, kind: EntryKind) -> FileClass {
     resolve_path(path, kind).class
 }
@@ -197,56 +199,7 @@ pub(crate) fn type_label_for_path(path: &Path, kind: EntryKind) -> &'static str 
 }
 
 pub(crate) fn specific_type_label(path: &Path, kind: EntryKind) -> Option<&'static str> {
-    if kind == EntryKind::Directory {
-        return None;
-    }
-
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(normalize_key)
-        .unwrap_or_default();
-    if name == "pkgbuild" {
-        return Some("Arch build script");
-    }
-
-    let ext = path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(normalize_key)
-        .unwrap_or_default();
-
-    match ext.as_str() {
-        "desktop" => Some("Desktop Entry"),
-        "xcf" => Some("GIMP image"),
-        "ico" => Some("Icon image"),
-        "iso" => Some("ISO disk image"),
-        "rpm" => Some("RPM package"),
-        "torrent" => Some("BitTorrent file"),
-        "hash" => Some("Hash file"),
-        "sha1" => Some("SHA-1 checksum"),
-        "sha256" => Some("SHA-256 checksum"),
-        "sha512" => Some("SHA-512 checksum"),
-        "md5" => Some("MD5 checksum"),
-        "log" => Some("Log file"),
-        "srt" => Some("SubRip subtitles"),
-        "keys" => Some("Keys file"),
-        "p12" | "pfx" => Some("PKCS#12 certificate"),
-        "pem" => Some("PEM certificate"),
-        "crt" | "cer" => Some("Certificate"),
-        "csr" => Some("Certificate signing request"),
-        "key" => Some("Private key"),
-        "deb" => Some("Debian package"),
-        "apk" => Some("Android package"),
-        "aab" => Some("Android App Bundle"),
-        "apkg" => Some("Anki package"),
-        "zst" => Some("Zstandard archive"),
-        "zest" => Some("Zest archive"),
-        "appimage" => Some("AppImage bundle"),
-        "exe" => Some("Windows executable"),
-        "jar" => Some("Java archive"),
-        _ => None,
-    }
+    file_facts::inspect_path(path, kind).specific_type_label
 }
 
 fn active_theme() -> &'static Theme {
@@ -718,7 +671,12 @@ impl Theme {
             .or_else(|| ext_rule.and_then(|rule| rule.color))
             .unwrap_or(base.color);
 
-        ResolvedAppearance { class, icon, color }
+        ResolvedAppearance {
+            #[cfg(test)]
+            class,
+            icon,
+            color,
+        }
     }
 }
 
@@ -884,44 +842,7 @@ fn rule_class(class: FileClass) -> RuleOverride {
 }
 
 fn builtin_classify_path(path: &Path, kind: EntryKind) -> FileClass {
-    if kind == EntryKind::Directory {
-        return FileClass::Directory;
-    }
-
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(normalize_key)
-        .unwrap_or_default();
-    if name == "pkgbuild" {
-        return FileClass::Config;
-    }
-
-    let ext = path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    match ext.as_str() {
-        "rs" | "js" | "ts" | "tsx" | "jsx" | "py" | "go" | "c" | "cpp" | "h" | "hpp" | "java"
-        | "lua" | "php" | "rb" | "swift" | "kt" | "sh" | "bash" | "zsh" | "fish" => FileClass::Code,
-        "json" | "toml" | "yaml" | "yml" | "ini" | "conf" | "cfg" | "desktop" | "ron" | "env"
-        | "keys" | "p12" | "pfx" | "pem" | "crt" | "cer" | "csr" | "key" => FileClass::Config,
-        "md" | "txt" | "rst" | "pdf" | "doc" | "docx" | "odt" | "srt" | "log" => {
-            FileClass::Document
-        }
-        "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "avif" | "xcf" | "ico" => {
-            FileClass::Image
-        }
-        "mp3" | "wav" | "flac" | "ogg" | "m4a" => FileClass::Audio,
-        "mp4" | "mkv" | "mov" | "webm" | "avi" => FileClass::Video,
-        "zip" | "tar" | "gz" | "xz" | "bz2" | "7z" | "iso" | "rpm" | "deb" | "apk" | "aab"
-        | "apkg" | "zst" | "jar" | "zest" | "appimage" => FileClass::Archive,
-        "ttf" | "otf" | "woff" | "woff2" => FileClass::Font,
-        "csv" | "tsv" | "sql" | "sqlite" | "db" | "parquet" | "torrent" | "hash" | "sha1"
-        | "sha256" | "sha512" | "md5" => FileClass::Data,
-        _ => FileClass::File,
-    }
+    file_facts::inspect_path(path, kind).builtin_class
 }
 
 fn parse_class_name(name: &str) -> Option<FileClass> {

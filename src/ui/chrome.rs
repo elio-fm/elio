@@ -16,6 +16,7 @@ pub(super) fn render_toolbar(
     state: &mut FrameState,
     palette: Palette,
 ) {
+    helpers::fill_area(frame, area, palette.chrome, palette.text);
     let block = Block::default()
         .style(Style::default().bg(palette.chrome).fg(palette.text))
         .borders(Borders::ALL)
@@ -102,6 +103,7 @@ pub(super) fn render_toolbar(
 }
 
 pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palette: Palette) {
+    helpers::fill_area(frame, area, palette.chrome, palette.text);
     let sections = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Min(24), Constraint::Length(34)])

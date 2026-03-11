@@ -101,15 +101,16 @@ impl App {
 
         let end = (search.scroll + max_rows).min(search.matches.len());
         (search.scroll..end)
-            .map(|visible_index| {
-                let candidate = &search.candidates[search.matches[visible_index]];
-                SearchRow {
+            .filter_map(|visible_index| {
+                let candidate_index = search.matches.get(visible_index).copied()?;
+                let candidate = search.candidates.get(candidate_index)?;
+                Some(SearchRow {
                     index: visible_index,
                     name: candidate.name.clone(),
                     relative: candidate.relative.clone(),
                     is_dir: candidate.is_dir,
                     selected: visible_index == search.selected,
-                }
+                })
             })
             .collect()
     }
@@ -359,13 +360,15 @@ impl App {
                 .matches
                 .get(search.selected)
                 .copied()
-                .map(|index| search.candidates[index].path.clone())
+                .and_then(|index| search.candidates.get(index))
+                .map(|candidate| candidate.path.clone())
         }) else {
             return Ok(());
         };
 
+        self.reveal_path(path)?;
         self.search = None;
-        self.reveal_path(path)
+        Ok(())
     }
 
     pub(super) fn sync_search_scroll(&mut self) -> bool {
@@ -488,6 +491,38 @@ fn prune_search_cache(cached_matches: &mut HashMap<String, Vec<usize>>, active_q
         };
         cached_matches.remove(&stale_key);
     }
+}
+
+fn char_to_byte_index(text: &str, char_index: usize) -> usize {
+    text.char_indices()
+        .nth(char_index)
+        .map(|(index, _)| index)
+        .unwrap_or(text.len())
+}
+
+fn insert_char_at_cursor(text: &mut String, cursor: &mut usize, ch: char) {
+    let byte_index = char_to_byte_index(text, *cursor);
+    text.insert(byte_index, ch);
+    *cursor += 1;
+}
+
+fn remove_char_before_cursor(text: &mut String, cursor: &mut usize) {
+    if *cursor == 0 {
+        return;
+    }
+    let start = char_to_byte_index(text, cursor.saturating_sub(1));
+    let end = char_to_byte_index(text, *cursor);
+    text.replace_range(start..end, "");
+    *cursor -= 1;
+}
+
+fn remove_char_at_cursor(text: &mut String, cursor: usize) {
+    let start = char_to_byte_index(text, cursor);
+    if start >= text.len() {
+        return;
+    }
+    let end = char_to_byte_index(text, cursor + 1);
+    text.replace_range(start..end, "");
 }
 
 #[cfg(test)]
@@ -659,36 +694,62 @@ mod tests {
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
-}
 
-fn char_to_byte_index(text: &str, char_index: usize) -> usize {
-    text.char_indices()
-        .nth(char_index)
-        .map(|(index, _)| index)
-        .unwrap_or(text.len())
-}
+    #[test]
+    fn search_rows_ignore_stale_match_indexes() {
+        let root = temp_path("stale-match-indexes");
+        fs::create_dir_all(&root).expect("failed to create temp root");
 
-fn insert_char_at_cursor(text: &mut String, cursor: &mut usize, ch: char) {
-    let byte_index = char_to_byte_index(text, *cursor);
-    text.insert(byte_index, ch);
-    *cursor += 1;
-}
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.search = Some(SearchOverlay {
+            scope: SearchScope::Folders,
+            query: String::new(),
+            query_cursor: 0,
+            candidates: Arc::new(Vec::new()),
+            matches: vec![3],
+            cached_matches: HashMap::from([(String::new(), vec![3])]),
+            selected: 0,
+            scroll: 0,
+            loading: false,
+            error: None,
+        });
 
-fn remove_char_before_cursor(text: &mut String, cursor: &mut usize) {
-    if *cursor == 0 {
-        return;
+        assert!(app.search_rows(10).is_empty());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
     }
-    let start = char_to_byte_index(text, cursor.saturating_sub(1));
-    let end = char_to_byte_index(text, *cursor);
-    text.replace_range(start..end, "");
-    *cursor -= 1;
-}
 
-fn remove_char_at_cursor(text: &mut String, cursor: usize) {
-    let start = char_to_byte_index(text, cursor);
-    if start >= text.len() {
-        return;
+    #[test]
+    fn confirm_search_selection_keeps_overlay_open_when_reveal_fails() {
+        let root = temp_path("reveal-fails");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        let missing = root.join("missing/file.txt");
+        app.search = Some(SearchOverlay {
+            scope: SearchScope::Files,
+            query: "missing".to_string(),
+            query_cursor: 7,
+            candidates: Arc::new(vec![crate::search::SearchCandidate {
+                path: missing,
+                name: "file.txt".to_string(),
+                name_key: "file.txt".to_string(),
+                relative: "missing/file.txt".to_string(),
+                relative_key: "missing/file.txt".to_string(),
+                is_dir: false,
+            }]),
+            matches: vec![0],
+            cached_matches: HashMap::from([(String::new(), vec![0])]),
+            selected: 0,
+            scroll: 0,
+            loading: false,
+            error: None,
+        });
+
+        assert!(app.confirm_search_selection().is_err());
+        assert!(app.search.is_some());
+        assert_eq!(app.cwd, root);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
     }
-    let end = char_to_byte_index(text, cursor + 1);
-    text.replace_range(start..end, "");
 }

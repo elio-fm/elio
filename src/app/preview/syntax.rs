@@ -1,5 +1,4 @@
 use super::*;
-use crate::appearance;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -17,37 +16,16 @@ use syntect::{
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
 static CODE_THEME: OnceLock<Theme> = OnceLock::new();
 
-pub(super) fn preview_code_syntax<'a>(
-    entry: &Entry,
-    syntax_set: &'a SyntaxSet,
+pub(super) fn find_code_syntax(
+    path: &Path,
     hint: Option<&str>,
-) -> Option<&'a SyntaxReference> {
-    let syntax = code_syntax_for(&entry.path, hint, syntax_set);
+) -> Option<&'static SyntaxReference> {
+    let syntax_set = syntax_set();
+    let syntax = code_syntax_for(path, hint, syntax_set);
     if ptr::eq(syntax, syntax_set.find_syntax_plain_text()) {
         return None;
     }
-
-    match appearance::classify_path(&entry.path, entry.kind) {
-        FileClass::Code | FileClass::Config | FileClass::Data => Some(syntax),
-        _ => hint.map(|_| syntax),
-    }
-}
-
-pub(super) fn preview_syntax_hint(path: &Path) -> Option<&'static str> {
-    let name = path.file_name()?.to_str()?.to_ascii_lowercase();
-    match name.as_str() {
-        "pkgbuild" => Some("bash"),
-        "cargo.lock" | "poetry.lock" => Some("toml"),
-        "package.json" | "package-lock.json" | "tsconfig.json" | "deno.json" => Some("json"),
-        "deno.jsonc" => Some("jsonc"),
-        "compose.yml"
-        | "compose.yaml"
-        | "docker-compose.yml"
-        | "docker-compose.yaml"
-        | "pnpm-lock.yaml"
-        | "pnpm-workspace.yaml" => Some("yaml"),
-        _ => None,
-    }
+    Some(syntax)
 }
 
 pub(super) fn syntax_set() -> &'static SyntaxSet {
@@ -171,9 +149,24 @@ fn build_code_theme() -> Theme {
                 None,
                 None,
             ),
-            theme_item("variable.parameter", Some(preview.parameter), None, None),
-            theme_item("entity.name.tag, meta.tag", Some(preview.tag), None, None),
-            theme_item("keyword.operator", Some(preview.operator), None, None),
+            theme_item(
+                "variable.parameter, entity.other.attribute-name, support.type.property-name, meta.attribute-with-value entity.other.attribute-name",
+                Some(preview.parameter),
+                None,
+                None,
+            ),
+            theme_item(
+                "entity.name.tag, meta.tag, entity.name.tag.doctype, meta.tag.sgml.doctype",
+                Some(preview.tag),
+                None,
+                None,
+            ),
+            theme_item(
+                "keyword.operator, punctuation.definition.tag, punctuation.separator.key-value, punctuation.separator.attribute-value",
+                Some(preview.operator),
+                None,
+                None,
+            ),
             theme_item(
                 "entity.name.function.preprocessor, support.function.macro",
                 Some(preview.r#macro),

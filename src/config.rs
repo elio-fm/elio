@@ -1,9 +1,5 @@
 use serde::Deserialize;
-use std::{
-    env, fs, io,
-    path::PathBuf,
-    sync::OnceLock,
-};
+use std::{env, fs, io, path::PathBuf, sync::OnceLock};
 
 static ACTIVE_CONFIG: OnceLock<Config> = OnceLock::new();
 
@@ -91,10 +87,10 @@ impl Config {
     fn from_str(config: &str) -> anyhow::Result<Self> {
         let parsed: ConfigFile = toml::from_str(config)?;
         let mut resolved = Self::default_config();
-        if let Some(ui) = parsed.ui {
-            if let Some(show_top_bar) = ui.show_top_bar {
-                resolved.ui.show_top_bar = show_top_bar;
-            }
+        if let Some(ui) = parsed.ui
+            && let Some(show_top_bar) = ui.show_top_bar
+        {
+            resolved.ui.show_top_bar = show_top_bar;
         }
         Ok(resolved)
     }

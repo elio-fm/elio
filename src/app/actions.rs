@@ -1,14 +1,15 @@
 use super::*;
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use std::path::PathBuf;
 
 impl App {
     pub fn reload(&mut self) -> Result<()> {
         let previous_name = self.selected_entry().map(|entry| entry.name.clone());
-        self.entries = support::read_entries(&self.cwd, self.show_hidden)?;
-        support::sort_entries(&mut self.entries, self.sort_mode);
+        let snapshot =
+            support::load_directory_snapshot(&self.cwd, self.show_hidden, self.sort_mode)?;
         self.sidebar = support::build_sidebar_items();
-        self.directory_fingerprint = support::entries_fingerprint(&self.entries);
+        self.entries = snapshot.entries;
+        self.directory_fingerprint = snapshot.fingerprint;
         self.last_auto_reload_at = Instant::now();
 
         self.selected = match previous_name {
@@ -295,7 +296,14 @@ impl App {
         path: PathBuf,
         record_history: bool,
     ) -> Result<()> {
-        if !path.is_dir() {
+        let metadata = std::fs::metadata(&path).map_err(|error| {
+            anyhow!(
+                "Cannot open {}: {}",
+                path.display(),
+                support::describe_io_error(&error)
+            )
+        })?;
+        if !metadata.is_dir() {
             bail!("{} is not a directory", path.display());
         }
         let normalized = path.canonicalize().unwrap_or(path);
@@ -303,15 +311,32 @@ impl App {
             self.status = format!("Already in {}", self.cwd.display());
             return Ok(());
         }
-        if record_history {
-            self.back_history.push(self.cwd.clone());
-            self.forward_history.clear();
-        }
+        let snapshot =
+            support::load_directory_snapshot(&normalized, self.show_hidden, self.sort_mode)
+                .map_err(|error| {
+                    let detail = error
+                        .downcast_ref::<std::io::Error>()
+                        .map(support::describe_io_error)
+                        .unwrap_or("Read error");
+                    anyhow!("Cannot open {}: {}", normalized.display(), detail)
+                })?;
+        let previous_cwd = self.cwd.clone();
         self.cwd = normalized;
+        self.entries = snapshot.entries;
+        self.sidebar = support::build_sidebar_items();
+        self.directory_fingerprint = snapshot.fingerprint;
+        self.last_auto_reload_at = Instant::now();
         self.selected = 0;
         self.scroll_row = 0;
-        self.reload()?;
+        self.clamp_selection();
+        self.sync_scroll();
+        self.refresh_preview();
+        self.clear_wheel_scroll();
         self.reset_directory_watch();
+        if record_history {
+            self.back_history.push(previous_cwd);
+            self.forward_history.clear();
+        }
         self.status.clear();
         Ok(())
     }
@@ -355,13 +380,14 @@ impl App {
     }
 
     pub(super) fn go_back(&mut self) -> Result<()> {
-        let Some(previous) = self.back_history.pop() else {
+        let Some(previous) = self.back_history.last().cloned() else {
             self.status = "No previous folder".to_string();
             return Ok(());
         };
         let current = self.cwd.clone();
-        self.forward_history.push(current.clone());
         self.set_dir_with_history(previous, false)?;
+        self.back_history.pop();
+        self.forward_history.push(current.clone());
         if let Some(index) = self.entries.iter().position(|entry| entry.path == current) {
             self.select_index(index);
         }
@@ -369,13 +395,14 @@ impl App {
     }
 
     pub(super) fn go_forward(&mut self) -> Result<()> {
-        let Some(next) = self.forward_history.pop() else {
+        let Some(next) = self.forward_history.last().cloned() else {
             self.status = "No next folder".to_string();
             return Ok(());
         };
         let current = self.cwd.clone();
-        self.back_history.push(current.clone());
         self.set_dir_with_history(next, false)?;
+        self.forward_history.pop();
+        self.back_history.push(current.clone());
         if let Some(index) = self.entries.iter().position(|entry| entry.path == current) {
             self.select_index(index);
         }
@@ -483,6 +510,7 @@ mod tests {
         fs::write(root.join("one.txt"), "hello").expect("failed to write first file");
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.directory_watch = None;
         assert_eq!(app.entries.len(), 1);
 
         let second = root.join("two.txt");
@@ -516,6 +544,7 @@ mod tests {
         fs::write(root.join("one.txt"), "hello").expect("failed to write first file");
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.directory_watch = None;
         assert_eq!(app.entries.len(), 1);
 
         fs::write(root.join("two.txt"), "world").expect("failed to write second file");
@@ -548,6 +577,7 @@ mod tests {
         fs::write(root.join("visible.txt"), "hello").expect("failed to write visible file");
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.directory_watch = None;
         assert!(!app.show_hidden);
         assert_eq!(app.entries.len(), 1);
 
@@ -618,6 +648,41 @@ mod tests {
 
         let app = App::new_at(root.clone()).expect("failed to create app");
         assert_eq!(app.selection_summary(), "1/1  child/");
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn set_dir_failure_keeps_previous_directory_state() {
+        let root = temp_path("set-dir-missing");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("note.txt"), "hello").expect("failed to write file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        let missing = root.join("missing");
+
+        assert!(app.set_dir(missing).is_err());
+        assert_eq!(app.cwd, root);
+        assert_eq!(app.entries.len(), 1);
+        assert!(app.back_history.is_empty());
+        assert!(app.forward_history.is_empty());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn go_back_failure_preserves_history() {
+        let root = temp_path("history-missing");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let missing = root.join("missing");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.back_history.push(missing.clone());
+
+        assert!(app.go_back().is_err());
+        assert_eq!(app.cwd, root);
+        assert_eq!(app.back_history, vec![missing]);
+        assert!(app.forward_history.is_empty());
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

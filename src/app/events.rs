@@ -8,11 +8,17 @@ use std::time::{Duration, Instant};
 
 impl App {
     pub fn handle_event(&mut self, event: Event) -> Result<()> {
-        match event {
+        let result = match event {
             Event::Key(key) => self.handle_key(key),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             Event::Resize(_, _) | Event::FocusGained | Event::FocusLost | Event::Paste(_) => Ok(()),
+        };
+
+        if let Err(error) = result {
+            self.report_runtime_error("Action failed", &error);
         }
+
+        Ok(())
     }
 
     pub fn process_pending_scroll(&mut self) -> bool {
@@ -236,8 +242,11 @@ impl App {
                     .find(|hit| rect_contains(hit.rect, mouse.column, mouse.row))
                     .cloned()
                 {
+                    let Some(path) = self.entries.get(hit.index).map(|entry| entry.path.clone())
+                    else {
+                        return Ok(());
+                    };
                     self.select_index(hit.index);
-                    let path = self.entries[hit.index].path.clone();
                     if self.is_double_click(&path) {
                         self.open_selected()?;
                     }
@@ -615,6 +624,8 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
     use std::{
         env, fs,
         path::PathBuf,
@@ -640,8 +651,11 @@ mod tests {
         app.view_mode = ViewMode::List;
         app.select_index(0);
 
-        app.handle_event(Event::Key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)))
-            .expect("right arrow should be handled");
+        app.handle_event(Event::Key(KeyEvent::new(
+            KeyCode::Right,
+            KeyModifiers::NONE,
+        )))
+        .expect("right arrow should be handled");
 
         assert_eq!(app.cwd, root);
         assert_eq!(
@@ -663,8 +677,11 @@ mod tests {
         app.view_mode = ViewMode::List;
         app.select_index(0);
 
-        app.handle_event(Event::Key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)))
-            .expect("right arrow should be handled");
+        app.handle_event(Event::Key(KeyEvent::new(
+            KeyCode::Right,
+            KeyModifiers::NONE,
+        )))
+        .expect("right arrow should be handled");
 
         assert_eq!(app.cwd, child);
 
@@ -779,6 +796,51 @@ mod tests {
         assert!(app.process_pending_scroll());
         assert_eq!(app.preview_horizontal_scroll, 1);
 
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn opening_a_removed_directory_does_not_bubble_an_error() {
+        let root = temp_path("removed-directory-open");
+        let child = root.join("child");
+        fs::create_dir_all(&child).expect("failed to create temp dirs");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        fs::remove_dir_all(&child).expect("failed to remove child dir");
+
+        app.handle_event(Event::Key(KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::NONE,
+        )))
+        .expect("stale directory open should be handled");
+
+        assert_eq!(app.cwd, root);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn opening_a_protected_directory_reports_permission_denied() {
+        let root = temp_path("protected-directory-open");
+        let child = root.join("child");
+        fs::create_dir_all(&child).expect("failed to create temp dirs");
+        fs::set_permissions(&child, fs::Permissions::from_mode(0o000))
+            .expect("failed to lock child dir");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+        app.handle_event(Event::Key(KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::NONE,
+        )))
+        .expect("protected directory open should be handled");
+
+        assert_eq!(app.cwd, root);
+        assert!(app.status_message().contains("Permission denied"));
+
+        fs::set_permissions(&child, fs::Permissions::from_mode(0o755))
+            .expect("failed to unlock child dir");
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
 }
