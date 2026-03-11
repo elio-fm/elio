@@ -37,6 +37,7 @@ const SEARCH_MATCH_LIMIT: usize = 250;
 const SEARCH_CACHE_LIMIT: usize = 32;
 const PREVIEW_CACHE_LIMIT: usize = 24;
 const PREVIEW_PREFETCH_LIMIT: usize = 2;
+const PREVIEW_VIEW_MEMORY_LIMIT: usize = 128;
 const AUTO_RELOAD_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -320,6 +321,24 @@ struct HistoryEntry {
     selected_path: Option<PathBuf>,
 }
 
+#[derive(Clone, Debug, Default)]
+struct DirectoryViewMemory {
+    selected_path: Option<PathBuf>,
+    scroll_row: usize,
+}
+
+#[derive(Clone, Debug, Default)]
+struct PreviewViewMemory {
+    scroll: usize,
+    horizontal_scroll: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum PreviewLoadState {
+    Placeholder(PathBuf),
+    Refreshing(PathBuf),
+}
+
 #[derive(Clone, Debug)]
 struct PendingDirectoryLoad {
     token: u64,
@@ -360,9 +379,12 @@ pub struct App {
     preview_token: u64,
     scheduler: JobScheduler,
     preview_metrics: PreviewMetrics,
+    preview_load_state: Option<PreviewLoadState>,
     preview_result_cache: HashMap<PathBuf, CachedPreview>,
     preview_result_order: VecDeque<PathBuf>,
-    directory_selection_memory: HashMap<PathBuf, PathBuf>,
+    preview_view_memory: HashMap<PathBuf, PreviewViewMemory>,
+    preview_view_order: VecDeque<PathBuf>,
+    directory_view_memory: HashMap<PathBuf, DirectoryViewMemory>,
     directory_watch_tx: std::sync::mpsc::Sender<watching::DirectoryWatchEvent>,
     directory_watch_rx: std::sync::mpsc::Receiver<watching::DirectoryWatchEvent>,
     directory_watch: Option<watching::DirectoryWatcher>,
@@ -412,9 +434,12 @@ impl App {
             preview_token: 0,
             scheduler,
             preview_metrics: PreviewMetrics::default(),
+            preview_load_state: None,
             preview_result_cache: HashMap::new(),
             preview_result_order: VecDeque::new(),
-            directory_selection_memory: HashMap::new(),
+            preview_view_memory: HashMap::new(),
+            preview_view_order: VecDeque::new(),
+            directory_view_memory: HashMap::new(),
             directory_watch_tx,
             directory_watch_rx,
             directory_watch: None,
@@ -458,7 +483,7 @@ impl App {
         app.entries = snapshot.entries;
         app.directory_fingerprint = snapshot.fingerprint;
         app.clamp_selection();
-        app.remember_current_directory_selection();
+        app.remember_current_directory_view();
         app.refresh_preview();
         app.reset_directory_watch();
         Ok(app)
@@ -466,7 +491,10 @@ impl App {
 
     pub fn set_frame_state(&mut self, frame_state: FrameState) -> bool {
         self.frame_state = frame_state;
-        self.sync_scroll() | self.sync_search_scroll() | self.sync_preview_scroll()
+        let dirty = self.sync_scroll() | self.sync_search_scroll() | self.sync_preview_scroll();
+        self.remember_current_directory_view();
+        self.remember_current_preview_view();
+        dirty
     }
 
     pub fn selected_entry(&self) -> Option<&Entry> {

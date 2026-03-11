@@ -90,6 +90,14 @@ impl App {
                     }
 
                     self.preview_cache = build.result;
+                    self.preview_load_state = None;
+                    let remembered_preview = self.remembered_preview_view_for(&build.entry.path);
+                    self.preview_scroll = remembered_preview.as_ref().map_or(0, |view| view.scroll);
+                    self.preview_horizontal_scroll = remembered_preview
+                        .as_ref()
+                        .map_or(0, |view| view.horizontal_scroll);
+                    self.sync_preview_scroll();
+                    self.remember_current_preview_view();
                     self.preview_metrics.applied_results += 1;
                     dirty = true;
                 }
@@ -144,6 +152,17 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
         panic!("timed out waiting for background preview");
+    }
+
+    fn wait_for_directory_load(app: &mut App) {
+        for _ in 0..100 {
+            let _ = app.process_background_jobs();
+            if app.pending_directory_load.is_none() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        panic!("timed out waiting for directory load");
     }
 
     fn write_docx_fixture(path: &Path) {
@@ -352,6 +371,79 @@ mod tests {
         let metrics = app.preview_metrics();
         assert_eq!(metrics.cache_hits, 1);
         assert_eq!(metrics.cache_misses, 1);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn archive_preview_restores_saved_scroll_after_async_refresh() {
+        let root = temp_path("archive-scroll-restore");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let archive = root.join("a.zip");
+        let archive_entries = (0..10)
+            .map(|index| (format!("docs/{index}.txt"), format!("hello {index}")))
+            .collect::<Vec<_>>();
+        let archive_refs = archive_entries
+            .iter()
+            .map(|(name, contents)| (name.as_str(), contents.as_str()))
+            .collect::<Vec<_>>();
+        write_zip_entries(&archive, &archive_refs);
+        let text = root.join("z.txt");
+        fs::write(&text, "plain text").expect("failed to write text file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.set_frame_state(FrameState {
+            preview_rows_visible: 4,
+            preview_cols_visible: 40,
+            ..FrameState::default()
+        });
+        wait_for_background_preview(&mut app);
+
+        app.preview_scroll = 2;
+        app.sync_preview_scroll();
+        assert_eq!(app.preview_scroll, 2);
+
+        app.set_selected(1);
+
+        let updated_entries = (0..12)
+            .map(|index| (format!("docs/{index}.txt"), format!("updated {index}")))
+            .collect::<Vec<_>>();
+        let updated_refs = updated_entries
+            .iter()
+            .map(|(name, contents)| (name.as_str(), contents.as_str()))
+            .collect::<Vec<_>>();
+        write_zip_entries(&archive, &updated_refs);
+        app.reload().expect("reload should queue successfully");
+        wait_for_directory_load(&mut app);
+
+        app.set_selected(0);
+        assert_eq!(app.preview_section_label(), "Archive");
+        assert_eq!(app.preview_scroll, 2);
+        assert!(
+            app.preview_header_detail(10)
+                .as_deref()
+                .is_some_and(|detail| detail.contains("Refreshing in background"))
+        );
+        assert!(
+            app.preview_lines()
+                .iter()
+                .all(|line| !line.to_string().contains("Loading preview"))
+        );
+
+        wait_for_background_preview(&mut app);
+
+        assert_eq!(app.preview_section_label(), "Archive");
+        assert_eq!(app.preview_scroll, 2);
+        assert!(
+            app.preview_header_detail(10)
+                .as_deref()
+                .is_some_and(|detail| !detail.contains("Refreshing in background"))
+        );
+        assert!(
+            app.preview_lines()
+                .iter()
+                .any(|line| line.to_string().contains("docs/"))
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

@@ -90,31 +90,70 @@ impl App {
 
     pub(super) fn refresh_preview(&mut self) {
         self.preview_token = self.preview_token.wrapping_add(1);
+        let remembered_preview = self.remembered_preview_view_for_selected_entry();
+        let mut restore_preview_view = true;
         self.preview_cache = match self.selected_entry().cloned() {
             Some(entry) if preview::should_build_preview_in_background(&entry) => {
                 if let Some(preview) = self.cached_preview_for(&entry) {
                     self.preview_metrics.cache_hits += 1;
+                    self.preview_load_state = None;
                     preview
-                } else {
+                } else if let Some(stale_preview) = self.stale_cached_preview_for(&entry) {
                     self.preview_metrics.cache_misses += 1;
-                    let placeholder = preview::loading_preview_for(&entry);
+                    let loading_path = entry.path.clone();
                     let request = PreviewRequest {
                         token: self.preview_token,
                         entry,
                         priority: PreviewPriority::High,
                     };
                     if !self.scheduler.submit_preview(request) {
+                        self.preview_load_state = None;
+                        stale_preview.with_status_note("Refresh unavailable")
+                    } else {
+                        self.preview_load_state = Some(PreviewLoadState::Refreshing(loading_path));
+                        stale_preview.with_status_note("Refreshing in background")
+                    }
+                } else {
+                    self.preview_metrics.cache_misses += 1;
+                    let placeholder = preview::loading_preview_for(&entry);
+                    let loading_path = entry.path.clone();
+                    let request = PreviewRequest {
+                        token: self.preview_token,
+                        entry,
+                        priority: PreviewPriority::High,
+                    };
+                    if !self.scheduler.submit_preview(request) {
+                        self.preview_load_state = None;
+                        restore_preview_view = false;
                         preview::PreviewContent::placeholder("Preview worker unavailable")
                     } else {
+                        self.preview_load_state = Some(PreviewLoadState::Placeholder(loading_path));
+                        restore_preview_view = false;
                         placeholder
                     }
                 }
             }
-            Some(entry) => preview::build_preview(&entry),
-            None => preview::PreviewContent::placeholder("No selection"),
+            Some(entry) => {
+                self.preview_load_state = None;
+                preview::build_preview(&entry)
+            }
+            None => {
+                self.preview_load_state = None;
+                restore_preview_view = false;
+                preview::PreviewContent::placeholder("No selection")
+            }
         };
-        self.preview_scroll = 0;
-        self.preview_horizontal_scroll = 0;
+        if restore_preview_view {
+            self.preview_scroll = remembered_preview.as_ref().map_or(0, |view| view.scroll);
+            self.preview_horizontal_scroll = remembered_preview
+                .as_ref()
+                .map_or(0, |view| view.horizontal_scroll);
+            self.sync_preview_scroll();
+            self.remember_current_preview_view();
+        } else {
+            self.preview_scroll = 0;
+            self.preview_horizontal_scroll = 0;
+        }
         self.prefetch_nearby_previews();
     }
 
@@ -125,6 +164,12 @@ impl App {
         } else {
             None
         }
+    }
+
+    fn stale_cached_preview_for(&self, entry: &Entry) -> Option<preview::PreviewContent> {
+        self.preview_result_cache
+            .get(&entry.path)
+            .map(|cached| cached.preview.clone())
     }
 
     pub(super) fn cache_preview_result(
@@ -186,6 +231,7 @@ impl App {
         snapshot: support::DirectorySnapshot,
     ) {
         let cwd_changed = load.target_cwd != self.cwd;
+        let remembered_view = self.remembered_view_for(&load.target_cwd);
         self.cwd = load.target_cwd.clone();
         self.entries = snapshot.entries;
         self.sidebar = support::build_sidebar_items();
@@ -193,6 +239,14 @@ impl App {
         self.last_auto_reload_at = Instant::now();
 
         self.selected = if let Some(path) = &load.reselect_path {
+            self.entries
+                .iter()
+                .position(|entry| entry.path == *path)
+                .unwrap_or(0)
+        } else if let Some(path) = remembered_view
+            .as_ref()
+            .and_then(|view| view.selected_path.as_ref())
+        {
             self.entries
                 .iter()
                 .position(|entry| entry.path == *path)
@@ -205,10 +259,10 @@ impl App {
         } else {
             0
         };
-        self.scroll_row = 0;
+        self.scroll_row = remembered_view.map_or(0, |view| view.scroll_row);
         self.clamp_selection();
-        self.remember_current_directory_selection();
         self.sync_scroll();
+        self.remember_current_directory_view();
         self.refresh_preview();
         self.clear_wheel_scroll();
 
@@ -292,16 +346,52 @@ impl App {
         self.preview_result_cache.contains_key(path)
     }
 
-    fn remembered_selection_for(&self, cwd: &Path) -> Option<PathBuf> {
-        self.directory_selection_memory.get(cwd).cloned()
+    fn remembered_view_for(&self, cwd: &Path) -> Option<DirectoryViewMemory> {
+        self.directory_view_memory.get(cwd).cloned()
     }
 
-    pub(super) fn remember_current_directory_selection(&mut self) {
-        if let Some(entry) = self.selected_entry() {
-            self.directory_selection_memory
-                .insert(self.cwd.clone(), entry.path.clone());
-        } else {
-            self.directory_selection_memory.remove(&self.cwd);
+    pub(super) fn remembered_preview_view_for(&self, path: &Path) -> Option<PreviewViewMemory> {
+        self.preview_view_memory.get(path).cloned()
+    }
+
+    fn remembered_preview_view_for_selected_entry(&self) -> Option<PreviewViewMemory> {
+        self.selected_entry()
+            .and_then(|entry| self.remembered_preview_view_for(&entry.path))
+    }
+
+    pub(super) fn remember_current_directory_view(&mut self) {
+        self.directory_view_memory.insert(
+            self.cwd.clone(),
+            DirectoryViewMemory {
+                selected_path: self.selected_entry().map(|entry| entry.path.clone()),
+                scroll_row: self.scroll_row,
+            },
+        );
+    }
+
+    pub(super) fn remember_current_preview_view(&mut self) {
+        let Some(path) = self.selected_entry().map(|entry| entry.path.clone()) else {
+            return;
+        };
+        if self.preview_load_state.as_ref() == Some(&PreviewLoadState::Placeholder(path.clone())) {
+            return;
+        }
+
+        self.preview_view_memory.insert(
+            path.clone(),
+            PreviewViewMemory {
+                scroll: self.preview_scroll,
+                horizontal_scroll: self.preview_horizontal_scroll,
+            },
+        );
+        self.preview_view_order
+            .retain(|queued_path| queued_path != &path);
+        self.preview_view_order.push_back(path);
+
+        while self.preview_view_order.len() > PREVIEW_VIEW_MEMORY_LIMIT {
+            if let Some(stale_path) = self.preview_view_order.pop_front() {
+                self.preview_view_memory.remove(&stale_path);
+            }
         }
     }
 
@@ -336,13 +426,16 @@ impl App {
     pub(super) fn set_selected(&mut self, index: usize) {
         let next = index.min(self.entries.len().saturating_sub(1));
         if next != self.selected {
+            self.remember_current_preview_view();
+        }
+        if next != self.selected {
             self.selected = next;
             self.refresh_preview();
         } else {
             self.selected = next;
         }
-        self.remember_current_directory_selection();
         self.sync_scroll();
+        self.remember_current_directory_view();
     }
 
     pub(super) fn set_selected_last(&mut self) {
@@ -440,6 +533,7 @@ impl App {
             self.scroll_row = 0;
             self.preview_cache = preview::PreviewContent::placeholder("No selection");
             self.preview_scroll = 0;
+            self.preview_horizontal_scroll = 0;
         } else if self.selected >= self.entries.len() {
             self.selected = self.entries.len() - 1;
         }
@@ -516,7 +610,11 @@ impl App {
             return Ok(());
         }
 
-        let reselect_path = reselect_path.or_else(|| self.remembered_selection_for(&normalized));
+        let reselect_path = reselect_path.or_else(|| {
+            self.remembered_view_for(&normalized)
+                .and_then(|view| view.selected_path)
+        });
+        self.remember_current_preview_view();
         self.status = format!("Opening {}", normalized.display());
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
@@ -895,6 +993,35 @@ mod tests {
             }]
         );
         assert!(app.forward_history.is_empty());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn reload_restores_latest_remembered_view_state() {
+        let root = temp_path("reload-latest-view-state");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        for index in 0..8 {
+            fs::write(root.join(format!("file-{index}.txt")), format!("{index}"))
+                .expect("failed to write file");
+        }
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.view_mode = ViewMode::List;
+        app.set_frame_state(FrameState {
+            metrics: ViewMetrics {
+                cols: 1,
+                rows_visible: 3,
+            },
+            ..FrameState::default()
+        });
+
+        app.reload().expect("reload should queue successfully");
+        app.select_index(6);
+        wait_for_directory_load(&mut app);
+
+        assert_eq!(app.selected, 6);
+        assert_eq!(app.scroll_row, 4);
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

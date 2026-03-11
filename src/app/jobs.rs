@@ -67,7 +67,7 @@ pub(super) struct PreviewRequest {
 pub(super) enum JobResult {
     Directory(DirectoryBuild),
     Search(SearchBuild),
-    Preview(PreviewBuild),
+    Preview(Box<PreviewBuild>),
 }
 
 #[cfg(test)]
@@ -615,11 +615,11 @@ impl PreviewPool {
                     PreviewShared::finish(&shared, &key);
                     lock_unpoison(&metrics).record_preview_completed(started_at.elapsed());
                     if result_tx
-                        .send(JobResult::Preview(PreviewBuild {
+                        .send(JobResult::Preview(Box::new(PreviewBuild {
                             token: request.token,
                             entry: request.entry,
                             result,
-                        }))
+                        })))
                         .is_err()
                     {
                         break;

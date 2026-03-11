@@ -69,6 +69,7 @@ impl PreviewKind {
 pub(super) struct PreviewContent {
     pub kind: PreviewKind,
     pub detail: Option<String>,
+    pub status_note: Option<String>,
     pub truncated: bool,
     pub truncation_note: Option<String>,
     pub source_lines: Option<usize>,
@@ -162,6 +163,7 @@ impl PreviewContent {
         Self {
             kind,
             detail: None,
+            status_note: None,
             truncated: false,
             truncation_note: None,
             source_lines: None,
@@ -181,6 +183,11 @@ impl PreviewContent {
 
     pub(super) fn with_detail(mut self, detail: impl Into<String>) -> Self {
         self.detail = Some(detail.into());
+        self
+    }
+
+    pub(super) fn with_status_note(mut self, note: impl Into<String>) -> Self {
+        self.status_note = Some(note.into());
         self
     }
 
@@ -244,6 +251,12 @@ impl PreviewContent {
             && !detail.is_empty()
         {
             parts.push(detail.clone());
+        }
+
+        if let Some(note) = &self.status_note
+            && !note.is_empty()
+        {
+            parts.push(note.clone());
         }
 
         if let Some(source_lines) = self.source_lines {

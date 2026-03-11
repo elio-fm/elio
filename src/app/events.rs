@@ -593,6 +593,7 @@ impl App {
         self.preview_scroll = self.preview_scroll.min(max_scroll);
         let max_horizontal = self.preview_max_horizontal_scroll(visible_cols);
         self.preview_horizontal_scroll = self.preview_horizontal_scroll.min(max_horizontal);
+        self.remember_current_preview_view();
         previous != self.preview_scroll || previous_horizontal != self.preview_horizontal_scroll
     }
 
@@ -858,6 +859,46 @@ mod tests {
     }
 
     #[test]
+    fn reopening_directory_restores_scroll_position() {
+        let root = temp_path("reopen-directory-scroll");
+        let child = root.join("child");
+        fs::create_dir_all(&child).expect("failed to create child dir");
+        for index in 0..8 {
+            fs::write(child.join(format!("file-{index}.txt")), format!("{index}"))
+                .expect("failed to write file");
+        }
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.view_mode = ViewMode::List;
+        app.set_frame_state(FrameState {
+            metrics: ViewMetrics {
+                cols: 1,
+                rows_visible: 3,
+            },
+            ..FrameState::default()
+        });
+        app.select_index(0);
+        app.open_selected()
+            .expect("opening selected directory should succeed");
+        wait_for_directory_load(&mut app);
+
+        app.select_index(6);
+        assert_eq!(app.scroll_row, 4);
+
+        app.go_parent().expect("go parent should succeed");
+        wait_for_directory_load(&mut app);
+        app.open_selected()
+            .expect("reopening selected directory should succeed");
+        wait_for_directory_load(&mut app);
+
+        assert_eq!(app.cwd, child);
+        assert_eq!(app.selected, 6);
+        assert_eq!(app.scroll_row, 4);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn reopening_parent_restores_last_selected_child_directory() {
         let root = temp_path("reopen-parent-selection");
         let home = root.join("home");
@@ -899,6 +940,51 @@ mod tests {
     }
 
     #[test]
+    fn reopening_parent_restores_scroll_position() {
+        let root = temp_path("reopen-parent-scroll");
+        let home = root.join("home");
+        let child_paths = (0..8)
+            .map(|index| home.join(format!("child-{index}")))
+            .collect::<Vec<_>>();
+        for child in &child_paths {
+            fs::create_dir_all(child).expect("failed to create child dir");
+        }
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.view_mode = ViewMode::List;
+        app.set_frame_state(FrameState {
+            metrics: ViewMetrics {
+                cols: 1,
+                rows_visible: 3,
+            },
+            ..FrameState::default()
+        });
+        app.select_index(0);
+        app.open_selected().expect("opening home should succeed");
+        wait_for_directory_load(&mut app);
+
+        app.select_index(6);
+        assert_eq!(app.scroll_row, 4);
+
+        app.open_selected()
+            .expect("opening remembered child should succeed");
+        wait_for_directory_load(&mut app);
+        app.go_parent().expect("go parent to home should succeed");
+        wait_for_directory_load(&mut app);
+        app.go_parent().expect("go parent to root should succeed");
+        wait_for_directory_load(&mut app);
+
+        app.open_selected().expect("reopening home should succeed");
+        wait_for_directory_load(&mut app);
+
+        assert_eq!(app.cwd, home);
+        assert_eq!(app.selected, 6);
+        assert_eq!(app.scroll_row, 4);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn preview_horizontal_scroll_works_in_list_view() {
         let root = temp_path("preview-horizontal-list");
         fs::create_dir_all(&root).expect("failed to create temp root");
@@ -933,6 +1019,94 @@ mod tests {
         .expect("scroll right should be handled");
         assert!(app.process_pending_scroll());
         assert_eq!(app.preview_horizontal_scroll, 1);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn preview_scroll_is_restored_when_reselecting_a_file() {
+        let root = temp_path("preview-scroll-restore");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let long = root.join("a.txt");
+        let other = root.join("b.txt");
+        let contents = (0..24)
+            .map(|index| format!("line {index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&long, contents).expect("failed to write long text file");
+        fs::write(&other, "short\ntext").expect("failed to write other text file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.view_mode = ViewMode::List;
+        app.select_index(0);
+        app.set_frame_state(FrameState {
+            preview_panel: Some(Rect {
+                x: 0,
+                y: 0,
+                width: 40,
+                height: 8,
+            }),
+            preview_rows_visible: 4,
+            preview_cols_visible: 40,
+            ..FrameState::default()
+        });
+
+        app.preview_scroll = 5;
+        app.sync_preview_scroll();
+        assert_eq!(app.preview_scroll, 5);
+
+        app.select_index(1);
+        app.select_index(0);
+
+        assert_eq!(
+            app.selected_entry().map(|entry| entry.path.as_path()),
+            Some(long.as_path())
+        );
+        assert_eq!(app.preview_scroll, 5);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn preview_horizontal_scroll_is_restored_when_reselecting_code() {
+        let root = temp_path("preview-horizontal-restore");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let code = root.join("a.rs");
+        let other = root.join("b.txt");
+        fs::write(
+            &code,
+            "fn main() { let preview_line = \"this line is intentionally long for horizontal preview scrolling\"; }\n",
+        )
+        .expect("failed to write code file");
+        fs::write(&other, "short\ntext").expect("failed to write other text file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.view_mode = ViewMode::List;
+        app.select_index(0);
+        app.set_frame_state(FrameState {
+            preview_panel: Some(Rect {
+                x: 0,
+                y: 0,
+                width: 20,
+                height: 8,
+            }),
+            preview_rows_visible: 6,
+            preview_cols_visible: 12,
+            ..FrameState::default()
+        });
+
+        app.preview_horizontal_scroll = 3;
+        app.sync_preview_scroll();
+        assert_eq!(app.preview_horizontal_scroll, 3);
+
+        app.select_index(1);
+        app.select_index(0);
+
+        assert_eq!(
+            app.selected_entry().map(|entry| entry.path.as_path()),
+            Some(code.as_path())
+        );
+        assert_eq!(app.preview_horizontal_scroll, 3);
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
