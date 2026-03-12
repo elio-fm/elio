@@ -366,9 +366,17 @@ impl Theme {
             ("txt".to_string(), rule_class(FileClass::Document)),
             ("rst".to_string(), rule_class(FileClass::Document)),
             ("pdf".to_string(), rule_class(FileClass::Document)),
-            ("doc".to_string(), rule_class(FileClass::Document)),
-            ("docx".to_string(), rule_class(FileClass::Document)),
-            ("odt".to_string(), rule_class(FileClass::Document)),
+            ("doc".to_string(), rule_document_file()),
+            ("docx".to_string(), rule_document_file()),
+            ("docm".to_string(), rule_document_file()),
+            ("odt".to_string(), rule_document_file()),
+            ("ods".to_string(), rule_spreadsheet_file()),
+            ("xlsx".to_string(), rule_spreadsheet_file()),
+            ("xlsm".to_string(), rule_spreadsheet_file()),
+            ("odp".to_string(), rule_presentation_file()),
+            ("pptx".to_string(), rule_presentation_file()),
+            ("pptm".to_string(), rule_presentation_file()),
+            ("pages".to_string(), rule_document_file()),
             ("png".to_string(), rule_class(FileClass::Image)),
             ("jpg".to_string(), rule_class(FileClass::Image)),
             ("jpeg".to_string(), rule_class(FileClass::Image)),
@@ -841,6 +849,30 @@ fn rule_class(class: FileClass) -> RuleOverride {
     }
 }
 
+fn rule_document_file() -> RuleOverride {
+    RuleOverride {
+        class: Some(FileClass::Document),
+        icon: Some("󰈬".to_string()),
+        color: Some(rgb(88, 142, 255)),
+    }
+}
+
+fn rule_spreadsheet_file() -> RuleOverride {
+    RuleOverride {
+        class: Some(FileClass::Document),
+        icon: Some("󱎏".to_string()),
+        color: Some(rgb(78, 178, 116)),
+    }
+}
+
+fn rule_presentation_file() -> RuleOverride {
+    RuleOverride {
+        class: Some(FileClass::Document),
+        icon: Some("󱎐".to_string()),
+        color: Some(rgb(232, 139, 63)),
+    }
+}
+
 fn builtin_classify_path(path: &Path, kind: EntryKind) -> FileClass {
     file_facts::inspect_path(path, kind).builtin_class
 }
@@ -961,6 +993,50 @@ macro = "#fedcba"
 
         let modules = theme.resolve(Path::new("node_modules"), EntryKind::Directory);
         assert_eq!(modules.icon, "󰏗");
+    }
+
+    #[test]
+    fn word_processing_documents_get_blue_document_icons() {
+        let theme = Theme::default_theme();
+
+        let docx = theme.resolve(Path::new("report.docx"), EntryKind::File);
+        assert_eq!(docx.class, FileClass::Document);
+        assert_eq!(docx.icon, "󰈬");
+        assert_eq!(docx.color, rgb(88, 142, 255));
+
+        let odt = theme.resolve(Path::new("notes.odt"), EntryKind::File);
+        assert_eq!(odt.class, FileClass::Document);
+        assert_eq!(odt.icon, "󰈬");
+        assert_eq!(odt.color, rgb(88, 142, 255));
+
+        let markdown = theme.resolve(Path::new("README.md"), EntryKind::File);
+        assert_eq!(markdown.class, FileClass::Document);
+        assert_ne!(markdown.icon, "󰈬");
+    }
+
+    #[test]
+    fn spreadsheets_and_presentations_get_family_specific_icons() {
+        let theme = Theme::default_theme();
+
+        let xlsx = theme.resolve(Path::new("budget.xlsx"), EntryKind::File);
+        assert_eq!(xlsx.class, FileClass::Document);
+        assert_eq!(xlsx.icon, "󱎏");
+        assert_eq!(xlsx.color, rgb(78, 178, 116));
+
+        let ods = theme.resolve(Path::new("budget.ods"), EntryKind::File);
+        assert_eq!(ods.class, FileClass::Document);
+        assert_eq!(ods.icon, "󱎏");
+        assert_eq!(ods.color, rgb(78, 178, 116));
+
+        let pptx = theme.resolve(Path::new("deck.pptx"), EntryKind::File);
+        assert_eq!(pptx.class, FileClass::Document);
+        assert_eq!(pptx.icon, "󱎐");
+        assert_eq!(pptx.color, rgb(232, 139, 63));
+
+        let odp = theme.resolve(Path::new("deck.odp"), EntryKind::File);
+        assert_eq!(odp.class, FileClass::Document);
+        assert_eq!(odp.icon, "󱎐");
+        assert_eq!(odp.color, rgb(232, 139, 63));
     }
 
     #[test]

@@ -75,13 +75,11 @@ mod tests {
 
         let preview = attempt.preview.expect("jsonc should render");
         assert_eq!(preview.detail, "JSONC (structured)");
-        assert!(
-            preview
-                .lines
-                .iter()
-                .flat_map(|line| line.spans.iter())
-                .any(|span| span.content.contains("name"))
-        );
+        assert!(preview
+            .lines
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .any(|span| span.content.contains("name")));
     }
 
     #[test]
@@ -91,13 +89,11 @@ mod tests {
 
         let preview = attempt.preview.expect("dotenv should render");
         assert_eq!(preview.detail, ".env (structured)");
-        assert!(
-            preview
-                .lines
-                .iter()
-                .flat_map(|line| line.spans.iter())
-                .any(|span| span.content.contains("APP_ENV"))
-        );
+        assert!(preview
+            .lines
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .any(|span| span.content.contains("APP_ENV")));
     }
 
     #[test]
@@ -110,19 +106,15 @@ mod tests {
 
         let preview = attempt.preview.expect("log should render");
         assert_eq!(preview.detail, "Log (structured)");
-        assert!(
-            preview
-                .lines
-                .iter()
-                .flat_map(|line| line.spans.iter())
-                .any(|span| span.content.contains("ERROR"))
-        );
-        assert!(
-            preview
-                .lines
-                .iter()
-                .flat_map(|line| line.spans.iter())
-                .any(|span| span.content.contains("request_id"))
-        );
+        assert!(preview
+            .lines
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .any(|span| span.content.contains("ERROR")));
+        assert!(preview
+            .lines
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .any(|span| span.content.contains("request_id")));
     }
 }

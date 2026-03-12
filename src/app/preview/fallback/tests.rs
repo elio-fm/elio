@@ -28,12 +28,10 @@ fn jsonc_fallback_renderer_keeps_comments() {
         true,
     );
 
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("// comment"))
-    );
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("// comment")));
 }
 
 #[test]
@@ -44,18 +42,14 @@ fn jsonc_fallback_renderer_keeps_multiline_block_comments() {
         true,
     );
 
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("/* first line"))
-    );
-    assert!(
-        lines[2]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("second line */"))
-    );
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("/* first line")));
+    assert!(lines[2]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("second line */")));
 }
 
 #[test]
@@ -71,12 +65,10 @@ fn desktop_fallback_renderer_handles_unicode_values() {
         true,
     );
 
-    assert!(
-        lines
-            .iter()
-            .flat_map(|line| line.spans.iter())
-            .any(|span| span.content.contains("日本語アプリ"))
-    );
+    assert!(lines
+        .iter()
+        .flat_map(|line| line.spans.iter())
+        .any(|span| span.content.contains("日本語アプリ")));
 }
 
 #[test]
@@ -87,18 +79,14 @@ fn log_fallback_renderer_highlights_levels_and_fields() {
         true,
     );
 
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("ERROR"))
-    );
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("request_id"))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("ERROR")));
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("request_id")));
 }
 
 #[test]
@@ -109,30 +97,22 @@ fn markup_fallback_renderer_highlights_tags_attributes_and_comments() {
         true,
     );
 
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("<!-- note -->"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("div"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("class"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("\"app\""))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("<!-- note -->")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("div")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("class")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("\"app\"")));
 }
 
 #[test]
@@ -143,18 +123,14 @@ fn markup_fallback_renderer_keeps_multiline_comments() {
         true,
     );
 
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("<!-- first line"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("second line -->"))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("<!-- first line")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("second line -->")));
 }
 
 #[test]
@@ -165,18 +141,14 @@ fn css_fallback_renderer_highlights_properties_and_values() {
         true,
     );
 
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("color"))
-    );
-    assert!(
-        lines[2]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("12px"))
-    );
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("color")));
+    assert!(lines[2]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("12px")));
 }
 
 #[test]
@@ -188,24 +160,18 @@ fn c_like_fallback_renderer_highlights_directives_comments_and_calls() {
     );
 
     assert!(lines[0].spans.iter().any(|span| span.content.contains("#")));
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("include"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("main"))
-    );
-    assert!(
-        lines[2]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("/* note */"))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("include")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("main")));
+    assert!(lines[2]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("/* note */")));
 }
 
 #[test]
@@ -216,18 +182,14 @@ fn c_like_fallback_renderer_handles_unicode_without_panicking() {
         true,
     );
 
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("👋"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("// áéíóú"))
-    );
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("👋")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("// áéíóú")));
 }
 
 #[test]
@@ -238,30 +200,22 @@ fn make_fallback_renderer_highlights_rules_variables_and_recipes() {
         true,
     );
 
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("CC"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains(".PHONY"))
-    );
-    assert!(
-        lines[2]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("build"))
-    );
-    assert!(
-        lines[3]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("$(CC)"))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("CC")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains(".PHONY")));
+    assert!(lines[2]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("build")));
+    assert!(lines[3]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("$(CC)")));
 }
 
 #[test]
@@ -272,24 +226,18 @@ fn nix_fallback_renderer_highlights_keywords_strings_and_comments() {
         true,
     );
 
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("let"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("\"elio\""))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("# note"))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("let")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("\"elio\"")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("# note")));
 }
 
 #[test]
@@ -300,18 +248,14 @@ fn nix_fallback_renderer_handles_unicode_without_panicking() {
         true,
     );
 
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("👋"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("# áéíóú"))
-    );
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("👋")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("# áéíóú")));
 }
 
 #[test]
@@ -322,30 +266,22 @@ fn cmake_fallback_renderer_highlights_commands_variables_and_comments() {
         true,
     );
 
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("project"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("NAME"))
-    );
-    assert!(
-        lines[2]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("${NAME}"))
-    );
-    assert!(
-        lines[2]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("# note"))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("project")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("NAME")));
+    assert!(lines[2]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("${NAME}")));
+    assert!(lines[2]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("# note")));
 }
 
 #[test]
@@ -356,18 +292,14 @@ fn cmake_fallback_renderer_handles_unicode_without_panicking() {
         true,
     );
 
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("👋"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("# áéíóú"))
-    );
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("👋")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("# áéíóú")));
 }
 
 #[test]
@@ -378,36 +310,26 @@ fn python_fallback_renderer_highlights_decorators_docstrings_and_comments() {
         true,
     );
 
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("@app.get"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("async"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("greet"))
-    );
-    assert!(
-        lines[2]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("\"\"\"Return a greeting.\"\"\""))
-    );
-    assert!(
-        lines[3]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("# note"))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("@app.get")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("async")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("greet")));
+    assert!(lines[2]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("\"\"\"Return a greeting.\"\"\"")));
+    assert!(lines[3]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("# note")));
 }
 
 #[test]
@@ -418,18 +340,14 @@ fn python_fallback_renderer_handles_unicode_identifiers_without_panicking() {
         true,
     );
 
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("👋"))
-    );
-    assert!(
-        lines[2]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("# áéíóú"))
-    );
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("👋")));
+    assert!(lines[2]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("# áéíóú")));
 }
 
 #[test]
@@ -440,18 +358,14 @@ fn js_like_fallback_renderer_handles_unicode_without_panicking() {
         true,
     );
 
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("👋"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("// áéíóú"))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("👋")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("// áéíóú")));
 }
 
 #[test]
@@ -462,18 +376,14 @@ fn json_fallback_renderer_handles_unicode_without_panicking() {
         true,
     );
 
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("👋"))
-    );
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("áéíóú"))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("👋")));
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("áéíóú")));
 }
 
 #[test]
@@ -485,37 +395,27 @@ fn shell_fallback_renderer_highlights_assignments_keywords_and_expansions() {
     );
     let line_texts: Vec<_> = lines.iter().map(line_text).collect();
 
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("#!"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("NAME"))
-    );
-    assert!(
-        lines[2]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("if"))
-    );
-    assert!(
-        lines[2]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("$NAME"))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("#!")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("NAME")));
+    assert!(lines[2]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("if")));
+    assert!(lines[2]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("$NAME")));
     assert!(line_texts[3].contains("$(whoami)"));
-    assert!(
-        lines[4]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("# done"))
-    );
+    assert!(lines[4]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("# done")));
 }
 
 #[test]
@@ -526,30 +426,22 @@ fn shell_fallback_renderer_keeps_env_prefix_commands_and_function_defs_readable(
         true,
     );
 
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("DEBUG"))
-    );
-    assert!(
-        lines[0]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("printf"))
-    );
-    assert!(
-        lines[1]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("hello"))
-    );
-    assert!(
-        lines[2]
-            .spans
-            .iter()
-            .any(|span| span.content.contains("return"))
-    );
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("DEBUG")));
+    assert!(lines[0]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("printf")));
+    assert!(lines[1]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("hello")));
+    assert!(lines[2]
+        .spans
+        .iter()
+        .any(|span| span.content.contains("return")));
 }
 
 #[test]

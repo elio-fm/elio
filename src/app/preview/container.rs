@@ -1,5 +1,5 @@
 use super::*;
-use crate::appearance;
+use crate::{appearance, file_facts};
 use ratatui::{
     style::Style,
     text::{Line, Span},
@@ -271,17 +271,29 @@ fn detect_archive_format(path: &Path) -> ArchiveFormat {
         .and_then(|name| name.to_str())
         .map(|name| name.to_ascii_lowercase())
         .unwrap_or_default();
-    if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
-        return ArchiveFormat::TarGzip;
-    }
-    if name.ends_with(".tar.xz") || name.ends_with(".txz") {
-        return ArchiveFormat::TarXz;
-    }
-    if name.ends_with(".tar.bz2") || name.ends_with(".tbz2") || name.ends_with(".tbz") {
-        return ArchiveFormat::TarBzip2;
-    }
-    if name.ends_with(".tar.zst") || name.ends_with(".tzst") {
-        return ArchiveFormat::TarZstd;
+    if let Some(kind) = file_facts::inspect_compound_archive_name(&name) {
+        return match kind {
+            file_facts::CompoundArchiveKind::TarGzip => ArchiveFormat::TarGzip,
+            file_facts::CompoundArchiveKind::TarXz => ArchiveFormat::TarXz,
+            file_facts::CompoundArchiveKind::TarBzip2 => ArchiveFormat::TarBzip2,
+            file_facts::CompoundArchiveKind::TarZstd => ArchiveFormat::TarZstd,
+            file_facts::CompoundArchiveKind::CompressedDiskImage {
+                compression: file_facts::CompressionKind::Gzip,
+                ..
+            } => ArchiveFormat::Gzip,
+            file_facts::CompoundArchiveKind::CompressedDiskImage {
+                compression: file_facts::CompressionKind::Xz,
+                ..
+            } => ArchiveFormat::Xz,
+            file_facts::CompoundArchiveKind::CompressedDiskImage {
+                compression: file_facts::CompressionKind::Bzip2,
+                ..
+            } => ArchiveFormat::Bzip2,
+            file_facts::CompoundArchiveKind::CompressedDiskImage {
+                compression: file_facts::CompressionKind::Zstd,
+                ..
+            } => ArchiveFormat::Zstd,
+        };
     }
 
     match path
@@ -425,7 +437,28 @@ fn build_external_archive_preview(
     type_detail: Option<&'static str>,
 ) -> Option<PreviewContent> {
     let detail = type_detail.unwrap_or(archive_default_label(format));
-    if let Some((metadata, entries)) = collect_archive_listing_with_7z(path) {
+    if let Some(entries) = collect_preferred_archive_entries(path, format) {
+        return Some(render_archive_preview(ArchiveRenderConfig {
+            detail: detail.to_string(),
+            metadata: ArchiveMetadata {
+                format_label: Some(archive_format_name(format).to_string()),
+                ..ArchiveMetadata::default()
+            },
+            entries: Some(entries),
+            total_entries_hint: None,
+            empty_label: archive_is_empty_label(format),
+            unavailable_label: "Unable to read archive contents",
+            extra_sections: Vec::new(),
+            scan_truncated: false,
+        }));
+    }
+
+    if let Some((metadata, mut entries)) = collect_archive_listing_with_7z(path) {
+        if entries.is_empty()
+            && let Some(entry) = synthetic_single_file_archive_entry(path, format)
+        {
+            entries.push(entry);
+        }
         return Some(render_archive_preview(ArchiveRenderConfig {
             detail: detail.to_string(),
             metadata,
@@ -438,9 +471,7 @@ fn build_external_archive_preview(
         }));
     }
 
-    let entries = collect_archive_entries_with_bsdtar(path)
-        .or_else(|| collect_archive_entries_with_tar(path))
-        .or_else(|| collect_archive_entries_with_unzip(path))?;
+    let entries = collect_fallback_archive_entries(path)?;
 
     Some(render_archive_preview(ArchiveRenderConfig {
         detail: detail.to_string(),
@@ -455,6 +486,51 @@ fn build_external_archive_preview(
         extra_sections: Vec::new(),
         scan_truncated: false,
     }))
+}
+
+fn collect_preferred_archive_entries(
+    path: &Path,
+    format: ArchiveFormat,
+) -> Option<Vec<ArchiveEntry>> {
+    if prefers_tar_listing(format) {
+        return collect_archive_entries_with_bsdtar(path)
+            .or_else(|| collect_archive_entries_with_tar(path));
+    }
+
+    None
+}
+
+fn collect_fallback_archive_entries(path: &Path) -> Option<Vec<ArchiveEntry>> {
+    collect_archive_entries_with_bsdtar(path)
+        .or_else(|| collect_archive_entries_with_tar(path))
+        .or_else(|| collect_archive_entries_with_unzip(path))
+}
+
+fn prefers_tar_listing(format: ArchiveFormat) -> bool {
+    matches!(
+        format,
+        ArchiveFormat::Tar
+            | ArchiveFormat::TarGzip
+            | ArchiveFormat::TarXz
+            | ArchiveFormat::TarBzip2
+            | ArchiveFormat::TarZstd
+    )
+}
+
+fn synthetic_single_file_archive_entry(path: &Path, format: ArchiveFormat) -> Option<ArchiveEntry> {
+    if !matches!(
+        format,
+        ArchiveFormat::Gzip | ArchiveFormat::Xz | ArchiveFormat::Bzip2 | ArchiveFormat::Zstd
+    ) {
+        return None;
+    }
+
+    let name = path.file_stem()?.to_str()?;
+    let path = normalize_archive_path(name, false)?;
+    Some(ArchiveEntry {
+        path,
+        is_dir: false,
+    })
 }
 
 fn read_iso_metadata(path: &Path) -> Option<IsoMetadata> {

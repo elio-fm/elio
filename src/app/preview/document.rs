@@ -1,6 +1,6 @@
 use super::{PreviewContent, PreviewKind};
 use crate::{appearance, file_facts::DocumentFormat};
-use quick_xml::{Reader, events::Event};
+use quick_xml::{events::Event, Reader};
 use ratatui::{
     style::Style,
     text::{Line, Span},
@@ -10,6 +10,7 @@ use std::{
     fs::File,
     io::{Cursor, Read},
     path::Path,
+    process::Command,
 };
 use zip::ZipArchive;
 
@@ -44,9 +45,8 @@ struct DocumentMetadata {
     application: Option<String>,
     created: Option<String>,
     modified: Option<String>,
-    pages: Option<u64>,
-    words: Option<u64>,
-    characters: Option<u64>,
+    stats: Vec<(String, String)>,
+    metadata: Vec<(String, String)>,
 }
 
 impl DocumentMetadata {
@@ -59,9 +59,8 @@ impl DocumentMetadata {
             && self.application.is_none()
             && self.created.is_none()
             && self.modified.is_none()
-            && self.pages.is_none()
-            && self.words.is_none()
-            && self.characters.is_none()
+            && self.stats.is_empty()
+            && self.metadata.is_empty()
     }
 }
 
@@ -77,9 +76,23 @@ pub(super) fn build_document_preview(
 ) -> Option<PreviewContent> {
     let metadata = match format {
         DocumentFormat::Doc => extract_doc_metadata(path),
-        DocumentFormat::Docx => extract_zip_document_metadata(path, extract_docx_metadata),
-        DocumentFormat::Odt => extract_zip_document_metadata(path, extract_odt_metadata),
+        DocumentFormat::Docx | DocumentFormat::Docm => {
+            extract_zip_document_metadata(path, |archive| extract_ooxml_metadata(archive, format))
+        }
+        DocumentFormat::Odt | DocumentFormat::Ods | DocumentFormat::Odp => {
+            extract_zip_document_metadata(path, |archive| {
+                extract_open_document_metadata(archive, format)
+            })
+        }
+        DocumentFormat::Pptx | DocumentFormat::Pptm => {
+            extract_zip_document_metadata(path, |archive| extract_ooxml_metadata(archive, format))
+        }
+        DocumentFormat::Xlsx | DocumentFormat::Xlsm => {
+            extract_zip_document_metadata(path, |archive| extract_ooxml_metadata(archive, format))
+        }
         DocumentFormat::Pages => extract_zip_document_metadata(path, extract_pages_metadata),
+        DocumentFormat::Epub => extract_zip_document_metadata(path, extract_epub_metadata),
+        DocumentFormat::Pdf => extract_pdf_metadata(path),
     }?;
 
     Some(render_document_preview(format, metadata))
@@ -87,7 +100,7 @@ pub(super) fn build_document_preview(
 
 fn extract_zip_document_metadata(
     path: &Path,
-    extract: fn(&mut ZipArchive<Cursor<Vec<u8>>>) -> DocumentMetadata,
+    extract: impl FnOnce(&mut ZipArchive<Cursor<Vec<u8>>>) -> DocumentMetadata,
 ) -> Option<DocumentMetadata> {
     let mut bytes = Vec::with_capacity(DOCUMENT_PREVIEW_LIMIT_BYTES as usize);
     File::open(path)
@@ -133,9 +146,21 @@ fn extract_doc_metadata(path: &Path) -> Option<DocumentMetadata> {
     metadata.application = doc_property_text(&properties, DOC_PROPERTY_APPLICATION);
     metadata.created = doc_property_time(&properties, DOC_PROPERTY_CREATED);
     metadata.modified = doc_property_time(&properties, DOC_PROPERTY_MODIFIED);
-    metadata.pages = doc_property_count(&properties, DOC_PROPERTY_PAGE_COUNT);
-    metadata.words = doc_property_count(&properties, DOC_PROPERTY_WORD_COUNT);
-    metadata.characters = doc_property_count(&properties, DOC_PROPERTY_CHAR_COUNT);
+    push_count_stat(
+        &mut metadata,
+        "Pages",
+        doc_property_count(&properties, DOC_PROPERTY_PAGE_COUNT),
+    );
+    push_count_stat(
+        &mut metadata,
+        "Words",
+        doc_property_count(&properties, DOC_PROPERTY_WORD_COUNT),
+    );
+    push_count_stat(
+        &mut metadata,
+        "Characters",
+        doc_property_count(&properties, DOC_PROPERTY_CHAR_COUNT),
+    );
 
     Some(metadata)
 }
@@ -158,23 +183,23 @@ fn render_document_preview(format: DocumentFormat, metadata: DocumentMetadata) -
         ("Created", metadata.created),
         ("Modified", metadata.modified),
     ];
-    let stats = vec![
-        ("Pages", metadata.pages.map(format_count)),
-        ("Words", metadata.words.map(format_count)),
-        ("Characters", metadata.characters.map(format_count)),
-    ];
-    let label_width = section_label_width([
-        document.as_slice(),
-        people.as_slice(),
-        dates.as_slice(),
-        stats.as_slice(),
-    ])
-    .max(6);
+    let label_width =
+        section_label_width([document.as_slice(), people.as_slice(), dates.as_slice()])
+            .max(owned_section_label_width(&metadata.stats))
+            .max(owned_section_label_width(&metadata.metadata))
+            .max(6);
 
     push_section(&mut lines, "Document", &document, label_width, palette);
     push_section(&mut lines, "People", &people, label_width, palette);
     push_section(&mut lines, "Dates", &dates, label_width, palette);
-    push_section(&mut lines, "Stats", &stats, label_width, palette);
+    push_owned_section(&mut lines, "Stats", &metadata.stats, label_width, palette);
+    push_owned_section(
+        &mut lines,
+        "Metadata",
+        &metadata.metadata,
+        label_width,
+        palette,
+    );
 
     if metadata_is_empty {
         lines.push(Line::from("No document metadata available"));
@@ -206,6 +231,25 @@ fn push_section(
     }
 }
 
+fn push_owned_section(
+    lines: &mut Vec<Line<'static>>,
+    title: &str,
+    fields: &[(String, String)],
+    label_width: usize,
+    palette: appearance::Palette,
+) {
+    if fields.is_empty() {
+        return;
+    }
+    if !lines.is_empty() {
+        lines.push(Line::from(""));
+    }
+    lines.push(section_line(title, palette));
+    for (label, value) in fields {
+        lines.push(document_line(label, value, label_width, palette));
+    }
+}
+
 fn section_label_width<'a>(
     sections: impl IntoIterator<Item = &'a [(&'a str, Option<String>)]>,
 ) -> usize {
@@ -216,6 +260,14 @@ fn section_label_width<'a>(
         .map(|(label, _)| label.len())
         .max()
         .unwrap_or(6)
+}
+
+fn owned_section_label_width(fields: &[(String, String)]) -> usize {
+    fields
+        .iter()
+        .map(|(label, _)| label.len())
+        .max()
+        .unwrap_or(0)
 }
 
 fn section_line(title: &str, palette: appearance::Palette) -> Line<'static> {
@@ -240,7 +292,10 @@ fn document_line(
     ])
 }
 
-fn extract_docx_metadata<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>) -> DocumentMetadata {
+fn extract_ooxml_metadata<R: Read + std::io::Seek>(
+    archive: &mut ZipArchive<R>,
+    format: DocumentFormat,
+) -> DocumentMetadata {
     let mut metadata = DocumentMetadata::default();
 
     let core = read_zip_entry(archive, "docProps/core.xml")
@@ -257,14 +312,49 @@ fn extract_docx_metadata<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>) -
     metadata.created = present_string(core.get("created"), "Created");
     metadata.modified = present_string(core.get("modified"), "Modified");
     metadata.application = present_string(app.get("Application"), "Application");
-    metadata.pages = present_count(app.get("Pages"));
-    metadata.words = present_count(app.get("Words"));
-    metadata.characters = present_count(app.get("Characters"));
+    if let Some(company) = present_string(app.get("Company"), "Company") {
+        metadata.metadata.push(("Company".to_string(), company));
+    }
+
+    match format {
+        DocumentFormat::Docx | DocumentFormat::Docm => {
+            push_count_stat(&mut metadata, "Pages", present_count(app.get("Pages")));
+            push_count_stat(&mut metadata, "Words", present_count(app.get("Words")));
+            push_count_stat(
+                &mut metadata,
+                "Characters",
+                present_count(app.get("Characters")),
+            );
+        }
+        DocumentFormat::Pptx | DocumentFormat::Pptm => {
+            push_count_stat(&mut metadata, "Slides", present_count(app.get("Slides")));
+            push_count_stat(&mut metadata, "Notes", present_count(app.get("Notes")));
+            push_count_stat(
+                &mut metadata,
+                "Hidden Slides",
+                present_count(app.get("HiddenSlides")),
+            );
+            push_count_stat(
+                &mut metadata,
+                "Media Clips",
+                present_count(app.get("MMClips")),
+            );
+        }
+        DocumentFormat::Xlsx | DocumentFormat::Xlsm => {
+            if let Some(manager) = present_string(app.get("Manager"), "Manager") {
+                metadata.metadata.push(("Manager".to_string(), manager));
+            }
+        }
+        _ => {}
+    }
 
     metadata
 }
 
-fn extract_odt_metadata<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>) -> DocumentMetadata {
+fn extract_open_document_metadata<R: Read + std::io::Seek>(
+    archive: &mut ZipArchive<R>,
+    format: DocumentFormat,
+) -> DocumentMetadata {
     let mut metadata = DocumentMetadata::default();
     let Some(xml) = read_zip_entry(archive, "meta.xml") else {
         return metadata;
@@ -280,9 +370,56 @@ fn extract_odt_metadata<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>) ->
     metadata.created = present_string(fields.get("creation-date"), "Created");
     metadata.modified = present_string(fields.get("date"), "Modified");
     metadata.application = present_string(fields.get("generator"), "Application");
-    metadata.pages = present_count(fields.get("page-count"));
-    metadata.words = present_count(fields.get("word-count"));
-    metadata.characters = present_count(fields.get("character-count"));
+
+    match format {
+        DocumentFormat::Odt => {
+            push_count_stat(
+                &mut metadata,
+                "Pages",
+                present_count(fields.get("page-count")),
+            );
+            push_count_stat(
+                &mut metadata,
+                "Words",
+                present_count(fields.get("word-count")),
+            );
+            push_count_stat(
+                &mut metadata,
+                "Characters",
+                present_count(fields.get("character-count")),
+            );
+        }
+        DocumentFormat::Ods => {
+            push_count_stat(
+                &mut metadata,
+                "Tables",
+                present_count(fields.get("table-count")),
+            );
+            push_count_stat(
+                &mut metadata,
+                "Cells",
+                present_count(fields.get("cell-count")),
+            );
+            push_count_stat(
+                &mut metadata,
+                "Objects",
+                present_count(fields.get("object-count")),
+            );
+        }
+        DocumentFormat::Odp => {
+            push_count_stat(
+                &mut metadata,
+                "Slides",
+                present_count(fields.get("page-count")),
+            );
+            push_count_stat(
+                &mut metadata,
+                "Objects",
+                present_count(fields.get("object-count")),
+            );
+        }
+        _ => {}
+    }
 
     metadata
 }
@@ -340,6 +477,126 @@ fn extract_pages_metadata<R: Read + std::io::Seek>(
     metadata
 }
 
+fn extract_epub_metadata<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>) -> DocumentMetadata {
+    let mut metadata = DocumentMetadata {
+        variant: Some("EPUB package".to_string()),
+        ..DocumentMetadata::default()
+    };
+    let Some(container_xml) = read_zip_entry(archive, "META-INF/container.xml") else {
+        return metadata;
+    };
+    let Some(package_path) = parse_epub_rootfile_path(&container_xml) else {
+        return metadata;
+    };
+    let Some(package_xml) = read_zip_entry(archive, &package_path) else {
+        return metadata;
+    };
+    let fields = parse_xml_text_fields(&package_xml);
+    metadata.title = present_string(fields.get("title"), "Title");
+    metadata.subject = present_string(fields.get("subject"), "Subject");
+    metadata.author = present_string(fields.get("creator"), "Author");
+    metadata.created = present_string(fields.get("date"), "Created");
+    if let Some(language) = present_string(fields.get("language"), "Language") {
+        metadata.metadata.push(("Language".to_string(), language));
+    }
+    if let Some(publisher) = present_string(fields.get("publisher"), "Publisher") {
+        metadata.metadata.push(("Publisher".to_string(), publisher));
+    }
+    if let Some(identifier) = present_string(fields.get("identifier"), "Identifier") {
+        metadata
+            .metadata
+            .push(("Identifier".to_string(), identifier));
+    }
+
+    metadata
+}
+
+fn extract_pdf_metadata(path: &Path) -> Option<DocumentMetadata> {
+    let mut bytes = Vec::with_capacity(256);
+    File::open(path)
+        .ok()?
+        .take(256)
+        .read_to_end(&mut bytes)
+        .ok()?;
+
+    let mut metadata = DocumentMetadata::default();
+    if let Some(version) = parse_pdf_version(&bytes) {
+        metadata.variant = Some(format!("PDF {version}"));
+        metadata
+            .metadata
+            .push(("PDF Version".to_string(), version.to_string()));
+    }
+
+    let output = Command::new("pdfinfo").arg(path).output().ok();
+    let Some(output) = output.filter(|output| output.status.success()) else {
+        return Some(metadata);
+    };
+    let fields = parse_pdfinfo_fields(&String::from_utf8_lossy(&output.stdout));
+    metadata.title = fields
+        .get("Title")
+        .and_then(|value| present_str(value, "Title"));
+    metadata.subject = fields
+        .get("Subject")
+        .and_then(|value| present_str(value, "Subject"));
+    metadata.author = fields
+        .get("Author")
+        .and_then(|value| present_str(value, "Author"));
+    metadata.application = fields
+        .get("Creator")
+        .and_then(|value| present_str(value, "Application"));
+    metadata.created = fields
+        .get("CreationDate")
+        .and_then(|value| present_str(value, "Created"));
+    metadata.modified = fields
+        .get("ModDate")
+        .and_then(|value| present_str(value, "Modified"));
+
+    push_count_stat(
+        &mut metadata,
+        "Pages",
+        fields
+            .get("Pages")
+            .and_then(|value| value.trim().parse().ok()),
+    );
+    push_metadata_field(
+        &mut metadata,
+        "Producer",
+        fields
+            .get("Producer")
+            .and_then(|value| present_str(value, "Producer")),
+    );
+    push_metadata_field(
+        &mut metadata,
+        "Page Size",
+        fields
+            .get("Page size")
+            .and_then(|value| present_str(value, "Page size")),
+    );
+    push_metadata_field(
+        &mut metadata,
+        "Tagged",
+        fields
+            .get("Tagged")
+            .and_then(|value| present_str(value, "Tagged")),
+    );
+    push_metadata_field(
+        &mut metadata,
+        "Encrypted",
+        fields
+            .get("Encrypted")
+            .and_then(|value| present_str(value, "Encrypted")),
+    );
+    push_metadata_field(
+        &mut metadata,
+        "Optimized",
+        fields
+            .get("Optimized")
+            .and_then(|value| present_str(value, "Optimized")),
+    );
+
+    Some(metadata)
+}
+
 fn detect_pages_variant<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>) -> Option<String> {
     let mut saw_iwa = false;
     let mut saw_legacy_index = false;
@@ -373,6 +630,47 @@ fn read_zip_entry<R: Read + std::io::Seek>(
         .read_to_end(&mut bytes)
         .ok()?;
     String::from_utf8(bytes).ok()
+}
+
+fn push_count_stat(metadata: &mut DocumentMetadata, label: &str, value: Option<u64>) {
+    if let Some(value) = value {
+        metadata
+            .stats
+            .push((label.to_string(), format_count(value)));
+    }
+}
+
+fn push_metadata_field(metadata: &mut DocumentMetadata, label: &str, value: Option<String>) {
+    if let Some(value) = value {
+        metadata.metadata.push((label.to_string(), value));
+    }
+}
+
+fn parse_epub_rootfile_path(xml: &str) -> Option<String> {
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Empty(event)) | Ok(Event::Start(event)) => {
+                if local_name(event.name().as_ref()) != "rootfile" {
+                    continue;
+                }
+                for attribute in event.attributes().flatten() {
+                    if local_name(attribute.key.as_ref()) != "full-path" {
+                        continue;
+                    }
+                    let value = attribute.decode_and_unescape_value(reader.decoder()).ok()?;
+                    let value = value.trim();
+                    if !value.is_empty() {
+                        return Some(value.to_string());
+                    }
+                }
+            }
+            Ok(Event::Eof) | Err(_) => return None,
+            _ => {}
+        }
+    }
 }
 
 fn parse_xml_text_fields(xml: &str) -> BTreeMap<String, String> {
@@ -433,6 +731,28 @@ fn parse_xml_text_fields(xml: &str) -> BTreeMap<String, String> {
     }
 
     fields
+}
+
+fn parse_pdfinfo_fields(output: &str) -> BTreeMap<String, String> {
+    let mut fields = BTreeMap::new();
+    for line in output.lines() {
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim();
+        if key.is_empty() || value.is_empty() {
+            continue;
+        }
+        fields.insert(key.to_string(), value.to_string());
+    }
+    fields
+}
+
+fn parse_pdf_version(bytes: &[u8]) -> Option<&str> {
+    let header = std::str::from_utf8(bytes).ok()?;
+    let header = header.lines().next()?.trim();
+    header.strip_prefix("%PDF-")
 }
 
 fn parse_plist_dict(xml: &str) -> Option<BTreeMap<String, String>> {

@@ -1,4 +1,4 @@
-use super::{LINE_LIMIT, StructuredPreview, styled};
+use super::{styled, StructuredPreview, LINE_LIMIT};
 use crate::{appearance, file_facts::StructuredFormat};
 use ratatui::{
     style::Modifier,
