@@ -441,14 +441,17 @@ impl App {
         {
             return None;
         }
-        if !self.scheduler.submit_pdf_render(jobs::PdfRenderRequest {
-            path: key.path.clone(),
-            size: key.size,
-            modified: key.modified,
-            page: key.page,
-            width_px: key.width_px,
-            height_px: key.height_px,
-        }) {
+        if !self.scheduler.submit_pdf_render(
+            jobs::PdfRenderRequest {
+                path: key.path.clone(),
+                size: key.size,
+                modified: key.modified,
+                page: key.page,
+                width_px: key.width_px,
+                height_px: key.height_px,
+            },
+            jobs::PdfJobPriority::Current,
+        ) {
             self.pdf_preview.failed_renders.insert(key.clone());
             return None;
         }
@@ -466,12 +469,15 @@ impl App {
         {
             return None;
         }
-        if !self.scheduler.submit_pdf_probe(jobs::PdfProbeRequest {
-            path: request.path.clone(),
-            size: request.size,
-            modified: request.modified,
-            page: request.page,
-        }) {
+        if !self.scheduler.submit_pdf_probe(
+            jobs::PdfProbeRequest {
+                path: request.path.clone(),
+                size: request.size,
+                modified: request.modified,
+                page: request.page,
+            },
+            jobs::PdfJobPriority::Current,
+        ) {
             self.pdf_preview.failed_page_probes.insert(key);
             return None;
         }
@@ -490,6 +496,7 @@ impl App {
 
         let current_request = self.active_pdf_overlay_request();
         let current_key = current_request.as_ref().map(PdfPageKey::from_request);
+        let is_current_key = current_key.as_ref() == Some(&key);
         let current_document = self
             .pdf_preview
             .session
@@ -538,7 +545,12 @@ impl App {
             }
             Err(_) => {
                 self.pdf_preview.failed_page_probes.insert(key);
-                false
+                if is_current_key {
+                    self.refresh_preview();
+                    true
+                } else {
+                    false
+                }
             }
         }
     }
@@ -553,22 +565,28 @@ impl App {
             height_px: build.height_px,
         };
         self.pdf_preview.pending_renders.remove(&key);
+        let is_current_key = self
+            .active_pdf_render_key()
+            .as_ref()
+            .is_some_and(|active| active == &key);
 
         match build.result {
             Ok(Some(path)) => {
                 self.pdf_preview.failed_renders.remove(&key);
                 let image_dimensions = read_png_dimensions(&path);
                 self.remember_rendered_pdf(key.clone(), path, image_dimensions);
-                let dirty = self
-                    .active_pdf_render_key()
-                    .as_ref()
-                    .is_some_and(|active| active == &key);
+                let dirty = is_current_key;
                 self.refresh_pdf_prefetch_window();
                 dirty
             }
             Ok(None) | Err(_) => {
                 self.pdf_preview.failed_renders.insert(key);
-                false
+                if is_current_key {
+                    self.refresh_preview();
+                    true
+                } else {
+                    false
+                }
             }
         }
     }
@@ -598,6 +616,10 @@ impl App {
         self.pdf_preview
             .activation_ready_at
             .is_none_or(|ready_at| Instant::now() >= ready_at)
+    }
+
+    pub(super) fn should_defer_pdf_document_preview(&self, entry: &Entry) -> bool {
+        is_pdf_entry(entry) && self.preview_prefers_pdf_surface()
     }
 
     fn overlay_placement_for_request(
@@ -785,7 +807,9 @@ impl App {
 
         self.queue_current_pdf_probe();
         self.queue_current_pdf_render();
-        self.queue_prefetch_pdf_probes();
+        if self.current_pdf_probe_ready() {
+            self.queue_prefetch_pdf_probes();
+        }
         if self.current_pdf_render_ready() {
             self.queue_prefetch_pdf_renders();
         }
@@ -808,25 +832,38 @@ impl App {
             return;
         };
 
-        self.submit_pdf_probe_key(PdfPageKey {
-            path: session.path.clone(),
-            size: session.size,
-            modified: session.modified,
-            page,
-        });
+        self.submit_pdf_probe_key(
+            PdfPageKey {
+                path: session.path.clone(),
+                size: session.size,
+                modified: session.modified,
+                page,
+            },
+            jobs::PdfJobPriority::Prefetch,
+        );
     }
 
     fn try_queue_pdf_render_page(&mut self, page: usize) {
         let Some(key) = self.pdf_render_key_for_page(page) else {
             return;
         };
-        self.submit_pdf_render_key(key);
+        self.submit_pdf_render_key(key, jobs::PdfJobPriority::Prefetch);
     }
 
     fn current_pdf_render_ready(&self) -> bool {
         self.active_pdf_render_key()
             .as_ref()
             .is_some_and(|key| self.cached_render_exists(key))
+    }
+
+    fn current_pdf_probe_ready(&self) -> bool {
+        self.active_pdf_overlay_request()
+            .as_ref()
+            .is_some_and(|request| {
+                self.pdf_preview
+                    .page_dimensions
+                    .contains_key(&PdfPageKey::from_request(request))
+            })
     }
 
     fn pdf_probe_window_pages(&self) -> Vec<usize> {
@@ -935,22 +972,25 @@ impl App {
             return;
         };
 
-        self.submit_pdf_probe_key(PdfPageKey {
-            path: session.path.clone(),
-            size: session.size,
-            modified: session.modified,
-            page: session.current_page,
-        });
+        self.submit_pdf_probe_key(
+            PdfPageKey {
+                path: session.path.clone(),
+                size: session.size,
+                modified: session.modified,
+                page: session.current_page,
+            },
+            jobs::PdfJobPriority::Current,
+        );
     }
 
     fn queue_current_pdf_render(&mut self) {
         let Some(key) = self.active_pdf_render_key() else {
             return;
         };
-        self.submit_pdf_render_key(key);
+        self.submit_pdf_render_key(key, jobs::PdfJobPriority::Current);
     }
 
-    fn submit_pdf_probe_key(&mut self, key: PdfPageKey) {
+    fn submit_pdf_probe_key(&mut self, key: PdfPageKey, priority: jobs::PdfJobPriority) {
         if self.pdf_preview.page_dimensions.contains_key(&key)
             || self.pdf_preview.pending_page_probes.contains(&key)
             || self.pdf_preview.failed_page_probes.contains(&key)
@@ -958,19 +998,22 @@ impl App {
             return;
         }
 
-        if self.scheduler.submit_pdf_probe(jobs::PdfProbeRequest {
-            path: key.path.clone(),
-            size: key.size,
-            modified: key.modified,
-            page: key.page,
-        }) {
+        if self.scheduler.submit_pdf_probe(
+            jobs::PdfProbeRequest {
+                path: key.path.clone(),
+                size: key.size,
+                modified: key.modified,
+                page: key.page,
+            },
+            priority,
+        ) {
             self.pdf_preview.pending_page_probes.insert(key);
         } else {
             self.pdf_preview.failed_page_probes.insert(key);
         }
     }
 
-    fn submit_pdf_render_key(&mut self, key: PdfRenderKey) {
+    fn submit_pdf_render_key(&mut self, key: PdfRenderKey, priority: jobs::PdfJobPriority) {
         if self.cached_render_exists(&key)
             || self.pdf_preview.pending_renders.contains(&key)
             || self.pdf_preview.failed_renders.contains(&key)
@@ -978,14 +1021,17 @@ impl App {
             return;
         }
 
-        if self.scheduler.submit_pdf_render(jobs::PdfRenderRequest {
-            path: key.path.clone(),
-            size: key.size,
-            modified: key.modified,
-            page: key.page,
-            width_px: key.width_px,
-            height_px: key.height_px,
-        }) {
+        if self.scheduler.submit_pdf_render(
+            jobs::PdfRenderRequest {
+                path: key.path.clone(),
+                size: key.size,
+                modified: key.modified,
+                page: key.page,
+                width_px: key.width_px,
+                height_px: key.height_px,
+            },
+            priority,
+        ) {
             self.pdf_preview.pending_renders.insert(key);
         } else {
             self.pdf_preview.failed_renders.insert(key);

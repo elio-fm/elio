@@ -43,6 +43,32 @@ fn build_pdf_overlay_test_app(label: &str) -> (App, PathBuf) {
     (app, root)
 }
 
+fn build_selected_pdf_app(label: &str) -> (App, PathBuf) {
+    let root = temp_root(label);
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let pdf_path = root.join("demo.pdf");
+    fs::write(&pdf_path, b"%PDF-1.7\n").expect("failed to write pdf placeholder");
+
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
+    app.pdf_preview.enabled = true;
+    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
+    app.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+    app.pdf_preview.terminal_window = Some(TerminalWindowSize {
+        cells_width,
+        cells_height,
+        pixels_width: 1920,
+        pixels_height: 1080,
+    });
+    app.refresh_preview();
+    (app, root)
+}
+
 #[test]
 fn parse_pdfinfo_page_count_reads_page_field() {
     assert_eq!(
@@ -343,6 +369,44 @@ fn sync_pdf_preview_selection_reuses_cached_total_page_count() {
 }
 
 #[test]
+fn sync_pdf_preview_selection_defers_adjacent_probe_prefetch_until_current_page_is_known() {
+    let root = temp_root("selection-probe-prefetch");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    let entry = Entry {
+        path: root.join("queued.pdf"),
+        name: "queued.pdf".to_string(),
+        name_key: "queued.pdf".to_string(),
+        kind: EntryKind::File,
+        size: 64,
+        modified: None,
+        readonly: false,
+    };
+    app.entries = vec![entry.clone()];
+    app.selected = 0;
+    app.pdf_preview.enabled = true;
+    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
+    app.pdf_preview
+        .document_page_counts
+        .insert(PdfDocumentKey::from_entry(&entry), 12);
+
+    app.sync_pdf_preview_selection();
+
+    assert_eq!(
+        app.pdf_preview.pending_page_probes,
+        std::iter::once(PdfPageKey {
+            path: entry.path,
+            size: entry.size,
+            modified: entry.modified,
+            page: PDF_PAGE_MIN,
+        })
+        .collect()
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn sync_pdf_preview_selection_queues_initial_probe_for_current_page() {
     let root = temp_root("selection-probe");
     fs::create_dir_all(&root).expect("failed to create temp root");
@@ -622,7 +686,7 @@ fn step_pdf_page_queues_render_immediately_when_dimensions_are_cached() {
 }
 
 #[test]
-fn step_pdf_page_prunes_stale_prefetch_probe_window() {
+fn step_pdf_page_prunes_stale_prefetch_probe_window_without_eager_neighbor_probe() {
     let (mut app, root) = build_pdf_overlay_test_app("page-step-prune");
     let session = app
         .pdf_preview
@@ -661,7 +725,7 @@ fn step_pdf_page_prunes_stale_prefetch_probe_window() {
         modified: None,
         page: 3,
     }));
-    assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+    assert!(!app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
         path: root.join("demo.pdf"),
         size: 128,
         modified: None,
@@ -778,6 +842,49 @@ fn preview_prefers_pdf_surface_falls_back_after_overlay_failure() {
     app.pdf_preview.failed_page_probes.insert(page_key);
 
     assert!(!app.preview_prefers_pdf_surface());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn refresh_preview_skips_background_pdf_metadata_when_surface_is_active() {
+    let (mut app, root) = build_selected_pdf_app("skip-pdf-metadata");
+    let before = app.scheduler_metrics();
+
+    app.refresh_preview();
+
+    let after = app.scheduler_metrics();
+    assert_eq!(
+        after.preview_jobs_submitted_high,
+        before.preview_jobs_submitted_high
+    );
+    assert_eq!(app.preview_state.content.lines.len(), 1);
+    assert_eq!(
+        app.preview_state.content.lines[0].to_string(),
+        "Preparing PDF preview"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn refresh_preview_restores_pdf_metadata_fallback_after_probe_failure() {
+    let (mut app, root) = build_selected_pdf_app("pdf-fallback-preview");
+    app.pdf_preview.activation_ready_at = Some(Instant::now());
+    let request = app
+        .active_pdf_overlay_request()
+        .expect("PDF overlay request should be available");
+    app.pdf_preview
+        .failed_page_probes
+        .insert(PdfPageKey::from_request(&request));
+
+    app.refresh_preview();
+
+    assert!(!app.preview_prefers_pdf_surface());
+    assert_ne!(
+        app.preview_state.content.lines[0].to_string(),
+        "Preparing PDF preview"
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

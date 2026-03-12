@@ -224,24 +224,33 @@ fn retain_pdf_probe_pages_discards_stale_pending_requests() {
     let scheduler = JobScheduler::new_for_tests(0, 0, 2);
     let path = PathBuf::from("manual.pdf");
 
-    assert!(scheduler.submit_pdf_probe(PdfProbeRequest {
-        path: path.clone(),
-        size: 64,
-        modified: None,
-        page: 1,
-    }));
-    assert!(scheduler.submit_pdf_probe(PdfProbeRequest {
-        path: path.clone(),
-        size: 64,
-        modified: None,
-        page: 2,
-    }));
-    assert!(scheduler.submit_pdf_probe(PdfProbeRequest {
-        path: PathBuf::from("other.pdf"),
-        size: 64,
-        modified: None,
-        page: 1,
-    }));
+    assert!(scheduler.submit_pdf_probe(
+        PdfProbeRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 1,
+        },
+        PdfJobPriority::Current
+    ));
+    assert!(scheduler.submit_pdf_probe(
+        PdfProbeRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 2,
+        },
+        PdfJobPriority::Prefetch
+    ));
+    assert!(scheduler.submit_pdf_probe(
+        PdfProbeRequest {
+            path: PathBuf::from("other.pdf"),
+            size: 64,
+            modified: None,
+            page: 1,
+        },
+        PdfJobPriority::Prefetch
+    ));
 
     scheduler.retain_pdf_probe_pages(&path, 64, None, &[2, 3]);
 
@@ -261,30 +270,39 @@ fn retain_pdf_render_variants_discards_stale_pending_requests() {
     let scheduler = JobScheduler::new_for_tests(0, 0, 2);
     let path = PathBuf::from("manual.pdf");
 
-    assert!(scheduler.submit_pdf_render(PdfRenderRequest {
-        path: path.clone(),
-        size: 64,
-        modified: None,
-        page: 2,
-        width_px: 640,
-        height_px: 896,
-    }));
-    assert!(scheduler.submit_pdf_render(PdfRenderRequest {
-        path: path.clone(),
-        size: 64,
-        modified: None,
-        page: 3,
-        width_px: 704,
-        height_px: 960,
-    }));
-    assert!(scheduler.submit_pdf_render(PdfRenderRequest {
-        path: PathBuf::from("other.pdf"),
-        size: 64,
-        modified: None,
-        page: 1,
-        width_px: 640,
-        height_px: 896,
-    }));
+    assert!(scheduler.submit_pdf_render(
+        PdfRenderRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 2,
+            width_px: 640,
+            height_px: 896,
+        },
+        PdfJobPriority::Current
+    ));
+    assert!(scheduler.submit_pdf_render(
+        PdfRenderRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 3,
+            width_px: 704,
+            height_px: 960,
+        },
+        PdfJobPriority::Prefetch
+    ));
+    assert!(scheduler.submit_pdf_render(
+        PdfRenderRequest {
+            path: PathBuf::from("other.pdf"),
+            size: 64,
+            modified: None,
+            page: 1,
+            width_px: 640,
+            height_px: 896,
+        },
+        PdfJobPriority::Prefetch
+    ));
 
     scheduler.retain_pdf_render_variants(&path, 64, None, &[(3, 704, 960)]);
 
@@ -298,5 +316,99 @@ fn retain_pdf_render_variants_discards_stale_pending_requests() {
             width_px: 704,
             height_px: 960,
         }]
+    );
+}
+
+#[test]
+fn current_pdf_probe_priority_outranks_prefetch_requests() {
+    let scheduler = JobScheduler::new_for_tests(0, 0, 2);
+    let path = PathBuf::from("manual.pdf");
+
+    assert!(scheduler.submit_pdf_probe(
+        PdfProbeRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 2,
+        },
+        PdfJobPriority::Prefetch,
+    ));
+    assert!(scheduler.submit_pdf_probe(
+        PdfProbeRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 1,
+        },
+        PdfJobPriority::Current,
+    ));
+
+    assert_eq!(
+        scheduler.snapshot().pdf_probe_pending,
+        vec![
+            PdfProbeJobKey {
+                path: path.clone(),
+                size: 64,
+                modified: None,
+                page: 1,
+            },
+            PdfProbeJobKey {
+                path,
+                size: 64,
+                modified: None,
+                page: 2,
+            },
+        ]
+    );
+}
+
+#[test]
+fn current_pdf_render_priority_outranks_prefetch_requests() {
+    let scheduler = JobScheduler::new_for_tests(0, 0, 2);
+    let path = PathBuf::from("manual.pdf");
+
+    assert!(scheduler.submit_pdf_render(
+        PdfRenderRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 2,
+            width_px: 640,
+            height_px: 896,
+        },
+        PdfJobPriority::Prefetch,
+    ));
+    assert!(scheduler.submit_pdf_render(
+        PdfRenderRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 1,
+            width_px: 640,
+            height_px: 896,
+        },
+        PdfJobPriority::Current,
+    ));
+
+    assert_eq!(
+        scheduler.snapshot().pdf_render_pending,
+        vec![
+            PdfRenderJobKey {
+                path: path.clone(),
+                size: 64,
+                modified: None,
+                page: 1,
+                width_px: 640,
+                height_px: 896,
+            },
+            PdfRenderJobKey {
+                path,
+                size: 64,
+                modified: None,
+                page: 2,
+                width_px: 640,
+                height_px: 896,
+            },
+        ]
     );
 }

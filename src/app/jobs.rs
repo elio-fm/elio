@@ -74,6 +74,12 @@ pub(super) enum PreviewPriority {
     Low,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum PdfJobPriority {
+    Current,
+    Prefetch,
+}
+
 #[derive(Debug)]
 pub(super) struct SearchBuild {
     pub token: u64,
@@ -262,12 +268,20 @@ impl JobScheduler {
         self.directory_item_count.submit(request)
     }
 
-    pub(super) fn submit_pdf_probe(&self, request: PdfProbeRequest) -> bool {
-        self.pdf_probe.submit(request)
+    pub(super) fn submit_pdf_probe(
+        &self,
+        request: PdfProbeRequest,
+        priority: PdfJobPriority,
+    ) -> bool {
+        self.pdf_probe.submit(request, priority)
     }
 
-    pub(super) fn submit_pdf_render(&self, request: PdfRenderRequest) -> bool {
-        self.pdf_render.submit(request)
+    pub(super) fn submit_pdf_render(
+        &self,
+        request: PdfRenderRequest,
+        priority: PdfJobPriority,
+    ) -> bool {
+        self.pdf_render.submit(request, priority)
     }
 
     pub(super) fn clear_pending_pdf_jobs(&self) {
@@ -717,8 +731,10 @@ struct PdfProbeShared {
 }
 
 struct PdfProbeState {
-    pending: VecDeque<PdfProbeRequest>,
-    queued_keys: HashSet<PdfProbeJobKey>,
+    pending_current: VecDeque<PdfProbeRequest>,
+    pending_prefetch: VecDeque<PdfProbeRequest>,
+    queued_current_keys: HashSet<PdfProbeJobKey>,
+    queued_prefetch_keys: HashSet<PdfProbeJobKey>,
     active_keys: HashSet<PdfProbeJobKey>,
     closed: bool,
     capacity: usize,
@@ -736,8 +752,10 @@ impl PdfProbePool {
     fn new(worker_count: usize, capacity: usize, result_tx: mpsc::Sender<JobResult>) -> Self {
         let shared = Arc::new(PdfProbeShared {
             state: Mutex::new(PdfProbeState {
-                pending: VecDeque::new(),
-                queued_keys: HashSet::new(),
+                pending_current: VecDeque::new(),
+                pending_prefetch: VecDeque::new(),
+                queued_current_keys: HashSet::new(),
+                queued_prefetch_keys: HashSet::new(),
                 active_keys: HashSet::new(),
                 closed: false,
                 capacity,
@@ -772,48 +790,83 @@ impl PdfProbePool {
         Self { shared, workers }
     }
 
-    fn submit(&self, request: PdfProbeRequest) -> bool {
+    fn submit(&self, request: PdfProbeRequest, priority: PdfJobPriority) -> bool {
         let key = PdfProbeJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
             return false;
         }
-        if state.queued_keys.contains(&key) || state.active_keys.contains(&key) {
-            return true;
+        match priority {
+            PdfJobPriority::Current => {
+                if state.queued_current_keys.contains(&key) || state.active_keys.contains(&key) {
+                    return true;
+                }
+                if state.queued_prefetch_keys.remove(&key) {
+                    remove_pdf_probe_request(&mut state.pending_prefetch, &key);
+                }
+            }
+            PdfJobPriority::Prefetch => {
+                if state.queued_current_keys.contains(&key)
+                    || state.queued_prefetch_keys.contains(&key)
+                    || state.active_keys.contains(&key)
+                {
+                    return true;
+                }
+            }
         }
-        while state.pending.len() >= state.capacity {
-            let Some(stale) = state.pending.pop_front() else {
-                break;
-            };
-            state
-                .queued_keys
-                .remove(&PdfProbeJobKey::from_request(&stale));
+        while pdf_probe_pending_len(&state) >= state.capacity {
+            if let Some(stale) = state.pending_prefetch.pop_front() {
+                state
+                    .queued_prefetch_keys
+                    .remove(&PdfProbeJobKey::from_request(&stale));
+                continue;
+            }
+            if let Some(stale) = state.pending_current.pop_front() {
+                state
+                    .queued_current_keys
+                    .remove(&PdfProbeJobKey::from_request(&stale));
+                continue;
+            }
+            break;
         }
-        state.queued_keys.insert(key);
-        state.pending.push_back(request);
+        match priority {
+            PdfJobPriority::Current => {
+                state.queued_current_keys.insert(key);
+                state.pending_current.push_back(request);
+            }
+            PdfJobPriority::Prefetch => {
+                state.queued_prefetch_keys.insert(key);
+                state.pending_prefetch.push_back(request);
+            }
+        }
         self.shared.available.notify_one();
         true
     }
 
     fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
-        !state.pending.is_empty() || !state.active_keys.is_empty()
+        !state.pending_current.is_empty()
+            || !state.pending_prefetch.is_empty()
+            || !state.active_keys.is_empty()
     }
 
     #[cfg(test)]
     fn pending_keys(&self) -> Vec<PdfProbeJobKey> {
         let state = lock_unpoison(&self.shared.state);
         state
-            .pending
+            .pending_current
             .iter()
+            .chain(state.pending_prefetch.iter())
             .map(PdfProbeJobKey::from_request)
             .collect()
     }
 
     fn clear_pending(&self) {
         let mut state = lock_unpoison(&self.shared.state);
-        state.pending.clear();
-        state.queued_keys.clear();
+        state.pending_current.clear();
+        state.pending_prefetch.clear();
+        state.queued_current_keys.clear();
+        state.queued_prefetch_keys.clear();
     }
 
     fn retain_pending(
@@ -824,21 +877,26 @@ impl PdfProbePool {
         keep_pages: &[usize],
     ) {
         let mut state = lock_unpoison(&self.shared.state);
-        let mut retained = VecDeque::with_capacity(state.pending.len());
-        state.queued_keys.clear();
-        while let Some(request) = state.pending.pop_front() {
-            let keep = request.path == path
-                && request.size == size
-                && request.modified == modified
-                && keep_pages.contains(&request.page);
-            if keep {
-                state
-                    .queued_keys
-                    .insert(PdfProbeJobKey::from_request(&request));
-                retained.push_back(request);
-            }
-        }
-        state.pending = retained;
+        let pending_current = std::mem::take(&mut state.pending_current);
+        let pending_prefetch = std::mem::take(&mut state.pending_prefetch);
+        state.queued_current_keys.clear();
+        state.queued_prefetch_keys.clear();
+        state.pending_current = retain_pdf_probe_requests(
+            pending_current,
+            path,
+            size,
+            modified,
+            keep_pages,
+            &mut state.queued_current_keys,
+        );
+        state.pending_prefetch = retain_pdf_probe_requests(
+            pending_prefetch,
+            path,
+            size,
+            modified,
+            keep_pages,
+            &mut state.queued_prefetch_keys,
+        );
     }
 }
 
@@ -847,8 +905,10 @@ impl Drop for PdfProbePool {
         {
             let mut state = lock_unpoison(&self.shared.state);
             state.closed = true;
-            state.pending.clear();
-            state.queued_keys.clear();
+            state.pending_current.clear();
+            state.pending_prefetch.clear();
+            state.queued_current_keys.clear();
+            state.queued_prefetch_keys.clear();
         }
         self.shared.available.notify_all();
         for worker in self.workers.drain(..) {
@@ -864,9 +924,15 @@ impl PdfProbeShared {
             if state.closed {
                 return None;
             }
-            if let Some(request) = state.pending.pop_front() {
+            if let Some(request) = state.pending_current.pop_front() {
                 let key = PdfProbeJobKey::from_request(&request);
-                state.queued_keys.remove(&key);
+                state.queued_current_keys.remove(&key);
+                state.active_keys.insert(key);
+                return Some(request);
+            }
+            if let Some(request) = state.pending_prefetch.pop_front() {
+                let key = PdfProbeJobKey::from_request(&request);
+                state.queued_prefetch_keys.remove(&key);
                 state.active_keys.insert(key);
                 return Some(request);
             }
@@ -891,6 +957,36 @@ impl PdfProbeJobKey {
     }
 }
 
+fn pdf_probe_pending_len(state: &PdfProbeState) -> usize {
+    state.pending_current.len() + state.pending_prefetch.len()
+}
+
+fn remove_pdf_probe_request(pending: &mut VecDeque<PdfProbeRequest>, key: &PdfProbeJobKey) {
+    pending.retain(|request| PdfProbeJobKey::from_request(request) != *key);
+}
+
+fn retain_pdf_probe_requests(
+    pending: VecDeque<PdfProbeRequest>,
+    path: &Path,
+    size: u64,
+    modified: Option<SystemTime>,
+    keep_pages: &[usize],
+    queued_keys: &mut HashSet<PdfProbeJobKey>,
+) -> VecDeque<PdfProbeRequest> {
+    let mut retained = VecDeque::with_capacity(pending.len());
+    for request in pending {
+        let keep = request.path == path
+            && request.size == size
+            && request.modified == modified
+            && keep_pages.contains(&request.page);
+        if keep {
+            queued_keys.insert(PdfProbeJobKey::from_request(&request));
+            retained.push_back(request);
+        }
+    }
+    retained
+}
+
 struct PdfRenderPool {
     shared: Arc<PdfRenderShared>,
     workers: Vec<thread::JoinHandle<()>>,
@@ -902,8 +998,10 @@ struct PdfRenderShared {
 }
 
 struct PdfRenderState {
-    pending: VecDeque<PdfRenderRequest>,
-    queued_keys: HashSet<PdfRenderJobKey>,
+    pending_current: VecDeque<PdfRenderRequest>,
+    pending_prefetch: VecDeque<PdfRenderRequest>,
+    queued_current_keys: HashSet<PdfRenderJobKey>,
+    queued_prefetch_keys: HashSet<PdfRenderJobKey>,
     active_keys: HashSet<PdfRenderJobKey>,
     closed: bool,
     capacity: usize,
@@ -923,8 +1021,10 @@ impl PdfRenderPool {
     fn new(worker_count: usize, capacity: usize, result_tx: mpsc::Sender<JobResult>) -> Self {
         let shared = Arc::new(PdfRenderShared {
             state: Mutex::new(PdfRenderState {
-                pending: VecDeque::new(),
-                queued_keys: HashSet::new(),
+                pending_current: VecDeque::new(),
+                pending_prefetch: VecDeque::new(),
+                queued_current_keys: HashSet::new(),
+                queued_prefetch_keys: HashSet::new(),
                 active_keys: HashSet::new(),
                 closed: false,
                 capacity,
@@ -968,48 +1068,83 @@ impl PdfRenderPool {
         Self { shared, workers }
     }
 
-    fn submit(&self, request: PdfRenderRequest) -> bool {
+    fn submit(&self, request: PdfRenderRequest, priority: PdfJobPriority) -> bool {
         let key = PdfRenderJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
             return false;
         }
-        if state.queued_keys.contains(&key) || state.active_keys.contains(&key) {
-            return true;
+        match priority {
+            PdfJobPriority::Current => {
+                if state.queued_current_keys.contains(&key) || state.active_keys.contains(&key) {
+                    return true;
+                }
+                if state.queued_prefetch_keys.remove(&key) {
+                    remove_pdf_render_request(&mut state.pending_prefetch, &key);
+                }
+            }
+            PdfJobPriority::Prefetch => {
+                if state.queued_current_keys.contains(&key)
+                    || state.queued_prefetch_keys.contains(&key)
+                    || state.active_keys.contains(&key)
+                {
+                    return true;
+                }
+            }
         }
-        while state.pending.len() >= state.capacity {
-            let Some(stale) = state.pending.pop_front() else {
-                break;
-            };
-            state
-                .queued_keys
-                .remove(&PdfRenderJobKey::from_request(&stale));
+        while pdf_render_pending_len(&state) >= state.capacity {
+            if let Some(stale) = state.pending_prefetch.pop_front() {
+                state
+                    .queued_prefetch_keys
+                    .remove(&PdfRenderJobKey::from_request(&stale));
+                continue;
+            }
+            if let Some(stale) = state.pending_current.pop_front() {
+                state
+                    .queued_current_keys
+                    .remove(&PdfRenderJobKey::from_request(&stale));
+                continue;
+            }
+            break;
         }
-        state.queued_keys.insert(key);
-        state.pending.push_back(request);
+        match priority {
+            PdfJobPriority::Current => {
+                state.queued_current_keys.insert(key);
+                state.pending_current.push_back(request);
+            }
+            PdfJobPriority::Prefetch => {
+                state.queued_prefetch_keys.insert(key);
+                state.pending_prefetch.push_back(request);
+            }
+        }
         self.shared.available.notify_one();
         true
     }
 
     fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
-        !state.pending.is_empty() || !state.active_keys.is_empty()
+        !state.pending_current.is_empty()
+            || !state.pending_prefetch.is_empty()
+            || !state.active_keys.is_empty()
     }
 
     #[cfg(test)]
     fn pending_keys(&self) -> Vec<PdfRenderJobKey> {
         let state = lock_unpoison(&self.shared.state);
         state
-            .pending
+            .pending_current
             .iter()
+            .chain(state.pending_prefetch.iter())
             .map(PdfRenderJobKey::from_request)
             .collect()
     }
 
     fn clear_pending(&self) {
         let mut state = lock_unpoison(&self.shared.state);
-        state.pending.clear();
-        state.queued_keys.clear();
+        state.pending_current.clear();
+        state.pending_prefetch.clear();
+        state.queued_current_keys.clear();
+        state.queued_prefetch_keys.clear();
     }
 
     fn retain_pending(
@@ -1020,21 +1155,26 @@ impl PdfRenderPool {
         keep_variants: &[(usize, u32, u32)],
     ) {
         let mut state = lock_unpoison(&self.shared.state);
-        let mut retained = VecDeque::with_capacity(state.pending.len());
-        state.queued_keys.clear();
-        while let Some(request) = state.pending.pop_front() {
-            let keep = request.path == path
-                && request.size == size
-                && request.modified == modified
-                && keep_variants.contains(&(request.page, request.width_px, request.height_px));
-            if keep {
-                state
-                    .queued_keys
-                    .insert(PdfRenderJobKey::from_request(&request));
-                retained.push_back(request);
-            }
-        }
-        state.pending = retained;
+        let pending_current = std::mem::take(&mut state.pending_current);
+        let pending_prefetch = std::mem::take(&mut state.pending_prefetch);
+        state.queued_current_keys.clear();
+        state.queued_prefetch_keys.clear();
+        state.pending_current = retain_pdf_render_requests(
+            pending_current,
+            path,
+            size,
+            modified,
+            keep_variants,
+            &mut state.queued_current_keys,
+        );
+        state.pending_prefetch = retain_pdf_render_requests(
+            pending_prefetch,
+            path,
+            size,
+            modified,
+            keep_variants,
+            &mut state.queued_prefetch_keys,
+        );
     }
 }
 
@@ -1043,8 +1183,10 @@ impl Drop for PdfRenderPool {
         {
             let mut state = lock_unpoison(&self.shared.state);
             state.closed = true;
-            state.pending.clear();
-            state.queued_keys.clear();
+            state.pending_current.clear();
+            state.pending_prefetch.clear();
+            state.queued_current_keys.clear();
+            state.queued_prefetch_keys.clear();
         }
         self.shared.available.notify_all();
         for worker in self.workers.drain(..) {
@@ -1060,9 +1202,15 @@ impl PdfRenderShared {
             if state.closed {
                 return None;
             }
-            if let Some(request) = state.pending.pop_front() {
+            if let Some(request) = state.pending_current.pop_front() {
                 let key = PdfRenderJobKey::from_request(&request);
-                state.queued_keys.remove(&key);
+                state.queued_current_keys.remove(&key);
+                state.active_keys.insert(key);
+                return Some(request);
+            }
+            if let Some(request) = state.pending_prefetch.pop_front() {
+                let key = PdfRenderJobKey::from_request(&request);
+                state.queued_prefetch_keys.remove(&key);
                 state.active_keys.insert(key);
                 return Some(request);
             }
@@ -1087,6 +1235,36 @@ impl PdfRenderJobKey {
             height_px: request.height_px,
         }
     }
+}
+
+fn pdf_render_pending_len(state: &PdfRenderState) -> usize {
+    state.pending_current.len() + state.pending_prefetch.len()
+}
+
+fn remove_pdf_render_request(pending: &mut VecDeque<PdfRenderRequest>, key: &PdfRenderJobKey) {
+    pending.retain(|request| PdfRenderJobKey::from_request(request) != *key);
+}
+
+fn retain_pdf_render_requests(
+    pending: VecDeque<PdfRenderRequest>,
+    path: &Path,
+    size: u64,
+    modified: Option<SystemTime>,
+    keep_variants: &[(usize, u32, u32)],
+    queued_keys: &mut HashSet<PdfRenderJobKey>,
+) -> VecDeque<PdfRenderRequest> {
+    let mut retained = VecDeque::with_capacity(pending.len());
+    for request in pending {
+        let keep = request.path == path
+            && request.size == size
+            && request.modified == modified
+            && keep_variants.contains(&(request.page, request.width_px, request.height_px));
+        if keep {
+            queued_keys.insert(PdfRenderJobKey::from_request(&request));
+            retained.push_back(request);
+        }
+    }
+    retained
 }
 
 struct SearchPool {

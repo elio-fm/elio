@@ -96,6 +96,14 @@ impl App {
         self.sync_pdf_preview_selection();
         self.preview_state.token = self.preview_state.token.wrapping_add(1);
         self.preview_state.content = match self.selected_entry().cloned() {
+            Some(entry) if self.should_defer_pdf_document_preview(&entry) => {
+                self.preview_state.load_state = None;
+                self.cached_preview_for(&entry)
+                    .or_else(|| self.stale_cached_preview_for(&entry))
+                    .unwrap_or_else(|| {
+                        preview::PreviewContent::placeholder("Preparing PDF preview")
+                    })
+            }
             Some(entry) if preview::should_build_preview_in_background(&entry) => {
                 if let Some(preview) = self.cached_preview_for(&entry) {
                     self.preview_state.metrics.cache_hits += 1;
