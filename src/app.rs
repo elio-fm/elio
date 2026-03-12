@@ -1,6 +1,7 @@
 mod actions;
 mod directory_counts;
 mod events;
+mod image_preview;
 mod jobs;
 mod pdf_preview;
 mod preview;
@@ -28,13 +29,15 @@ pub(crate) use self::support::{
 };
 
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(450);
+const KEY_REPEAT_NAV_INTERVAL: Duration = Duration::from_millis(28);
 const WHEEL_SCROLL_INTERVAL_HORIZONTAL: Duration = Duration::from_millis(64);
-const WHEEL_SCROLL_INTERVAL_VERTICAL: Duration = Duration::from_millis(24);
+const WHEEL_SCROLL_INTERVAL_VERTICAL: Duration = Duration::from_millis(16);
 const WHEEL_SCROLL_INTERVAL_VERTICAL_HIGH_FREQUENCY: Duration = Duration::from_millis(12);
 const WHEEL_SCROLL_INTERVAL_PREVIEW: Duration = Duration::from_millis(12);
 const WHEEL_SCROLL_INTERVAL_PREVIEW_HORIZONTAL: Duration = Duration::from_millis(12);
 const WHEEL_SCROLL_INTERVAL_SEARCH: Duration = Duration::from_millis(72);
 const PREVIEW_AUTO_FOCUS_DELAY: Duration = Duration::from_millis(220);
+const IMAGE_SELECTION_ACTIVATION_DELAY: Duration = Duration::from_millis(120);
 const HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY: Duration = Duration::from_millis(85);
 const WHEEL_SCROLL_QUEUE_LIMIT: isize = 8;
 const WHEEL_SCROLL_QUEUE_LIMIT_HORIZONTAL: isize = 3;
@@ -228,6 +231,18 @@ enum WheelTarget {
 enum WheelProfile {
     Default,
     HighFrequency,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NavigationRepeatKey {
+    Up,
+    Down,
+    Left,
+    Right,
+    PageUp,
+    PageDown,
+    Home,
+    End,
 }
 
 #[derive(Clone, Debug)]
@@ -436,6 +451,7 @@ pub struct App {
     pub should_quit: bool,
     navigation_history: NavigationHistory,
     preview_state: PreviewState,
+    image_preview: image_preview::ImagePreviewState,
     pdf_preview: pdf_preview::PdfPreviewState,
     frame_state: FrameState,
     search: Option<SearchOverlay>,
@@ -454,6 +470,7 @@ pub struct App {
     wheel_profile: WheelProfile,
     last_wheel_target: Option<WheelTarget>,
     browser_wheel_post_burst_pending: bool,
+    last_navigation_key: Option<(NavigationRepeatKey, Instant)>,
     last_selection_change_at: Instant,
 }
 
@@ -491,6 +508,7 @@ impl App {
                 result_cache: HashMap::new(),
                 result_order: VecDeque::new(),
             },
+            image_preview: image_preview::ImagePreviewState::default(),
             pdf_preview: pdf_preview::PdfPreviewState::default(),
             frame_state: FrameState::default(),
             search: None,
@@ -524,6 +542,7 @@ impl App {
             wheel_profile: detect_wheel_profile(),
             last_wheel_target: Some(WheelTarget::Entries),
             browser_wheel_post_burst_pending: false,
+            last_navigation_key: None,
             last_selection_change_at: Instant::now(),
         };
         let snapshot = support::load_directory_snapshot(&app.cwd, app.show_hidden, app.sort_mode)?;

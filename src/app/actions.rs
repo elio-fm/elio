@@ -88,14 +88,32 @@ impl App {
                 _ => pdf_detail,
             });
         }
+        if let Some(image_detail) = self.static_image_preview_header_detail() {
+            return Some(match detail {
+                Some(detail) if !detail.is_empty() => format!("{detail}  •  {image_detail}"),
+                _ => image_detail,
+            });
+        }
         detail
     }
 
     pub(super) fn refresh_preview(&mut self) {
         self.preview_state.deferred_refresh_at = None;
         self.sync_pdf_preview_selection();
+        self.sync_image_preview_selection_activation();
         self.preview_state.token = self.preview_state.token.wrapping_add(1);
         self.preview_state.content = match self.selected_entry().cloned() {
+            Some(entry) if self.should_defer_static_image_preview(&entry) => {
+                self.preview_state.load_state = None;
+                preview::PreviewContent::new(
+                    preview::PreviewKind::Image,
+                    vec![Line::from("Preparing image preview")],
+                )
+                .with_detail(
+                    self.static_image_preview_detail(&entry)
+                        .unwrap_or("Image preview"),
+                )
+            }
             Some(entry) if self.should_defer_pdf_document_preview(&entry) => {
                 self.preview_state.load_state = None;
                 self.cached_preview_for(&entry)

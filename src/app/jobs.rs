@@ -1,3 +1,4 @@
+use super::image_preview::PreparedStaticImageAsset;
 use super::pdf_preview::PdfProbeResult;
 use super::*;
 use crate::search::SearchCandidate;
@@ -13,10 +14,12 @@ use std::{
 const PREVIEW_WORKER_COUNT: usize = 2;
 const SEARCH_WORKER_COUNT: usize = 1;
 const DIRECTORY_ITEM_COUNT_WORKER_COUNT: usize = 1;
+const IMAGE_PREPARE_WORKER_COUNT: usize = 1;
 const PDF_PROBE_WORKER_COUNT: usize = 2;
 const PDF_RENDER_WORKER_COUNT: usize = 2;
 const PREVIEW_QUEUE_LIMIT: usize = 8;
 const DIRECTORY_ITEM_COUNT_QUEUE_LIMIT: usize = 48;
+const IMAGE_PREPARE_QUEUE_LIMIT: usize = 1;
 const PDF_PROBE_QUEUE_LIMIT: usize = 16;
 const PDF_RENDER_QUEUE_LIMIT: usize = 8;
 
@@ -27,6 +30,8 @@ struct SchedulerConfig {
     preview_queue_limit: usize,
     directory_item_count_worker_count: usize,
     directory_item_count_queue_limit: usize,
+    image_prepare_worker_count: usize,
+    image_prepare_queue_limit: usize,
     pdf_probe_worker_count: usize,
     pdf_probe_queue_limit: usize,
     pdf_render_worker_count: usize,
@@ -41,6 +46,8 @@ impl SchedulerConfig {
             preview_queue_limit: PREVIEW_QUEUE_LIMIT,
             directory_item_count_worker_count: DIRECTORY_ITEM_COUNT_WORKER_COUNT,
             directory_item_count_queue_limit: DIRECTORY_ITEM_COUNT_QUEUE_LIMIT,
+            image_prepare_worker_count: IMAGE_PREPARE_WORKER_COUNT,
+            image_prepare_queue_limit: IMAGE_PREPARE_QUEUE_LIMIT,
             pdf_probe_worker_count: PDF_PROBE_WORKER_COUNT,
             pdf_probe_queue_limit: PDF_PROBE_QUEUE_LIMIT,
             pdf_render_worker_count: PDF_RENDER_WORKER_COUNT,
@@ -60,6 +67,8 @@ impl SchedulerConfig {
             preview_queue_limit,
             directory_item_count_worker_count: DIRECTORY_ITEM_COUNT_WORKER_COUNT,
             directory_item_count_queue_limit: DIRECTORY_ITEM_COUNT_QUEUE_LIMIT,
+            image_prepare_worker_count: 0,
+            image_prepare_queue_limit: IMAGE_PREPARE_QUEUE_LIMIT,
             pdf_probe_worker_count: 0,
             pdf_probe_queue_limit: PDF_PROBE_QUEUE_LIMIT,
             pdf_render_worker_count: 0,
@@ -126,6 +135,27 @@ pub(super) struct DirectoryItemCountRequest {
 }
 
 #[derive(Debug)]
+pub(super) struct ImagePrepareBuild {
+    pub path: PathBuf,
+    pub size: u64,
+    pub modified: Option<SystemTime>,
+    pub target_width_px: u32,
+    pub target_height_px: u32,
+    pub result: Option<PreparedStaticImageAsset>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct ImagePrepareRequest {
+    pub path: PathBuf,
+    pub size: u64,
+    pub modified: Option<SystemTime>,
+    pub target_width_px: u32,
+    pub target_height_px: u32,
+    pub ffmpeg_available: bool,
+    pub magick_available: bool,
+}
+
+#[derive(Debug)]
 pub(super) struct PdfProbeBuild {
     pub path: PathBuf,
     pub size: u64,
@@ -181,6 +211,7 @@ pub(super) struct PreviewRequest {
 pub(super) enum JobResult {
     Directory(DirectoryBuild),
     DirectoryItemCount(DirectoryItemCountBuild),
+    ImagePrepare(ImagePrepareBuild),
     PdfProbe(PdfProbeBuild),
     PdfRender(PdfRenderBuild),
     Search(SearchBuild),
@@ -209,6 +240,7 @@ pub struct SchedulerMetricsSnapshot {
 pub(super) struct JobScheduler {
     directory: DirectoryPool,
     directory_item_count: DirectoryItemCountPool,
+    image_prepare: ImagePreparePool,
     pdf_probe: PdfProbePool,
     pdf_render: PdfRenderPool,
     search: SearchPool,
@@ -231,6 +263,11 @@ impl JobScheduler {
             directory_item_count: DirectoryItemCountPool::new(
                 config.directory_item_count_worker_count,
                 config.directory_item_count_queue_limit,
+                result_tx.clone(),
+            ),
+            image_prepare: ImagePreparePool::new(
+                config.image_prepare_worker_count,
+                config.image_prepare_queue_limit,
                 result_tx.clone(),
             ),
             pdf_probe: PdfProbePool::new(
@@ -266,6 +303,10 @@ impl JobScheduler {
 
     pub(super) fn submit_directory_item_count(&self, request: DirectoryItemCountRequest) -> bool {
         self.directory_item_count.submit(request)
+    }
+
+    pub(super) fn submit_image_prepare(&self, request: ImagePrepareRequest) -> bool {
+        self.image_prepare.submit(request)
     }
 
     pub(super) fn submit_pdf_probe(
@@ -326,6 +367,7 @@ impl JobScheduler {
     pub(super) fn has_pending_work(&self) -> bool {
         self.directory.has_pending_work()
             || self.directory_item_count.has_pending_work()
+            || self.image_prepare.has_pending_work()
             || self.pdf_probe.has_pending_work()
             || self.pdf_render.has_pending_work()
             || self.search.has_pending_work()
@@ -716,6 +758,159 @@ impl DirectoryItemCountJobKey {
             path: request.path.clone(),
             modified: request.modified,
             show_hidden: request.show_hidden,
+        }
+    }
+}
+
+struct ImagePreparePool {
+    shared: Arc<ImagePrepareShared>,
+    workers: Vec<thread::JoinHandle<()>>,
+}
+
+struct ImagePrepareShared {
+    state: Mutex<ImagePrepareState>,
+    available: Condvar,
+}
+
+struct ImagePrepareState {
+    pending: VecDeque<ImagePrepareRequest>,
+    queued_keys: HashSet<ImagePrepareJobKey>,
+    active_keys: HashSet<ImagePrepareJobKey>,
+    closed: bool,
+    capacity: usize,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct ImagePrepareJobKey {
+    path: PathBuf,
+    size: u64,
+    modified: Option<SystemTime>,
+    target_width_px: u32,
+    target_height_px: u32,
+}
+
+impl ImagePreparePool {
+    fn new(worker_count: usize, capacity: usize, result_tx: mpsc::Sender<JobResult>) -> Self {
+        let shared = Arc::new(ImagePrepareShared {
+            state: Mutex::new(ImagePrepareState {
+                pending: VecDeque::new(),
+                queued_keys: HashSet::new(),
+                active_keys: HashSet::new(),
+                closed: false,
+                capacity,
+            }),
+            available: Condvar::new(),
+        });
+        let mut workers = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            let shared = Arc::clone(&shared);
+            let result_tx = result_tx.clone();
+            workers.push(thread::spawn(move || {
+                while let Some(request) = ImagePrepareShared::pop(&shared) {
+                    let key = ImagePrepareJobKey::from_request(&request);
+                    let result = image_preview::prepare_static_image_asset(
+                        &request.path,
+                        request.size,
+                        request.modified,
+                        request.target_width_px,
+                        request.target_height_px,
+                        request.ffmpeg_available,
+                        request.magick_available,
+                    );
+                    ImagePrepareShared::finish(&shared, &key);
+                    if result_tx
+                        .send(JobResult::ImagePrepare(ImagePrepareBuild {
+                            path: request.path,
+                            size: request.size,
+                            modified: request.modified,
+                            target_width_px: request.target_width_px,
+                            target_height_px: request.target_height_px,
+                            result,
+                        }))
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            }));
+        }
+        Self { shared, workers }
+    }
+
+    fn submit(&self, request: ImagePrepareRequest) -> bool {
+        let key = ImagePrepareJobKey::from_request(&request);
+        let mut state = lock_unpoison(&self.shared.state);
+        if state.closed {
+            return false;
+        }
+        if state.queued_keys.contains(&key) || state.active_keys.contains(&key) {
+            return true;
+        }
+        if !state.pending.is_empty() {
+            state.pending.clear();
+            state.queued_keys.clear();
+        }
+        while state.pending.len() >= state.capacity {
+            state.pending.pop_front();
+        }
+        state.queued_keys.insert(key);
+        state.pending.push_back(request);
+        self.shared.available.notify_one();
+        true
+    }
+
+    fn has_pending_work(&self) -> bool {
+        let state = lock_unpoison(&self.shared.state);
+        !state.pending.is_empty() || !state.active_keys.is_empty()
+    }
+}
+
+impl Drop for ImagePreparePool {
+    fn drop(&mut self) {
+        {
+            let mut state = lock_unpoison(&self.shared.state);
+            state.closed = true;
+            state.pending.clear();
+            state.queued_keys.clear();
+        }
+        self.shared.available.notify_all();
+        for worker in self.workers.drain(..) {
+            let _ = worker.join();
+        }
+    }
+}
+
+impl ImagePrepareShared {
+    fn pop(shared: &Arc<Self>) -> Option<ImagePrepareRequest> {
+        let mut state = lock_unpoison(&shared.state);
+        loop {
+            if state.closed {
+                return None;
+            }
+            if let Some(request) = state.pending.pop_front() {
+                let key = ImagePrepareJobKey::from_request(&request);
+                state.queued_keys.remove(&key);
+                state.active_keys.insert(key);
+                return Some(request);
+            }
+            state = wait_unpoison(&shared.available, state);
+        }
+    }
+
+    fn finish(shared: &Arc<Self>, key: &ImagePrepareJobKey) {
+        let mut state = lock_unpoison(&shared.state);
+        state.active_keys.remove(key);
+    }
+}
+
+impl ImagePrepareJobKey {
+    fn from_request(request: &ImagePrepareRequest) -> Self {
+        Self {
+            path: request.path.clone(),
+            size: request.size,
+            modified: request.modified,
+            target_width_px: request.target_width_px,
+            target_height_px: request.target_height_px,
         }
     }
 }

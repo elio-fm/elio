@@ -48,6 +48,9 @@ impl App {
                 JobResult::PdfRender(build) => {
                     dirty |= self.apply_pdf_render_build(build);
                 }
+                JobResult::ImagePrepare(build) => {
+                    dirty |= self.apply_image_prepare_build(build);
+                }
                 JobResult::Search(build) => {
                     if build.token != self.search_token || build.cwd != self.cwd {
                         continue;

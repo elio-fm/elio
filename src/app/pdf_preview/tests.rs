@@ -1,6 +1,9 @@
 use super::*;
+use crate::app::preview::PreviewKind;
+use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use std::{
     fs,
+    path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -19,6 +22,7 @@ fn build_pdf_overlay_test_app(label: &str) -> (App, PathBuf) {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
     app.pdf_preview.enabled = true;
+    app.pdf_preview.pdf_tools_available = true;
     app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.pdf_preview.session = Some(PdfSession {
         path: root.join("demo.pdf"),
@@ -52,6 +56,75 @@ fn build_selected_pdf_app(label: &str) -> (App, PathBuf) {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
     app.pdf_preview.enabled = true;
+    app.pdf_preview.pdf_tools_available = true;
+    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
+    app.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+    app.pdf_preview.terminal_window = Some(TerminalWindowSize {
+        cells_width,
+        cells_height,
+        pixels_width: 1920,
+        pixels_height: 1080,
+    });
+    app.refresh_preview();
+    (app, root)
+}
+
+fn write_test_png(path: &Path, width_px: u32, height_px: u32) {
+    let mut bytes = vec![
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, b'I', b'H', b'D',
+        b'R',
+    ];
+    bytes.extend_from_slice(&width_px.to_be_bytes());
+    bytes.extend_from_slice(&height_px.to_be_bytes());
+    fs::write(path, bytes).expect("failed to write png header");
+}
+
+fn write_test_raster_image(path: &Path, format: ImageFormat, width_px: u32, height_px: u32) {
+    let mut image = RgbaImage::new(width_px, height_px);
+    for pixel in image.pixels_mut() {
+        *pixel = Rgba([32, 128, 224, 255]);
+    }
+
+    DynamicImage::ImageRgba8(image)
+        .save_with_format(path, format)
+        .expect("failed to write raster test image");
+}
+
+fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBuf) {
+    let root = temp_root(label);
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let image_path = root.join(file_name);
+    match image_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("png") => write_test_raster_image(&image_path, ImageFormat::Png, 600, 300),
+        Some("jpg") | Some("jpeg") => {
+            write_test_raster_image(&image_path, ImageFormat::Jpeg, 600, 300)
+        }
+        Some("gif") => write_test_raster_image(&image_path, ImageFormat::Gif, 600, 300),
+        Some("webp") => write_test_raster_image(&image_path, ImageFormat::WebP, 600, 300),
+        Some("svg") => {
+            fs::write(
+                &image_path,
+                r#"<svg viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg"></svg>"#,
+            )
+            .expect("failed to write svg placeholder");
+        }
+        _ => panic!("unsupported test image extension: {file_name}"),
+    }
+
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
+    app.pdf_preview.enabled = true;
+    app.pdf_preview.pdf_tools_available = true;
     app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.frame_state.preview_content_area = Some(Rect {
         x: 2,
@@ -105,11 +178,7 @@ fn read_png_dimensions_reads_ihdr_size() {
     let root = temp_root("png-dimensions");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("page.png");
-    let bytes = [
-        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, b'I', b'H', b'D',
-        b'R', 0x00, 0x00, 0x02, 0x58, 0x00, 0x00, 0x01, 0x2c,
-    ];
-    fs::write(&path, bytes).expect("failed to write png header");
+    write_test_png(&path, 600, 300);
 
     assert_eq!(
         read_png_dimensions(&path),
@@ -117,6 +186,162 @@ fn read_png_dimensions_reads_ihdr_size() {
             width_px: 600,
             height_px: 300,
         })
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn refresh_preview_uses_static_image_surface_placeholder_when_backend_enabled() {
+    for (file_name, detail) in [
+        ("demo.png", "PNG image"),
+        ("demo.jpg", "JPEG image"),
+        ("demo.jpeg", "JPEG image"),
+        ("demo.gif", "GIF image"),
+        ("demo.webp", "WebP image"),
+        ("demo.svg", "SVG image"),
+    ] {
+        let (app, root) = build_selected_static_image_app("image-placeholder", file_name);
+
+        assert_eq!(app.preview_state.content.kind, PreviewKind::Image);
+        assert_eq!(app.preview_state.content.detail.as_deref(), Some(detail));
+        assert_eq!(
+            app.preview_state.content.lines[0].to_string(),
+            "Preparing image preview"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+}
+
+#[test]
+fn preview_prefers_image_surface_for_supported_static_images_when_backend_enabled() {
+    for file_name in [
+        "demo.png",
+        "demo.jpg",
+        "demo.jpeg",
+        "demo.gif",
+        "demo.webp",
+        "demo.svg",
+    ] {
+        let (app, root) = build_selected_static_image_app("image-surface", file_name);
+
+        assert!(app.preview_prefers_image_surface());
+        assert_eq!(
+            app.preview_overlay_placeholder_message().as_deref(),
+            Some("Preparing image preview...")
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+}
+
+#[test]
+fn raster_static_images_use_png_display_paths() {
+    for file_name in ["demo.png", "demo.jpg", "demo.jpeg", "demo.gif", "demo.webp"] {
+        let (_app, root) = build_selected_static_image_app("image-cache", file_name);
+        let path = root.join(file_name);
+        let metadata = fs::metadata(&path).expect("image metadata should exist");
+        let prepared = crate::app::image_preview::prepare_static_image_asset(
+            &path,
+            metadata.len(),
+            None,
+            768,
+            540,
+            true,
+            true,
+        )
+        .expect("static image should prepare successfully");
+
+        assert_eq!(
+            prepared
+                .display_path
+                .extension()
+                .and_then(|extension| extension.to_str()),
+            Some("png")
+        );
+        assert_eq!(
+            prepared.dimensions,
+            RenderedImageDimensions {
+                width_px: 600,
+                height_px: 300,
+            }
+        );
+        if file_name == "demo.png" {
+            assert_eq!(prepared.display_path, path);
+        } else {
+            assert_ne!(prepared.display_path, path);
+        }
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+}
+
+#[test]
+fn svg_static_images_are_normalized_to_cached_png_overlays() {
+    let (_app, root) = build_selected_static_image_app("svg-cache", "demo.svg");
+    let path = root.join("demo.svg");
+    let metadata = fs::metadata(&path).expect("svg metadata should exist");
+    let prepared = crate::app::image_preview::prepare_static_image_asset(
+        &path,
+        metadata.len(),
+        None,
+        768,
+        540,
+        true,
+        true,
+    )
+    .expect("svg image should prepare successfully");
+
+    assert_eq!(
+        prepared
+            .display_path
+            .extension()
+            .and_then(|extension| extension.to_str()),
+        Some("png")
+    );
+    assert_eq!(
+        prepared.dimensions,
+        RenderedImageDimensions {
+            width_px: 600,
+            height_px: 300,
+        }
+    );
+    assert_ne!(prepared.display_path, path);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn oversized_png_static_images_are_downscaled_for_overlay_cache() {
+    let root = temp_root("large-png-cache");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("large.png");
+    write_test_raster_image(&path, ImageFormat::Png, 3200, 1800);
+    let metadata = fs::metadata(&path).expect("png metadata should exist");
+
+    let prepared = crate::app::image_preview::prepare_static_image_asset(
+        &path,
+        metadata.len(),
+        None,
+        768,
+        540,
+        true,
+        true,
+    )
+    .expect("large png should prepare successfully");
+
+    assert_ne!(prepared.display_path, path);
+    let rendered =
+        image::image_dimensions(&prepared.display_path).expect("rendered image should be readable");
+    assert!(rendered.0 <= 768);
+    assert!(rendered.1 <= 540);
+    assert_eq!(
+        prepared.dimensions,
+        RenderedImageDimensions {
+            width_px: 3200,
+            height_px: 1800,
+        }
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -181,7 +406,6 @@ fn build_kitty_display_sequence_positions_png_without_cursor_motion() {
     assert!(sequence.starts_with("\u{1b}[5;8H\u{1b}_G"));
     assert!(sequence.contains("a=T"));
     assert!(sequence.contains("q=2"));
-    assert!(sequence.contains("f=100"));
     assert!(sequence.contains("t=f"));
     assert!(sequence.contains("c=30"));
     assert!(sequence.contains("r=12"));
@@ -251,6 +475,7 @@ fn fit_image_area_preserves_actual_rendered_png_aspect_ratio() {
 fn pdf_preview_page_navigation_clamps_to_document_bounds() {
     let mut app = App::new_at(std::env::temp_dir()).expect("app should initialize");
     app.pdf_preview.enabled = true;
+    app.pdf_preview.pdf_tools_available = true;
     app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.pdf_preview.session = Some(PdfSession {
         path: PathBuf::from("demo.pdf"),
@@ -350,6 +575,7 @@ fn sync_pdf_preview_selection_reuses_cached_total_page_count() {
     app.entries = vec![entry.clone()];
     app.selected = 0;
     app.pdf_preview.enabled = true;
+    app.pdf_preview.pdf_tools_available = true;
     app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.pdf_preview
         .document_page_counts
@@ -385,6 +611,7 @@ fn sync_pdf_preview_selection_defers_adjacent_probe_prefetch_until_current_page_
     app.entries = vec![entry.clone()];
     app.selected = 0;
     app.pdf_preview.enabled = true;
+    app.pdf_preview.pdf_tools_available = true;
     app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.pdf_preview
         .document_page_counts
@@ -423,6 +650,7 @@ fn sync_pdf_preview_selection_queues_initial_probe_for_current_page() {
     app.entries = vec![entry.clone()];
     app.selected = 0;
     app.pdf_preview.enabled = true;
+    app.pdf_preview.pdf_tools_available = true;
     app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
 
     app.sync_pdf_preview_selection();
@@ -630,7 +858,9 @@ fn preview_uses_image_overlay_only_for_current_render_target() {
             height_px: placement.render_height_px,
         },
     );
-    app.pdf_preview.displayed = Some(DisplayedPdfPreview::from_request(&request, placement));
+    app.pdf_preview.displayed = Some(DisplayedOverlay::Pdf(DisplayedPdfPreview::from_request(
+        &request, placement,
+    )));
 
     assert!(app.preview_uses_image_overlay());
 
@@ -802,7 +1032,7 @@ fn pdf_preview_placeholder_message_tracks_loading_state() {
     let (mut app, root) = build_pdf_overlay_test_app("placeholder");
 
     assert_eq!(
-        app.pdf_preview_placeholder_message().as_deref(),
+        app.preview_overlay_placeholder_message().as_deref(),
         Some("Loading PDF page...")
     );
 
@@ -825,7 +1055,7 @@ fn pdf_preview_placeholder_message_tracks_loading_state() {
         .insert(PdfRenderKey::from_request(&request, placement));
 
     assert_eq!(
-        app.pdf_preview_placeholder_message().as_deref(),
+        app.preview_overlay_placeholder_message().as_deref(),
         Some("Rendering PDF page...")
     );
 
@@ -894,6 +1124,7 @@ fn sync_pdf_preview_selection_clears_stale_pdf_page_status() {
     let mut app = App::new_at(std::env::temp_dir()).expect("app should initialize");
     app.status = "PDF page 3/10".to_string();
     app.pdf_preview.enabled = true;
+    app.pdf_preview.pdf_tools_available = true;
     app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
 
     app.sync_pdf_preview_selection();

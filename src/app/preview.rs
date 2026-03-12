@@ -37,6 +37,7 @@ pub(super) enum PreviewKind {
     Archive,
     Directory,
     Document,
+    Image,
     Markdown,
     Code,
     Text,
@@ -50,6 +51,7 @@ impl PreviewKind {
             Self::Archive => "Archive",
             Self::Directory => "Contents",
             Self::Document => "Document",
+            Self::Image => "Image",
             Self::Markdown => "Markdown",
             Self::Code => "Code",
             Self::Text => "Text",
@@ -60,7 +62,12 @@ impl PreviewKind {
     pub(super) fn wraps_in_preview(self) -> bool {
         matches!(
             self,
-            Self::Document | Self::Markdown | Self::Text | Self::Binary | Self::Unavailable
+            Self::Document
+                | Self::Image
+                | Self::Markdown
+                | Self::Text
+                | Self::Binary
+                | Self::Unavailable
         )
     }
 

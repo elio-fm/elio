@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
     thread,
     time::Duration,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 fn temp_path(label: &str) -> PathBuf {
@@ -407,6 +407,59 @@ fn wheel_burst_smoothing_coalesces_dense_input() {
 
     assert!(lane.pending.abs() < 6);
     assert!(lane.pending > 0);
+}
+
+#[test]
+fn short_entry_wheel_burst_keeps_full_distance() {
+    let mut lane = ScrollLane::new();
+
+    for _ in 0..3 {
+        App::queue_scroll(&mut lane, 1, ENTRY_WHEEL_TUNING);
+    }
+
+    assert_eq!(lane.pending, 3);
+}
+
+#[test]
+fn repeated_down_arrow_is_throttled_without_starving_hold_repeat() {
+    let root = temp_path("down-arrow-debounce");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    for name in ["a.txt", "b.txt", "c.txt"] {
+        fs::write(root.join(name), name).expect("failed to write temp file");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.view_mode = ViewMode::List;
+    app.select_index(0);
+
+    app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
+        .expect("first down arrow should be handled");
+
+    let throttled_at = app
+        .last_navigation_key
+        .expect("accepted navigation key should be tracked")
+        .1;
+    app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
+        .expect("second down arrow should be handled");
+
+    assert_eq!(app.selected, 1);
+    assert_eq!(
+        app.last_navigation_key
+            .expect("throttled navigation key should keep prior timestamp")
+            .1,
+        throttled_at
+    );
+
+    app.last_navigation_key = Some((
+        NavigationRepeatKey::Down,
+        Instant::now() - KEY_REPEAT_NAV_INTERVAL - Duration::from_millis(1),
+    ));
+    app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
+        .expect("third down arrow should be handled");
+
+    assert_eq!(app.selected, 2);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
 #[test]

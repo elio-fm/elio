@@ -17,10 +17,10 @@ struct WheelTuning {
 
 const ENTRY_WHEEL_TUNING: WheelTuning = WheelTuning {
     queue_limit: WHEEL_SCROLL_QUEUE_LIMIT,
-    medium_threshold: 3,
-    fast_threshold: 6,
+    medium_threshold: 4,
+    fast_threshold: 8,
     medium_divisor: 2,
-    fast_divisor: 4,
+    fast_divisor: 3,
 };
 const ENTRY_HORIZONTAL_WHEEL_TUNING: WheelTuning = WheelTuning {
     queue_limit: WHEEL_SCROLL_QUEUE_LIMIT_HORIZONTAL,
@@ -115,6 +115,10 @@ impl App {
     fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
         if self.search.is_some() {
             return self.handle_search_key(key);
+        }
+
+        if self.should_debounce_navigation_key(key) {
+            return Ok(());
         }
 
         if self.help_open {
@@ -247,6 +251,47 @@ impl App {
             _ => {}
         }
         Ok(())
+    }
+
+    fn should_debounce_navigation_key(&mut self, key: KeyEvent) -> bool {
+        let Some(navigation_key) = Self::navigation_repeat_key(key) else {
+            return false;
+        };
+
+        let now = Instant::now();
+        if self
+            .last_navigation_key
+            .is_some_and(|(previous_key, previous_at)| {
+                previous_key == navigation_key
+                    && now.duration_since(previous_at) < KEY_REPEAT_NAV_INTERVAL
+            })
+        {
+            return true;
+        }
+
+        self.last_navigation_key = Some((navigation_key, now));
+        false
+    }
+
+    fn navigation_repeat_key(key: KeyEvent) -> Option<NavigationRepeatKey> {
+        if key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
+            return None;
+        }
+
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => Some(NavigationRepeatKey::Up),
+            KeyCode::Down | KeyCode::Char('j') => Some(NavigationRepeatKey::Down),
+            KeyCode::Left | KeyCode::Char('h') => Some(NavigationRepeatKey::Left),
+            KeyCode::Right | KeyCode::Char('l') => Some(NavigationRepeatKey::Right),
+            KeyCode::PageUp => Some(NavigationRepeatKey::PageUp),
+            KeyCode::PageDown => Some(NavigationRepeatKey::PageDown),
+            KeyCode::Home | KeyCode::Char('g') => Some(NavigationRepeatKey::Home),
+            KeyCode::End | KeyCode::Char('G') => Some(NavigationRepeatKey::End),
+            _ => None,
+        }
     }
 
     fn handle_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
@@ -720,7 +765,8 @@ impl App {
     }
 
     fn pdf_page_wheel_navigation_active(&self) -> bool {
-        self.preview_uses_image_overlay() || self.preview_prefers_pdf_surface()
+        self.preview_prefers_pdf_surface()
+            || (self.preview_uses_image_overlay() && self.pdf_preview_header_detail().is_some())
     }
 
     fn preview_has_vertical_overflow(&self) -> bool {

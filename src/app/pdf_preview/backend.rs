@@ -12,10 +12,6 @@ use std::{
 };
 
 pub(super) fn detect_terminal_pdf_preview_backend() -> Option<TerminalImageBackend> {
-    if !command_exists("pdftocairo") {
-        return None;
-    }
-
     let term = env::var("TERM").unwrap_or_default();
     let term_program = env::var("TERM_PROGRAM").unwrap_or_default();
     let kitten_available = command_exists("kitten");
@@ -28,6 +24,10 @@ pub(super) fn detect_terminal_pdf_preview_backend() -> Option<TerminalImageBacke
         kitten_available,
         kitten_detected,
     )
+}
+
+pub(super) fn pdf_preview_tools_available() -> bool {
+    command_exists("pdfinfo") && command_exists("pdftocairo")
 }
 
 pub(super) fn select_terminal_image_backend(

@@ -88,6 +88,10 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             dirty = true;
         }
 
+        if app.process_image_preview_timers() {
+            dirty = true;
+        }
+
         match app.process_auto_reload() {
             Ok(changed) => {
                 dirty |= changed;
@@ -140,6 +144,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         let poll_interval = app
             .pending_pdf_preview_timer()
             .into_iter()
+            .chain(app.pending_image_preview_timer())
             .chain(app.pending_preview_refresh_timer())
             .chain(app.pending_browser_wheel_timer())
             .min()
