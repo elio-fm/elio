@@ -23,17 +23,19 @@ pub(super) fn highlight_python_line(
         ];
     }
 
-    let bytes = line.as_bytes();
     let mut spans = Vec::new();
     let mut index = 0usize;
     let mut expect_name: Option<NameKind> = None;
 
-    while index < bytes.len() {
-        let ch = bytes[index] as char;
+    while index < line.len() {
+        let ch = line[index..].chars().next().unwrap_or(' ');
         if ch.is_whitespace() {
             let start = index;
-            while index < bytes.len() && (bytes[index] as char).is_whitespace() {
-                index += 1;
+            while let Some(current) = line[index..].chars().next() {
+                if !current.is_whitespace() {
+                    break;
+                }
+                index += current.len_utf8();
             }
             spans.push(Span::raw(line[start..index].to_string()));
             continue;
@@ -71,13 +73,12 @@ pub(super) fn highlight_python_line(
             continue;
         }
 
-        if ch.is_ascii_alphabetic() || ch == '_' {
+        if ch.is_alphabetic() || ch == '_' {
             let start = index;
-            index += 1;
-            while index < bytes.len() {
-                let current = bytes[index] as char;
-                if current.is_ascii_alphanumeric() || current == '_' {
-                    index += 1;
+            index += ch.len_utf8();
+            while let Some(current) = line[index..].chars().next() {
+                if current.is_alphanumeric() || current == '_' {
+                    index += current.len_utf8();
                 } else {
                     break;
                 }
@@ -125,11 +126,10 @@ pub(super) fn highlight_python_line(
 
         if ch.is_ascii_digit() {
             let start = index;
-            index += 1;
-            while index < bytes.len() {
-                let current = bytes[index] as char;
+            index += ch.len_utf8();
+            while let Some(current) = line[index..].chars().next() {
                 if current.is_ascii_alphanumeric() || matches!(current, '.' | '_' | 'j') {
-                    index += 1;
+                    index += current.len_utf8();
                 } else {
                     break;
                 }
@@ -190,15 +190,20 @@ fn scan_python_string_end(input: &str, start: usize, state: &mut PythonState) ->
 }
 
 fn python_string_start(input: &str, start: usize) -> Option<(usize, char, &'static str)> {
+    if !input.is_char_boundary(start) {
+        return None;
+    }
     for prefix_len in [2usize, 1, 0] {
         if start + prefix_len >= input.len() {
             continue;
         }
-        let prefix = &input[start..start + prefix_len];
+        let Some(prefix) = input.get(start..start + prefix_len) else {
+            continue;
+        };
         if !prefix.chars().all(is_python_string_prefix_char) {
             continue;
         }
-        let quote = input[start + prefix_len..].chars().next()?;
+        let quote = input.get(start + prefix_len..)?.chars().next()?;
         if !matches!(quote, '"' | '\'') {
             continue;
         }

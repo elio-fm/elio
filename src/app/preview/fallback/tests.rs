@@ -345,6 +345,28 @@ fn python_fallback_renderer_highlights_decorators_docstrings_and_comments() {
 }
 
 #[test]
+fn python_fallback_renderer_handles_unicode_identifiers_without_panicking() {
+    let lines = render_fallback_code_preview(
+        "def saludar(nombre):\n    mensaje = f\"hola, {nombre} 👋\"\n    print(mensaje)  # áéíóú\n",
+        FallbackSyntax::Python,
+        true,
+    );
+
+    assert!(
+        lines[1]
+            .spans
+            .iter()
+            .any(|span| span.content.contains("👋"))
+    );
+    assert!(
+        lines[2]
+            .spans
+            .iter()
+            .any(|span| span.content.contains("# áéíóú"))
+    );
+}
+
+#[test]
 fn shell_fallback_renderer_highlights_assignments_keywords_and_expansions() {
     let lines = render_fallback_code_preview(
         "#!/usr/bin/env bash\nNAME=elio\nif [ -n \"$NAME\" ]; then\n  printf '%s' \"$(whoami)\"\nfi # done\n",
