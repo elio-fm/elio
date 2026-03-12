@@ -1,24 +1,45 @@
+mod backend;
+mod geometry;
+mod pipeline;
+
+pub(crate) use self::pipeline::{probe_pdf_page, render_pdf_page_to_cache};
+#[cfg(test)]
+use self::{
+    backend::{
+        build_kitty_clear_sequence, build_kitty_display_sequence, fallback_window_size_pixels,
+        parse_window_size, select_terminal_image_backend,
+    },
+    geometry::bucket_render_dimensions,
+    pipeline::{parse_pdfinfo_page_count, parse_pdfinfo_page_dimensions},
+};
+use self::{
+    backend::{
+        clear_pdf_images, detect_terminal_pdf_preview_backend, place_pdf_image,
+        query_terminal_window_size, read_png_dimensions,
+    },
+    geometry::{fit_image_area, fit_pdf_page},
+};
 use super::*;
 use crate::file_facts::{self, DocumentFormat};
 use anyhow::{Context, Result};
+#[cfg(test)]
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use crossterm::terminal;
 use ratatui::layout::Rect;
 use std::{
-    collections::{HashMap, HashSet, VecDeque, hash_map::DefaultHasher},
-    env, fs,
-    hash::{Hash, Hasher},
-    io::{self, Write},
+    collections::{HashMap, HashSet, VecDeque},
+    fs,
+    hash::Hash,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
     time::{Duration, Instant, SystemTime},
 };
 
 const PDF_RENDER_CACHE_LIMIT: usize = 12;
+const PDF_RENDER_BUCKET_PX: u32 = 64;
 const PDF_RENDER_MIN_DIMENSION_PX: u32 = 96;
 const PDF_PAGE_MIN: usize = 1;
 const PDF_PAGE_STATUS_PREFIX: &str = "PDF page ";
-const PDF_SELECTION_ACTIVATION_DELAY: Duration = Duration::from_millis(80);
+const PDF_PREFETCH_DISTANCE: usize = 1;
+const PDF_SELECTION_ACTIVATION_DELAY: Duration = Duration::from_millis(60);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TerminalImageBackend {
@@ -36,6 +57,7 @@ pub(super) struct PdfPreviewState {
     pending_page_probes: HashSet<PdfPageKey>,
     failed_page_probes: HashSet<PdfPageKey>,
     rendered_pages: HashMap<PdfRenderKey, PathBuf>,
+    rendered_page_dimensions: HashMap<PdfRenderKey, RenderedImageDimensions>,
     render_order: VecDeque<PdfRenderKey>,
     pending_renders: HashSet<PdfRenderKey>,
     failed_renders: HashSet<PdfRenderKey>,
@@ -72,6 +94,12 @@ struct PdfPageKey {
 struct PdfPageDimensions {
     width_pts: f32,
     height_pts: f32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RenderedImageDimensions {
+    width_px: u32,
+    height_px: u32,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -137,9 +165,27 @@ impl App {
     pub(crate) fn handle_pdf_terminal_resize(&mut self) {
         self.refresh_pdf_terminal_window_size();
         if self.pdf_preview.session.is_some() {
-            self.pdf_preview.activation_ready_at = Some(Instant::now());
-            self.queue_current_pdf_render();
+            self.pdf_preview.activation_ready_at = None;
+            self.refresh_pdf_prefetch_window();
         }
+    }
+
+    pub(crate) fn process_pdf_preview_timers(&mut self) -> bool {
+        let Some(ready_at) = self.pdf_preview.activation_ready_at else {
+            return false;
+        };
+        if Instant::now() < ready_at {
+            return false;
+        }
+
+        self.pdf_preview.activation_ready_at = None;
+        self.pdf_preview.session.is_some()
+    }
+
+    pub(crate) fn pending_pdf_preview_timer(&self) -> Option<Duration> {
+        self.pdf_preview
+            .activation_ready_at
+            .map(|ready_at| ready_at.saturating_duration_since(Instant::now()))
     }
 
     pub(crate) fn present_pdf_overlay(&mut self) -> Result<()> {
@@ -166,19 +212,24 @@ impl App {
             return Ok(());
         }
 
-        let Some(placement) = self.overlay_placement_for_request(&request) else {
+        let Some(requested_placement) = self.overlay_placement_for_request(&request) else {
             let _ = self.ensure_pdf_page_probe(&request);
             return Ok(());
         };
+        let render_key = PdfRenderKey::from_request(&request, requested_placement);
+        let Some(rendered) = self.ensure_pdf_render(&render_key) else {
+            return Ok(());
+        };
+        let placement = self.resolved_pdf_display_placement(
+            &request,
+            &render_key,
+            requested_placement,
+            &rendered,
+        );
         let displayed = DisplayedPdfPreview::from_request(&request, placement);
         if self.pdf_preview.displayed.as_ref() == Some(&displayed) {
             return Ok(());
         }
-
-        let render_key = PdfRenderKey::from_request(&request, placement);
-        let Some(rendered) = self.ensure_pdf_render(&render_key) else {
-            return Ok(());
-        };
 
         if self.pdf_preview.displayed.is_some() {
             clear_pdf_images(backend).context("failed to clear previous PDF page")?;
@@ -309,9 +360,8 @@ impl App {
         session.current_page = next_page.clamp(PDF_PAGE_MIN, max_page.max(PDF_PAGE_MIN));
         let changed = session.current_page != previous_page;
         if changed {
-            self.pdf_preview.activation_ready_at = Some(Instant::now());
-            self.queue_current_pdf_probe();
-            self.queue_current_pdf_render();
+            self.pdf_preview.activation_ready_at = None;
+            self.refresh_pdf_prefetch_window();
         }
         changed
     }
@@ -320,6 +370,7 @@ impl App {
         if !self.pdf_preview.enabled {
             self.pdf_preview.session = None;
             self.pdf_preview.activation_ready_at = None;
+            self.clear_pending_pdf_work();
             self.clear_pdf_page_status();
             return;
         }
@@ -327,12 +378,14 @@ impl App {
         let Some(entry) = self.selected_entry() else {
             self.pdf_preview.session = None;
             self.pdf_preview.activation_ready_at = None;
+            self.clear_pending_pdf_work();
             self.clear_pdf_page_status();
             return;
         };
         if !is_pdf_entry(entry) {
             self.pdf_preview.session = None;
             self.pdf_preview.activation_ready_at = None;
+            self.clear_pending_pdf_work();
             self.clear_pdf_page_status();
             return;
         }
@@ -355,8 +408,7 @@ impl App {
         });
         self.pdf_preview.activation_ready_at =
             Some(Instant::now() + PDF_SELECTION_ACTIVATION_DELAY);
-        self.queue_current_pdf_probe();
-        self.queue_current_pdf_render();
+        self.refresh_pdf_prefetch_window();
         self.clear_pdf_page_status();
     }
 
@@ -481,7 +533,7 @@ impl App {
                     );
                     dirty |= current_key.as_ref() == Some(&key);
                 }
-                self.queue_current_pdf_render();
+                self.refresh_pdf_prefetch_window();
                 dirty
             }
             Err(_) => {
@@ -505,10 +557,14 @@ impl App {
         match build.result {
             Ok(Some(path)) => {
                 self.pdf_preview.failed_renders.remove(&key);
-                self.remember_rendered_pdf(key.clone(), path);
-                self.active_pdf_render_key()
+                let image_dimensions = read_png_dimensions(&path);
+                self.remember_rendered_pdf(key.clone(), path, image_dimensions);
+                let dirty = self
+                    .active_pdf_render_key()
                     .as_ref()
-                    .is_some_and(|active| active == &key)
+                    .is_some_and(|active| active == &key);
+                self.refresh_pdf_prefetch_window();
+                dirty
             }
             Ok(None) | Err(_) => {
                 self.pdf_preview.failed_renders.insert(key);
@@ -554,15 +610,7 @@ impl App {
     }
 
     fn cached_pdf_terminal_window(&self) -> Option<TerminalWindowSize> {
-        let cached = self.pdf_preview.terminal_window?;
-        let Ok((cells_width, cells_height)) = terminal::size() else {
-            return Some(cached);
-        };
-        if cached.cells_width == cells_width && cached.cells_height == cells_height {
-            Some(cached)
-        } else {
-            None
-        }
+        self.pdf_preview.terminal_window
     }
 
     fn cached_pdf_page_dimensions(&self, request: &PdfOverlayRequest) -> Option<PdfPageDimensions> {
@@ -580,19 +628,27 @@ impl App {
         }
 
         self.pdf_preview.rendered_pages.remove(key);
+        self.pdf_preview.rendered_page_dimensions.remove(key);
         self.pdf_preview.render_order.retain(|queued| queued != key);
         None
     }
 
     fn cached_render_exists(&self, key: &PdfRenderKey) -> bool {
-        self.pdf_preview
-            .rendered_pages
-            .get(key)
-            .is_some_and(|path| path.exists())
+        self.pdf_preview.rendered_pages.contains_key(key)
     }
 
-    fn remember_rendered_pdf(&mut self, key: PdfRenderKey, path: PathBuf) {
+    fn remember_rendered_pdf(
+        &mut self,
+        key: PdfRenderKey,
+        path: PathBuf,
+        dimensions: Option<RenderedImageDimensions>,
+    ) {
         self.pdf_preview.rendered_pages.insert(key.clone(), path);
+        if let Some(dimensions) = dimensions {
+            self.pdf_preview
+                .rendered_page_dimensions
+                .insert(key.clone(), dimensions);
+        }
         self.pdf_preview
             .render_order
             .retain(|queued| queued != &key);
@@ -601,6 +657,7 @@ impl App {
             if let Some(stale_key) = self.pdf_preview.render_order.pop_front()
                 && let Some(stale_path) = self.pdf_preview.rendered_pages.remove(&stale_key)
             {
+                self.pdf_preview.rendered_page_dimensions.remove(&stale_key);
                 let _ = fs::remove_file(stale_path);
             }
         }
@@ -611,15 +668,13 @@ impl App {
         if !self.pdf_selection_activation_ready() {
             return None;
         }
-        let placement = self.overlay_placement_for_request(&request)?;
+        let requested_placement = self.overlay_placement_for_request(&request)?;
+        let placement = self.cached_display_placement_for_request(&request, requested_placement)?;
         Some(DisplayedPdfPreview::from_request(&request, placement))
     }
 
     fn active_pdf_render_key(&self) -> Option<PdfRenderKey> {
         let request = self.active_pdf_overlay_request()?;
-        if !self.pdf_selection_activation_ready() {
-            return None;
-        }
         let placement = self.overlay_placement_for_request(&request)?;
         Some(PdfRenderKey::from_request(&request, placement))
     }
@@ -630,17 +685,272 @@ impl App {
             .is_some_and(|target| target == displayed)
     }
 
+    fn clear_pending_pdf_work(&mut self) {
+        self.pdf_preview.pending_page_probes.clear();
+        self.pdf_preview.pending_renders.clear();
+        self.scheduler.clear_pending_pdf_jobs();
+    }
+
+    fn resolved_pdf_display_placement(
+        &mut self,
+        request: &PdfOverlayRequest,
+        render_key: &PdfRenderKey,
+        fallback: FittedPdfPlacement,
+        rendered: &Path,
+    ) -> FittedPdfPlacement {
+        let Some(window_size) = self.cached_pdf_terminal_window() else {
+            return fallback;
+        };
+        let Some(image_dimensions) = self.cached_rendered_image_dimensions(render_key, rendered)
+        else {
+            return fallback;
+        };
+
+        FittedPdfPlacement {
+            image_area: fit_image_area(
+                request.area,
+                window_size,
+                image_dimensions.width_px as f32 / image_dimensions.height_px as f32,
+            ),
+            ..fallback
+        }
+    }
+
+    fn cached_rendered_image_dimensions(
+        &mut self,
+        key: &PdfRenderKey,
+        rendered: &Path,
+    ) -> Option<RenderedImageDimensions> {
+        if let Some(dimensions) = self.pdf_preview.rendered_page_dimensions.get(key).copied() {
+            return Some(dimensions);
+        }
+
+        let dimensions = read_png_dimensions(rendered)?;
+        self.pdf_preview
+            .rendered_page_dimensions
+            .insert(key.clone(), dimensions);
+        Some(dimensions)
+    }
+
+    fn cached_display_placement_for_request(
+        &self,
+        request: &PdfOverlayRequest,
+        fallback: FittedPdfPlacement,
+    ) -> Option<FittedPdfPlacement> {
+        let window_size = self.cached_pdf_terminal_window()?;
+        let render_key = PdfRenderKey::from_request(request, fallback);
+        let image_dimensions = self
+            .pdf_preview
+            .rendered_page_dimensions
+            .get(&render_key)
+            .copied()?;
+        Some(FittedPdfPlacement {
+            image_area: fit_image_area(
+                request.area,
+                window_size,
+                image_dimensions.width_px as f32 / image_dimensions.height_px as f32,
+            ),
+            ..fallback
+        })
+    }
+
+    fn refresh_pdf_prefetch_window(&mut self) {
+        let Some(session) = self.pdf_preview.session.as_ref() else {
+            self.clear_pending_pdf_work();
+            return;
+        };
+        let path = session.path.clone();
+        let size = session.size;
+        let modified = session.modified;
+
+        let window_pages = self.pdf_probe_window_pages();
+        self.scheduler
+            .retain_pdf_probe_pages(&path, size, modified, &window_pages);
+        self.pdf_preview.pending_page_probes.retain(|key| {
+            key.path == path
+                && key.size == size
+                && key.modified == modified
+                && window_pages.contains(&key.page)
+        });
+
+        let render_variants = self.desired_pdf_render_variants();
+        self.scheduler
+            .retain_pdf_render_variants(&path, size, modified, &render_variants);
+        self.pdf_preview.pending_renders.retain(|key| {
+            key.path == path
+                && key.size == size
+                && key.modified == modified
+                && render_variants.contains(&(key.page, key.width_px, key.height_px))
+        });
+
+        self.queue_current_pdf_probe();
+        self.queue_current_pdf_render();
+        self.queue_prefetch_pdf_probes();
+        if self.current_pdf_render_ready() {
+            self.queue_prefetch_pdf_renders();
+        }
+    }
+
+    fn queue_prefetch_pdf_probes(&mut self) {
+        for page in self.pdf_prefetch_probe_pages() {
+            self.try_queue_pdf_probe_page(page);
+        }
+    }
+
+    fn queue_prefetch_pdf_renders(&mut self) {
+        for page in self.pdf_prefetch_render_pages() {
+            self.try_queue_pdf_render_page(page);
+        }
+    }
+
+    fn try_queue_pdf_probe_page(&mut self, page: usize) {
+        let Some(session) = &self.pdf_preview.session else {
+            return;
+        };
+
+        self.submit_pdf_probe_key(PdfPageKey {
+            path: session.path.clone(),
+            size: session.size,
+            modified: session.modified,
+            page,
+        });
+    }
+
+    fn try_queue_pdf_render_page(&mut self, page: usize) {
+        let Some(key) = self.pdf_render_key_for_page(page) else {
+            return;
+        };
+        self.submit_pdf_render_key(key);
+    }
+
+    fn current_pdf_render_ready(&self) -> bool {
+        self.active_pdf_render_key()
+            .as_ref()
+            .is_some_and(|key| self.cached_render_exists(key))
+    }
+
+    fn pdf_probe_window_pages(&self) -> Vec<usize> {
+        let Some(session) = self.pdf_preview.session.as_ref() else {
+            return Vec::new();
+        };
+
+        let mut pages = vec![session.current_page];
+        let Some(total_pages) = session.total_pages else {
+            return pages;
+        };
+
+        for distance in 1..=PDF_PREFETCH_DISTANCE {
+            let next_page = session.current_page.saturating_add(distance);
+            if next_page <= total_pages {
+                pages.push(next_page);
+            }
+            let previous_page = session.current_page.saturating_sub(distance);
+            if previous_page >= PDF_PAGE_MIN {
+                pages.push(previous_page);
+            }
+        }
+        pages
+    }
+
+    fn pdf_prefetch_probe_pages(&self) -> Vec<usize> {
+        self.pdf_probe_window_pages()
+            .into_iter()
+            .filter(|page| {
+                self.pdf_preview
+                    .session
+                    .as_ref()
+                    .is_some_and(|session| *page != session.current_page)
+            })
+            .collect()
+    }
+
+    fn pdf_prefetch_render_pages(&self) -> Vec<usize> {
+        let Some(session) = self.pdf_preview.session.as_ref() else {
+            return Vec::new();
+        };
+        let Some(total_pages) = session.total_pages else {
+            return Vec::new();
+        };
+
+        let next_page = session.current_page.saturating_add(1);
+        if next_page <= total_pages {
+            return vec![next_page];
+        }
+
+        let previous_page = session.current_page.saturating_sub(1);
+        if previous_page >= PDF_PAGE_MIN {
+            vec![previous_page]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn pdf_overlay_request_for_page(&self, page: usize) -> Option<PdfOverlayRequest> {
+        if !self.pdf_preview.enabled {
+            return None;
+        }
+
+        let session = self.pdf_preview.session.as_ref()?;
+        let area = self.frame_state.preview_content_area?;
+        if area.width == 0 || area.height == 0 {
+            return None;
+        }
+
+        Some(PdfOverlayRequest {
+            path: session.path.clone(),
+            size: session.size,
+            modified: session.modified,
+            page,
+            area,
+        })
+    }
+
+    fn pdf_render_key_for_page(&self, page: usize) -> Option<PdfRenderKey> {
+        let request = self.pdf_overlay_request_for_page(page)?;
+        let placement = self.overlay_placement_for_request(&request)?;
+        Some(PdfRenderKey::from_request(&request, placement))
+    }
+
+    fn desired_pdf_render_variants(&self) -> Vec<(usize, u32, u32)> {
+        let Some(session) = self.pdf_preview.session.as_ref() else {
+            return Vec::new();
+        };
+
+        let mut variants = Vec::new();
+        if let Some(key) = self.pdf_render_key_for_page(session.current_page) {
+            variants.push((key.page, key.width_px, key.height_px));
+        }
+        if self.current_pdf_render_ready() {
+            for page in self.pdf_prefetch_render_pages() {
+                if let Some(key) = self.pdf_render_key_for_page(page) {
+                    variants.push((key.page, key.width_px, key.height_px));
+                }
+            }
+        }
+        variants
+    }
+
     fn queue_current_pdf_probe(&mut self) {
         let Some(session) = &self.pdf_preview.session else {
             return;
         };
 
-        let key = PdfPageKey {
+        self.submit_pdf_probe_key(PdfPageKey {
             path: session.path.clone(),
             size: session.size,
             modified: session.modified,
             page: session.current_page,
+        });
+    }
+
+    fn queue_current_pdf_render(&mut self) {
+        let Some(key) = self.active_pdf_render_key() else {
+            return;
         };
+        self.submit_pdf_render_key(key);
+    }
+
+    fn submit_pdf_probe_key(&mut self, key: PdfPageKey) {
         if self.pdf_preview.page_dimensions.contains_key(&key)
             || self.pdf_preview.pending_page_probes.contains(&key)
             || self.pdf_preview.failed_page_probes.contains(&key)
@@ -660,14 +970,7 @@ impl App {
         }
     }
 
-    fn queue_current_pdf_render(&mut self) {
-        let Some(request) = self.active_pdf_overlay_request() else {
-            return;
-        };
-        let Some(placement) = self.overlay_placement_for_request(&request) else {
-            return;
-        };
-        let key = PdfRenderKey::from_request(&request, placement);
+    fn submit_pdf_render_key(&mut self, key: PdfRenderKey) {
         if self.cached_render_exists(&key)
             || self.pdf_preview.pending_renders.contains(&key)
             || self.pdf_preview.failed_renders.contains(&key)
@@ -754,372 +1057,11 @@ impl PdfDocumentKey {
     }
 }
 
-fn detect_terminal_pdf_preview_backend() -> Option<TerminalImageBackend> {
-    if !command_exists("pdftocairo") {
-        return None;
-    }
-
-    let term = env::var("TERM").unwrap_or_default();
-    let term_program = env::var("TERM_PROGRAM").unwrap_or_default();
-    let kitten_available = command_exists("kitten");
-    let kitten_detected = kitten_available && detect_kitten_backend_support();
-
-    select_terminal_image_backend(
-        &term,
-        &term_program,
-        env::var_os("KITTY_WINDOW_ID").is_some(),
-        kitten_available,
-        kitten_detected,
-    )
-}
-
-fn detect_kitten_backend_support() -> bool {
-    Command::new("kitten")
-        .arg("icat")
-        .arg("--stdin=no")
-        .arg("--detect-support")
-        .arg("--detection-timeout=1")
-        .status()
-        .is_ok_and(|status| status.success())
-}
-
-fn select_terminal_image_backend(
-    term: &str,
-    term_program: &str,
-    kitty_window_id_present: bool,
-    kitten_available: bool,
-    kitten_detected: bool,
-) -> Option<TerminalImageBackend> {
-    let term = term.to_ascii_lowercase();
-    let term_program = term_program.to_ascii_lowercase();
-    let supports_kitty_protocol = kitty_window_id_present
-        || term.contains("xterm-kitty")
-        || term.contains("ghostty")
-        || term.contains("wezterm")
-        || matches!(term_program.as_str(), "kitty" | "ghostty" | "wezterm");
-
-    if supports_kitty_protocol {
-        Some(TerminalImageBackend::KittyProtocol)
-    } else if kitten_available && kitten_detected {
-        Some(TerminalImageBackend::Kitten)
-    } else {
-        None
-    }
-}
-
-fn command_exists(program: &str) -> bool {
-    Command::new("sh")
-        .arg("-lc")
-        .arg(format!("command -v {program} >/dev/null 2>&1"))
-        .status()
-        .is_ok_and(|status| status.success())
-}
-
 fn is_pdf_entry(entry: &Entry) -> bool {
     file_facts::inspect_path(&entry.path, entry.kind)
         .preview
         .document_format
         == Some(DocumentFormat::Pdf)
-}
-
-pub(super) fn probe_pdf_page(path: &Path, page: usize) -> Result<PdfProbeResult> {
-    let output = Command::new("pdfinfo")
-        .arg("-f")
-        .arg(page.to_string())
-        .arg("-l")
-        .arg(page.to_string())
-        .arg(path)
-        .output()
-        .context("failed to start pdfinfo")?;
-    if !output.status.success() {
-        anyhow::bail!("pdfinfo exited with {}", output.status);
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let dimensions = parse_pdfinfo_page_dimensions(&stdout);
-    Ok(PdfProbeResult {
-        total_pages: parse_pdfinfo_page_count(&stdout),
-        width_pts: dimensions.map(|dimensions| dimensions.width_pts),
-        height_pts: dimensions.map(|dimensions| dimensions.height_pts),
-    })
-}
-
-pub(super) fn render_pdf_page_to_cache(
-    path: &Path,
-    size: u64,
-    modified: Option<SystemTime>,
-    page: usize,
-    width_px: u32,
-    height_px: u32,
-) -> Result<Option<PathBuf>> {
-    let key = PdfRenderKey {
-        path: path.to_path_buf(),
-        size,
-        modified,
-        page,
-        width_px,
-        height_px,
-    };
-    let cache_dir = pdf_render_cache_dir()?;
-    let stem = cache_dir.join(pdf_render_cache_stem(&key));
-    let png_path = stem.with_extension("png");
-    if png_path.exists() {
-        return Ok(Some(png_path));
-    }
-
-    let status = Command::new("pdftocairo")
-        .arg("-png")
-        .arg("-singlefile")
-        .arg("-f")
-        .arg(page.to_string())
-        .arg("-l")
-        .arg(page.to_string())
-        .arg("-scale-to-x")
-        .arg(width_px.to_string())
-        .arg("-scale-to-y")
-        .arg("-1")
-        .arg(path)
-        .arg(&stem)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .context("failed to start pdftocairo")?;
-
-    if !status.success() || !png_path.exists() {
-        return Ok(None);
-    }
-    Ok(Some(png_path))
-}
-
-fn parse_pdfinfo_page_count(output: &str) -> Option<usize> {
-    output.lines().find_map(|line| {
-        let (label, value) = line.split_once(':')?;
-        (label.trim() == "Pages")
-            .then_some(value.trim())
-            .and_then(|value| value.parse().ok())
-    })
-}
-
-fn parse_pdfinfo_page_dimensions(output: &str) -> Option<PdfPageDimensions> {
-    output.lines().find_map(|line| {
-        let (label, value) = line.split_once(':')?;
-        let label = label.trim();
-        if !(label == "Page size" || label.starts_with("Page ") && label.ends_with(" size")) {
-            return None;
-        }
-
-        let mut parts = value.split_whitespace();
-        let width_pts = parts.next()?.parse().ok()?;
-        let _separator = parts.next()?;
-        let height_pts = parts.next()?.parse().ok()?;
-        Some(PdfPageDimensions {
-            width_pts,
-            height_pts,
-        })
-    })
-}
-
-fn query_terminal_window_size() -> Option<TerminalWindowSize> {
-    let terminal_size = terminal::window_size().ok();
-    let (cells_width, cells_height) = terminal_size
-        .as_ref()
-        .map(|size| (size.columns, size.rows))
-        .or_else(|| terminal::size().ok())?;
-    let (pixels_width, pixels_height) = terminal_size
-        .as_ref()
-        .and_then(|size| {
-            let width = u32::from(size.width);
-            let height = u32::from(size.height);
-            (width > 0 && height > 0).then_some((width, height))
-        })
-        .or_else(query_kitten_window_size)
-        .unwrap_or_else(|| fallback_window_size_pixels(cells_width, cells_height));
-    Some(TerminalWindowSize {
-        cells_width,
-        cells_height,
-        pixels_width,
-        pixels_height,
-    })
-}
-
-fn query_kitten_window_size() -> Option<(u32, u32)> {
-    if !command_exists("kitten") {
-        return None;
-    }
-
-    let output = Command::new("kitten")
-        .arg("icat")
-        .arg("--print-window-size")
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    parse_window_size(&String::from_utf8_lossy(&output.stdout))
-}
-
-fn parse_window_size(output: &str) -> Option<(u32, u32)> {
-    let trimmed = output.trim();
-    let (width, height) = trimmed.split_once('x')?;
-    Some((width.parse().ok()?, height.parse().ok()?))
-}
-
-fn fallback_window_size_pixels(cells_width: u16, cells_height: u16) -> (u32, u32) {
-    (
-        u32::from(cells_width.max(1)) * 8,
-        u32::from(cells_height.max(1)) * 16,
-    )
-}
-
-fn fit_pdf_page(
-    area: Rect,
-    window_size: TerminalWindowSize,
-    page_dimensions: PdfPageDimensions,
-) -> FittedPdfPlacement {
-    let cell_width_px = window_size.pixels_width as f32 / f32::from(window_size.cells_width.max(1));
-    let cell_height_px =
-        window_size.pixels_height as f32 / f32::from(window_size.cells_height.max(1));
-    let area_width_px = f32::from(area.width.max(1)) * cell_width_px;
-    let area_height_px = f32::from(area.height.max(1)) * cell_height_px;
-    let page_aspect = (page_dimensions.width_pts / page_dimensions.height_pts.max(f32::EPSILON))
-        .max(f32::EPSILON);
-
-    let (fit_width_px, fit_height_px) = if area_width_px / area_height_px > page_aspect {
-        let height = area_height_px;
-        (height * page_aspect, height)
-    } else {
-        let width = area_width_px;
-        (width, width / page_aspect)
-    };
-    let (render_width_px, render_height_px) =
-        ensure_render_floor(fit_width_px.max(1.0), fit_height_px.max(1.0));
-
-    let width_cells = ((fit_width_px / cell_width_px).round() as u16).clamp(1, area.width.max(1));
-    let height_cells =
-        ((fit_height_px / cell_height_px).round() as u16).clamp(1, area.height.max(1));
-    let image_area = Rect {
-        x: area.x + (area.width.saturating_sub(width_cells)) / 2,
-        y: area.y + (area.height.saturating_sub(height_cells)) / 2,
-        width: width_cells,
-        height: height_cells,
-    };
-
-    FittedPdfPlacement {
-        image_area,
-        render_width_px,
-        render_height_px,
-    }
-}
-
-fn ensure_render_floor(width_px: f32, height_px: f32) -> (u32, u32) {
-    let longest = width_px.max(height_px).max(1.0);
-    if longest >= PDF_RENDER_MIN_DIMENSION_PX as f32 {
-        return (width_px.round() as u32, height_px.round() as u32);
-    }
-
-    let scale = PDF_RENDER_MIN_DIMENSION_PX as f32 / longest;
-    (
-        (width_px * scale).round().max(1.0) as u32,
-        (height_px * scale).round().max(1.0) as u32,
-    )
-}
-
-fn place_pdf_image(backend: TerminalImageBackend, path: &Path, area: Rect) -> Result<()> {
-    match backend {
-        TerminalImageBackend::Kitten => place_pdf_image_with_kitten(path, area),
-        TerminalImageBackend::KittyProtocol => place_pdf_image_with_kitty_protocol(path, area),
-    }
-}
-
-fn place_pdf_image_with_kitten(path: &Path, area: Rect) -> Result<()> {
-    let place = format!(
-        "{}x{}@{}x{}",
-        area.width.max(1),
-        area.height.max(1),
-        area.x,
-        area.y
-    );
-    let status = Command::new("kitten")
-        .arg("icat")
-        .arg("--stdin=no")
-        .arg("--transfer-mode=file")
-        .arg("--place")
-        .arg(place)
-        .arg("--scale-up")
-        .arg(path)
-        .status()
-        .context("failed to start kitten icat")?;
-    if status.success() {
-        Ok(())
-    } else {
-        anyhow::bail!("kitten icat exited with {status}");
-    }
-}
-
-fn place_pdf_image_with_kitty_protocol(path: &Path, area: Rect) -> Result<()> {
-    write_terminal_escape(&build_kitty_display_sequence(path, area))
-}
-
-fn clear_pdf_images(backend: TerminalImageBackend) -> Result<()> {
-    match backend {
-        TerminalImageBackend::Kitten => clear_pdf_images_with_kitten(),
-        TerminalImageBackend::KittyProtocol => clear_pdf_images_with_kitty_protocol(),
-    }
-}
-
-fn clear_pdf_images_with_kitten() -> Result<()> {
-    let status = Command::new("kitten")
-        .arg("icat")
-        .arg("--stdin=no")
-        .arg("--clear")
-        .status()
-        .context("failed to start kitten icat")?;
-    if status.success() {
-        Ok(())
-    } else {
-        anyhow::bail!("kitten icat exited with {status}");
-    }
-}
-
-fn clear_pdf_images_with_kitty_protocol() -> Result<()> {
-    write_terminal_escape(build_kitty_clear_sequence())
-}
-
-fn write_terminal_escape(sequence: &str) -> Result<()> {
-    let mut stdout = io::stdout();
-    stdout
-        .write_all(sequence.as_bytes())
-        .context("failed to write terminal escape")?;
-    stdout.flush().context("failed to flush terminal escape")?;
-    Ok(())
-}
-
-fn build_kitty_display_sequence(path: &Path, area: Rect) -> String {
-    let payload = BASE64_STANDARD.encode(path.as_os_str().as_encoded_bytes());
-    format!(
-        "\u{1b}[{};{}H\u{1b}_Ga=T,q=2,f=100,t=f,c={},r={},C=1;{}\u{1b}\\",
-        area.y.saturating_add(1),
-        area.x.saturating_add(1),
-        area.width.max(1),
-        area.height.max(1),
-        payload
-    )
-}
-
-fn build_kitty_clear_sequence() -> &'static str {
-    "\u{1b}_Ga=d,d=A,q=2\u{1b}\\"
-}
-
-fn pdf_render_cache_dir() -> Result<PathBuf> {
-    let cache_dir = env::temp_dir().join("elio-pdf-preview");
-    fs::create_dir_all(&cache_dir).context("failed to create PDF preview cache")?;
-    Ok(cache_dir)
-}
-
-fn pdf_render_cache_stem(key: &PdfRenderKey) -> String {
-    let mut hasher = DefaultHasher::new();
-    key.hash(&mut hasher);
-    format!("page-{:016x}", hasher.finish())
 }
 
 #[cfg(test)]
@@ -1143,7 +1085,7 @@ mod tests {
         fs::create_dir_all(&root).expect("failed to create temp root");
 
         let mut app = App::new_at(root.clone()).expect("app should initialize");
-        let (cells_width, cells_height) = terminal::size().unwrap_or((120, 40));
+        let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
         app.pdf_preview.enabled = true;
         app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
         app.pdf_preview.session = Some(PdfSession {
@@ -1198,6 +1140,37 @@ mod tests {
     #[test]
     fn parse_window_size_reads_pixel_dimensions() {
         assert_eq!(parse_window_size("1575x919\n"), Some((1575, 919)));
+    }
+
+    #[test]
+    fn read_png_dimensions_reads_ihdr_size() {
+        let root = temp_root("png-dimensions");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("page.png");
+        let bytes = [
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, // signature
+            0x00, 0x00, 0x00, 0x0d, // chunk length
+            b'I', b'H', b'D', b'R', // chunk type
+            0x00, 0x00, 0x02, 0x58, // width 600
+            0x00, 0x00, 0x01, 0x2c, // height 300
+        ];
+        fs::write(&path, bytes).expect("failed to write png header");
+
+        assert_eq!(
+            read_png_dimensions(&path),
+            Some(RenderedImageDimensions {
+                width_px: 600,
+                height_px: 300,
+            })
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn bucket_render_dimensions_rounds_up_longest_edge_without_distortion() {
+        assert_eq!(bucket_render_dimensions((512, 768)), (512, 768));
+        assert_eq!(bucket_render_dimensions((530, 742)), (549, 768));
     }
 
     #[test]
@@ -1296,6 +1269,30 @@ mod tests {
     }
 
     #[test]
+    fn fit_image_area_preserves_actual_rendered_png_aspect_ratio() {
+        let area = fit_image_area(
+            Rect {
+                x: 10,
+                y: 4,
+                width: 30,
+                height: 20,
+            },
+            TerminalWindowSize {
+                cells_width: 100,
+                cells_height: 50,
+                pixels_width: 1000,
+                pixels_height: 1000,
+            },
+            0.25,
+        );
+
+        assert_eq!(area.width, 10);
+        assert_eq!(area.height, 20);
+        assert_eq!(area.x, 20);
+        assert_eq!(area.y, 4);
+    }
+
+    #[test]
     fn pdf_preview_page_navigation_clamps_to_document_bounds() {
         let mut app = App::new_at(std::env::temp_dir()).expect("app should initialize");
         app.pdf_preview.enabled = true;
@@ -1365,6 +1362,18 @@ mod tests {
         assert_eq!(app.pdf_preview.pending_page_probes.len(), 1);
         assert!(app.pdf_preview.pending_page_probes.contains(&key));
         assert!(app.scheduler.has_pending_work());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn process_pdf_preview_timers_releases_selection_activation_once() {
+        let (mut app, root) = build_pdf_overlay_test_app("activation-timer");
+        app.pdf_preview.activation_ready_at = Some(Instant::now() - Duration::from_millis(1));
+
+        assert!(app.process_pdf_preview_timers());
+        assert!(!app.process_pdf_preview_timers());
+        assert!(app.pdf_preview.activation_ready_at.is_none());
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -1525,6 +1534,85 @@ mod tests {
     }
 
     #[test]
+    fn apply_pdf_probe_build_queues_render_even_before_selection_activation_is_ready() {
+        let (mut app, root) = build_pdf_overlay_test_app("probe-render-before-activation");
+        app.pdf_preview.activation_ready_at = Some(Instant::now() + Duration::from_secs(5));
+        let request = app
+            .active_pdf_overlay_request()
+            .expect("PDF overlay request should be available");
+        let page_key = PdfPageKey::from_request(&request);
+        app.pdf_preview.pending_page_probes.insert(page_key);
+
+        let dirty = app.apply_pdf_probe_build(jobs::PdfProbeBuild {
+            path: request.path.clone(),
+            size: request.size,
+            modified: request.modified,
+            page: request.page,
+            result: Ok(PdfProbeResult {
+                total_pages: Some(8),
+                width_pts: Some(595.0),
+                height_pts: Some(842.0),
+            }),
+        });
+
+        let placement = app
+            .overlay_placement_for_request(&request)
+            .expect("overlay placement should be available after probe");
+        let render_key = PdfRenderKey::from_request(&request, placement);
+
+        assert!(dirty);
+        assert!(app.pdf_preview.pending_renders.contains(&render_key));
+        assert!(app.scheduler.has_pending_work());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn apply_pdf_probe_build_prefetches_adjacent_page_probes_once_total_is_known() {
+        let (mut app, root) = build_pdf_overlay_test_app("probe-prefetch-pages");
+        let session = app
+            .pdf_preview
+            .session
+            .as_mut()
+            .expect("PDF session should exist");
+        session.current_page = 2;
+
+        let request = app
+            .active_pdf_overlay_request()
+            .expect("PDF overlay request should be available");
+        let page_key = PdfPageKey::from_request(&request);
+        app.pdf_preview.pending_page_probes.insert(page_key);
+
+        let dirty = app.apply_pdf_probe_build(jobs::PdfProbeBuild {
+            path: request.path.clone(),
+            size: request.size,
+            modified: request.modified,
+            page: request.page,
+            result: Ok(PdfProbeResult {
+                total_pages: Some(4),
+                width_pts: Some(595.0),
+                height_pts: Some(842.0),
+            }),
+        });
+
+        assert!(dirty);
+        assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+            path: request.path.clone(),
+            size: request.size,
+            modified: request.modified,
+            page: 1,
+        }));
+        assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+            path: request.path,
+            size: request.size,
+            modified: request.modified,
+            page: 3,
+        }));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn preview_uses_image_overlay_only_for_current_render_target() {
         let (mut app, root) = build_pdf_overlay_test_app("overlay-match");
         let request = app
@@ -1541,6 +1629,14 @@ mod tests {
         let placement = app
             .overlay_placement_for_request(&request)
             .expect("overlay placement should be available");
+        let render_key = PdfRenderKey::from_request(&request, placement);
+        app.pdf_preview.rendered_page_dimensions.insert(
+            render_key,
+            RenderedImageDimensions {
+                width_px: placement.render_width_px,
+                height_px: placement.render_height_px,
+            },
+        );
         app.pdf_preview.displayed = Some(DisplayedPdfPreview::from_request(&request, placement));
 
         assert!(app.preview_uses_image_overlay());
@@ -1592,6 +1688,118 @@ mod tests {
             .expect("overlay placement should be available");
         let render_key = PdfRenderKey::from_request(&active_request, placement);
         assert!(app.pdf_preview.pending_renders.contains(&render_key));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn step_pdf_page_prunes_stale_prefetch_probe_window() {
+        let (mut app, root) = build_pdf_overlay_test_app("page-step-prune");
+        let session = app
+            .pdf_preview
+            .session
+            .as_mut()
+            .expect("PDF session should exist");
+        session.current_page = 2;
+        session.total_pages = Some(5);
+
+        for page in [1, 2, 3] {
+            app.pdf_preview.pending_page_probes.insert(PdfPageKey {
+                path: root.join("demo.pdf"),
+                size: 128,
+                modified: None,
+                page,
+            });
+        }
+
+        assert!(app.step_pdf_page(1));
+
+        assert!(!app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+            path: root.join("demo.pdf"),
+            size: 128,
+            modified: None,
+            page: 1,
+        }));
+        assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+            path: root.join("demo.pdf"),
+            size: 128,
+            modified: None,
+            page: 2,
+        }));
+        assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+            path: root.join("demo.pdf"),
+            size: 128,
+            modified: None,
+            page: 3,
+        }));
+        assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+            path: root.join("demo.pdf"),
+            size: 128,
+            modified: None,
+            page: 4,
+        }));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn apply_pdf_render_build_prefetches_next_page_when_current_page_is_ready() {
+        let (mut app, root) = build_pdf_overlay_test_app("render-prefetch-next");
+        let session = app
+            .pdf_preview
+            .session
+            .as_mut()
+            .expect("PDF session should exist");
+        session.current_page = 2;
+        session.total_pages = Some(4);
+
+        for page in [2, 3] {
+            let request = PdfOverlayRequest {
+                path: root.join("demo.pdf"),
+                size: 128,
+                modified: None,
+                page,
+                area: app
+                    .frame_state
+                    .preview_content_area
+                    .expect("preview content area should be set"),
+            };
+            app.pdf_preview.page_dimensions.insert(
+                PdfPageKey::from_request(&request),
+                PdfPageDimensions {
+                    width_pts: 612.0,
+                    height_pts: 792.0,
+                },
+            );
+        }
+
+        let current_request = app
+            .pdf_overlay_request_for_page(2)
+            .expect("current PDF overlay request should be available");
+        let current_key = app
+            .pdf_render_key_for_page(2)
+            .expect("current PDF render key should be available");
+        app.pdf_preview.pending_renders.insert(current_key.clone());
+
+        let rendered_path = root.join("current-page.png");
+        fs::write(&rendered_path, b"png").expect("failed to write rendered page placeholder");
+
+        let dirty = app.apply_pdf_render_build(jobs::PdfRenderBuild {
+            path: current_request.path.clone(),
+            size: current_request.size,
+            modified: current_request.modified,
+            page: current_request.page,
+            width_px: current_key.width_px,
+            height_px: current_key.height_px,
+            result: Ok(Some(rendered_path)),
+        });
+
+        let next_key = app
+            .pdf_render_key_for_page(3)
+            .expect("next page render key should be available");
+
+        assert!(dirty);
+        assert!(app.pdf_preview.pending_renders.contains(&next_key));
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

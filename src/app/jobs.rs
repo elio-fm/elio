@@ -4,7 +4,7 @@ use crate::search::SearchCandidate;
 use std::{
     collections::{HashSet, VecDeque},
     hash::Hash,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Condvar, Mutex, MutexGuard, mpsc},
     thread,
     time::{Duration, Instant, SystemTime},
@@ -60,9 +60,9 @@ impl SchedulerConfig {
             preview_queue_limit,
             directory_item_count_worker_count: DIRECTORY_ITEM_COUNT_WORKER_COUNT,
             directory_item_count_queue_limit: DIRECTORY_ITEM_COUNT_QUEUE_LIMIT,
-            pdf_probe_worker_count: PDF_PROBE_WORKER_COUNT,
+            pdf_probe_worker_count: 0,
             pdf_probe_queue_limit: PDF_PROBE_QUEUE_LIMIT,
-            pdf_render_worker_count: PDF_RENDER_WORKER_COUNT,
+            pdf_render_worker_count: 0,
             pdf_render_queue_limit: PDF_RENDER_QUEUE_LIMIT,
         }
     }
@@ -270,6 +270,33 @@ impl JobScheduler {
         self.pdf_render.submit(request)
     }
 
+    pub(super) fn clear_pending_pdf_jobs(&self) {
+        self.pdf_probe.clear_pending();
+        self.pdf_render.clear_pending();
+    }
+
+    pub(super) fn retain_pdf_probe_pages(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<SystemTime>,
+        keep_pages: &[usize],
+    ) {
+        self.pdf_probe
+            .retain_pending(path, size, modified, keep_pages);
+    }
+
+    pub(super) fn retain_pdf_render_variants(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<SystemTime>,
+        keep_variants: &[(usize, u32, u32)],
+    ) {
+        self.pdf_render
+            .retain_pending(path, size, modified, keep_variants);
+    }
+
     pub(super) fn submit_search(&self, request: SearchRequest) -> bool {
         self.search.submit(request)
     }
@@ -318,6 +345,8 @@ impl JobScheduler {
         SchedulerSnapshot {
             search_pending: self.search.pending_key(),
             search_active: self.search.active_key(),
+            pdf_probe_pending: self.pdf_probe.pending_keys(),
+            pdf_render_pending: self.pdf_render.pending_keys(),
             preview_pending_high: self.preview.pending_keys(PreviewPriority::High),
             preview_pending_low: self.preview.pending_keys(PreviewPriority::Low),
             preview_active: self.preview.active_keys(),
@@ -770,6 +799,47 @@ impl PdfProbePool {
         let state = lock_unpoison(&self.shared.state);
         !state.pending.is_empty() || !state.active_keys.is_empty()
     }
+
+    #[cfg(test)]
+    fn pending_keys(&self) -> Vec<PdfProbeJobKey> {
+        let state = lock_unpoison(&self.shared.state);
+        state
+            .pending
+            .iter()
+            .map(PdfProbeJobKey::from_request)
+            .collect()
+    }
+
+    fn clear_pending(&self) {
+        let mut state = lock_unpoison(&self.shared.state);
+        state.pending.clear();
+        state.queued_keys.clear();
+    }
+
+    fn retain_pending(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<SystemTime>,
+        keep_pages: &[usize],
+    ) {
+        let mut state = lock_unpoison(&self.shared.state);
+        let mut retained = VecDeque::with_capacity(state.pending.len());
+        state.queued_keys.clear();
+        while let Some(request) = state.pending.pop_front() {
+            let keep = request.path == path
+                && request.size == size
+                && request.modified == modified
+                && keep_pages.contains(&request.page);
+            if keep {
+                state
+                    .queued_keys
+                    .insert(PdfProbeJobKey::from_request(&request));
+                retained.push_back(request);
+            }
+        }
+        state.pending = retained;
+    }
 }
 
 impl Drop for PdfProbePool {
@@ -924,6 +994,47 @@ impl PdfRenderPool {
     fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         !state.pending.is_empty() || !state.active_keys.is_empty()
+    }
+
+    #[cfg(test)]
+    fn pending_keys(&self) -> Vec<PdfRenderJobKey> {
+        let state = lock_unpoison(&self.shared.state);
+        state
+            .pending
+            .iter()
+            .map(PdfRenderJobKey::from_request)
+            .collect()
+    }
+
+    fn clear_pending(&self) {
+        let mut state = lock_unpoison(&self.shared.state);
+        state.pending.clear();
+        state.queued_keys.clear();
+    }
+
+    fn retain_pending(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<SystemTime>,
+        keep_variants: &[(usize, u32, u32)],
+    ) {
+        let mut state = lock_unpoison(&self.shared.state);
+        let mut retained = VecDeque::with_capacity(state.pending.len());
+        state.queued_keys.clear();
+        while let Some(request) = state.pending.pop_front() {
+            let keep = request.path == path
+                && request.size == size
+                && request.modified == modified
+                && keep_variants.contains(&(request.page, request.width_px, request.height_px));
+            if keep {
+                state
+                    .queued_keys
+                    .insert(PdfRenderJobKey::from_request(&request));
+                retained.push_back(request);
+            }
+        }
+        state.pending = retained;
     }
 }
 
@@ -1454,6 +1565,8 @@ fn wait_unpoison<'a, T>(condvar: &Condvar, guard: MutexGuard<'a, T>) -> MutexGua
 struct SchedulerSnapshot {
     search_pending: Option<SearchJobKey>,
     search_active: Option<SearchJobKey>,
+    pdf_probe_pending: Vec<PdfProbeJobKey>,
+    pdf_render_pending: Vec<PdfRenderJobKey>,
     preview_pending_high: Vec<PreviewJobKey>,
     preview_pending_low: Vec<PreviewJobKey>,
     preview_active: Vec<PreviewJobKey>,
@@ -1680,5 +1793,87 @@ mod tests {
             scope: SearchScope::Files,
         }));
         assert!(scheduler.has_pending_work());
+    }
+
+    #[test]
+    fn retain_pdf_probe_pages_discards_stale_pending_requests() {
+        let scheduler = JobScheduler::new_for_tests(0, 0, 2);
+        let path = PathBuf::from("manual.pdf");
+
+        assert!(scheduler.submit_pdf_probe(PdfProbeRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 1,
+        }));
+        assert!(scheduler.submit_pdf_probe(PdfProbeRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 2,
+        }));
+        assert!(scheduler.submit_pdf_probe(PdfProbeRequest {
+            path: PathBuf::from("other.pdf"),
+            size: 64,
+            modified: None,
+            page: 1,
+        }));
+
+        scheduler.retain_pdf_probe_pages(&path, 64, None, &[2, 3]);
+
+        assert_eq!(
+            scheduler.snapshot().pdf_probe_pending,
+            vec![PdfProbeJobKey {
+                path,
+                size: 64,
+                modified: None,
+                page: 2,
+            }]
+        );
+    }
+
+    #[test]
+    fn retain_pdf_render_variants_discards_stale_pending_requests() {
+        let scheduler = JobScheduler::new_for_tests(0, 0, 2);
+        let path = PathBuf::from("manual.pdf");
+
+        assert!(scheduler.submit_pdf_render(PdfRenderRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 2,
+            width_px: 640,
+            height_px: 896,
+        }));
+        assert!(scheduler.submit_pdf_render(PdfRenderRequest {
+            path: path.clone(),
+            size: 64,
+            modified: None,
+            page: 3,
+            width_px: 704,
+            height_px: 960,
+        }));
+        assert!(scheduler.submit_pdf_render(PdfRenderRequest {
+            path: PathBuf::from("other.pdf"),
+            size: 64,
+            modified: None,
+            page: 1,
+            width_px: 640,
+            height_px: 896,
+        }));
+
+        scheduler.retain_pdf_render_variants(&path, 64, None, &[(3, 704, 960)]);
+
+        assert_eq!(
+            scheduler.snapshot().pdf_render_pending,
+            vec![PdfRenderJobKey {
+                path,
+                size: 64,
+                modified: None,
+                page: 3,
+                width_px: 704,
+                height_px: 960,
+            }]
+        );
     }
 }

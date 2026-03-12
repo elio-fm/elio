@@ -72,6 +72,10 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             dirty = true;
         }
 
+        if app.process_pdf_preview_timers() {
+            dirty = true;
+        }
+
         if app.process_pending_scroll() {
             dirty = true;
         }
@@ -115,7 +119,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             break;
         }
 
-        let poll_interval = if app.has_pending_scroll()
+        let base_poll_interval = if app.has_pending_scroll()
             || app.has_pending_auto_reload()
             || app.has_pending_background_work()
         {
@@ -123,6 +127,10 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         } else {
             IDLE_POLL_INTERVAL
         };
+        let poll_interval = app
+            .pending_pdf_preview_timer()
+            .map(|delay| delay.min(base_poll_interval))
+            .unwrap_or(base_poll_interval);
 
         if event::poll(poll_interval)? {
             let event = event::read()?;
