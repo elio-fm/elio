@@ -6,7 +6,11 @@ use std::{
     collections::{HashSet, VecDeque},
     hash::Hash,
     path::{Path, PathBuf},
-    sync::{Arc, Condvar, Mutex, MutexGuard, mpsc},
+    sync::{
+        Arc, Condvar, Mutex, MutexGuard,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     thread,
     time::{Duration, Instant, SystemTime},
 };
@@ -19,7 +23,7 @@ const PDF_PROBE_WORKER_COUNT: usize = 2;
 const PDF_RENDER_WORKER_COUNT: usize = 2;
 const PREVIEW_QUEUE_LIMIT: usize = 8;
 const DIRECTORY_ITEM_COUNT_QUEUE_LIMIT: usize = 48;
-const IMAGE_PREPARE_QUEUE_LIMIT: usize = 1;
+const IMAGE_PREPARE_QUEUE_LIMIT: usize = 6;
 const PDF_PROBE_QUEUE_LIMIT: usize = 16;
 const PDF_RENDER_QUEUE_LIMIT: usize = 8;
 
@@ -89,6 +93,12 @@ pub(super) enum PdfJobPriority {
     Prefetch,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ImageJobPriority {
+    Current,
+    Nearby,
+}
+
 #[derive(Debug)]
 pub(super) struct SearchBuild {
     pub token: u64,
@@ -141,6 +151,7 @@ pub(super) struct ImagePrepareBuild {
     pub modified: Option<SystemTime>,
     pub target_width_px: u32,
     pub target_height_px: u32,
+    pub canceled: bool,
     pub result: Option<PreparedStaticImageAsset>,
 }
 
@@ -306,7 +317,20 @@ impl JobScheduler {
     }
 
     pub(super) fn submit_image_prepare(&self, request: ImagePrepareRequest) -> bool {
-        self.image_prepare.submit(request)
+        self.image_prepare
+            .submit(request, ImageJobPriority::Current)
+    }
+
+    pub(super) fn submit_nearby_image_prepare(&self, request: ImagePrepareRequest) -> bool {
+        self.image_prepare.submit(request, ImageJobPriority::Nearby)
+    }
+
+    pub(super) fn retain_image_prepares(
+        &self,
+        current: Option<&ImagePrepareRequest>,
+        nearby: &[ImagePrepareRequest],
+    ) {
+        self.image_prepare.retain_pending(current, nearby);
     }
 
     pub(super) fn submit_pdf_probe(
@@ -401,6 +425,7 @@ impl JobScheduler {
         SchedulerSnapshot {
             search_pending: self.search.pending_key(),
             search_active: self.search.active_key(),
+            image_prepare_pending: self.image_prepare.pending_keys(),
             pdf_probe_pending: self.pdf_probe.pending_keys(),
             pdf_render_pending: self.pdf_render.pending_keys(),
             preview_pending_high: self.preview.pending_keys(PreviewPriority::High),
@@ -773,9 +798,11 @@ struct ImagePrepareShared {
 }
 
 struct ImagePrepareState {
-    pending: VecDeque<ImagePrepareRequest>,
-    queued_keys: HashSet<ImagePrepareJobKey>,
-    active_keys: HashSet<ImagePrepareJobKey>,
+    pending_current: VecDeque<ImagePrepareRequest>,
+    pending_nearby: VecDeque<ImagePrepareRequest>,
+    queued_current_keys: HashSet<ImagePrepareJobKey>,
+    queued_nearby_keys: HashSet<ImagePrepareJobKey>,
+    active: Vec<(ImagePrepareJobKey, Arc<AtomicBool>)>,
     closed: bool,
     capacity: usize,
 }
@@ -793,9 +820,11 @@ impl ImagePreparePool {
     fn new(worker_count: usize, capacity: usize, result_tx: mpsc::Sender<JobResult>) -> Self {
         let shared = Arc::new(ImagePrepareShared {
             state: Mutex::new(ImagePrepareState {
-                pending: VecDeque::new(),
-                queued_keys: HashSet::new(),
-                active_keys: HashSet::new(),
+                pending_current: VecDeque::new(),
+                pending_nearby: VecDeque::new(),
+                queued_current_keys: HashSet::new(),
+                queued_nearby_keys: HashSet::new(),
+                active: Vec::new(),
                 closed: false,
                 capacity,
             }),
@@ -806,17 +835,11 @@ impl ImagePreparePool {
             let shared = Arc::clone(&shared);
             let result_tx = result_tx.clone();
             workers.push(thread::spawn(move || {
-                while let Some(request) = ImagePrepareShared::pop(&shared) {
+                while let Some((request, canceled)) = ImagePrepareShared::pop(&shared) {
                     let key = ImagePrepareJobKey::from_request(&request);
-                    let result = image_preview::prepare_static_image_asset(
-                        &request.path,
-                        request.size,
-                        request.modified,
-                        request.target_width_px,
-                        request.target_height_px,
-                        request.ffmpeg_available,
-                        request.magick_available,
-                    );
+                    let result = image_preview::prepare_static_image_asset(&request, || {
+                        canceled.load(Ordering::Relaxed)
+                    });
                     ImagePrepareShared::finish(&shared, &key);
                     if result_tx
                         .send(JobResult::ImagePrepare(ImagePrepareBuild {
@@ -825,6 +848,7 @@ impl ImagePreparePool {
                             modified: request.modified,
                             target_width_px: request.target_width_px,
                             target_height_px: request.target_height_px,
+                            canceled: canceled.load(Ordering::Relaxed),
                             result,
                         }))
                         .is_err()
@@ -837,31 +861,128 @@ impl ImagePreparePool {
         Self { shared, workers }
     }
 
-    fn submit(&self, request: ImagePrepareRequest) -> bool {
+    fn submit(&self, request: ImagePrepareRequest, priority: ImageJobPriority) -> bool {
         let key = ImagePrepareJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
             return false;
         }
-        if state.queued_keys.contains(&key) || state.active_keys.contains(&key) {
-            return true;
+        match priority {
+            ImageJobPriority::Current => {
+                if state.queued_current_keys.contains(&key)
+                    || image_prepare_active_contains(&state, &key)
+                {
+                    return true;
+                }
+                if state.queued_nearby_keys.remove(&key) {
+                    remove_image_prepare_request(&mut state.pending_nearby, &key);
+                }
+                for (active_key, canceled) in &state.active {
+                    if active_key != &key {
+                        canceled.store(true, Ordering::Relaxed);
+                    }
+                }
+            }
+            ImageJobPriority::Nearby => {
+                if state.queued_current_keys.contains(&key)
+                    || state.queued_nearby_keys.contains(&key)
+                    || image_prepare_active_contains(&state, &key)
+                {
+                    return true;
+                }
+            }
         }
-        if !state.pending.is_empty() {
-            state.pending.clear();
-            state.queued_keys.clear();
+        while image_prepare_pending_len(&state) >= state.capacity {
+            if let Some(stale) = state.pending_nearby.pop_front() {
+                state
+                    .queued_nearby_keys
+                    .remove(&ImagePrepareJobKey::from_request(&stale));
+                continue;
+            }
+            if let Some(stale) = state.pending_current.pop_front() {
+                state
+                    .queued_current_keys
+                    .remove(&ImagePrepareJobKey::from_request(&stale));
+                continue;
+            }
+            break;
         }
-        while state.pending.len() >= state.capacity {
-            state.pending.pop_front();
+        match priority {
+            ImageJobPriority::Current => {
+                state.queued_current_keys.insert(key);
+                state.pending_current.push_back(request);
+            }
+            ImageJobPriority::Nearby => {
+                state.queued_nearby_keys.insert(key);
+                state.pending_nearby.push_back(request);
+            }
         }
-        state.queued_keys.insert(key);
-        state.pending.push_back(request);
         self.shared.available.notify_one();
         true
     }
 
     fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
-        !state.pending.is_empty() || !state.active_keys.is_empty()
+        !state.pending_current.is_empty()
+            || !state.pending_nearby.is_empty()
+            || !state.active.is_empty()
+    }
+
+    fn retain_pending(
+        &self,
+        current: Option<&ImagePrepareRequest>,
+        nearby: &[ImagePrepareRequest],
+    ) {
+        let mut state = lock_unpoison(&self.shared.state);
+        let keep_current = current.map(ImagePrepareJobKey::from_request);
+        let keep_nearby = nearby
+            .iter()
+            .map(ImagePrepareJobKey::from_request)
+            .collect::<HashSet<_>>();
+
+        let pending_current = std::mem::take(&mut state.pending_current);
+        let pending_nearby = std::mem::take(&mut state.pending_nearby);
+        state.queued_current_keys.clear();
+        state.queued_nearby_keys.clear();
+        state.pending_current = pending_current
+            .into_iter()
+            .filter(|request| {
+                keep_current
+                    .as_ref()
+                    .is_some_and(|key| key == &ImagePrepareJobKey::from_request(request))
+            })
+            .inspect(|request| {
+                state
+                    .queued_current_keys
+                    .insert(ImagePrepareJobKey::from_request(request));
+            })
+            .collect();
+        state.pending_nearby = pending_nearby
+            .into_iter()
+            .filter(|request| keep_nearby.contains(&ImagePrepareJobKey::from_request(request)))
+            .inspect(|request| {
+                state
+                    .queued_nearby_keys
+                    .insert(ImagePrepareJobKey::from_request(request));
+            })
+            .collect();
+        for (key, canceled) in &state.active {
+            let keep = keep_current.as_ref() == Some(key) || keep_nearby.contains(key);
+            if !keep {
+                canceled.store(true, Ordering::Relaxed);
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn pending_keys(&self) -> Vec<ImagePrepareJobKey> {
+        let state = lock_unpoison(&self.shared.state);
+        state
+            .pending_current
+            .iter()
+            .chain(state.pending_nearby.iter())
+            .map(ImagePrepareJobKey::from_request)
+            .collect()
     }
 }
 
@@ -870,8 +991,13 @@ impl Drop for ImagePreparePool {
         {
             let mut state = lock_unpoison(&self.shared.state);
             state.closed = true;
-            state.pending.clear();
-            state.queued_keys.clear();
+            state.pending_current.clear();
+            state.pending_nearby.clear();
+            state.queued_current_keys.clear();
+            state.queued_nearby_keys.clear();
+            for (_, canceled) in &state.active {
+                canceled.store(true, Ordering::Relaxed);
+            }
         }
         self.shared.available.notify_all();
         for worker in self.workers.drain(..) {
@@ -881,17 +1007,32 @@ impl Drop for ImagePreparePool {
 }
 
 impl ImagePrepareShared {
-    fn pop(shared: &Arc<Self>) -> Option<ImagePrepareRequest> {
+    fn pop(shared: &Arc<Self>) -> Option<(ImagePrepareRequest, Arc<AtomicBool>)> {
         let mut state = lock_unpoison(&shared.state);
         loop {
             if state.closed {
                 return None;
             }
-            if let Some(request) = state.pending.pop_front() {
+            let request = state
+                .pending_current
+                .pop_front()
+                .inspect(|request| {
+                    state
+                        .queued_current_keys
+                        .remove(&ImagePrepareJobKey::from_request(request));
+                })
+                .or_else(|| {
+                    state.pending_nearby.pop_front().inspect(|request| {
+                        state
+                            .queued_nearby_keys
+                            .remove(&ImagePrepareJobKey::from_request(request));
+                    })
+                });
+            if let Some(request) = request {
                 let key = ImagePrepareJobKey::from_request(&request);
-                state.queued_keys.remove(&key);
-                state.active_keys.insert(key);
-                return Some(request);
+                let canceled = Arc::new(AtomicBool::new(false));
+                state.active.push((key, Arc::clone(&canceled)));
+                return Some((request, canceled));
             }
             state = wait_unpoison(&shared.available, state);
         }
@@ -899,7 +1040,7 @@ impl ImagePrepareShared {
 
     fn finish(shared: &Arc<Self>, key: &ImagePrepareJobKey) {
         let mut state = lock_unpoison(&shared.state);
-        state.active_keys.remove(key);
+        state.active.retain(|(active_key, _)| active_key != key);
     }
 }
 
@@ -1927,6 +2068,21 @@ fn lock_unpoison<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|poison| poison.into_inner())
 }
 
+fn image_prepare_pending_len(state: &ImagePrepareState) -> usize {
+    state.pending_current.len() + state.pending_nearby.len()
+}
+
+fn image_prepare_active_contains(state: &ImagePrepareState, key: &ImagePrepareJobKey) -> bool {
+    state.active.iter().any(|(active_key, _)| active_key == key)
+}
+
+fn remove_image_prepare_request(
+    pending: &mut VecDeque<ImagePrepareRequest>,
+    key: &ImagePrepareJobKey,
+) {
+    pending.retain(|request| ImagePrepareJobKey::from_request(request) != *key);
+}
+
 fn wait_unpoison<'a, T>(condvar: &Condvar, guard: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
     condvar
         .wait(guard)
@@ -1938,6 +2094,7 @@ fn wait_unpoison<'a, T>(condvar: &Condvar, guard: MutexGuard<'a, T>) -> MutexGua
 struct SchedulerSnapshot {
     search_pending: Option<SearchJobKey>,
     search_active: Option<SearchJobKey>,
+    image_prepare_pending: Vec<ImagePrepareJobKey>,
     pdf_probe_pending: Vec<PdfProbeJobKey>,
     pdf_render_pending: Vec<PdfRenderJobKey>,
     preview_pending_high: Vec<PreviewJobKey>,

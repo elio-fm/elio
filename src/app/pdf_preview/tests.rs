@@ -132,6 +132,62 @@ fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBu
         width: 48,
         height: 20,
     });
+    app.frame_state.metrics.cols = 1;
+    app.frame_state.metrics.rows_visible = 6;
+    app.pdf_preview.terminal_window = Some(TerminalWindowSize {
+        cells_width,
+        cells_height,
+        pixels_width: 1920,
+        pixels_height: 1080,
+    });
+    app.refresh_preview();
+    (app, root)
+}
+
+fn build_multi_static_image_app(label: &str, file_names: &[&str]) -> (App, PathBuf) {
+    let root = temp_root(label);
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    for file_name in file_names {
+        let image_path = root.join(file_name);
+        match image_path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| extension.to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("png") => write_test_raster_image(&image_path, ImageFormat::Png, 600, 300),
+            Some("jpg") | Some("jpeg") => {
+                write_test_raster_image(&image_path, ImageFormat::Jpeg, 600, 300)
+            }
+            Some("gif") => write_test_raster_image(&image_path, ImageFormat::Gif, 600, 300),
+            Some("webp") => write_test_raster_image(&image_path, ImageFormat::WebP, 600, 300),
+            Some("svg") => {
+                fs::write(
+                    &image_path,
+                    r#"<svg viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg"></svg>"#,
+                )
+                .expect("failed to write svg placeholder");
+            }
+            Some("txt") => {
+                fs::write(&image_path, "plain text").expect("failed to write text placeholder");
+            }
+            _ => panic!("unsupported test image extension: {file_name}"),
+        }
+    }
+
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
+    app.pdf_preview.enabled = true;
+    app.pdf_preview.pdf_tools_available = true;
+    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
+    app.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+    app.frame_state.metrics.cols = 1;
+    app.frame_state.metrics.rows_visible = 6;
     app.pdf_preview.terminal_window = Some(TerminalWindowSize {
         cells_width,
         cells_height,
@@ -243,13 +299,16 @@ fn raster_static_images_use_png_display_paths() {
         let path = root.join(file_name);
         let metadata = fs::metadata(&path).expect("image metadata should exist");
         let prepared = crate::app::image_preview::prepare_static_image_asset(
-            &path,
-            metadata.len(),
-            None,
-            768,
-            540,
-            true,
-            true,
+            &jobs::ImagePrepareRequest {
+                path: path.clone(),
+                size: metadata.len(),
+                modified: None,
+                target_width_px: 768,
+                target_height_px: 540,
+                ffmpeg_available: true,
+                magick_available: true,
+            },
+            || false,
         )
         .expect("static image should prepare successfully");
 
@@ -283,13 +342,16 @@ fn svg_static_images_are_normalized_to_cached_png_overlays() {
     let path = root.join("demo.svg");
     let metadata = fs::metadata(&path).expect("svg metadata should exist");
     let prepared = crate::app::image_preview::prepare_static_image_asset(
-        &path,
-        metadata.len(),
-        None,
-        768,
-        540,
-        true,
-        true,
+        &jobs::ImagePrepareRequest {
+            path: path.clone(),
+            size: metadata.len(),
+            modified: None,
+            target_width_px: 768,
+            target_height_px: 540,
+            ffmpeg_available: true,
+            magick_available: true,
+        },
+        || false,
     )
     .expect("svg image should prepare successfully");
 
@@ -321,13 +383,16 @@ fn oversized_png_static_images_are_downscaled_for_overlay_cache() {
     let metadata = fs::metadata(&path).expect("png metadata should exist");
 
     let prepared = crate::app::image_preview::prepare_static_image_asset(
-        &path,
-        metadata.len(),
-        None,
-        768,
-        540,
-        true,
-        true,
+        &jobs::ImagePrepareRequest {
+            path: path.clone(),
+            size: metadata.len(),
+            modified: None,
+            target_width_px: 768,
+            target_height_px: 540,
+            ffmpeg_available: true,
+            magick_available: true,
+        },
+        || false,
     )
     .expect("large png should prepare successfully");
 
@@ -343,6 +408,48 @@ fn oversized_png_static_images_are_downscaled_for_overlay_cache() {
             height_px: 1800,
         }
     );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn refresh_preview_preloads_current_and_visible_nearby_static_images() {
+    let (mut app, root) = build_multi_static_image_app(
+        "image-preload-window",
+        &["a.jpg", "b.txt", "c.png", "d.webp", "e.svg"],
+    );
+    app.set_selected(2);
+
+    let current_request = app
+        .active_static_image_overlay_request()
+        .expect("current image request should be available");
+    let target_width_px = current_request.target_width_px;
+    let target_height_px = current_request.target_height_px;
+
+    let expected = app
+        .visible_entry_indices()
+        .into_iter()
+        .filter_map(|index| app.entries.get(index))
+        .filter(|entry| crate::app::image_preview::static_image_detail_label(entry).is_some())
+        .map(|entry| {
+            StaticImageKey::from_parts(
+                entry.path.clone(),
+                entry.size,
+                entry.modified,
+                target_width_px,
+                target_height_px,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    for key in expected {
+        assert!(
+            app.image_preview.pending_prepares.contains(&key)
+                || app.image_preview.dimensions.contains_key(&key),
+            "expected image preload for {:?}",
+            key
+        );
+    }
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

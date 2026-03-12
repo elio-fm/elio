@@ -174,6 +174,7 @@ impl App {
         self.preview_state.scroll = 0;
         self.preview_state.horizontal_scroll = 0;
         self.sync_preview_scroll();
+        self.refresh_static_image_preloads();
         self.prefetch_nearby_previews();
     }
 
@@ -482,6 +483,7 @@ impl App {
             self.selected = next;
         }
         self.sync_scroll();
+        self.refresh_static_image_preloads();
         self.remember_current_directory_view();
     }
 

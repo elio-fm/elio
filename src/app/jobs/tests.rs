@@ -1,5 +1,17 @@
 use super::*;
 
+fn image_prepare_request(name: &str) -> ImagePrepareRequest {
+    ImagePrepareRequest {
+        path: PathBuf::from(name),
+        size: 1,
+        modified: None,
+        target_width_px: 640,
+        target_height_px: 480,
+        ffmpeg_available: true,
+        magick_available: true,
+    }
+}
+
 #[test]
 fn preview_pool_deduplicates_identical_active_or_queued_requests() {
     let scheduler = JobScheduler::new_for_tests(0, 0, 8);
@@ -217,6 +229,68 @@ fn scheduler_reports_pending_work_when_jobs_are_queued() {
         scope: SearchScope::Files,
     }));
     assert!(scheduler.has_pending_work());
+}
+
+#[test]
+fn current_image_prepare_priority_outranks_nearby_requests() {
+    let scheduler = JobScheduler::new_for_tests(0, 0, 2);
+
+    assert!(scheduler.submit_nearby_image_prepare(image_prepare_request("nearby.png")));
+    assert!(scheduler.submit_image_prepare(image_prepare_request("current.png")));
+
+    assert_eq!(
+        scheduler.snapshot().image_prepare_pending,
+        vec![
+            ImagePrepareJobKey {
+                path: PathBuf::from("current.png"),
+                size: 1,
+                modified: None,
+                target_width_px: 640,
+                target_height_px: 480,
+            },
+            ImagePrepareJobKey {
+                path: PathBuf::from("nearby.png"),
+                size: 1,
+                modified: None,
+                target_width_px: 640,
+                target_height_px: 480,
+            },
+        ]
+    );
+}
+
+#[test]
+fn retain_image_prepares_discards_stale_nearby_requests() {
+    let scheduler = JobScheduler::new_for_tests(0, 0, 2);
+    let current = image_prepare_request("current.png");
+    let nearby_keep = image_prepare_request("keep.png");
+    let nearby_drop = image_prepare_request("drop.png");
+
+    assert!(scheduler.submit_image_prepare(current.clone()));
+    assert!(scheduler.submit_nearby_image_prepare(nearby_keep.clone()));
+    assert!(scheduler.submit_nearby_image_prepare(nearby_drop));
+
+    scheduler.retain_image_prepares(Some(&current), std::slice::from_ref(&nearby_keep));
+
+    assert_eq!(
+        scheduler.snapshot().image_prepare_pending,
+        vec![
+            ImagePrepareJobKey {
+                path: PathBuf::from("current.png"),
+                size: 1,
+                modified: None,
+                target_width_px: 640,
+                target_height_px: 480,
+            },
+            ImagePrepareJobKey {
+                path: PathBuf::from("keep.png"),
+                size: 1,
+                modified: None,
+                target_width_px: 640,
+                target_height_px: 480,
+            },
+        ]
+    );
 }
 
 #[test]

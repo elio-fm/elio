@@ -234,7 +234,7 @@ impl App {
             if !self.image_selection_activation_ready() {
                 return Ok(());
             }
-            let prepared = match self.prepare_static_image_for_overlay(&request) {
+            let prepared = match self.prepared_static_image_for_overlay(&request) {
                 StaticImageOverlayPreparation::Ready(prepared) => prepared,
                 StaticImageOverlayPreparation::Pending => return Ok(()),
                 StaticImageOverlayPreparation::Failed => {

@@ -101,7 +101,7 @@ impl App {
         })
     }
 
-    fn visible_entry_indices(&self) -> Vec<usize> {
+    pub(super) fn visible_entry_indices(&self) -> Vec<usize> {
         if self.entries.is_empty() {
             return Vec::new();
         }
