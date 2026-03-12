@@ -5,7 +5,7 @@ use ratatui::{
     text::{Line, Span},
 };
 use serde_json::Value as JsonValue;
-use serde_yaml::Value as YamlValue;
+use yaml_serde::Value as YamlValue;
 
 const INLINE_ARRAY_LIMIT: usize = 4;
 const INLINE_OBJECT_LIMIT: usize = 3;
@@ -31,7 +31,7 @@ pub(super) fn render_toml_preview(text: &str, detail: &'static str) -> Option<St
 }
 
 pub(super) fn render_yaml_preview(text: &str, detail: &'static str) -> Option<StructuredPreview> {
-    serde_yaml::from_str::<YamlValue>(text)
+    yaml_serde::from_str::<YamlValue>(text)
         .ok()
         .map(|value| render_tree_preview(yaml_to_tree(value), detail))
 }

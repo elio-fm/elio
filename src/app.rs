@@ -353,6 +353,12 @@ struct HistoryEntry {
 }
 
 #[derive(Clone, Debug, Default)]
+struct NavigationHistory {
+    back: Vec<HistoryEntry>,
+    forward: Vec<HistoryEntry>,
+}
+
+#[derive(Clone, Debug, Default)]
 struct DirectoryViewMemory {
     selected_path: Option<PathBuf>,
     scroll_row: usize,
@@ -362,6 +368,17 @@ struct DirectoryViewMemory {
 enum PreviewLoadState {
     Placeholder(PathBuf),
     Refreshing(PathBuf),
+}
+
+struct PreviewState {
+    scroll: usize,
+    horizontal_scroll: usize,
+    content: preview::PreviewContent,
+    token: u64,
+    metrics: PreviewMetrics,
+    load_state: Option<PreviewLoadState>,
+    result_cache: HashMap<PathBuf, CachedPreview>,
+    result_order: VecDeque<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -377,6 +394,17 @@ struct PendingDirectoryLoad {
     completion: DirectoryLoadCompletion,
 }
 
+struct DirectoryRuntime {
+    fingerprint: support::DirectoryFingerprint,
+    watch_tx: std::sync::mpsc::Sender<watching::DirectoryWatchEvent>,
+    watch_rx: std::sync::mpsc::Receiver<watching::DirectoryWatchEvent>,
+    watch: Option<watching::DirectoryWatcher>,
+    pending_reload_at: Option<Instant>,
+    pending_load: Option<PendingDirectoryLoad>,
+    use_polling_reload: bool,
+    last_auto_reload_at: Instant,
+}
+
 pub struct App {
     pub cwd: PathBuf,
     pub entries: Vec<Entry>,
@@ -387,14 +415,11 @@ pub struct App {
     pub zoom_level: u8,
     pub sort_mode: SortMode,
     pub show_hidden: bool,
-    pub preview_scroll: usize,
-    pub preview_horizontal_scroll: usize,
     pub status: String,
     pub help_open: bool,
     pub should_quit: bool,
-    back_history: Vec<HistoryEntry>,
-    forward_history: Vec<HistoryEntry>,
-    preview_cache: preview::PreviewContent,
+    navigation_history: NavigationHistory,
+    preview_state: PreviewState,
     pdf_preview: pdf_preview::PdfPreviewState,
     frame_state: FrameState,
     search: Option<SearchOverlay>,
@@ -402,28 +427,16 @@ pub struct App {
     search_loading: bool,
     search_token: u64,
     directory_token: u64,
-    preview_token: u64,
     scheduler: JobScheduler,
-    preview_metrics: PreviewMetrics,
-    preview_load_state: Option<PreviewLoadState>,
-    preview_result_cache: HashMap<PathBuf, CachedPreview>,
-    preview_result_order: VecDeque<PathBuf>,
     directory_item_count_cache: HashMap<DirectoryItemCountKey, Option<usize>>,
     directory_item_count_order: VecDeque<DirectoryItemCountKey>,
     directory_view_memory: HashMap<PathBuf, DirectoryViewMemory>,
-    directory_watch_tx: std::sync::mpsc::Sender<watching::DirectoryWatchEvent>,
-    directory_watch_rx: std::sync::mpsc::Receiver<watching::DirectoryWatchEvent>,
-    directory_watch: Option<watching::DirectoryWatcher>,
-    pending_directory_reload_at: Option<Instant>,
-    pending_directory_load: Option<PendingDirectoryLoad>,
-    use_polling_reload: bool,
+    directory_runtime: DirectoryRuntime,
     last_click: Option<ClickState>,
     wheel_scroll: ScrollState,
     wheel_profile: WheelProfile,
     last_wheel_target: Option<WheelTarget>,
     last_selection_change_at: Instant,
-    directory_fingerprint: support::DirectoryFingerprint,
-    last_auto_reload_at: Instant,
 }
 
 impl App {
@@ -445,14 +458,20 @@ impl App {
             zoom_level: 1,
             sort_mode: SortMode::Name,
             show_hidden: false,
-            preview_scroll: 0,
-            preview_horizontal_scroll: 0,
             status: String::new(),
             help_open: false,
             should_quit: false,
-            back_history: Vec::new(),
-            forward_history: Vec::new(),
-            preview_cache: preview::PreviewContent::placeholder("No selection"),
+            navigation_history: NavigationHistory::default(),
+            preview_state: PreviewState {
+                scroll: 0,
+                horizontal_scroll: 0,
+                content: preview::PreviewContent::placeholder("No selection"),
+                token: 0,
+                metrics: PreviewMetrics::default(),
+                load_state: None,
+                result_cache: HashMap::new(),
+                result_order: VecDeque::new(),
+            },
             pdf_preview: pdf_preview::PdfPreviewState::default(),
             frame_state: FrameState::default(),
             search: None,
@@ -460,21 +479,20 @@ impl App {
             search_loading: false,
             search_token: 0,
             directory_token: 0,
-            preview_token: 0,
             scheduler,
-            preview_metrics: PreviewMetrics::default(),
-            preview_load_state: None,
-            preview_result_cache: HashMap::new(),
-            preview_result_order: VecDeque::new(),
             directory_item_count_cache: HashMap::new(),
             directory_item_count_order: VecDeque::new(),
             directory_view_memory: HashMap::new(),
-            directory_watch_tx,
-            directory_watch_rx,
-            directory_watch: None,
-            pending_directory_reload_at: None,
-            pending_directory_load: None,
-            use_polling_reload: true,
+            directory_runtime: DirectoryRuntime {
+                fingerprint: support::DirectoryFingerprint::default(),
+                watch_tx: directory_watch_tx,
+                watch_rx: directory_watch_rx,
+                watch: None,
+                pending_reload_at: None,
+                pending_load: None,
+                use_polling_reload: true,
+                last_auto_reload_at: Instant::now(),
+            },
             last_click: None,
             wheel_scroll: ScrollState {
                 horizontal: ScrollLane::new(),
@@ -486,13 +504,11 @@ impl App {
             wheel_profile: detect_wheel_profile(),
             last_wheel_target: Some(WheelTarget::Entries),
             last_selection_change_at: Instant::now(),
-            directory_fingerprint: support::DirectoryFingerprint::default(),
-            last_auto_reload_at: Instant::now(),
         };
         let snapshot = support::load_directory_snapshot(&app.cwd, app.show_hidden, app.sort_mode)?;
         app.sidebar = support::build_sidebar_items();
         app.entries = snapshot.entries;
-        app.directory_fingerprint = snapshot.fingerprint;
+        app.directory_runtime.fingerprint = snapshot.fingerprint;
         app.clamp_selection();
         app.remember_current_directory_view();
         app.refresh_preview();
@@ -513,7 +529,7 @@ impl App {
     }
 
     pub fn has_pending_auto_reload(&self) -> bool {
-        self.pending_directory_reload_at.is_some()
+        self.directory_runtime.pending_reload_at.is_some()
     }
 
     pub fn has_pending_background_work(&self) -> bool {
@@ -527,7 +543,7 @@ impl App {
 
     #[cfg(test)]
     pub fn preview_metrics(&self) -> PreviewMetricsSnapshot {
-        self.preview_metrics.snapshot()
+        self.preview_state.metrics.snapshot()
     }
 
     pub fn report_runtime_error(&mut self, context: &str, error: &anyhow::Error) {
