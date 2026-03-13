@@ -1,8 +1,8 @@
 mod app;
-mod appearance;
 mod config;
-mod file_facts;
-mod search;
+mod file_info;
+mod fs;
+mod preview;
 mod ui;
 
 use crate::app::App;
@@ -25,7 +25,7 @@ const RELATIVE_TIME_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
 fn main() -> Result<()> {
     config::initialize();
-    appearance::initialize();
+    ui::theme::initialize();
     let mut terminal = init_terminal()?;
     let result = run(&mut terminal);
     restore_terminal(&mut terminal)?;

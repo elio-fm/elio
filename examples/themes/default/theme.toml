@@ -87,6 +87,7 @@ color = "#d6def0"
 
 [extensions.toml]
 class = "config"
+icon = ""
 
 [extensions.yaml]
 class = "config"
@@ -442,11 +443,6 @@ class = "code"
 icon = ""
 color = "#f7c85e"
 
-[files."Cargo.toml"]
-class = "config"
-icon = ""
-color = "#ff8f40"
-
 [files."Cargo.lock"]
 class = "data"
 icon = "󰌾"
@@ -547,11 +543,6 @@ class = "config"
 icon = ""
 color = "#ffb86b"
 
-[files."bunfig.toml"]
-class = "config"
-icon = ""
-color = "#f7c85e"
-
 [files."biome.json"]
 class = "config"
 icon = "󰏗"
@@ -571,11 +562,6 @@ color = "#66e39a"
 class = "config"
 icon = ""
 color = "#66e39a"
-
-[files."pyproject.toml"]
-class = "config"
-icon = ""
-color = "#f7c85e"
 
 [files."poetry.lock"]
 class = "data"
@@ -801,11 +787,6 @@ color = "#4ecfff"
 class = "data"
 icon = ""
 color = "#66e39a"
-
-[files."rust-toolchain.toml"]
-class = "config"
-icon = ""
-color = "#ff8f40"
 
 [files."next.config.js"]
 class = "config"

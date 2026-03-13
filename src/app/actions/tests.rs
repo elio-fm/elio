@@ -43,7 +43,7 @@ fn watcher_reload_detects_new_visible_entries() {
     fs::write(&second, "world").expect("failed to write second file");
     app.directory_runtime
         .watch_tx
-        .send(watching::DirectoryWatchEvent::Changed(vec![second]))
+        .send(crate::fs::DirectoryWatchEvent::Changed(vec![second]))
         .expect("failed to queue watch event");
 
     assert!(
@@ -78,7 +78,7 @@ fn watcher_rescan_event_triggers_reload() {
     fs::write(root.join("two.txt"), "world").expect("failed to write second file");
     app.directory_runtime
         .watch_tx
-        .send(watching::DirectoryWatchEvent::Rescan)
+        .send(crate::fs::DirectoryWatchEvent::Rescan)
         .expect("failed to queue rescan event");
 
     assert!(
@@ -115,7 +115,7 @@ fn watcher_reload_ignores_hidden_entries_when_hidden_files_are_off() {
     fs::write(&hidden, "hidden").expect("failed to write hidden file");
     app.directory_runtime
         .watch_tx
-        .send(watching::DirectoryWatchEvent::Changed(vec![hidden]))
+        .send(crate::fs::DirectoryWatchEvent::Changed(vec![hidden]))
         .expect("failed to queue watch event");
 
     assert!(

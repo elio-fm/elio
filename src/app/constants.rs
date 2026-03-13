@@ -1,0 +1,25 @@
+use std::time::Duration;
+
+pub(super) const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(450);
+pub(super) const KEY_REPEAT_NAV_INTERVAL: Duration = Duration::from_millis(28);
+pub(super) const WHEEL_SCROLL_INTERVAL_HORIZONTAL: Duration = Duration::from_millis(64);
+pub(super) const WHEEL_SCROLL_INTERVAL_VERTICAL: Duration = Duration::from_millis(16);
+pub(super) const WHEEL_SCROLL_INTERVAL_VERTICAL_HIGH_FREQUENCY: Duration =
+    Duration::from_millis(12);
+pub(super) const WHEEL_SCROLL_INTERVAL_PREVIEW: Duration = Duration::from_millis(12);
+pub(super) const WHEEL_SCROLL_INTERVAL_PREVIEW_HORIZONTAL: Duration = Duration::from_millis(12);
+pub(super) const WHEEL_SCROLL_INTERVAL_SEARCH: Duration = Duration::from_millis(72);
+pub(super) const PREVIEW_AUTO_FOCUS_DELAY: Duration = Duration::from_millis(220);
+pub(super) const IMAGE_SELECTION_ACTIVATION_DELAY: Duration = Duration::from_millis(120);
+pub(super) const HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY: Duration = Duration::from_millis(85);
+pub(super) const WHEEL_SCROLL_QUEUE_LIMIT: isize = 8;
+pub(super) const WHEEL_SCROLL_QUEUE_LIMIT_HORIZONTAL: isize = 3;
+pub(super) const WHEEL_SCROLL_QUEUE_LIMIT_PREVIEW_HORIZONTAL: isize = 10;
+pub(super) const WHEEL_SCROLL_QUEUE_LIMIT_SEARCH: isize = 2;
+pub(super) const WHEEL_SCROLL_BURST_WINDOW: Duration = Duration::from_millis(90);
+pub(super) const SEARCH_MATCH_LIMIT: usize = 250;
+pub(super) const SEARCH_CACHE_LIMIT: usize = 32;
+pub(super) const PREVIEW_CACHE_LIMIT: usize = 24;
+pub(super) const PREVIEW_PREFETCH_LIMIT: usize = 2;
+pub(super) const DIRECTORY_ITEM_COUNT_CACHE_LIMIT: usize = 128;
+pub(super) const AUTO_RELOAD_INTERVAL: Duration = Duration::from_millis(250);

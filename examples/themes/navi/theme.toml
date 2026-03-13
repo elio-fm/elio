@@ -40,10 +40,7 @@ color = "#d9b36c"
 
 [extensions.toml]
 class = "config"
-
-[files."Cargo.toml"]
-class = "config"
-icon = "󰣖"
+icon = ""
 
 [files."Cargo.lock"]
 class = "data"
