@@ -1,26 +1,21 @@
-mod backend;
 mod geometry;
 mod pipeline;
 
+use self::geometry::fit_pdf_page;
 pub(crate) use self::pipeline::{probe_pdf_page, render_pdf_page_to_cache};
 #[cfg(test)]
 use self::{
-    backend::{
-        build_kitty_clear_sequence, build_kitty_display_sequence, fallback_window_size_pixels,
-        parse_window_size, select_terminal_image_backend,
-    },
     geometry::bucket_render_dimensions,
     pipeline::{parse_pdfinfo_page_count, parse_pdfinfo_page_dimensions},
 };
-use self::{
-    backend::{
-        clear_pdf_images, detect_terminal_pdf_preview_backend, pdf_preview_tools_available,
-        place_pdf_image, query_terminal_window_size, read_png_dimensions,
-    },
-    geometry::{fit_image_area, fit_pdf_page},
+use super::terminal_images::{
+    OverlayPresentState, RenderedImageDimensions, TerminalImageBackend, fit_image_area,
+    place_terminal_image, read_png_dimensions,
 };
-use super::image_preview::{
-    StaticImageKey, StaticImageOverlayPreparation, StaticImageOverlayRequest,
+#[cfg(test)]
+use super::terminal_images::{
+    build_kitty_clear_sequence, build_kitty_display_sequence, fallback_window_size_pixels,
+    parse_window_size, select_terminal_image_backend,
 };
 use super::*;
 use crate::file_facts::{self, DocumentFormat};
@@ -44,17 +39,9 @@ const PDF_PAGE_STATUS_PREFIX: &str = "PDF page ";
 const PDF_PREFETCH_DISTANCE: usize = 1;
 const PDF_SELECTION_ACTIVATION_DELAY: Duration = Duration::from_millis(35);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TerminalImageBackend {
-    KittyProtocol,
-    Kitten,
-}
-
 #[derive(Clone, Debug, Default)]
 pub(super) struct PdfPreviewState {
-    enabled: bool,
-    backend: Option<TerminalImageBackend>,
-    pdf_tools_available: bool,
+    pub(super) pdf_tools_available: bool,
     session: Option<PdfSession>,
     document_page_counts: HashMap<PdfDocumentKey, usize>,
     page_dimensions: HashMap<PdfPageKey, PdfPageDimensions>,
@@ -65,8 +52,7 @@ pub(super) struct PdfPreviewState {
     render_order: VecDeque<PdfRenderKey>,
     pending_renders: HashSet<PdfRenderKey>,
     failed_renders: HashSet<PdfRenderKey>,
-    displayed: Option<DisplayedOverlay>,
-    terminal_window: Option<TerminalWindowSize>,
+    displayed: Option<DisplayedPdfPreview>,
     activation_ready_at: Option<Instant>,
 }
 
@@ -100,12 +86,6 @@ struct PdfPageDimensions {
     height_pts: f32,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct RenderedImageDimensions {
-    pub(super) width_px: u32,
-    pub(super) height_px: u32,
-}
-
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct PdfRenderKey {
     path: PathBuf,
@@ -125,28 +105,6 @@ struct DisplayedPdfPreview {
     area: Rect,
     render_width_px: u32,
     render_height_px: u32,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DisplayedStaticImagePreview {
-    path: PathBuf,
-    size: u64,
-    modified: Option<SystemTime>,
-    area: Rect,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum DisplayedOverlay {
-    Pdf(DisplayedPdfPreview),
-    StaticImage(DisplayedStaticImagePreview),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct TerminalWindowSize {
-    pub(super) cells_width: u16,
-    pub(super) cells_height: u16,
-    pub(super) pixels_width: u32,
-    pub(super) pixels_height: u32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -173,20 +131,7 @@ pub(super) struct PdfProbeResult {
 }
 
 impl App {
-    pub(super) fn terminal_image_overlay_available(&self) -> bool {
-        self.pdf_preview.enabled && self.pdf_preview.backend.is_some()
-    }
-
-    pub(crate) fn enable_terminal_pdf_previews(&mut self) {
-        self.pdf_preview.backend = detect_terminal_pdf_preview_backend();
-        self.pdf_preview.enabled = self.pdf_preview.backend.is_some();
-        self.pdf_preview.pdf_tools_available = pdf_preview_tools_available();
-        self.refresh_pdf_terminal_window_size();
-        self.sync_pdf_preview_selection();
-    }
-
-    pub(crate) fn handle_pdf_terminal_resize(&mut self) {
-        self.refresh_pdf_terminal_window_size();
+    pub(super) fn handle_pdf_overlay_resize(&mut self) {
         if self.pdf_preview.session.is_some() {
             self.pdf_preview.activation_ready_at = None;
             self.refresh_pdf_prefetch_window();
@@ -211,84 +156,25 @@ impl App {
             .map(|ready_at| ready_at.saturating_duration_since(Instant::now()))
     }
 
-    pub(crate) fn present_pdf_overlay(&mut self) -> Result<()> {
-        if self.browser_wheel_burst_active() {
-            return Ok(());
-        }
-
-        let Some(backend) = self.pdf_preview.backend else {
-            self.clear_pdf_overlay()?;
-            return Ok(());
-        };
-
-        if self
-            .pdf_preview
-            .displayed
-            .as_ref()
-            .is_some_and(|displayed| !self.should_keep_displayed_overlay(displayed))
-        {
-            self.clear_pdf_overlay()?;
-        }
-
-        if let Some(request) = self.active_static_image_overlay_request() {
-            if !self.image_selection_activation_ready() {
-                return Ok(());
-            }
-            let prepared = match self.prepared_static_image_for_overlay(&request) {
-                StaticImageOverlayPreparation::Ready(prepared) => prepared,
-                StaticImageOverlayPreparation::Pending => return Ok(()),
-                StaticImageOverlayPreparation::Failed => {
-                    self.mark_static_image_failed(&request);
-                    self.refresh_preview();
-                    return Ok(());
-                }
-            };
-            let Some(window_size) = self.cached_pdf_terminal_window() else {
-                self.mark_static_image_failed(&request);
-                self.refresh_preview();
-                return Ok(());
-            };
-            let placement = fit_image_area(
-                request.area,
-                window_size,
-                prepared.dimensions.width_px as f32 / prepared.dimensions.height_px as f32,
-            );
-            let displayed = DisplayedOverlay::StaticImage(
-                DisplayedStaticImagePreview::from_request(&request, placement),
-            );
-            if self.pdf_preview.displayed.as_ref() == Some(&displayed) {
-                return Ok(());
-            }
-
-            if self.pdf_preview.displayed.is_some() {
-                clear_pdf_images(backend).context("failed to clear previous preview image")?;
-                self.pdf_preview.displayed = None;
-            }
-            if place_pdf_image(backend, &prepared.display_path, placement).is_err() {
-                self.mark_static_image_failed(&request);
-                self.refresh_preview();
-                return Ok(());
-            }
-            self.pdf_preview.displayed = Some(displayed);
-            return Ok(());
-        }
-
+    pub(super) fn present_pdf_overlay(
+        &mut self,
+        backend: TerminalImageBackend,
+    ) -> Result<OverlayPresentState> {
         let Some(request) = self.active_pdf_overlay_request() else {
-            self.clear_pdf_overlay()?;
-            return Ok(());
+            return Ok(OverlayPresentState::NotRequested);
         };
 
         if !self.pdf_selection_activation_ready() {
-            return Ok(());
+            return Ok(OverlayPresentState::Waiting);
         }
 
         let Some(requested_placement) = self.overlay_placement_for_request(&request) else {
             let _ = self.ensure_pdf_page_probe(&request);
-            return Ok(());
+            return Ok(OverlayPresentState::Waiting);
         };
-        let render_key = PdfRenderKey::from_request(&request, requested_placement);
+        let render_key = self.pdf_render_key_from_request(&request, requested_placement);
         let Some(rendered) = self.ensure_pdf_render(&render_key) else {
-            return Ok(());
+            return Ok(OverlayPresentState::Waiting);
         };
         let placement = self.resolved_pdf_display_placement(
             &request,
@@ -296,49 +182,18 @@ impl App {
             requested_placement,
             &rendered,
         );
-        let displayed =
-            DisplayedOverlay::Pdf(DisplayedPdfPreview::from_request(&request, placement));
+        let displayed = DisplayedPdfPreview::from_request(&request, placement);
         if self.pdf_preview.displayed.as_ref() == Some(&displayed) {
-            return Ok(());
+            return Ok(OverlayPresentState::Displayed);
         }
-
-        if self.pdf_preview.displayed.is_some() {
-            clear_pdf_images(backend).context("failed to clear previous PDF page")?;
-            self.pdf_preview.displayed = None;
-        }
-        place_pdf_image(backend, &rendered, placement.image_area)
+        place_terminal_image(backend, &rendered, placement.image_area)
             .context("failed to display PDF page")?;
         self.pdf_preview.displayed = Some(displayed);
-        Ok(())
-    }
-
-    pub(crate) fn clear_pdf_overlay(&mut self) -> Result<()> {
-        if self.pdf_preview.displayed.is_none() {
-            return Ok(());
-        }
-        let Some(backend) = self.pdf_preview.backend else {
-            self.pdf_preview.displayed = None;
-            return Ok(());
-        };
-        clear_pdf_images(backend).context("failed to clear PDF preview overlay")?;
-        self.pdf_preview.displayed = None;
-        Ok(())
-    }
-
-    pub(crate) fn preview_uses_image_overlay(&self) -> bool {
-        self.active_display_target()
-            .as_ref()
-            .zip(self.pdf_preview.displayed.as_ref())
-            .is_some_and(|(active, displayed)| active == displayed)
-    }
-
-    pub(crate) fn preview_prefers_image_surface(&self) -> bool {
-        self.preview_prefers_static_image_surface() || self.preview_prefers_pdf_surface()
+        Ok(OverlayPresentState::Displayed)
     }
 
     pub(crate) fn preview_prefers_pdf_surface(&self) -> bool {
-        if !self.pdf_preview.enabled
-            || self.pdf_preview.backend.is_none()
+        if !self.terminal_image_overlay_available()
             || !self.pdf_preview.pdf_tools_available
             || self.pdf_preview.session.is_none()
         {
@@ -355,7 +210,7 @@ impl App {
             return true;
         }
 
-        let page_key = PdfPageKey::from_request(&request);
+        let page_key = self.pdf_page_key_from_request(&request);
         if self.pdf_preview.failed_page_probes.contains(&page_key) {
             return false;
         }
@@ -368,7 +223,7 @@ impl App {
         let Some(placement) = self.overlay_placement_for_request(&request) else {
             return false;
         };
-        let render_key = PdfRenderKey::from_request(&request, placement);
+        let render_key = self.pdf_render_key_from_request(&request, placement);
         if self.pdf_preview.failed_renders.contains(&render_key) {
             return false;
         }
@@ -390,7 +245,7 @@ impl App {
             return Some("Preparing PDF preview...".to_string());
         }
 
-        let page_key = PdfPageKey::from_request(&request);
+        let page_key = self.pdf_page_key_from_request(&request);
         if self.pdf_preview.failed_page_probes.contains(&page_key) {
             return Some("PDF preview unavailable".to_string());
         }
@@ -401,7 +256,7 @@ impl App {
         }
 
         let placement = self.overlay_placement_for_request(&request)?;
-        let render_key = PdfRenderKey::from_request(&request, placement);
+        let render_key = self.pdf_render_key_from_request(&request, placement);
         if self.pdf_preview.failed_renders.contains(&render_key) {
             return Some("PDF preview unavailable".to_string());
         }
@@ -413,7 +268,7 @@ impl App {
 
     pub(super) fn pdf_preview_header_detail(&self) -> Option<String> {
         let session = self.pdf_preview.session.as_ref()?;
-        if !self.pdf_preview.enabled {
+        if !self.terminal_image_overlay_available() {
             return None;
         }
 
@@ -448,7 +303,7 @@ impl App {
 
     pub(super) fn sync_pdf_preview_selection(&mut self) {
         self.clear_failed_static_image_state_if_needed();
-        if !self.pdf_preview.enabled || !self.pdf_preview.pdf_tools_available {
+        if !self.terminal_image_overlay_available() || !self.pdf_preview.pdf_tools_available {
             self.pdf_preview.session = None;
             self.pdf_preview.activation_ready_at = None;
             self.clear_pending_pdf_work();
@@ -494,7 +349,7 @@ impl App {
     }
 
     fn active_pdf_overlay_request(&self) -> Option<PdfOverlayRequest> {
-        if !self.pdf_preview.enabled {
+        if !self.terminal_image_overlay_available() {
             return None;
         }
 
@@ -678,14 +533,6 @@ impl App {
         }
     }
 
-    fn refresh_pdf_terminal_window_size(&mut self) {
-        self.pdf_preview.terminal_window = if self.pdf_preview.enabled {
-            query_terminal_window_size()
-        } else {
-            None
-        };
-    }
-
     fn cached_pdf_total_pages(&self, entry: &Entry) -> Option<usize> {
         self.pdf_preview
             .document_page_counts
@@ -707,13 +554,9 @@ impl App {
         &self,
         request: &PdfOverlayRequest,
     ) -> Option<FittedPdfPlacement> {
-        let window_size = self.cached_pdf_terminal_window()?;
+        let window_size = self.cached_terminal_window()?;
         let page_dimensions = self.cached_pdf_page_dimensions(request)?;
         Some(fit_pdf_page(request.area, window_size, page_dimensions))
-    }
-
-    pub(super) fn cached_pdf_terminal_window(&self) -> Option<TerminalWindowSize> {
-        self.pdf_preview.terminal_window
     }
 
     fn cached_pdf_page_dimensions(&self, request: &PdfOverlayRequest) -> Option<PdfPageDimensions> {
@@ -766,53 +609,35 @@ impl App {
         }
     }
 
-    fn active_display_target(&self) -> Option<DisplayedOverlay> {
-        self.active_static_image_display_target()
-            .or_else(|| self.active_pdf_display_target())
+    pub(super) fn pdf_overlay_displayed(&self) -> bool {
+        self.pdf_preview.displayed.is_some()
     }
 
-    fn active_static_image_display_target(&self) -> Option<DisplayedOverlay> {
-        let request = self.active_static_image_overlay_request()?;
-        let window_size = self.cached_pdf_terminal_window()?;
-        let image_dimensions = self
-            .image_preview
-            .dimensions
-            .get(&StaticImageKey::from_request(&request))
-            .copied()?;
-        Some(DisplayedOverlay::StaticImage(
-            DisplayedStaticImagePreview::from_request(
-                &request,
-                fit_image_area(
-                    request.area,
-                    window_size,
-                    image_dimensions.width_px as f32 / image_dimensions.height_px as f32,
-                ),
-            ),
-        ))
+    pub(super) fn clear_displayed_pdf_overlay(&mut self) {
+        self.pdf_preview.displayed = None;
     }
 
-    fn active_pdf_display_target(&self) -> Option<DisplayedOverlay> {
+    pub(super) fn displayed_pdf_overlay_matches_active(&self) -> bool {
+        self.active_pdf_display_target()
+            .as_ref()
+            .zip(self.pdf_preview.displayed.as_ref())
+            .is_some_and(|(active, displayed)| active == displayed)
+    }
+
+    fn active_pdf_display_target(&self) -> Option<DisplayedPdfPreview> {
         let request = self.active_pdf_overlay_request()?;
         if !self.pdf_selection_activation_ready() {
             return None;
         }
         let requested_placement = self.overlay_placement_for_request(&request)?;
         let placement = self.cached_display_placement_for_request(&request, requested_placement)?;
-        Some(DisplayedOverlay::Pdf(DisplayedPdfPreview::from_request(
-            &request, placement,
-        )))
+        Some(DisplayedPdfPreview::from_request(&request, placement))
     }
 
     fn active_pdf_render_key(&self) -> Option<PdfRenderKey> {
         let request = self.active_pdf_overlay_request()?;
         let placement = self.overlay_placement_for_request(&request)?;
-        Some(PdfRenderKey::from_request(&request, placement))
-    }
-
-    fn should_keep_displayed_overlay(&self, displayed: &DisplayedOverlay) -> bool {
-        self.active_display_target()
-            .as_ref()
-            .is_some_and(|target| target == displayed)
+        Some(self.pdf_render_key_from_request(&request, placement))
     }
 
     fn clear_pending_pdf_work(&mut self) {
@@ -828,7 +653,7 @@ impl App {
         fallback: FittedPdfPlacement,
         rendered: &Path,
     ) -> FittedPdfPlacement {
-        let Some(window_size) = self.cached_pdf_terminal_window() else {
+        let Some(window_size) = self.cached_terminal_window() else {
             return fallback;
         };
         let Some(image_dimensions) = self.cached_rendered_image_dimensions(render_key, rendered)
@@ -867,8 +692,8 @@ impl App {
         request: &PdfOverlayRequest,
         fallback: FittedPdfPlacement,
     ) -> Option<FittedPdfPlacement> {
-        let window_size = self.cached_pdf_terminal_window()?;
-        let render_key = PdfRenderKey::from_request(request, fallback);
+        let window_size = self.cached_terminal_window()?;
+        let render_key = self.pdf_render_key_from_request(request, fallback);
         let image_dimensions = self
             .pdf_preview
             .rendered_page_dimensions
@@ -1031,7 +856,7 @@ impl App {
     }
 
     fn pdf_overlay_request_for_page(&self, page: usize) -> Option<PdfOverlayRequest> {
-        if !self.pdf_preview.enabled {
+        if !self.terminal_image_overlay_available() {
             return None;
         }
 
@@ -1145,6 +970,18 @@ impl App {
             self.pdf_preview.failed_renders.insert(key);
         }
     }
+
+    fn pdf_page_key_from_request(&self, request: &PdfOverlayRequest) -> PdfPageKey {
+        PdfPageKey::from_request(request)
+    }
+
+    fn pdf_render_key_from_request(
+        &self,
+        request: &PdfOverlayRequest,
+        placement: FittedPdfPlacement,
+    ) -> PdfRenderKey {
+        PdfRenderKey::from_request(request, placement)
+    }
 }
 
 impl PdfRenderKey {
@@ -1181,17 +1018,6 @@ impl DisplayedPdfPreview {
             area: request.area,
             render_width_px: placement.render_width_px,
             render_height_px: placement.render_height_px,
-        }
-    }
-}
-
-impl DisplayedStaticImagePreview {
-    fn from_request(request: &StaticImageOverlayRequest, area: Rect) -> Self {
-        Self {
-            path: request.path.clone(),
-            size: request.size,
-            modified: request.modified,
-            area,
         }
     }
 }

@@ -8,6 +8,7 @@ mod preview;
 mod previewing;
 mod searching;
 mod support;
+mod terminal_images;
 mod watching;
 
 #[cfg(test)]
@@ -453,6 +454,7 @@ pub struct App {
     preview_state: PreviewState,
     image_preview: image_preview::ImagePreviewState,
     pdf_preview: pdf_preview::PdfPreviewState,
+    terminal_images: terminal_images::TerminalImageState,
     frame_state: FrameState,
     search: Option<SearchOverlay>,
     search_cache: Option<SearchCache>,
@@ -510,6 +512,7 @@ impl App {
             },
             image_preview: image_preview::ImagePreviewState::default(),
             pdf_preview: pdf_preview::PdfPreviewState::default(),
+            terminal_images: terminal_images::TerminalImageState::default(),
             frame_state: FrameState::default(),
             search: None,
             search_cache: None,

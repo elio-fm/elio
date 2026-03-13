@@ -1,6 +1,6 @@
+use super::super::terminal_images::{TerminalWindowSize, fit_image_area, fit_image_pixels};
 use super::{
     FittedPdfPlacement, PDF_RENDER_BUCKET_PX, PDF_RENDER_MIN_DIMENSION_PX, PdfPageDimensions,
-    TerminalWindowSize,
 };
 use ratatui::layout::Rect;
 
@@ -22,48 +22,6 @@ pub(super) fn fit_pdf_page(
         image_area: fit_image_area(area, window_size, page_aspect),
         render_width_px,
         render_height_px,
-    }
-}
-
-pub(super) fn fit_image_pixels(
-    area: Rect,
-    window_size: TerminalWindowSize,
-    aspect_ratio: f32,
-) -> (f32, f32) {
-    let aspect_ratio = aspect_ratio.max(f32::EPSILON);
-    let cell_width_px = window_size.pixels_width as f32 / f32::from(window_size.cells_width.max(1));
-    let cell_height_px =
-        window_size.pixels_height as f32 / f32::from(window_size.cells_height.max(1));
-    let area_width_px = f32::from(area.width.max(1)) * cell_width_px;
-    let area_height_px = f32::from(area.height.max(1)) * cell_height_px;
-
-    if area_width_px / area_height_px > aspect_ratio {
-        let height = area_height_px;
-        (height * aspect_ratio, height)
-    } else {
-        let width = area_width_px;
-        (width, width / aspect_ratio)
-    }
-}
-
-pub(super) fn fit_image_area(
-    area: Rect,
-    window_size: TerminalWindowSize,
-    aspect_ratio: f32,
-) -> Rect {
-    let cell_width_px = window_size.pixels_width as f32 / f32::from(window_size.cells_width.max(1));
-    let cell_height_px =
-        window_size.pixels_height as f32 / f32::from(window_size.cells_height.max(1));
-    let (fit_width_px, fit_height_px) = fit_image_pixels(area, window_size, aspect_ratio);
-    let width_cells = ((fit_width_px / cell_width_px).round() as u16).clamp(1, area.width.max(1));
-    let height_cells =
-        ((fit_height_px / cell_height_px).round() as u16).clamp(1, area.height.max(1));
-
-    Rect {
-        x: area.x + (area.width.saturating_sub(width_cells)) / 2,
-        y: area.y + (area.height.saturating_sub(height_cells)) / 2,
-        width: width_cells,
-        height: height_cells,
     }
 }
 

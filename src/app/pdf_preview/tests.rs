@@ -1,5 +1,7 @@
 use super::*;
+use crate::app::image_preview::StaticImageKey;
 use crate::app::preview::PreviewKind;
+use crate::app::terminal_images::TerminalWindowSize;
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use std::{
     fs,
@@ -15,15 +17,24 @@ fn temp_root(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!("elio-pdf-preview-{label}-{unique}"))
 }
 
+fn configure_terminal_image_support(app: &mut App) {
+    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
+    app.terminal_images.backend = Some(TerminalImageBackend::KittyProtocol);
+    app.terminal_images.window = Some(TerminalWindowSize {
+        cells_width,
+        cells_height,
+        pixels_width: 1920,
+        pixels_height: 1080,
+    });
+}
+
 fn build_pdf_overlay_test_app(label: &str) -> (App, PathBuf) {
     let root = temp_root(label);
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
-    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
-    app.pdf_preview.enabled = true;
+    configure_terminal_image_support(&mut app);
     app.pdf_preview.pdf_tools_available = true;
-    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.pdf_preview.session = Some(PdfSession {
         path: root.join("demo.pdf"),
         size: 128,
@@ -37,12 +48,6 @@ fn build_pdf_overlay_test_app(label: &str) -> (App, PathBuf) {
         width: 48,
         height: 20,
     });
-    app.pdf_preview.terminal_window = Some(TerminalWindowSize {
-        cells_width,
-        cells_height,
-        pixels_width: 1920,
-        pixels_height: 1080,
-    });
     app.pdf_preview.activation_ready_at = Some(Instant::now());
     (app, root)
 }
@@ -54,21 +59,13 @@ fn build_selected_pdf_app(label: &str) -> (App, PathBuf) {
     fs::write(&pdf_path, b"%PDF-1.7\n").expect("failed to write pdf placeholder");
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
-    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
-    app.pdf_preview.enabled = true;
+    configure_terminal_image_support(&mut app);
     app.pdf_preview.pdf_tools_available = true;
-    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
-    });
-    app.pdf_preview.terminal_window = Some(TerminalWindowSize {
-        cells_width,
-        cells_height,
-        pixels_width: 1920,
-        pixels_height: 1080,
     });
     app.refresh_preview();
     (app, root)
@@ -122,10 +119,8 @@ fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBu
     }
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
-    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
-    app.pdf_preview.enabled = true;
+    configure_terminal_image_support(&mut app);
     app.pdf_preview.pdf_tools_available = true;
-    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
@@ -134,12 +129,6 @@ fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBu
     });
     app.frame_state.metrics.cols = 1;
     app.frame_state.metrics.rows_visible = 6;
-    app.pdf_preview.terminal_window = Some(TerminalWindowSize {
-        cells_width,
-        cells_height,
-        pixels_width: 1920,
-        pixels_height: 1080,
-    });
     app.refresh_preview();
     (app, root)
 }
@@ -176,10 +165,8 @@ fn build_multi_static_image_app(label: &str, file_names: &[&str]) -> (App, PathB
     }
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
-    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
-    app.pdf_preview.enabled = true;
+    configure_terminal_image_support(&mut app);
     app.pdf_preview.pdf_tools_available = true;
-    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
@@ -188,12 +175,6 @@ fn build_multi_static_image_app(label: &str, file_names: &[&str]) -> (App, PathB
     });
     app.frame_state.metrics.cols = 1;
     app.frame_state.metrics.rows_visible = 6;
-    app.pdf_preview.terminal_window = Some(TerminalWindowSize {
-        cells_width,
-        cells_height,
-        pixels_width: 1920,
-        pixels_height: 1080,
-    });
     app.refresh_preview();
     (app, root)
 }
@@ -293,6 +274,22 @@ fn preview_prefers_image_surface_for_supported_static_images_when_backend_enable
 }
 
 #[test]
+fn static_image_surface_remains_available_without_pdf_tooling() {
+    let (mut app, root) = build_selected_static_image_app("image-no-pdf-tools", "demo.png");
+    app.pdf_preview.pdf_tools_available = false;
+    app.refresh_preview();
+
+    assert!(app.preview_prefers_static_image_surface());
+    assert!(app.preview_prefers_image_surface());
+    assert_eq!(
+        app.preview_overlay_placeholder_message().as_deref(),
+        Some("Preparing image preview...")
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn raster_static_images_use_png_display_paths() {
     for file_name in ["demo.png", "demo.jpg", "demo.jpeg", "demo.gif", "demo.webp"] {
         let (_app, root) = build_selected_static_image_app("image-cache", file_name);
@@ -305,7 +302,6 @@ fn raster_static_images_use_png_display_paths() {
                 modified: None,
                 target_width_px: 768,
                 target_height_px: 540,
-                ffmpeg_available: true,
                 magick_available: true,
             },
             || false,
@@ -348,7 +344,6 @@ fn svg_static_images_are_normalized_to_cached_png_overlays() {
             modified: None,
             target_width_px: 768,
             target_height_px: 540,
-            ffmpeg_available: true,
             magick_available: true,
         },
         || false,
@@ -389,7 +384,6 @@ fn oversized_png_static_images_are_downscaled_for_overlay_cache() {
             modified: None,
             target_width_px: 768,
             target_height_px: 540,
-            ffmpeg_available: true,
             magick_available: true,
         },
         || false,
@@ -581,9 +575,8 @@ fn fit_image_area_preserves_actual_rendered_png_aspect_ratio() {
 #[test]
 fn pdf_preview_page_navigation_clamps_to_document_bounds() {
     let mut app = App::new_at(std::env::temp_dir()).expect("app should initialize");
-    app.pdf_preview.enabled = true;
+    configure_terminal_image_support(&mut app);
     app.pdf_preview.pdf_tools_available = true;
-    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.pdf_preview.session = Some(PdfSession {
         path: PathBuf::from("demo.pdf"),
         size: 1,
@@ -624,7 +617,7 @@ fn present_pdf_overlay_waits_for_selection_activation_before_queueing_probe() {
     let (mut app, root) = build_pdf_overlay_test_app("activation-delay");
     app.pdf_preview.activation_ready_at = Some(Instant::now() + Duration::from_secs(5));
 
-    app.present_pdf_overlay()
+    app.present_preview_overlay()
         .expect("presenting a delayed PDF overlay should not fail");
 
     assert!(app.pdf_preview.pending_page_probes.is_empty());
@@ -641,9 +634,9 @@ fn present_pdf_overlay_queues_current_probe_only_once() {
         .expect("PDF overlay request should be available");
     let key = PdfPageKey::from_request(&request);
 
-    app.present_pdf_overlay()
+    app.present_preview_overlay()
         .expect("presenting a PDF overlay should not fail");
-    app.present_pdf_overlay()
+    app.present_preview_overlay()
         .expect("retrying a PDF overlay should not fail");
 
     assert_eq!(app.pdf_preview.pending_page_probes.len(), 1);
@@ -681,9 +674,8 @@ fn sync_pdf_preview_selection_reuses_cached_total_page_count() {
     };
     app.entries = vec![entry.clone()];
     app.selected = 0;
-    app.pdf_preview.enabled = true;
+    configure_terminal_image_support(&mut app);
     app.pdf_preview.pdf_tools_available = true;
-    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.pdf_preview
         .document_page_counts
         .insert(PdfDocumentKey::from_entry(&entry), 12);
@@ -717,9 +709,8 @@ fn sync_pdf_preview_selection_defers_adjacent_probe_prefetch_until_current_page_
     };
     app.entries = vec![entry.clone()];
     app.selected = 0;
-    app.pdf_preview.enabled = true;
+    configure_terminal_image_support(&mut app);
     app.pdf_preview.pdf_tools_available = true;
-    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
     app.pdf_preview
         .document_page_counts
         .insert(PdfDocumentKey::from_entry(&entry), 12);
@@ -756,9 +747,8 @@ fn sync_pdf_preview_selection_queues_initial_probe_for_current_page() {
     };
     app.entries = vec![entry.clone()];
     app.selected = 0;
-    app.pdf_preview.enabled = true;
+    configure_terminal_image_support(&mut app);
     app.pdf_preview.pdf_tools_available = true;
-    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
 
     app.sync_pdf_preview_selection();
 
@@ -965,9 +955,7 @@ fn preview_uses_image_overlay_only_for_current_render_target() {
             height_px: placement.render_height_px,
         },
     );
-    app.pdf_preview.displayed = Some(DisplayedOverlay::Pdf(DisplayedPdfPreview::from_request(
-        &request, placement,
-    )));
+    app.pdf_preview.displayed = Some(DisplayedPdfPreview::from_request(&request, placement));
 
     assert!(app.preview_uses_image_overlay());
 
@@ -1230,9 +1218,8 @@ fn refresh_preview_restores_pdf_metadata_fallback_after_probe_failure() {
 fn sync_pdf_preview_selection_clears_stale_pdf_page_status() {
     let mut app = App::new_at(std::env::temp_dir()).expect("app should initialize");
     app.status = "PDF page 3/10".to_string();
-    app.pdf_preview.enabled = true;
+    configure_terminal_image_support(&mut app);
     app.pdf_preview.pdf_tools_available = true;
-    app.pdf_preview.backend = Some(TerminalImageBackend::KittyProtocol);
 
     app.sync_pdf_preview_selection();
 

@@ -1,5 +1,9 @@
-use super::pdf_preview::{RenderedImageDimensions, TerminalWindowSize};
+use super::terminal_images::{
+    OverlayPresentState, RenderedImageDimensions, TerminalImageBackend, TerminalWindowSize,
+    command_exists, fit_image_area, place_terminal_image,
+};
 use super::*;
+use anyhow::Result;
 use image::{DynamicImage, GenericImageView, ImageFormat, ImageReader, imageops::FilterType};
 use quick_xml::{Reader, events::Event};
 use ratatui::layout::Rect;
@@ -22,8 +26,8 @@ pub(super) struct ImagePreviewState {
     pub(super) render_order: VecDeque<StaticImageKey>,
     pub(super) failed_images: HashSet<StaticImageKey>,
     pub(super) pending_prepares: HashSet<StaticImageKey>,
+    displayed: Option<DisplayedStaticImagePreview>,
     activation_ready_at: Option<Instant>,
-    ffmpeg_available: Option<bool>,
     magick_available: Option<bool>,
 }
 
@@ -49,6 +53,14 @@ pub(super) struct StaticImageOverlayRequest {
 pub(super) struct PreparedStaticImage {
     pub(super) display_path: PathBuf,
     pub(super) dimensions: RenderedImageDimensions,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DisplayedStaticImagePreview {
+    path: PathBuf,
+    size: u64,
+    modified: Option<SystemTime>,
+    area: Rect,
 }
 
 #[derive(Debug)]
@@ -114,6 +126,50 @@ impl App {
         self.static_image_overlay_request_for_entry(entry)
     }
 
+    pub(super) fn present_static_image_overlay(
+        &mut self,
+        backend: TerminalImageBackend,
+    ) -> Result<OverlayPresentState> {
+        let Some(request) = self.active_static_image_overlay_request() else {
+            return Ok(OverlayPresentState::NotRequested);
+        };
+        if !self.image_selection_activation_ready() {
+            return Ok(OverlayPresentState::Waiting);
+        }
+
+        let prepared = match self.prepared_static_image_for_overlay(&request) {
+            StaticImageOverlayPreparation::Ready(prepared) => prepared,
+            StaticImageOverlayPreparation::Pending => return Ok(OverlayPresentState::Waiting),
+            StaticImageOverlayPreparation::Failed => {
+                self.mark_static_image_failed(&request);
+                self.refresh_preview();
+                return Ok(OverlayPresentState::NotRequested);
+            }
+        };
+        let Some(window_size) = self.cached_terminal_window() else {
+            self.mark_static_image_failed(&request);
+            self.refresh_preview();
+            return Ok(OverlayPresentState::NotRequested);
+        };
+        let placement = fit_image_area(
+            request.area,
+            window_size,
+            prepared.dimensions.width_px as f32 / prepared.dimensions.height_px as f32,
+        );
+        let displayed = DisplayedStaticImagePreview::from_request(&request, placement);
+        if self.image_preview.displayed.as_ref() == Some(&displayed) {
+            return Ok(OverlayPresentState::Displayed);
+        }
+        if place_terminal_image(backend, &prepared.display_path, placement).is_err() {
+            self.mark_static_image_failed(&request);
+            self.refresh_preview();
+            return Ok(OverlayPresentState::NotRequested);
+        }
+
+        self.image_preview.displayed = Some(displayed);
+        Ok(OverlayPresentState::Displayed)
+    }
+
     pub(super) fn prepared_static_image_for_overlay(
         &mut self,
         request: &StaticImageOverlayRequest,
@@ -156,13 +212,6 @@ impl App {
             .insert(StaticImageKey::from_request(request));
     }
 
-    fn ffmpeg_available(&mut self) -> bool {
-        *self
-            .image_preview
-            .ffmpeg_available
-            .get_or_insert_with(|| command_exists("ffmpeg"))
-    }
-
     fn magick_available(&mut self) -> bool {
         *self
             .image_preview
@@ -172,6 +221,21 @@ impl App {
 
     pub(super) fn image_selection_activation_ready(&self) -> bool {
         self.image_preview.activation_ready_at.is_none()
+    }
+
+    pub(super) fn static_image_overlay_displayed(&self) -> bool {
+        self.image_preview.displayed.is_some()
+    }
+
+    pub(super) fn clear_displayed_static_image(&mut self) {
+        self.image_preview.displayed = None;
+    }
+
+    pub(super) fn displayed_static_image_matches_active(&self) -> bool {
+        self.active_static_image_display_target()
+            .as_ref()
+            .zip(self.image_preview.displayed.as_ref())
+            .is_some_and(|(active, displayed)| active == displayed)
     }
 
     pub(super) fn refresh_static_image_preloads(&mut self) {
@@ -296,8 +360,8 @@ impl App {
             size: entry.size,
             modified: entry.modified,
             area,
-            target_width_px: image_target_width_px(area, self.cached_pdf_terminal_window()),
-            target_height_px: image_target_height_px(area, self.cached_pdf_terminal_window()),
+            target_width_px: image_target_width_px(area, self.cached_terminal_window()),
+            target_height_px: image_target_height_px(area, self.cached_terminal_window()),
         })
     }
 
@@ -360,9 +424,26 @@ impl App {
             modified: request.modified,
             target_width_px: request.target_width_px,
             target_height_px: request.target_height_px,
-            ffmpeg_available: self.ffmpeg_available(),
             magick_available: self.magick_available(),
         }
+    }
+
+    fn active_static_image_display_target(&self) -> Option<DisplayedStaticImagePreview> {
+        let request = self.active_static_image_overlay_request()?;
+        let window_size = self.cached_terminal_window()?;
+        let image_dimensions = self
+            .image_preview
+            .dimensions
+            .get(&StaticImageKey::from_request(&request))
+            .copied()?;
+        Some(DisplayedStaticImagePreview::from_request(
+            &request,
+            fit_image_area(
+                request.area,
+                window_size,
+                image_dimensions.width_px as f32 / image_dimensions.height_px as f32,
+            ),
+        ))
     }
 }
 
@@ -390,6 +471,17 @@ impl StaticImageKey {
             modified,
             target_width_px,
             target_height_px,
+        }
+    }
+}
+
+impl DisplayedStaticImagePreview {
+    fn from_request(request: &StaticImageOverlayRequest, area: Rect) -> Self {
+        Self {
+            path: request.path.clone(),
+            size: request.size,
+            modified: request.modified,
+            area,
         }
     }
 }
@@ -476,22 +568,6 @@ where
             dimensions: source_dimensions,
         });
     }
-
-    if request.ffmpeg_available
-        && should_extract_first_frame_with_ffmpeg(&request.path)
-        && render_first_frame_to_png_with_ffmpeg(
-            &request.path,
-            &cache_path,
-            target_width_px,
-            target_height_px,
-            &canceled,
-        )
-    {
-        return Some(PreparedStaticImageAsset {
-            display_path: cache_path,
-            dimensions: source_dimensions,
-        });
-    }
     if canceled() {
         return None;
     }
@@ -537,51 +613,6 @@ fn is_png_path(path: &std::path::Path) -> bool {
         .is_some_and(|extension| extension.eq_ignore_ascii_case("png"))
 }
 
-fn should_extract_first_frame_with_ffmpeg(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| matches!(extension.to_ascii_lowercase().as_str(), "gif" | "webp"))
-}
-
-fn render_first_frame_to_png_with_ffmpeg(
-    input_path: &Path,
-    output_path: &Path,
-    target_width_px: u32,
-    target_height_px: u32,
-    canceled: &impl Fn() -> bool,
-) -> bool {
-    if !command_exists("ffmpeg") {
-        return false;
-    }
-    if let Some(parent) = output_path.parent()
-        && fs::create_dir_all(parent).is_err()
-    {
-        return false;
-    }
-
-    run_cancelable_command(
-        Command::new("ffmpeg")
-            .arg("-v")
-            .arg("error")
-            .arg("-y")
-            .arg("-i")
-            .arg(input_path)
-            .arg("-frames:v")
-            .arg("1")
-            .arg("-vf")
-            .arg(format!(
-                "scale=w={}:h={}:force_original_aspect_ratio=decrease",
-                target_width_px.max(1),
-                target_height_px.max(1)
-            ))
-            .arg(output_path)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null()),
-        canceled,
-    )
-    .is_some_and(|status| status.success() && output_path.exists())
-}
-
 fn render_svg_to_png(
     input_path: &Path,
     output_path: &Path,
@@ -610,14 +641,6 @@ fn render_svg_to_png(
         canceled,
     )
     .is_some_and(|status| status.success() && output_path.exists())
-}
-
-fn command_exists(program: &str) -> bool {
-    Command::new("sh")
-        .arg("-lc")
-        .arg(format!("command -v {program} >/dev/null 2>&1"))
-        .status()
-        .is_ok_and(|status| status.success())
 }
 
 fn read_raster_dimensions(path: &Path) -> Option<RenderedImageDimensions> {

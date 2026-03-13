@@ -57,7 +57,7 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
 
 fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     let mut app = App::new()?;
-    app.enable_terminal_pdf_previews();
+    app.enable_terminal_image_previews();
     let mut dirty = true;
     let mut search_cursor_active = false;
     let mut last_relative_time_refresh_at = Instant::now();
@@ -107,7 +107,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             terminal.draw(|frame| ui::render(frame, &app, &mut frame_state))?;
             dirty = app.set_frame_state(frame_state);
             if !app.browser_wheel_burst_active() {
-                app.present_pdf_overlay()?;
+                app.present_preview_overlay()?;
             }
         }
 
@@ -154,7 +154,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         if event::poll(poll_interval)? {
             let event = event::read()?;
             if matches!(event, Event::Resize(_, _)) {
-                app.handle_pdf_terminal_resize();
+                app.handle_terminal_image_resize();
                 dirty = true;
                 continue;
             }
@@ -168,6 +168,6 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         }
     }
 
-    app.clear_pdf_overlay()?;
+    app.clear_preview_overlay()?;
     Ok(())
 }

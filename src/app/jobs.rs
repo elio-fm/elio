@@ -162,7 +162,6 @@ pub(super) struct ImagePrepareRequest {
     pub modified: Option<SystemTime>,
     pub target_width_px: u32,
     pub target_height_px: u32,
-    pub ffmpeg_available: bool,
     pub magick_available: bool,
 }
 
