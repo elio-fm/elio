@@ -20,6 +20,14 @@ pub(super) fn highlight_c_like_line(
     spans
 }
 
+pub(super) fn highlight_brace_like_line(
+    line: &str,
+    palette: appearance::CodePreviewPalette,
+    in_block_comment: &mut bool,
+) -> Vec<Span<'static>> {
+    highlight_c_like_line(line, palette, in_block_comment)
+}
+
 fn highlight_c_like_segment(
     input: &str,
     palette: appearance::CodePreviewPalette,
@@ -114,6 +122,25 @@ fn highlight_c_like_tokens(
             continue;
         }
 
+        if ch == '$' {
+            let start = index;
+            index += ch.len_utf8();
+            while let Some(current) = input[index..].chars().next() {
+                if current.is_ascii_alphanumeric() || current == '_' {
+                    index += current.len_utf8();
+                } else {
+                    break;
+                }
+            }
+            spans.push(styled_text(
+                &input[start..index],
+                palette.parameter,
+                Modifier::empty(),
+            ));
+            last_word = None;
+            continue;
+        }
+
         if ch.is_ascii_alphabetic() || ch == '_' {
             let start = index;
             index += ch.len_utf8();
@@ -128,18 +155,36 @@ fn highlight_c_like_tokens(
             let next = input[index..]
                 .chars()
                 .find(|current| !current.is_whitespace());
-            let color = if is_c_type_keyword(token) {
+            let color = if is_brace_like_type_keyword(token) {
                 palette.r#type
-            } else if is_c_keyword(token) {
+            } else if is_brace_like_keyword(token) {
                 palette.keyword
-            } else if matches!(last_word.as_deref(), Some("struct" | "enum" | "union")) {
+            } else if matches!(
+                last_word.as_deref(),
+                Some(
+                    "struct"
+                        | "enum"
+                        | "union"
+                        | "class"
+                        | "interface"
+                        | "trait"
+                        | "impl"
+                        | "type"
+                        | "namespace"
+                        | "package"
+                        | "module"
+                        | "protocol"
+                        | "actor"
+                        | "object"
+                )
+            ) {
                 palette.r#type
             } else if token
                 .chars()
                 .all(|current| current.is_ascii_uppercase() || current == '_')
             {
                 palette.r#macro
-            } else if next == Some('(') && !is_c_control_like(token) {
+            } else if next == Some('(') && !is_brace_like_control_like(token) {
                 palette.function
             } else {
                 palette.fg
@@ -289,7 +334,7 @@ fn split_c_like_segments<'a>(line: &'a str, in_block_comment: &mut bool) -> Vec<
     segments
 }
 
-fn is_c_keyword(token: &str) -> bool {
+fn is_brace_like_keyword(token: &str) -> bool {
     matches!(
         token,
         "if" | "else"
@@ -314,10 +359,81 @@ fn is_c_keyword(token: &str) -> bool {
             | "struct"
             | "enum"
             | "union"
+            | "class"
+            | "namespace"
+            | "template"
+            | "using"
+            | "new"
+            | "delete"
+            | "try"
+            | "catch"
+            | "throw"
+            | "throws"
+            | "public"
+            | "private"
+            | "protected"
+            | "final"
+            | "override"
+            | "abstract"
+            | "extends"
+            | "implements"
+            | "interface"
+            | "package"
+            | "import"
+            | "export"
+            | "fn"
+            | "let"
+            | "mut"
+            | "impl"
+            | "trait"
+            | "pub"
+            | "use"
+            | "mod"
+            | "crate"
+            | "super"
+            | "self"
+            | "Self"
+            | "ref"
+            | "move"
+            | "where"
+            | "match"
+            | "async"
+            | "await"
+            | "unsafe"
+            | "dyn"
+            | "type"
+            | "as"
+            | "loop"
+            | "yield"
+            | "defer"
+            | "func"
+            | "select"
+            | "go"
+            | "fallthrough"
+            | "chan"
+            | "range"
+            | "var"
+            | "val"
+            | "when"
+            | "is"
+            | "in"
+            | "object"
+            | "data"
+            | "sealed"
+            | "open"
+            | "operator"
+            | "infix"
+            | "reified"
+            | "suspend"
+            | "protocol"
+            | "guard"
+            | "actor"
+            | "nonisolated"
+            | "associatedtype"
     )
 }
 
-fn is_c_type_keyword(token: &str) -> bool {
+fn is_brace_like_type_keyword(token: &str) -> bool {
     matches!(
         token,
         "void"
@@ -340,12 +456,42 @@ fn is_c_type_keyword(token: &str) -> bool {
             | "int16_t"
             | "int32_t"
             | "int64_t"
+            | "auto"
+            | "byte"
+            | "boolean"
+            | "String"
+            | "str"
+            | "usize"
+            | "isize"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "u128"
+            | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "i128"
+            | "f32"
+            | "f64"
+            | "Result"
+            | "Option"
+            | "Vec"
     )
 }
 
-fn is_c_control_like(token: &str) -> bool {
+fn is_brace_like_control_like(token: &str) -> bool {
     matches!(
         token,
-        "if" | "for" | "while" | "switch" | "return" | "sizeof"
+        "if" | "for"
+            | "while"
+            | "switch"
+            | "return"
+            | "sizeof"
+            | "match"
+            | "catch"
+            | "when"
+            | "guard"
     )
 }

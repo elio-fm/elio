@@ -48,7 +48,7 @@ impl DocumentFormat {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum FallbackSyntax {
+pub(crate) enum HighlightLanguage {
     JsLike,
     CLike,
     Python,
@@ -67,11 +67,11 @@ pub(crate) enum FallbackSyntax {
     DesktopEntry,
 }
 
-impl FallbackSyntax {
+impl HighlightLanguage {
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::JsLike => "TypeScript",
-            Self::CLike => "C",
+            Self::JsLike => "JavaScript / TypeScript",
+            Self::CLike => "C-style code",
             Self::Python => "Python",
             Self::Make => "Makefile",
             Self::Shell => "Shell",
@@ -90,7 +90,30 @@ impl FallbackSyntax {
     }
 
     pub(crate) fn detail_label(self) -> String {
-        format!("{} (best-effort)", self.label())
+        self.label().to_string()
+    }
+
+    pub(crate) fn from_language_token(token: &str) -> Option<Self> {
+        match token.trim().to_ascii_lowercase().as_str() {
+            "js" | "jsx" | "javascript" | "ts" | "tsx" | "typescript" => Some(Self::JsLike),
+            "c" | "h" | "cpp" | "c++" | "cc" | "cxx" | "hpp" | "hh" | "hxx" | "rust" | "rs"
+            | "go" | "golang" | "java" | "kotlin" | "kt" | "swift" | "php" => Some(Self::CLike),
+            "python" | "py" | "ruby" | "rb" => Some(Self::Python),
+            "make" | "makefile" => Some(Self::Make),
+            "sh" | "shell" | "bash" | "zsh" | "ksh" | "fish" => Some(Self::Shell),
+            "nix" => Some(Self::Nix),
+            "cmake" => Some(Self::CMake),
+            "html" | "xml" | "xhtml" | "svg" | "markup" => Some(Self::Markup),
+            "css" | "scss" | "sass" | "less" => Some(Self::Css),
+            "toml" => Some(Self::Toml),
+            "json" => Some(Self::Json),
+            "jsonc" | "json5" => Some(Self::Jsonc),
+            "yaml" | "yml" => Some(Self::Yaml),
+            "log" => Some(Self::Log),
+            "ini" | "conf" | "cfg" => Some(Self::Ini),
+            "desktop" => Some(Self::DesktopEntry),
+            _ => None,
+        }
     }
 }
 
@@ -222,92 +245,87 @@ impl DiskImageKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct PreviewSpec {
     pub kind: PreviewKind,
-    pub syntax_hint: Option<&'static str>,
-    pub fallback_syntax: Option<FallbackSyntax>,
+    pub language_hint: Option<&'static str>,
+    pub highlight_language: Option<HighlightLanguage>,
     pub structured_format: Option<StructuredFormat>,
     pub document_format: Option<DocumentFormat>,
-    pub force_fallback: bool,
 }
 
 impl PreviewSpec {
     const fn plain_text() -> Self {
         Self {
             kind: PreviewKind::PlainText,
-            syntax_hint: None,
-            fallback_syntax: None,
+            language_hint: None,
+            highlight_language: None,
             structured_format: None,
             document_format: None,
-            force_fallback: false,
         }
     }
 
     const fn markdown() -> Self {
         Self {
             kind: PreviewKind::Markdown,
-            syntax_hint: None,
-            fallback_syntax: None,
+            language_hint: None,
+            highlight_language: None,
             structured_format: None,
             document_format: None,
-            force_fallback: false,
         }
     }
 
     const fn iso() -> Self {
         Self {
             kind: PreviewKind::Iso,
-            syntax_hint: None,
-            fallback_syntax: None,
+            language_hint: None,
+            highlight_language: None,
             structured_format: None,
             document_format: None,
-            force_fallback: false,
         }
     }
 
     const fn torrent() -> Self {
         Self {
             kind: PreviewKind::Torrent,
-            syntax_hint: None,
-            fallback_syntax: None,
+            language_hint: None,
+            highlight_language: None,
             structured_format: None,
             document_format: None,
-            force_fallback: false,
         }
     }
 
     const fn source(
-        syntax_hint: Option<&'static str>,
-        fallback_syntax: Option<FallbackSyntax>,
+        language_hint: Option<&'static str>,
+        highlight_language: Option<HighlightLanguage>,
         structured_format: Option<StructuredFormat>,
     ) -> Self {
         Self {
             kind: PreviewKind::Source,
-            syntax_hint,
-            fallback_syntax,
+            language_hint,
+            highlight_language,
             structured_format,
             document_format: None,
-            force_fallback: false,
         }
     }
 
     const fn document(document_format: DocumentFormat) -> Self {
         Self {
             kind: PreviewKind::PlainText,
-            syntax_hint: None,
-            fallback_syntax: None,
+            language_hint: None,
+            highlight_language: None,
             structured_format: None,
             document_format: Some(document_format),
-            force_fallback: false,
         }
     }
 
-    const fn forced_fallback(fallback_syntax: FallbackSyntax) -> Self {
+    const fn highlighted_source(
+        language_hint: Option<&'static str>,
+        highlight_language: HighlightLanguage,
+    ) -> Self {
         Self {
             kind: PreviewKind::Source,
-            syntax_hint: None,
-            fallback_syntax: Some(fallback_syntax),
+            language_hint,
+            highlight_language: Some(highlight_language),
             structured_format: None,
             document_format: None,
-            force_fallback: true,
         }
     }
 }
@@ -353,17 +371,17 @@ fn inspect_exact_name(name: &str) -> Option<FileFacts> {
         "pkgbuild" => Some(FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("Arch build script"),
-            preview: PreviewSpec::source(Some("bash"), Some(FallbackSyntax::Shell), None),
+            preview: PreviewSpec::source(Some("bash"), Some(HighlightLanguage::Shell), None),
         }),
         "makefile" | "gnumakefile" | "bsdmakefile" => Some(FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("Makefile"),
-            preview: PreviewSpec::source(Some("make"), Some(FallbackSyntax::Make), None),
+            preview: PreviewSpec::source(Some("make"), Some(HighlightLanguage::Make), None),
         }),
         "cmakelists.txt" => Some(FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("CMake project"),
-            preview: PreviewSpec::forced_fallback(FallbackSyntax::CMake),
+            preview: PreviewSpec::highlighted_source(Some("cmake"), HighlightLanguage::CMake),
         }),
         ".bashrc" | ".bash_profile" | ".bash_login" | ".bash_logout" | ".bash_aliases" => {
             Some(shell_file_facts(FileClass::Config, "Bash config", "bash"))
@@ -384,7 +402,7 @@ fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: None,
             preview: PreviewSpec::source(
                 Some("toml"),
-                Some(FallbackSyntax::Toml),
+                Some(HighlightLanguage::Toml),
                 Some(StructuredFormat::Toml),
             ),
         }),
@@ -393,7 +411,7 @@ fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: Some("Lockfile"),
             preview: PreviewSpec::source(
                 Some("toml"),
-                Some(FallbackSyntax::Toml),
+                Some(HighlightLanguage::Toml),
                 Some(StructuredFormat::Toml),
             ),
         }),
@@ -402,7 +420,7 @@ fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: None,
             preview: PreviewSpec::source(
                 Some("json"),
-                Some(FallbackSyntax::Json),
+                Some(HighlightLanguage::Json),
                 Some(StructuredFormat::Json),
             ),
         }),
@@ -411,7 +429,7 @@ fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: None,
             preview: PreviewSpec::source(
                 Some("json"),
-                Some(FallbackSyntax::Json),
+                Some(HighlightLanguage::Json),
                 Some(StructuredFormat::Json),
             ),
         }),
@@ -420,21 +438,21 @@ fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: Some("Lockfile"),
             preview: PreviewSpec::source(
                 Some("json"),
-                Some(FallbackSyntax::Json),
+                Some(HighlightLanguage::Json),
                 Some(StructuredFormat::Json),
             ),
         }),
         "gemfile.lock" | "bun.lock" => Some(FileFacts {
             builtin_class: FileClass::Data,
             specific_type_label: Some("Lockfile"),
-            preview: PreviewSpec::source(None, Some(FallbackSyntax::Ini), None),
+            preview: PreviewSpec::source(None, Some(HighlightLanguage::Ini), None),
         }),
         "deno.jsonc" => Some(FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("JSON with comments"),
             preview: PreviewSpec::source(
                 Some("jsonc"),
-                Some(FallbackSyntax::Jsonc),
+                Some(HighlightLanguage::Jsonc),
                 Some(StructuredFormat::Jsonc),
             ),
         }),
@@ -448,7 +466,7 @@ fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: None,
             preview: PreviewSpec::source(
                 Some("yaml"),
-                Some(FallbackSyntax::Yaml),
+                Some(HighlightLanguage::Yaml),
                 Some(StructuredFormat::Yaml),
             ),
         }),
@@ -457,7 +475,7 @@ fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: Some("Environment file"),
             preview: PreviewSpec::source(
                 None,
-                Some(FallbackSyntax::Ini),
+                Some(HighlightLanguage::Ini),
                 Some(StructuredFormat::Dotenv),
             ),
         }),
@@ -526,7 +544,7 @@ fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: None,
             preview: PreviewSpec::source(
                 Some("json"),
-                Some(FallbackSyntax::Json),
+                Some(HighlightLanguage::Json),
                 Some(StructuredFormat::Json),
             ),
         },
@@ -535,7 +553,7 @@ fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("JSON with comments"),
             preview: PreviewSpec::source(
                 Some("jsonc"),
-                Some(FallbackSyntax::Jsonc),
+                Some(HighlightLanguage::Jsonc),
                 Some(StructuredFormat::Jsonc),
             ),
         },
@@ -544,7 +562,7 @@ fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("JSON5 file"),
             preview: PreviewSpec::source(
                 Some("javascript"),
-                Some(FallbackSyntax::Jsonc),
+                Some(HighlightLanguage::Jsonc),
                 Some(StructuredFormat::Json5),
             ),
         },
@@ -553,7 +571,7 @@ fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: None,
             preview: PreviewSpec::source(
                 Some("toml"),
-                Some(FallbackSyntax::Toml),
+                Some(HighlightLanguage::Toml),
                 Some(StructuredFormat::Toml),
             ),
         },
@@ -562,39 +580,39 @@ fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: None,
             preview: PreviewSpec::source(
                 Some("yaml"),
-                Some(FallbackSyntax::Yaml),
+                Some(HighlightLanguage::Yaml),
                 Some(StructuredFormat::Yaml),
             ),
         },
         "html" | "htm" | "xhtml" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("HTML document"),
-            preview: PreviewSpec::source(Some("html"), Some(FallbackSyntax::Markup), None),
+            preview: PreviewSpec::source(Some("html"), Some(HighlightLanguage::Markup), None),
         },
         "xml" | "xsd" | "xsl" | "xslt" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("XML document"),
-            preview: PreviewSpec::source(Some("xml"), Some(FallbackSyntax::Markup), None),
+            preview: PreviewSpec::source(Some("xml"), Some(HighlightLanguage::Markup), None),
         },
         "css" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Stylesheet"),
-            preview: PreviewSpec::source(Some("css"), Some(FallbackSyntax::Css), None),
+            preview: PreviewSpec::source(Some("css"), Some(HighlightLanguage::Css), None),
         },
         "scss" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("SCSS stylesheet"),
-            preview: PreviewSpec::source(Some("scss"), Some(FallbackSyntax::Css), None),
+            preview: PreviewSpec::source(Some("scss"), Some(HighlightLanguage::Css), None),
         },
         "sass" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Sass stylesheet"),
-            preview: PreviewSpec::source(Some("sass"), Some(FallbackSyntax::Css), None),
+            preview: PreviewSpec::source(Some("sass"), Some(HighlightLanguage::Css), None),
         },
         "less" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Less stylesheet"),
-            preview: PreviewSpec::source(Some("css"), Some(FallbackSyntax::Css), None),
+            preview: PreviewSpec::source(Some("css"), Some(HighlightLanguage::Css), None),
         },
         "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => {
             js_like_file_facts(FileClass::Code, None)
@@ -604,7 +622,7 @@ fn inspect_extension(ext: &str) -> FileFacts {
         "lock" => FileFacts {
             builtin_class: FileClass::Data,
             specific_type_label: Some("Lockfile"),
-            preview: PreviewSpec::source(None, Some(FallbackSyntax::Ini), None),
+            preview: PreviewSpec::source(None, Some(HighlightLanguage::Ini), None),
         },
         "ini" | "conf" | "cfg" | "keys" => FileFacts {
             builtin_class: FileClass::Config,
@@ -612,21 +630,21 @@ fn inspect_extension(ext: &str) -> FileFacts {
                 "keys" => Some("Keys file"),
                 _ => None,
             },
-            preview: PreviewSpec::source(None, Some(FallbackSyntax::Ini), None),
+            preview: PreviewSpec::source(None, Some(HighlightLanguage::Ini), None),
         },
         "env" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("Environment file"),
             preview: PreviewSpec::source(
                 None,
-                Some(FallbackSyntax::Ini),
+                Some(HighlightLanguage::Ini),
                 Some(StructuredFormat::Dotenv),
             ),
         },
         "desktop" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("Desktop Entry"),
-            preview: PreviewSpec::forced_fallback(FallbackSyntax::DesktopEntry),
+            preview: PreviewSpec::highlighted_source(None, HighlightLanguage::DesktopEntry),
         },
         "raw" => disk_image_file_facts(DiskImageKind::Raw),
         "img" => disk_image_file_facts(DiskImageKind::Img),
@@ -640,7 +658,7 @@ fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("Log file"),
             preview: PreviewSpec::source(
                 None,
-                Some(FallbackSyntax::Log),
+                Some(HighlightLanguage::Log),
                 Some(StructuredFormat::Log),
             ),
         },
@@ -680,16 +698,53 @@ fn inspect_extension(ext: &str) -> FileFacts {
         "cpp" | "cc" | "cxx" => c_like_file_facts(FileClass::Code, "C++ source file", "cpp"),
         "hpp" | "hh" | "hxx" => c_like_file_facts(FileClass::Code, "C++ header", "cpp"),
         "mk" | "mak" => source_only(FileClass::Config, Some("Makefile"), Some("make"))
-            .with_fallback(FallbackSyntax::Make),
+            .with_highlight_language(HighlightLanguage::Make),
         "sh" => shell_file_facts(FileClass::Code, "Shell script", "sh"),
         "bash" => shell_file_facts(FileClass::Code, "Bash script", "bash"),
         "zsh" => shell_file_facts(FileClass::Code, "Zsh script", "zsh"),
         "ksh" => shell_file_facts(FileClass::Code, "KornShell script", "ksh"),
         "fish" => shell_file_facts(FileClass::Code, "Fish script", "fish"),
         "py" | "pyi" | "pyw" | "pyx" => python_file_facts(FileClass::Code, None),
-        "rs" | "go" | "java" | "lua" | "php" | "rb" | "swift" | "kt" => {
-            source_only(FileClass::Code, None, None)
-        }
+        "rs" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Rust source file"),
+            preview: PreviewSpec::source(Some("rust"), Some(HighlightLanguage::CLike), None),
+        },
+        "go" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Go source file"),
+            preview: PreviewSpec::source(Some("go"), Some(HighlightLanguage::CLike), None),
+        },
+        "java" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Java source file"),
+            preview: PreviewSpec::source(Some("java"), Some(HighlightLanguage::CLike), None),
+        },
+        "php" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("PHP script"),
+            preview: PreviewSpec::source(Some("php"), Some(HighlightLanguage::CLike), None),
+        },
+        "swift" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Swift source file"),
+            preview: PreviewSpec::source(Some("swift"), Some(HighlightLanguage::CLike), None),
+        },
+        "kt" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Kotlin source file"),
+            preview: PreviewSpec::source(Some("kotlin"), Some(HighlightLanguage::CLike), None),
+        },
+        "rb" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Ruby script"),
+            preview: PreviewSpec::source(Some("ruby"), Some(HighlightLanguage::Python), None),
+        },
+        "lua" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Lua script"),
+            preview: PreviewSpec::source(None, None, None),
+        },
         "ron" => source_only(FileClass::Config, None, None),
         "csv" | "tsv" | "sql" | "sqlite" | "db" | "parquet" => {
             source_only(FileClass::Data, None, None)
@@ -763,9 +818,13 @@ fn inspect_extension(ext: &str) -> FileFacts {
         "svg" => FileFacts {
             builtin_class: FileClass::Image,
             specific_type_label: Some("SVG image"),
-            preview: PreviewSpec::source(Some("xml"), Some(FallbackSyntax::Markup), None),
+            preview: PreviewSpec::source(Some("xml"), Some(HighlightLanguage::Markup), None),
         },
-        "png" | "jpg" | "jpeg" | "gif" | "webp" | "avif" => plain(FileClass::Image, None),
+        "png" => plain(FileClass::Image, Some("PNG image")),
+        "jpg" | "jpeg" => plain(FileClass::Image, Some("JPEG image")),
+        "gif" => plain(FileClass::Image, Some("GIF image")),
+        "webp" => plain(FileClass::Image, Some("WebP image")),
+        "avif" => plain(FileClass::Image, Some("AVIF image")),
         "mp3" | "wav" | "flac" | "ogg" | "m4a" => plain(FileClass::Audio, None),
         "mp4" | "mkv" | "mov" | "webm" | "avi" => plain(FileClass::Video, None),
         "zip" | "tar" | "gz" | "xz" | "bz2" | "7z" => plain(FileClass::Archive, None),
@@ -785,33 +844,31 @@ const fn plain(class: FileClass, specific_type_label: Option<&'static str>) -> F
 const fn source_only(
     class: FileClass,
     specific_type_label: Option<&'static str>,
-    syntax_hint: Option<&'static str>,
+    language_hint: Option<&'static str>,
 ) -> FileFacts {
     FileFacts {
         builtin_class: class,
         specific_type_label,
-        preview: PreviewSpec::source(syntax_hint, None, None),
+        preview: PreviewSpec::source(language_hint, None, None),
     }
 }
 
 const fn shell_file_facts(
     class: FileClass,
     specific_type_label: &'static str,
-    syntax_hint: &'static str,
+    language_hint: &'static str,
 ) -> FileFacts {
-    source_only(class, Some(specific_type_label), Some(syntax_hint))
-        .with_fallback(FallbackSyntax::Shell)
-        .prefer_fallback()
+    source_only(class, Some(specific_type_label), Some(language_hint))
+        .with_highlight_language(HighlightLanguage::Shell)
 }
 
 const fn c_like_file_facts(
     class: FileClass,
     specific_type_label: &'static str,
-    syntax_hint: &'static str,
+    language_hint: &'static str,
 ) -> FileFacts {
-    source_only(class, Some(specific_type_label), Some(syntax_hint))
-        .with_fallback(FallbackSyntax::CLike)
-        .prefer_fallback()
+    source_only(class, Some(specific_type_label), Some(language_hint))
+        .with_highlight_language(HighlightLanguage::CLike)
 }
 
 const fn python_file_facts(
@@ -819,29 +876,25 @@ const fn python_file_facts(
     specific_type_label: Option<&'static str>,
 ) -> FileFacts {
     source_only(class, specific_type_label, Some("python"))
-        .with_fallback(FallbackSyntax::Python)
-        .prefer_fallback()
+        .with_highlight_language(HighlightLanguage::Python)
 }
 
 const fn js_like_file_facts(
     class: FileClass,
     specific_type_label: Option<&'static str>,
 ) -> FileFacts {
-    source_only(class, specific_type_label, None)
-        .with_fallback(FallbackSyntax::JsLike)
-        .prefer_fallback()
+    source_only(class, specific_type_label, Some("typescript"))
+        .with_highlight_language(HighlightLanguage::JsLike)
 }
 
 const fn nix_file_facts(class: FileClass, specific_type_label: &'static str) -> FileFacts {
     source_only(class, Some(specific_type_label), Some("nix"))
-        .with_fallback(FallbackSyntax::Nix)
-        .prefer_fallback()
+        .with_highlight_language(HighlightLanguage::Nix)
 }
 
 const fn cmake_file_facts(class: FileClass, specific_type_label: &'static str) -> FileFacts {
     source_only(class, Some(specific_type_label), Some("cmake"))
-        .with_fallback(FallbackSyntax::CMake)
-        .prefer_fallback()
+        .with_highlight_language(HighlightLanguage::CMake)
 }
 
 const fn disk_image_file_facts(kind: DiskImageKind) -> FileFacts {
@@ -849,13 +902,8 @@ const fn disk_image_file_facts(kind: DiskImageKind) -> FileFacts {
 }
 
 impl FileFacts {
-    const fn with_fallback(mut self, fallback_syntax: FallbackSyntax) -> Self {
-        self.preview.fallback_syntax = Some(fallback_syntax);
-        self
-    }
-
-    const fn prefer_fallback(mut self) -> Self {
-        self.preview.force_fallback = true;
+    const fn with_highlight_language(mut self, highlight_language: HighlightLanguage) -> Self {
+        self.preview.highlight_language = Some(highlight_language);
         self
     }
 }
@@ -920,7 +968,10 @@ mod tests {
             facts.preview.structured_format,
             Some(StructuredFormat::Json)
         );
-        assert_eq!(facts.preview.fallback_syntax, Some(FallbackSyntax::Json));
+        assert_eq!(
+            facts.preview.highlight_language,
+            Some(HighlightLanguage::Json)
+        );
     }
 
     #[test]
@@ -931,19 +982,25 @@ mod tests {
         let generic = inspect_path(Path::new("deps.lock"), EntryKind::File);
 
         assert_eq!(uv.preview.structured_format, Some(StructuredFormat::Toml));
-        assert_eq!(uv.preview.fallback_syntax, Some(FallbackSyntax::Toml));
+        assert_eq!(uv.preview.highlight_language, Some(HighlightLanguage::Toml));
 
         assert_eq!(
             flake.preview.structured_format,
             Some(StructuredFormat::Json)
         );
-        assert_eq!(flake.preview.fallback_syntax, Some(FallbackSyntax::Json));
+        assert_eq!(
+            flake.preview.highlight_language,
+            Some(HighlightLanguage::Json)
+        );
 
         assert_eq!(gem.specific_type_label, Some("Lockfile"));
-        assert_eq!(gem.preview.fallback_syntax, Some(FallbackSyntax::Ini));
+        assert_eq!(gem.preview.highlight_language, Some(HighlightLanguage::Ini));
 
         assert_eq!(generic.specific_type_label, Some("Lockfile"));
-        assert_eq!(generic.preview.fallback_syntax, Some(FallbackSyntax::Ini));
+        assert_eq!(
+            generic.preview.highlight_language,
+            Some(HighlightLanguage::Ini)
+        );
     }
 
     #[test]
@@ -967,7 +1024,10 @@ mod tests {
             facts.preview.structured_format,
             Some(StructuredFormat::Json5)
         );
-        assert_eq!(facts.preview.fallback_syntax, Some(FallbackSyntax::Jsonc));
+        assert_eq!(
+            facts.preview.highlight_language,
+            Some(HighlightLanguage::Jsonc)
+        );
     }
 
     #[test]
@@ -976,12 +1036,15 @@ mod tests {
         let css = inspect_path(Path::new("styles.css"), EntryKind::File);
 
         assert_eq!(html.builtin_class, FileClass::Code);
-        assert_eq!(html.preview.syntax_hint, Some("html"));
-        assert_eq!(html.preview.fallback_syntax, Some(FallbackSyntax::Markup));
+        assert_eq!(html.preview.language_hint, Some("html"));
+        assert_eq!(
+            html.preview.highlight_language,
+            Some(HighlightLanguage::Markup)
+        );
 
         assert_eq!(css.builtin_class, FileClass::Code);
-        assert_eq!(css.preview.syntax_hint, Some("css"));
-        assert_eq!(css.preview.fallback_syntax, Some(FallbackSyntax::Css));
+        assert_eq!(css.preview.language_hint, Some("css"));
+        assert_eq!(css.preview.highlight_language, Some(HighlightLanguage::Css));
     }
 
     #[test]
@@ -992,20 +1055,21 @@ mod tests {
 
         assert_eq!(nix.builtin_class, FileClass::Config);
         assert_eq!(nix.specific_type_label, Some("Nix expression"));
-        assert_eq!(nix.preview.syntax_hint, Some("nix"));
+        assert_eq!(nix.preview.language_hint, Some("nix"));
 
         assert_eq!(cmake.builtin_class, FileClass::Config);
         assert_eq!(cmake.specific_type_label, Some("CMake script"));
-        assert_eq!(cmake.preview.fallback_syntax, Some(FallbackSyntax::CMake));
-        assert!(cmake.preview.force_fallback);
+        assert_eq!(
+            cmake.preview.highlight_language,
+            Some(HighlightLanguage::CMake)
+        );
 
         assert_eq!(cmakelists.builtin_class, FileClass::Config);
         assert_eq!(cmakelists.specific_type_label, Some("CMake project"));
         assert_eq!(
-            cmakelists.preview.fallback_syntax,
-            Some(FallbackSyntax::CMake)
+            cmakelists.preview.highlight_language,
+            Some(HighlightLanguage::CMake)
         );
-        assert!(cmakelists.preview.force_fallback);
     }
 
     #[test]
@@ -1016,26 +1080,27 @@ mod tests {
 
         assert_eq!(makefile.builtin_class, FileClass::Config);
         assert_eq!(makefile.specific_type_label, Some("Makefile"));
-        assert_eq!(makefile.preview.syntax_hint, Some("make"));
-        assert_eq!(makefile.preview.fallback_syntax, Some(FallbackSyntax::Make));
+        assert_eq!(makefile.preview.language_hint, Some("make"));
+        assert_eq!(
+            makefile.preview.highlight_language,
+            Some(HighlightLanguage::Make)
+        );
 
         assert_eq!(c_source.builtin_class, FileClass::Code);
         assert_eq!(c_source.specific_type_label, Some("C source file"));
-        assert_eq!(c_source.preview.syntax_hint, Some("c"));
+        assert_eq!(c_source.preview.language_hint, Some("c"));
         assert_eq!(
-            c_source.preview.fallback_syntax,
-            Some(FallbackSyntax::CLike)
+            c_source.preview.highlight_language,
+            Some(HighlightLanguage::CLike)
         );
-        assert!(c_source.preview.force_fallback);
 
         assert_eq!(c_header.builtin_class, FileClass::Code);
         assert_eq!(c_header.specific_type_label, Some("C header"));
-        assert_eq!(c_header.preview.syntax_hint, Some("c"));
+        assert_eq!(c_header.preview.language_hint, Some("c"));
         assert_eq!(
-            c_header.preview.fallback_syntax,
-            Some(FallbackSyntax::CLike)
+            c_header.preview.highlight_language,
+            Some(HighlightLanguage::CLike)
         );
-        assert!(c_header.preview.force_fallback);
     }
 
     #[test]
@@ -1048,63 +1113,81 @@ mod tests {
 
         assert_eq!(shell.builtin_class, FileClass::Code);
         assert_eq!(shell.specific_type_label, Some("Shell script"));
-        assert_eq!(shell.preview.syntax_hint, Some("sh"));
-        assert_eq!(shell.preview.fallback_syntax, Some(FallbackSyntax::Shell));
-        assert!(shell.preview.force_fallback);
+        assert_eq!(shell.preview.language_hint, Some("sh"));
+        assert_eq!(
+            shell.preview.highlight_language,
+            Some(HighlightLanguage::Shell)
+        );
 
         assert_eq!(bashrc.builtin_class, FileClass::Config);
         assert_eq!(bashrc.specific_type_label, Some("Bash config"));
-        assert_eq!(bashrc.preview.syntax_hint, Some("bash"));
-        assert_eq!(bashrc.preview.fallback_syntax, Some(FallbackSyntax::Shell));
-        assert!(bashrc.preview.force_fallback);
+        assert_eq!(bashrc.preview.language_hint, Some("bash"));
+        assert_eq!(
+            bashrc.preview.highlight_language,
+            Some(HighlightLanguage::Shell)
+        );
 
         assert_eq!(zsh.builtin_class, FileClass::Code);
         assert_eq!(zsh.specific_type_label, Some("Zsh script"));
-        assert_eq!(zsh.preview.syntax_hint, Some("zsh"));
-        assert_eq!(zsh.preview.fallback_syntax, Some(FallbackSyntax::Shell));
-        assert!(zsh.preview.force_fallback);
+        assert_eq!(zsh.preview.language_hint, Some("zsh"));
+        assert_eq!(
+            zsh.preview.highlight_language,
+            Some(HighlightLanguage::Shell)
+        );
 
         assert_eq!(fish.builtin_class, FileClass::Code);
         assert_eq!(fish.specific_type_label, Some("Fish script"));
-        assert_eq!(fish.preview.syntax_hint, Some("fish"));
-        assert_eq!(fish.preview.fallback_syntax, Some(FallbackSyntax::Shell));
-        assert!(fish.preview.force_fallback);
+        assert_eq!(fish.preview.language_hint, Some("fish"));
+        assert_eq!(
+            fish.preview.highlight_language,
+            Some(HighlightLanguage::Shell)
+        );
 
         assert_eq!(zshrc.builtin_class, FileClass::Config);
         assert_eq!(zshrc.specific_type_label, Some("Zsh config"));
-        assert_eq!(zshrc.preview.syntax_hint, Some("zsh"));
-        assert_eq!(zshrc.preview.fallback_syntax, Some(FallbackSyntax::Shell));
-        assert!(zshrc.preview.force_fallback);
+        assert_eq!(zshrc.preview.language_hint, Some("zsh"));
+        assert_eq!(
+            zshrc.preview.highlight_language,
+            Some(HighlightLanguage::Shell)
+        );
     }
 
     #[test]
-    fn js_like_files_prefer_targeted_fallback_support() {
+    fn js_like_files_use_syntax_highlighting() {
         let js = inspect_path(Path::new("main.js"), EntryKind::File);
         let tsx = inspect_path(Path::new("App.tsx"), EntryKind::File);
 
         assert_eq!(js.builtin_class, FileClass::Code);
-        assert_eq!(js.preview.fallback_syntax, Some(FallbackSyntax::JsLike));
-        assert!(js.preview.force_fallback);
+        assert_eq!(
+            js.preview.highlight_language,
+            Some(HighlightLanguage::JsLike)
+        );
 
         assert_eq!(tsx.builtin_class, FileClass::Code);
-        assert_eq!(tsx.preview.fallback_syntax, Some(FallbackSyntax::JsLike));
-        assert!(tsx.preview.force_fallback);
+        assert_eq!(
+            tsx.preview.highlight_language,
+            Some(HighlightLanguage::JsLike)
+        );
     }
 
     #[test]
-    fn python_family_files_prefer_targeted_fallback_support() {
+    fn python_family_files_use_syntax_highlighting() {
         let py = inspect_path(Path::new("main.py"), EntryKind::File);
         let pyi = inspect_path(Path::new("types.pyi"), EntryKind::File);
 
         assert_eq!(py.builtin_class, FileClass::Code);
-        assert_eq!(py.preview.syntax_hint, Some("python"));
-        assert_eq!(py.preview.fallback_syntax, Some(FallbackSyntax::Python));
-        assert!(py.preview.force_fallback);
+        assert_eq!(py.preview.language_hint, Some("python"));
+        assert_eq!(
+            py.preview.highlight_language,
+            Some(HighlightLanguage::Python)
+        );
 
         assert_eq!(pyi.builtin_class, FileClass::Code);
-        assert_eq!(pyi.preview.syntax_hint, Some("python"));
-        assert_eq!(pyi.preview.fallback_syntax, Some(FallbackSyntax::Python));
-        assert!(pyi.preview.force_fallback);
+        assert_eq!(pyi.preview.language_hint, Some("python"));
+        assert_eq!(
+            pyi.preview.highlight_language,
+            Some(HighlightLanguage::Python)
+        );
     }
 
     #[test]
@@ -1113,8 +1196,11 @@ mod tests {
 
         assert_eq!(facts.builtin_class, FileClass::Image);
         assert_eq!(facts.specific_type_label, Some("SVG image"));
-        assert_eq!(facts.preview.syntax_hint, Some("xml"));
-        assert_eq!(facts.preview.fallback_syntax, Some(FallbackSyntax::Markup));
+        assert_eq!(facts.preview.language_hint, Some("xml"));
+        assert_eq!(
+            facts.preview.highlight_language,
+            Some(HighlightLanguage::Markup)
+        );
     }
 
     #[test]

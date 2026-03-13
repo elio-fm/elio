@@ -4,10 +4,9 @@ mod container;
 mod directory;
 mod dispatch;
 mod document;
-mod fallback;
+mod highlighting;
 mod markdown;
 mod structured;
-mod syntax;
 mod text;
 
 use self::text::{

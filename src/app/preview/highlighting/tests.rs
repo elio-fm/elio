@@ -8,23 +8,20 @@ fn line_text(line: &Line<'_>) -> String {
 }
 
 #[test]
-fn fallback_detail_label_marks_best_effort() {
-    assert_eq!(FallbackSyntax::Json.detail_label(), "JSON (best-effort)");
+fn highlighting_detail_label_is_plain() {
+    assert_eq!(HighlightLanguage::Json.detail_label(), "JSON");
 }
 
 #[test]
-fn markup_detail_label_marks_best_effort() {
-    assert_eq!(
-        FallbackSyntax::Markup.detail_label(),
-        "Markup (best-effort)"
-    );
+fn markup_detail_label_is_plain() {
+    assert_eq!(HighlightLanguage::Markup.detail_label(), "Markup");
 }
 
 #[test]
-fn jsonc_fallback_renderer_keeps_comments() {
-    let lines = render_fallback_code_preview(
+fn jsonc_highlighting_renderer_keeps_comments() {
+    let lines = render_highlighted_code_preview_for_tests(
         "{\n  // comment\n  \"name\": \"elio\"\n}\n",
-        FallbackSyntax::Jsonc,
+        HighlightLanguage::Jsonc,
         true,
     );
 
@@ -37,10 +34,10 @@ fn jsonc_fallback_renderer_keeps_comments() {
 }
 
 #[test]
-fn jsonc_fallback_renderer_keeps_multiline_block_comments() {
-    let lines = render_fallback_code_preview(
+fn jsonc_highlighting_renderer_keeps_multiline_block_comments() {
+    let lines = render_highlighted_code_preview_for_tests(
         "{\n  /* first line\n     second line */\n  \"name\": \"elio\"\n}\n",
-        FallbackSyntax::Jsonc,
+        HighlightLanguage::Jsonc,
         true,
     );
 
@@ -59,15 +56,15 @@ fn jsonc_fallback_renderer_keeps_multiline_block_comments() {
 }
 
 #[test]
-fn jsonc_detail_label_marks_best_effort() {
-    assert_eq!(FallbackSyntax::Jsonc.detail_label(), "JSONC (best-effort)");
+fn jsonc_detail_label_is_plain() {
+    assert_eq!(HighlightLanguage::Jsonc.detail_label(), "JSONC");
 }
 
 #[test]
-fn desktop_fallback_renderer_handles_unicode_values() {
-    let lines = render_fallback_code_preview(
+fn desktop_highlighting_renderer_handles_unicode_values() {
+    let lines = render_highlighted_code_preview_for_tests(
         "[Desktop Entry]\nName=エリオ\nName[ja]=日本語アプリ\n",
-        FallbackSyntax::DesktopEntry,
+        HighlightLanguage::DesktopEntry,
         true,
     );
 
@@ -80,10 +77,10 @@ fn desktop_fallback_renderer_handles_unicode_values() {
 }
 
 #[test]
-fn log_fallback_renderer_highlights_levels_and_fields() {
-    let lines = render_fallback_code_preview(
+fn log_highlighting_renderer_highlights_levels_and_fields() {
+    let lines = render_highlighted_code_preview_for_tests(
         "2026-03-10T12:00:00Z ERROR request_id=42 path=/login failed\n",
-        FallbackSyntax::Log,
+        HighlightLanguage::Log,
         true,
     );
 
@@ -102,10 +99,10 @@ fn log_fallback_renderer_highlights_levels_and_fields() {
 }
 
 #[test]
-fn markup_fallback_renderer_highlights_tags_attributes_and_comments() {
-    let lines = render_fallback_code_preview(
+fn markup_highlighting_renderer_highlights_tags_attributes_and_comments() {
+    let lines = render_highlighted_code_preview_for_tests(
         "<!-- note -->\n<div class=\"app\" data-id=\"42\">elio</div>\n",
-        FallbackSyntax::Markup,
+        HighlightLanguage::Markup,
         true,
     );
 
@@ -136,10 +133,10 @@ fn markup_fallback_renderer_highlights_tags_attributes_and_comments() {
 }
 
 #[test]
-fn markup_fallback_renderer_keeps_multiline_comments() {
-    let lines = render_fallback_code_preview(
+fn markup_highlighting_renderer_keeps_multiline_comments() {
+    let lines = render_highlighted_code_preview_for_tests(
         "<!-- first line\nsecond line -->\n<section />\n",
-        FallbackSyntax::Markup,
+        HighlightLanguage::Markup,
         true,
     );
 
@@ -158,10 +155,10 @@ fn markup_fallback_renderer_keeps_multiline_comments() {
 }
 
 #[test]
-fn css_fallback_renderer_highlights_properties_and_values() {
-    let lines = render_fallback_code_preview(
+fn css_highlighting_renderer_highlights_properties_and_values() {
+    let lines = render_highlighted_code_preview_for_tests(
         ".app {\n  color: #fff;\n  margin: 12px;\n}\n",
-        FallbackSyntax::Css,
+        HighlightLanguage::Css,
         true,
     );
 
@@ -180,10 +177,10 @@ fn css_fallback_renderer_highlights_properties_and_values() {
 }
 
 #[test]
-fn c_like_fallback_renderer_highlights_directives_comments_and_calls() {
-    let lines = render_fallback_code_preview(
+fn c_like_highlighting_renderer_highlights_directives_comments_and_calls() {
+    let lines = render_highlighted_code_preview_for_tests(
         "#include <stdio.h>\nint main(void) {\n  printf(\"hi\"); /* note */\n}\n",
-        FallbackSyntax::CLike,
+        HighlightLanguage::CLike,
         true,
     );
 
@@ -209,10 +206,10 @@ fn c_like_fallback_renderer_highlights_directives_comments_and_calls() {
 }
 
 #[test]
-fn c_like_fallback_renderer_handles_unicode_without_panicking() {
-    let lines = render_fallback_code_preview(
+fn c_like_highlighting_renderer_handles_unicode_without_panicking() {
+    let lines = render_highlighted_code_preview_for_tests(
         "int main(void) {\n  printf(\"hola 👋\"); // áéíóú\n}\n",
-        FallbackSyntax::CLike,
+        HighlightLanguage::CLike,
         true,
     );
 
@@ -231,10 +228,10 @@ fn c_like_fallback_renderer_handles_unicode_without_panicking() {
 }
 
 #[test]
-fn make_fallback_renderer_highlights_rules_variables_and_recipes() {
-    let lines = render_fallback_code_preview(
+fn make_highlighting_renderer_highlights_rules_variables_and_recipes() {
+    let lines = render_highlighted_code_preview_for_tests(
         "CC := clang\n.PHONY: build\nbuild: main.o util.o\n\t$(CC) -o app main.o util.o\n",
-        FallbackSyntax::Make,
+        HighlightLanguage::Make,
         true,
     );
 
@@ -265,10 +262,10 @@ fn make_fallback_renderer_highlights_rules_variables_and_recipes() {
 }
 
 #[test]
-fn nix_fallback_renderer_highlights_keywords_strings_and_comments() {
-    let lines = render_fallback_code_preview(
+fn nix_highlighting_renderer_highlights_keywords_strings_and_comments() {
+    let lines = render_highlighted_code_preview_for_tests(
         "let\n  name = \"elio\"; # note\nin name\n",
-        FallbackSyntax::Nix,
+        HighlightLanguage::Nix,
         true,
     );
 
@@ -293,10 +290,10 @@ fn nix_fallback_renderer_highlights_keywords_strings_and_comments() {
 }
 
 #[test]
-fn nix_fallback_renderer_handles_unicode_without_panicking() {
-    let lines = render_fallback_code_preview(
+fn nix_highlighting_renderer_handles_unicode_without_panicking() {
+    let lines = render_highlighted_code_preview_for_tests(
         "let\n  name = \"hóla 👋\"; # áéíóú\nin name\n",
-        FallbackSyntax::Nix,
+        HighlightLanguage::Nix,
         true,
     );
 
@@ -315,10 +312,10 @@ fn nix_fallback_renderer_handles_unicode_without_panicking() {
 }
 
 #[test]
-fn cmake_fallback_renderer_highlights_commands_variables_and_comments() {
-    let lines = render_fallback_code_preview(
+fn cmake_highlighting_renderer_highlights_commands_variables_and_comments() {
+    let lines = render_highlighted_code_preview_for_tests(
         "project(elio)\nset(NAME elio)\nmessage(STATUS \"hi ${NAME}\") # note\n",
-        FallbackSyntax::CMake,
+        HighlightLanguage::CMake,
         true,
     );
 
@@ -349,10 +346,10 @@ fn cmake_fallback_renderer_highlights_commands_variables_and_comments() {
 }
 
 #[test]
-fn cmake_fallback_renderer_handles_unicode_without_panicking() {
-    let lines = render_fallback_code_preview(
+fn cmake_highlighting_renderer_handles_unicode_without_panicking() {
+    let lines = render_highlighted_code_preview_for_tests(
         "project(elio)\nmessage(STATUS \"hóla 👋\") # áéíóú\n",
-        FallbackSyntax::CMake,
+        HighlightLanguage::CMake,
         true,
     );
 
@@ -371,10 +368,10 @@ fn cmake_fallback_renderer_handles_unicode_without_panicking() {
 }
 
 #[test]
-fn python_fallback_renderer_highlights_decorators_docstrings_and_comments() {
-    let lines = render_fallback_code_preview(
+fn python_highlighting_renderer_highlights_decorators_docstrings_and_comments() {
+    let lines = render_highlighted_code_preview_for_tests(
         "@app.get(\"/status\")\nasync def greet(name: str) -> str:\n    \"\"\"Return a greeting.\"\"\"\n    return f\"hi {name}\"  # note\n",
-        FallbackSyntax::Python,
+        HighlightLanguage::Python,
         true,
     );
 
@@ -411,10 +408,10 @@ fn python_fallback_renderer_highlights_decorators_docstrings_and_comments() {
 }
 
 #[test]
-fn python_fallback_renderer_handles_unicode_identifiers_without_panicking() {
-    let lines = render_fallback_code_preview(
+fn python_highlighting_renderer_handles_unicode_identifiers_without_panicking() {
+    let lines = render_highlighted_code_preview_for_tests(
         "def saludar(nombre):\n    mensaje = f\"hola, {nombre} 👋\"\n    print(mensaje)  # áéíóú\n",
-        FallbackSyntax::Python,
+        HighlightLanguage::Python,
         true,
     );
 
@@ -433,10 +430,10 @@ fn python_fallback_renderer_handles_unicode_identifiers_without_panicking() {
 }
 
 #[test]
-fn js_like_fallback_renderer_handles_unicode_without_panicking() {
-    let lines = render_fallback_code_preview(
+fn js_like_highlighting_renderer_handles_unicode_without_panicking() {
+    let lines = render_highlighted_code_preview_for_tests(
         "const saludo = \"hóla 👋\";\nconsole.log(saludo); // áéíóú\n",
-        FallbackSyntax::JsLike,
+        HighlightLanguage::JsLike,
         true,
     );
 
@@ -455,10 +452,10 @@ fn js_like_fallback_renderer_handles_unicode_without_panicking() {
 }
 
 #[test]
-fn json_fallback_renderer_handles_unicode_without_panicking() {
-    let lines = render_fallback_code_preview(
+fn json_highlighting_renderer_handles_unicode_without_panicking() {
+    let lines = render_highlighted_code_preview_for_tests(
         "{ \"message\": \"hóla 👋\", \"note\": \"áéíóú\" }\n",
-        FallbackSyntax::Json,
+        HighlightLanguage::Json,
         true,
     );
 
@@ -477,10 +474,10 @@ fn json_fallback_renderer_handles_unicode_without_panicking() {
 }
 
 #[test]
-fn shell_fallback_renderer_highlights_assignments_keywords_and_expansions() {
-    let lines = render_fallback_code_preview(
+fn shell_highlighting_renderer_highlights_assignments_keywords_and_expansions() {
+    let lines = render_highlighted_code_preview_for_tests(
         "#!/usr/bin/env bash\nNAME=elio\nif [ -n \"$NAME\" ]; then\n  printf '%s' \"$(whoami)\"\nfi # done\n",
-        FallbackSyntax::Shell,
+        HighlightLanguage::Shell,
         true,
     );
     let line_texts: Vec<_> = lines.iter().map(line_text).collect();
@@ -519,10 +516,10 @@ fn shell_fallback_renderer_highlights_assignments_keywords_and_expansions() {
 }
 
 #[test]
-fn shell_fallback_renderer_keeps_env_prefix_commands_and_function_defs_readable() {
-    let lines = render_fallback_code_preview(
+fn shell_highlighting_renderer_keeps_env_prefix_commands_and_function_defs_readable() {
+    let lines = render_highlighted_code_preview_for_tests(
         "DEBUG=1 PATH=\"$HOME/bin:$PATH\" env printf '%s\\n' \"$PATH\"\nhello() {\n  return 0\n}\n",
-        FallbackSyntax::Shell,
+        HighlightLanguage::Shell,
         true,
     );
 
@@ -553,10 +550,10 @@ fn shell_fallback_renderer_keeps_env_prefix_commands_and_function_defs_readable(
 }
 
 #[test]
-fn shell_fallback_renderer_preserves_heredoc_blocks() {
-    let lines = render_fallback_code_preview(
+fn shell_highlighting_renderer_preserves_heredoc_blocks() {
+    let lines = render_highlighted_code_preview_for_tests(
         "cat <<'EOF'\nhello $USER\nEOF\n",
-        FallbackSyntax::Shell,
+        HighlightLanguage::Shell,
         true,
     );
     let line_texts: Vec<_> = lines.iter().map(line_text).collect();

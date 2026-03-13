@@ -36,8 +36,11 @@ const PDF_RENDER_BUCKET_PX: u32 = 64;
 const PDF_RENDER_MIN_DIMENSION_PX: u32 = 96;
 const PDF_PAGE_MIN: usize = 1;
 const PDF_PAGE_STATUS_PREFIX: &str = "PDF page ";
-const PDF_PREFETCH_DISTANCE: usize = 1;
-const PDF_SELECTION_ACTIVATION_DELAY: Duration = Duration::from_millis(35);
+const PDF_PROBE_PREFETCH_AHEAD_DISTANCE: usize = 2;
+const PDF_PROBE_PREFETCH_BEHIND_DISTANCE: usize = 1;
+const PDF_RENDER_PREFETCH_AHEAD_DISTANCE: usize = 2;
+const PDF_RENDER_PREFETCH_BEHIND_DISTANCE: usize = 1;
+const PDF_SELECTION_ACTIVATION_DELAY: Duration = Duration::from_millis(16);
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct PdfPreviewState {
@@ -54,6 +57,7 @@ pub(super) struct PdfPreviewState {
     failed_renders: HashSet<PdfRenderKey>,
     displayed: Option<DisplayedPdfPreview>,
     activation_ready_at: Option<Instant>,
+    last_navigation_direction: isize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -232,27 +236,20 @@ impl App {
     }
 
     pub(crate) fn preview_overlay_placeholder_message(&self) -> Option<String> {
-        if self.preview_prefers_static_image_surface() && !self.preview_uses_image_overlay() {
-            return Some("Preparing image preview...".to_string());
-        }
-
         if !self.preview_prefers_pdf_surface() || self.preview_uses_image_overlay() {
             return None;
         }
 
         let request = self.active_pdf_overlay_request()?;
-        if !self.pdf_selection_activation_ready() {
-            return Some("Preparing PDF preview...".to_string());
-        }
-
         let page_key = self.pdf_page_key_from_request(&request);
         if self.pdf_preview.failed_page_probes.contains(&page_key) {
             return Some("PDF preview unavailable".to_string());
         }
-        if !self.pdf_preview.page_dimensions.contains_key(&page_key)
+        if !self.pdf_selection_activation_ready()
+            || !self.pdf_preview.page_dimensions.contains_key(&page_key)
             || self.pdf_preview.pending_page_probes.contains(&page_key)
         {
-            return Some("Loading PDF page...".to_string());
+            return None;
         }
 
         let placement = self.overlay_placement_for_request(&request)?;
@@ -263,7 +260,7 @@ impl App {
         if self.cached_render_exists(&render_key) {
             return None;
         }
-        Some("Rendering PDF page...".to_string())
+        None
     }
 
     pub(super) fn pdf_preview_header_detail(&self) -> Option<String> {
@@ -295,6 +292,7 @@ impl App {
         session.current_page = next_page.clamp(PDF_PAGE_MIN, max_page.max(PDF_PAGE_MIN));
         let changed = session.current_page != previous_page;
         if changed {
+            self.pdf_preview.last_navigation_direction = delta.signum();
             self.pdf_preview.activation_ready_at = None;
             self.refresh_pdf_prefetch_window();
         }
@@ -342,6 +340,7 @@ impl App {
             current_page: PDF_PAGE_MIN,
             total_pages: self.cached_pdf_total_pages(entry),
         });
+        self.pdf_preview.last_navigation_direction = 0;
         self.pdf_preview.activation_ready_at =
             Some(Instant::now() + PDF_SELECTION_ACTIVATION_DELAY);
         self.refresh_pdf_prefetch_window();
@@ -740,10 +739,8 @@ impl App {
 
         self.queue_current_pdf_probe();
         self.queue_current_pdf_render();
+        self.queue_prefetch_pdf_probes();
         if self.current_pdf_probe_ready() {
-            self.queue_prefetch_pdf_probes();
-        }
-        if self.current_pdf_render_ready() {
             self.queue_prefetch_pdf_renders();
         }
     }
@@ -783,10 +780,43 @@ impl App {
         self.submit_pdf_render_key(key, jobs::PdfJobPriority::Prefetch);
     }
 
-    fn current_pdf_render_ready(&self) -> bool {
-        self.active_pdf_render_key()
-            .as_ref()
-            .is_some_and(|key| self.cached_render_exists(key))
+    fn pdf_probe_window_pages(&self) -> Vec<usize> {
+        let Some(session) = self.pdf_preview.session.as_ref() else {
+            return Vec::new();
+        };
+
+        let mut pages = vec![session.current_page];
+        pages.extend(self.pdf_prefetch_pages(
+            session.current_page,
+            session.total_pages,
+            PDF_PROBE_PREFETCH_AHEAD_DISTANCE,
+            PDF_PROBE_PREFETCH_BEHIND_DISTANCE,
+        ));
+        pages
+    }
+
+    fn pdf_prefetch_probe_pages(&self) -> Vec<usize> {
+        let Some(session) = self.pdf_preview.session.as_ref() else {
+            return Vec::new();
+        };
+        self.pdf_prefetch_pages(
+            session.current_page,
+            session.total_pages,
+            PDF_PROBE_PREFETCH_AHEAD_DISTANCE,
+            PDF_PROBE_PREFETCH_BEHIND_DISTANCE,
+        )
+    }
+
+    fn pdf_prefetch_render_pages(&self) -> Vec<usize> {
+        let Some(session) = self.pdf_preview.session.as_ref() else {
+            return Vec::new();
+        };
+        self.pdf_prefetch_pages(
+            session.current_page,
+            session.total_pages,
+            PDF_RENDER_PREFETCH_AHEAD_DISTANCE,
+            PDF_RENDER_PREFETCH_BEHIND_DISTANCE,
+        )
     }
 
     fn current_pdf_probe_ready(&self) -> bool {
@@ -797,62 +827,6 @@ impl App {
                     .page_dimensions
                     .contains_key(&PdfPageKey::from_request(request))
             })
-    }
-
-    fn pdf_probe_window_pages(&self) -> Vec<usize> {
-        let Some(session) = self.pdf_preview.session.as_ref() else {
-            return Vec::new();
-        };
-
-        let mut pages = vec![session.current_page];
-        let Some(total_pages) = session.total_pages else {
-            return pages;
-        };
-
-        for distance in 1..=PDF_PREFETCH_DISTANCE {
-            let next_page = session.current_page.saturating_add(distance);
-            if next_page <= total_pages {
-                pages.push(next_page);
-            }
-            let previous_page = session.current_page.saturating_sub(distance);
-            if previous_page >= PDF_PAGE_MIN {
-                pages.push(previous_page);
-            }
-        }
-        pages
-    }
-
-    fn pdf_prefetch_probe_pages(&self) -> Vec<usize> {
-        self.pdf_probe_window_pages()
-            .into_iter()
-            .filter(|page| {
-                self.pdf_preview
-                    .session
-                    .as_ref()
-                    .is_some_and(|session| *page != session.current_page)
-            })
-            .collect()
-    }
-
-    fn pdf_prefetch_render_pages(&self) -> Vec<usize> {
-        let Some(session) = self.pdf_preview.session.as_ref() else {
-            return Vec::new();
-        };
-        let Some(total_pages) = session.total_pages else {
-            return Vec::new();
-        };
-
-        let next_page = session.current_page.saturating_add(1);
-        if next_page <= total_pages {
-            return vec![next_page];
-        }
-
-        let previous_page = session.current_page.saturating_sub(1);
-        if previous_page >= PDF_PAGE_MIN {
-            vec![previous_page]
-        } else {
-            Vec::new()
-        }
     }
 
     fn pdf_overlay_request_for_page(&self, page: usize) -> Option<PdfOverlayRequest> {
@@ -890,7 +864,7 @@ impl App {
         if let Some(key) = self.pdf_render_key_for_page(session.current_page) {
             variants.push((key.page, key.width_px, key.height_px));
         }
-        if self.current_pdf_render_ready() {
+        if self.current_pdf_probe_ready() {
             for page in self.pdf_prefetch_render_pages() {
                 if let Some(key) = self.pdf_render_key_for_page(page) {
                     variants.push((key.page, key.width_px, key.height_px));
@@ -898,6 +872,50 @@ impl App {
             }
         }
         variants
+    }
+
+    fn pdf_prefetch_pages(
+        &self,
+        current_page: usize,
+        total_pages: Option<usize>,
+        ahead_distance: usize,
+        behind_distance: usize,
+    ) -> Vec<usize> {
+        let Some(total_pages) = total_pages else {
+            return Vec::new();
+        };
+        let prefer_backward = self.pdf_preview.last_navigation_direction < 0;
+        let mut pages = Vec::new();
+
+        if prefer_backward {
+            for distance in 1..=ahead_distance {
+                let previous_page = current_page.saturating_sub(distance);
+                if previous_page >= PDF_PAGE_MIN {
+                    pages.push(previous_page);
+                }
+            }
+            for distance in 1..=behind_distance {
+                let next_page = current_page.saturating_add(distance);
+                if next_page <= total_pages {
+                    pages.push(next_page);
+                }
+            }
+        } else {
+            for distance in 1..=ahead_distance {
+                let next_page = current_page.saturating_add(distance);
+                if next_page <= total_pages {
+                    pages.push(next_page);
+                }
+            }
+            for distance in 1..=behind_distance {
+                let previous_page = current_page.saturating_sub(distance);
+                if previous_page >= PDF_PAGE_MIN {
+                    pages.push(previous_page);
+                }
+            }
+        }
+
+        pages
     }
 
     fn queue_current_pdf_probe(&mut self) {

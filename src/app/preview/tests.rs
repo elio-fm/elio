@@ -1,4 +1,5 @@
 use super::*;
+use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use ratatui::style::{Color, Modifier};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -155,6 +156,17 @@ fn write_zip_entries(path: &Path, entries: &[(&str, &str)]) {
     }
 
     zip.finish().expect("failed to finish zip");
+}
+
+fn write_test_raster_image(path: &Path, format: ImageFormat, width_px: u32, height_px: u32) {
+    let mut image = RgbaImage::new(width_px, height_px);
+    for pixel in image.pixels_mut() {
+        *pixel = Rgba([32, 128, 224, 255]);
+    }
+
+    DynamicImage::ImageRgba8(image)
+        .save_with_format(path, format)
+        .expect("failed to write raster test image");
 }
 
 fn write_tar_gz_entries(path: &Path, entries: &[(&str, &str)]) -> bool {
@@ -671,7 +683,7 @@ fn generic_lockfile_uses_code_renderer() {
     let preview = build_preview(&file_entry(path));
 
     assert_eq!(preview.kind, PreviewKind::Code);
-    assert!(preview.detail.is_some_and(|detail| detail.contains("INI")));
+    assert_eq!(preview.detail.as_deref(), Some("Lockfile"));
     assert!(
         preview
             .lines
@@ -1251,7 +1263,7 @@ fn desktop_preview_uses_code_renderer() {
         preview
             .detail
             .as_deref()
-            .is_some_and(|detail| detail == "Desktop Entry (best-effort)")
+            .is_some_and(|detail| detail == "Desktop Entry")
     );
     assert!(
         preview
@@ -1343,7 +1355,7 @@ fn shell_dotfile_preview_uses_code_renderer() {
         preview
             .detail
             .as_deref()
-            .is_some_and(|detail| detail.contains("Shell"))
+            .is_some_and(|detail| detail.contains("Bash"))
     );
     assert!(line_texts.iter().any(|text| text.contains("export")));
     assert!(line_texts.iter().any(|text| text.contains("alias")));
@@ -1382,7 +1394,7 @@ fn zsh_preview_uses_shell_specific_support() {
 }
 
 #[test]
-fn keys_preview_uses_fallback_renderer() {
+fn keys_preview_uses_highlighting_renderer() {
     let root = temp_path("keys");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("bindings.keys");
@@ -1391,12 +1403,7 @@ fn keys_preview_uses_fallback_renderer() {
     let preview = build_preview(&file_entry(path));
 
     assert_eq!(preview.kind, PreviewKind::Code);
-    assert!(
-        preview
-            .detail
-            .as_deref()
-            .is_some_and(|detail| detail.contains("INI"))
-    );
+    assert_eq!(preview.detail.as_deref(), Some("Keys file"));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1466,8 +1473,8 @@ fn multiline_log_preview_keeps_stack_trace_context() {
 }
 
 #[test]
-fn unstructured_log_preview_falls_back_to_best_effort_renderer() {
-    let root = temp_path("log-fallback");
+fn unstructured_log_preview_uses_log_highlighting() {
+    let root = temp_path("log-highlighting");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("notes.log");
     fs::write(
@@ -1479,7 +1486,7 @@ fn unstructured_log_preview_falls_back_to_best_effort_renderer() {
     let preview = build_preview(&file_entry(path));
 
     assert_eq!(preview.kind, PreviewKind::Code);
-    assert_eq!(preview.detail.as_deref(), Some("Log (best-effort)"));
+    assert_eq!(preview.detail.as_deref(), Some("Log file"));
     assert!(
         preview
             .lines
@@ -2557,6 +2564,32 @@ fn utf16le_bom_text_file_is_not_mislabeled_as_binary() {
         line_texts
             .iter()
             .any(|line| line.contains("Hello from UTF-16"))
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn raster_image_preview_uses_image_metadata_fallback() {
+    let root = temp_path("image-metadata");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("cover.png");
+    write_test_raster_image(&path, ImageFormat::Png, 600, 300);
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+    assert_eq!(preview.kind, PreviewKind::Image);
+    assert_eq!(preview.detail.as_deref(), Some("PNG image"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|line| line.contains("Dimensions") && line.contains("600x300"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .all(|line| !line.contains("Binary or unsupported file"))
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

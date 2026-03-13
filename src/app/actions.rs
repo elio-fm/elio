@@ -105,11 +105,7 @@ impl App {
         self.preview_state.content = match self.selected_entry().cloned() {
             Some(entry) if self.should_defer_static_image_preview(&entry) => {
                 self.preview_state.load_state = None;
-                preview::PreviewContent::new(
-                    preview::PreviewKind::Image,
-                    vec![Line::from("Preparing image preview")],
-                )
-                .with_detail(
+                preview::PreviewContent::new(preview::PreviewKind::Image, Vec::new()).with_detail(
                     self.static_image_preview_detail(&entry)
                         .unwrap_or("Image preview"),
                 )
@@ -119,7 +115,8 @@ impl App {
                 self.cached_preview_for(&entry)
                     .or_else(|| self.stale_cached_preview_for(&entry))
                     .unwrap_or_else(|| {
-                        preview::PreviewContent::placeholder("Preparing PDF preview")
+                        preview::PreviewContent::new(preview::PreviewKind::Document, Vec::new())
+                            .with_detail("PDF document")
                     })
             }
             Some(entry) if preview::should_build_preview_in_background(&entry) => {

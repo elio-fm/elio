@@ -1,5 +1,5 @@
 use super::*;
-use crate::file_facts;
+use crate::{appearance, file_facts};
 
 pub(super) fn should_build_preview_in_background(entry: &Entry) -> bool {
     let facts = file_facts::inspect_path(&entry.path, entry.kind);
@@ -65,6 +65,11 @@ pub(super) fn build_preview(entry: &Entry) -> PreviewContent {
     {
         return apply_type_detail(preview, type_detail);
     }
+    if facts.builtin_class == FileClass::Image
+        && preview_spec.kind != file_facts::PreviewKind::Source
+    {
+        return image_metadata_preview(entry, type_detail);
+    }
 
     let text_preview = match read_text_preview(&entry.path) {
         Ok(Some(text)) => text,
@@ -120,54 +125,23 @@ pub(super) fn build_preview(entry: &Entry) -> PreviewContent {
             }
         }
 
-        if preview_spec.force_fallback
-            && let Some(fallback_syntax) = preview_spec.fallback_syntax
-        {
-            let preview = PreviewContent::new(
-                PreviewKind::Code,
-                fallback::render_fallback_code_preview(&text_preview.text, fallback_syntax, true),
-            )
-            .with_detail(fallback_syntax.detail_label());
-            return finalize_text_preview(
-                preview,
-                source_line_count,
-                text_preview.bytes_truncated,
-                preview_truncation_note.clone(),
-            );
+        let mut preview = PreviewContent::new(
+            PreviewKind::Code,
+            highlighting::render_code_preview(
+                &text_preview.text,
+                preview_spec.highlight_language,
+                true,
+            ),
+        );
+        if let Some(detail) = source_preview_detail(type_detail, preview_spec) {
+            preview = preview.with_detail(detail);
         }
-
-        if let Some(syntax) = syntax::find_code_syntax(&entry.path, preview_spec.syntax_hint) {
-            let preview = PreviewContent::new(
-                PreviewKind::Code,
-                syntax::render_code_preview(
-                    &entry.path,
-                    &text_preview.text,
-                    preview_spec.syntax_hint,
-                    true,
-                ),
-            )
-            .with_detail(syntax.name.clone());
-            return finalize_text_preview(
-                preview,
-                source_line_count,
-                text_preview.bytes_truncated,
-                preview_truncation_note.clone(),
-            );
-        }
-
-        if let Some(fallback_syntax) = preview_spec.fallback_syntax {
-            let preview = PreviewContent::new(
-                PreviewKind::Code,
-                fallback::render_fallback_code_preview(&text_preview.text, fallback_syntax, true),
-            )
-            .with_detail(fallback_syntax.detail_label());
-            return finalize_text_preview(
-                preview,
-                source_line_count,
-                text_preview.bytes_truncated,
-                preview_truncation_note,
-            );
-        }
+        return finalize_text_preview(
+            preview,
+            source_line_count,
+            text_preview.bytes_truncated,
+            preview_truncation_note,
+        );
     }
 
     let preview = PreviewContent::new(
@@ -197,6 +171,52 @@ fn apply_type_detail(
     preview
 }
 
+fn source_preview_detail(
+    type_detail: Option<&'static str>,
+    preview_spec: file_facts::PreviewSpec,
+) -> Option<String> {
+    type_detail
+        .map(ToString::to_string)
+        .or_else(|| preview_spec.language_hint.map(display_language_hint))
+        .or_else(|| {
+            preview_spec
+                .highlight_language
+                .map(file_facts::HighlightLanguage::detail_label)
+        })
+}
+
+fn display_language_hint(language_hint: &str) -> String {
+    match language_hint {
+        "c" => "C".to_string(),
+        "cpp" => "C++".to_string(),
+        "cmake" => "CMake".to_string(),
+        "css" => "CSS".to_string(),
+        "html" => "HTML".to_string(),
+        "ini" => "INI".to_string(),
+        "javascript" => "JavaScript".to_string(),
+        "json" => "JSON".to_string(),
+        "jsonc" => "JSONC".to_string(),
+        "kotlin" => "Kotlin".to_string(),
+        "nix" => "Nix".to_string(),
+        "php" => "PHP".to_string(),
+        "python" => "Python".to_string(),
+        "rust" => "Rust".to_string(),
+        "shell" => "Shell".to_string(),
+        "swift" => "Swift".to_string(),
+        "toml" => "TOML".to_string(),
+        "typescript" => "TypeScript".to_string(),
+        "xml" => "XML".to_string(),
+        "yaml" => "YAML".to_string(),
+        other => {
+            let mut chars = other.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        }
+    }
+}
+
 fn binary_preview() -> PreviewContent {
     super::status_preview(
         PreviewKind::Binary,
@@ -206,6 +226,50 @@ fn binary_preview() -> PreviewContent {
             Line::from("Binary or unsupported file"),
         ],
     )
+}
+
+fn image_metadata_preview(entry: &Entry, type_detail: Option<&'static str>) -> PreviewContent {
+    let palette = appearance::palette();
+    let detail = type_detail.unwrap_or("Image");
+    let byte_size = std::fs::metadata(&entry.path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(entry.size);
+    let mut fields = vec![("File Size", crate::app::format_size(byte_size))];
+    if let Ok((width_px, height_px)) = image::image_dimensions(&entry.path) {
+        fields.insert(0, ("Dimensions", format!("{width_px}x{height_px}")));
+    }
+    let label_width = fields
+        .iter()
+        .map(|(label, _)| label.len())
+        .max()
+        .unwrap_or(8);
+    let mut lines = vec![preview_section_line("Image", palette)];
+    for (label, value) in fields {
+        lines.push(preview_field_line(label, &value, label_width, palette));
+    }
+    PreviewContent::new(PreviewKind::Image, lines).with_detail(detail)
+}
+
+fn preview_section_line(title: &str, palette: appearance::Palette) -> Line<'static> {
+    Line::from(Span::styled(
+        title.to_string(),
+        Style::default().fg(palette.accent),
+    ))
+}
+
+fn preview_field_line(
+    label: &str,
+    value: &str,
+    label_width: usize,
+    palette: appearance::Palette,
+) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(
+            format!("{label:<width$} ", width = label_width + 1),
+            Style::default().fg(palette.muted),
+        ),
+        Span::styled(value.to_string(), Style::default().fg(palette.text)),
+    ])
 }
 
 fn unavailable_preview(detail: &str, message: &str) -> PreviewContent {

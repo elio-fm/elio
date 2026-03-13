@@ -5,7 +5,6 @@ use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
 };
-use std::path::Path;
 
 #[derive(Clone, Debug, Default)]
 struct ListContext {
@@ -463,10 +462,9 @@ impl MarkdownRenderer {
             ),
         ]));
 
-        let rendered = super::syntax::render_code_preview(
-            Path::new("markdown-fence"),
+        let rendered = super::highlighting::render_markdown_code_preview(
             &code_block.text,
-            Some(&code_block.language),
+            &code_block.language,
             false,
         );
         for line in rendered {

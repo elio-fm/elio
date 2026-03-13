@@ -229,7 +229,7 @@ fn read_png_dimensions_reads_ihdr_size() {
 }
 
 #[test]
-fn refresh_preview_uses_static_image_surface_placeholder_when_backend_enabled() {
+fn refresh_preview_uses_blank_static_image_surface_preview_when_backend_enabled() {
     for (file_name, detail) in [
         ("demo.png", "PNG image"),
         ("demo.jpg", "JPEG image"),
@@ -242,10 +242,7 @@ fn refresh_preview_uses_static_image_surface_placeholder_when_backend_enabled() 
 
         assert_eq!(app.preview_state.content.kind, PreviewKind::Image);
         assert_eq!(app.preview_state.content.detail.as_deref(), Some(detail));
-        assert_eq!(
-            app.preview_state.content.lines[0].to_string(),
-            "Preparing image preview"
-        );
+        assert!(app.preview_state.content.lines.is_empty());
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -264,10 +261,7 @@ fn preview_prefers_image_surface_for_supported_static_images_when_backend_enable
         let (app, root) = build_selected_static_image_app("image-surface", file_name);
 
         assert!(app.preview_prefers_image_surface());
-        assert_eq!(
-            app.preview_overlay_placeholder_message().as_deref(),
-            Some("Preparing image preview...")
-        );
+        assert_eq!(app.preview_overlay_placeholder_message(), None);
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -281,10 +275,7 @@ fn static_image_surface_remains_available_without_pdf_tooling() {
 
     assert!(app.preview_prefers_static_image_surface());
     assert!(app.preview_prefers_image_surface());
-    assert_eq!(
-        app.preview_overlay_placeholder_message().as_deref(),
-        Some("Preparing image preview...")
-    );
+    assert_eq!(app.preview_overlay_placeholder_message(), None);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -694,7 +685,7 @@ fn sync_pdf_preview_selection_reuses_cached_total_page_count() {
 }
 
 #[test]
-fn sync_pdf_preview_selection_defers_adjacent_probe_prefetch_until_current_page_is_known() {
+fn sync_pdf_preview_selection_prefetches_forward_probe_window_when_page_count_is_known() {
     let root = temp_root("selection-probe-prefetch");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let mut app = App::new_at(root.clone()).expect("app should initialize");
@@ -719,13 +710,15 @@ fn sync_pdf_preview_selection_defers_adjacent_probe_prefetch_until_current_page_
 
     assert_eq!(
         app.pdf_preview.pending_page_probes,
-        std::iter::once(PdfPageKey {
-            path: entry.path,
-            size: entry.size,
-            modified: entry.modified,
-            page: PDF_PAGE_MIN,
-        })
-        .collect()
+        [PDF_PAGE_MIN, 2, 3]
+            .into_iter()
+            .map(|page| PdfPageKey {
+                path: entry.path.clone(),
+                size: entry.size,
+                modified: entry.modified,
+                page,
+            })
+            .collect()
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -921,10 +914,16 @@ fn apply_pdf_probe_build_prefetches_adjacent_page_probes_once_total_is_known() {
         page: 1,
     }));
     assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
-        path: request.path,
+        path: request.path.clone(),
         size: request.size,
         modified: request.modified,
         page: 3,
+    }));
+    assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+        path: request.path,
+        size: request.size,
+        modified: request.modified,
+        page: 4,
     }));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -1011,7 +1010,7 @@ fn step_pdf_page_queues_render_immediately_when_dimensions_are_cached() {
 }
 
 #[test]
-fn step_pdf_page_prunes_stale_prefetch_probe_window_without_eager_neighbor_probe() {
+fn step_pdf_page_prunes_stale_probe_window_and_prefetches_forward_pages() {
     let (mut app, root) = build_pdf_overlay_test_app("page-step-prune");
     let session = app
         .pdf_preview
@@ -1050,11 +1049,17 @@ fn step_pdf_page_prunes_stale_prefetch_probe_window_without_eager_neighbor_probe
         modified: None,
         page: 3,
     }));
-    assert!(!app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+    assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
         path: root.join("demo.pdf"),
         size: 128,
         modified: None,
         page: 4,
+    }));
+    assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+        path: root.join("demo.pdf"),
+        size: 128,
+        modified: None,
+        page: 5,
     }));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -1123,13 +1128,10 @@ fn apply_pdf_render_build_prefetches_next_page_when_current_page_is_ready() {
 }
 
 #[test]
-fn pdf_preview_placeholder_message_tracks_loading_state() {
+fn pdf_preview_placeholder_message_stays_silent_while_loading() {
     let (mut app, root) = build_pdf_overlay_test_app("placeholder");
 
-    assert_eq!(
-        app.preview_overlay_placeholder_message().as_deref(),
-        Some("Loading PDF page...")
-    );
+    assert_eq!(app.preview_overlay_placeholder_message(), None);
 
     let request = app
         .active_pdf_overlay_request()
@@ -1149,10 +1151,7 @@ fn pdf_preview_placeholder_message_tracks_loading_state() {
         .pending_renders
         .insert(PdfRenderKey::from_request(&request, placement));
 
-    assert_eq!(
-        app.preview_overlay_placeholder_message().as_deref(),
-        Some("Rendering PDF page...")
-    );
+    assert_eq!(app.preview_overlay_placeholder_message(), None);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1172,7 +1171,7 @@ fn preview_prefers_pdf_surface_falls_back_after_overlay_failure() {
 }
 
 #[test]
-fn refresh_preview_skips_background_pdf_metadata_when_surface_is_active() {
+fn refresh_preview_uses_blank_pdf_surface_preview_when_active() {
     let (mut app, root) = build_selected_pdf_app("skip-pdf-metadata");
     let before = app.scheduler_metrics();
 
@@ -1183,11 +1182,12 @@ fn refresh_preview_skips_background_pdf_metadata_when_surface_is_active() {
         after.preview_jobs_submitted_high,
         before.preview_jobs_submitted_high
     );
-    assert_eq!(app.preview_state.content.lines.len(), 1);
+    assert_eq!(app.preview_state.content.kind, PreviewKind::Document);
     assert_eq!(
-        app.preview_state.content.lines[0].to_string(),
-        "Preparing PDF preview"
+        app.preview_state.content.detail.as_deref(),
+        Some("PDF document")
     );
+    assert!(app.preview_state.content.lines.is_empty());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1206,10 +1206,7 @@ fn refresh_preview_restores_pdf_metadata_fallback_after_probe_failure() {
     app.refresh_preview();
 
     assert!(!app.preview_prefers_pdf_surface());
-    assert_ne!(
-        app.preview_state.content.lines[0].to_string(),
-        "Preparing PDF preview"
-    );
+    assert!(!app.preview_state.content.lines.is_empty());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
