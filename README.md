@@ -1,96 +1,97 @@
 # elio
 
-`elio` is a mouse-capable terminal file manager with a GNOME Files / Nautilus-inspired layout and a soft folder-first presentation.
+`elio` is a mouse-capable terminal file manager with a soft folder-first presentation.
 
-## Features
+It opens the current working directory, keeps pinned places on the left, shows files in a grid or list in the center, and uses the right-hand pane for details and previews.
 
-- Nautilus-like shell with a places sidebar, main file area, and details pane
-- Grid view by default, plus a denser list view
-- Mouse click, double click, and wheel support
-- Directory navigation, back/forward history, hidden-file toggle, sort cycling, instant auto-reload, and external open via `xdg-open`
-- Rich details pane with metadata plus folder, text, markdown, and code previews
-- Folder search with `f` and file search with `Ctrl+F`, both scoped to the current directory tree
-- Type-aware icons and colors for folders, config files, documents, code, archives, media, fonts, data files, and plain files
-- Configurable behavior from `~/.config/elio/config.toml`
-- Configurable appearance rules from `~/.config/elio/theme.toml`
+## Highlights
 
-## Run
+- Three-pane layout with places on the left, the main browser in the center, and details plus previews on the right
+- Grid view by default, with a denser list view when you want it
+- Keyboard and mouse support, including click, double click, wheel scroll, and preview scrolling
+- Back/forward history, parent navigation, hidden-file toggle, and sort cycling
+- Automatic reload when the current directory changes, with polling fallback when file watching is unavailable
+- Fuzzy folder search with `f` and fuzzy file search with `Ctrl+F`, both scoped to the current directory tree
+- Type-aware previews for directories, text, markdown, code, structured data, archives, documents, images, and PDFs
+- Configurable behavior from `config.toml` and configurable appearance rules from `theme.toml`
+
+## Quick Start
+
+Run from the repository root:
 
 ```bash
-cargo run
+cargo run --release
 ```
 
-## License
+`elio` starts in your current working directory.
 
-Licensed under the [MIT license](LICENSE-MIT).
+If you want a local install instead of `cargo run`, you can also do:
 
-## Config
+```bash
+cargo install --path .
+elio
+```
 
-General app settings live in:
+## Optional Tools
+
+`elio` works without extra setup, but a few integrations unlock better behavior:
+
+- `gio open` or `xdg-open` enables external open with `o`
+- `pdfinfo` and `pdftocairo` enable rendered PDF page previews
+- Kitty graphics protocol support, or a working `kitten` backend, enables inline image and PDF surface previews
+
+Image previews are detected automatically in terminals such as Kitty, Ghostty, and WezTerm. When those tools are missing, `elio` falls back to text or metadata-based previews instead of failing.
+
+## Configuration
+
+`elio` reads configuration from:
 
 ```bash
 ~/.config/elio/config.toml
 ```
 
-Supported sections:
+Current supported config:
 
-- `[ui]` for interface behavior
+```toml
+[ui]
+show_top_bar = false
+```
 
-The current config keys are:
+- `show_top_bar`: show or hide the optional toolbar at the top of the screen
 
-- `show_top_bar` to show or hide the optional toolbar at the top of the screen
+If the config file does not exist, `elio` uses built-in defaults. The example file in [examples/config.toml](examples/config.toml) mirrors the current config surface.
 
-If the config file does not exist, `elio` uses built-in defaults. The example config is mirrored in [`examples/config.toml`](examples/config.toml).
+## Theming
 
-## Theme
-
-`elio` ships with a built-in default theme, but you can override file icons, file colors, and the full app chrome palette by creating:
+Theme overrides live at:
 
 ```bash
 ~/.config/elio/theme.toml
 ```
 
+Theme loading behavior:
+
+- If the file exists and parses, `elio` layers it on top of the built-in default theme
+- Any key you omit falls back to the built-in default theme
+- If the file does not exist, `elio` uses the built-in default theme
+- If the file cannot be read or parsed, `elio` falls back to the built-in default theme and prints an error to `stderr`
+
 Supported sections:
 
-- `[palette]` for app-wide TUI colors
+- `[palette]` for app-wide colors
 - `[preview.code]` for code preview syntax colors
 - `[classes.<name>]` for default icon/color per file class
-- `[extensions.<ext>]` for file-extension overrides
+- `[extensions.<ext>]` for file extension overrides
 - `[files."<exact-name>"]` for exact file-name overrides
 - `[directories."<exact-name>"]` for exact directory-name overrides
 
-How theme loading works:
+Rule matching is case-insensitive and trims surrounding whitespace. Resolution order is:
 
-- if `~/.config/elio/theme.toml` exists and parses, `elio` layers it on top of the built-in default theme
-- any key you omit falls back to the built-in default theme
-- if the file does not exist, `elio` uses the built-in default theme
-- if the file exists but fails to read or parse, `elio` falls back to the built-in default theme and prints an error to `stderr`
+1. Exact file or directory name
+2. File extension
+3. Built-in file classification fallback
 
-The built-in default theme is mirrored in [`examples/themes/default/theme.toml`](examples/themes/default/theme.toml). The older blue-heavy variant is kept in [`examples/themes/navi/theme.toml`](examples/themes/navi/theme.toml).
-
-The current app UI colors all come from `[palette]`. That includes:
-
-- `bg`, `text`, `muted`
-- `chrome`, `chrome_alt`
-- `panel`, `panel_alt`
-- `surface`, `elevated`
-- `border`
-- `accent`, `accent_soft`, `accent_text`
-- `selected_bg`, `selected_border`
-- `sidebar_active`
-- `button_bg`, `button_disabled_bg`
-- `path_bg`
-
-Code preview syntax colors can be customized under `[preview.code]`. The available keys are:
-
-- `fg`, `bg`
-- `selection_bg`, `selection_fg`
-- `caret`, `line_highlight`, `line_number`
-- `comment`, `string`, `constant`, `keyword`
-- `function`, `type`, `parameter`
-- `tag`, `operator`, `macro`, `invalid`
-
-The built-in file classes you can override under `[classes.<name>]` are:
+Built-in file class names:
 
 - `directory`
 - `code`
@@ -104,37 +105,7 @@ The built-in file classes you can override under `[classes.<name>]` are:
 - `data`
 - `file`
 
-Rule matching is case-insensitive and trims surrounding whitespace. Resolution order is:
-
-- exact file or directory name
-- file extension
-- built-in file classification fallback
-
-The built-in theme already includes exact-name rules for many common files and folders, including:
-
-- `Cargo.toml`
-- `Cargo.lock`
-- `package.json`
-- `package-lock.json`
-- `Dockerfile`
-- `compose.yml`
-- `compose.yaml`
-- `README.md`
-- `LICENSE`
-- `.gitignore`
-- `.env`
-- `.config`
-- `.github`
-- `node_modules`
-- `src`
-- `target`
-- `Documents`
-- `Downloads`
-- `Pictures`
-- `Music`
-- `Videos`
-
-Class names accept a few aliases:
+Class aliases:
 
 - `directory`, `dir`, `folder`
 - `document`, `doc`, `text`
@@ -142,7 +113,7 @@ Class names accept a few aliases:
 - `archive`, `compressed`
 - `file`, `plain`
 
-Example:
+Minimal example:
 
 ```toml
 [palette]
@@ -169,36 +140,37 @@ color = "#b38cff"
 class = "data"
 icon = "󰌾"
 color = "#59de94"
-
-[files."Cargo.toml"]
-class = "config"
-icon = ""
-color = "#ff8f40"
 ```
 
-There are fuller examples in [`examples/themes/default/theme.toml`](examples/themes/default/theme.toml) and [`examples/themes/navi/theme.toml`](examples/themes/navi/theme.toml).
+The built-in default theme is mirrored in [examples/themes/default/theme.toml](examples/themes/default/theme.toml). The older blue-heavier variant is kept in [examples/themes/navi/theme.toml](examples/themes/navi/theme.toml).
 
 ## Controls
 
+Main browser controls:
+
 - `Enter`: open the selected folder or file
 - `Backspace`: go to the parent directory
-- `Arrows` or `h/j/k/l`: navigate the main browser
+- `Left` / `h`: go to the parent directory
+- `Right` / `l`: enter the selected folder
+- `Up` / `Down` or `j` / `k`: move selection
 - `Tab` / `Shift+Tab`: jump through pinned places
 - `Alt+Left` / `Alt+Right`: go back or forward in history
 - `v`: toggle grid/list view
 - `.`: show or hide dotfiles
-- `s`: cycle sort mode
-- `o`: open the selected file with `xdg-open`
+- `s`: cycle sort mode (`Name`, `Modified`, `Size`)
+- `o`: open the selected item externally
 - `f`: fuzzy-find folders in the current directory tree
 - `Ctrl+F`: fuzzy-find files in the current directory tree
 - `?`: open the help overlay
 - `q` or `Esc`: quit
 
-The current directory reloads automatically when its contents change. Elio uses filesystem watching when available and falls back to throttled polling if watching is unavailable.
+Mouse and preview behavior:
 
-The details pane supports its own mouse-wheel scrolling. Text, markdown, and code previews report real source line counts, while folder previews show item counts and a compact folder/file breakdown.
-
-## Fuzzy Finder
+- Click selects an item
+- Double click opens a folder or file
+- Mouse wheel scrolls the browser or the details pane, depending on focus
+- `Shift+Wheel` scrolls sideways in code previews
+- The details pane keeps its own scroll position and reports real line counts where available
 
 Inside the fuzzy finder:
 
@@ -208,3 +180,7 @@ Inside the fuzzy finder:
 - `Up` / `Down`: move through results
 - `Enter`: open the selected result
 - `Esc`: close the finder
+
+## License
+
+Licensed under the [MIT license](LICENSE-MIT).
