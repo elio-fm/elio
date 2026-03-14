@@ -1,5 +1,5 @@
 use super::super::*;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::{
     collections::HashMap,
     fs,
@@ -165,6 +165,141 @@ fn search_query_cursor_inserts_and_deletes_in_place() {
         .expect("delete should work");
     assert_eq!(app.search_query(), "fatch");
     assert_eq!(app.search_query_cursor(), 2);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn search_query_ctrl_arrows_move_across_word_boundaries() {
+    let root = temp_path("cursor-word-move");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.search = Some(SearchOverlay {
+        scope: SearchScope::Folders,
+        query: "foo bar/baz".to_string(),
+        query_cursor: "foo bar/baz".chars().count(),
+        candidates: Arc::new(Vec::new()),
+        matches: Vec::new(),
+        cached_matches: HashMap::from([(String::new(), Vec::new())]),
+        selected: 0,
+        scroll: 0,
+        loading: false,
+        error: None,
+    });
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL))
+        .expect("ctrl-left should work");
+    assert_eq!(app.search_query_cursor(), 8);
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL))
+        .expect("ctrl-left should work");
+    assert_eq!(app.search_query_cursor(), 4);
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL))
+        .expect("ctrl-left should work");
+    assert_eq!(app.search_query_cursor(), 0);
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL))
+        .expect("ctrl-right should work");
+    assert_eq!(app.search_query_cursor(), 4);
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL))
+        .expect("ctrl-right should work");
+    assert_eq!(app.search_query_cursor(), 8);
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL))
+        .expect("ctrl-right should work");
+    assert_eq!(app.search_query_cursor(), 11);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn search_query_ctrl_backspace_and_delete_remove_word_units() {
+    let root = temp_path("cursor-word-delete");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.search = Some(SearchOverlay {
+        scope: SearchScope::Folders,
+        query: "foo bar/baz".to_string(),
+        query_cursor: 8,
+        candidates: Arc::new(Vec::new()),
+        matches: Vec::new(),
+        cached_matches: HashMap::from([(String::new(), Vec::new())]),
+        selected: 0,
+        scroll: 0,
+        loading: false,
+        error: None,
+    });
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::CONTROL))
+        .expect("ctrl-backspace should work");
+    assert_eq!(app.search_query(), "foo baz");
+    assert_eq!(app.search_query_cursor(), 4);
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::CONTROL))
+        .expect("ctrl-delete should work");
+    assert_eq!(app.search_query(), "foo ");
+    assert_eq!(app.search_query_cursor(), 4);
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::CONTROL))
+        .expect("ctrl-delete at end should work");
+    assert_eq!(app.search_query(), "foo ");
+    assert_eq!(app.search_query_cursor(), 4);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn search_query_terminal_fallback_word_delete_bindings_work() {
+    let root = temp_path("cursor-word-delete-fallbacks");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.search = Some(SearchOverlay {
+        scope: SearchScope::Folders,
+        query: "foo bar/baz".to_string(),
+        query_cursor: 8,
+        candidates: Arc::new(Vec::new()),
+        matches: Vec::new(),
+        cached_matches: HashMap::from([(String::new(), Vec::new())]),
+        selected: 0,
+        scroll: 0,
+        loading: false,
+        error: None,
+    });
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::CONTROL))
+        .expect("ctrl-h should work as a backspace fallback");
+    assert_eq!(app.search_query(), "foo baz");
+    assert_eq!(app.search_query_cursor(), 4);
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL))
+        .expect("ctrl-d should work as a delete fallback");
+    assert_eq!(app.search_query(), "foo ");
+    assert_eq!(app.search_query_cursor(), 4);
+
+    if let Some(search) = &mut app.search {
+        search.query = "foo bar baz".to_string();
+        search.query_cursor = 4;
+    }
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::ALT))
+        .expect("alt-d should work as a delete fallback");
+    assert_eq!(app.search_query(), "foo baz");
+    assert_eq!(app.search_query_cursor(), 4);
+
+    if let Some(search) = &mut app.search {
+        search.query = "foo bar".to_string();
+        search.query_cursor = 7;
+    }
+
+    app.handle_search_key(KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL))
+        .expect("ctrl-w should work as a backward word delete fallback");
+    assert_eq!(app.search_query(), "foo ");
+    assert_eq!(app.search_query_cursor(), 4);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

@@ -315,6 +315,9 @@ pub(super) fn render_help(frame: &mut Frame<'_>, area: Rect, palette: Palette) {
         )]),
         helpers::help_row("f", "search folders", palette),
         helpers::help_row("Ctrl+F", "search files", palette),
+        helpers::help_row("Ctrl+←→", "move by word in search", palette),
+        helpers::help_row("Ctrl+⌫ / Del", "delete word in search", palette),
+        helpers::help_row("Ctrl+W / Alt+D", "fallback word delete", palette),
     ];
     frame.render_widget(
         Paragraph::new(left)

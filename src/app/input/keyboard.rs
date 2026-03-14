@@ -32,8 +32,11 @@ impl App {
                 return Ok(());
             }
             match key.code {
-                KeyCode::Esc | KeyCode::Char('?') => self.help_open = false,
+                KeyCode::Esc => self.help_open = false,
                 _ => {}
+            }
+            if is_help_shortcut(key) {
+                self.help_open = false;
             }
             return Ok(());
         }
@@ -112,7 +115,7 @@ impl App {
 
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
-            KeyCode::Char('?') => {
+            _ if is_help_shortcut(key) => {
                 self.clear_wheel_scroll();
                 self.help_open = true;
             }
@@ -207,4 +210,13 @@ impl App {
             self.open_in_system()
         }
     }
+}
+
+fn is_help_shortcut(key: KeyEvent) -> bool {
+    if key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) {
+        return false;
+    }
+
+    matches!(key.code, KeyCode::Char('?'))
+        || matches!(key.code, KeyCode::Char('/')) && key.modifiers.contains(KeyModifiers::SHIFT)
 }

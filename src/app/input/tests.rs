@@ -56,6 +56,30 @@ fn right_arrow_does_not_open_selected_file_in_list_view() {
 }
 
 #[test]
+fn shift_slash_opens_and_closes_help_overlay() {
+    let root = temp_path("help-shift-slash");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('/'),
+        KeyModifiers::SHIFT,
+    )))
+    .expect("shift-slash should open help");
+    assert!(app.help_open);
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('/'),
+        KeyModifiers::SHIFT,
+    )))
+    .expect("shift-slash should close help");
+    assert!(!app.help_open);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn right_arrow_enters_selected_directory_in_list_view() {
     let root = temp_path("right-dir");
     let child = root.join("child");

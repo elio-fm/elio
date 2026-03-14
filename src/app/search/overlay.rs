@@ -114,6 +114,12 @@ impl App {
                 self.status.clear();
             }
             KeyCode::Enter => self.confirm_search_selection()?,
+            KeyCode::Left if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.move_search_cursor_to_previous_word()
+            }
+            KeyCode::Right if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.move_search_cursor_to_next_word()
+            }
             KeyCode::Left => self.move_search_cursor(-1),
             KeyCode::Right => self.move_search_cursor(1),
             KeyCode::Up => self.move_search_selection(-1),
@@ -122,6 +128,17 @@ impl App {
             KeyCode::PageDown => self.page_search(1),
             KeyCode::Home => self.move_search_cursor_to(0),
             KeyCode::End => self.move_search_cursor_to_end(),
+            _ if search_key_deletes_previous_word(key) => {
+                let previous_query = self
+                    .search
+                    .as_ref()
+                    .map(|search| search.query.clone())
+                    .unwrap_or_default();
+                if let Some(search) = &mut self.search {
+                    remove_word_before_cursor(&mut search.query, &mut search.query_cursor);
+                }
+                self.refresh_search_matches(&previous_query);
+            }
             KeyCode::Backspace => {
                 let previous_query = self
                     .search
@@ -130,6 +147,17 @@ impl App {
                     .unwrap_or_default();
                 if let Some(search) = &mut self.search {
                     remove_char_before_cursor(&mut search.query, &mut search.query_cursor);
+                }
+                self.refresh_search_matches(&previous_query);
+            }
+            _ if search_key_deletes_next_word(key) => {
+                let previous_query = self
+                    .search
+                    .as_ref()
+                    .map(|search| search.query.clone())
+                    .unwrap_or_default();
+                if let Some(search) = &mut self.search {
+                    remove_word_at_cursor(&mut search.query, search.query_cursor);
                 }
                 self.refresh_search_matches(&previous_query);
             }
@@ -221,6 +249,20 @@ impl App {
         };
         let max = search.query.chars().count() as isize;
         search.query_cursor = (search.query_cursor as isize + delta).clamp(0, max) as usize;
+    }
+
+    fn move_search_cursor_to_previous_word(&mut self) {
+        let Some(search) = &mut self.search else {
+            return;
+        };
+        search.query_cursor = previous_word_start(&search.query, search.query_cursor);
+    }
+
+    fn move_search_cursor_to_next_word(&mut self) {
+        let Some(search) = &mut self.search else {
+            return;
+        };
+        search.query_cursor = next_word_start(&search.query, search.query_cursor);
     }
 
     fn move_search_cursor_to(&mut self, index: usize) {
@@ -335,6 +377,74 @@ fn insert_char_at_cursor(text: &mut String, cursor: &mut usize, ch: char) {
     *cursor += 1;
 }
 
+fn search_key_deletes_previous_word(key: KeyEvent) -> bool {
+    matches!(key.code, KeyCode::Backspace) && key.modifiers.contains(KeyModifiers::CONTROL)
+        || matches!(key.code, KeyCode::Char('h' | 'w'))
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+            && !key.modifiers.contains(KeyModifiers::ALT)
+}
+
+fn search_key_deletes_next_word(key: KeyEvent) -> bool {
+    matches!(key.code, KeyCode::Delete) && key.modifiers.contains(KeyModifiers::CONTROL)
+        || matches!(key.code, KeyCode::Char('d'))
+            && key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+}
+
+fn is_search_word_char(ch: char) -> bool {
+    ch.is_alphanumeric() || ch == '_'
+}
+
+fn previous_word_start(text: &str, cursor: usize) -> usize {
+    let chars = text.chars().collect::<Vec<_>>();
+    let mut index = cursor.min(chars.len());
+
+    while index > 0 && chars[index - 1].is_whitespace() {
+        index -= 1;
+    }
+    while index > 0 && !chars[index - 1].is_whitespace() && !is_search_word_char(chars[index - 1]) {
+        index -= 1;
+    }
+    while index > 0 && is_search_word_char(chars[index - 1]) {
+        index -= 1;
+    }
+
+    index
+}
+
+fn next_word_start(text: &str, cursor: usize) -> usize {
+    let chars = text.chars().collect::<Vec<_>>();
+    let mut index = cursor.min(chars.len());
+
+    while index < chars.len() && is_search_word_char(chars[index]) {
+        index += 1;
+    }
+    while index < chars.len() && !is_search_word_char(chars[index]) {
+        index += 1;
+    }
+
+    index
+}
+
+fn remove_char_range(text: &mut String, start_char: usize, end_char: usize) {
+    let start = char_to_byte_index(text, start_char);
+    let end = char_to_byte_index(text, end_char);
+    if start >= end {
+        return;
+    }
+    text.replace_range(start..end, "");
+}
+
+fn remove_word_before_cursor(text: &mut String, cursor: &mut usize) {
+    if *cursor == 0 {
+        return;
+    }
+    let start = previous_word_delete_start(text, *cursor);
+    remove_char_range(text, start, *cursor);
+    *cursor = start;
+}
+
 fn remove_char_before_cursor(text: &mut String, cursor: &mut usize) {
     if *cursor == 0 {
         return;
@@ -352,4 +462,50 @@ fn remove_char_at_cursor(text: &mut String, cursor: usize) {
     }
     let end = char_to_byte_index(text, cursor + 1);
     text.replace_range(start..end, "");
+}
+
+fn previous_word_delete_start(text: &str, cursor: usize) -> usize {
+    let chars = text.chars().collect::<Vec<_>>();
+    let mut index = cursor.min(chars.len());
+
+    while index > 0 && !is_search_word_char(chars[index - 1]) {
+        index -= 1;
+    }
+    while index > 0 && is_search_word_char(chars[index - 1]) {
+        index -= 1;
+    }
+
+    index
+}
+
+fn remove_word_at_cursor(text: &mut String, cursor: usize) {
+    let end = next_word_delete_end(text, cursor);
+    remove_char_range(text, cursor, end);
+}
+
+fn next_word_delete_end(text: &str, cursor: usize) -> usize {
+    let chars = text.chars().collect::<Vec<_>>();
+    let mut index = cursor.min(chars.len());
+    if index >= chars.len() {
+        return chars.len();
+    }
+
+    if is_search_word_char(chars[index]) {
+        while index < chars.len() && is_search_word_char(chars[index]) {
+            index += 1;
+        }
+        while index < chars.len() && !is_search_word_char(chars[index]) {
+            index += 1;
+        }
+        return index;
+    }
+
+    while index < chars.len() && !is_search_word_char(chars[index]) {
+        index += 1;
+    }
+    while index < chars.len() && is_search_word_char(chars[index]) {
+        index += 1;
+    }
+
+    index
 }

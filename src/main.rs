@@ -9,9 +9,15 @@ use crate::app::App;
 use anyhow::Result;
 use crossterm::{
     cursor::SetCursorStyle,
-    event::{self, Event},
+    event::{
+        self, Event, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+        PushKeyboardEnhancementFlags,
+    },
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+        supports_keyboard_enhancement,
+    },
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{
@@ -36,6 +42,18 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, event::EnableMouseCapture)?;
+    if matches!(supports_keyboard_enhancement(), Ok(true)) {
+        // Ctrl+Backspace and similar modified editing keys need the kitty keyboard
+        // protocol's "all keys as escape codes" mode to stay distinguishable.
+        execute!(
+            stdout,
+            PushKeyboardEnhancementFlags(
+                KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                    | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
+                    | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
+            )
+        )?;
+    }
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
@@ -48,6 +66,7 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
     execute!(
         terminal.backend_mut(),
         SetCursorStyle::DefaultUserShape,
+        PopKeyboardEnhancementFlags,
         LeaveAlternateScreen,
         event::DisableMouseCapture
     )?;
