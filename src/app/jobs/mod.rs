@@ -113,6 +113,7 @@ pub(super) struct SearchBuild {
     pub token: u64,
     pub cwd: PathBuf,
     pub scope: SearchScope,
+    pub show_hidden: bool,
     pub result: Result<Arc<Vec<SearchCandidate>>, String>,
 }
 
@@ -121,6 +122,7 @@ pub(super) struct SearchRequest {
     pub token: u64,
     pub cwd: PathBuf,
     pub scope: SearchScope,
+    pub show_hidden: bool,
 }
 
 #[derive(Debug)]

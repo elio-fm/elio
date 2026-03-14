@@ -28,6 +28,7 @@ struct SearchState {
 pub(in crate::app::jobs) struct SearchJobKey {
     pub(in crate::app::jobs) cwd: PathBuf,
     pub(in crate::app::jobs) scope: SearchScope,
+    pub(in crate::app::jobs) show_hidden: bool,
 }
 
 impl SearchPool {
@@ -56,7 +57,7 @@ impl SearchPool {
                     let started_at = Instant::now();
                     let result = crate::fs::search::collect_candidates(
                         &request.cwd,
-                        true,
+                        request.show_hidden,
                         request.scope.candidate_scope(),
                     )
                     .map(Arc::new)
@@ -68,6 +69,7 @@ impl SearchPool {
                             token: request.token,
                             cwd: request.cwd,
                             scope: request.scope,
+                            show_hidden: request.show_hidden,
                             result,
                         }))
                         .is_err()
@@ -161,6 +163,7 @@ impl SearchJobKey {
         Self {
             cwd: request.cwd.clone(),
             scope: request.scope,
+            show_hidden: request.show_hidden,
         }
     }
 }

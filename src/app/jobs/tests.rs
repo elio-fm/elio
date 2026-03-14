@@ -56,17 +56,20 @@ fn search_pool_replaces_pending_request_with_latest_distinct_job() {
         token: 1,
         cwd: PathBuf::from("/tmp/a"),
         scope: SearchScope::Files,
+        show_hidden: false,
     }));
     assert!(scheduler.submit_search(SearchRequest {
         token: 2,
         cwd: PathBuf::from("/tmp/b"),
         scope: SearchScope::Files,
+        show_hidden: false,
     }));
     assert_eq!(
         scheduler.snapshot().search_pending,
         Some(SearchJobKey {
             cwd: PathBuf::from("/tmp/b"),
             scope: SearchScope::Files,
+            show_hidden: false,
         })
     );
 }
@@ -227,6 +230,7 @@ fn scheduler_reports_pending_work_when_jobs_are_queued() {
         token: 1,
         cwd: PathBuf::from("/tmp/a"),
         scope: SearchScope::Files,
+        show_hidden: false,
     }));
     assert!(scheduler.has_pending_work());
 }

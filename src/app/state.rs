@@ -96,6 +96,7 @@ pub(super) struct SearchOverlay {
 pub(super) struct SearchCache {
     pub(super) cwd: PathBuf,
     pub(super) scope: SearchScope,
+    pub(super) show_hidden: bool,
     pub(super) candidates: Arc<Vec<SearchCandidate>>,
 }
 

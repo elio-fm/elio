@@ -256,3 +256,45 @@ fn reload_restores_latest_remembered_view_state() {
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[test]
+fn same_directory_reselect_updates_pending_load_instead_of_dropping_it() {
+    let root = temp_path("same-dir-reselect-pending");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let beta = root.join("beta.txt");
+    fs::write(&beta, "beta").expect("failed to write beta");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.directory_runtime.pending_load = Some(PendingDirectoryLoad {
+        token: 99,
+        target_cwd: app.cwd.clone(),
+        previous_cwd: app.cwd.clone(),
+        previous_selected_path: app.selected_entry().map(|entry| entry.path.clone()),
+        previous_selection_name: None,
+        reselect_path: None,
+        history_mode: DirectoryHistoryMode::None,
+        refresh_search: false,
+        completion: DirectoryLoadCompletion::Keep,
+    });
+
+    app.set_dir_transition(
+        root.clone(),
+        DirectoryHistoryMode::PushCurrent,
+        Some(beta.clone()),
+        DirectoryLoadCompletion::Status("Located beta.txt".to_string()),
+    )
+    .expect("same-directory reselect should update the pending load");
+
+    let load = app
+        .directory_runtime
+        .pending_load
+        .as_ref()
+        .expect("pending load should remain queued");
+    assert_eq!(load.reselect_path.as_deref(), Some(beta.as_path()));
+    match &load.completion {
+        DirectoryLoadCompletion::Status(status) => assert_eq!(status, "Located beta.txt"),
+        other => panic!("expected status completion, got {other:?}"),
+    }
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}

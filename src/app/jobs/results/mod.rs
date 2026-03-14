@@ -51,7 +51,10 @@ impl App {
                     dirty |= self.apply_image_prepare_build(build);
                 }
                 JobResult::Search(build) => {
-                    if build.token != self.search_token || build.cwd != self.cwd {
+                    if build.token != self.search_token
+                        || build.cwd != self.cwd
+                        || build.show_hidden != self.show_hidden
+                    {
                         continue;
                     }
 
@@ -63,6 +66,7 @@ impl App {
                             self.search_cache = Some(SearchCache {
                                 cwd: build.cwd,
                                 scope: build.scope,
+                                show_hidden: build.show_hidden,
                                 candidates: candidates.clone(),
                             });
                             if let Some(search) = &mut self.search

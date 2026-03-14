@@ -35,8 +35,8 @@ fn opening_search_restarts_index_when_cache_missing_even_if_loading() {
 }
 
 #[test]
-fn opening_search_uses_hidden_candidates_even_when_browser_hides_dotfiles() {
-    let root = temp_path("hidden-cache");
+fn opening_search_ignores_hidden_cache_when_browser_hides_dotfiles() {
+    let root = temp_path("hidden-cache-mismatch");
     fs::create_dir_all(root.join(".hidden-root/needle")).expect("failed to create temp tree");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
@@ -44,6 +44,7 @@ fn opening_search_uses_hidden_candidates_even_when_browser_hides_dotfiles() {
     app.search_cache = Some(SearchCache {
         cwd: root.clone(),
         scope: SearchScope::Folders,
+        show_hidden: true,
         candidates: Arc::new(vec![crate::fs::search::SearchCandidate {
             path: root.join(".hidden-root/needle"),
             name: "needle".to_string(),
@@ -57,11 +58,8 @@ fn opening_search_uses_hidden_candidates_even_when_browser_hides_dotfiles() {
     app.open_fuzzy_finder(SearchScope::Folders)
         .expect("failed to open search");
 
-    assert_eq!(app.search_candidate_count(), 1);
-    assert_eq!(
-        app.search_rows(10).first().map(|row| row.relative.as_str()),
-        Some(".hidden-root/needle")
-    );
+    assert_eq!(app.search_candidate_count(), 0);
+    assert!(app.search_is_loading());
 
     fs::remove_dir_all(root).expect("failed to remove temp tree");
 }
@@ -277,8 +275,8 @@ fn search_query_terminal_fallback_word_delete_bindings_work() {
     assert_eq!(app.search_query_cursor(), 4);
 
     app.handle_search_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL))
-        .expect("ctrl-d should work as a delete fallback");
-    assert_eq!(app.search_query(), "foo ");
+        .expect("ctrl-d should be ignored");
+    assert_eq!(app.search_query(), "foo baz");
     assert_eq!(app.search_query_cursor(), 4);
 
     if let Some(search) = &mut app.search {
@@ -324,6 +322,54 @@ fn search_rows_ignore_stale_match_indexes() {
     });
 
     assert!(app.search_rows(10).is_empty());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn confirm_search_selection_selects_file_already_in_current_directory() {
+    let root = temp_path("search-select-current-file");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let alpha = root.join("alpha.txt");
+    let beta = root.join("beta.txt");
+    fs::write(&alpha, "alpha").expect("failed to write alpha");
+    fs::write(&beta, "beta").expect("failed to write beta");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    assert_eq!(
+        app.selected_entry().map(|entry| entry.path.as_path()),
+        Some(alpha.as_path())
+    );
+    app.search = Some(SearchOverlay {
+        scope: SearchScope::Files,
+        query: "beta".to_string(),
+        query_cursor: 4,
+        candidates: Arc::new(vec![crate::fs::search::SearchCandidate {
+            path: beta.clone(),
+            name: "beta.txt".to_string(),
+            name_key: "beta.txt".to_string(),
+            relative: "beta.txt".to_string(),
+            relative_key: "beta.txt".to_string(),
+            is_dir: false,
+        }]),
+        matches: vec![0],
+        cached_matches: HashMap::from([(String::new(), vec![0])]),
+        selected: 0,
+        scroll: 0,
+        loading: false,
+        error: None,
+    });
+
+    app.confirm_search_selection()
+        .expect("search selection should succeed");
+
+    assert!(app.search.is_none());
+    assert_eq!(app.cwd, root);
+    assert_eq!(
+        app.selected_entry().map(|entry| entry.path.as_path()),
+        Some(beta.as_path())
+    );
+    assert_eq!(app.status_message(), "Located beta.txt");
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

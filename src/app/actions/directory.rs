@@ -197,6 +197,12 @@ impl App {
         }
         let normalized = path.canonicalize().unwrap_or(path);
         if normalized == self.cwd && self.directory_runtime.pending_load.is_none() {
+            if let Some(path) = reselect_path.as_ref()
+                && self.reselect_visible_entry(path)
+            {
+                self.apply_directory_completion(completion);
+                return Ok(());
+            }
             self.status = format!("Already in {}", self.cwd.display());
             return Ok(());
         }
@@ -206,6 +212,12 @@ impl App {
             .as_ref()
             .is_some_and(|load| load.target_cwd == normalized)
         {
+            if let Some(load) = self.directory_runtime.pending_load.as_mut() {
+                if let Some(path) = reselect_path {
+                    load.reselect_path = Some(path);
+                }
+                load.completion = completion;
+            }
             self.status = format!("Already opening {}", normalized.display());
             return Ok(());
         }
@@ -226,6 +238,23 @@ impl App {
             refresh_search: false,
             completion,
         })
+    }
+
+    fn reselect_visible_entry(&mut self, path: &Path) -> bool {
+        let Some(index) = self.entries.iter().position(|entry| entry.path == path) else {
+            return false;
+        };
+        self.set_selected(index);
+        self.clear_wheel_scroll();
+        true
+    }
+
+    fn apply_directory_completion(&mut self, completion: DirectoryLoadCompletion) {
+        match completion {
+            DirectoryLoadCompletion::Keep => {}
+            DirectoryLoadCompletion::Clear => self.status.clear(),
+            DirectoryLoadCompletion::Status(status) => self.status = status,
+        }
     }
 
     pub(in crate::app) fn go_parent(&mut self) -> Result<()> {

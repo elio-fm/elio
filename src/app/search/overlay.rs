@@ -70,7 +70,11 @@ impl App {
         let cached = self
             .search_cache
             .as_ref()
-            .filter(|cache| cache.cwd == self.cwd && cache.scope == scope)
+            .filter(|cache| {
+                cache.cwd == self.cwd
+                    && cache.scope == scope
+                    && cache.show_hidden == self.show_hidden
+            })
             .map(|cache| cache.candidates.clone());
         let candidates = cached.clone().unwrap_or_else(|| Arc::new(Vec::new()));
         let base_matches = (0..candidates.len()).collect::<Vec<_>>();
@@ -387,9 +391,8 @@ fn search_key_deletes_previous_word(key: KeyEvent) -> bool {
 fn search_key_deletes_next_word(key: KeyEvent) -> bool {
     matches!(key.code, KeyCode::Delete) && key.modifiers.contains(KeyModifiers::CONTROL)
         || matches!(key.code, KeyCode::Char('d'))
-            && key
-                .modifiers
-                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+            && key.modifiers.contains(KeyModifiers::ALT)
+            && !key.modifiers.contains(KeyModifiers::CONTROL)
 }
 
 fn is_search_word_char(ch: char) -> bool {
