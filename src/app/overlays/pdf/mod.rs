@@ -239,6 +239,10 @@ impl App {
     }
 
     pub(crate) fn preview_overlay_placeholder_message(&self) -> Option<String> {
+        if self.preview_prefers_static_image_surface() && !self.preview_uses_image_overlay() {
+            return self.static_image_overlay_placeholder_message();
+        }
+
         if !self.preview_prefers_pdf_surface() || self.preview_uses_image_overlay() {
             return None;
         }

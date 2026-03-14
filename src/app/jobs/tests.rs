@@ -7,6 +7,7 @@ fn image_prepare_request(name: &str) -> ImagePrepareRequest {
         modified: None,
         target_width_px: 640,
         target_height_px: 480,
+        ffmpeg_available: true,
         magick_available: true,
     }
 }

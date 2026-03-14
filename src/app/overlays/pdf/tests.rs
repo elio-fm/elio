@@ -92,6 +92,36 @@ fn write_test_raster_image(path: &Path, format: ImageFormat, width_px: u32, heig
         .expect("failed to write raster test image");
 }
 
+fn write_test_oriented_jpeg(path: &Path, width_px: u32, height_px: u32, orientation: u16) {
+    write_test_raster_image(path, ImageFormat::Jpeg, width_px, height_px);
+
+    let jpeg = fs::read(path).expect("failed to read jpeg placeholder");
+    assert!(
+        jpeg.starts_with(&[0xff, 0xd8]),
+        "test jpeg should start with SOI"
+    );
+
+    let mut exif = Vec::with_capacity(36);
+    exif.extend_from_slice(&[0xff, 0xe1, 0x00, 0x22]);
+    exif.extend_from_slice(b"Exif\0\0");
+    exif.extend_from_slice(b"II");
+    exif.extend_from_slice(&42_u16.to_le_bytes());
+    exif.extend_from_slice(&8_u32.to_le_bytes());
+    exif.extend_from_slice(&1_u16.to_le_bytes());
+    exif.extend_from_slice(&0x0112_u16.to_le_bytes());
+    exif.extend_from_slice(&3_u16.to_le_bytes());
+    exif.extend_from_slice(&1_u32.to_le_bytes());
+    exif.extend_from_slice(&orientation.to_le_bytes());
+    exif.extend_from_slice(&0_u16.to_le_bytes());
+    exif.extend_from_slice(&0_u32.to_le_bytes());
+
+    let mut oriented = Vec::with_capacity(jpeg.len() + exif.len());
+    oriented.extend_from_slice(&jpeg[..2]);
+    oriented.extend_from_slice(&exif);
+    oriented.extend_from_slice(&jpeg[2..]);
+    fs::write(path, oriented).expect("failed to write oriented jpeg");
+}
+
 fn write_test_svg_image(path: &Path, width_px: u32, height_px: u32) {
     fs::write(
         path,
@@ -295,18 +325,21 @@ fn refresh_preview_uses_blank_static_image_surface_preview_when_backend_enabled(
 
 #[test]
 fn preview_prefers_image_surface_for_supported_static_images_when_backend_enabled() {
-    for file_name in [
-        "demo.png",
-        "demo.jpg",
-        "demo.jpeg",
-        "demo.gif",
-        "demo.webp",
-        "demo.svg",
+    for (file_name, placeholder) in [
+        ("demo.png", None),
+        ("demo.jpg", None),
+        ("demo.jpeg", None),
+        ("demo.gif", None),
+        ("demo.webp", None),
+        ("demo.svg", None),
     ] {
         let (app, root) = build_selected_static_image_app("image-surface", file_name);
 
         assert!(app.preview_prefers_image_surface());
-        assert_eq!(app.preview_overlay_placeholder_message(), None);
+        assert_eq!(
+            app.preview_overlay_placeholder_message().as_deref(),
+            placeholder
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -400,6 +433,137 @@ fn current_small_jpeg_prepares_inline_for_immediate_overlay() {
 }
 
 #[test]
+fn current_large_jpeg_prepares_inline_when_ffmpeg_is_available() {
+    if !crate::app::overlays::inline_image::command_exists("ffmpeg") {
+        return;
+    }
+
+    let root = temp_root("image-inline-large-jpeg");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_terminal_image_support(&mut app);
+    app.pdf_preview.pdf_tools_available = true;
+
+    let path = root.join("photo.jpg");
+    write_test_raster_image(&path, ImageFormat::Jpeg, 3200, 1800);
+    set_single_test_entry(&mut app, &path);
+
+    let request = app
+        .active_static_image_overlay_request()
+        .expect("image request should be available");
+    match app.prepared_static_image_for_overlay(&request) {
+        crate::app::overlays::images::StaticImageOverlayPreparation::Ready(prepared) => {
+            assert_ne!(prepared.display_path, path);
+            assert_eq!(
+                prepared
+                    .display_path
+                    .extension()
+                    .and_then(|extension| extension.to_str()),
+                Some("png")
+            );
+            assert_eq!(
+                prepared.dimensions,
+                RenderedImageDimensions {
+                    width_px: 3200,
+                    height_px: 1800,
+                }
+            );
+        }
+        _ => panic!("large jpeg should prepare inline when ffmpeg is available"),
+    }
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn oriented_jpeg_fallback_preview_uses_exif_corrected_dimensions() {
+    let root = temp_root("image-oriented-jpeg-fallback");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("portrait.jpg");
+    write_test_oriented_jpeg(&path, 60, 30, 6);
+    let metadata = fs::metadata(&path).expect("jpeg metadata should exist");
+
+    let prepared = crate::app::overlays::images::prepare_static_image_asset(
+        &jobs::ImagePrepareRequest {
+            path: path.clone(),
+            size: metadata.len(),
+            modified: None,
+            target_width_px: 60,
+            target_height_px: 60,
+            ffmpeg_available: false,
+            magick_available: true,
+        },
+        || false,
+    )
+    .expect("oriented jpeg should prepare successfully");
+
+    assert_eq!(
+        prepared.dimensions,
+        RenderedImageDimensions {
+            width_px: 30,
+            height_px: 60,
+        }
+    );
+    assert_eq!(
+        image::ImageReader::open(&prepared.display_path)
+            .expect("prepared image should open")
+            .with_guessed_format()
+            .expect("prepared image format should be detected")
+            .into_dimensions()
+            .expect("prepared image dimensions should be readable"),
+        (30, 60)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn oriented_jpeg_ffmpeg_preview_uses_exif_corrected_dimensions() {
+    if !crate::app::overlays::inline_image::command_exists("ffmpeg") {
+        return;
+    }
+
+    let root = temp_root("image-oriented-jpeg-ffmpeg");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("portrait.jpg");
+    write_test_oriented_jpeg(&path, 60, 30, 6);
+    let metadata = fs::metadata(&path).expect("jpeg metadata should exist");
+
+    let prepared = crate::app::overlays::images::prepare_static_image_asset(
+        &jobs::ImagePrepareRequest {
+            path: path.clone(),
+            size: metadata.len(),
+            modified: None,
+            target_width_px: 60,
+            target_height_px: 60,
+            ffmpeg_available: true,
+            magick_available: true,
+        },
+        || false,
+    )
+    .expect("oriented jpeg should prepare successfully");
+
+    assert_eq!(
+        prepared.dimensions,
+        RenderedImageDimensions {
+            width_px: 30,
+            height_px: 60,
+        }
+    );
+    assert_eq!(
+        image::ImageReader::open(&prepared.display_path)
+            .expect("prepared image should open")
+            .with_guessed_format()
+            .expect("prepared image format should be detected")
+            .into_dimensions()
+            .expect("prepared image dimensions should be readable"),
+        (30, 60)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn extensionless_png_static_image_preparation_succeeds() {
     let (_app, root) = build_selected_extensionless_png_app("image-prepare-noext", "background");
     let path = root.join("background");
@@ -411,6 +575,7 @@ fn extensionless_png_static_image_preparation_succeeds() {
             modified: None,
             target_width_px: 768,
             target_height_px: 540,
+            ffmpeg_available: true,
             magick_available: true,
         },
         || false,
@@ -464,6 +629,7 @@ fn raster_static_images_use_png_display_paths() {
                 modified: None,
                 target_width_px: 768,
                 target_height_px: 540,
+                ffmpeg_available: true,
                 magick_available: true,
             },
             || false,
@@ -506,6 +672,7 @@ fn svg_static_images_are_normalized_to_cached_png_overlays() {
             modified: None,
             target_width_px: 768,
             target_height_px: 540,
+            ffmpeg_available: true,
             magick_available: true,
         },
         || false,
@@ -546,6 +713,7 @@ fn extensionless_svg_static_image_preparation_succeeds() {
             modified: None,
             target_width_px: 768,
             target_height_px: 540,
+            ffmpeg_available: true,
             magick_available: true,
         },
         || false,
@@ -586,6 +754,7 @@ fn oversized_png_static_images_use_source_file_for_overlay() {
             modified: None,
             target_width_px: 768,
             target_height_px: 540,
+            ffmpeg_available: true,
             magick_available: true,
         },
         || false,
@@ -619,6 +788,7 @@ fn oversized_extensionless_png_static_images_use_source_file_for_overlay() {
             modified: None,
             target_width_px: 768,
             target_height_px: 540,
+            ffmpeg_available: true,
             magick_available: true,
         },
         || false,

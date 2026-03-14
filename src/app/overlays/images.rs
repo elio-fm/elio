@@ -10,7 +10,9 @@ use ratatui::layout::Rect;
 use std::{
     collections::{HashMap, HashSet, VecDeque, hash_map::DefaultHasher},
     env, fs,
+    fs::File,
     hash::{Hash, Hasher},
+    io::Read,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     time::{Instant, SystemTime},
@@ -18,7 +20,8 @@ use std::{
 
 const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 24;
 const STATIC_IMAGE_PRELOAD_LIMIT: usize = 6;
-const STATIC_IMAGE_INLINE_PREPARE_MAX_BYTES: u64 = 512 * 1024;
+const STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES: u64 = 512 * 1024;
+const STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Clone, Debug, Default)]
 pub(in crate::app) struct ImagePreviewState {
@@ -29,6 +32,7 @@ pub(in crate::app) struct ImagePreviewState {
     pub(super) pending_prepares: HashSet<StaticImageKey>,
     displayed: Option<DisplayedStaticImagePreview>,
     activation_ready_at: Option<Instant>,
+    ffmpeg_available: Option<bool>,
     magick_available: Option<bool>,
 }
 
@@ -123,6 +127,31 @@ impl App {
         entry: &Entry,
     ) -> Option<&'static str> {
         static_image_detail_label(entry)
+    }
+
+    pub(in crate::app) fn static_image_overlay_placeholder_message(&self) -> Option<String> {
+        if !self.preview_prefers_static_image_surface() || self.preview_uses_image_overlay() {
+            return None;
+        }
+
+        let request = self.active_static_image_overlay_request()?;
+        let key = StaticImageKey::from_request(&request);
+        if self.image_preview.failed_images.contains(&key) {
+            return Some("Image preview unavailable".to_string());
+        }
+        if !self.image_selection_activation_ready() {
+            return None;
+        }
+        if self.static_image_can_prepare_inline_now(&request) {
+            return None;
+        }
+        if self.image_preview.dimensions.contains_key(&key) {
+            return None;
+        }
+        if self.image_preview.pending_prepares.contains(&key) {
+            return Some("Preparing image preview".to_string());
+        }
+        Some("Preparing image preview".to_string())
     }
 
     pub(in crate::app) fn active_static_image_overlay_request(
@@ -226,7 +255,7 @@ impl App {
         request: &StaticImageOverlayRequest,
     ) -> Option<PreparedStaticImage> {
         let format = static_image_format_for_path(&request.path)?;
-        if !should_prepare_static_image_inline(request, format) {
+        if !should_prepare_static_image_inline(request, format, self.ffmpeg_available()) {
             return None;
         }
 
@@ -247,11 +276,29 @@ impl App {
         })
     }
 
+    fn static_image_can_prepare_inline_now(&self, request: &StaticImageOverlayRequest) -> bool {
+        let Some(format) = static_image_format_for_path(&request.path) else {
+            return false;
+        };
+        let ffmpeg_available = self
+            .image_preview
+            .ffmpeg_available
+            .unwrap_or_else(|| command_exists("ffmpeg"));
+        should_prepare_static_image_inline(request, format, ffmpeg_available)
+    }
+
     fn magick_available(&mut self) -> bool {
         *self
             .image_preview
             .magick_available
             .get_or_insert_with(|| command_exists("magick"))
+    }
+
+    fn ffmpeg_available(&mut self) -> bool {
+        *self
+            .image_preview
+            .ffmpeg_available
+            .get_or_insert_with(|| command_exists("ffmpeg"))
     }
 
     pub(in crate::app) fn image_selection_activation_ready(&self) -> bool {
@@ -464,6 +511,7 @@ impl App {
             modified: request.modified,
             target_width_px: request.target_width_px,
             target_height_px: request.target_height_px,
+            ffmpeg_available: self.ffmpeg_available(),
             magick_available: self.magick_available(),
         }
     }
@@ -634,12 +682,32 @@ where
         return None;
     }
 
+    if request.ffmpeg_available
+        && should_render_raster_with_ffmpeg(format)
+        && render_raster_to_png_with_ffmpeg(
+            &request.path,
+            &cache_path,
+            target_width_px,
+            target_height_px,
+            &canceled,
+        )
+    {
+        return Some(PreparedStaticImageAsset {
+            display_path: cache_path,
+            dimensions: source_dimensions,
+        });
+    }
+
     let image = ImageReader::open(&request.path)
         .ok()?
         .with_guessed_format()
         .ok()?
         .decode()
         .ok()?;
+    if canceled() {
+        return None;
+    }
+    let image = apply_raster_orientation(image, read_exif_orientation(&request.path).unwrap_or(1));
     if canceled() {
         return None;
     }
@@ -666,14 +734,26 @@ fn static_image_render_cache_path(key: &StaticImageKey) -> Option<PathBuf> {
 fn should_prepare_static_image_inline(
     request: &StaticImageOverlayRequest,
     format: StaticImageFormat,
+    ffmpeg_available: bool,
 ) -> bool {
     match format {
         StaticImageFormat::Png => true,
         StaticImageFormat::Jpeg | StaticImageFormat::Gif | StaticImageFormat::Webp => {
-            request.size <= STATIC_IMAGE_INLINE_PREPARE_MAX_BYTES
+            if ffmpeg_available {
+                request.size <= STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES
+            } else {
+                request.size <= STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES
+            }
         }
         StaticImageFormat::Svg => false,
     }
+}
+
+fn should_render_raster_with_ffmpeg(format: StaticImageFormat) -> bool {
+    matches!(
+        format,
+        StaticImageFormat::Jpeg | StaticImageFormat::Gif | StaticImageFormat::Webp
+    )
 }
 
 fn static_image_format_for_entry(entry: &Entry) -> Option<StaticImageFormat> {
@@ -718,17 +798,155 @@ fn render_svg_to_png(
     .is_some_and(|status| status.success() && output_path.exists())
 }
 
+fn render_raster_to_png_with_ffmpeg(
+    input_path: &Path,
+    output_path: &Path,
+    target_width_px: u32,
+    target_height_px: u32,
+    canceled: &impl Fn() -> bool,
+) -> bool {
+    if let Some(parent) = output_path.parent()
+        && fs::create_dir_all(parent).is_err()
+    {
+        return false;
+    }
+
+    run_cancelable_command(
+        Command::new("ffmpeg")
+            .arg("-v")
+            .arg("error")
+            .arg("-y")
+            .arg("-i")
+            .arg(input_path)
+            .arg("-frames:v")
+            .arg("1")
+            .arg("-vf")
+            .arg(format!(
+                "scale=w={}:h={}:force_original_aspect_ratio=decrease",
+                target_width_px.max(1),
+                target_height_px.max(1)
+            ))
+            .arg(output_path)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null()),
+        canceled,
+    )
+    .is_some_and(|status| status.success() && output_path.exists())
+}
+
 fn read_raster_dimensions(path: &Path) -> Option<RenderedImageDimensions> {
-    let (width_px, height_px) = ImageReader::open(path)
+    let (mut width_px, mut height_px) = ImageReader::open(path)
         .ok()?
         .with_guessed_format()
         .ok()?
         .into_dimensions()
         .ok()?;
+    if exif_orientation_swaps_dimensions(read_exif_orientation(path).unwrap_or(1)) {
+        std::mem::swap(&mut width_px, &mut height_px);
+    }
     (width_px > 0 && height_px > 0).then_some(RenderedImageDimensions {
         width_px,
         height_px,
     })
+}
+
+fn read_exif_orientation(path: &Path) -> Option<u16> {
+    let mut file = File::open(path).ok()?;
+    let mut soi = [0_u8; 2];
+    file.read_exact(&mut soi).ok()?;
+    if soi != [0xff, 0xd8] {
+        return None;
+    }
+
+    loop {
+        let mut prefix = [0_u8; 1];
+        file.read_exact(&mut prefix).ok()?;
+        while prefix[0] != 0xff {
+            file.read_exact(&mut prefix).ok()?;
+        }
+
+        let mut marker = [0_u8; 1];
+        file.read_exact(&mut marker).ok()?;
+        while marker[0] == 0xff {
+            file.read_exact(&mut marker).ok()?;
+        }
+
+        match marker[0] {
+            0xd8 | 0x01 => continue,
+            0xd9 | 0xda => return None,
+            _ => {
+                let mut length = [0_u8; 2];
+                file.read_exact(&mut length).ok()?;
+                let payload_len = usize::from(u16::from_be_bytes(length)).checked_sub(2)?;
+                let mut payload = vec![0_u8; payload_len];
+                file.read_exact(&mut payload).ok()?;
+                if marker[0] == 0xe1 && payload.starts_with(b"Exif\0\0") {
+                    return parse_exif_orientation(&payload[6..]);
+                }
+            }
+        }
+    }
+}
+
+fn parse_exif_orientation(tiff: &[u8]) -> Option<u16> {
+    if tiff.len() < 8 {
+        return None;
+    }
+    let little_endian = match &tiff[..2] {
+        b"II" => true,
+        b"MM" => false,
+        _ => return None,
+    };
+    let read_u16 = |offset: usize| -> Option<u16> {
+        let bytes: [u8; 2] = tiff.get(offset..offset + 2)?.try_into().ok()?;
+        Some(if little_endian {
+            u16::from_le_bytes(bytes)
+        } else {
+            u16::from_be_bytes(bytes)
+        })
+    };
+    let read_u32 = |offset: usize| -> Option<u32> {
+        let bytes: [u8; 4] = tiff.get(offset..offset + 4)?.try_into().ok()?;
+        Some(if little_endian {
+            u32::from_le_bytes(bytes)
+        } else {
+            u32::from_be_bytes(bytes)
+        })
+    };
+
+    if read_u16(2)? != 42 {
+        return None;
+    }
+    let ifd_offset = read_u32(4)? as usize;
+    let entry_count = usize::from(read_u16(ifd_offset)?);
+    let mut entry_offset = ifd_offset + 2;
+    for _ in 0..entry_count {
+        let tag = read_u16(entry_offset)?;
+        let field_type = read_u16(entry_offset + 2)?;
+        let count = read_u32(entry_offset + 4)?;
+        if tag == 0x0112 && field_type == 3 && count >= 1 {
+            return read_u16(entry_offset + 8);
+        }
+        entry_offset += 12;
+    }
+    None
+}
+
+fn exif_orientation_swaps_dimensions(orientation: u16) -> bool {
+    matches!(orientation, 5..=8)
+}
+
+fn apply_raster_orientation(image: DynamicImage, orientation: u16) -> DynamicImage {
+    match orientation {
+        2 => image.fliph(),
+        3 => image.rotate180(),
+        4 => image.flipv(),
+        5 => image.rotate90().fliph(),
+        6 => image.rotate90(),
+        7 => image.rotate90().flipv(),
+        8 => image.rotate270(),
+        _ => image,
+    }
 }
 
 fn shrink_image_to_fit(
