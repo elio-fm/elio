@@ -8,6 +8,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 use std::{env, path::Path};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 pub(super) fn render_empty_state(frame: &mut Frame<'_>, area: Rect, label: &str, palette: Palette) {
     fill_area(frame, area, palette.panel_alt, palette.muted);
@@ -207,7 +208,7 @@ pub(super) fn path_is_active(current: &Path, candidate: &Path) -> bool {
 
 fn truncate_path_tail(path: &str, max_chars: usize) -> String {
     let path = sanitize_terminal_text(path);
-    if path.chars().count() <= max_chars {
+    if display_width(&path) <= max_chars {
         return path;
     }
 
@@ -229,13 +230,13 @@ fn truncate_path_tail(path: &str, max_chars: usize) -> String {
     }
 
     let last = parts.last().copied().unwrap_or_default();
-    let reserve = prefix.chars().count() + last.chars().count() + 4;
+    let reserve = display_width(prefix) + display_width(last) + 4;
     if reserve >= max_chars {
         return truncate_middle(&path, max_chars);
     }
 
     let mut result = format!("{prefix}…/{last}");
-    if result.chars().count() > max_chars {
+    if display_width(&result) > max_chars {
         result = truncate_middle(&path, max_chars);
     }
     result
@@ -243,8 +244,7 @@ fn truncate_path_tail(path: &str, max_chars: usize) -> String {
 
 pub(super) fn truncate_middle(text: &str, max_chars: usize) -> String {
     let text = sanitize_terminal_text(text);
-    let chars = text.chars().collect::<Vec<_>>();
-    if chars.len() <= max_chars {
+    if display_width(&text) <= max_chars {
         return text;
     }
     if max_chars <= 1 {
@@ -253,25 +253,61 @@ pub(super) fn truncate_middle(text: &str, max_chars: usize) -> String {
 
     let head = max_chars / 2;
     let tail = max_chars.saturating_sub(head + 1);
-    let start = chars.iter().take(head).collect::<String>();
-    let end = chars
-        .iter()
-        .skip(chars.len().saturating_sub(tail))
-        .collect::<String>();
+    let start = take_prefix_width(&text, head);
+    let end = take_suffix_width(&text, tail);
     format!("{start}…{end}")
 }
 
 pub(super) fn clamp_label(label: &str, max_chars: usize) -> String {
     let label = sanitize_terminal_text(label);
-    let count = label.chars().count();
-    if count <= max_chars {
+    if display_width(&label) <= max_chars {
         return label;
     }
     if max_chars <= 1 {
         return "…".to_string();
     }
-    let head = label.chars().take(max_chars - 1).collect::<String>();
+    let head = take_prefix_width(&label, max_chars - 1);
     format!("{head}…")
+}
+
+pub(super) fn display_width(text: &str) -> usize {
+    UnicodeWidthStr::width(text)
+}
+
+fn take_prefix_width(text: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+
+    let mut result = String::new();
+    let mut width = 0usize;
+    for ch in text.chars() {
+        let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if width + ch_width > max_width {
+            break;
+        }
+        result.push(ch);
+        width += ch_width;
+    }
+    result
+}
+
+fn take_suffix_width(text: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+
+    let mut result = Vec::new();
+    let mut width = 0usize;
+    for ch in text.chars().rev() {
+        let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if width + ch_width > max_width {
+            break;
+        }
+        result.push(ch);
+        width += ch_width;
+    }
+    result.into_iter().rev().collect()
 }
 
 pub(super) fn inner_with_padding(rect: Rect) -> Rect {

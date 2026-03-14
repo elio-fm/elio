@@ -783,7 +783,7 @@ fn render_compact_list_row(
 }
 
 fn pad_left(mut text: String, width: usize) -> String {
-    let visible = text.chars().count();
+    let visible = helpers::display_width(&text);
     if visible >= width {
         return helpers::clamp_label(&text, width);
     }
@@ -792,9 +792,9 @@ fn pad_left(mut text: String, width: usize) -> String {
 }
 
 fn pad_right(text: String, width: usize) -> String {
-    let visible = text.chars().count();
+    let visible = helpers::display_width(&text);
     if visible >= width {
-        return text;
+        return helpers::clamp_label(&text, width);
     }
     format!("{text}{}", " ".repeat(width - visible))
 }
@@ -1061,6 +1061,57 @@ mod tests {
         assert!(
             rendered.contains("2 items"),
             "expected visible directory rows to show cached item counts, got: {rendered:?}"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn compact_list_rows_keep_metadata_visible_for_wide_names() {
+        let root = temp_path("wide-list-metadata");
+        let series = root.join("北斗の拳究極版北斗の拳究極版北斗の拳究極版北斗の拳究極版");
+        fs::create_dir_all(&series).expect("failed to create series folder");
+        for index in 0..10 {
+            fs::write(series.join(format!("chapter-{index}.txt")), "x")
+                .expect("failed to write child file");
+        }
+
+        let epub_path =
+            root.join("北斗の拳究極版北斗の拳究極版北斗の拳究極版北斗の拳究極版13.epub");
+        let epub = fs::File::create(&epub_path).expect("failed to create epub");
+        epub.set_len(13_000_000).expect("failed to size epub");
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+
+        draw_ui(&mut terminal, &mut app);
+        wait_for_directory_counts(&mut app);
+        draw_ui(&mut terminal, &mut app);
+
+        let rows = (0..terminal.backend().buffer().area.height)
+            .map(|y| row_text(terminal.backend().buffer(), y))
+            .collect::<Vec<_>>();
+        let rendered = rows.join("\n");
+        let folder_row = rows
+            .iter()
+            .find(|row| row.contains("10 items"))
+            .expect("folder row should keep its item count visible");
+        let epub_row = rows
+            .iter()
+            .find(|row| row.contains("13 MB"))
+            .expect("epub row should keep its size visible");
+
+        assert!(
+            folder_row.contains("ago"),
+            "expected wide directory rows to keep modified timestamps visible, got: {folder_row:?}"
+        );
+        assert!(
+            epub_row.contains("ago"),
+            "expected wide epub rows to keep modified timestamps visible, got: {epub_row:?}"
+        );
+        assert!(
+            rendered.contains("10 items") && rendered.contains("13 MB"),
+            "expected wide-name rows to keep full metadata visible, got: {rendered:?}"
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
