@@ -154,6 +154,64 @@ fn trash_dir(home: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Reads the `DeletionDate` from a `.trashinfo` file inside `info_dir` for the given file name.
+fn read_trash_deletion_date(info_dir: &Path, name: &str) -> Option<SystemTime> {
+    let info_path = info_dir.join(format!("{name}.trashinfo"));
+    let content = fs::read_to_string(info_path).ok()?;
+    for line in content.lines() {
+        if let Some(date_str) = line.trim().strip_prefix("DeletionDate=") {
+            return parse_trash_deletion_date(date_str);
+        }
+    }
+    None
+}
+
+/// Parses a `DeletionDate` value from a `.trashinfo` file into a `SystemTime`.
+///
+/// The format is `YYYY-MM-DDTHH:MM:SS` in local time. Because Rust's standard library has no
+/// timezone support, the timestamp is treated as UTC for the purpose of computing a relative age
+/// ("trashed N days ago"). The error introduced by ignoring the UTC offset is at most a few hours
+/// and is imperceptible when displaying coarse relative times (days, weeks, months).
+fn parse_trash_deletion_date(s: &str) -> Option<SystemTime> {
+    let s = s.trim();
+    if s.len() < 19 {
+        return None;
+    }
+
+    let year: i32 = s[0..4].parse().ok()?;
+    let month: u32 = s[5..7].parse().ok()?;
+    let day: u32 = s[8..10].parse().ok()?;
+    let hour: u32 = s[11..13].parse().ok()?;
+    let minute: u32 = s[14..16].parse().ok()?;
+    let second: u32 = s[17..19].parse().ok()?;
+
+    if !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+        || hour > 23
+        || minute > 59
+        || second > 59
+    {
+        return None;
+    }
+
+    // Gregorian calendar date → Julian Day Number (standard algorithm).
+    let a = (14i64 - month as i64) / 12;
+    let y = year as i64 + 4800 - a;
+    let m = month as i64 + 12 * a - 3;
+    let jdn =
+        day as i64 + (153 * m + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32_045;
+
+    // JDN of 1970-01-01 is 2 440 588.
+    let days = jdn - 2_440_588;
+    if days < 0 {
+        return None;
+    }
+
+    let secs =
+        days as u64 * 86_400 + hour as u64 * 3_600 + minute as u64 * 60 + second as u64;
+    Some(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+}
+
 fn read_entries(dir: &Path, show_hidden: bool) -> Result<Vec<Entry>> {
     let mut entries = Vec::new();
     for item in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
@@ -194,6 +252,21 @@ pub(crate) fn load_directory_snapshot(
     sort_mode: SortMode,
 ) -> Result<DirectorySnapshot> {
     let mut entries = read_entries(dir, show_hidden)?;
+
+    // If this is a freedesktop trash `files/` directory (recognised by the presence of a
+    // sibling `info/` directory), replace each entry's modification time with the deletion
+    // date stored in the corresponding `.trashinfo` file so the listing shows "trashed X ago"
+    // rather than the file's own last-modified timestamp.
+    if dir.file_name().is_some_and(|n| n == "files") {
+        if let Some(info_dir) = dir.parent().map(|p| p.join("info")).filter(|p| p.is_dir()) {
+            for entry in &mut entries {
+                if let Some(date) = read_trash_deletion_date(&info_dir, &entry.name) {
+                    entry.modified = Some(date);
+                }
+            }
+        }
+    }
+
     sort_entries(&mut entries, sort_mode);
     let fingerprint = entries_fingerprint(&entries);
     Ok(DirectorySnapshot {
@@ -426,6 +499,58 @@ mod tests {
         let second = scan_directory_fingerprint(&root, false).expect("failed to fingerprint");
 
         assert_ne!(first, second);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn trash_deletion_date_is_parsed_to_unix_timestamp() {
+        // 2024-03-15T10:30:00 UTC = 1710498600 seconds since epoch
+        let time = parse_trash_deletion_date("2024-03-15T10:30:00").expect("should parse");
+        let secs = time
+            .duration_since(UNIX_EPOCH)
+            .expect("should be after epoch")
+            .as_secs();
+        assert_eq!(secs, 1_710_498_600);
+    }
+
+    #[test]
+    fn trash_deletion_date_rejects_invalid_input() {
+        assert!(parse_trash_deletion_date("").is_none());
+        assert!(parse_trash_deletion_date("not-a-date").is_none());
+        assert!(parse_trash_deletion_date("2024-13-01T00:00:00").is_none()); // month 13
+        assert!(parse_trash_deletion_date("2024-00-01T00:00:00").is_none()); // month 0
+    }
+
+    #[test]
+    fn trash_snapshot_uses_deletion_date_from_trashinfo() {
+        let root = temp_path("trash-snapshot");
+        let files_dir = root.join("files");
+        let info_dir = root.join("info");
+        fs::create_dir_all(&files_dir).expect("failed to create files dir");
+        fs::create_dir_all(&info_dir).expect("failed to create info dir");
+        fs::write(files_dir.join("report.pdf"), "dummy").expect("failed to write trashed file");
+        fs::write(
+            info_dir.join("report.pdf.trashinfo"),
+            "[Trash Info]\nPath=/home/user/report.pdf\nDeletionDate=2024-03-15T10:30:00\n",
+        )
+        .expect("failed to write trashinfo");
+
+        let snapshot =
+            load_directory_snapshot(&files_dir, false, SortMode::Name).expect("should load");
+        let entry = snapshot
+            .entries
+            .iter()
+            .find(|e| e.name == "report.pdf")
+            .expect("entry should be present");
+
+        let secs = entry
+            .modified
+            .expect("modified should be set")
+            .duration_since(UNIX_EPOCH)
+            .expect("should be after epoch")
+            .as_secs();
+        assert_eq!(secs, 1_710_498_600);
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
