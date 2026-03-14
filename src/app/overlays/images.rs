@@ -757,7 +757,7 @@ fn should_render_raster_with_ffmpeg(format: StaticImageFormat) -> bool {
 }
 
 fn static_image_format_for_entry(entry: &Entry) -> Option<StaticImageFormat> {
-    crate::file_info::inspect_path(&entry.path, entry.kind)
+    crate::file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified)
         .specific_type_label
         .and_then(StaticImageFormat::from_label)
 }

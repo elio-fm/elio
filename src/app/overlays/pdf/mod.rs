@@ -1074,7 +1074,7 @@ impl PdfDocumentKey {
 }
 
 fn is_pdf_entry(entry: &Entry) -> bool {
-    file_info::inspect_path(&entry.path, entry.kind)
+    file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified)
         .preview
         .document_format
         == Some(DocumentFormat::Pdf)

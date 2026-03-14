@@ -1130,7 +1130,13 @@ fn builtin_classify_entry(entry: &Entry) -> FileClass {
         return class;
     }
 
-    let class = builtin_classify_path(&entry.path, entry.kind);
+    let class = file_info::inspect_path_cached(
+        &entry.path,
+        entry.kind,
+        entry.size,
+        entry.modified,
+    )
+    .builtin_class;
     entry_class_cache()
         .lock()
         .expect("entry class cache lock")

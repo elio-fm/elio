@@ -9,12 +9,12 @@ use ratatui::{
 };
 
 pub(crate) fn should_build_preview_in_background(entry: &Entry) -> bool {
-    let facts = file_info::inspect_path(&entry.path, entry.kind);
+    let facts = file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified);
     facts.builtin_class == FileClass::Archive || facts.preview.document_format.is_some()
 }
 
 pub(crate) fn loading_preview_for(entry: &Entry) -> PreviewContent {
-    let facts = file_info::inspect_path(&entry.path, entry.kind);
+    let facts = file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified);
     let detail = facts
         .specific_type_label
         .or_else(|| {
@@ -49,7 +49,7 @@ pub(crate) fn build_preview(entry: &Entry) -> PreviewContent {
         return directory::build_directory_preview(entry);
     }
 
-    let facts = file_info::inspect_path(&entry.path, entry.kind);
+    let facts = file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified);
     let preview_spec = facts.preview;
     let type_detail = facts.specific_type_label;
     if preview_spec.kind == file_info::PreviewKind::Iso

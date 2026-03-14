@@ -4,7 +4,11 @@ use super::{
     types::shell_file_facts,
 };
 use crate::app::{EntryKind, FileClass};
-use std::{fs::File, io::Read, path::Path};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
+use std::{fs::File, io::Read};
 
 const CONFIG_SNIFF_BYTE_LIMIT: usize = 16 * 1024;
 const CONFIG_SNIFF_LINE_LIMIT: usize = 80;
@@ -46,6 +50,54 @@ pub(crate) fn inspect_path(path: &Path, kind: EntryKind) -> FileFacts {
         facts = sniff_config_file_type(path).unwrap_or(facts);
     }
     sniff_license_file_type(path, &name, &ext, facts).unwrap_or(facts)
+}
+
+/// Cached variant of [`inspect_path`] that avoids repeated file I/O for the same file version.
+/// The cache is keyed on path, kind, file size, and modification time, so stale results are not
+/// served when a file changes on disk.
+pub(crate) fn inspect_path_cached(
+    path: &Path,
+    kind: EntryKind,
+    size: u64,
+    modified: Option<SystemTime>,
+) -> FileFacts {
+    #[derive(Eq, Hash, PartialEq)]
+    struct CacheKey {
+        path: PathBuf,
+        is_dir: bool,
+        size: u64,
+        mtime: Option<(u64, u32)>,
+    }
+
+    fn facts_cache() -> &'static Mutex<HashMap<CacheKey, FileFacts>> {
+        static CACHE: OnceLock<Mutex<HashMap<CacheKey, FileFacts>>> = OnceLock::new();
+        CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    let mtime = modified
+        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+        .map(|d| (d.as_secs(), d.subsec_nanos()));
+    let key = CacheKey {
+        path: path.to_path_buf(),
+        is_dir: kind == EntryKind::Directory,
+        size,
+        mtime,
+    };
+
+    if let Some(&facts) = facts_cache()
+        .lock()
+        .expect("file facts cache lock")
+        .get(&key)
+    {
+        return facts;
+    }
+
+    let facts = inspect_path(path, kind);
+    facts_cache()
+        .lock()
+        .expect("file facts cache lock")
+        .insert(key, facts);
+    facts
 }
 
 fn normalize_key(input: &str) -> String {
