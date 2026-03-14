@@ -75,6 +75,14 @@ pub(crate) fn build_sidebar_items() -> Vec<SidebarItem> {
         }
     }
 
+    if let Some(trash) = trash_dir(&home) {
+        items.push(SidebarItem {
+            title: "Trash".to_string(),
+            icon: "󰩺",
+            path: trash,
+        });
+    }
+
     items.push(SidebarItem {
         title: "Root".to_string(),
         icon: "󰋊",
@@ -120,6 +128,30 @@ fn read_xdg_user_dirs(home: &Path) -> HashMap<String, PathBuf> {
         dirs.insert(key.trim().to_string(), path);
     }
     dirs
+}
+
+/// Returns the path to the user's trash directory, or `None` if it cannot be determined.
+///
+/// On freedesktop systems (Linux) the trash lives at `$XDG_DATA_HOME/Trash/files`.
+/// On macOS it is `~/.Trash`. The `files` subdirectory is used on Linux because that is
+/// where the actual deleted items are stored (the sibling `info/` directory holds metadata).
+fn trash_dir(home: &Path) -> Option<PathBuf> {
+    // Freedesktop / Linux: $XDG_DATA_HOME/Trash/files (default: ~/.local/share/Trash/files)
+    let data_home = env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".local/share"));
+    let xdg_trash = data_home.join("Trash/files");
+    if xdg_trash.exists() {
+        return Some(xdg_trash);
+    }
+
+    // macOS: ~/.Trash
+    let mac_trash = home.join(".Trash");
+    if mac_trash.exists() {
+        return Some(mac_trash);
+    }
+
+    None
 }
 
 fn read_entries(dir: &Path, show_hidden: bool) -> Result<Vec<Entry>> {
