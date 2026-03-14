@@ -516,21 +516,32 @@ fn render_preview_body(
     }
     let visible_rows = text_area.height as usize;
     state.preview_cols_visible = text_area.width as usize;
+    let section_label = app.preview_section_label();
     let header_detail = app.preview_header_detail(visible_rows);
+    let header_detail_width = sections[0]
+        .width
+        .saturating_sub(section_label.len() as u16 + 2) as usize;
+    let header_detail = header_detail
+        .as_deref()
+        .map(|detail| {
+            if header_detail_width == 0 {
+                String::new()
+            } else {
+                helpers::clamp_label(detail, header_detail_width)
+            }
+        })
+        .unwrap_or_default();
 
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
-                app.preview_section_label().to_string(),
+                section_label.to_string(),
                 Style::default()
                     .fg(palette.accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled("  ", Style::default().fg(palette.muted)),
-            Span::styled(
-                header_detail.unwrap_or_default(),
-                Style::default().fg(palette.muted),
-            ),
+            Span::styled(header_detail, Style::default().fg(palette.muted)),
         ]))
         .style(Style::default().bg(palette.panel).fg(palette.text)),
         sections[0],
@@ -929,6 +940,37 @@ mod tests {
         assert!(
             !rendered.contains("Modified "),
             "preview panel should not repeat generic modified metadata, got: {rendered:?}"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn preview_header_detail_is_clamped_to_panel_width() {
+        let root = temp_path("preview-header-clamp");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let contents = (1..=300)
+            .map(|index| format!("line {index} {}", "word ".repeat(30)))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(root.join("report.txt"), contents).expect("failed to write temp file");
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        let mut terminal = Terminal::new(TestBackend::new(60, 24)).expect("terminal should init");
+
+        let state = draw_ui(&mut terminal, &mut app);
+        let preview_panel = state
+            .preview_panel
+            .expect("preview panel should be rendered");
+        let header_row = row_text(terminal.backend().buffer(), preview_panel.y + 1);
+
+        assert!(
+            header_row.contains("Text"),
+            "expected preview header row to contain the section label, got: {header_row:?}"
+        );
+        assert!(
+            header_row.contains("…"),
+            "expected preview header row to clamp long detail text, got: {header_row:?}"
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
