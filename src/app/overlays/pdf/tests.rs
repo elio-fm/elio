@@ -92,6 +92,42 @@ fn write_test_raster_image(path: &Path, format: ImageFormat, width_px: u32, heig
         .expect("failed to write raster test image");
 }
 
+fn write_test_svg_image(path: &Path, width_px: u32, height_px: u32) {
+    fs::write(
+        path,
+        format!(
+            r#"<svg viewBox="0 0 {width_px} {height_px}" xmlns="http://www.w3.org/2000/svg"></svg>"#
+        ),
+    )
+    .expect("failed to write svg placeholder");
+}
+
+fn set_single_test_entry(app: &mut App, path: &Path) {
+    let metadata = fs::metadata(path).expect("file metadata should exist");
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("file name should be valid utf-8");
+    app.entries = vec![Entry {
+        path: path.to_path_buf(),
+        name: name.to_string(),
+        name_key: name.to_ascii_lowercase(),
+        kind: EntryKind::File,
+        size: metadata.len(),
+        modified: None,
+        readonly: false,
+    }];
+    app.selected = 0;
+    app.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+    app.frame_state.metrics.cols = 1;
+    app.frame_state.metrics.rows_visible = 6;
+}
+
 fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBuf) {
     let root = temp_root(label);
     fs::create_dir_all(&root).expect("failed to create temp root");
@@ -108,13 +144,7 @@ fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBu
         }
         Some("gif") => write_test_raster_image(&image_path, ImageFormat::Gif, 600, 300),
         Some("webp") => write_test_raster_image(&image_path, ImageFormat::WebP, 600, 300),
-        Some("svg") => {
-            fs::write(
-                &image_path,
-                r#"<svg viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg"></svg>"#,
-            )
-            .expect("failed to write svg placeholder");
-        }
+        Some("svg") => write_test_svg_image(&image_path, 600, 300),
         _ => panic!("unsupported test image extension: {file_name}"),
     }
 
@@ -171,13 +201,7 @@ fn build_multi_static_image_app(label: &str, file_names: &[&str]) -> (App, PathB
             }
             Some("gif") => write_test_raster_image(&image_path, ImageFormat::Gif, 600, 300),
             Some("webp") => write_test_raster_image(&image_path, ImageFormat::WebP, 600, 300),
-            Some("svg") => {
-                fs::write(
-                    &image_path,
-                    r#"<svg viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg"></svg>"#,
-                )
-                .expect("failed to write svg placeholder");
-            }
+            Some("svg") => write_test_svg_image(&image_path, 600, 300),
             Some("txt") => {
                 fs::write(&image_path, "plain text").expect("failed to write text placeholder");
             }
@@ -305,6 +329,77 @@ fn preview_prefers_image_surface_for_extensionless_png_when_backend_enabled() {
 }
 
 #[test]
+fn current_extensionless_png_prepares_inline_for_immediate_overlay() {
+    let root = temp_root("image-inline-noext");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_terminal_image_support(&mut app);
+    app.pdf_preview.pdf_tools_available = true;
+
+    let path = root.join("background");
+    write_test_raster_image(&path, ImageFormat::Png, 600, 300);
+    set_single_test_entry(&mut app, &path);
+
+    let request = app
+        .active_static_image_overlay_request()
+        .expect("image request should be available");
+    match app.prepared_static_image_for_overlay(&request) {
+        crate::app::overlays::images::StaticImageOverlayPreparation::Ready(prepared) => {
+            assert_eq!(prepared.display_path, path);
+            assert_eq!(
+                prepared.dimensions,
+                RenderedImageDimensions {
+                    width_px: 600,
+                    height_px: 300,
+                }
+            );
+        }
+        _ => panic!("extensionless png should prepare inline"),
+    }
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn current_small_jpeg_prepares_inline_for_immediate_overlay() {
+    let root = temp_root("image-inline-jpeg");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_terminal_image_support(&mut app);
+    app.pdf_preview.pdf_tools_available = true;
+
+    let path = root.join("photo.jpg");
+    write_test_raster_image(&path, ImageFormat::Jpeg, 600, 300);
+    set_single_test_entry(&mut app, &path);
+
+    let request = app
+        .active_static_image_overlay_request()
+        .expect("image request should be available");
+    match app.prepared_static_image_for_overlay(&request) {
+        crate::app::overlays::images::StaticImageOverlayPreparation::Ready(prepared) => {
+            assert_ne!(prepared.display_path, path);
+            assert_eq!(
+                prepared
+                    .display_path
+                    .extension()
+                    .and_then(|extension| extension.to_str()),
+                Some("png")
+            );
+            assert_eq!(
+                prepared.dimensions,
+                RenderedImageDimensions {
+                    width_px: 600,
+                    height_px: 300,
+                }
+            );
+        }
+        _ => panic!("small jpeg should prepare inline"),
+    }
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn extensionless_png_static_image_preparation_succeeds() {
     let (_app, root) = build_selected_extensionless_png_app("image-prepare-noext", "background");
     let path = root.join("background");
@@ -329,8 +424,14 @@ fn extensionless_png_static_image_preparation_succeeds() {
             height_px: 300,
         }
     );
+    assert_eq!(prepared.display_path, path);
     assert_eq!(
-        image::image_dimensions(&prepared.display_path).expect("rendered image should be readable"),
+        image::ImageReader::open(&prepared.display_path)
+            .expect("rendered image should open")
+            .with_guessed_format()
+            .expect("rendered image format should be detected")
+            .into_dimensions()
+            .expect("rendered image should be readable"),
         (600, 300)
     );
 
@@ -431,7 +532,47 @@ fn svg_static_images_are_normalized_to_cached_png_overlays() {
 }
 
 #[test]
-fn oversized_png_static_images_are_downscaled_for_overlay_cache() {
+fn extensionless_svg_static_image_preparation_succeeds() {
+    let root = temp_root("svg-noext-cache");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("logo");
+    write_test_svg_image(&path, 600, 300);
+    let metadata = fs::metadata(&path).expect("svg metadata should exist");
+
+    let prepared = crate::app::overlays::images::prepare_static_image_asset(
+        &jobs::ImagePrepareRequest {
+            path: path.clone(),
+            size: metadata.len(),
+            modified: None,
+            target_width_px: 768,
+            target_height_px: 540,
+            magick_available: true,
+        },
+        || false,
+    )
+    .expect("extensionless svg should prepare successfully");
+
+    assert_eq!(
+        prepared
+            .display_path
+            .extension()
+            .and_then(|extension| extension.to_str()),
+        Some("png")
+    );
+    assert_eq!(
+        prepared.dimensions,
+        RenderedImageDimensions {
+            width_px: 600,
+            height_px: 300,
+        }
+    );
+    assert_ne!(prepared.display_path, path);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn oversized_png_static_images_use_source_file_for_overlay() {
     let root = temp_root("large-png-cache");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("large.png");
@@ -451,11 +592,40 @@ fn oversized_png_static_images_are_downscaled_for_overlay_cache() {
     )
     .expect("large png should prepare successfully");
 
-    assert_ne!(prepared.display_path, path);
-    let rendered =
-        image::image_dimensions(&prepared.display_path).expect("rendered image should be readable");
-    assert!(rendered.0 <= 768);
-    assert!(rendered.1 <= 540);
+    assert_eq!(prepared.display_path, path);
+    assert_eq!(
+        prepared.dimensions,
+        RenderedImageDimensions {
+            width_px: 3200,
+            height_px: 1800,
+        }
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn oversized_extensionless_png_static_images_use_source_file_for_overlay() {
+    let root = temp_root("large-png-noext-cache");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("background");
+    write_test_raster_image(&path, ImageFormat::Png, 3200, 1800);
+    let metadata = fs::metadata(&path).expect("png metadata should exist");
+
+    let prepared = crate::app::overlays::images::prepare_static_image_asset(
+        &jobs::ImagePrepareRequest {
+            path: path.clone(),
+            size: metadata.len(),
+            modified: None,
+            target_width_px: 768,
+            target_height_px: 540,
+            magick_available: true,
+        },
+        || false,
+    )
+    .expect("large extensionless png should prepare successfully");
+
+    assert_eq!(prepared.display_path, path);
     assert_eq!(
         prepared.dimensions,
         RenderedImageDimensions {

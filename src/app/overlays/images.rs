@@ -18,6 +18,7 @@ use std::{
 
 const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 24;
 const STATIC_IMAGE_PRELOAD_LIMIT: usize = 6;
+const STATIC_IMAGE_INLINE_PREPARE_MAX_BYTES: u64 = 512 * 1024;
 
 #[derive(Clone, Debug, Default)]
 pub(in crate::app) struct ImagePreviewState {
@@ -188,6 +189,9 @@ impl App {
                 dimensions,
             });
         }
+        if let Some(prepared) = self.try_prepare_current_static_image_inline(request) {
+            return StaticImageOverlayPreparation::Ready(prepared);
+        }
         if self.image_preview.failed_images.contains(&key) {
             StaticImageOverlayPreparation::Failed
         } else {
@@ -215,6 +219,32 @@ impl App {
         self.image_preview
             .failed_images
             .insert(StaticImageKey::from_request(request));
+    }
+
+    fn try_prepare_current_static_image_inline(
+        &mut self,
+        request: &StaticImageOverlayRequest,
+    ) -> Option<PreparedStaticImage> {
+        let format = static_image_format_for_path(&request.path)?;
+        if !should_prepare_static_image_inline(request, format) {
+            return None;
+        }
+
+        let key = StaticImageKey::from_request(request);
+        let prepared =
+            prepare_static_image_asset(&self.image_prepare_request_for_overlay(request), || false)?;
+        self.image_preview.failed_images.remove(&key);
+        self.image_preview
+            .dimensions
+            .insert(key.clone(), prepared.dimensions);
+        if prepared.display_path != request.path {
+            self.remember_rendered_static_image(key, prepared.display_path.clone());
+        }
+
+        Some(PreparedStaticImage {
+            display_path: prepared.display_path,
+            dimensions: prepared.dimensions,
+        })
     }
 
     fn magick_available(&mut self) -> bool {
@@ -323,7 +353,9 @@ impl App {
         {
             return Some(path.clone());
         }
-        if is_png_path(&key.path) && key.path.exists() {
+        if key.path.exists()
+            && static_image_format_for_path(&key.path) == Some(StaticImageFormat::Png)
+        {
             return Some(key.path.clone());
         }
 
@@ -494,13 +526,40 @@ impl DisplayedStaticImagePreview {
     }
 }
 
-pub(in crate::app) fn static_image_detail_label(entry: &Entry) -> Option<&'static str> {
-    match crate::file_info::inspect_path(&entry.path, entry.kind).specific_type_label {
-        Some(label @ ("PNG image" | "JPEG image" | "GIF image" | "WebP image" | "SVG image")) => {
-            Some(label)
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StaticImageFormat {
+    Png,
+    Jpeg,
+    Gif,
+    Webp,
+    Svg,
+}
+
+impl StaticImageFormat {
+    fn detail_label(self) -> &'static str {
+        match self {
+            Self::Png => "PNG image",
+            Self::Jpeg => "JPEG image",
+            Self::Gif => "GIF image",
+            Self::Webp => "WebP image",
+            Self::Svg => "SVG image",
         }
-        _ => None,
     }
+
+    fn from_label(label: &'static str) -> Option<Self> {
+        match label {
+            "PNG image" => Some(Self::Png),
+            "JPEG image" => Some(Self::Jpeg),
+            "GIF image" => Some(Self::Gif),
+            "WebP image" => Some(Self::Webp),
+            "SVG image" => Some(Self::Svg),
+            _ => None,
+        }
+    }
+}
+
+pub(in crate::app) fn static_image_detail_label(entry: &Entry) -> Option<&'static str> {
+    static_image_format_for_entry(entry).map(StaticImageFormat::detail_label)
 }
 
 pub(crate) fn prepare_static_image_asset<F>(
@@ -513,7 +572,8 @@ where
     if canceled() {
         return None;
     }
-    let source_dimensions = if is_svg_path(&request.path) {
+    let format = static_image_format_for_path(&request.path)?;
+    let source_dimensions = if format == StaticImageFormat::Svg {
         read_svg_dimensions(&request.path)?
     } else {
         read_raster_dimensions(&request.path)?
@@ -531,7 +591,7 @@ where
         target_height_px,
     );
 
-    if is_svg_path(&request.path) {
+    if format == StaticImageFormat::Svg {
         let cache_path = static_image_render_cache_path(&key)?;
         if cache_path.exists() {
             return Some(PreparedStaticImageAsset {
@@ -556,10 +616,7 @@ where
         return None;
     }
 
-    if is_png_path(&request.path)
-        && source_dimensions.width_px <= target_width_px
-        && source_dimensions.height_px <= target_height_px
-    {
+    if format == StaticImageFormat::Png {
         return Some(PreparedStaticImageAsset {
             display_path: request.path.clone(),
             dimensions: source_dimensions,
@@ -606,16 +663,29 @@ fn static_image_render_cache_path(key: &StaticImageKey) -> Option<PathBuf> {
     Some(cache_dir.join(format!("image-{:016x}.png", hasher.finish())))
 }
 
-fn is_svg_path(path: &std::path::Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("svg"))
+fn should_prepare_static_image_inline(
+    request: &StaticImageOverlayRequest,
+    format: StaticImageFormat,
+) -> bool {
+    match format {
+        StaticImageFormat::Png => true,
+        StaticImageFormat::Jpeg | StaticImageFormat::Gif | StaticImageFormat::Webp => {
+            request.size <= STATIC_IMAGE_INLINE_PREPARE_MAX_BYTES
+        }
+        StaticImageFormat::Svg => false,
+    }
 }
 
-fn is_png_path(path: &std::path::Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("png"))
+fn static_image_format_for_entry(entry: &Entry) -> Option<StaticImageFormat> {
+    crate::file_info::inspect_path(&entry.path, entry.kind)
+        .specific_type_label
+        .and_then(StaticImageFormat::from_label)
+}
+
+fn static_image_format_for_path(path: &Path) -> Option<StaticImageFormat> {
+    crate::file_info::inspect_path(path, EntryKind::File)
+        .specific_type_label
+        .and_then(StaticImageFormat::from_label)
 }
 
 fn render_svg_to_png(

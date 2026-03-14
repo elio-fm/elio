@@ -281,6 +281,25 @@ fn extensionless_png_is_detected_from_magic_bytes() {
 }
 
 #[test]
+fn extensionless_svg_is_detected_from_contents() {
+    let root = temp_path("extensionless-svg");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("logo");
+    fs::write(
+        &path,
+        r#"<?xml version="1.0"?><svg viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg"></svg>"#,
+    )
+    .expect("failed to write svg contents");
+
+    let facts = inspect_path(&path, EntryKind::File);
+
+    assert_eq!(facts.builtin_class, FileClass::Image);
+    assert_eq!(facts.specific_type_label, Some("SVG image"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn office_and_pages_documents_use_metadata_preview() {
     let doc = inspect_path(Path::new("legacy.doc"), EntryKind::File);
     let docx = inspect_path(Path::new("report.docx"), EntryKind::File);
