@@ -492,6 +492,7 @@ fn oriented_jpeg_fallback_preview_uses_exif_corrected_dimensions() {
             target_height_px: 60,
             ffmpeg_available: false,
             magick_available: true,
+            force_render_to_cache: false,
         },
         || false,
     )
@@ -538,6 +539,7 @@ fn oriented_jpeg_ffmpeg_preview_uses_exif_corrected_dimensions() {
             target_height_px: 60,
             ffmpeg_available: true,
             magick_available: true,
+            force_render_to_cache: false,
         },
         || false,
     )
@@ -577,6 +579,7 @@ fn extensionless_png_static_image_preparation_succeeds() {
             target_height_px: 540,
             ffmpeg_available: true,
             magick_available: true,
+            force_render_to_cache: false,
         },
         || false,
     )
@@ -631,6 +634,7 @@ fn raster_static_images_use_png_display_paths() {
                 target_height_px: 540,
                 ffmpeg_available: true,
                 magick_available: true,
+                force_render_to_cache: false,
             },
             || false,
         )
@@ -674,6 +678,7 @@ fn svg_static_images_are_normalized_to_cached_png_overlays() {
             target_height_px: 540,
             ffmpeg_available: true,
             magick_available: true,
+            force_render_to_cache: false,
         },
         || false,
     )
@@ -715,6 +720,7 @@ fn extensionless_svg_static_image_preparation_succeeds() {
             target_height_px: 540,
             ffmpeg_available: true,
             magick_available: true,
+            force_render_to_cache: false,
         },
         || false,
     )
@@ -756,6 +762,7 @@ fn oversized_png_static_images_use_source_file_for_overlay() {
             target_height_px: 540,
             ffmpeg_available: true,
             magick_available: true,
+            force_render_to_cache: false,
         },
         || false,
     )
@@ -768,6 +775,57 @@ fn oversized_png_static_images_use_source_file_for_overlay() {
             width_px: 3200,
             height_px: 1800,
         }
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn forced_png_preview_renders_a_cached_overlay_asset() {
+    let root = temp_root("forced-png-cache");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("page.png");
+    write_test_raster_image(&path, ImageFormat::Png, 3200, 1800);
+    let metadata = fs::metadata(&path).expect("png metadata should exist");
+
+    let prepared = crate::app::overlays::images::prepare_static_image_asset(
+        &jobs::ImagePrepareRequest {
+            path: path.clone(),
+            size: metadata.len(),
+            modified: None,
+            target_width_px: 768,
+            target_height_px: 540,
+            ffmpeg_available: true,
+            magick_available: true,
+            force_render_to_cache: true,
+        },
+        || false,
+    )
+    .expect("forced png preview should prepare successfully");
+
+    assert_ne!(prepared.display_path, path);
+    assert_eq!(
+        prepared
+            .display_path
+            .extension()
+            .and_then(|extension| extension.to_str()),
+        Some("png")
+    );
+    assert_eq!(
+        prepared.dimensions,
+        RenderedImageDimensions {
+            width_px: 3200,
+            height_px: 1800,
+        }
+    );
+    assert_eq!(
+        image::ImageReader::open(&prepared.display_path)
+            .expect("rendered image should open")
+            .with_guessed_format()
+            .expect("rendered image format should be detected")
+            .into_dimensions()
+            .expect("rendered image should be readable"),
+        (768, 432)
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -790,6 +848,7 @@ fn oversized_extensionless_png_static_images_use_source_file_for_overlay() {
             target_height_px: 540,
             ffmpeg_available: true,
             magick_available: true,
+            force_render_to_cache: false,
         },
         || false,
     )
@@ -833,6 +892,7 @@ fn refresh_preview_preloads_current_and_visible_nearby_static_images() {
                 entry.modified,
                 target_width_px,
                 target_height_px,
+                false,
             )
         })
         .collect::<Vec<_>>();

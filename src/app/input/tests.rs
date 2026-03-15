@@ -3,11 +3,14 @@ use super::*;
 use std::os::unix::fs::PermissionsExt;
 use std::{
     env, fs,
+    fs::File,
+    io::Write,
     path::PathBuf,
     thread,
     time::Duration,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
+use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
 fn temp_path(label: &str) -> PathBuf {
     let unique = SystemTime::now()
@@ -26,6 +29,30 @@ fn wait_for_directory_load(app: &mut App) {
         thread::sleep(Duration::from_millis(10));
     }
     panic!("timed out waiting for directory load");
+}
+
+fn wait_for_background_preview(app: &mut App) {
+    for _ in 0..200 {
+        if app.process_background_jobs() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for background preview");
+}
+
+fn write_binary_zip_entries(path: &std::path::Path, entries: &[(&str, &[u8])]) {
+    let file = File::create(path).expect("failed to create zip");
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+
+    for (name, contents) in entries {
+        zip.start_file(name, options)
+            .expect("failed to start zip entry");
+        zip.write_all(contents).expect("failed to write zip entry");
+    }
+
+    zip.finish().expect("failed to finish zip");
 }
 
 #[test]
@@ -905,6 +932,133 @@ fn preview_wheel_uses_preview_column_when_row_is_unreliable() {
 
     assert!(app.process_pending_scroll());
     assert!(app.preview_state.scroll > 0);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn preview_wheel_steps_comic_pages_instead_of_scrolling_summary_text() {
+    let root = temp_path("preview-wheel-comic-pages");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let archive = root.join("issue.cbz");
+    write_binary_zip_entries(
+        &archive,
+        &[
+            ("1.jpg", b"page-one"),
+            ("2.jpg", b"page-two"),
+            ("3.jpg", b"page-three"),
+        ],
+    );
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.view_mode = ViewMode::List;
+    app.select_index(0);
+    wait_for_background_preview(&mut app);
+    app.set_frame_state(FrameState {
+        entries_panel: Some(Rect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 8,
+        }),
+        preview_panel: Some(Rect {
+            x: 21,
+            y: 0,
+            width: 20,
+            height: 8,
+        }),
+        preview_rows_visible: 6,
+        preview_cols_visible: 20,
+        ..FrameState::default()
+    });
+
+    app.handle_event(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: 22,
+        row: 1,
+        modifiers: KeyModifiers::NONE,
+    }))
+    .expect("preview wheel should be handled");
+
+    assert_eq!(
+        app.preview_state
+            .content
+            .navigation_position
+            .as_ref()
+            .map(|position| position.index),
+        Some(1)
+    );
+    assert!(app.pending_preview_refresh_timer().is_some());
+    assert_eq!(app.preview_state.scroll, 0);
+
+    thread::sleep(HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY + Duration::from_millis(20));
+    assert!(app.process_preview_refresh_timers());
+    wait_for_background_preview(&mut app);
+
+    assert_eq!(
+        app.preview_state
+            .content
+            .navigation_position
+            .as_ref()
+            .map(|position| position.index),
+        Some(1)
+    );
+    assert_eq!(app.preview_state.scroll, 0);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_preview_wheel_clears_pending_entry_scroll_before_page_turns() {
+    let root = temp_path("preview-wheel-comic-clears-entry-scroll");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    write_binary_zip_entries(
+        &root.join("a.cbz"),
+        &[("1.jpg", b"a-one"), ("2.jpg", b"a-two")],
+    );
+    fs::write(root.join("b.txt"), "next entry").expect("failed to write temp text");
+    fs::write(root.join("c.txt"), "another entry").expect("failed to write temp text");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.view_mode = ViewMode::List;
+    app.select_index(0);
+    wait_for_background_preview(&mut app);
+    app.set_frame_state(FrameState {
+        entries_panel: Some(Rect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 8,
+        }),
+        preview_panel: Some(Rect {
+            x: 21,
+            y: 0,
+            width: 20,
+            height: 8,
+        }),
+        preview_rows_visible: 6,
+        preview_cols_visible: 20,
+        ..FrameState::default()
+    });
+    app.wheel_scroll.vertical.pending = 3;
+
+    app.handle_event(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: 22,
+        row: 1,
+        modifiers: KeyModifiers::NONE,
+    }))
+    .expect("preview wheel should be handled");
+
+    assert_eq!(app.selected, 0);
+    assert_eq!(app.wheel_scroll.vertical.pending, 0);
+    assert_eq!(
+        app.current_preview_request_options().comic_page_index(),
+        Some(1)
+    );
+
+    let _ = app.process_pending_scroll();
+    assert_eq!(app.selected, 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

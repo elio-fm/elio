@@ -171,8 +171,7 @@ fn write_zip_binary_entries(path: &Path, entries: &[(&str, &[u8])]) {
     for (name, contents) in entries {
         zip.start_file(name, options)
             .expect("failed to start zip entry");
-        zip.write_all(contents)
-            .expect("failed to write zip entry");
+        zip.write_all(contents).expect("failed to write zip entry");
     }
 
     zip.finish().expect("failed to finish zip");
@@ -1186,7 +1185,10 @@ fn epub_preview_shows_package_metadata() {
 
     assert_eq!(preview.kind, PreviewKind::Document);
     assert_eq!(preview.detail.as_deref(), Some("Elio Handbook"));
-    assert_eq!(preview.status_note.as_deref(), Some("EPUB ebook  •  Regueiro"));
+    assert_eq!(
+        preview.status_note.as_deref(),
+        Some("EPUB ebook  •  Regueiro")
+    );
     assert!(
         line_texts
             .iter()
@@ -1291,7 +1293,10 @@ fn epub_preview_shows_contents_and_excerpt() {
 
     assert_eq!(preview.kind, PreviewKind::Document);
     assert_eq!(preview.detail.as_deref(), Some("Elio Story"));
-    assert_eq!(preview.status_note.as_deref(), Some("EPUB ebook  •  Regueiro"));
+    assert_eq!(
+        preview.status_note.as_deref(),
+        Some("EPUB ebook  •  Regueiro")
+    );
     assert_eq!(preview.ebook_section_index, Some(0));
     assert_eq!(preview.ebook_section_count, Some(2));
     assert_eq!(preview.ebook_section_title.as_deref(), Some("Opening"));
@@ -1308,7 +1313,10 @@ fn epub_preview_shows_contents_and_excerpt() {
     let second_line_texts: Vec<_> = second_preview.lines.iter().map(line_text).collect();
     assert_eq!(second_preview.ebook_section_index, Some(1));
     assert_eq!(second_preview.ebook_section_count, Some(2));
-    assert_eq!(second_preview.ebook_section_title.as_deref(), Some("Second Step"));
+    assert_eq!(
+        second_preview.ebook_section_title.as_deref(),
+        Some("Second Step")
+    );
     assert!(second_line_texts.iter().any(|text| {
         text.contains(
             "The preview pane grows into an actual reading surface instead of stopping at metadata."
@@ -1497,9 +1505,11 @@ fn epub_preview_uses_section_image_for_fixed_layout_pages() {
     assert_eq!(preview.ebook_section_title.as_deref(), Some("Page 1"));
     assert_eq!(visual.kind, PreviewVisualKind::PageImage);
     assert_eq!(visual.layout, PreviewVisualLayout::FullHeight);
-    assert!(line_texts
-        .iter()
-        .any(|text| text.contains("Fixed-layout page preview")));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Fixed-layout page preview"))
+    );
     assert!(visual.path.exists());
 
     let _ = fs::remove_file(visual.path);
@@ -1570,7 +1580,10 @@ fn epub_package_cache_reuses_parse_across_section_switches() {
     );
 
     let _ = build_preview(&file_entry(path.clone()));
-    let _ = build_preview_with_options(&file_entry(path.clone()), &PreviewRequestOptions::EpubSection(1));
+    let _ = build_preview_with_options(
+        &file_entry(path.clone()),
+        &PreviewRequestOptions::EpubSection(1),
+    );
 
     assert_eq!(super::document::epub_package_parse_count(&path), 1);
 
@@ -2410,7 +2423,7 @@ fn zip_preview_renders_archive_summary_and_tree() {
 }
 
 #[test]
-fn comic_zip_preview_renders_summary_and_first_page() {
+fn comic_zip_preview_renders_first_page_without_summary() {
     let root = temp_path("comic-zip-preview");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("issue.cbz");
@@ -2431,8 +2444,7 @@ fn comic_zip_preview_renders_summary_and_first_page() {
         .expect("failed to write page entry");
     zip.start_file("notes/readme.txt", options)
         .expect("failed to start text entry");
-    zip.write_all(b"hello")
-        .expect("failed to write text entry");
+    zip.write_all(b"hello").expect("failed to write text entry");
     zip.finish().expect("failed to finish comic zip");
 
     let preview = build_preview(&file_entry(path));
@@ -2445,7 +2457,7 @@ fn comic_zip_preview_renders_summary_and_first_page() {
     assert_eq!(preview.kind, PreviewKind::Comic);
     assert_eq!(preview.detail.as_deref(), Some("Comic ZIP archive"));
     assert_eq!(visual.kind, PreviewVisualKind::PageImage);
-    assert_eq!(visual.layout, PreviewVisualLayout::Inline);
+    assert_eq!(visual.layout, PreviewVisualLayout::FullHeight);
     let position = preview
         .navigation_position
         .as_ref()
@@ -2454,10 +2466,12 @@ fn comic_zip_preview_renders_summary_and_first_page() {
     assert_eq!(position.index, 0);
     assert_eq!(position.count, 2);
     assert!(visual.path.exists());
-    assert!(line_texts.iter().any(|text| text.trim() == "Summary"));
-    assert!(line_texts.iter().any(|text| text.contains("Pages") && text.contains("2")));
-    assert!(line_texts.iter().any(|text| text.contains("Size")));
-    assert!(!line_texts.iter().any(|text| text.contains("Format") && text.contains("ZIP")));
+    assert!(line_texts.is_empty());
+    assert!(
+        !line_texts
+            .iter()
+            .any(|text| text.contains("Format") && text.contains("ZIP"))
+    );
     assert!(!line_texts.iter().any(|text| text.contains("Packed")));
     assert!(!line_texts.iter().any(|text| text.contains("Archive Size")));
     assert!(!line_texts.iter().any(|text| text.trim() == "Contents"));
@@ -2488,28 +2502,47 @@ fn comic_zip_preview_uses_natural_page_order_and_page_selection() {
         .preview_visual
         .as_ref()
         .expect("first page should be extracted");
-    let second_preview =
-        build_preview_with_options(&file_entry(path.clone()), &PreviewRequestOptions::ComicPage(1));
+    let second_preview = build_preview_with_options(
+        &file_entry(path.clone()),
+        &PreviewRequestOptions::ComicPage(1),
+    );
     let second_visual = second_preview
         .preview_visual
         .as_ref()
         .expect("second page should be extracted");
-    let third_preview =
-        build_preview_with_options(&file_entry(path.clone()), &PreviewRequestOptions::ComicPage(2));
+    let third_preview = build_preview_with_options(
+        &file_entry(path.clone()),
+        &PreviewRequestOptions::ComicPage(2),
+    );
     let third_visual = third_preview
         .preview_visual
         .as_ref()
         .expect("third page should be extracted");
 
-    assert_eq!(fs::read(&first_visual.path).expect("failed to read first page"), b"page-one");
-    assert_eq!(fs::read(&second_visual.path).expect("failed to read second page"), b"page-two");
-    assert_eq!(fs::read(&third_visual.path).expect("failed to read third page"), b"page-ten");
     assert_eq!(
-        second_preview.navigation_position.as_ref().map(|position| position.index),
+        fs::read(&first_visual.path).expect("failed to read first page"),
+        b"page-one"
+    );
+    assert_eq!(
+        fs::read(&second_visual.path).expect("failed to read second page"),
+        b"page-two"
+    );
+    assert_eq!(
+        fs::read(&third_visual.path).expect("failed to read third page"),
+        b"page-ten"
+    );
+    assert_eq!(
+        second_preview
+            .navigation_position
+            .as_ref()
+            .map(|position| position.index),
         Some(1)
     );
     assert_eq!(
-        third_preview.navigation_position.as_ref().map(|position| position.count),
+        third_preview
+            .navigation_position
+            .as_ref()
+            .map(|position| position.count),
         Some(3)
     );
 

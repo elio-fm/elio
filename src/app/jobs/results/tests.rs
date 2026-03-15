@@ -40,8 +40,7 @@ fn write_binary_zip_entries(path: &Path, entries: &[(&str, &[u8])]) {
     for (name, contents) in entries {
         zip.start_file(name, options)
             .expect("failed to start zip entry");
-        zip.write_all(contents)
-            .expect("failed to write zip entry");
+        zip.write_all(contents).expect("failed to write zip entry");
     }
 
     zip.finish().expect("failed to finish zip");
@@ -59,7 +58,11 @@ fn wait_for_background_preview(app: &mut App) {
 
 fn wait_for_preview_header(app: &mut App, visible_rows: usize, width: usize, expected: &str) {
     for _ in 0..200 {
-        if app.preview_header_detail_for_width(visible_rows, width).as_deref() == Some(expected) {
+        if app
+            .preview_header_detail_for_width(visible_rows, width)
+            .as_deref()
+            == Some(expected)
+        {
             return;
         }
         let _ = app.process_background_jobs();
@@ -148,22 +151,16 @@ fn comic_preview_loads_in_background_and_steps_pages() {
     let root = temp_path("comic-background");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let archive = root.join("issue.cbz");
-    write_binary_zip_entries(
-        &archive,
-        &[("1.jpg", b"page-one"), ("2.jpg", b"page-two")],
-    );
+    write_binary_zip_entries(&archive, &[("1.jpg", b"page-one"), ("2.jpg", b"page-two")]);
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
 
-    assert_eq!(app.preview_section_label(), "Preview");
+    assert_eq!(app.preview_section_label(), "Comic");
     assert_eq!(
         app.preview_header_detail(10).as_deref(),
         Some("Comic ZIP archive")
     );
-    assert!(app.preview_lines().iter().any(|line| {
-        line.to_string()
-            .contains("Extracting comic page in background")
-    }));
+    assert!(app.preview_lines().is_empty());
 
     wait_for_background_preview(&mut app);
 
@@ -179,11 +176,73 @@ fn comic_preview_loads_in_background_and_steps_pages() {
     );
 
     assert!(app.step_comic_page(1));
+    assert_eq!(app.preview_section_label(), "Comic");
+    assert_eq!(
+        app.preview_header_detail(10).as_deref(),
+        Some("Comic ZIP archive  •  Page 2/2")
+    );
     wait_for_background_preview(&mut app);
 
     assert_eq!(
         app.preview_header_detail(10).as_deref(),
         Some("Comic ZIP archive  •  Page 2/2")
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_preview_prefetches_adjacent_pages_for_instant_page_steps() {
+    let root = temp_path("comic-page-prefetch");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let archive = root.join("issue.cbz");
+    write_binary_zip_entries(
+        &archive,
+        &[
+            ("1.jpg", b"page-one"),
+            ("2.jpg", b"page-two"),
+            ("3.jpg", b"page-three"),
+            ("4.jpg", b"page-four"),
+        ],
+    );
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_background_preview(&mut app);
+
+    for _ in 0..200 {
+        let _ = app.process_background_jobs();
+        if app.has_cached_comic_preview_page(&archive, 1)
+            && app.has_cached_comic_preview_page(&archive, 2)
+        {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    assert!(app.has_cached_comic_preview_page(&archive, 1));
+    assert!(app.has_cached_comic_preview_page(&archive, 2));
+    assert!(app.scheduler_metrics().preview_jobs_submitted_low >= 2);
+
+    let preview_metrics = app.preview_metrics();
+    assert!(app.step_comic_page(1));
+    assert_eq!(
+        app.preview_metrics().cache_hits,
+        preview_metrics.cache_hits + 1
+    );
+    assert_eq!(
+        app.preview_header_detail(10).as_deref(),
+        Some("Comic ZIP archive  •  Page 2/4")
+    );
+
+    let preview_metrics = app.preview_metrics();
+    assert!(app.step_comic_page(1));
+    assert_eq!(
+        app.preview_metrics().cache_hits,
+        preview_metrics.cache_hits + 1
+    );
+    assert_eq!(
+        app.preview_header_detail(10).as_deref(),
+        Some("Comic ZIP archive  •  Page 3/4")
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -327,7 +386,12 @@ fn narrow_code_header_prefers_compact_subtype_and_drops_low_priority_notes() {
     fs::create_dir_all(&root).expect("failed to create temp root");
     let source = root.join("main.rs");
     let contents = (1..=1_500)
-        .map(|index| format!("fn line_{index}() {{ println!(\"{}\"); }}", "word ".repeat(20)))
+        .map(|index| {
+            format!(
+                "fn line_{index}() {{ println!(\"{}\"); }}",
+                "word ".repeat(20)
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n");
     fs::write(&source, contents).expect("failed to write source");
@@ -348,7 +412,12 @@ fn byte_truncated_code_header_upgrades_to_exact_total_lines_after_background_cou
     fs::create_dir_all(&root).expect("failed to create temp root");
     let source = root.join("main.rs");
     let contents = (1..=1_500)
-        .map(|index| format!("fn line_{index}() {{ println!(\"{}\"); }}", "word ".repeat(20)))
+        .map(|index| {
+            format!(
+                "fn line_{index}() {{ println!(\"{}\"); }}",
+                "word ".repeat(20)
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n");
     fs::write(&source, contents).expect("failed to write source");

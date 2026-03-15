@@ -28,7 +28,7 @@ const PREVIEW_WORKER_COUNT: usize = 2;
 const SEARCH_WORKER_COUNT: usize = 1;
 const DIRECTORY_ITEM_COUNT_WORKER_COUNT: usize = 1;
 const PREVIEW_LINE_COUNT_WORKER_COUNT: usize = 1;
-const IMAGE_PREPARE_WORKER_COUNT: usize = 1;
+const IMAGE_PREPARE_WORKER_COUNT: usize = 2;
 const PDF_PROBE_WORKER_COUNT: usize = 2;
 const PDF_RENDER_WORKER_COUNT: usize = 2;
 const PREVIEW_QUEUE_LIMIT: usize = 8;
@@ -185,6 +185,7 @@ pub(super) struct ImagePrepareBuild {
     pub modified: Option<SystemTime>,
     pub target_width_px: u32,
     pub target_height_px: u32,
+    pub force_render_to_cache: bool,
     pub canceled: bool,
     pub result: Option<PreparedStaticImageAsset>,
 }
@@ -198,6 +199,7 @@ pub(super) struct ImagePrepareRequest {
     pub target_height_px: u32,
     pub ffmpeg_available: bool,
     pub magick_available: bool,
+    pub force_render_to_cache: bool,
 }
 
 #[derive(Debug)]

@@ -1,7 +1,7 @@
 use super::*;
 use crate::preview::{
-    PreviewContent, PreviewKind, PreviewLineCoverage, PreviewRequestOptions, build_preview_with_options,
-    loading_preview_for, should_build_preview_in_background,
+    PreviewContent, PreviewKind, PreviewLineCoverage, PreviewRequestOptions,
+    build_preview_with_options, loading_preview_for, should_build_preview_in_background,
 };
 use std::sync::Arc;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -201,7 +201,9 @@ impl App {
                     }
                 } else {
                     self.preview_state.metrics.cache_misses += 1;
-                    let placeholder = loading_preview_for(&entry, &preview_options);
+                    let placeholder = self.apply_current_comic_loading_navigation(
+                        loading_preview_for(&entry, &preview_options),
+                    );
                     let loading_path = entry.path.clone();
                     let request = PreviewRequest {
                         token: self.preview_state.token,
@@ -235,6 +237,7 @@ impl App {
         self.preview_state.horizontal_scroll = 0;
         self.sync_preview_scroll();
         self.refresh_static_image_preloads();
+        self.prefetch_nearby_comic_pages();
         self.prefetch_nearby_previews();
     }
 
@@ -255,7 +258,7 @@ impl App {
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))
     }
 
-    fn cached_preview_for(
+    pub(in crate::app) fn cached_preview_for(
         &self,
         entry: &Entry,
         variant: &PreviewRequestOptions,
@@ -303,7 +306,9 @@ impl App {
                 preview: preview.clone(),
             },
         );
-        self.preview_state.result_order.retain(|cached| cached != &key);
+        self.preview_state
+            .result_order
+            .retain(|cached| cached != &key);
         self.preview_state.result_order.push_back(key);
 
         while self.preview_state.result_order.len() > PREVIEW_CACHE_LIMIT {
@@ -354,11 +359,13 @@ impl App {
         };
         self.preview_state.pending_line_counts.remove(&key);
         let Some(total_lines) = total_lines else {
-            let should_clear_pending = self
-                .selected_entry()
-                .is_some_and(|entry| entry.path == key.path && entry.size == key.size && entry.modified == key.modified);
+            let should_clear_pending = self.selected_entry().is_some_and(|entry| {
+                entry.path == key.path && entry.size == key.size && entry.modified == key.modified
+            });
             if should_clear_pending {
-                self.preview_state.content.set_total_line_count_pending(false);
+                self.preview_state
+                    .content
+                    .set_total_line_count_pending(false);
                 return true;
             }
             return false;
@@ -369,7 +376,9 @@ impl App {
             entry.path == key.path && entry.size == key.size && entry.modified == key.modified
         });
         if is_current_entry {
-            self.preview_state.content.apply_total_line_count(total_lines);
+            self.preview_state
+                .content
+                .apply_total_line_count(total_lines);
             return true;
         }
         false
@@ -428,7 +437,9 @@ impl App {
             return;
         };
         if !needs_total_line_count {
-            self.preview_state.content.set_total_line_count_pending(false);
+            self.preview_state
+                .content
+                .set_total_line_count_pending(false);
             return;
         }
 
@@ -438,16 +449,20 @@ impl App {
             modified: entry.modified,
         };
         if let Some(total_lines) = self.preview_state.line_count_cache.get(&key).copied() {
-            self.preview_state.content.apply_total_line_count(total_lines);
+            self.preview_state
+                .content
+                .apply_total_line_count(total_lines);
             return;
         }
 
         let pending = self.preview_state.pending_line_counts.contains(&key)
-            || self.scheduler.submit_preview_line_count(PreviewLineCountRequest {
-                path: entry.path,
-                size: entry.size,
-                modified: entry.modified,
-            });
+            || self
+                .scheduler
+                .submit_preview_line_count(PreviewLineCountRequest {
+                    path: entry.path,
+                    size: entry.size,
+                    modified: entry.modified,
+                });
         if pending {
             self.preview_state.pending_line_counts.insert(key);
         }
@@ -485,7 +500,8 @@ impl App {
             && !detail.is_empty()
         {
             let detail = sanitize_terminal_text(detail);
-            let header_detail = compact_preview_header_label(&detail).unwrap_or_else(|| detail.clone());
+            let header_detail =
+                compact_preview_header_label(&detail).unwrap_or_else(|| detail.clone());
             segments.push(PreviewHeaderSegment::new(
                 HEADER_SCORE_DETAIL,
                 header_detail,
@@ -524,7 +540,10 @@ impl App {
             ));
         }
 
-        let has_primary_parts = content.detail.as_deref().is_some_and(|detail| !detail.is_empty())
+        let has_primary_parts = content
+            .detail
+            .as_deref()
+            .is_some_and(|detail| !detail.is_empty())
             || content
                 .status_note
                 .as_deref()
@@ -550,11 +569,7 @@ impl App {
                     } else {
                         format!("{rendered_total} lines")
                     };
-                    segments.push(PreviewHeaderSegment::new(
-                        HEADER_SCORE_CONTEXT,
-                        range,
-                        None,
-                    ));
+                    segments.push(PreviewHeaderSegment::new(HEADER_SCORE_CONTEXT, range, None));
                 }
             }
         } else if !has_primary_parts && content.kind != PreviewKind::Directory {
@@ -688,7 +703,11 @@ fn fallback_preview_header_segment(segments: &[PreviewHeaderSegment]) -> Option<
                 .find_map(|variant| variant.text.as_ref().map(|text| (variant.score, text)))?;
             Some((variant.0, variant.1.clone()))
         })
-        .max_by(|left, right| left.0.cmp(&right.0).then(left.1.len().cmp(&right.1.len()).reverse()))
+        .max_by(|left, right| {
+            left.0
+                .cmp(&right.0)
+                .then(left.1.len().cmp(&right.1.len()).reverse())
+        })
         .map(|(_, label)| label)
 }
 
@@ -735,8 +754,8 @@ fn preview_line_coverage_header_segment(
 ) -> Option<PreviewHeaderSegment> {
     let coverage = coverage?;
     let full = format_preview_line_coverage(coverage, false);
-    let compact = Some(format_preview_line_coverage(coverage, true))
-        .filter(|compact| compact != &full);
+    let compact =
+        Some(format_preview_line_coverage(coverage, true)).filter(|compact| compact != &full);
     Some(PreviewHeaderSegment::new(
         HEADER_SCORE_LINE_COVERAGE,
         full,

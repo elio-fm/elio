@@ -28,14 +28,12 @@ pub(crate) fn loading_preview_for(
         })
         .unwrap_or("Preview")
         .to_string();
-    let lines = if matches!(
+    let is_comic_page_preview = matches!(
         (facts.specific_type_label, options.comic_page_index()),
         (Some("Comic ZIP archive"), Some(_))
-    ) {
-        vec![
-            Line::from("Loading preview"),
-            Line::from("Extracting comic page in background"),
-        ]
+    );
+    let lines = if is_comic_page_preview {
+        Vec::new()
     } else if facts.builtin_class == FileClass::Archive {
         vec![
             Line::from("Loading preview"),
@@ -60,7 +58,15 @@ pub(crate) fn loading_preview_for(
             Line::from("Preparing file preview in background"),
         ]
     };
-    PreviewContent::new(PreviewKind::Unavailable, lines).with_detail(detail)
+    PreviewContent::new(
+        if is_comic_page_preview {
+            PreviewKind::Comic
+        } else {
+            PreviewKind::Unavailable
+        },
+        lines,
+    )
+    .with_detail(detail)
 }
 
 #[cfg(test)]
@@ -90,11 +96,8 @@ pub(crate) fn build_preview_with_options(
         return preview;
     }
     if facts.builtin_class == FileClass::Archive
-        && let Some(preview) = container::build_archive_preview(
-            &entry.path,
-            type_detail,
-            options.comic_page_index(),
-        )
+        && let Some(preview) =
+            container::build_archive_preview(&entry.path, type_detail, options.comic_page_index())
     {
         return preview;
     }

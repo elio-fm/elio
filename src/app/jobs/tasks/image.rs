@@ -38,6 +38,7 @@ pub(in crate::app::jobs) struct ImagePrepareJobKey {
     pub(in crate::app::jobs) modified: Option<SystemTime>,
     pub(in crate::app::jobs) target_width_px: u32,
     pub(in crate::app::jobs) target_height_px: u32,
+    pub(in crate::app::jobs) force_render_to_cache: bool,
 }
 
 impl ImagePreparePool {
@@ -76,6 +77,7 @@ impl ImagePreparePool {
                             modified: request.modified,
                             target_width_px: request.target_width_px,
                             target_height_px: request.target_height_px,
+                            force_render_to_cache: request.force_render_to_cache,
                             canceled: canceled.load(Ordering::Relaxed),
                             result,
                         }))
@@ -284,6 +286,7 @@ impl ImagePrepareJobKey {
             modified: request.modified,
             target_width_px: request.target_width_px,
             target_height_px: request.target_height_px,
+            force_render_to_cache: request.force_render_to_cache,
         }
     }
 }

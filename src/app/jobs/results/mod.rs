@@ -2,6 +2,16 @@ use super::*;
 use std::{collections::HashMap, sync::Arc};
 
 impl App {
+    fn refresh_static_image_preloads_for_cached_selected_comic_preview(
+        &mut self,
+        build_is_comic: bool,
+        is_current_entry: bool,
+    ) {
+        if build_is_comic && is_current_entry {
+            self.refresh_static_image_preloads();
+        }
+    }
+
     pub fn process_background_jobs(&mut self) -> bool {
         let mut dirty = false;
 
@@ -109,6 +119,7 @@ impl App {
                 }
                 JobResult::Preview(build) => {
                     self.cache_preview_result(&build.entry, &build.variant, &build.result);
+                    let build_is_comic = build.result.kind == preview::PreviewKind::Comic;
                     let is_current_entry = self
                         .selected_entry()
                         .map(|entry| {
@@ -123,6 +134,10 @@ impl App {
                         || !is_current_entry
                         || !is_current_variant
                     {
+                        self.refresh_static_image_preloads_for_cached_selected_comic_preview(
+                            build_is_comic,
+                            is_current_entry,
+                        );
                         self.preview_state.metrics.stale_results_dropped += 1;
                         continue;
                     }
@@ -135,6 +150,10 @@ impl App {
                     self.preview_state.scroll = 0;
                     self.preview_state.horizontal_scroll = 0;
                     self.sync_preview_scroll();
+                    if build_is_comic {
+                        self.refresh_static_image_preloads();
+                        self.prefetch_nearby_comic_pages();
+                    }
                     self.preview_state.metrics.applied_results += 1;
                     dirty = true;
                 }

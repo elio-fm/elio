@@ -22,6 +22,9 @@ const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 24;
 const STATIC_IMAGE_PRELOAD_LIMIT: usize = 6;
 const STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES: u64 = 512 * 1024;
 const STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES: u64 = 16 * 1024 * 1024;
+const FAST_FORCE_RENDER_FFMPEG_RASTER_ARGS: [&str; 4] =
+    ["-compression_level", "1", "-sws_flags", "fast_bilinear"];
+const DEFAULT_FFMPEG_RASTER_ARGS: [&str; 0] = [];
 
 #[derive(Clone, Debug, Default)]
 pub(in crate::app) struct ImagePreviewState {
@@ -43,6 +46,7 @@ pub(in crate::app) struct StaticImageKey {
     modified: Option<SystemTime>,
     target_width_px: u32,
     target_height_px: u32,
+    force_render_to_cache: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -60,6 +64,7 @@ pub(in crate::app) struct StaticImageOverlayRequest {
     pub(super) target_width_px: u32,
     pub(super) target_height_px: u32,
     pub(super) mode: StaticImageOverlayMode,
+    pub(super) force_render_to_cache: bool,
 }
 
 pub(in crate::app) struct PreparedStaticImage {
@@ -287,10 +292,10 @@ impl App {
     }
 
     pub(in crate::app) fn sync_image_preview_selection_activation(&mut self) {
-        self.image_preview.activation_ready_at =
-            self.active_static_image_overlay_request()
-                .or_else(|| self.active_preview_visual_overlay_request())
-                .and_then(|_| {
+        self.image_preview.activation_ready_at = self
+            .active_static_image_overlay_request()
+            .or_else(|| self.active_preview_visual_overlay_request())
+            .and_then(|_| {
                 let ready_at = self.last_selection_change_at + IMAGE_SELECTION_ACTIVATION_DELAY;
                 (Instant::now() < ready_at).then_some(ready_at)
             });
@@ -372,6 +377,48 @@ impl App {
             .is_some_and(|(active, displayed)| active == displayed)
     }
 
+    pub(in crate::app) fn keep_displayed_comic_preview_overlay_while_pending(&self) -> bool {
+        let Some(displayed) = self.image_preview.displayed.as_ref() else {
+            return false;
+        };
+        if displayed.mode != StaticImageOverlayMode::Inline
+            || self.preview_state.content.kind != preview::PreviewKind::Comic
+        {
+            return false;
+        }
+
+        let loading_current_comic_page =
+            self.preview_state
+                .load_state
+                .as_ref()
+                .is_some_and(|load_state| {
+                    let loading_path = match load_state {
+                        PreviewLoadState::Placeholder(path)
+                        | PreviewLoadState::Refreshing(path) => path,
+                    };
+                    self.selected_entry()
+                        .is_some_and(|entry| entry.path == *loading_path)
+                });
+        if loading_current_comic_page {
+            return true;
+        }
+
+        let Some(request) = self.active_preview_visual_overlay_request_unchecked() else {
+            return false;
+        };
+        let key = StaticImageKey::from_request(&request);
+        if !request.force_render_to_cache || self.image_preview.failed_images.contains(&key) {
+            return false;
+        }
+        if !self.image_selection_activation_ready() {
+            return true;
+        }
+
+        self.image_preview.pending_prepares.contains(&key)
+            || (self.static_image_can_prepare_inline_now(&request)
+                && !self.image_preview.dimensions.contains_key(&key))
+    }
+
     pub(in crate::app) fn displayed_static_image_replaces_preview(&self) -> bool {
         self.image_preview
             .displayed
@@ -381,14 +428,19 @@ impl App {
     }
 
     pub(in crate::app) fn refresh_static_image_preloads(&mut self) {
-        let current = self
-            .active_static_image_overlay_request()
-            .or_else(|| self.active_preview_visual_overlay_request());
-        let nearby = self
-            .active_static_image_overlay_request()
+        let current_static = self.active_static_image_overlay_request();
+        let current_preview_visual = self.active_preview_visual_overlay_request();
+        let current = current_static
             .as_ref()
-            .map(|request| self.nearby_static_image_overlay_requests(Some(request)))
-            .unwrap_or_default();
+            .cloned()
+            .or(current_preview_visual.as_ref().cloned());
+        let nearby = if let Some(request) = current_static.as_ref() {
+            self.nearby_static_image_overlay_requests(Some(request))
+        } else if current_preview_visual.is_some() {
+            self.nearby_comic_preview_visual_overlay_requests()
+        } else {
+            Vec::new()
+        };
         let desired = current
             .iter()
             .map(StaticImageKey::from_request)
@@ -425,12 +477,17 @@ impl App {
             build.modified,
             build.target_width_px,
             build.target_height_px,
+            build.force_render_to_cache,
         );
         self.image_preview.pending_prepares.remove(&key);
         let is_current = self
             .active_static_image_overlay_request()
             .as_ref()
-            .is_some_and(|request| StaticImageKey::from_request(request) == key);
+            .is_some_and(|request| StaticImageKey::from_request(request) == key)
+            || self
+                .active_preview_visual_overlay_request_unchecked()
+                .as_ref()
+                .is_some_and(|request| StaticImageKey::from_request(request) == key);
         if build.canceled {
             self.refresh_static_image_preloads();
             return is_current;
@@ -516,6 +573,7 @@ impl App {
             target_width_px: image_target_width_px(area, self.cached_terminal_window()),
             target_height_px: image_target_height_px(area, self.cached_terminal_window()),
             mode: StaticImageOverlayMode::FullPane,
+            force_render_to_cache: false,
         })
     }
 
@@ -580,6 +638,7 @@ impl App {
             target_height_px: request.target_height_px,
             ffmpeg_available: self.ffmpeg_available(),
             magick_available: self.magick_available(),
+            force_render_to_cache: request.force_render_to_cache,
         }
     }
 
@@ -612,6 +671,7 @@ impl StaticImageKey {
             modified: request.modified,
             target_width_px: request.target_width_px,
             target_height_px: request.target_height_px,
+            force_render_to_cache: request.force_render_to_cache,
         }
     }
 
@@ -621,6 +681,7 @@ impl StaticImageKey {
         modified: Option<SystemTime>,
         target_width_px: u32,
         target_height_px: u32,
+        force_render_to_cache: bool,
     ) -> Self {
         Self {
             path,
@@ -628,6 +689,7 @@ impl StaticImageKey {
             modified,
             target_width_px,
             target_height_px,
+            force_render_to_cache,
         }
     }
 }
@@ -707,6 +769,7 @@ where
         request.modified,
         target_width_px,
         target_height_px,
+        request.force_render_to_cache,
     );
 
     if format == StaticImageFormat::Svg {
@@ -735,10 +798,12 @@ where
     }
 
     if format == StaticImageFormat::Png {
-        return Some(PreparedStaticImageAsset {
-            display_path: request.path.clone(),
-            dimensions: source_dimensions,
-        });
+        if !request.force_render_to_cache {
+            return Some(PreparedStaticImageAsset {
+                display_path: request.path.clone(),
+                dimensions: source_dimensions,
+            });
+        }
     }
 
     let cache_path = static_image_render_cache_path(&key)?;
@@ -759,6 +824,7 @@ where
             &cache_path,
             target_width_px,
             target_height_px,
+            request.force_render_to_cache,
             &canceled,
         )
     {
@@ -806,6 +872,10 @@ fn should_prepare_static_image_inline(
     format: StaticImageFormat,
     ffmpeg_available: bool,
 ) -> bool {
+    if request.force_render_to_cache {
+        return false;
+    }
+
     match format {
         StaticImageFormat::Png => true,
         StaticImageFormat::Jpeg | StaticImageFormat::Gif | StaticImageFormat::Webp => {
@@ -873,6 +943,7 @@ fn render_raster_to_png_with_ffmpeg(
     output_path: &Path,
     target_width_px: u32,
     target_height_px: u32,
+    force_render_to_cache: bool,
     canceled: &impl Fn() -> bool,
 ) -> bool {
     if let Some(parent) = output_path.parent()
@@ -881,27 +952,39 @@ fn render_raster_to_png_with_ffmpeg(
         return false;
     }
 
-    run_cancelable_command(
-        Command::new("ffmpeg")
-            .arg("-v")
-            .arg("error")
-            .arg("-y")
-            .arg("-i")
-            .arg(input_path)
-            .arg("-frames:v")
-            .arg("1")
-            .arg("-vf")
-            .arg(format!(
-                "scale=w={}:h={}:force_original_aspect_ratio=decrease",
-                target_width_px.max(1),
-                target_height_px.max(1)
-            ))
-            .arg(output_path)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null()),
-        canceled,
-    )
-    .is_some_and(|status| status.success() && output_path.exists())
+    let mut command = Command::new("ffmpeg");
+    command
+        .arg("-v")
+        .arg("error")
+        .arg("-y")
+        .arg("-i")
+        .arg(input_path)
+        .arg("-frames:v")
+        .arg("1")
+        .arg("-vf")
+        .arg(format!(
+            "scale=w={}:h={}:force_original_aspect_ratio=decrease",
+            target_width_px.max(1),
+            target_height_px.max(1)
+        ));
+    command.args(ffmpeg_raster_render_args(force_render_to_cache));
+    command
+        .arg(output_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    run_cancelable_command(&mut command, canceled)
+        .is_some_and(|status| status.success() && output_path.exists())
+}
+
+pub(in crate::app) fn ffmpeg_raster_render_args(
+    force_render_to_cache: bool,
+) -> &'static [&'static str] {
+    if force_render_to_cache {
+        &FAST_FORCE_RENDER_FFMPEG_RASTER_ARGS
+    } else {
+        &DEFAULT_FFMPEG_RASTER_ARGS
+    }
 }
 
 fn read_raster_dimensions(path: &Path) -> Option<RenderedImageDimensions> {

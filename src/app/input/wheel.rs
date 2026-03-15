@@ -98,10 +98,15 @@ impl App {
             .or_else(|| self.resolve_wheel_target(mouse.column, mouse.row));
         match target {
             Some(WheelTarget::Preview) => {
+                self.focus_preview_scroll();
                 if self.pdf_page_wheel_navigation_active() && self.step_pdf_page(delta) {
                     return;
                 }
-                self.focus_preview_scroll();
+                if self.comic_page_wheel_navigation_active()
+                    && self.step_comic_page_with_preview_mode(delta, PreviewRefreshMode::Deferred)
+                {
+                    return;
+                }
                 if mouse.modifiers.contains(KeyModifiers::SHIFT)
                     && self.preview_allows_horizontal_scroll()
                 {
@@ -465,6 +470,10 @@ impl App {
     fn pdf_page_wheel_navigation_active(&self) -> bool {
         self.preview_prefers_pdf_surface()
             || (self.preview_uses_image_overlay() && self.pdf_preview_header_detail().is_some())
+    }
+
+    fn comic_page_wheel_navigation_active(&self) -> bool {
+        self.comic_preview_wheel_capture_active()
     }
 
     fn preview_has_vertical_overflow(&self) -> bool {
