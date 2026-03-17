@@ -152,6 +152,14 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         }
 
         if dirty {
+            // iTerm2 has no clear primitive, so we erase image cells with blank
+            // spaces before terminal.draw(). ratatui then overpaints those cells
+            // with the correct panel background in the same render pass, avoiding
+            // the black-background artifact that occurs when erasing after draw.
+            let pre_erase = app.iterm_pre_draw_erase();
+            if !pre_erase.is_empty() {
+                terminal.backend_mut().write_all(&pre_erase)?;
+            }
             let mut frame_state = app::FrameState::default();
             terminal.draw(|frame| ui::render(frame, &app, &mut frame_state))?;
             dirty = app.set_frame_state(frame_state);

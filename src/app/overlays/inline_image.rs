@@ -110,6 +110,30 @@ impl App {
         self.terminal_images.window
     }
 
+    /// Returns iTerm2 erase bytes that must be written to the terminal **before**
+    /// `terminal.draw()` when an image is about to be replaced or cleared.
+    ///
+    /// Emitting the erase before the draw lets ratatui naturally overpaint the
+    /// erased cells with the correct panel background in the same render pass,
+    /// avoiding the black-background artifact that occurs when erasing after draw.
+    pub(crate) fn iterm_pre_draw_erase(&self) -> Vec<u8> {
+        if self.terminal_images.protocol != ImageProtocol::ItermInline {
+            return Vec::new();
+        }
+        let keep_stale = self.keep_displayed_page_preview_overlay_while_pending();
+        let needs_clear = (self.static_image_overlay_displayed()
+            && !self.displayed_static_image_matches_active()
+            && !keep_stale)
+            || (self.pdf_overlay_displayed() && !self.displayed_pdf_overlay_matches_active());
+        if !needs_clear {
+            return Vec::new();
+        }
+        self.displayed_static_image_pane_area()
+            .or_else(|| self.displayed_pdf_overlay_area())
+            .map(erase_cells)
+            .unwrap_or_default()
+    }
+
     pub(crate) fn present_preview_overlay(&mut self) -> Result<Vec<u8>> {
         if self.browser_wheel_burst_active() {
             return Ok(Vec::new());
@@ -171,19 +195,11 @@ impl App {
         if !self.static_image_overlay_displayed() && !self.pdf_overlay_displayed() {
             return Ok(Vec::new());
         }
-        let mut bytes = clear_terminal_images(self.terminal_images.protocol)
+        let bytes = clear_terminal_images(self.terminal_images.protocol)
             .context("failed to clear preview overlay")?;
-        // iTerm2 has no delete primitive — overwrite the last displayed area
-        // with blank cells so ghost pixels don't show through on the next draw.
-        if self.terminal_images.protocol == ImageProtocol::ItermInline {
-            // Use the full pane rect for erasure so pixels from images of any
-            // aspect ratio are fully cleared, not just the fitted placement rect.
-            let area = self.displayed_static_image_pane_area()
-                .or_else(|| self.displayed_pdf_overlay_area());
-            if let Some(area) = area {
-                bytes.extend(erase_cells(area));
-            }
-        }
+        // iTerm2 erase is emitted by iterm_pre_draw_erase() *before* terminal.draw(),
+        // so ratatui naturally overpaints with the correct panel background. Nothing
+        // extra needed here.
         self.clear_displayed_static_image();
         self.clear_displayed_pdf_overlay();
         Ok(bytes)
@@ -402,13 +418,25 @@ fn clear_terminal_images_with_kitty_protocol() -> Result<Vec<u8>> {
     Ok(build_kitty_clear_sequence().as_bytes().to_vec())
 }
 
-/// Overwrite every cell in `area` with a space so iTerm2 ghost pixels are
-/// erased before ratatui redraws the region with text content.
-/// Emits SGR reset first to avoid inheriting any active foreground/background.
+/// Overwrite every cell in `area` with a space colored with the panel background
+/// so iTerm2 ghost pixels are erased without leaving black traces.
+///
+/// Using the exact panel color means ratatui's differential renderer can safely
+/// skip those cells on the next draw — they already show the right color.
 fn erase_cells(area: Rect) -> Vec<u8> {
+    use ratatui::style::Color;
     let mut out = Vec::new();
     let blank_row = " ".repeat(usize::from(area.width));
-    let _ = write!(out, "\x1b[0m"); // reset attributes
+    // Set background to the panel color so empty cells match the pane background.
+    // Fall back to default-background reset if the theme returns a non-RGB value.
+    match crate::ui::theme::palette().panel {
+        Color::Rgb(r, g, b) => {
+            let _ = write!(out, "\x1b[0;48;2;{r};{g};{b}m");
+        }
+        _ => {
+            let _ = write!(out, "\x1b[0m");
+        }
+    }
     for row in 0..area.height {
         let _ = write!(
             out,
@@ -418,6 +446,7 @@ fn erase_cells(area: Rect) -> Vec<u8> {
             blank_row
         );
     }
+    let _ = write!(out, "\x1b[0m"); // restore default attributes
     out
 }
 
