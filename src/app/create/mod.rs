@@ -32,6 +32,30 @@ impl App {
         self.create.as_ref().map_or(0, |c| c.cursor_col)
     }
 
+    pub fn create_title(&self) -> String {
+        let Some(c) = &self.create else {
+            return "Create".to_string();
+        };
+        let files = c.lines.iter().filter(|l| {
+            let t = l.trim();
+            !t.is_empty() && !t.starts_with('/') && !t.ends_with('/')
+        }).count();
+        let dirs = c.lines.iter().filter(|l| {
+            let t = l.trim();
+            !t.is_empty() && (t.starts_with('/') || t.ends_with('/'))
+        }).count();
+        match (files, dirs) {
+            (0, 0) => "Create".to_string(),
+            (f, 0) => format!("Create {} file{}", f, if f == 1 { "" } else { "s" }),
+            (0, d) => format!("Create {} folder{}", d, if d == 1 { "" } else { "s" }),
+            (f, d) => format!(
+                "Create {} file{} and {} folder{}",
+                f, if f == 1 { "" } else { "s" },
+                d, if d == 1 { "" } else { "s" },
+            ),
+        }
+    }
+
     pub fn create_line_error(&self, index: usize) -> Option<&str> {
         self.create
             .as_ref()
@@ -207,14 +231,23 @@ impl App {
 
 impl App {
     pub(in crate::app) fn handle_create_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-            let inside = self
-                .frame_state
-                .create_panel
-                .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
-            if !inside {
-                self.create = None;
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                let inside = self
+                    .frame_state
+                    .create_panel
+                    .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+                if !inside {
+                    self.create = None;
+                }
             }
+            MouseEventKind::ScrollUp => {
+                self.create_move_vertical(-1);
+            }
+            MouseEventKind::ScrollDown => {
+                self.create_move_vertical(1);
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -473,6 +506,19 @@ impl App {
         }
 
         self.create = None;
+        let files = items.iter().filter(|(_, i)| !i.is_dir).count();
+        let dirs = items.iter().filter(|(_, i)| i.is_dir).count();
+        let status = match (files, dirs) {
+            (1, 0) => format!("Created \"{}\"", items.iter().find(|(_, i)| !i.is_dir).unwrap().1.name),
+            (0, 1) => format!("Created \"{}\"", items.iter().find(|(_, i)| i.is_dir).unwrap().1.name),
+            (f, 0) => format!("Created {f} files"),
+            (0, d) => format!("Created {d} folders"),
+            (f, d) => format!(
+                "Created {f} file{} and {d} folder{}",
+                if f == 1 { "" } else { "s" },
+                if d == 1 { "" } else { "s" },
+            ),
+        };
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
             target_cwd: self.cwd.clone(),
@@ -482,7 +528,7 @@ impl App {
             reselect_path: last_path,
             history_mode: DirectoryHistoryMode::None,
             refresh_search: false,
-            completion: DirectoryLoadCompletion::Clear,
+            completion: DirectoryLoadCompletion::Status(status),
         })?;
 
         Ok(())

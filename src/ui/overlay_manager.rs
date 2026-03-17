@@ -142,7 +142,7 @@ pub(super) fn render_create_overlay(
 
     frame.render_widget(Clear, popup);
     frame.render_widget(
-        helpers::panel_block(" New ", palette.chrome_alt, palette),
+        helpers::panel_block(&format!(" {} ", app.create_title()), palette.chrome_alt, palette),
         popup,
     );
 
@@ -200,6 +200,20 @@ pub(super) fn render_create_overlay(
     // Compute scroll_top so cursor stays visible.
     let scroll_top = compute_create_scroll_top(cursor_line, line_count, visible_lines as usize);
 
+    let show_scrollbar = line_count > visible_lines as usize;
+    let thumb_size = if show_scrollbar {
+        (visible_lines as usize * visible_lines as usize / line_count).max(1)
+    } else {
+        0
+    };
+    let max_scroll = line_count.saturating_sub(visible_lines as usize);
+    let thumb_pos = if max_scroll == 0 {
+        0
+    } else {
+        scroll_top * (visible_lines as usize - thumb_size) / max_scroll
+    };
+    let bar_x = list_area.x + list_area.width.saturating_sub(1);
+
     let mut cursor_screen_pos: Option<(u16, u16)> = None;
 
     for row_offset in 0..visible_lines as usize {
@@ -215,20 +229,17 @@ pub(super) fn render_create_overlay(
         let icon = if is_dir { "󰉋" } else { "󰈔" };
         let icon_color = if is_dir { palette.accent } else { palette.muted };
 
-        // Horizontal scrolling: keep cursor visible within the text area.
-        // Icon takes 3 chars (icon + 2 spaces); text gets the rest.
-        let text_width = list_area.width.saturating_sub(3) as usize;
+        // Icon takes 3 chars (icon + 2 spaces); scrollbar takes 2 when visible.
+        let text_width = list_area.width
+            .saturating_sub(3)
+            .saturating_sub(if show_scrollbar { 2 } else { 0 }) as usize;
         let chars: Vec<char> = line_text.chars().collect();
         let col = if is_cursor_line {
             cursor_col.min(chars.len())
         } else {
             0
         };
-        let h_start = if col > text_width {
-            col - text_width
-        } else {
-            0
-        };
+        let h_start = if col > text_width { col - text_width } else { 0 };
 
         let mut visible_text: String = chars.iter().skip(h_start).take(text_width).collect();
         if h_start > 0 && !visible_text.is_empty() {
@@ -237,9 +248,7 @@ pub(super) fn render_create_overlay(
         }
 
         let text_style = if is_cursor_line {
-            Style::default()
-                .fg(palette.text)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(palette.text).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(palette.text)
         };
@@ -261,7 +270,7 @@ pub(super) fn render_create_overlay(
         let row_rect = Rect {
             x: list_area.x,
             y: list_area.y + row_offset as u16,
-            width: list_area.width,
+            width: list_area.width.saturating_sub(if show_scrollbar { 2 } else { 0 }),
             height: 1,
         };
         frame.render_widget(
@@ -269,6 +278,16 @@ pub(super) fn render_create_overlay(
                 .style(Style::default().bg(palette.path_bg).fg(palette.text)),
             row_rect,
         );
+
+        if show_scrollbar {
+            let y = list_area.y + row_offset as u16;
+            let in_thumb = row_offset >= thumb_pos && row_offset < thumb_pos + thumb_size;
+            let bar_char = if in_thumb { "▐" } else { " " };
+            let bar_color = if in_thumb { palette.muted } else { palette.path_bg };
+            frame.buffer_mut()[(bar_x, y)].set_symbol(bar_char);
+            frame.buffer_mut()[(bar_x, y)]
+                .set_style(Style::default().bg(palette.path_bg).fg(bar_color));
+        }
 
         if is_cursor_line {
             let visible_col = col.saturating_sub(h_start);
