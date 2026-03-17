@@ -1,119 +1,148 @@
 # elio
 
-`elio` is a mouse-capable terminal file manager with a soft folder-first presentation.
+A mouse-capable terminal file manager with a soft folder-first layout.
 
-It opens the current working directory, keeps pinned places on the left, shows files in a grid or list in the center, and uses the right-hand pane for details and previews.
+![elio — default theme](examples/themes/default/screenshot.png)
 
-## Highlights
+Three-pane interface: pinned places on the left, a grid or list browser in the center, and a detail and preview pane on the right. Works entirely in the terminal with full keyboard and mouse support.
 
-- Three-pane layout with places on the left, the main browser in the center, and details plus previews on the right
-- Grid view by default, with a denser list view when you want it
-- Keyboard and mouse support, including click, double click, wheel scroll, and preview scrolling
-- Back/forward history, parent navigation, hidden-file toggle, and sort cycling
-- Automatic reload when the current directory changes, with polling fallback when file watching is unavailable
-- Fuzzy folder search with `f` and fuzzy file search with `Ctrl+F`, both scoped to the current directory tree
-- Type-aware previews for directories, text, markdown, code, structured data, archives, documents, images, and PDFs
-- Configurable behavior from `config.toml` and configurable appearance rules from `theme.toml`
+---
 
-## Quick Start
+## Features
 
-Run from the repository root:
+- **Grid and list views** — switch with `v`; grid by default, denser list on demand
+- **Full mouse support** — click, double-click, scroll, preview scrolling, Shift+scroll for sideways panning
+- **Type-aware previews** — directories, text, Markdown, code, structured data, archives, EPUB, comic archives, images, and PDFs
+- **Inline image previews** — rendered images and PDF pages directly inside the terminal on supported terminals
+- **Fuzzy search** — `f` to search folders, `Ctrl+F` to search files, both scoped to the current directory tree
+- **Auto-reload** — watches the current directory for changes, with polling fallback
+- **Back/forward history**, parent navigation, hidden-file toggle, sort cycling
+- **Configurable** via `config.toml` for behavior and `theme.toml` for appearance
+
+---
+
+## Screenshots
+
+| Default | Catppuccin Mocha | Tokyo Night |
+|---|---|---|
+| ![Default](examples/themes/default/screenshot.png) | ![Catppuccin Mocha](examples/themes/catppuccin-mocha/screenshot.png) | ![Tokyo Night](examples/themes/tokyo-night/screenshot.png) |
+
+| Neon Cherry | Amber Dusk | Blush Light |
+|---|---|---|
+| ![Neon Cherry](examples/themes/neon-cherry/screenshot.png) | ![Amber Dusk](examples/themes/amber-dusk/screenshot.png) | ![Blush Light](examples/themes/blush-light/screenshot.png) |
+
+---
+
+## Requirements
+
+- Rust (stable toolchain) — for building from source
+- A terminal that supports 24-bit color and mouse reporting
+
+---
+
+## Installation
+
+**Run directly from the repository:**
 
 ```bash
 cargo run --release
 ```
 
-`elio` starts in your current working directory.
-
-If you want a local install instead of `cargo run`, you can also do:
+**Install to your PATH:**
 
 ```bash
 cargo install --path .
 elio
 ```
 
+`elio` starts in your current working directory.
+
+---
+
 ## Optional Tools
 
-`elio` works without extra setup, but a few integrations unlock better behavior:
+`elio` works without extra setup. These tools unlock additional behavior when present:
 
-- `gio open` or `xdg-open` enables external open with `o`
-- `pdfinfo` and `pdftocairo` enable rendered PDF page previews
-- Kitty graphics protocol support, or a working `kitten` backend, enables inline image and PDF surface previews
+| Tool | What it enables |
+|---|---|
+| `pdfinfo` + `pdftocairo` | Rendered PDF page previews |
+| `gio open` or `xdg-open` | Open files externally with `o` |
+| `ffmpeg` or `magick` | Broader image format rendering |
 
-Image previews are detected automatically in terminals such as Kitty, Ghostty, and WezTerm. When those tools are missing, `elio` falls back to text or metadata-based previews instead of failing.
+---
+
+## Image Previews
+
+`elio` renders inline images and PDF pages directly in the terminal using the native graphics protocol of the detected terminal. Detection is automatic — no configuration needed in supported terminals.
+
+### Terminal Compatibility
+
+| Terminal | Protocol | Image previews |
+|---|---|---|
+| [Kitty](https://sw.kovidgoyal.net/kitty/) | Kitty Graphics Protocol | Enabled by default |
+| [Ghostty](https://ghostty.org/) | Kitty Graphics Protocol | Enabled by default |
+| [Warp](https://www.warp.dev/) | Kitty Graphics Protocol | Enabled by default |
+| [WezTerm](https://wezfurlong.org/wezterm/) | iTerm2 Inline Protocol | Enabled by default |
+| Alacritty | — | Not supported |
+| Other | Kitty Graphics Protocol | Disabled by default (see below) |
+
+### Environment Variables
+
+| Variable | Effect |
+|---|---|
+| `ELIO_IMAGE_PREVIEWS=1` | Force-enable image previews on unrecognized terminals that support the Kitty Graphics Protocol |
+| `ELIO_DEBUG_PREVIEW` | Log image preview activity to `/tmp/elio-preview.log` |
+| `ELIO_LOG_MOUSE` | Log raw mouse events to `/tmp/elio-mouse.log` |
+
+---
 
 ## Configuration
-
-`elio` reads configuration from:
 
 ```bash
 ~/.config/elio/config.toml
 ```
-
-Current supported config:
 
 ```toml
 [ui]
 show_top_bar = false
 ```
 
-- `show_top_bar`: show or hide the optional toolbar at the top of the screen
+| Key | Default | Description |
+|---|---|---|
+| `ui.show_top_bar` | `false` | Show or hide the toolbar at the top of the screen |
 
-If the config file does not exist, `elio` uses built-in defaults. The example file in [examples/config.toml](examples/config.toml) mirrors the current config surface.
+If the file does not exist, `elio` uses built-in defaults. See [examples/config.toml](examples/config.toml) for an annotated reference.
+
+---
 
 ## Theming
-
-Theme overrides live at:
 
 ```bash
 ~/.config/elio/theme.toml
 ```
 
-Theme loading behavior:
+Theme files layer on top of the built-in defaults — only the keys you set are overridden. If the file is missing or unparseable, `elio` falls back to the built-in theme silently (parse errors are reported to `stderr`).
 
-- If the file exists and parses, `elio` layers it on top of the built-in default theme
-- Any key you omit falls back to the built-in default theme
-- If the file does not exist, `elio` uses the built-in default theme
-- If the file cannot be read or parsed, `elio` falls back to the built-in default theme and prints an error to `stderr`
+### Supported Sections
 
-Supported sections:
+| Section | Controls |
+|---|---|
+| `[palette]` | App-wide colors |
+| `[preview.code]` | Syntax highlight colors |
+| `[classes.<name>]` | Default icon and color per file class |
+| `[extensions.<ext>]` | Overrides by file extension |
+| `[files."<name>"]` | Overrides by exact filename |
+| `[directories."<name>"]` | Overrides by exact directory name |
 
-- `[palette]` for app-wide colors
-- `[preview.code]` for code preview syntax colors
-- `[classes.<name>]` for default icon/color per file class
-- `[extensions.<ext>]` for file extension overrides
-- `[files."<exact-name>"]` for exact file-name overrides
-- `[directories."<exact-name>"]` for exact directory-name overrides
+Rule resolution order: exact name → extension → class fallback. Matching is case-insensitive.
 
-Rule matching is case-insensitive and trims surrounding whitespace. Resolution order is:
+### Built-in File Classes
 
-1. Exact file or directory name
-2. File extension
-3. Built-in file classification fallback
+`directory` · `code` · `config` · `document` · `image` · `audio` · `video` · `archive` · `font` · `data` · `file`
 
-Built-in file class names:
+Aliases: `dir`/`folder` → `directory`, `doc`/`text` → `document`, `img` → `image`, `compressed` → `archive`, `plain` → `file`
 
-- `directory`
-- `code`
-- `config`
-- `document`
-- `image`
-- `audio`
-- `video`
-- `archive`
-- `font`
-- `data`
-- `file`
-
-Class aliases:
-
-- `directory`, `dir`, `folder`
-- `document`, `doc`, `text`
-- `image`, `img`
-- `archive`, `compressed`
-- `file`, `plain`
-
-Minimal example:
+### Minimal Example
 
 ```toml
 [palette]
@@ -132,55 +161,59 @@ type = "#b38cff"
 string = "#79e7d5"
 comment = "#6f8399"
 
-[classes.config]
-icon = "󰒓"
-color = "#b38cff"
-
 [extensions.lock]
 class = "data"
 icon = "󰌾"
 color = "#59de94"
 ```
 
-Example config, including the example themes, lives under [examples/](examples/).
+Ready-to-use themes are in [examples/themes/](examples/themes/). Copy any `theme.toml` to `~/.config/elio/theme.toml` to apply it.
+
+---
 
 ## Controls
 
-Main browser controls:
+### Browser
 
-- `Enter`: open the selected folder or file
-- `Backspace`: go to the parent directory
-- `Left` / `h`: go to the parent directory
-- `Right` / `l`: enter the selected folder
-- `Up` / `Down` or `j` / `k`: move selection
-- `Tab` / `Shift+Tab`: jump through pinned places
-- `Alt+Left` / `Alt+Right`: go back or forward in history
-- `v`: toggle grid/list view
-- `.`: show or hide dotfiles
-- `s`: cycle sort mode (`Name`, `Modified`, `Size`)
-- `o`: open the selected item externally
-- `f`: fuzzy-find folders in the current directory tree
-- `Ctrl+F`: fuzzy-find files in the current directory tree
-- `?`: open the help overlay
-- `q` or `Esc`: quit
+| Key / Action | Description |
+|---|---|
+| `Enter` | Open selected folder or file |
+| `Backspace` · `Left` · `h` | Go to parent directory |
+| `Right` · `l` | Enter selected folder |
+| `Up` / `Down` · `j` / `k` | Move selection |
+| `Tab` / `Shift+Tab` | Jump through pinned places |
+| `Alt+Left` / `Alt+Right` | Back / forward in history |
+| `v` | Toggle grid / list view |
+| `.` | Show or hide dotfiles |
+| `s` | Cycle sort mode (Name → Modified → Size) |
+| `o` | Open selected item externally |
+| `f` | Fuzzy-find folders in the current tree |
+| `Ctrl+F` | Fuzzy-find files in the current tree |
+| `?` | Open help overlay |
+| `q` · `Esc` | Quit |
 
-Mouse and preview behavior:
+### Mouse
 
-- Click selects an item
-- Double click opens a folder or file
-- Mouse wheel scrolls the browser or the details pane, depending on focus
-- `Shift+Wheel` scrolls sideways in code previews
-- The details pane keeps its own scroll position and reports real line counts where available
+| Action | Description |
+|---|---|
+| Click | Select item |
+| Double-click | Open folder or file |
+| Scroll | Scroll browser or preview pane depending on cursor position |
+| `Shift+Scroll` | Scroll sideways in code previews |
 
-Inside the fuzzy finder:
+### Fuzzy Finder
 
-- `Left` / `Right`: move the text cursor
-- `Home` / `End`: jump to the start or end of the query
-- `Backspace` / `Delete`: edit at the cursor position
-- `Up` / `Down`: move through results
-- `Enter`: open the selected result
-- `Esc`: close the finder
+| Key | Description |
+|---|---|
+| `Left` / `Right` | Move text cursor |
+| `Home` / `End` | Jump to start / end of query |
+| `Backspace` / `Delete` | Edit at cursor |
+| `Up` / `Down` | Move through results |
+| `Enter` | Open selected result |
+| `Esc` | Close finder |
+
+---
 
 ## License
 
-Licensed under the [MIT license](LICENSE-MIT).
+[MIT](LICENSE-MIT)
