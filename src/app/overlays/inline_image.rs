@@ -176,7 +176,9 @@ impl App {
         // iTerm2 has no delete primitive — overwrite the last displayed area
         // with blank cells so ghost pixels don't show through on the next draw.
         if self.terminal_images.protocol == ImageProtocol::ItermInline {
-            let area = self.displayed_static_image_area()
+            // Use the full pane rect for erasure so pixels from images of any
+            // aspect ratio are fully cleared, not just the fitted placement rect.
+            let area = self.displayed_static_image_pane_area()
                 .or_else(|| self.displayed_pdf_overlay_area());
             if let Some(area) = area {
                 bytes.extend(erase_cells(area));

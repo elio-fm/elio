@@ -79,6 +79,7 @@ struct DisplayedStaticImagePreview {
     size: u64,
     modified: Option<SystemTime>,
     area: Rect,
+    pane_area: Rect,
     mode: StaticImageOverlayMode,
 }
 
@@ -443,10 +444,12 @@ impl App {
         self.image_preview.displayed.is_some()
     }
 
-    /// The placement rect of the currently displayed static image overlay, if any.
-    pub(in crate::app) fn displayed_static_image_area(&self) -> Option<Rect> {
-        self.image_preview.displayed.as_ref().map(|d| d.area)
+    /// The full pane rect of the currently displayed static image overlay, if any.
+    /// Used to erase iTerm2 ghost pixels — must cover the whole pane, not just the fitted placement.
+    pub(in crate::app) fn displayed_static_image_pane_area(&self) -> Option<Rect> {
+        self.image_preview.displayed.as_ref().map(|d| d.pane_area)
     }
+
 
     pub(in crate::app) fn clear_displayed_static_image(&mut self) {
         self.image_preview.displayed = None;
@@ -811,6 +814,7 @@ impl DisplayedStaticImagePreview {
             size: request.size,
             modified: request.modified,
             area,
+            pane_area: request.area,
             mode: request.mode,
         }
     }
