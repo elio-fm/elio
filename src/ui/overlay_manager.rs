@@ -62,6 +62,12 @@ pub(super) fn render_trash_overlay(
     } else {
         // Multiple items — scrollable list with scroll indicator
         let show_scrollbar = count > visible;
+        // Fixed thumb size + sliding position — size never changes while scrolling
+        let thumb_size = (visible * visible / count).max(1);
+        let max_scroll = count.saturating_sub(visible);
+        let thumb_pos = if max_scroll == 0 { 0 } else { scroll * (visible - thumb_size) / max_scroll };
+        let bar_x = list_area.x + list_area.width.saturating_sub(1);
+
         for row_offset in 0..visible {
             let item_index = scroll + row_offset;
             let Some(name) = app.trash_target_name_at(item_index) else {
@@ -79,10 +85,7 @@ pub(super) fn render_trash_overlay(
             );
 
             if show_scrollbar {
-                let bar_x = list_area.x + list_area.width.saturating_sub(1);
-                let thumb_start = scroll * visible / count;
-                let thumb_end = (scroll + visible) * visible / count;
-                let in_thumb = row_offset >= thumb_start && row_offset < thumb_end.max(thumb_start + 1);
+                let in_thumb = row_offset >= thumb_pos && row_offset < thumb_pos + thumb_size;
                 let bar_char = if in_thumb { "▐" } else { " " };
                 let bar_color = if in_thumb { palette.muted } else { palette.chrome_alt };
                 frame.buffer_mut()[(bar_x, y)].set_symbol(bar_char);
