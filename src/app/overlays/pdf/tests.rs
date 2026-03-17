@@ -940,14 +940,14 @@ fn select_image_protocol_ghostty_always_enabled() {
 }
 
 #[test]
-fn select_image_protocol_wezterm_requires_override() {
+fn select_image_protocol_wezterm_always_enabled() {
     assert_eq!(
         select_image_protocol(TerminalIdentity::WezTerm, false),
-        ImageProtocol::None
+        ImageProtocol::ItermInline
     );
     assert_eq!(
         select_image_protocol(TerminalIdentity::WezTerm, true),
-        ImageProtocol::KittyGraphics
+        ImageProtocol::ItermInline
     );
 }
 

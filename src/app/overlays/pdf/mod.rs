@@ -640,6 +640,11 @@ impl App {
         self.pdf_preview.displayed.is_some()
     }
 
+    /// The content area of the currently displayed PDF overlay, if any.
+    pub(in crate::app) fn displayed_pdf_overlay_area(&self) -> Option<Rect> {
+        self.pdf_preview.displayed.as_ref().map(|d| d.area)
+    }
+
     pub(in crate::app) fn clear_displayed_pdf_overlay(&mut self) {
         self.pdf_preview.displayed = None;
     }

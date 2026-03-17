@@ -443,6 +443,11 @@ impl App {
         self.image_preview.displayed.is_some()
     }
 
+    /// The placement rect of the currently displayed static image overlay, if any.
+    pub(in crate::app) fn displayed_static_image_area(&self) -> Option<Rect> {
+        self.image_preview.displayed.as_ref().map(|d| d.area)
+    }
+
     pub(in crate::app) fn clear_displayed_static_image(&mut self) {
         self.image_preview.displayed = None;
     }

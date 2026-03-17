@@ -5,7 +5,7 @@ use crossterm::terminal;
 use ratatui::layout::Rect;
 use std::{
     env,
-    fs::File,
+    fs::{self, File},
     io::{Read, Write as _},
     path::Path,
     process::Command,
@@ -52,7 +52,11 @@ pub(in crate::app) enum TerminalIdentity {
 /// the same protocol without coupling detection logic to rendering logic.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) enum ImageProtocol {
+    /// Kitty Graphics Protocol (APC `\x1b_G…\x1b\\`). Supported natively by
+    /// Kitty, Ghostty, and Warp.
     KittyGraphics,
+    /// iTerm2 inline image protocol (OSC 1337). WezTerm's preferred path.
+    ItermInline,
     #[default]
     None,
 }
@@ -167,8 +171,17 @@ impl App {
         if !self.static_image_overlay_displayed() && !self.pdf_overlay_displayed() {
             return Ok(Vec::new());
         }
-        let bytes = clear_terminal_images(self.terminal_images.protocol)
+        let mut bytes = clear_terminal_images(self.terminal_images.protocol)
             .context("failed to clear preview overlay")?;
+        // iTerm2 has no delete primitive — overwrite the last displayed area
+        // with blank cells so ghost pixels don't show through on the next draw.
+        if self.terminal_images.protocol == ImageProtocol::ItermInline {
+            let area = self.displayed_static_image_area()
+                .or_else(|| self.displayed_pdf_overlay_area());
+            if let Some(area) = area {
+                bytes.extend(erase_cells(area));
+            }
+        }
         self.clear_displayed_static_image();
         self.clear_displayed_pdf_overlay();
         Ok(bytes)
@@ -228,8 +241,11 @@ pub(in crate::app) fn select_image_protocol(
         TerminalIdentity::Kitty => ImageProtocol::KittyGraphics,
         TerminalIdentity::Ghostty => ImageProtocol::KittyGraphics,
         TerminalIdentity::Warp => ImageProtocol::KittyGraphics,
-        TerminalIdentity::WezTerm if image_previews_override => ImageProtocol::KittyGraphics,
-        _ => ImageProtocol::None,
+        TerminalIdentity::WezTerm => ImageProtocol::ItermInline,
+        // ELIO_IMAGE_PREVIEWS=1 force-enables KittyGraphics on unrecognised terminals
+        // for testing. Alacritty is excluded — it does not support image protocols.
+        TerminalIdentity::Other if image_previews_override => ImageProtocol::KittyGraphics,
+        TerminalIdentity::Alacritty | TerminalIdentity::Other => ImageProtocol::None,
     }
 }
 
@@ -337,6 +353,7 @@ pub(in crate::app) fn place_terminal_image(
 ) -> Result<Vec<u8>> {
     match protocol {
         ImageProtocol::KittyGraphics => place_terminal_image_with_kitty_protocol(path, area),
+        ImageProtocol::ItermInline => place_terminal_image_with_iterm_protocol(path, area),
         ImageProtocol::None => Ok(Vec::new()),
     }
 }
@@ -344,7 +361,9 @@ pub(in crate::app) fn place_terminal_image(
 pub(in crate::app) fn clear_terminal_images(protocol: ImageProtocol) -> Result<Vec<u8>> {
     match protocol {
         ImageProtocol::KittyGraphics => clear_terminal_images_with_kitty_protocol(),
-        ImageProtocol::None => Ok(Vec::new()),
+        // iTerm2 protocol has no clear primitive — the overlay is erased by
+        // the next ratatui draw call overwriting the cell region.
+        ImageProtocol::ItermInline | ImageProtocol::None => Ok(Vec::new()),
     }
 }
 
@@ -379,4 +398,39 @@ fn place_terminal_image_with_kitty_protocol(path: &Path, area: Rect) -> Result<V
 
 fn clear_terminal_images_with_kitty_protocol() -> Result<Vec<u8>> {
     Ok(build_kitty_clear_sequence().as_bytes().to_vec())
+}
+
+/// Overwrite every cell in `area` with a space so iTerm2 ghost pixels are
+/// erased before ratatui redraws the region with text content.
+/// Emits SGR reset first to avoid inheriting any active foreground/background.
+fn erase_cells(area: Rect) -> Vec<u8> {
+    let mut out = Vec::new();
+    let blank_row = " ".repeat(usize::from(area.width));
+    let _ = write!(out, "\x1b[0m"); // reset attributes
+    for row in 0..area.height {
+        let _ = write!(
+            out,
+            "\x1b[{};{}H{}",
+            area.y.saturating_add(1).saturating_add(row),
+            area.x.saturating_add(1),
+            blank_row
+        );
+    }
+    out
+}
+
+fn place_terminal_image_with_iterm_protocol(path: &Path, area: Rect) -> Result<Vec<u8>> {
+    let data = fs::read(path)?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&data);
+    // Move cursor to the top-left cell of the placement area, then emit the
+    // OSC 1337 sequence. `width` and `height` are in terminal cells.
+    let seq = format!(
+        "\x1b[{};{}H\x1b]1337;File=inline=1;width={};height={};preserveAspectRatio=1:{}\x07",
+        area.y.saturating_add(1),
+        area.x.saturating_add(1),
+        area.width.max(1),
+        area.height.max(1),
+        encoded
+    );
+    Ok(seq.into_bytes())
 }
