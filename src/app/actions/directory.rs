@@ -112,6 +112,7 @@ impl App {
         self.clear_wheel_scroll();
 
         if cwd_changed {
+            self.selected_paths.clear();
             self.reset_directory_watch();
         }
 

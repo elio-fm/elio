@@ -7,6 +7,7 @@ mod jobs;
 mod overlays;
 use crate::preview;
 mod search;
+mod selection;
 mod state;
 mod types;
 

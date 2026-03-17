@@ -32,6 +32,7 @@ pub(crate) struct Palette {
     pub accent_text: Color,
     pub selected_bg: Color,
     pub selected_border: Color,
+    pub selection_bar: Color,
     pub sidebar_active: Color,
     pub button_bg: Color,
     pub button_disabled_bg: Color,
@@ -130,6 +131,7 @@ struct PaletteOverride {
     accent_text: Option<String>,
     selected_bg: Option<String>,
     selected_border: Option<String>,
+    selection_bar: Option<String>,
     sidebar_active: Option<String>,
     button_bg: Option<String>,
     button_disabled_bg: Option<String>,
@@ -812,6 +814,7 @@ impl Theme {
                 accent_text: rgb(234, 245, 255),
                 selected_bg: rgb(32, 64, 100),
                 selected_border: rgb(149, 211, 255),
+                selection_bar: rgb(255, 178, 86),
                 sidebar_active: rgb(27, 56, 88),
                 button_bg: rgb(14, 23, 38),
                 button_disabled_bg: rgb(8, 16, 27),
@@ -982,6 +985,7 @@ fn apply_palette_overrides(
     apply_palette_color(&mut palette.accent_text, overrides.accent_text)?;
     apply_palette_color(&mut palette.selected_bg, overrides.selected_bg)?;
     apply_palette_color(&mut palette.selected_border, overrides.selected_border)?;
+    apply_palette_color(&mut palette.selection_bar, overrides.selection_bar)?;
     apply_palette_color(&mut palette.sidebar_active, overrides.sidebar_active)?;
     apply_palette_color(&mut palette.button_bg, overrides.button_bg)?;
     apply_palette_color(

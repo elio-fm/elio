@@ -352,6 +352,7 @@ fn render_list(
             height: row_height,
         };
         let selected = entry_index == app.selected;
+        let multi_selected = app.is_selected(&entry.path);
         let icon_color = theme::entry_color(entry, palette);
         let bg = if selected {
             palette.selected_bg
@@ -367,16 +368,21 @@ fn render_list(
                 row,
             );
         } else {
+            let bar_color = if selected {
+                palette.selected_border
+            } else if multi_selected {
+                palette.selection_bar
+            } else {
+                bg
+            };
             let columns = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Length(1), Constraint::Min(1)])
                 .split(row);
             frame.render_widget(
-                Paragraph::new("▌").alignment(Alignment::Left).style(
-                    Style::default()
-                        .bg(bg)
-                        .fg(if selected { palette.accent } else { bg }),
-                ),
+                Paragraph::new(if selected || multi_selected { "▌" } else { " " })
+                    .alignment(Alignment::Left)
+                    .style(Style::default().bg(bg).fg(bar_color)),
                 columns[0],
             );
             let secondary = if entry.is_dir() {
@@ -769,7 +775,14 @@ fn render_compact_list_row(
 ) -> Line<'static> {
     let detail_width = 12usize;
     let modified_width = 10usize;
-    let marker = if selected { "▌" } else { " " };
+    let multi_selected = app.is_selected(&entry.path);
+    let marker_color = if selected {
+        palette.selected_border
+    } else if multi_selected {
+        palette.selection_bar
+    } else {
+        palette.panel_alt
+    };
     let icon = theme::entry_symbol(entry);
     let icon_style = Style::default()
         .fg(theme::entry_color(entry, palette))
@@ -794,12 +807,8 @@ fn render_compact_list_row(
 
     Line::from(vec![
         Span::styled(
-            marker,
-            Style::default().fg(if selected {
-                palette.accent
-            } else {
-                palette.panel_alt
-            }),
+            if selected || multi_selected { "▌" } else { " " },
+            Style::default().fg(marker_color),
         ),
         Span::raw(" "),
         Span::styled(icon.to_string(), icon_style),

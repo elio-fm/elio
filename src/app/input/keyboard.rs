@@ -50,13 +50,17 @@ impl App {
         }
 
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.should_quit = true;
+            self.clear_selection();
             return Ok(());
         }
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {
                 KeyCode::Char('f') => {
                     self.open_search_with_status(SearchScope::Files);
+                    return Ok(());
+                }
+                KeyCode::Char('a') => {
+                    self.select_all();
                     return Ok(());
                 }
                 KeyCode::Char('+') | KeyCode::Char('=') => {
@@ -128,7 +132,10 @@ impl App {
         }
 
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
+            KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Esc => {
+                self.clear_selection();
+            }
             _ if is_help_shortcut(key) => {
                 self.clear_wheel_scroll();
                 self.help_open = true;
@@ -166,6 +173,7 @@ impl App {
             }
             KeyCode::Char('s') => self.cycle_sort_mode()?,
             KeyCode::Char('.') => self.toggle_hidden_files()?,
+            KeyCode::Char(' ') => self.toggle_selection(),
             KeyCode::Char('a') => self.open_create_prompt(),
             KeyCode::Char('d') => self.open_trash_prompt(),
             KeyCode::Char('f') => self.open_search_with_status(SearchScope::Folders),

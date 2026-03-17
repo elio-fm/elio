@@ -5,7 +5,7 @@ use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Modifier, Style},
-    text::Line,
+    text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
@@ -114,17 +114,39 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
     } else {
         helpers::truncate_middle(app.status_message(), sections[1].width as usize)
     };
-    frame.render_widget(
-        Paragraph::new(helpers::truncate_middle(
+    let count = app.selection_count();
+    let left_line = if count > 0 {
+        let chip = format!(" {count} selected ");
+        let summary = helpers::truncate_middle(
             &app.selection_summary(),
-            sections[0].width as usize,
-        ))
-        .style(
+            sections[0].width.saturating_sub(chip.len() as u16 + 2) as usize,
+        );
+        Line::from(vec![
+            Span::styled(
+                chip,
+                Style::default()
+                    .bg(palette.selection_bar)
+                    .fg(palette.chrome)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                summary,
+                Style::default()
+                    .fg(palette.text)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])
+    } else {
+        Line::from(Span::styled(
+            helpers::truncate_middle(&app.selection_summary(), sections[0].width as usize),
             Style::default()
-                .bg(palette.chrome)
                 .fg(palette.text)
                 .add_modifier(Modifier::BOLD),
-        ),
+        ))
+    };
+    frame.render_widget(
+        Paragraph::new(left_line).style(Style::default().bg(palette.chrome)),
         sections[0],
     );
     frame.render_widget(

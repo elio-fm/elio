@@ -181,29 +181,83 @@ impl App {
     }
 
     pub(in crate::app) fn open_trash_prompt(&mut self) {
-        let Some((path, name)) = self
-            .selected_entry()
-            .map(|e| (e.path.clone(), e.name.clone()))
-        else {
-            return;
+        let targets: Vec<TrashTarget> = if !self.selected_paths.is_empty() {
+            self.entries
+                .iter()
+                .filter(|e| self.selected_paths.contains(&e.path))
+                .map(|e| TrashTarget {
+                    path: e.path.clone(),
+                    name: e.name.clone(),
+                    is_dir: e.is_dir(),
+                })
+                .collect()
+        } else {
+            let Some(entry) = self.selected_entry() else {
+                return;
+            };
+            vec![TrashTarget {
+                path: entry.path.clone(),
+                name: entry.name.clone(),
+                is_dir: entry.is_dir(),
+            }]
         };
-        let is_dir = path.is_dir();
+
+        if targets.is_empty() {
+            return;
+        }
+
         self.help_open = false;
         self.search = None;
         self.create = None;
-        self.trash = Some(TrashOverlay { path, name, is_dir, confirmed: true });
+        self.trash = Some(TrashOverlay { targets, scroll: 0, confirmed: true });
     }
 
     pub fn trash_is_open(&self) -> bool {
         self.trash.is_some()
     }
 
-    pub fn trash_target_name(&self) -> Option<&str> {
-        self.trash.as_ref().map(|t| t.name.as_str())
+    pub fn trash_title(&self) -> String {
+        let Some(t) = &self.trash else {
+            return String::new();
+        };
+        match t.targets.len() {
+            0 => String::new(),
+            1 => {
+                let kind = if t.targets[0].is_dir { "folder" } else { "file" };
+                format!("Trash 1 selected {kind}?")
+            }
+            n => {
+                let files = t.targets.iter().filter(|t| !t.is_dir).count();
+                let dirs = t.targets.iter().filter(|t| t.is_dir).count();
+                let desc = match (files, dirs) {
+                    (f, 0) => format!("{f} file{}", if f == 1 { "" } else { "s" }),
+                    (0, d) => format!("{d} folder{}", if d == 1 { "" } else { "s" }),
+                    (f, d) => format!("{f} file{} and {d} folder{}", if f == 1 { "" } else { "s" }, if d == 1 { "" } else { "s" }),
+                };
+                let _ = n;
+                format!("Trash {desc}?")
+            }
+        }
     }
 
-    pub fn trash_target_is_dir(&self) -> bool {
-        self.trash.as_ref().is_some_and(|t| t.is_dir)
+
+    pub fn trash_scroll(&self) -> usize {
+        self.trash.as_ref().map_or(0, |t| t.scroll)
+    }
+
+    pub fn trash_target_count(&self) -> usize {
+        self.trash.as_ref().map_or(0, |t| t.targets.len())
+    }
+
+    pub fn trash_visible_rows(&self) -> usize {
+        self.trash_target_count().min(8)
+    }
+
+    pub fn trash_target_name_at(&self, index: usize) -> Option<&str> {
+        self.trash
+            .as_ref()
+            .and_then(|t| t.targets.get(index))
+            .map(|t| t.name.as_str())
     }
 
     pub fn trash_confirmed(&self) -> bool {
@@ -220,6 +274,18 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 self.trash = None;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if let Some(t) = &mut self.trash {
+                    t.scroll = t.scroll.saturating_sub(1);
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if let Some(t) = &mut self.trash {
+                    let visible = t.targets.len().min(8);
+                    let max_scroll = t.targets.len().saturating_sub(visible);
+                    t.scroll = (t.scroll + 1).min(max_scroll);
+                }
             }
             KeyCode::Left | KeyCode::Char('h') => {
                 if let Some(t) = &mut self.trash {
@@ -249,14 +315,29 @@ impl App {
     }
 
     pub(in crate::app) fn handle_trash_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-            let inside = self
-                .frame_state
-                .trash_panel
-                .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
-            if !inside {
-                self.trash = None;
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                let inside = self
+                    .frame_state
+                    .trash_panel
+                    .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+                if !inside {
+                    self.trash = None;
+                }
             }
+            MouseEventKind::ScrollUp => {
+                if let Some(t) = &mut self.trash {
+                    t.scroll = t.scroll.saturating_sub(1);
+                }
+            }
+            MouseEventKind::ScrollDown => {
+                if let Some(t) = &mut self.trash {
+                    let visible = t.targets.len().min(8);
+                    let max_scroll = t.targets.len().saturating_sub(visible);
+                    t.scroll = (t.scroll + 1).min(max_scroll);
+                }
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -265,8 +346,16 @@ impl App {
         let Some(t) = self.trash.take() else {
             return Ok(());
         };
-        trash::delete(&t.path)
-            .map_err(|e| anyhow::anyhow!("Could not trash \"{}\": {e}", t.name))?;
+        for target in &t.targets {
+            trash::delete(&target.path)
+                .map_err(|e| anyhow::anyhow!("Could not trash \"{}\": {e}", target.name))?;
+        }
+        self.selected_paths.clear();
+        let status = match t.targets.len() {
+            0 => String::new(),
+            1 => format!("Trashed \"{}\"", t.targets[0].name),
+            n => format!("Trashed {n} items"),
+        };
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
             target_cwd: self.cwd.clone(),
@@ -276,7 +365,7 @@ impl App {
             reselect_path: None,
             history_mode: DirectoryHistoryMode::None,
             refresh_search: false,
-            completion: DirectoryLoadCompletion::Status(format!("Trashed \"{}\"", t.name)),
+            completion: DirectoryLoadCompletion::Status(status),
         })?;
         Ok(())
     }

@@ -79,10 +79,16 @@ pub(super) enum NavigationRepeatKey {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct TrashOverlay {
+pub(super) struct TrashTarget {
     pub(super) path: std::path::PathBuf,
     pub(super) name: String,
     pub(super) is_dir: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct TrashOverlay {
+    pub(super) targets: Vec<TrashTarget>,
+    pub(super) scroll: usize,
     pub(super) confirmed: bool,
 }
 
@@ -282,6 +288,7 @@ pub struct App {
     pub(super) pdf_preview: pdf::PdfPreviewState,
     pub(super) terminal_images: inline_image::TerminalImageState,
     pub(super) frame_state: FrameState,
+    pub(super) selected_paths: HashSet<PathBuf>,
     pub(super) trash: Option<TrashOverlay>,
     pub(super) create: Option<CreateOverlay>,
     pub(super) search: Option<SearchOverlay>,
@@ -352,6 +359,7 @@ impl App {
             pdf_preview: pdf::PdfPreviewState::default(),
             terminal_images: inline_image::TerminalImageState::default(),
             frame_state: FrameState::default(),
+            selected_paths: HashSet::new(),
             trash: None,
             create: None,
             search: None,

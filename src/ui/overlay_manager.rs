@@ -17,11 +17,12 @@ pub(super) fn render_trash_overlay(
     state: &mut FrameState,
     palette: Palette,
 ) {
-    let kind = if app.trash_target_is_dir() { "folder" } else { "file" };
-    let block_title = format!(" Trash 1 selected {kind}? ");
-
+    let block_title = format!(" {} ", app.trash_title());
+    let count = app.trash_target_count();
+    let list_rows = app.trash_visible_rows().max(1) as u16;
+    // inner = list + 1 spacer + 1 buttons; border(2) + padding top+bottom(2) = 4 overhead
+    let popup_height = list_rows + 2 + 4;
     let popup_width = area.width.saturating_sub(8).clamp(40, 60);
-    let popup_height = 7u16;
     let popup = helpers::centered_rect(area, popup_width, popup_height);
     state.trash_panel = Some(popup);
 
@@ -35,25 +36,62 @@ pub(super) fn render_trash_overlay(
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // name
-            Constraint::Min(1),    // spacer
-            Constraint::Length(1), // buttons
+            Constraint::Length(list_rows), // name(s)
+            Constraint::Length(1),         // spacer
+            Constraint::Length(1),         // buttons
         ])
         .split(inner);
 
-    // Filename
-    let name = app.trash_target_name().unwrap_or("");
-    let max_width = rows[0].width.saturating_sub(2) as usize;
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(
-                helpers::clamp_label(name, max_width.max(4)),
+    // Names list
+    let list_area = rows[0];
+    let visible = app.trash_visible_rows().max(1);
+    let scroll = app.trash_scroll();
+    let max_name_width = list_area.width.saturating_sub(3) as usize; // leave room for scroll bar
+
+    if count <= 1 {
+        // Single item — plain name
+        let name = app.trash_target_name_at(0).unwrap_or("");
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                helpers::clamp_label(name, max_name_width.max(4)),
                 Style::default().fg(palette.muted),
-            ),
-        ]))
-        .style(Style::default().bg(palette.chrome_alt)),
-        rows[0],
-    );
+            )))
+            .style(Style::default().bg(palette.chrome_alt)),
+            list_area,
+        );
+    } else {
+        // Multiple items — scrollable list with scroll indicator
+        let show_scrollbar = count > visible;
+        for row_offset in 0..visible {
+            let item_index = scroll + row_offset;
+            let Some(name) = app.trash_target_name_at(item_index) else {
+                break;
+            };
+            let y = list_area.y + row_offset as u16;
+            let name_rect = Rect { x: list_area.x, y, width: list_area.width.saturating_sub(if show_scrollbar { 2 } else { 0 }), height: 1 };
+            frame.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    helpers::clamp_label(name, name_rect.width as usize),
+                    Style::default().fg(palette.muted),
+                )))
+                .style(Style::default().bg(palette.chrome_alt)),
+                name_rect,
+            );
+
+            if show_scrollbar {
+                let bar_x = list_area.x + list_area.width.saturating_sub(1);
+                let thumb_start = scroll * visible / count;
+                let thumb_end = (scroll + visible) * visible / count;
+                let in_thumb = row_offset >= thumb_start && row_offset < thumb_end.max(thumb_start + 1);
+                let bar_char = if in_thumb { "▐" } else { " " };
+                let bar_color = if in_thumb { palette.muted } else { palette.chrome_alt };
+                frame.buffer_mut()[(bar_x, y)].set_symbol(bar_char);
+                frame.buffer_mut()[(bar_x, y)].set_style(
+                    Style::default().bg(palette.chrome_alt).fg(bar_color),
+                );
+            }
+        }
+    }
 
     // Centered buttons: [ Cancel ]  [ Confirm ]
     let confirmed = app.trash_confirmed();
@@ -67,7 +105,6 @@ pub(super) fn render_trash_overlay(
     } else {
         Style::default().bg(palette.chrome_alt).fg(palette.muted)
     };
-    // "  Cancel  " = 10, gap = 3, "  Confirm  " = 11, total = 24
     let total_btn_width = 24u16;
     let left_pad = rows[2].width.saturating_sub(total_btn_width) / 2;
     let pad = " ".repeat(left_pad as usize);
@@ -559,12 +596,24 @@ pub(super) fn render_help(frame: &mut Frame<'_>, area: Rect, palette: Palette) {
             action: "open externally",
         },
         HelpEntry {
+            key: "Space",
+            action: "toggle selection",
+        },
+        HelpEntry {
+            key: "Ctrl+A",
+            action: "select all",
+        },
+        HelpEntry {
+            key: "Esc",
+            action: "clear selection",
+        },
+        HelpEntry {
             key: "a",
             action: "create file or folder",
         },
         HelpEntry {
             key: "d",
-            action: "move to trash",
+            action: "trash selected",
         },
     ];
     const LEFT_SECTIONS: &[HelpSection<'_>] = &[
