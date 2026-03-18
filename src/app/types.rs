@@ -110,6 +110,8 @@ pub struct FrameState {
     pub rename_panel: Option<Rect>,
     pub create_list_area: Option<Rect>,
     pub create_scroll_top: usize,
+    pub bulk_rename_list_area: Option<Rect>,
+    pub bulk_rename_scroll_top: usize,
     pub search_panel: Option<Rect>,
     pub help_panel: Option<Rect>,
     pub entries_panel: Option<Rect>,

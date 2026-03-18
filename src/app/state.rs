@@ -103,10 +103,30 @@ pub(super) struct RestoreOverlay {
 
 #[derive(Clone, Debug)]
 pub(super) struct RenameOverlay {
+    pub(super) path: PathBuf,
+    pub(super) is_dir: bool,
     pub(super) original_name: String,
     pub(super) input: String,
     pub(super) cursor_col: usize,
     pub(super) error: Option<String>,
+}
+
+pub(super) struct BulkRenameItem {
+    pub(super) path: PathBuf,
+    pub(super) original_name: String,
+    pub(super) is_dir: bool,
+}
+
+pub(super) struct BulkRenameOverlay {
+    pub(super) items: Vec<BulkRenameItem>,
+    /// Editable new name for each item, one-to-one with `items`.
+    pub(super) new_names: Vec<String>,
+    pub(super) cursor_line: usize,
+    pub(super) cursor_col: usize,
+    /// Remembered column target for vertical motion.
+    pub(super) preferred_col: usize,
+    /// Per-line validation error; same length as `items`.
+    pub(super) line_errors: Vec<Option<String>>,
 }
 
 pub(super) struct CreateOverlay {
@@ -320,6 +340,7 @@ pub struct App {
     pub(super) restore: Option<RestoreOverlay>,
     pub(super) create: Option<CreateOverlay>,
     pub(super) rename: Option<RenameOverlay>,
+    pub(super) bulk_rename: Option<BulkRenameOverlay>,
     pub(super) search: Option<SearchOverlay>,
     pub(super) search_cache: Option<SearchCache>,
     pub(super) search_loading: bool,
@@ -394,6 +415,7 @@ impl App {
             restore: None,
             create: None,
             rename: None,
+            bulk_rename: None,
             search: None,
             search_cache: None,
             search_loading: false,

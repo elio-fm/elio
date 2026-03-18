@@ -804,6 +804,473 @@ impl App {
 }
 
 // ---------------------------------------------------------------------------
+// Bulk rename overlay
+// ---------------------------------------------------------------------------
+
+impl App {
+    pub(in crate::app) fn open_bulk_rename_prompt(&mut self) {
+        if self.in_trash {
+            return;
+        }
+        // Collect selected entries in directory order (not HashSet order).
+        let items: Vec<BulkRenameItem> = self
+            .entries
+            .iter()
+            .filter(|e| self.selected_paths.contains(&e.path))
+            .map(|e| BulkRenameItem {
+                path: e.path.clone(),
+                original_name: e.name.clone(),
+                is_dir: e.is_dir(),
+            })
+            .collect();
+        if items.is_empty() {
+            return;
+        }
+        let count = items.len();
+        let new_names: Vec<String> = items.iter().map(|i| i.original_name.clone()).collect();
+        self.help_open = false;
+        self.search = None;
+        self.create = None;
+        self.rename = None;
+        self.trash = None;
+        self.restore = None;
+        self.bulk_rename = Some(BulkRenameOverlay {
+            items,
+            new_names,
+            cursor_line: 0,
+            cursor_col: 0,
+            preferred_col: 0,
+            line_errors: vec![None; count],
+        });
+    }
+
+    pub fn bulk_rename_is_open(&self) -> bool {
+        self.bulk_rename.is_some()
+    }
+
+    pub fn bulk_rename_title(&self) -> String {
+        let Some(r) = &self.bulk_rename else {
+            return "Rename".to_string();
+        };
+        if r.items.len() == 1 {
+            return format!("Rename \"{}\"", r.items[0].original_name);
+        }
+        let files = r.items.iter().filter(|i| !i.is_dir).count();
+        let dirs = r.items.iter().filter(|i| i.is_dir).count();
+        match (files, dirs) {
+            (f, 0) => format!("Rename {} file{}", f, if f == 1 { "" } else { "s" }),
+            (0, d) => format!("Rename {} folder{}", d, if d == 1 { "" } else { "s" }),
+            (f, d) => format!(
+                "Rename {} file{} and {} folder{}",
+                f,
+                if f == 1 { "" } else { "s" },
+                d,
+                if d == 1 { "" } else { "s" },
+            ),
+        }
+    }
+
+    pub fn bulk_rename_item_count(&self) -> usize {
+        self.bulk_rename.as_ref().map_or(0, |r| r.items.len())
+    }
+
+    pub fn bulk_rename_new_name(&self, index: usize) -> &str {
+        self.bulk_rename
+            .as_ref()
+            .and_then(|r| r.new_names.get(index))
+            .map(String::as_str)
+            .unwrap_or("")
+    }
+
+    pub fn bulk_rename_item_path(&self, index: usize) -> Option<&std::path::Path> {
+        self.bulk_rename
+            .as_ref()
+            .and_then(|r| r.items.get(index))
+            .map(|i| i.path.as_path())
+    }
+
+    pub fn bulk_rename_item_is_dir(&self, index: usize) -> bool {
+        self.bulk_rename
+            .as_ref()
+            .and_then(|r| r.items.get(index))
+            .map_or(false, |i| i.is_dir)
+    }
+
+    pub fn bulk_rename_line_error(&self, index: usize) -> Option<&str> {
+        self.bulk_rename
+            .as_ref()
+            .and_then(|r| r.line_errors.get(index))
+            .and_then(Option::as_deref)
+    }
+
+    pub fn bulk_rename_cursor_line(&self) -> usize {
+        self.bulk_rename.as_ref().map_or(0, |r| r.cursor_line)
+    }
+
+    pub fn bulk_rename_cursor_col(&self) -> usize {
+        self.bulk_rename.as_ref().map_or(0, |r| r.cursor_col)
+    }
+
+    pub(in crate::app) fn handle_bulk_rename_key(&mut self, key: KeyEvent) -> Result<()> {
+        if key.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(key.code, KeyCode::Char('c'))
+        {
+            self.bulk_rename = None;
+            return Ok(());
+        }
+
+        match key.code {
+            KeyCode::Esc => {
+                self.bulk_rename = None;
+            }
+
+            KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
+                self.confirm_bulk_rename()?;
+            }
+
+            // Vertical movement between items
+            KeyCode::Up if key.modifiers == KeyModifiers::NONE => {
+                self.bulk_rename_move_vertical(-1);
+            }
+            KeyCode::Down if key.modifiers == KeyModifiers::NONE => {
+                self.bulk_rename_move_vertical(1);
+            }
+
+            // Horizontal cursor movement
+            KeyCode::Left
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                if let Some(r) = &mut self.bulk_rename {
+                    let new_col = previous_word_start(&r.new_names[r.cursor_line], r.cursor_col);
+                    r.cursor_col = new_col;
+                    r.preferred_col = new_col;
+                }
+            }
+            KeyCode::Right
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                if let Some(r) = &mut self.bulk_rename {
+                    let new_col = next_word_start(&r.new_names[r.cursor_line], r.cursor_col);
+                    r.cursor_col = new_col;
+                    r.preferred_col = new_col;
+                }
+            }
+            KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
+                if let Some(r) = &mut self.bulk_rename {
+                    r.cursor_col = r.cursor_col.saturating_sub(1);
+                    r.preferred_col = r.cursor_col;
+                }
+            }
+            KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
+                if let Some(r) = &mut self.bulk_rename {
+                    let len = r.new_names[r.cursor_line].chars().count();
+                    if r.cursor_col < len {
+                        r.cursor_col += 1;
+                    }
+                    r.preferred_col = r.cursor_col;
+                }
+            }
+            KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
+                if let Some(r) = &mut self.bulk_rename {
+                    r.cursor_col = 0;
+                    r.preferred_col = 0;
+                }
+            }
+            KeyCode::End if key.modifiers == KeyModifiers::NONE => {
+                if let Some(r) = &mut self.bulk_rename {
+                    r.cursor_col = r.new_names[r.cursor_line].chars().count();
+                    r.preferred_col = r.cursor_col;
+                }
+            }
+
+            // Deletion
+            KeyCode::Backspace
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                if let Some(r) = &mut self.bulk_rename {
+                    if r.cursor_col > 0 {
+                        let start =
+                            previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
+                        remove_char_range(&mut r.new_names[r.cursor_line], start, r.cursor_col);
+                        r.cursor_col = start;
+                        r.preferred_col = start;
+                        r.line_errors[r.cursor_line] = None;
+                    }
+                }
+            }
+            KeyCode::Char('h' | 'w')
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                if let Some(r) = &mut self.bulk_rename {
+                    if r.cursor_col > 0 {
+                        let start =
+                            previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
+                        remove_char_range(&mut r.new_names[r.cursor_line], start, r.cursor_col);
+                        r.cursor_col = start;
+                        r.preferred_col = start;
+                        r.line_errors[r.cursor_line] = None;
+                    }
+                }
+            }
+            KeyCode::Delete
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                if let Some(r) = &mut self.bulk_rename {
+                    let end = next_delete_end(&r.new_names[r.cursor_line], r.cursor_col);
+                    remove_char_range(&mut r.new_names[r.cursor_line], r.cursor_col, end);
+                    r.line_errors[r.cursor_line] = None;
+                }
+            }
+            KeyCode::Char('d')
+                if key.modifiers.contains(KeyModifiers::ALT)
+                    && !key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                if let Some(r) = &mut self.bulk_rename {
+                    let end = next_delete_end(&r.new_names[r.cursor_line], r.cursor_col);
+                    remove_char_range(&mut r.new_names[r.cursor_line], r.cursor_col, end);
+                    r.line_errors[r.cursor_line] = None;
+                }
+            }
+            KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
+                if let Some(r) = &mut self.bulk_rename {
+                    if r.cursor_col > 0 {
+                        let start =
+                            char_to_byte(&r.new_names[r.cursor_line], r.cursor_col - 1);
+                        let end = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col);
+                        r.new_names[r.cursor_line].replace_range(start..end, "");
+                        r.cursor_col -= 1;
+                        r.preferred_col = r.cursor_col;
+                        r.line_errors[r.cursor_line] = None;
+                    }
+                }
+            }
+            KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
+                if let Some(r) = &mut self.bulk_rename {
+                    let len = r.new_names[r.cursor_line].chars().count();
+                    if r.cursor_col < len {
+                        let start = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col);
+                        let end = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col + 1);
+                        r.new_names[r.cursor_line].replace_range(start..end, "");
+                        r.line_errors[r.cursor_line] = None;
+                    }
+                }
+            }
+
+            // Character input
+            KeyCode::Char(ch)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                if let Some(r) = &mut self.bulk_rename {
+                    let byte = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col);
+                    r.new_names[r.cursor_line].insert(byte, ch);
+                    r.cursor_col += 1;
+                    r.preferred_col = r.cursor_col;
+                    r.line_errors[r.cursor_line] = None;
+                }
+            }
+
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn bulk_rename_move_vertical(&mut self, delta: isize) {
+        let Some(r) = &mut self.bulk_rename else {
+            return;
+        };
+        let new_line = (r.cursor_line as isize + delta)
+            .clamp(0, r.items.len() as isize - 1) as usize;
+        if new_line == r.cursor_line {
+            return;
+        }
+        r.cursor_line = new_line;
+        let max_col = r.new_names[r.cursor_line].chars().count();
+        r.cursor_col = r.preferred_col.min(max_col);
+    }
+
+    pub(in crate::app) fn handle_bulk_rename_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                let inside = self
+                    .frame_state
+                    .rename_panel
+                    .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+                if !inside {
+                    self.bulk_rename = None;
+                    return Ok(());
+                }
+                if let Some(list_area) = self.frame_state.bulk_rename_list_area {
+                    if rect_contains(list_area, mouse.column, mouse.row) {
+                        let scroll_top = self.frame_state.bulk_rename_scroll_top;
+                        let row_offset = (mouse.row - list_area.y) as usize;
+                        let line_idx = scroll_top + row_offset;
+                        let count = self.bulk_rename_item_count();
+                        if line_idx < count {
+                            let line_len =
+                                self.bulk_rename_new_name(line_idx).chars().count();
+                            // Text starts after icon (3 cells).
+                            let char_col =
+                                (mouse.column.saturating_sub(list_area.x + 3)) as usize;
+                            let cursor_col = char_col.min(line_len);
+                            if let Some(r) = &mut self.bulk_rename {
+                                r.cursor_line = line_idx;
+                                r.cursor_col = cursor_col;
+                                r.preferred_col = cursor_col;
+                            }
+                        }
+                    }
+                }
+            }
+            MouseEventKind::ScrollUp => {
+                self.bulk_rename_move_vertical(-1);
+            }
+            MouseEventKind::ScrollDown => {
+                self.bulk_rename_move_vertical(1);
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn confirm_bulk_rename(&mut self) -> Result<()> {
+        let Some(r) = &self.bulk_rename else {
+            return Ok(());
+        };
+
+        // --- Validate all new names ---
+        let count = r.items.len();
+        let mut errors: Vec<Option<String>> = vec![None; count];
+        let mut first_error: Option<usize> = None;
+
+        // Paths currently being renamed — a destination matching one of these is
+        // OK because that file will be moved out of the way during the operation.
+        let renaming_paths: std::collections::HashSet<&PathBuf> =
+            r.items.iter().map(|i| &i.path).collect();
+
+        let mut seen_new_names: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+
+        for (i, (item, new_name_raw)) in r.items.iter().zip(r.new_names.iter()).enumerate() {
+            let new_name = new_name_raw.trim().to_string();
+            let err = if new_name.is_empty() {
+                Some("Name cannot be empty".to_string())
+            } else if new_name.contains('/') {
+                Some("Name cannot contain /".to_string())
+            } else if !seen_new_names.insert(new_name.clone()) {
+                Some(format!("\"{}\" appears more than once", new_name))
+            } else {
+                let new_path = self.cwd.join(&new_name);
+                // Conflict only if the path exists and is NOT one of the files
+                // being renamed away in this same batch.
+                if new_path.exists() && !renaming_paths.contains(&new_path) {
+                    Some(format!("\"{}\" already exists", new_name))
+                } else {
+                    let _ = item; // no further per-item checks needed
+                    None
+                }
+            };
+            if let Some(msg) = err {
+                errors[i] = Some(msg);
+                if first_error.is_none() {
+                    first_error = Some(i);
+                }
+            }
+        }
+
+        if let Some(err_line) = first_error {
+            if let Some(r) = &mut self.bulk_rename {
+                r.line_errors = errors;
+                r.cursor_line = err_line;
+                r.cursor_col =
+                    r.cursor_col.min(r.new_names[err_line].chars().count());
+                r.preferred_col = r.cursor_col;
+            }
+            return Ok(());
+        }
+
+        // --- Execute renames ---
+        // Clone everything we need before consuming the overlay.
+        let ops: Vec<(PathBuf, String, String)> = r
+            .items
+            .iter()
+            .zip(r.new_names.iter())
+            .map(|(item, new_name)| {
+                (
+                    item.path.clone(),
+                    item.original_name.clone(),
+                    new_name.trim().to_string(),
+                )
+            })
+            .collect();
+
+        self.bulk_rename = None;
+        self.selected_paths.clear();
+
+        let mut renamed = 0usize;
+        let mut last_new_path: Option<PathBuf> = None;
+
+        for (old_path, original_name, new_name) in &ops {
+            if *new_name == *original_name {
+                continue; // unchanged — skip
+            }
+            let new_path = self.cwd.join(new_name);
+            if let Err(e) = fs::rename(old_path, &new_path) {
+                let msg = match e.kind() {
+                    std::io::ErrorKind::PermissionDenied => {
+                        format!("Permission denied renaming \"{}\"", original_name)
+                    }
+                    _ => format!("Could not rename \"{}\": {e}", original_name),
+                };
+                // Partial success: reload and report error as status.
+                self.queue_directory_load(PendingDirectoryLoad {
+                    token: 0,
+                    target_cwd: self.cwd.clone(),
+                    previous_cwd: self.cwd.clone(),
+                    previous_selected_path: None,
+                    previous_selection_name: None,
+                    reselect_path: last_new_path,
+                    history_mode: DirectoryHistoryMode::None,
+                    refresh_search: false,
+                    completion: DirectoryLoadCompletion::Status(msg),
+                })?;
+                return Ok(());
+            }
+            last_new_path = Some(self.cwd.join(new_name));
+            renamed += 1;
+        }
+
+        let status = match renamed {
+            0 => "No files renamed".to_string(),
+            1 => {
+                let (_, orig, new_name) =
+                    ops.iter().find(|(_, o, n)| o != n).unwrap();
+                format!("Renamed \"{}\" → \"{}\"", orig, new_name)
+            }
+            n => format!("Renamed {} items", n),
+        };
+        self.queue_directory_load(PendingDirectoryLoad {
+            token: 0,
+            target_cwd: self.cwd.clone(),
+            previous_cwd: self.cwd.clone(),
+            previous_selected_path: None,
+            previous_selection_name: None,
+            reselect_path: last_new_path,
+            history_mode: DirectoryHistoryMode::None,
+            refresh_search: false,
+            completion: DirectoryLoadCompletion::Status(status),
+        })?;
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Rename overlay
 // ---------------------------------------------------------------------------
 
@@ -816,6 +1283,8 @@ impl App {
             return;
         };
         let name = entry.name.clone();
+        let path = entry.path.clone();
+        let is_dir = entry.is_dir();
         // Place cursor before the extension (e.g. "foo.txt" → col 3).
         // Dot-prefixed hidden files ("." at index 0) are treated as having no extension.
         let cursor_col = cursor_before_extension(&name);
@@ -825,6 +1294,8 @@ impl App {
         self.trash = None;
         self.restore = None;
         self.rename = Some(RenameOverlay {
+            path,
+            is_dir,
             original_name: name.clone(),
             input: name,
             cursor_col,
@@ -846,6 +1317,14 @@ impl App {
 
     pub fn rename_original_name(&self) -> &str {
         self.rename.as_ref().map_or("", |r| &r.original_name)
+    }
+
+    pub fn rename_item_path(&self) -> Option<&std::path::Path> {
+        self.rename.as_ref().map(|r| r.path.as_path())
+    }
+
+    pub fn rename_item_is_dir(&self) -> bool {
+        self.rename.as_ref().map_or(false, |r| r.is_dir)
     }
 
     pub fn rename_error(&self) -> Option<&str> {

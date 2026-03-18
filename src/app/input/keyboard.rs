@@ -32,6 +32,10 @@ impl App {
             return self.handle_rename_key(key);
         }
 
+        if self.bulk_rename.is_some() {
+            return self.handle_bulk_rename_key(key);
+        }
+
         if self.search.is_some() {
             return self.handle_search_key(key);
         }
@@ -187,6 +191,8 @@ impl App {
             KeyCode::Char('r') => {
                 if self.in_trash {
                     self.open_restore_prompt();
+                } else if !self.selected_paths.is_empty() {
+                    self.open_bulk_rename_prompt();
                 } else {
                     self.open_rename_prompt();
                 }

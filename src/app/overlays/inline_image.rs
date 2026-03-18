@@ -177,6 +177,7 @@ impl App {
             || self.restore.is_some()
             || self.create.is_some()
             || self.rename.is_some()
+            || self.bulk_rename.is_some()
             || self.search.is_some()
             || self.help_open;
 

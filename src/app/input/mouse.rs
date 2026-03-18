@@ -18,6 +18,10 @@ impl App {
             return self.handle_rename_mouse(mouse);
         }
 
+        if self.bulk_rename.is_some() {
+            return self.handle_bulk_rename_mouse(mouse);
+        }
+
         if self.search.is_some() {
             return self.handle_search_mouse(mouse);
         }

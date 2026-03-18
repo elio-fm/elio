@@ -27,6 +27,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     state.rename_panel = None;
     state.create_list_area = None;
     state.create_scroll_top = 0;
+    state.bulk_rename_list_area = None;
+    state.bulk_rename_scroll_top = 0;
     state.search_panel = None;
     state.help_panel = None;
     state.preview_panel = None;
@@ -83,6 +85,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
         overlay_manager::render_create_overlay(frame, area, app, state, palette);
     } else if app.rename_is_open() {
         overlay_manager::render_rename_overlay(frame, area, app, state, palette);
+    } else if app.bulk_rename_is_open() {
+        overlay_manager::render_bulk_rename_overlay(frame, area, app, state, palette);
     } else if app.search_is_open() {
         overlay_manager::render_search_overlay(frame, area, app, state, palette);
     } else if app.help_open {
