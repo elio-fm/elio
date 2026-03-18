@@ -424,6 +424,96 @@ fn compute_create_scroll_top(cursor_line: usize, line_count: usize, visible: usi
     }
 }
 
+pub(super) fn render_rename_overlay(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    state: &mut FrameState,
+    palette: Palette,
+) {
+    let original = app.rename_original_name();
+    let block_title = format!(" Rename \"{}\" ", helpers::clamp_label(original, 30));
+    // Layout inside inner (inner_with_padding removes 2 from height):
+    //   input_box(3) + error(1) = 4  →  popup_height = 4 + 2 = 6
+    let popup_width = area.width.saturating_sub(8).clamp(40, 64);
+    let popup_height = 6u16;
+    let popup = helpers::centered_rect(area, popup_width, popup_height);
+    state.rename_panel = Some(popup);
+
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        helpers::panel_block(&block_title, palette.chrome_alt, palette),
+        popup,
+    );
+
+    let inner = helpers::inner_with_padding(popup);
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // input box (border + 1 line + border)
+            Constraint::Length(1), // error / spacer
+        ])
+        .split(inner);
+
+    // Input box
+    frame.render_widget(
+        helpers::rounded_block(palette.path_bg, palette.border),
+        rows[0],
+    );
+    let input_area = rows[0].inner(Margin { horizontal: 1, vertical: 1 });
+
+    let input = app.rename_input();
+    let cursor_col = app.rename_cursor_col();
+    let chars: Vec<char> = input.chars().collect();
+    let col = cursor_col.min(chars.len());
+    let available = input_area.width.saturating_sub(3) as usize; // 3 for icon prefix
+    let h_start = if col > available { col - available } else { 0 };
+
+    let mut visible_text: String = chars.iter().skip(h_start).take(available).collect();
+    if h_start > 0 && !visible_text.is_empty() {
+        visible_text.remove(0);
+        visible_text.insert(0, '…');
+    }
+
+    let line = if input.is_empty() {
+        Line::from(vec![
+            Span::styled("󰑕", Style::default().fg(palette.accent)),
+            Span::raw("  "),
+            Span::styled("name…", Style::default().fg(palette.muted)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("󰑕", Style::default().fg(palette.accent)),
+            Span::raw("  "),
+            Span::styled(
+                visible_text,
+                Style::default().fg(palette.text).add_modifier(Modifier::BOLD),
+            ),
+        ])
+    };
+    frame.render_widget(
+        Paragraph::new(line).style(Style::default().bg(palette.path_bg).fg(palette.text)),
+        input_area,
+    );
+
+    let visible_cursor_col = col.saturating_sub(h_start);
+    let cursor_x = (input_area.x + 3 + visible_cursor_col as u16)
+        .min(input_area.x + input_area.width.saturating_sub(1));
+    frame.set_cursor_position((cursor_x, input_area.y));
+
+    // Error row
+    if let Some(error) = app.rename_error() {
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![Span::styled(
+                helpers::clamp_label(error, rows[1].width.saturating_sub(2) as usize),
+                Style::default().fg(palette.accent),
+            )]))
+            .style(Style::default().bg(palette.chrome_alt).fg(palette.text)),
+            rows[1],
+        );
+    }
+}
+
 pub(super) fn render_search_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -777,7 +867,7 @@ pub(super) fn render_help(
         },
         HelpEntry {
             key: "r",
-            action: "restore from trash",
+            action: "rename (restore in trash)",
         },
     ];
     const LEFT_SECTIONS: &[HelpSection<'_>] = &[

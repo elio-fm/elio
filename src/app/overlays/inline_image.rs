@@ -176,6 +176,7 @@ impl App {
         let any_overlay_open = self.trash.is_some()
             || self.restore.is_some()
             || self.create.is_some()
+            || self.rename.is_some()
             || self.search.is_some()
             || self.help_open;
 
@@ -249,6 +250,9 @@ impl App {
             rects.push(r);
         }
         if let Some(r) = self.frame_state.create_panel {
+            rects.push(r);
+        }
+        if let Some(r) = self.frame_state.rename_panel {
             rects.push(r);
         }
         if let Some(r) = self.frame_state.search_panel {

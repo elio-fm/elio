@@ -101,6 +101,14 @@ pub(super) struct RestoreOverlay {
     pub(super) confirmed: bool,
 }
 
+#[derive(Clone, Debug)]
+pub(super) struct RenameOverlay {
+    pub(super) original_name: String,
+    pub(super) input: String,
+    pub(super) cursor_col: usize,
+    pub(super) error: Option<String>,
+}
+
 pub(super) struct CreateOverlay {
     /// One entry per line; always at least one element.
     pub(super) lines: Vec<String>,
@@ -311,6 +319,7 @@ pub struct App {
     pub(super) trash: Option<TrashOverlay>,
     pub(super) restore: Option<RestoreOverlay>,
     pub(super) create: Option<CreateOverlay>,
+    pub(super) rename: Option<RenameOverlay>,
     pub(super) search: Option<SearchOverlay>,
     pub(super) search_cache: Option<SearchCache>,
     pub(super) search_loading: bool,
@@ -384,6 +393,7 @@ impl App {
             trash: None,
             restore: None,
             create: None,
+            rename: None,
             search: None,
             search_cache: None,
             search_loading: false,

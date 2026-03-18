@@ -107,6 +107,7 @@ pub struct FrameState {
     pub restore_confirm_btn: Option<Rect>,
     pub restore_cancel_btn: Option<Rect>,
     pub create_panel: Option<Rect>,
+    pub rename_panel: Option<Rect>,
     pub create_list_area: Option<Rect>,
     pub create_scroll_top: usize,
     pub search_panel: Option<Rect>,

@@ -176,7 +176,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             }
         }
 
-        let wants_search_cursor = app.search_is_open() || app.create_is_open();
+        let wants_search_cursor = app.search_is_open() || app.create_is_open() || app.rename_is_open();
         if wants_search_cursor != search_cursor_active {
             if wants_search_cursor {
                 terminal.show_cursor()?;

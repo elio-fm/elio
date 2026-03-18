@@ -14,6 +14,10 @@ impl App {
             return self.handle_create_mouse(mouse);
         }
 
+        if self.rename.is_some() {
+            return self.handle_rename_mouse(mouse);
+        }
+
         if self.search.is_some() {
             return self.handle_search_mouse(mouse);
         }
