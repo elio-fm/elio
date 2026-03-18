@@ -671,6 +671,20 @@ impl App {
             .map(|t| t.name.as_str())
     }
 
+    pub fn trash_target_path_at(&self, index: usize) -> Option<&std::path::Path> {
+        self.trash
+            .as_ref()
+            .and_then(|t| t.targets.get(index))
+            .map(|t| t.path.as_path())
+    }
+
+    pub fn trash_target_is_dir_at(&self, index: usize) -> bool {
+        self.trash
+            .as_ref()
+            .and_then(|t| t.targets.get(index))
+            .map_or(false, |t| t.is_dir)
+    }
+
     pub fn trash_confirmed(&self) -> bool {
         self.trash.as_ref().is_some_and(|t| t.confirmed)
     }
@@ -1666,6 +1680,20 @@ impl App {
             .as_ref()
             .and_then(|r| r.targets.get(index))
             .map(|t| t.name.as_str())
+    }
+
+    pub fn restore_target_path_at(&self, index: usize) -> Option<&std::path::Path> {
+        self.restore
+            .as_ref()
+            .and_then(|r| r.targets.get(index))
+            .map(|t| t.path.as_path())
+    }
+
+    pub fn restore_target_is_dir_at(&self, index: usize) -> bool {
+        self.restore
+            .as_ref()
+            .and_then(|r| r.targets.get(index))
+            .map_or(false, |t| t.is_dir)
     }
 
     pub fn restore_confirmed(&self) -> bool {

@@ -59,14 +59,24 @@ pub(super) fn render_trash_overlay(
     for row_offset in 0..visible {
         let item_index = scroll + row_offset;
         let Some(name) = app.trash_target_name_at(item_index) else { break };
+        let is_dir = app.trash_target_is_dir_at(item_index);
+        let (icon, icon_color) = app
+            .trash_target_path_at(item_index)
+            .map(|path| (theme::path_symbol(path, is_dir), theme::path_color(path, is_dir, palette)))
+            .unwrap_or_else(|| if is_dir { ("󰉋", palette.accent) } else { ("󰈔", palette.muted) });
         let y = list_area.y + row_offset as u16;
-        let name_width = list_area.width.saturating_sub(if show_scrollbar { 2 } else { 0 });
-        let name_rect = Rect { x: list_area.x, y, width: name_width, height: 1 };
+        let row_width = list_area.width.saturating_sub(if show_scrollbar { 2 } else { 0 });
+        let name_width = row_width.saturating_sub(2) as usize; // icon + 1 space
+        let name_rect = Rect { x: list_area.x, y, width: row_width, height: 1 };
         frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                helpers::clamp_label(name, name_rect.width as usize),
-                Style::default().fg(palette.muted),
-            )))
+            Paragraph::new(Line::from(vec![
+                Span::styled(icon, Style::default().fg(icon_color).add_modifier(Modifier::BOLD)),
+                Span::raw(" "),
+                Span::styled(
+                    helpers::clamp_label(name, name_width),
+                    Style::default().fg(palette.muted),
+                ),
+            ]))
             .style(Style::default().bg(palette.path_bg)),
             name_rect,
         );
@@ -163,14 +173,24 @@ pub(super) fn render_restore_overlay(
     for row_offset in 0..visible {
         let item_index = scroll + row_offset;
         let Some(name) = app.restore_target_name_at(item_index) else { break };
+        let is_dir = app.restore_target_is_dir_at(item_index);
+        let (icon, icon_color) = app
+            .restore_target_path_at(item_index)
+            .map(|path| (theme::path_symbol(path, is_dir), theme::path_color(path, is_dir, palette)))
+            .unwrap_or_else(|| if is_dir { ("󰉋", palette.accent) } else { ("󰈔", palette.muted) });
         let y = list_area.y + row_offset as u16;
-        let name_width = list_area.width.saturating_sub(if show_scrollbar { 2 } else { 0 });
-        let name_rect = Rect { x: list_area.x, y, width: name_width, height: 1 };
+        let row_width = list_area.width.saturating_sub(if show_scrollbar { 2 } else { 0 });
+        let name_width = row_width.saturating_sub(2) as usize; // icon + 1 space
+        let name_rect = Rect { x: list_area.x, y, width: row_width, height: 1 };
         frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                helpers::clamp_label(name, name_rect.width as usize),
-                Style::default().fg(palette.muted),
-            )))
+            Paragraph::new(Line::from(vec![
+                Span::styled(icon, Style::default().fg(icon_color).add_modifier(Modifier::BOLD)),
+                Span::raw(" "),
+                Span::styled(
+                    helpers::clamp_label(name, name_width),
+                    Style::default().fg(palette.muted),
+                ),
+            ]))
             .style(Style::default().bg(palette.path_bg)),
             name_rect,
         );
