@@ -1,7 +1,7 @@
 use super::*;
 use super::text_edit::*;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use std::{fs, path::Path};
+use std::{env, fs, path::Path};
 
 // ---------------------------------------------------------------------------
 // Public accessors (used by the UI layer)
@@ -562,6 +562,31 @@ impl App {
 // ---------------------------------------------------------------------------
 
 impl App {
+    /// True once the trash directory has fully loaded (set in apply_directory_snapshot).
+    pub(in crate::app) fn cwd_is_trash(&self) -> bool {
+        self.in_trash
+    }
+
+    pub(in crate::app) fn path_is_trash(path: &std::path::Path) -> bool {
+        let home = env::var_os("HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from("/"));
+        crate::fs::trash_dir(&home).is_some_and(|trash| path == trash)
+    }
+
+    /// Effective show_hidden for the current loaded directory.
+    /// Hidden files are always visible inside the trash folder.
+    pub(in crate::app) fn effective_show_hidden(&self) -> bool {
+        self.show_hidden || self.in_trash
+    }
+
+    /// Effective show_hidden for a navigation target (used before the load completes).
+    pub(in crate::app) fn effective_show_hidden_for(&self, path: &std::path::Path) -> bool {
+        self.show_hidden || Self::path_is_trash(path)
+    }
+}
+
+impl App {
     pub(in crate::app) fn open_trash_prompt(&mut self) {
         let targets: Vec<TrashTarget> = if !self.selected_paths.is_empty() {
             self.entries
@@ -588,10 +613,11 @@ impl App {
             return;
         }
 
+        let permanent = self.cwd_is_trash();
         self.help_open = false;
         self.search = None;
         self.create = None;
-        self.trash = Some(TrashOverlay { targets, scroll: 0, confirmed: true });
+        self.trash = Some(TrashOverlay { targets, scroll: 0, confirmed: true, permanent });
     }
 
     pub fn trash_is_open(&self) -> bool {
@@ -602,13 +628,14 @@ impl App {
         let Some(t) = &self.trash else {
             return String::new();
         };
+        let verb = if t.permanent { "Delete permanently" } else { "Trash" };
         match t.targets.len() {
             0 => String::new(),
             1 => {
                 let kind = if t.targets[0].is_dir { "folder" } else { "file" };
-                format!("Trash 1 selected {kind}?")
+                format!("{verb} 1 selected {kind}?")
             }
-            n => {
+            _ => {
                 let files = t.targets.iter().filter(|t| !t.is_dir).count();
                 let dirs = t.targets.iter().filter(|t| t.is_dir).count();
                 let desc = match (files, dirs) {
@@ -620,8 +647,7 @@ impl App {
                         if d == 1 { "" } else { "s" }
                     ),
                 };
-                let _ = n;
-                format!("Trash {desc}?")
+                format!("{verb} {desc}?")
             }
         }
     }
@@ -742,14 +768,25 @@ impl App {
             return Ok(());
         };
         for target in &t.targets {
-            trash::delete(&target.path)
-                .map_err(|e| anyhow::anyhow!("Could not trash \"{}\": {e}", target.name))?;
+            if t.permanent {
+                if target.is_dir {
+                    fs::remove_dir_all(&target.path)
+                        .map_err(|e| anyhow::anyhow!("Could not delete \"{}\": {e}", target.name))?;
+                } else {
+                    fs::remove_file(&target.path)
+                        .map_err(|e| anyhow::anyhow!("Could not delete \"{}\": {e}", target.name))?;
+                }
+            } else {
+                trash::delete(&target.path)
+                    .map_err(|e| anyhow::anyhow!("Could not trash \"{}\": {e}", target.name))?;
+            }
         }
         self.selected_paths.clear();
+        let verb = if t.permanent { "Permanently deleted" } else { "Trashed" };
         let status = match t.targets.len() {
             0 => String::new(),
-            1 => format!("Trashed \"{}\"", t.targets[0].name),
-            n => format!("Trashed {n} items"),
+            1 => format!("{verb} \"{}\"", t.targets[0].name),
+            n => format!("{verb} {n} items"),
         };
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,

@@ -90,6 +90,8 @@ pub(super) struct TrashOverlay {
     pub(super) targets: Vec<TrashTarget>,
     pub(super) scroll: usize,
     pub(super) confirmed: bool,
+    /// When true the items will be permanently deleted instead of trashed.
+    pub(super) permanent: bool,
 }
 
 pub(super) struct CreateOverlay {
@@ -220,6 +222,7 @@ pub(super) struct DirectoryCountViewport {
     pub(super) scroll_row: usize,
     pub(super) cols: usize,
     pub(super) rows_visible: usize,
+    pub(super) show_hidden: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -283,6 +286,9 @@ pub struct App {
     pub zoom_level: u8,
     pub sort_mode: SortMode,
     pub show_hidden: bool,
+    /// True when the loaded directory is the trash folder.
+    /// Set in apply_directory_snapshot so it's only true once the load completes.
+    pub(super) in_trash: bool,
     pub status: String,
     pub help_open: bool,
     pub should_quit: bool,
@@ -341,6 +347,7 @@ impl App {
             zoom_level: 1,
             sort_mode: SortMode::Name,
             show_hidden: false,
+            in_trash: false,
             status: String::new(),
             help_open: false,
             should_quit: false,
@@ -403,8 +410,9 @@ impl App {
             last_navigation_key: None,
             last_selection_change_at: Instant::now(),
         };
+        app.in_trash = App::path_is_trash(&app.cwd);
         let snapshot =
-            crate::fs::load_directory_snapshot(&app.cwd, app.show_hidden, app.sort_mode)?;
+            crate::fs::load_directory_snapshot(&app.cwd, app.effective_show_hidden(), app.sort_mode)?;
         app.sidebar = crate::fs::build_sidebar_items();
         app.entries = snapshot.entries;
         app.directory_runtime.fingerprint = snapshot.fingerprint;

@@ -48,7 +48,7 @@ impl App {
             token: self.search_token,
             cwd: self.cwd.clone(),
             scope,
-            show_hidden: self.show_hidden,
+            show_hidden: self.effective_show_hidden(),
         };
         if !self.scheduler.submit_search(request) {
             self.search_loading = false;

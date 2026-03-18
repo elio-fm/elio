@@ -9,7 +9,7 @@ impl App {
         while let Ok(event) = self.directory_runtime.watch_rx.try_recv() {
             match event {
                 crate::fs::DirectoryWatchEvent::Changed(paths)
-                    if !crate::fs::event_affects_visible_entries(&paths, self.show_hidden) => {}
+                    if !crate::fs::event_affects_visible_entries(&paths, self.effective_show_hidden()) => {}
                 _ => {
                     self.directory_runtime.pending_reload_at =
                         Some(Instant::now() + crate::fs::directory_watch_debounce());
@@ -45,7 +45,7 @@ impl App {
         let request = jobs::DirectoryRequest {
             token: load.token,
             cwd: load.target_cwd.clone(),
-            show_hidden: self.show_hidden,
+            show_hidden: self.effective_show_hidden_for(&load.target_cwd),
             sort_mode: self.sort_mode,
         };
         if !self.scheduler.submit_directory(request) {
@@ -77,6 +77,7 @@ impl App {
         let cwd_changed = load.target_cwd != self.cwd;
         let remembered_view = self.remembered_view_for(&load.target_cwd);
         self.cwd = load.target_cwd.clone();
+        self.in_trash = Self::path_is_trash(&self.cwd);
         self.entries = snapshot.entries;
         self.sidebar = crate::fs::build_sidebar_items();
         self.directory_runtime.fingerprint = snapshot.fingerprint;
@@ -292,7 +293,7 @@ impl App {
         if self.directory_runtime.pending_load.is_some() {
             return Ok(false);
         }
-        let fingerprint = match crate::fs::scan_directory_fingerprint(&self.cwd, self.show_hidden) {
+        let fingerprint = match crate::fs::scan_directory_fingerprint(&self.cwd, self.effective_show_hidden()) {
             Ok(fingerprint) => fingerprint,
             Err(_) => return Ok(false),
         };

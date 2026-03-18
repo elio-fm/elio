@@ -43,6 +43,10 @@ impl App {
     }
 
     pub(in crate::app) fn toggle_hidden_files(&mut self) -> Result<()> {
+        if self.cwd_is_trash() {
+            self.status = "Trash shows all files".to_string();
+            return Ok(());
+        }
         self.show_hidden = !self.show_hidden;
         self.reload()?;
         self.status = if self.show_hidden {

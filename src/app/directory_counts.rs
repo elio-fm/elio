@@ -37,6 +37,7 @@ impl App {
             scroll_row: self.scroll_row,
             cols: self.frame_state.metrics.cols.max(1),
             rows_visible: self.frame_state.metrics.rows_visible.max(1),
+            show_hidden: self.effective_show_hidden(),
         };
         if self.directory_count_viewport == Some(viewport) {
             return;
@@ -62,7 +63,7 @@ impl App {
         modified: Option<SystemTime>,
         show_hidden: bool,
     ) -> bool {
-        if self.show_hidden != show_hidden {
+        if self.effective_show_hidden() != show_hidden {
             return false;
         }
 
@@ -97,7 +98,7 @@ impl App {
         entry.is_dir().then(|| DirectoryItemCountKey {
             path: entry.path.clone(),
             modified: entry.modified,
-            show_hidden: self.show_hidden,
+            show_hidden: self.effective_show_hidden(),
         })
     }
 

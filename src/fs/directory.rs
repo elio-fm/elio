@@ -135,7 +135,7 @@ fn read_xdg_user_dirs(home: &Path) -> HashMap<String, PathBuf> {
 /// On freedesktop systems (Linux) the trash lives at `$XDG_DATA_HOME/Trash/files`.
 /// On macOS it is `~/.Trash`. The `files` subdirectory is used on Linux because that is
 /// where the actual deleted items are stored (the sibling `info/` directory holds metadata).
-fn trash_dir(home: &Path) -> Option<PathBuf> {
+pub(crate) fn trash_dir(home: &Path) -> Option<PathBuf> {
     // Freedesktop / Linux: $XDG_DATA_HOME/Trash/files (default: ~/.local/share/Trash/files)
     let data_home = env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
