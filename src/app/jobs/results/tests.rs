@@ -1,4 +1,5 @@
 use super::*;
+use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use std::{
     fs,
     fs::File,
@@ -44,6 +45,17 @@ fn write_binary_zip_entries(path: &Path, entries: &[(&str, &[u8])]) {
     }
 
     zip.finish().expect("failed to finish zip");
+}
+
+fn write_test_raster_image(path: &Path, format: ImageFormat, width_px: u32, height_px: u32) {
+    let mut image = RgbaImage::new(width_px, height_px);
+    for pixel in image.pixels_mut() {
+        *pixel = Rgba([32, 128, 224, 255]);
+    }
+
+    DynamicImage::ImageRgba8(image)
+        .save_with_format(path, format)
+        .expect("failed to write raster test image");
 }
 
 fn write_epub_fixture(path: &Path, sections: &[(&str, &str)]) {
@@ -633,6 +645,39 @@ fn text_preview_loads_in_background() {
         app.preview_lines()
             .iter()
             .any(|line| line.to_string().contains("plain text"))
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn image_metadata_preview_loads_in_background() {
+    let root = temp_path("image-background");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let image = root.join("cover.png");
+    write_test_raster_image(&image, ImageFormat::Png, 600, 300);
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+    assert_eq!(app.preview_section_label(), "Image");
+    assert!(
+        app.preview_lines()
+            .iter()
+            .any(|line| line.to_string().contains("Preparing file preview in background"))
+    );
+
+    wait_for_background_preview(&mut app);
+
+    assert_eq!(app.preview_section_label(), "Image");
+    assert!(
+        app.preview_lines()
+            .iter()
+            .any(|line| line.to_string().contains("Dimensions"))
+    );
+    assert!(
+        app.preview_lines()
+            .iter()
+            .any(|line| line.to_string().contains("600x300"))
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

@@ -1,7 +1,7 @@
 use super::*;
 use crate::preview::{
     PreviewContent, PreviewKind, PreviewLineCoverage, PreviewRequestOptions,
-    build_preview_with_options, loading_preview_for, should_build_preview_in_background,
+    loading_preview_for, should_build_preview_in_background,
 };
 use std::sync::Arc;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -175,7 +175,7 @@ impl App {
                             .with_detail("PDF document")
                     })
             }
-            Some(entry) if should_build_preview_in_background(&entry) => {
+            Some(entry) => {
                 if let Some(preview) = self.cached_preview_for(&entry, &preview_options) {
                     self.preview_state.metrics.cache_hits += 1;
                     self.preview_state.load_state = None;
@@ -223,10 +223,6 @@ impl App {
                         placeholder
                     }
                 }
-            }
-            Some(entry) => {
-                self.preview_state.load_state = None;
-                build_preview_with_options(&entry, &preview_options)
             }
             None => {
                 self.preview_state.load_state = None;

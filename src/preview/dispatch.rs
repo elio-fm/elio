@@ -9,6 +9,8 @@ use ratatui::{
 };
 
 pub(crate) fn should_build_preview_in_background(entry: &Entry) -> bool {
+    // Any selected file preview may touch the filesystem or decode enough content to
+    // stall the UI on slow or remote storage. Keep the selection path strictly async.
     let _ = entry;
     true
 }
