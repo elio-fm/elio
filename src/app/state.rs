@@ -103,7 +103,6 @@ pub(super) struct RestoreOverlay {
 
 #[derive(Clone, Debug)]
 pub(super) struct RenameOverlay {
-    pub(super) path: PathBuf,
     pub(super) is_dir: bool,
     pub(super) original_name: String,
     pub(super) input: String,

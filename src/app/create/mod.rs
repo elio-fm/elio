@@ -896,13 +896,6 @@ impl App {
             .unwrap_or("")
     }
 
-    pub fn bulk_rename_item_path(&self, index: usize) -> Option<&std::path::Path> {
-        self.bulk_rename
-            .as_ref()
-            .and_then(|r| r.items.get(index))
-            .map(|i| i.path.as_path())
-    }
-
     pub fn bulk_rename_item_is_dir(&self, index: usize) -> bool {
         self.bulk_rename
             .as_ref()
@@ -1297,7 +1290,6 @@ impl App {
             return;
         };
         let name = entry.name.clone();
-        let path = entry.path.clone();
         let is_dir = entry.is_dir();
         // Place cursor before the extension (e.g. "foo.txt" → col 3).
         // Dot-prefixed hidden files ("." at index 0) are treated as having no extension.
@@ -1308,7 +1300,6 @@ impl App {
         self.trash = None;
         self.restore = None;
         self.rename = Some(RenameOverlay {
-            path,
             is_dir,
             original_name: name.clone(),
             input: name,
@@ -1331,10 +1322,6 @@ impl App {
 
     pub fn rename_original_name(&self) -> &str {
         self.rename.as_ref().map_or("", |r| &r.original_name)
-    }
-
-    pub fn rename_item_path(&self) -> Option<&std::path::Path> {
-        self.rename.as_ref().map(|r| r.path.as_path())
     }
 
     pub fn rename_item_is_dir(&self) -> bool {

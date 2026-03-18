@@ -344,8 +344,14 @@ pub(super) fn render_create_overlay(
 
         // Choose icon based on content (/ prefix or suffix → folder).
         let is_dir = line_text.starts_with('/') || line_text.ends_with('/');
-        let icon = if is_dir { "󰉋" } else { "󰈔" };
-        let icon_color = if is_dir { palette.accent } else { palette.muted };
+        let clean_name = line_text.trim_matches('/');
+        let (icon, icon_color) = if clean_name.is_empty() {
+            // Empty input — show generic placeholder icon.
+            if is_dir { ("󰉋", palette.accent) } else { ("󰈔", palette.muted) }
+        } else {
+            let path = app.cwd.join(clean_name);
+            (theme::path_symbol(&path, is_dir), theme::path_color(&path, is_dir, palette))
+        };
 
         // Icon takes 3 chars (icon + 2 spaces); scrollbar takes 2 when visible.
         let text_width = list_area.width
@@ -519,22 +525,12 @@ pub(super) fn render_bulk_rename_overlay(
         let is_dir = app.bulk_rename_item_is_dir(line_idx);
         let is_cursor_line = line_idx == cursor_line;
 
-        // Use the full theme resolution (respects user config overrides).
-        let (icon, icon_color) = app
-            .bulk_rename_item_path(line_idx)
-            .map(|path| {
-                (
-                    theme::path_symbol(path, is_dir),
-                    theme::path_color(path, is_dir, palette),
-                )
-            })
-            .unwrap_or_else(|| {
-                if is_dir {
-                    ("󰉋", palette.accent)
-                } else {
-                    ("󰈔", palette.muted)
-                }
-            });
+        // Resolve icon from the live edited name so it updates as the user types.
+        let live_path = app.cwd.join(new_name);
+        let (icon, icon_color) = (
+            theme::path_symbol(&live_path, is_dir),
+            theme::path_color(&live_path, is_dir, palette),
+        );
 
         // Horizontal scrolling to keep cursor visible.
         let text_width = list_area
@@ -674,10 +670,11 @@ pub(super) fn render_rename_overlay(
     }
 
     let is_dir = app.rename_item_is_dir();
-    let (icon, icon_color) = app
-        .rename_item_path()
-        .map(|path| (theme::path_symbol(path, is_dir), theme::path_color(path, is_dir, palette)))
-        .unwrap_or_else(|| if is_dir { ("󰉋", palette.accent) } else { ("󰈔", palette.muted) });
+    let live_path = app.cwd.join(app.rename_input());
+    let (icon, icon_color) = (
+        theme::path_symbol(&live_path, is_dir),
+        theme::path_color(&live_path, is_dir, palette),
+    );
 
     let line = if input.is_empty() {
         Line::from(vec![
