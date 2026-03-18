@@ -9,6 +9,9 @@ use ratatui::{
 };
 
 pub(crate) fn should_build_preview_in_background(entry: &Entry) -> bool {
+    if entry.is_dir() {
+        return true;
+    }
     let facts = file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified);
     facts.builtin_class == FileClass::Archive || facts.preview.document_format.is_some()
 }
@@ -17,6 +20,9 @@ pub(crate) fn loading_preview_for(
     entry: &Entry,
     options: &PreviewRequestOptions,
 ) -> PreviewContent {
+    if entry.is_dir() {
+        return PreviewContent::new(PreviewKind::Directory, Vec::new()).with_detail("Loading");
+    }
     let facts = file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified);
     let detail = facts
         .specific_type_label
