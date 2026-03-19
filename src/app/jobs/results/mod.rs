@@ -1,5 +1,8 @@
 use super::*;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::{Duration, Instant}};
+
+const JOB_RESULT_APPLY_MAX_PER_TICK: usize = 12;
+const JOB_RESULT_APPLY_TIME_BUDGET: Duration = Duration::from_millis(2);
 
 impl App {
     fn refresh_static_image_preloads_for_cached_selected_page_preview(
@@ -14,8 +17,16 @@ impl App {
 
     pub fn process_background_jobs(&mut self) -> bool {
         let mut dirty = false;
+        let started_at = Instant::now();
+        let mut processed = 0usize;
 
-        while let Ok(job) = self.scheduler.try_recv() {
+        while processed < JOB_RESULT_APPLY_MAX_PER_TICK
+            && started_at.elapsed() < JOB_RESULT_APPLY_TIME_BUDGET
+        {
+            let Ok(job) = self.scheduler.try_recv() else {
+                break;
+            };
+            processed += 1;
             match job {
                 JobResult::Directory(build) => {
                     let Some(load) = self.directory_runtime.pending_load.clone() else {
@@ -187,15 +198,20 @@ impl App {
                     if build_has_page_image {
                         self.refresh_static_image_preloads();
                     }
-                    if build_is_comic {
-                        self.prefetch_nearby_comic_pages();
-                    }
-                    if build_is_epub_section {
-                        self.prefetch_nearby_epub_sections();
+                    if build_is_comic || build_is_epub_section || is_current_entry {
+                        self.schedule_preview_prefetch();
                     }
                     self.preview_state.metrics.applied_results += 1;
                     dirty = true;
                 }
+            }
+        }
+
+        if processed == JOB_RESULT_APPLY_MAX_PER_TICK
+            || (processed > 0 && started_at.elapsed() >= JOB_RESULT_APPLY_TIME_BUDGET)
+        {
+            if let Ok(job) = self.scheduler.try_recv() {
+                self.scheduler.defer_result(job);
             }
         }
 

@@ -40,6 +40,7 @@ pub(in crate::app) struct ImagePreviewState {
     pub(in crate::app) selection_activation_delay: Duration,
     ffmpeg_available: Option<bool>,
     magick_available: Option<bool>,
+    preload_viewport: Option<StaticImagePreloadViewport>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -83,6 +84,18 @@ struct DisplayedStaticImagePreview {
     area: Rect,
     pane_area: Rect,
     mode: StaticImageOverlayMode,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct StaticImagePreloadViewport {
+    selected: usize,
+    scroll_row: usize,
+    cols: usize,
+    rows_visible: usize,
+    preview_content_area: Option<Rect>,
+    preview_media_area: Option<Rect>,
+    protocol: ImageProtocol,
+    window: Option<TerminalWindowSize>,
 }
 
 #[derive(Debug)]
@@ -567,6 +580,24 @@ impl App {
                 self.ensure_static_image_preload(request, jobs::ImageJobPriority::Nearby);
             }
         }
+    }
+
+    pub(in crate::app) fn refresh_static_image_preloads_if_needed(&mut self) {
+        let viewport = StaticImagePreloadViewport {
+            selected: self.selected,
+            scroll_row: self.scroll_row,
+            cols: self.frame_state.metrics.cols.max(1),
+            rows_visible: self.frame_state.metrics.rows_visible.max(1),
+            preview_content_area: self.frame_state.preview_content_area,
+            preview_media_area: self.frame_state.preview_media_area,
+            protocol: self.terminal_images.protocol,
+            window: self.cached_terminal_window(),
+        };
+        if self.image_preview.preload_viewport == Some(viewport) {
+            return;
+        }
+        self.image_preview.preload_viewport = Some(viewport);
+        self.refresh_static_image_preloads();
     }
 
     pub(in crate::app) fn apply_image_prepare_build(

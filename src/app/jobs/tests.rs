@@ -1,5 +1,6 @@
 use super::*;
 use crate::preview::PreviewRequestOptions;
+use std::sync::Arc;
 
 fn image_prepare_request(name: &str) -> ImagePrepareRequest {
     ImagePrepareRequest {
@@ -248,6 +249,28 @@ fn scheduler_reports_pending_work_when_jobs_are_queued() {
         show_hidden: false,
     }));
     assert!(scheduler.has_pending_work());
+}
+
+#[test]
+fn scheduler_reports_pending_work_for_buffered_results() {
+    let scheduler = JobScheduler::new_for_tests(0, 0, 2);
+    scheduler.defer_result(JobResult::Search(SearchBuild {
+        token: 7,
+        cwd: PathBuf::from("/tmp/search"),
+        scope: SearchScope::Files,
+        show_hidden: false,
+        result: Ok(Arc::new(Vec::new())),
+    }));
+
+    assert!(scheduler.has_pending_work());
+    match scheduler.try_recv() {
+        Ok(JobResult::Search(build)) => {
+            assert_eq!(build.token, 7);
+            assert_eq!(build.cwd, PathBuf::from("/tmp/search"));
+        }
+        other => panic!("expected buffered search result, got {other:?}"),
+    }
+    assert!(!scheduler.has_pending_work());
 }
 
 #[test]

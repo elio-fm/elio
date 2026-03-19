@@ -269,6 +269,18 @@ fn wait_for_background_preview(app: &mut App) {
     panic!("timed out waiting for background preview");
 }
 
+fn wait_for_preview_prefetch(app: &mut App) {
+    for _ in 0..200 {
+        let _ = app.process_background_jobs();
+        let _ = app.process_preview_prefetch_timers();
+        if app.pending_preview_prefetch_timer().is_none() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for preview prefetch");
+}
+
 fn wait_for_preview_header(app: &mut App, visible_rows: usize, width: usize, expected: &str) {
     for _ in 0..200 {
         if app
@@ -464,6 +476,7 @@ fn comic_preview_prefetches_adjacent_pages_for_instant_page_steps() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_background_preview(&mut app);
+    wait_for_preview_prefetch(&mut app);
 
     for _ in 0..200 {
         let _ = app.process_background_jobs();
@@ -513,6 +526,7 @@ fn epub_preview_prefetches_adjacent_sections_for_instant_page_steps() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_background_preview(&mut app);
+    wait_for_preview_prefetch(&mut app);
 
     for _ in 0..200 {
         let _ = app.process_background_jobs();
@@ -632,11 +646,10 @@ fn text_preview_loads_in_background() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
 
     assert_eq!(app.preview_section_label(), "Text");
-    assert!(
-        app.preview_lines()
-            .iter()
-            .any(|line| line.to_string().contains("Preparing file preview in background"))
-    );
+    assert!(app.preview_lines().iter().any(|line| {
+        line.to_string()
+            .contains("Preparing file preview in background")
+    }));
 
     wait_for_background_preview(&mut app);
 
@@ -660,11 +673,10 @@ fn image_metadata_preview_loads_in_background() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
 
     assert_eq!(app.preview_section_label(), "Image");
-    assert!(
-        app.preview_lines()
-            .iter()
-            .any(|line| line.to_string().contains("Preparing file preview in background"))
-    );
+    assert!(app.preview_lines().iter().any(|line| {
+        line.to_string()
+            .contains("Preparing file preview in background")
+    }));
 
     wait_for_background_preview(&mut app);
 
@@ -693,7 +705,9 @@ fn nearby_archive_preview_is_prefetched_at_low_priority() {
     write_zip_entries(&second, &[("docs/second.txt", "world")]);
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_preview_prefetch(&mut app);
     for _ in 0..100 {
+        let _ = app.process_preview_prefetch_timers();
         let _ = app.process_background_jobs();
         if app.has_cached_preview_for_path(&second) {
             break;
@@ -742,11 +756,10 @@ fn stale_archive_preview_result_is_ignored_after_selection_changes() {
         Some("z.txt")
     );
     assert_eq!(app.preview_section_label(), "Text");
-    assert!(
-        app.preview_lines()
-            .iter()
-            .any(|line| line.to_string().contains("Preparing file preview in background"))
-    );
+    assert!(app.preview_lines().iter().any(|line| {
+        line.to_string()
+            .contains("Preparing file preview in background")
+    }));
 
     wait_for_background_preview(&mut app);
 
@@ -1006,6 +1019,42 @@ fn stale_preview_results_are_counted_in_metrics() {
     let metrics = app.preview_metrics();
     assert!(metrics.stale_results_dropped >= 1);
     assert!(metrics.applied_results <= 1);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn background_job_processing_yields_after_a_burst_of_results() {
+    let root = temp_path("result-burst-budget");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    for index in 0..20 {
+        app.scheduler
+            .defer_result(JobResult::PreviewLineCount(PreviewLineCountBuild {
+                path: root.join(format!("item-{index}.txt")),
+                size: index as u64 + 1,
+                modified: None,
+                total_lines: Some(index + 1),
+            }));
+    }
+
+    let _ = app.process_background_jobs();
+    assert!(!app.preview_state.line_count_cache.is_empty());
+    assert!(app.preview_state.line_count_cache.len() < 20);
+    assert!(app.has_pending_background_work());
+
+    for _ in 0..10 {
+        let _ = app.process_background_jobs();
+        if !app.has_pending_background_work() {
+            break;
+        }
+    }
+
+    assert_eq!(app.preview_state.line_count_cache.len(), 20);
+    assert!(!app.has_pending_background_work());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

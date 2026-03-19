@@ -12,6 +12,7 @@ pub(super) const WHEEL_SCROLL_INTERVAL_SEARCH: Duration = Duration::from_millis(
 pub(super) const PREVIEW_AUTO_FOCUS_DELAY: Duration = Duration::from_millis(220);
 pub(super) const IMAGE_SELECTION_ACTIVATION_DELAY: Duration = Duration::from_millis(120);
 pub(super) const HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY: Duration = Duration::from_millis(85);
+pub(super) const PREVIEW_PREFETCH_IDLE_DELAY: Duration = Duration::from_millis(140);
 pub(super) const WHEEL_SCROLL_QUEUE_LIMIT: isize = 8;
 pub(super) const WHEEL_SCROLL_QUEUE_LIMIT_HORIZONTAL: isize = 3;
 pub(super) const WHEEL_SCROLL_QUEUE_LIMIT_PREVIEW_HORIZONTAL: isize = 10;

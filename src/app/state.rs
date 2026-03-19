@@ -279,6 +279,7 @@ pub(super) struct PreviewState {
     pub(super) metrics: PreviewMetrics,
     pub(super) load_state: Option<PreviewLoadState>,
     pub(super) deferred_refresh_at: Option<Instant>,
+    pub(super) prefetch_ready_at: Option<Instant>,
     pub(super) result_cache: HashMap<PreviewCacheKey, CachedPreview>,
     pub(super) result_order: VecDeque<PreviewCacheKey>,
     pub(super) line_count_cache: HashMap<PreviewLineCountKey, usize>,
@@ -406,6 +407,7 @@ impl App {
                 metrics: PreviewMetrics::default(),
                 load_state: None,
                 deferred_refresh_at: None,
+                prefetch_ready_at: None,
                 result_cache: HashMap::new(),
                 result_order: VecDeque::new(),
                 line_count_cache: HashMap::new(),
@@ -462,8 +464,11 @@ impl App {
             last_selection_change_at: Instant::now(),
         };
         app.in_trash = App::path_is_trash(&app.cwd);
-        let snapshot =
-            crate::fs::load_directory_snapshot(&app.cwd, app.effective_show_hidden(), app.sort_mode)?;
+        let snapshot = crate::fs::load_directory_snapshot(
+            &app.cwd,
+            app.effective_show_hidden(),
+            app.sort_mode,
+        )?;
         app.sidebar = crate::fs::build_sidebar_items();
         app.entries = snapshot.entries;
         app.directory_runtime.fingerprint = snapshot.fingerprint;

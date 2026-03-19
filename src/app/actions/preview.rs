@@ -1,7 +1,7 @@
 use super::*;
 use crate::preview::{
-    PreviewContent, PreviewKind, PreviewLineCoverage, PreviewRequestOptions,
-    loading_preview_for, should_build_preview_in_background,
+    PreviewContent, PreviewKind, PreviewLineCoverage, PreviewRequestOptions, loading_preview_for,
+    should_build_preview_in_background,
 };
 use std::sync::Arc;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -152,6 +152,7 @@ impl App {
 
     pub(in crate::app) fn refresh_preview(&mut self) {
         self.preview_state.deferred_refresh_at = None;
+        self.preview_state.prefetch_ready_at = None;
         self.sync_comic_preview_selection();
         self.sync_epub_preview_selection();
         self.sync_pdf_preview_selection();
@@ -236,9 +237,7 @@ impl App {
         self.preview_state.horizontal_scroll = 0;
         self.sync_preview_scroll();
         self.refresh_static_image_preloads();
-        self.prefetch_nearby_comic_pages();
-        self.prefetch_nearby_epub_sections();
-        self.prefetch_nearby_previews();
+        self.schedule_preview_prefetch();
     }
 
     pub(crate) fn process_preview_refresh_timers(&mut self) -> bool {
@@ -255,6 +254,30 @@ impl App {
     pub(crate) fn pending_preview_refresh_timer(&self) -> Option<std::time::Duration> {
         self.preview_state
             .deferred_refresh_at
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+    }
+
+    pub(crate) fn process_preview_prefetch_timers(&mut self) -> bool {
+        let Some(deadline) = self.preview_state.prefetch_ready_at else {
+            return false;
+        };
+        if Instant::now() < deadline
+            || self.preview_state.deferred_refresh_at.is_some()
+            || self.browser_wheel_burst_active()
+        {
+            return false;
+        }
+
+        self.preview_state.prefetch_ready_at = None;
+        self.prefetch_nearby_comic_pages();
+        self.prefetch_nearby_epub_sections();
+        self.prefetch_nearby_previews();
+        false
+    }
+
+    pub(crate) fn pending_preview_prefetch_timer(&self) -> Option<std::time::Duration> {
+        self.preview_state
+            .prefetch_ready_at
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))
     }
 
@@ -415,6 +438,12 @@ impl App {
                 queued += 1;
             }
         }
+    }
+
+    pub(in crate::app) fn schedule_preview_prefetch(&mut self) {
+        self.preview_state.prefetch_ready_at = self
+            .selected_entry()
+            .map(|_| Instant::now() + PREVIEW_PREFETCH_IDLE_DELAY);
     }
 
     fn preview_request_options_for_entry(&self, entry: &Entry) -> PreviewRequestOptions {

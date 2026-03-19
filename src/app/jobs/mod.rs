@@ -20,6 +20,7 @@ use super::overlays::pdf::PdfProbeResult;
 use super::*;
 use crate::fs::search::SearchCandidate;
 use std::{
+    collections::VecDeque,
     path::{Path, PathBuf},
     sync::{Arc, Condvar, Mutex, MutexGuard, mpsc},
     time::{Duration, SystemTime},
@@ -319,6 +320,7 @@ pub(super) struct JobScheduler {
     search: SearchPool,
     preview: PreviewPool,
     result_rx: mpsc::Receiver<JobResult>,
+    buffered_results: Mutex<VecDeque<JobResult>>,
     #[cfg(test)]
     metrics: Arc<Mutex<SchedulerMetrics>>,
 }
@@ -374,6 +376,7 @@ impl JobScheduler {
                 Arc::clone(&metrics),
             ),
             result_rx,
+            buffered_results: Mutex::new(VecDeque::new()),
             #[cfg(test)]
             metrics,
         }
@@ -383,7 +386,10 @@ impl JobScheduler {
         self.directory.submit(request)
     }
 
-    pub(super) fn submit_directory_fingerprint(&self, request: DirectoryFingerprintRequest) -> bool {
+    pub(super) fn submit_directory_fingerprint(
+        &self,
+        request: DirectoryFingerprintRequest,
+    ) -> bool {
         self.directory_fingerprint.submit(request)
     }
 
@@ -464,11 +470,19 @@ impl JobScheduler {
     }
 
     pub(super) fn try_recv(&self) -> Result<JobResult, mpsc::TryRecvError> {
+        if let Some(job) = lock_unpoison(&self.buffered_results).pop_front() {
+            return Ok(job);
+        }
         self.result_rx.try_recv()
     }
 
+    pub(super) fn defer_result(&self, job: JobResult) {
+        lock_unpoison(&self.buffered_results).push_front(job);
+    }
+
     pub(super) fn has_pending_work(&self) -> bool {
-        self.directory.has_pending_work()
+        !lock_unpoison(&self.buffered_results).is_empty()
+            || self.directory.has_pending_work()
             || self.directory_fingerprint.has_pending_work()
             || self.directory_item_count.has_pending_work()
             || self.preview_line_count.has_pending_work()

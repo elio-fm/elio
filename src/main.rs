@@ -133,6 +133,10 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             dirty = true;
         }
 
+        if app.process_preview_prefetch_timers() {
+            dirty = true;
+        }
+
         if app.process_browser_wheel_timers() {
             dirty = true;
         }
@@ -214,6 +218,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             .into_iter()
             .chain(app.pending_image_preview_timer())
             .chain(app.pending_preview_refresh_timer())
+            .chain(app.pending_preview_prefetch_timer())
             .chain(app.pending_browser_wheel_timer())
             .min()
             .map(|delay| delay.min(base_poll_interval))

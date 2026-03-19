@@ -89,7 +89,9 @@ impl App {
             self.selected = next;
         }
         self.sync_scroll();
-        self.refresh_static_image_preloads();
+        if matches!(preview_mode, PreviewRefreshMode::Deferred) {
+            self.refresh_static_image_preloads();
+        }
         self.remember_current_directory_view();
     }
 

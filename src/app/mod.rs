@@ -45,7 +45,7 @@ impl App {
         if !self.browser_wheel_burst_active() {
             self.queue_visible_directory_item_counts();
         }
-        self.refresh_static_image_preloads();
+        self.refresh_static_image_preloads_if_needed();
         self.remember_current_directory_view();
         dirty
     }

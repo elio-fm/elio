@@ -90,6 +90,18 @@ fn wait_for_displayed_preview_overlay(app: &mut App) {
     panic!("timed out waiting for preview overlay");
 }
 
+fn wait_for_preview_prefetch(app: &mut App) {
+    for _ in 0..200 {
+        let _ = app.process_background_jobs();
+        let _ = app.process_preview_prefetch_timers();
+        if app.pending_preview_prefetch_timer().is_none() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for preview prefetch");
+}
+
 #[test]
 fn page_image_overlay_request_uses_asset_metadata_without_forcing_render_cache() {
     let root = temp_root("request-metadata");
@@ -766,9 +778,11 @@ fn stale_adjacent_comic_preview_result_immediately_queues_image_prepare() {
         width: 48,
         height: 20,
     });
+    wait_for_preview_prefetch(&mut app);
 
     let mut adjacent_key = None;
     for _ in 0..200 {
+        let _ = app.process_preview_prefetch_timers();
         let _ = app.process_background_jobs();
         if !app.has_cached_comic_preview_page(&archive, 1) {
             thread::sleep(Duration::from_millis(10));
