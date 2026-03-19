@@ -964,7 +964,13 @@ mod tests {
 
     fn wait_for_directory_counts(app: &mut App) {
         for _ in 0..100 {
-            if app.process_background_jobs() {
+            let _ = app.process_background_jobs();
+            let all_visible_directory_counts_loaded = app
+                .entries
+                .iter()
+                .filter(|entry| entry.is_dir())
+                .all(|entry| app.directory_item_count_label(entry).is_some());
+            if all_visible_directory_counts_loaded {
                 return;
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -984,6 +990,12 @@ mod tests {
 
     fn row_text(buffer: &Buffer, y: u16) -> String {
         (0..buffer.area.width)
+            .map(|x| buffer[(x, y)].symbol())
+            .collect::<String>()
+    }
+
+    fn rect_row_text(buffer: &Buffer, rect: Rect, y: u16) -> String {
+        (rect.x..rect.x.saturating_add(rect.width))
             .map(|x| buffer[(x, y)].symbol())
             .collect::<String>()
     }
@@ -1269,10 +1281,13 @@ mod tests {
 
         draw_ui(&mut terminal, &mut app);
         wait_for_directory_counts(&mut app);
-        draw_ui(&mut terminal, &mut app);
+        let state = draw_ui(&mut terminal, &mut app);
+        let entries_panel = state
+            .entries_panel
+            .expect("entries panel should be rendered");
 
-        let rows = (0..terminal.backend().buffer().area.height)
-            .map(|y| row_text(terminal.backend().buffer(), y))
+        let rows = (entries_panel.y..entries_panel.y.saturating_add(entries_panel.height))
+            .map(|y| rect_row_text(terminal.backend().buffer(), entries_panel, y))
             .collect::<Vec<_>>();
         let rendered = rows.join("\n");
         let folder_row = rows
