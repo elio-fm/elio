@@ -165,7 +165,11 @@ impl App {
         if areas.is_empty() {
             return Vec::new();
         }
-        areas.into_iter().flat_map(erase_cells).collect()
+        let mut expanded_areas = Vec::with_capacity(areas.len());
+        for area in areas {
+            push_unique_rect(&mut expanded_areas, self.expand_iterm_erase_area(area));
+        }
+        expanded_areas.into_iter().flat_map(erase_cells).collect()
     }
 
     pub(crate) fn present_preview_overlay(&mut self) -> Result<Vec<u8>> {
@@ -310,6 +314,30 @@ impl App {
         self.terminal_images.window = (self.terminal_images.protocol != ImageProtocol::None)
             .then(query_terminal_window_size)
             .flatten();
+    }
+
+    fn expand_iterm_erase_area(&self, area: Rect) -> Rect {
+        let safe_bounds = self
+            .frame_state
+            .preview_body_area
+            .or(self.frame_state.preview_content_area)
+            .unwrap_or(area);
+        let Some(bounds) = self.frame_state.preview_panel.or(Some(safe_bounds)) else {
+            return area;
+        };
+        let clamped = intersect_rect(area, safe_bounds).unwrap_or(area);
+        let bottom = clamped.y.saturating_add(clamped.height);
+        let bounds_bottom = bounds.y.saturating_add(bounds.height);
+        if bottom >= bounds_bottom {
+            return clamped;
+        }
+        let extra_rows = bounds_bottom.saturating_sub(bottom).min(2);
+        Rect {
+            x: clamped.x,
+            y: clamped.y,
+            width: clamped.width,
+            height: clamped.height.saturating_add(extra_rows),
+        }
     }
 }
 
@@ -669,6 +697,19 @@ fn push_unique_rect(rects: &mut Vec<Rect>, area: Rect) {
         return;
     }
     rects.push(area);
+}
+
+fn intersect_rect(a: Rect, b: Rect) -> Option<Rect> {
+    let left = a.x.max(b.x);
+    let top = a.y.max(b.y);
+    let right = a.x.saturating_add(a.width).min(b.x.saturating_add(b.width));
+    let bottom = a.y.saturating_add(a.height).min(b.y.saturating_add(b.height));
+    (right > left && bottom > top).then_some(Rect {
+        x: left,
+        y: top,
+        width: right.saturating_sub(left),
+        height: bottom.saturating_sub(top),
+    })
 }
 
 fn place_terminal_image_with_iterm_protocol(
