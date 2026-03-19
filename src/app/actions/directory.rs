@@ -9,7 +9,10 @@ impl App {
         while let Ok(event) = self.directory_runtime.watch_rx.try_recv() {
             match event {
                 crate::fs::DirectoryWatchEvent::Changed(paths)
-                    if !crate::fs::event_affects_visible_entries(&paths, self.effective_show_hidden()) => {}
+                    if !crate::fs::event_affects_visible_entries(
+                        &paths,
+                        self.effective_show_hidden(),
+                    ) => {}
                 _ => {
                     self.directory_runtime.pending_reload_at =
                         Some(Instant::now() + crate::fs::directory_watch_debounce());
@@ -112,6 +115,7 @@ impl App {
         };
         self.scroll_row = remembered_view.map_or(0, |view| view.scroll_row);
         self.last_selection_change_at = Instant::now();
+        self.image_preview.selection_activation_delay = std::time::Duration::ZERO;
         self.clamp_selection();
         self.sync_scroll();
         self.remember_current_directory_view();

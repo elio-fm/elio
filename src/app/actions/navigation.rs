@@ -74,6 +74,10 @@ impl App {
         if next != self.selected {
             self.selected = next;
             self.last_selection_change_at = Instant::now();
+            self.image_preview.selection_activation_delay = match preview_mode {
+                PreviewRefreshMode::Immediate => std::time::Duration::ZERO,
+                PreviewRefreshMode::Deferred => IMAGE_SELECTION_ACTIVATION_DELAY,
+            };
             match preview_mode {
                 PreviewRefreshMode::Immediate => self.refresh_preview(),
                 PreviewRefreshMode::Deferred => {

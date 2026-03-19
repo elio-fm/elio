@@ -1,7 +1,7 @@
 use super::super::*;
 use super::inline_image::{
     ImageProtocol, OverlayPresentState, RenderedImageDimensions, TerminalWindowSize,
-    command_exists, fit_image_area, place_terminal_image, preview_log,
+    command_exists, fit_image_area, place_terminal_image, preview_log, read_png_dimensions,
 };
 use anyhow::Result;
 use image::{DynamicImage, GenericImageView, ImageFormat, ImageReader, imageops::FilterType};
@@ -15,7 +15,7 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    time::{Instant, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 
 const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 24;
@@ -37,6 +37,7 @@ pub(in crate::app) struct ImagePreviewState {
     displayed: Option<DisplayedStaticImagePreview>,
     displayed_excluded: Vec<Rect>,
     activation_ready_at: Option<Instant>,
+    pub(in crate::app) selection_activation_delay: Duration,
     ffmpeg_available: Option<bool>,
     magick_available: Option<bool>,
 }
@@ -167,7 +168,7 @@ impl App {
         if !self.image_selection_activation_ready() {
             return None;
         }
-        if self.static_image_can_prepare_inline_now(&request) {
+        if self.static_image_can_display_directly_now(&request) {
             return None;
         }
         if self.image_preview.dimensions.contains_key(&key) {
@@ -224,11 +225,7 @@ impl App {
             self.refresh_preview();
             return Ok(OverlayPresentState::NotRequested);
         };
-        let placement = fit_image_area(
-            request.area,
-            window_size,
-            prepared.dimensions.width_px as f32 / prepared.dimensions.height_px as f32,
-        );
+        let placement = self.static_image_display_area(&request, prepared.dimensions, window_size);
         preview_log(format_args!(
             "present_static_image_overlay: dims={}x{} placement={:?}",
             prepared.dimensions.width_px, prepared.dimensions.height_px, placement
@@ -305,11 +302,7 @@ impl App {
             self.mark_static_image_failed(&request);
             return Ok(OverlayPresentState::NotRequested);
         };
-        let placement = fit_image_area(
-            request.area,
-            window_size,
-            prepared.dimensions.width_px as f32 / prepared.dimensions.height_px as f32,
-        );
+        let placement = self.static_image_display_area(&request, prepared.dimensions, window_size);
         preview_log(format_args!(
             "present_preview_visual_overlay: dims={}x{} placement={:?}",
             prepared.dimensions.width_px, prepared.dimensions.height_px, placement
@@ -359,7 +352,7 @@ impl App {
                 dimensions,
             });
         }
-        if let Some(prepared) = self.try_prepare_current_static_image_inline(request) {
+        if let Some(prepared) = self.direct_static_image_for_overlay(request) {
             return StaticImageOverlayPreparation::Ready(prepared);
         }
         if self.image_preview.pending_prepares.contains(&key) {
@@ -385,7 +378,8 @@ impl App {
             .active_static_image_overlay_request()
             .or_else(|| self.active_preview_visual_overlay_request())
             .and_then(|_| {
-                let ready_at = self.last_selection_change_at + IMAGE_SELECTION_ACTIVATION_DELAY;
+                let ready_at =
+                    self.last_selection_change_at + self.image_preview.selection_activation_delay;
                 (Instant::now() < ready_at).then_some(ready_at)
             });
     }
@@ -396,41 +390,39 @@ impl App {
             .insert(StaticImageKey::from_request(request));
     }
 
-    fn try_prepare_current_static_image_inline(
+    fn direct_static_image_for_overlay(
         &mut self,
         request: &StaticImageOverlayRequest,
     ) -> Option<PreparedStaticImage> {
-        let format = static_image_format_for_path(&request.path)?;
-        if !should_prepare_static_image_inline(request, format, self.ffmpeg_available()) {
+        if !self.static_image_can_display_directly_now(request) {
             return None;
         }
 
         let key = StaticImageKey::from_request(request);
-        let prepared =
-            prepare_static_image_asset(&self.image_prepare_request_for_overlay(request), || false)?;
         self.image_preview.failed_images.remove(&key);
-        self.image_preview
+        let dimensions = self
+            .image_preview
             .dimensions
-            .insert(key.clone(), prepared.dimensions);
-        if prepared.display_path != request.path {
-            self.remember_rendered_static_image(key, prepared.display_path.clone());
-        }
+            .get(&key)
+            .copied()
+            .or_else(|| read_png_dimensions(&request.path))
+            .or_else(|| read_raster_dimensions(&request.path))?;
+        self.image_preview.dimensions.insert(key, dimensions);
 
         Some(PreparedStaticImage {
-            display_path: prepared.display_path,
-            dimensions: prepared.dimensions,
+            display_path: request.path.clone(),
+            dimensions,
         })
     }
 
-    fn static_image_can_prepare_inline_now(&self, request: &StaticImageOverlayRequest) -> bool {
-        let Some(format) = static_image_format_for_path(&request.path) else {
-            return false;
-        };
-        let ffmpeg_available = self
-            .image_preview
-            .ffmpeg_available
-            .unwrap_or_else(|| command_exists("ffmpeg"));
-        should_prepare_static_image_inline(request, format, ffmpeg_available)
+    fn static_image_can_display_directly_now(&self, request: &StaticImageOverlayRequest) -> bool {
+        self.terminal_images.protocol == ImageProtocol::KittyGraphics
+            && !request.force_render_to_cache
+            && static_image_format_for_overlay_request(request) == Some(StaticImageFormat::Png)
+    }
+
+    fn static_image_requires_prepare(&self, request: &StaticImageOverlayRequest) -> bool {
+        !self.static_image_can_display_directly_now(request)
     }
 
     fn magick_available(&mut self) -> bool {
@@ -466,7 +458,6 @@ impl App {
         self.image_preview.displayed.as_ref().map(|d| d.pane_area)
     }
 
-
     pub(in crate::app) fn clear_displayed_static_image(&mut self) {
         self.image_preview.displayed = None;
     }
@@ -496,35 +487,32 @@ impl App {
             .is_some_and(|(active, displayed)| active == displayed)
     }
 
-    pub(in crate::app) fn keep_displayed_page_preview_overlay_while_pending(&self) -> bool {
+    pub(in crate::app) fn keep_displayed_static_image_overlay_while_pending(&self) -> bool {
         let Some(displayed) = self.image_preview.displayed.as_ref() else {
             return false;
         };
-        let loading_current_page_preview = self.current_page_preview_loading_active();
-        if displayed.mode != StaticImageOverlayMode::Inline
-            || (!self.current_page_preview_visual_active() && !loading_current_page_preview)
-        {
-            return false;
-        }
+        match displayed.mode {
+            StaticImageOverlayMode::Inline => {
+                let loading_current_page_preview = self.current_page_preview_loading_active();
+                if !self.current_page_preview_visual_active() && !loading_current_page_preview {
+                    return false;
+                }
 
-        if loading_current_page_preview {
-            return true;
-        }
+                if loading_current_page_preview {
+                    return true;
+                }
 
-        let Some(request) = self.active_preview_visual_overlay_request_unchecked() else {
-            return false;
-        };
-        let key = StaticImageKey::from_request(&request);
-        if self.image_preview.failed_images.contains(&key) {
-            return false;
+                let Some(request) = self.active_preview_visual_overlay_request_unchecked() else {
+                    return false;
+                };
+                self.keep_displayed_static_image_request_while_pending(&request)
+            }
+            StaticImageOverlayMode::FullPane => self
+                .active_static_image_overlay_request()
+                .is_some_and(|request| {
+                    self.keep_displayed_static_image_request_while_pending(&request)
+                }),
         }
-        if !self.image_selection_activation_ready() {
-            return true;
-        }
-
-        self.image_preview.pending_prepares.contains(&key)
-            || (self.static_image_can_prepare_inline_now(&request)
-                && !self.image_preview.dimensions.contains_key(&key))
     }
 
     pub(in crate::app) fn displayed_static_image_replaces_preview(&self) -> bool {
@@ -570,12 +558,14 @@ impl App {
             .retain_image_prepares(current_job.as_ref(), &nearby_jobs);
 
         if let Some(request) = current.as_ref()
-            && (request.force_render_to_cache || !self.static_image_can_prepare_inline_now(request))
+            && self.static_image_requires_prepare(request)
         {
             self.ensure_static_image_preload(request, jobs::ImageJobPriority::Current);
         }
         for request in &nearby {
-            self.ensure_static_image_preload(request, jobs::ImageJobPriority::Nearby);
+            if self.static_image_requires_prepare(request) {
+                self.ensure_static_image_preload(request, jobs::ImageJobPriority::Nearby);
+            }
         }
     }
 
@@ -761,12 +751,25 @@ impl App {
             .copied()?;
         Some(DisplayedStaticImagePreview::from_request(
             &request,
+            self.static_image_display_area(&request, image_dimensions, window_size),
+        ))
+    }
+
+    fn static_image_display_area(
+        &self,
+        request: &StaticImageOverlayRequest,
+        dimensions: RenderedImageDimensions,
+        window_size: TerminalWindowSize,
+    ) -> Rect {
+        if self.terminal_images.protocol == ImageProtocol::KittyGraphics {
+            request.area
+        } else {
             fit_image_area(
                 request.area,
                 window_size,
-                image_dimensions.width_px as f32 / image_dimensions.height_px as f32,
-            ),
-        ))
+                dimensions.width_px as f32 / dimensions.height_px as f32,
+            )
+        }
     }
 
     fn current_page_preview_loading_active(&self) -> bool {
@@ -784,6 +787,23 @@ impl App {
                     && (self.comic_preview_wheel_capture_active()
                         || self.epub_preview_wheel_capture_active())
             })
+    }
+
+    fn keep_displayed_static_image_request_while_pending(
+        &self,
+        request: &StaticImageOverlayRequest,
+    ) -> bool {
+        let key = StaticImageKey::from_request(request);
+        if self.image_preview.failed_images.contains(&key) {
+            return false;
+        }
+        if !self.image_selection_activation_ready() {
+            return true;
+        }
+
+        self.image_preview.pending_prepares.contains(&key)
+            || (self.static_image_requires_prepare(request)
+                && !self.image_preview.dimensions.contains_key(&key))
     }
 }
 
@@ -877,7 +897,7 @@ where
     if canceled() {
         return None;
     }
-    let format = static_image_format_for_path(&request.path)?;
+    let format = static_image_format_for_prepare_request(request)?;
     let source_dimensions = if format == StaticImageFormat::Svg {
         read_svg_dimensions(&request.path)?
     } else {
@@ -901,8 +921,8 @@ where
         let cache_path = static_image_render_cache_path(&key)?;
         if cache_path.exists() {
             return Some(PreparedStaticImageAsset {
+                dimensions: prepared_display_dimensions(&cache_path, source_dimensions),
                 display_path: cache_path,
-                dimensions: source_dimensions,
             });
         }
         let temp_path = static_image_render_temp_path(&cache_path)?;
@@ -917,8 +937,8 @@ where
         {
             finalize_static_image_render(&temp_path, &cache_path)?;
             return Some(PreparedStaticImageAsset {
+                dimensions: prepared_display_dimensions(&cache_path, source_dimensions),
                 display_path: cache_path,
-                dimensions: source_dimensions,
             });
         }
         let _ = fs::remove_file(temp_path);
@@ -928,8 +948,8 @@ where
     let cache_path = static_image_render_cache_path(&key)?;
     if cache_path.exists() {
         return Some(PreparedStaticImageAsset {
+            dimensions: prepared_display_dimensions(&cache_path, source_dimensions),
             display_path: cache_path,
-            dimensions: source_dimensions,
         });
     }
     if canceled() {
@@ -950,8 +970,8 @@ where
     {
         finalize_static_image_render(&temp_path, &cache_path)?;
         return Some(PreparedStaticImageAsset {
+            dimensions: prepared_display_dimensions(&cache_path, source_dimensions),
             display_path: cache_path,
-            dimensions: source_dimensions,
         });
     }
 
@@ -976,9 +996,18 @@ where
     finalize_static_image_render(&temp_path, &cache_path)?;
 
     Some(PreparedStaticImageAsset {
+        dimensions: prepared_display_dimensions(&cache_path, source_dimensions),
         display_path: cache_path,
-        dimensions: source_dimensions,
     })
+}
+
+fn prepared_display_dimensions(
+    display_path: &Path,
+    fallback: RenderedImageDimensions,
+) -> RenderedImageDimensions {
+    read_png_dimensions(display_path)
+        .or_else(|| read_raster_dimensions(display_path))
+        .unwrap_or(fallback)
 }
 
 fn static_image_render_cache_path(key: &StaticImageKey) -> Option<PathBuf> {
@@ -1003,10 +1032,9 @@ fn static_image_render_temp_path(path: &Path) -> Option<PathBuf> {
     let stem = path.file_stem()?.to_string_lossy();
     let extension = path.extension().and_then(|extension| extension.to_str());
     let file_name = match extension {
-        Some(extension) if !extension.is_empty() => format!(
-            ".{stem}.tmp-{}-{unique}.{extension}",
-            std::process::id()
-        ),
+        Some(extension) if !extension.is_empty() => {
+            format!(".{stem}.tmp-{}-{unique}.{extension}", std::process::id())
+        }
         _ => format!(".{stem}.tmp-{}-{unique}", std::process::id()),
     };
     Some(parent.join(file_name))
@@ -1024,18 +1052,6 @@ fn finalize_static_image_render(temp_path: &Path, cache_path: &Path) -> Option<(
             None
         }
     }
-}
-
-fn should_prepare_static_image_inline(
-    request: &StaticImageOverlayRequest,
-    format: StaticImageFormat,
-    ffmpeg_available: bool,
-) -> bool {
-    if request.force_render_to_cache {
-        return false;
-    }
-
-    static_image_can_prepare_inline(request.size, format, ffmpeg_available)
 }
 
 fn static_image_can_prepare_inline(
@@ -1067,6 +1083,32 @@ fn static_image_format_for_entry(entry: &Entry) -> Option<StaticImageFormat> {
     crate::file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified)
         .specific_type_label
         .and_then(StaticImageFormat::from_label)
+}
+
+fn static_image_format_for_overlay_request(
+    request: &StaticImageOverlayRequest,
+) -> Option<StaticImageFormat> {
+    crate::file_info::inspect_path_cached(
+        &request.path,
+        EntryKind::File,
+        request.size,
+        request.modified,
+    )
+    .specific_type_label
+    .and_then(StaticImageFormat::from_label)
+}
+
+fn static_image_format_for_prepare_request(
+    request: &jobs::ImagePrepareRequest,
+) -> Option<StaticImageFormat> {
+    crate::file_info::inspect_path_cached(
+        &request.path,
+        EntryKind::File,
+        request.size,
+        request.modified,
+    )
+    .specific_type_label
+    .and_then(StaticImageFormat::from_label)
 }
 
 fn static_image_format_for_path(path: &Path) -> Option<StaticImageFormat> {

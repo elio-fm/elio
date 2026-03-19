@@ -342,11 +342,11 @@ fn refresh_preview_uses_blank_static_image_surface_preview_when_backend_enabled(
 fn preview_prefers_image_surface_for_supported_static_images_when_backend_enabled() {
     for (file_name, placeholder) in [
         ("demo.png", None),
-        ("demo.jpg", None),
-        ("demo.jpeg", None),
-        ("demo.gif", None),
-        ("demo.webp", None),
-        ("demo.svg", None),
+        ("demo.jpg", Some("Preparing image preview")),
+        ("demo.jpeg", Some("Preparing image preview")),
+        ("demo.gif", Some("Preparing image preview")),
+        ("demo.webp", Some("Preparing image preview")),
+        ("demo.svg", Some("Preparing image preview")),
     ] {
         let (app, root) = build_selected_static_image_app("image-surface", file_name);
 
@@ -377,7 +377,7 @@ fn preview_prefers_image_surface_for_extensionless_png_when_backend_enabled() {
 }
 
 #[test]
-fn current_extensionless_png_prepares_inline_for_immediate_overlay() {
+fn current_extensionless_png_uses_direct_kitty_source_overlay() {
     let root = temp_root("image-inline-noext");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let mut app = App::new_at(root.clone()).expect("app should initialize");
@@ -387,20 +387,15 @@ fn current_extensionless_png_prepares_inline_for_immediate_overlay() {
     let path = root.join("background");
     write_test_raster_image(&path, ImageFormat::Png, 600, 300);
     set_single_test_entry(&mut app, &path);
+    app.refresh_preview();
 
     let request = app
         .active_static_image_overlay_request()
         .expect("image request should be available");
+    let key = StaticImageKey::from_request(&request);
     match app.prepared_static_image_for_overlay(&request) {
         crate::app::overlays::images::StaticImageOverlayPreparation::Ready(prepared) => {
-            assert_ne!(prepared.display_path, path);
-            assert_eq!(
-                prepared
-                    .display_path
-                    .extension()
-                    .and_then(|extension| extension.to_str()),
-                Some("png")
-            );
+            assert_eq!(prepared.display_path, path);
             assert_eq!(
                 prepared.dimensions,
                 RenderedImageDimensions {
@@ -409,14 +404,17 @@ fn current_extensionless_png_prepares_inline_for_immediate_overlay() {
                 }
             );
         }
-        _ => panic!("extensionless png should prepare inline"),
+        _ => panic!("extensionless png should render directly in kitty"),
     }
+    assert!(!app.image_preview.pending_prepares.contains(&key));
+    assert!(app.pending_image_preview_timer().is_none());
+    assert_eq!(app.preview_overlay_placeholder_message(), None);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
 #[test]
-fn current_small_jpeg_prepares_inline_for_immediate_overlay() {
+fn current_small_jpeg_queues_background_prepare_for_overlay() {
     let root = temp_root("image-inline-jpeg");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let mut app = App::new_at(root.clone()).expect("app should initialize");
@@ -426,36 +424,27 @@ fn current_small_jpeg_prepares_inline_for_immediate_overlay() {
     let path = root.join("photo.jpg");
     write_test_raster_image(&path, ImageFormat::Jpeg, 600, 300);
     set_single_test_entry(&mut app, &path);
+    app.refresh_preview();
 
     let request = app
         .active_static_image_overlay_request()
         .expect("image request should be available");
+    let key = StaticImageKey::from_request(&request);
     match app.prepared_static_image_for_overlay(&request) {
-        crate::app::overlays::images::StaticImageOverlayPreparation::Ready(prepared) => {
-            assert_ne!(prepared.display_path, path);
-            assert_eq!(
-                prepared
-                    .display_path
-                    .extension()
-                    .and_then(|extension| extension.to_str()),
-                Some("png")
-            );
-            assert_eq!(
-                prepared.dimensions,
-                RenderedImageDimensions {
-                    width_px: 600,
-                    height_px: 300,
-                }
-            );
-        }
-        _ => panic!("small jpeg should prepare inline"),
+        crate::app::overlays::images::StaticImageOverlayPreparation::Pending => {}
+        _ => panic!("small jpeg should prepare in the background"),
     }
+    assert!(app.image_preview.pending_prepares.contains(&key));
+    assert_eq!(
+        app.preview_overlay_placeholder_message().as_deref(),
+        Some("Preparing image preview")
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
 #[test]
-fn current_large_jpeg_prepares_inline_when_ffmpeg_is_available() {
+fn current_large_jpeg_queues_background_prepare_when_ffmpeg_is_available() {
     if !crate::app::overlays::inline_image::command_exists("ffmpeg") {
         return;
     }
@@ -469,30 +458,91 @@ fn current_large_jpeg_prepares_inline_when_ffmpeg_is_available() {
     let path = root.join("photo.jpg");
     write_test_raster_image(&path, ImageFormat::Jpeg, 3200, 1800);
     set_single_test_entry(&mut app, &path);
+    app.refresh_preview();
 
     let request = app
         .active_static_image_overlay_request()
         .expect("image request should be available");
+    let key = StaticImageKey::from_request(&request);
     match app.prepared_static_image_for_overlay(&request) {
-        crate::app::overlays::images::StaticImageOverlayPreparation::Ready(prepared) => {
-            assert_ne!(prepared.display_path, path);
-            assert_eq!(
-                prepared
-                    .display_path
-                    .extension()
-                    .and_then(|extension| extension.to_str()),
-                Some("png")
-            );
-            assert_eq!(
-                prepared.dimensions,
-                RenderedImageDimensions {
-                    width_px: 3200,
-                    height_px: 1800,
-                }
-            );
-        }
-        _ => panic!("large jpeg should prepare inline when ffmpeg is available"),
+        crate::app::overlays::images::StaticImageOverlayPreparation::Pending => {}
+        _ => panic!("large jpeg should prepare in the background when ffmpeg is available"),
     }
+    assert!(app.image_preview.pending_prepares.contains(&key));
+    assert_eq!(
+        app.preview_overlay_placeholder_message().as_deref(),
+        Some("Preparing image preview")
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn prepared_full_pane_image_uses_full_pane_kitty_placement() {
+    let root = temp_root("image-placement-from-rendered-png");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    app.terminal_images.protocol = ImageProtocol::KittyGraphics;
+    app.terminal_images.window = Some(TerminalWindowSize {
+        cells_width: 100,
+        cells_height: 50,
+        pixels_width: 1000,
+        pixels_height: 1000,
+    });
+    app.pdf_preview.pdf_tools_available = true;
+
+    let path = root.join("photo.jpg");
+    write_test_raster_image(&path, ImageFormat::Jpeg, 1600, 900);
+    set_single_test_entry(&mut app, &path);
+    app.refresh_preview();
+
+    let request = app
+        .active_static_image_overlay_request()
+        .expect("image request should be available");
+    let metadata = fs::metadata(&path).expect("image metadata should exist");
+    let rendered = root.join("photo-rendered.png");
+    write_test_raster_image(&rendered, ImageFormat::Png, 250, 540);
+
+    let dirty = app.apply_image_prepare_build(crate::app::jobs::ImagePrepareBuild {
+        path: path.clone(),
+        size: metadata.len(),
+        modified: None,
+        target_width_px: request.target_width_px,
+        target_height_px: request.target_height_px,
+        force_render_to_cache: false,
+        canceled: false,
+        result: Some(crate::app::overlays::images::PreparedStaticImageAsset {
+            display_path: rendered,
+            dimensions: RenderedImageDimensions {
+                width_px: 250,
+                height_px: 540,
+            },
+        }),
+    });
+
+    assert!(dirty);
+    app.image_preview.selection_activation_delay = Duration::ZERO;
+    app.sync_image_preview_selection_activation();
+
+    let output = String::from_utf8(
+        app.present_preview_overlay()
+            .expect("presenting prepared jpeg overlay should not fail"),
+    )
+    .expect("kitty output should be utf8");
+    assert!(output.contains(&format!("c={}", request.area.width)));
+    assert!(output.contains(&format!("r={}", request.area.height)));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn immediate_selection_changes_do_not_delay_static_image_activation() {
+    let (mut app, root) = build_selected_static_image_app("image-activation", "demo.png");
+
+    app.select_index(0);
+
+    assert!(app.image_selection_activation_ready());
+    assert!(app.pending_image_preview_timer().is_none());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -677,11 +727,8 @@ fn raster_static_images_use_png_display_paths() {
             Some("png")
         );
         assert_eq!(
-            prepared.dimensions,
-            RenderedImageDimensions {
-                width_px: 600,
-                height_px: 300,
-            }
+            Some(prepared.dimensions),
+            read_png_dimensions(&prepared.display_path)
         );
         assert_ne!(prepared.display_path, path);
 
@@ -804,8 +851,8 @@ fn oversized_png_static_images_are_normalized_to_cached_overlays() {
     assert_eq!(
         prepared.dimensions,
         RenderedImageDimensions {
-            width_px: 3200,
-            height_px: 1800,
+            width_px: 768,
+            height_px: 432,
         }
     );
     assert_eq!(
@@ -855,8 +902,8 @@ fn forced_png_preview_renders_a_cached_overlay_asset() {
     assert_eq!(
         prepared.dimensions,
         RenderedImageDimensions {
-            width_px: 3200,
-            height_px: 1800,
+            width_px: 768,
+            height_px: 432,
         }
     );
     assert_eq!(
@@ -906,8 +953,8 @@ fn oversized_extensionless_png_static_images_are_normalized_to_cached_overlays()
     assert_eq!(
         prepared.dimensions,
         RenderedImageDimensions {
-            width_px: 3200,
-            height_px: 1800,
+            width_px: 768,
+            height_px: 432,
         }
     );
     assert_eq!(
@@ -942,6 +989,16 @@ fn refresh_preview_preloads_current_and_visible_nearby_static_images() {
         .into_iter()
         .filter_map(|index| app.entries.get(index))
         .filter(|entry| crate::app::overlays::images::static_image_detail_label(entry).is_some())
+        .filter(|entry| {
+            crate::file_info::inspect_path_cached(
+                &entry.path,
+                entry.kind,
+                entry.size,
+                entry.modified,
+            )
+            .specific_type_label
+                != Some("PNG image")
+        })
         .map(|entry| {
             StaticImageKey::from_parts(
                 entry.path.clone(),
@@ -1061,6 +1118,7 @@ fn build_kitty_upload_sequence_uses_unicode_placeholder_mode() {
     assert!(sequence.contains("t=f"));
     assert!(sequence.contains("U=1"));
     assert!(sequence.contains(&format!("i={id}")));
+    assert!(sequence.contains("p=1"));
     assert!(sequence.contains("c=30"));
     assert!(sequence.contains("r=20"));
     assert!(sequence.contains("C=1"));
@@ -1070,22 +1128,21 @@ fn build_kitty_upload_sequence_uses_unicode_placeholder_mode() {
 
 #[test]
 fn kitty_placeholder_sequence_sets_panel_background_for_transparency() {
-    let sequence = String::from_utf8(
-        build_kitty_placeholder_sequence(
-            42,
-            Rect {
-                x: 1,
-                y: 2,
-                width: 2,
-                height: 2,
-            },
-            &[],
-        ),
-    )
+    let sequence = String::from_utf8(build_kitty_placeholder_sequence(
+        42,
+        Rect {
+            x: 1,
+            y: 2,
+            width: 2,
+            height: 2,
+        },
+        &[],
+    ))
     .expect("placeholder sequence should be utf8");
 
     assert!(sequence.contains("[38;2;"));
     assert!(sequence.contains(";48;2;"));
+    assert!(sequence.contains(";58;2;0;0;1m"));
 }
 
 #[test]
@@ -1592,9 +1649,9 @@ fn preview_uses_image_overlay_only_for_current_render_target() {
 fn leaving_static_image_selection_clears_overlay_without_recursion() {
     let root = temp_root("static-image-transition");
     fs::create_dir_all(&root).expect("failed to create temp root");
-    let fade_path = root.join("fade.gif");
+    let fade_path = root.join("fade.png");
     let html_path = root.join("index.html");
-    write_test_raster_image(&fade_path, ImageFormat::Gif, 8, 8);
+    write_test_raster_image(&fade_path, ImageFormat::Png, 8, 8);
     fs::write(&html_path, "<html><body>demo</body></html>\n")
         .expect("failed to write html placeholder");
 

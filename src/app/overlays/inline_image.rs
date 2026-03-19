@@ -90,10 +90,7 @@ impl App {
         self.terminal_images.protocol = protocol;
         self.pdf_preview.pdf_tools_available = pdf_preview_tools_available();
         self.refresh_terminal_image_window_size();
-        preview_log(format_args!(
-            "  window={:?}",
-            self.terminal_images.window
-        ));
+        preview_log(format_args!("  window={:?}", self.terminal_images.window));
         self.sync_pdf_preview_selection();
     }
 
@@ -130,7 +127,7 @@ impl App {
         if self.terminal_images.protocol != ImageProtocol::KittyGraphics {
             return Vec::new();
         }
-        let keep_stale = self.keep_displayed_page_preview_overlay_while_pending();
+        let keep_stale = self.keep_displayed_static_image_overlay_while_pending();
         let needs_clear = (self.static_image_overlay_displayed()
             && !self.displayed_static_image_matches_active()
             && !keep_stale)
@@ -148,7 +145,7 @@ impl App {
         if self.terminal_images.protocol != ImageProtocol::ItermInline {
             return Vec::new();
         }
-        let keep_stale = self.keep_displayed_page_preview_overlay_while_pending();
+        let keep_stale = self.keep_displayed_static_image_overlay_while_pending();
         let needs_clear = (self.static_image_overlay_displayed()
             && !self.displayed_static_image_matches_active()
             && !keep_stale)
@@ -196,7 +193,7 @@ impl App {
         };
 
         let keep_stale_page_preview_overlay =
-            self.keep_displayed_page_preview_overlay_while_pending();
+            self.keep_displayed_static_image_overlay_while_pending();
         let mut out = Vec::new();
         if (self.static_image_overlay_displayed()
             && !self.displayed_static_image_matches_active()
@@ -226,8 +223,7 @@ impl App {
             OverlayPresentState::NotRequested => {}
         }
 
-        let visual_state =
-            self.present_preview_visual_overlay(protocol, &excluded, &mut out)?;
+        let visual_state = self.present_preview_visual_overlay(protocol, &excluded, &mut out)?;
         preview_log(format_args!(
             "present_preview_overlay: visual={visual_state:?} out_len={}",
             out.len()
@@ -289,10 +285,9 @@ impl App {
     }
 
     fn refresh_terminal_image_window_size(&mut self) {
-        self.terminal_images.window =
-            (self.terminal_images.protocol != ImageProtocol::None)
-                .then(query_terminal_window_size)
-                .flatten();
+        self.terminal_images.window = (self.terminal_images.protocol != ImageProtocol::None)
+            .then(query_terminal_window_size)
+            .flatten();
     }
 }
 
@@ -466,7 +461,7 @@ pub(in crate::app) fn build_kitty_upload_sequence(path: &Path, id: u32, area: Re
     let payload =
         base64::engine::general_purpose::STANDARD.encode(path.as_os_str().as_encoded_bytes());
     format!(
-        "\u{1b}_Ga=T,q=2,f=100,t=f,U=1,i={id},c={},r={},C=1;{payload}\u{1b}\\",
+        "\u{1b}_Ga=T,q=2,f=100,t=f,U=1,i={id},p=1,c={},r={},C=1;{payload}\u{1b}\\",
         area.width.max(1),
         area.height.max(1),
     )
@@ -483,11 +478,11 @@ pub(in crate::app) fn build_kitty_placeholder_sequence(
         Color::Rgb(bg_r, bg_g, bg_b) => {
             let _ = write!(
                 buf,
-                "\x1b[38;2;{r};{g};{b};48;2;{bg_r};{bg_g};{bg_b}m"
+                "\x1b[38;2;{r};{g};{b};48;2;{bg_r};{bg_g};{bg_b};58;2;0;0;1m"
             );
         }
         _ => {
-            let _ = write!(buf, "\x1b[38;2;{r};{g};{b}m");
+            let _ = write!(buf, "\x1b[38;2;{r};{g};{b};58;2;0;0;1m");
         }
     }
     for y in 0..area.height {
@@ -504,7 +499,12 @@ pub(in crate::app) fn build_kitty_placeholder_sequence(
                 continue;
             }
             if need_pos {
-                let _ = write!(buf, "\x1b[{};{}H", abs_row.saturating_add(1), abs_col.saturating_add(1));
+                let _ = write!(
+                    buf,
+                    "\x1b[{};{}H",
+                    abs_row.saturating_add(1),
+                    abs_col.saturating_add(1)
+                );
                 need_pos = false;
             }
             let dx = usize::from(x).min(DIACRITICS.len() - 1);

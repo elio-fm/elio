@@ -150,11 +150,13 @@ impl App {
 
         match preview_mode {
             PreviewRefreshMode::Immediate => {
+                self.image_preview.selection_activation_delay = std::time::Duration::ZERO;
                 self.preview_state.deferred_refresh_at = Some(Instant::now());
                 self.refresh_preview();
             }
             PreviewRefreshMode::Deferred => {
                 self.last_selection_change_at = Instant::now();
+                self.image_preview.selection_activation_delay = IMAGE_SELECTION_ACTIVATION_DELAY;
                 self.preview_state.deferred_refresh_at =
                     Some(Instant::now() + HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY);
                 if let Some(position) = self.preview_state.content.navigation_position.as_mut()

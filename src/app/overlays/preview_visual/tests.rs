@@ -318,7 +318,7 @@ fn page_image_placeholder_message_stays_silent() {
 }
 
 #[test]
-fn comic_jpeg_page_renders_inline_without_waiting_for_background_prepare() {
+fn comic_jpeg_page_prepares_in_background_before_display() {
     let root = temp_root("comic-jpeg-background");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let page = root.join("page.jpg");
@@ -352,10 +352,11 @@ fn comic_jpeg_page_renders_inline_without_waiting_for_background_prepare() {
     let key = StaticImageKey::from_request(&request);
 
     app.refresh_static_image_preloads();
-    assert!(!app.image_preview.pending_prepares.contains(&key));
-    app.image_preview.pending_prepares.insert(key.clone());
+    assert!(app.image_preview.pending_prepares.contains(&key));
     app.present_preview_overlay()
         .expect("presenting a comic jpeg overlay should not fail");
+    assert!(!app.static_image_overlay_displayed());
+    wait_for_displayed_preview_overlay(&mut app);
 
     assert!(app.static_image_overlay_displayed());
     assert!(app.image_preview.dimensions.contains_key(&key));
@@ -364,7 +365,7 @@ fn comic_jpeg_page_renders_inline_without_waiting_for_background_prepare() {
 }
 
 #[test]
-fn document_page_image_renders_inline_without_waiting_for_background_prepare() {
+fn document_page_image_prepares_in_background_before_display() {
     let root = temp_root("document-jpeg-background");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let page = root.join("page.jpg");
@@ -398,10 +399,11 @@ fn document_page_image_renders_inline_without_waiting_for_background_prepare() {
     let key = StaticImageKey::from_request(&request);
 
     app.refresh_static_image_preloads();
-    assert!(!app.image_preview.pending_prepares.contains(&key));
-    app.image_preview.pending_prepares.insert(key.clone());
+    assert!(app.image_preview.pending_prepares.contains(&key));
     app.present_preview_overlay()
         .expect("presenting a document page overlay should not fail");
+    assert!(!app.static_image_overlay_displayed());
+    wait_for_displayed_preview_overlay(&mut app);
 
     assert!(app.static_image_overlay_displayed());
     assert!(app.image_preview.dimensions.contains_key(&key));
@@ -576,8 +578,8 @@ fn current_comic_prepare_build_marks_preview_dirty() {
         result: Some(crate::app::overlays::images::PreparedStaticImageAsset {
             display_path: rendered,
             dimensions: crate::app::overlays::inline_image::RenderedImageDimensions {
-                width_px: 1600,
-                height_px: 900,
+                width_px: 768,
+                height_px: 432,
             },
         }),
     });
