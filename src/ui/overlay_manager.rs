@@ -46,31 +46,65 @@ pub(super) fn render_trash_overlay(
         helpers::rounded_block(palette.path_bg, palette.border),
         rows[0],
     );
-    let list_area = rows[0].inner(Margin { horizontal: 1, vertical: 1 });
+    let list_area = rows[0].inner(Margin {
+        horizontal: 1,
+        vertical: 1,
+    });
     let visible = app.trash_visible_rows().max(1);
     let scroll = app.trash_scroll();
 
     let show_scrollbar = count > visible;
-    let thumb_size = if show_scrollbar { (visible * visible / count).max(1) } else { 0 };
+    let thumb_size = if show_scrollbar {
+        (visible * visible / count).max(1)
+    } else {
+        0
+    };
     let max_scroll = count.saturating_sub(visible);
-    let thumb_pos = if max_scroll == 0 { 0 } else { scroll * (visible - thumb_size) / max_scroll };
+    let thumb_pos = if max_scroll == 0 {
+        0
+    } else {
+        scroll * (visible - thumb_size) / max_scroll
+    };
     let bar_x = list_area.x + list_area.width.saturating_sub(1);
 
     for row_offset in 0..visible {
         let item_index = scroll + row_offset;
-        let Some(name) = app.trash_target_name_at(item_index) else { break };
+        let Some(name) = app.trash_target_name_at(item_index) else {
+            break;
+        };
         let is_dir = app.trash_target_is_dir_at(item_index);
         let (icon, icon_color) = app
             .trash_target_path_at(item_index)
-            .map(|path| (theme::path_symbol(path, is_dir), theme::path_color(path, is_dir, palette)))
-            .unwrap_or_else(|| if is_dir { ("󰉋", palette.accent) } else { ("󰈔", palette.muted) });
+            .map(|path| {
+                (
+                    theme::path_symbol(path, is_dir),
+                    theme::path_color(path, is_dir, palette),
+                )
+            })
+            .unwrap_or_else(|| {
+                if is_dir {
+                    ("󰉋", palette.accent)
+                } else {
+                    ("󰈔", palette.muted)
+                }
+            });
         let y = list_area.y + row_offset as u16;
-        let row_width = list_area.width.saturating_sub(if show_scrollbar { 2 } else { 0 });
+        let row_width = list_area
+            .width
+            .saturating_sub(if show_scrollbar { 2 } else { 0 });
         let name_width = row_width.saturating_sub(2) as usize; // icon + 1 space
-        let name_rect = Rect { x: list_area.x, y, width: row_width, height: 1 };
+        let name_rect = Rect {
+            x: list_area.x,
+            y,
+            width: row_width,
+            height: 1,
+        };
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(icon, Style::default().fg(icon_color).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    icon,
+                    Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" "),
                 Span::styled(
                     helpers::clamp_label(name, name_width),
@@ -84,7 +118,11 @@ pub(super) fn render_trash_overlay(
         if show_scrollbar {
             let in_thumb = row_offset >= thumb_pos && row_offset < thumb_pos + thumb_size;
             let bar_char = if in_thumb { "▐" } else { " " };
-            let bar_color = if in_thumb { palette.muted } else { palette.path_bg };
+            let bar_color = if in_thumb {
+                palette.muted
+            } else {
+                palette.path_bg
+            };
             frame.buffer_mut()[(bar_x, y)].set_symbol(bar_char);
             frame.buffer_mut()[(bar_x, y)]
                 .set_style(Style::default().bg(palette.path_bg).fg(bar_color));
@@ -94,25 +132,41 @@ pub(super) fn render_trash_overlay(
     // Buttons: [ Confirm ]  [ Cancel ] — confirm left, cancel right
     let confirmed = app.trash_confirmed();
     let confirm_style = if confirmed {
-        Style::default().bg(palette.selected_bg).fg(palette.text).add_modifier(Modifier::BOLD)
+        Style::default()
+            .bg(palette.selected_bg)
+            .fg(palette.text)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().bg(palette.chrome_alt).fg(palette.muted)
     };
     let cancel_style = if !confirmed {
-        Style::default().bg(palette.selected_bg).fg(palette.text).add_modifier(Modifier::BOLD)
+        Style::default()
+            .bg(palette.selected_bg)
+            .fg(palette.text)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().bg(palette.chrome_alt).fg(palette.muted)
     };
     let confirm_w = 11u16; // "  Confirm  "
-    let cancel_w = 10u16;  // "  Cancel  "
+    let cancel_w = 10u16; // "  Cancel  "
     let gap = 3u16;
     let total_btn_width = confirm_w + gap + cancel_w;
     let left_pad = rows[1].width.saturating_sub(total_btn_width) / 2;
     let btn_y = rows[1].y;
     let confirm_x = rows[1].x + left_pad;
     let cancel_x = confirm_x + confirm_w + gap;
-    state.trash_confirm_btn = Some(Rect { x: confirm_x, y: btn_y, width: confirm_w, height: 1 });
-    state.trash_cancel_btn  = Some(Rect { x: cancel_x,  y: btn_y, width: cancel_w,  height: 1 });
+    state.trash_confirm_btn = Some(Rect {
+        x: confirm_x,
+        y: btn_y,
+        width: confirm_w,
+        height: 1,
+    });
+    state.trash_cancel_btn = Some(Rect {
+        x: cancel_x,
+        y: btn_y,
+        width: cancel_w,
+        height: 1,
+    });
     let pad = " ".repeat(left_pad as usize);
     frame.render_widget(
         Paragraph::new(Line::from(vec![
@@ -150,41 +204,72 @@ pub(super) fn render_restore_overlay(
     let inner = helpers::inner_with_padding(popup);
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(list_rows + 2),
-            Constraint::Length(1),
-        ])
+        .constraints([Constraint::Length(list_rows + 2), Constraint::Length(1)])
         .split(inner);
 
     frame.render_widget(
         helpers::rounded_block(palette.path_bg, palette.border),
         rows[0],
     );
-    let list_area = rows[0].inner(Margin { horizontal: 1, vertical: 1 });
+    let list_area = rows[0].inner(Margin {
+        horizontal: 1,
+        vertical: 1,
+    });
     let visible = app.restore_visible_rows().max(1);
     let scroll = app.restore_scroll();
 
     let show_scrollbar = count > visible;
-    let thumb_size = if show_scrollbar { (visible * visible / count).max(1) } else { 0 };
+    let thumb_size = if show_scrollbar {
+        (visible * visible / count).max(1)
+    } else {
+        0
+    };
     let max_scroll = count.saturating_sub(visible);
-    let thumb_pos = if max_scroll == 0 { 0 } else { scroll * (visible - thumb_size) / max_scroll };
+    let thumb_pos = if max_scroll == 0 {
+        0
+    } else {
+        scroll * (visible - thumb_size) / max_scroll
+    };
     let bar_x = list_area.x + list_area.width.saturating_sub(1);
 
     for row_offset in 0..visible {
         let item_index = scroll + row_offset;
-        let Some(name) = app.restore_target_name_at(item_index) else { break };
+        let Some(name) = app.restore_target_name_at(item_index) else {
+            break;
+        };
         let is_dir = app.restore_target_is_dir_at(item_index);
         let (icon, icon_color) = app
             .restore_target_path_at(item_index)
-            .map(|path| (theme::path_symbol(path, is_dir), theme::path_color(path, is_dir, palette)))
-            .unwrap_or_else(|| if is_dir { ("󰉋", palette.accent) } else { ("󰈔", palette.muted) });
+            .map(|path| {
+                (
+                    theme::path_symbol(path, is_dir),
+                    theme::path_color(path, is_dir, palette),
+                )
+            })
+            .unwrap_or_else(|| {
+                if is_dir {
+                    ("󰉋", palette.accent)
+                } else {
+                    ("󰈔", palette.muted)
+                }
+            });
         let y = list_area.y + row_offset as u16;
-        let row_width = list_area.width.saturating_sub(if show_scrollbar { 2 } else { 0 });
+        let row_width = list_area
+            .width
+            .saturating_sub(if show_scrollbar { 2 } else { 0 });
         let name_width = row_width.saturating_sub(2) as usize; // icon + 1 space
-        let name_rect = Rect { x: list_area.x, y, width: row_width, height: 1 };
+        let name_rect = Rect {
+            x: list_area.x,
+            y,
+            width: row_width,
+            height: 1,
+        };
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(icon, Style::default().fg(icon_color).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    icon,
+                    Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" "),
                 Span::styled(
                     helpers::clamp_label(name, name_width),
@@ -198,7 +283,11 @@ pub(super) fn render_restore_overlay(
         if show_scrollbar {
             let in_thumb = row_offset >= thumb_pos && row_offset < thumb_pos + thumb_size;
             let bar_char = if in_thumb { "▐" } else { " " };
-            let bar_color = if in_thumb { palette.muted } else { palette.path_bg };
+            let bar_color = if in_thumb {
+                palette.muted
+            } else {
+                palette.path_bg
+            };
             frame.buffer_mut()[(bar_x, y)].set_symbol(bar_char);
             frame.buffer_mut()[(bar_x, y)]
                 .set_style(Style::default().bg(palette.path_bg).fg(bar_color));
@@ -207,12 +296,18 @@ pub(super) fn render_restore_overlay(
 
     let confirmed = app.restore_confirmed();
     let confirm_style = if confirmed {
-        Style::default().bg(palette.selected_bg).fg(palette.text).add_modifier(Modifier::BOLD)
+        Style::default()
+            .bg(palette.selected_bg)
+            .fg(palette.text)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().bg(palette.chrome_alt).fg(palette.muted)
     };
     let cancel_style = if !confirmed {
-        Style::default().bg(palette.selected_bg).fg(palette.text).add_modifier(Modifier::BOLD)
+        Style::default()
+            .bg(palette.selected_bg)
+            .fg(palette.text)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().bg(palette.chrome_alt).fg(palette.muted)
     };
@@ -224,8 +319,18 @@ pub(super) fn render_restore_overlay(
     let btn_y = rows[1].y;
     let confirm_x = rows[1].x + left_pad;
     let cancel_x = confirm_x + confirm_w + gap;
-    state.restore_confirm_btn = Some(Rect { x: confirm_x, y: btn_y, width: confirm_w, height: 1 });
-    state.restore_cancel_btn  = Some(Rect { x: cancel_x,  y: btn_y, width: cancel_w,  height: 1 });
+    state.restore_confirm_btn = Some(Rect {
+        x: confirm_x,
+        y: btn_y,
+        width: confirm_w,
+        height: 1,
+    });
+    state.restore_cancel_btn = Some(Rect {
+        x: cancel_x,
+        y: btn_y,
+        width: cancel_w,
+        height: 1,
+    });
     let pad = " ".repeat(left_pad as usize);
     frame.render_widget(
         Paragraph::new(Line::from(vec![
@@ -258,7 +363,11 @@ pub(super) fn render_create_overlay(
 
     frame.render_widget(Clear, popup);
     frame.render_widget(
-        helpers::panel_block(&format!(" {} ", app.create_title()), palette.chrome_alt, palette),
+        helpers::panel_block(
+            &format!(" {} ", app.create_title()),
+            palette.chrome_alt,
+            palette,
+        ),
         popup,
     );
 
@@ -266,9 +375,9 @@ pub(super) fn render_create_overlay(
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),                      // header hint
-            Constraint::Length(visible_lines + 2),      // input box (border + lines)
-            Constraint::Length(1),                      // error / spacer
+            Constraint::Length(1),                 // header hint
+            Constraint::Length(visible_lines + 2), // input box (border + lines)
+            Constraint::Length(1),                 // error / spacer
         ])
         .split(inner);
 
@@ -347,14 +456,22 @@ pub(super) fn render_create_overlay(
         let clean_name = line_text.trim_matches('/');
         let (icon, icon_color) = if clean_name.is_empty() {
             // Empty input — show generic placeholder icon.
-            if is_dir { ("󰉋", palette.accent) } else { ("󰈔", palette.muted) }
+            if is_dir {
+                ("󰉋", palette.accent)
+            } else {
+                ("󰈔", palette.muted)
+            }
         } else {
             let path = app.cwd.join(clean_name);
-            (theme::path_symbol(&path, is_dir), theme::path_color(&path, is_dir, palette))
+            (
+                theme::path_symbol(&path, is_dir),
+                theme::path_color(&path, is_dir, palette),
+            )
         };
 
         // Icon takes 3 chars (icon + 2 spaces); scrollbar takes 2 when visible.
-        let text_width = list_area.width
+        let text_width = list_area
+            .width
             .saturating_sub(3)
             .saturating_sub(if show_scrollbar { 2 } else { 0 }) as usize;
         let chars: Vec<char> = line_text.chars().collect();
@@ -363,7 +480,11 @@ pub(super) fn render_create_overlay(
         } else {
             0
         };
-        let h_start = if col > text_width { col - text_width } else { 0 };
+        let h_start = if col > text_width {
+            col - text_width
+        } else {
+            0
+        };
 
         let mut visible_text: String = chars.iter().skip(h_start).take(text_width).collect();
         if h_start > 0 && !visible_text.is_empty() {
@@ -372,20 +493,28 @@ pub(super) fn render_create_overlay(
         }
 
         let text_style = if is_cursor_line {
-            Style::default().fg(palette.text).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(palette.text)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(palette.text)
         };
 
         let line_widget = if line_text.is_empty() && is_cursor_line {
             Line::from(vec![
-                Span::styled(icon, Style::default().fg(icon_color)),
+                Span::styled(
+                    icon,
+                    Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("  "),
                 Span::styled("name…", Style::default().fg(palette.muted)),
             ])
         } else {
             Line::from(vec![
-                Span::styled(icon, Style::default().fg(icon_color)),
+                Span::styled(
+                    icon,
+                    Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("  "),
                 Span::styled(visible_text, text_style),
             ])
@@ -394,7 +523,9 @@ pub(super) fn render_create_overlay(
         let row_rect = Rect {
             x: list_area.x,
             y: list_area.y + row_offset as u16,
-            width: list_area.width.saturating_sub(if show_scrollbar { 2 } else { 0 }),
+            width: list_area
+                .width
+                .saturating_sub(if show_scrollbar { 2 } else { 0 }),
             height: 1,
         };
         frame.render_widget(
@@ -407,7 +538,11 @@ pub(super) fn render_create_overlay(
             let y = list_area.y + row_offset as u16;
             let in_thumb = row_offset >= thumb_pos && row_offset < thumb_pos + thumb_size;
             let bar_char = if in_thumb { "▐" } else { " " };
-            let bar_color = if in_thumb { palette.muted } else { palette.path_bg };
+            let bar_color = if in_thumb {
+                palette.muted
+            } else {
+                palette.path_bg
+            };
             frame.buffer_mut()[(bar_x, y)].set_symbol(bar_char);
             frame.buffer_mut()[(bar_x, y)]
                 .set_style(Style::default().bg(palette.path_bg).fg(bar_color));
@@ -438,7 +573,6 @@ pub(super) fn render_create_overlay(
             rows[2],
         );
     }
-
 }
 
 fn compute_create_scroll_top(cursor_line: usize, line_count: usize, visible: usize) -> usize {
@@ -489,8 +623,14 @@ pub(super) fn render_bulk_rename_overlay(
     // -----------------------------------------------------------------------
     // List box
     // -----------------------------------------------------------------------
-    frame.render_widget(helpers::rounded_block(palette.path_bg, palette.border), rows[0]);
-    let list_area = rows[0].inner(Margin { horizontal: 1, vertical: 1 });
+    frame.render_widget(
+        helpers::rounded_block(palette.path_bg, palette.border),
+        rows[0],
+    );
+    let list_area = rows[0].inner(Margin {
+        horizontal: 1,
+        vertical: 1,
+    });
 
     let cursor_line = app.bulk_rename_cursor_line();
     let cursor_col = app.bulk_rename_cursor_col();
@@ -536,30 +676,35 @@ pub(super) fn render_bulk_rename_overlay(
         let text_width = list_area
             .width
             .saturating_sub(3) // icon prefix
-            .saturating_sub(if show_scrollbar { 2 } else { 0 })
-            as usize;
+            .saturating_sub(if show_scrollbar { 2 } else { 0 }) as usize;
         let chars: Vec<char> = new_name.chars().collect();
         let col = if is_cursor_line {
             cursor_col.min(chars.len())
         } else {
             0
         };
-        let h_start = if col > text_width { col - text_width } else { 0 };
-        let mut visible_text: String =
-            chars.iter().skip(h_start).take(text_width).collect();
+        let h_start = if col > text_width {
+            col - text_width
+        } else {
+            0
+        };
+        let mut visible_text: String = chars.iter().skip(h_start).take(text_width).collect();
         if h_start > 0 && !visible_text.is_empty() {
             visible_text.remove(0);
             visible_text.insert(0, '…');
         }
 
         let text_style = if is_cursor_line {
-            Style::default().fg(palette.text).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(palette.text)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(palette.text)
         };
 
-        let row_width =
-            list_area.width.saturating_sub(if show_scrollbar { 2 } else { 0 });
+        let row_width = list_area
+            .width
+            .saturating_sub(if show_scrollbar { 2 } else { 0 });
         let row_rect = Rect {
             x: list_area.x,
             y: list_area.y + row_offset as u16,
@@ -570,9 +715,7 @@ pub(super) fn render_bulk_rename_overlay(
             Paragraph::new(Line::from(vec![
                 Span::styled(
                     icon,
-                    Style::default()
-                        .fg(icon_color)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
                 ),
                 Span::raw("  "),
                 Span::styled(visible_text, text_style),
@@ -585,7 +728,11 @@ pub(super) fn render_bulk_rename_overlay(
             let y = list_area.y + row_offset as u16;
             let in_thumb = row_offset >= thumb_pos && row_offset < thumb_pos + thumb_size;
             let bar_char = if in_thumb { "▐" } else { " " };
-            let bar_color = if in_thumb { palette.muted } else { palette.path_bg };
+            let bar_color = if in_thumb {
+                palette.muted
+            } else {
+                palette.path_bg
+            };
             frame.buffer_mut()[(bar_x, y)].set_symbol(bar_char);
             frame.buffer_mut()[(bar_x, y)]
                 .set_style(Style::default().bg(palette.path_bg).fg(bar_color));
@@ -654,7 +801,10 @@ pub(super) fn render_rename_overlay(
         helpers::rounded_block(palette.path_bg, palette.border),
         rows[0],
     );
-    let input_area = rows[0].inner(Margin { horizontal: 1, vertical: 1 });
+    let input_area = rows[0].inner(Margin {
+        horizontal: 1,
+        vertical: 1,
+    });
 
     let input = app.rename_input();
     let cursor_col = app.rename_cursor_col();
@@ -678,17 +828,25 @@ pub(super) fn render_rename_overlay(
 
     let line = if input.is_empty() {
         Line::from(vec![
-            Span::styled(icon, Style::default().fg(icon_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                icon,
+                Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
+            ),
             Span::raw("  "),
             Span::styled("name…", Style::default().fg(palette.muted)),
         ])
     } else {
         Line::from(vec![
-            Span::styled(icon, Style::default().fg(icon_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                icon,
+                Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
+            ),
             Span::raw("  "),
             Span::styled(
                 visible_text,
-                Style::default().fg(palette.text).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(palette.text)
+                    .add_modifier(Modifier::BOLD),
             ),
         ])
     };

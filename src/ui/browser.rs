@@ -996,6 +996,40 @@ mod tests {
     }
 
     #[test]
+    fn create_overlay_uses_themed_bold_icon_for_live_json_names() {
+        let root = temp_path("create-overlay-json-icon");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('a'))))
+            .expect("create overlay should open");
+        for ch in "i.json".chars() {
+            app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(ch))))
+                .expect("typing into create overlay should succeed");
+        }
+
+        let state = draw_ui(&mut terminal, &mut app);
+        let list_area = state
+            .create_list_area
+            .expect("create list area should be rendered");
+        let icon_cell = &terminal.backend().buffer()[(list_area.x, list_area.y)];
+
+        assert_eq!(
+            icon_cell.symbol(),
+            "",
+            "create overlay should resolve the JSON icon while typing",
+        );
+        assert!(
+            icon_cell.modifier.contains(Modifier::BOLD),
+            "create overlay icon should use the same bold styling as other file icon surfaces",
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn preview_title_row_is_cleared_when_switching_to_shorter_names() {
         let root = temp_path("preview-title");
         fs::create_dir_all(&root).expect("failed to create temp root");
