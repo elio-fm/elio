@@ -436,7 +436,7 @@ fn document_page_image_prepares_in_background_before_display() {
 }
 
 #[test]
-fn iterm_inline_page_image_clear_area_covers_full_preview_body() {
+fn iterm_inline_page_image_clear_area_covers_preview_body_without_header() {
     let root = temp_root("iterm-inline-clear-area");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let page = root.join("page.png");
@@ -482,10 +482,10 @@ fn iterm_inline_page_image_clear_area_covers_full_preview_body() {
     assert_eq!(
         app.displayed_static_image_clear_area(),
         Some(Rect {
-            x: 1,
-            y: 1,
-            width: 50,
-            height: 24,
+            x: 2,
+            y: 3,
+            width: 48,
+            height: 20,
         })
     );
 
@@ -1052,7 +1052,8 @@ fn iterm_popup_clear_defers_page_image_erase_until_next_draw() {
     assert!(!app.static_image_overlay_displayed());
     let erase = String::from_utf8(app.iterm_pre_draw_erase())
         .expect("iTerm erase output should be valid utf8");
-    assert!(erase.contains("\x1b[24;2H"));
+    assert!(erase.contains("\x1b[23;3H"));
+    assert!(!erase.contains("\x1b[2;2H"));
     assert!(app.iterm_pre_draw_erase().is_empty());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

@@ -32,6 +32,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     state.search_panel = None;
     state.help_panel = None;
     state.preview_panel = None;
+    state.preview_body_area = None;
     state.preview_media_area = None;
     state.back_button = None;
     state.forward_button = None;

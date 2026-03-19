@@ -872,12 +872,17 @@ impl App {
 
     fn static_image_clear_area(&self, request: &StaticImageOverlayRequest) -> Rect {
         if self.terminal_images.protocol == ImageProtocol::ItermInline {
-            if let Some(panel) = self.frame_state.preview_panel {
-                return panel;
-            }
             if request.mode == StaticImageOverlayMode::Inline {
-                return self.preview_body_area().unwrap_or(request.area);
+                return self
+                    .frame_state
+                    .preview_body_area
+                    .or_else(|| self.preview_body_area())
+                    .unwrap_or(request.area);
             }
+            return self
+                .frame_state
+                .preview_content_area
+                .unwrap_or(request.area);
         }
         request.area
     }

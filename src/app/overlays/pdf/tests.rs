@@ -219,6 +219,20 @@ fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBu
     (app, root)
 }
 
+fn wait_for_displayed_static_image_overlay(app: &mut App) {
+    for _ in 0..200 {
+        let _ = app.process_background_jobs();
+        let _ = app.process_image_preview_timers();
+        app.present_preview_overlay()
+            .expect("presenting static image overlay should not fail");
+        if app.static_image_overlay_displayed() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for static image overlay");
+}
+
 fn build_selected_extensionless_png_app(label: &str, file_name: &str) -> (App, PathBuf) {
     let root = temp_root(label);
     fs::create_dir_all(&root).expect("failed to create temp root");
@@ -1792,6 +1806,39 @@ fn leaving_static_image_selection_clears_overlay_without_recursion() {
         .expect("clearing a stale static image overlay should not fail");
     assert!(!app.static_image_overlay_displayed());
     assert!(!app.preview_uses_image_overlay());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn iterm_full_pane_static_image_clear_area_excludes_preview_header_and_border() {
+    let (mut app, root) = build_selected_static_image_app("iterm-clear-area", "demo.png");
+    configure_iterm_image_support(&mut app);
+    app.frame_state.preview_panel = Some(Rect {
+        x: 1,
+        y: 1,
+        width: 50,
+        height: 24,
+    });
+    app.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+    app.refresh_preview();
+
+    wait_for_displayed_static_image_overlay(&mut app);
+
+    assert_eq!(
+        app.displayed_static_image_clear_area(),
+        Some(Rect {
+            x: 2,
+            y: 3,
+            width: 48,
+            height: 20,
+        })
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

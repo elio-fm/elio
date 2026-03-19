@@ -541,6 +541,7 @@ fn render_preview_body(
     };
     let body_area = body[0];
     let scrollbar_area = body.get(1).copied();
+    state.preview_body_area = Some(sections[1]);
     let (media_area, text_area) = if let Some(media_rows) = app.preview_visual_rows(body_area)
     {
         let split = Layout::default()
