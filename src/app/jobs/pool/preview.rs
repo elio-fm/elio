@@ -3,7 +3,11 @@ use crate::preview::{PreviewRequestOptions, PreviewWorkClass};
 use std::{
     collections::{HashSet, VecDeque},
     path::PathBuf,
-    sync::{Arc, Condvar, Mutex, mpsc},
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     thread,
     time::{Instant, SystemTime},
 };
@@ -32,11 +36,12 @@ struct PreviewState {
     capacity: usize,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 struct ActivePreviewJob {
     key: PreviewJobKey,
     priority: PreviewPriority,
     work_class: PreviewWorkClass,
+    canceled: Arc<AtomicBool>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -45,6 +50,7 @@ pub(in crate::app::jobs) struct PreviewJobKey {
     pub(in crate::app::jobs) size: u64,
     pub(in crate::app::jobs) modified: Option<SystemTime>,
     pub(in crate::app::jobs) variant: PreviewRequestOptions,
+    pub(in crate::app::jobs) code_line_limit: usize,
 }
 
 impl PreviewPool {
@@ -73,20 +79,26 @@ impl PreviewPool {
             let result_tx = result_tx.clone();
             let metrics = Arc::clone(&metrics);
             workers.push(thread::spawn(move || {
-                while let Some(request) = PreviewShared::pop(&shared) {
-                    let key = PreviewJobKey::from_entry(&request.entry, &request.variant);
+                while let Some((request, canceled)) = PreviewShared::pop(&shared) {
+                    let key = PreviewJobKey::from_request(&request);
                     let started_at = Instant::now();
-                    let result = crate::preview::build_preview_with_options(
+                    let result = crate::preview::build_preview_with_options_and_code_line_limit(
                         &request.entry,
                         &request.variant,
+                        request.code_line_limit,
+                        &|| canceled.load(Ordering::Relaxed),
                     );
                     PreviewShared::finish(&shared, &key);
                     lock_unpoison(&metrics).record_preview_completed(started_at.elapsed());
+                    if canceled.load(Ordering::Relaxed) {
+                        continue;
+                    }
                     if result_tx
                         .send(JobResult::Preview(Box::new(PreviewBuild {
                             token: request.token,
                             entry: request.entry,
                             variant: request.variant,
+                            code_line_limit: request.code_line_limit,
                             result,
                         })))
                         .is_err()
@@ -104,7 +116,7 @@ impl PreviewPool {
     }
 
     pub(in crate::app::jobs) fn submit(&self, request: PreviewRequest) -> bool {
-        let key = PreviewJobKey::from_entry(&request.entry, &request.variant);
+        let key = PreviewJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
             return false;
@@ -120,6 +132,7 @@ impl PreviewPool {
                     lock_unpoison(&self.metrics).preview_promotions += 1;
                 }
                 let evicted = trim_preview_queue_for_high(&mut state);
+                cancel_stale_active_previews(&state, &key);
                 state.queued_high_keys.insert(key);
                 state.pending_high.push_back(request);
                 let mut metrics = lock_unpoison(&self.metrics);
@@ -138,6 +151,9 @@ impl PreviewPool {
                 }
                 if state.queued_low_keys.contains(&key) {
                     replace_preview_request(&mut state.pending_low, request, &key);
+                    return true;
+                }
+                if preview_active_contains(&state, &key) {
                     return true;
                 }
                 let evicted = if preview_pending_len(&state) >= state.capacity {
@@ -176,10 +192,7 @@ impl PreviewPool {
             PreviewPriority::High => &state.pending_high,
             PreviewPriority::Low => &state.pending_low,
         };
-        queue
-            .iter()
-            .map(|request| PreviewJobKey::from_entry(&request.entry, &request.variant))
-            .collect()
+        queue.iter().map(PreviewJobKey::from_request).collect()
     }
 
     #[cfg(test)]
@@ -208,15 +221,27 @@ impl PreviewPool {
     }
 
     #[cfg(test)]
+    pub(in crate::app::jobs) fn canceled_active_keys(&self) -> Vec<PreviewJobKey> {
+        let mut keys = lock_unpoison(&self.shared.state)
+            .active_jobs
+            .iter()
+            .filter(|job| job.canceled.load(Ordering::Relaxed))
+            .map(|job| job.key.clone())
+            .collect::<Vec<_>>();
+        keys.sort_by(|left, right| left.path.cmp(&right.path));
+        keys
+    }
+
+    #[cfg(test)]
     pub(in crate::app::jobs) fn pop_next_pending_for_tests(&self) -> Option<PreviewRequest> {
         let mut state = lock_unpoison(&self.shared.state);
         if let Some(request) = state.pending_high.pop_front() {
-            let key = PreviewJobKey::from_entry(&request.entry, &request.variant);
+            let key = PreviewJobKey::from_request(&request);
             state.queued_high_keys.remove(&key);
-            start_preview_request(&mut state, key, &request);
+            let _ = start_preview_request(&mut state, key, &request);
             return Some(request);
         }
-        pop_low_priority_request(&mut state)
+        pop_low_priority_request(&mut state).map(|(request, _)| request)
     }
 }
 
@@ -229,6 +254,9 @@ impl Drop for PreviewPool {
             state.pending_low.clear();
             state.queued_high_keys.clear();
             state.queued_low_keys.clear();
+            for job in &state.active_jobs {
+                job.canceled.store(true, Ordering::Relaxed);
+            }
         }
         self.shared.available.notify_all();
         for worker in self.workers.drain(..) {
@@ -238,17 +266,17 @@ impl Drop for PreviewPool {
 }
 
 impl PreviewShared {
-    fn pop(shared: &Arc<Self>) -> Option<PreviewRequest> {
+    fn pop(shared: &Arc<Self>) -> Option<(PreviewRequest, Arc<AtomicBool>)> {
         let mut state = lock_unpoison(&shared.state);
         loop {
             if state.closed {
                 return None;
             }
             if let Some(request) = state.pending_high.pop_front() {
-                let key = PreviewJobKey::from_entry(&request.entry, &request.variant);
+                let key = PreviewJobKey::from_request(&request);
                 state.queued_high_keys.remove(&key);
-                start_preview_request(&mut state, key, &request);
-                return Some(request);
+                let canceled = start_preview_request(&mut state, key, &request);
+                return Some((request, canceled));
             }
             if let Some(request) = pop_low_priority_request(&mut state) {
                 return Some(request);
@@ -266,12 +294,13 @@ impl PreviewShared {
 }
 
 impl PreviewJobKey {
-    fn from_entry(entry: &Entry, variant: &PreviewRequestOptions) -> Self {
+    fn from_request(request: &PreviewRequest) -> Self {
         Self {
-            path: entry.path.clone(),
-            size: entry.size,
-            modified: entry.modified,
-            variant: variant.clone(),
+            path: request.entry.path.clone(),
+            size: request.entry.size,
+            modified: request.entry.modified,
+            variant: request.variant.clone(),
+            code_line_limit: request.code_line_limit,
         }
     }
 }
@@ -279,7 +308,7 @@ impl PreviewJobKey {
 fn remove_preview_request(queue: &mut VecDeque<PreviewRequest>, key: &PreviewJobKey) {
     if let Some(index) = queue
         .iter()
-        .position(|request| PreviewJobKey::from_entry(&request.entry, &request.variant) == *key)
+        .position(|request| PreviewJobKey::from_request(request) == *key)
     {
         queue.remove(index);
     }
@@ -289,16 +318,19 @@ fn start_preview_request(
     state: &mut PreviewState,
     key: PreviewJobKey,
     request: &PreviewRequest,
-) {
+) -> Arc<AtomicBool> {
+    let canceled = Arc::new(AtomicBool::new(false));
     state.active_keys.insert(key.clone());
     state.active_jobs.push(ActivePreviewJob {
         key,
         priority: request.priority,
         work_class: request.work_class,
+        canceled: Arc::clone(&canceled),
     });
+    canceled
 }
 
-fn pop_low_priority_request(state: &mut PreviewState) -> Option<PreviewRequest> {
+fn pop_low_priority_request(state: &mut PreviewState) -> Option<(PreviewRequest, Arc<AtomicBool>)> {
     let heavy_limit_reached =
         active_low_priority_heavy_count(state) >= MAX_CONCURRENT_LOW_PRIORITY_HEAVY_PREVIEWS;
     let index = if heavy_limit_reached {
@@ -310,10 +342,10 @@ fn pop_low_priority_request(state: &mut PreviewState) -> Option<PreviewRequest> 
         0
     };
     let request = state.pending_low.remove(index)?;
-    let key = PreviewJobKey::from_entry(&request.entry, &request.variant);
+    let key = PreviewJobKey::from_request(&request);
     state.queued_low_keys.remove(&key);
-    start_preview_request(state, key, &request);
-    Some(request)
+    let canceled = start_preview_request(state, key, &request);
+    Some((request, canceled))
 }
 
 fn active_low_priority_heavy_count(state: &PreviewState) -> usize {
@@ -321,8 +353,7 @@ fn active_low_priority_heavy_count(state: &PreviewState) -> usize {
         .active_jobs
         .iter()
         .filter(|job| {
-            job.priority == PreviewPriority::Low
-                && job.work_class == PreviewWorkClass::Heavy
+            job.priority == PreviewPriority::Low && job.work_class == PreviewWorkClass::Heavy
         })
         .count()
 }
@@ -345,7 +376,7 @@ fn replace_preview_request_with_priority(
     request.priority = priority;
     if let Some(index) = queue
         .iter()
-        .position(|queued| PreviewJobKey::from_entry(&queued.entry, &queued.variant) == *key)
+        .position(|queued| PreviewJobKey::from_request(queued) == *key)
     {
         queue[index] = request;
     }
@@ -355,13 +386,25 @@ fn preview_pending_len(state: &PreviewState) -> usize {
     state.pending_high.len() + state.pending_low.len()
 }
 
+fn preview_active_contains(state: &PreviewState, key: &PreviewJobKey) -> bool {
+    state.active_jobs.iter().any(|job| job.key == *key)
+}
+
+fn cancel_stale_active_previews(state: &PreviewState, keep: &PreviewJobKey) {
+    for job in &state.active_jobs {
+        if &job.key != keep {
+            job.canceled.store(true, Ordering::Relaxed);
+        }
+    }
+}
+
 fn evict_oldest_low_priority_preview(state: &mut PreviewState) -> bool {
     let Some(stale) = state.pending_low.pop_front() else {
         return false;
     };
     state
         .queued_low_keys
-        .remove(&PreviewJobKey::from_entry(&stale.entry, &stale.variant));
+        .remove(&PreviewJobKey::from_request(&stale));
     true
 }
 
@@ -378,7 +421,7 @@ fn trim_preview_queue_for_high(state: &mut PreviewState) -> u64 {
         };
         state
             .queued_high_keys
-            .remove(&PreviewJobKey::from_entry(&stale.entry, &stale.variant));
+            .remove(&PreviewJobKey::from_request(&stale));
     }
     evicted
 }

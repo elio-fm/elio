@@ -40,8 +40,24 @@ pub use self::types::{
 
 impl App {
     pub fn set_frame_state(&mut self, frame_state: FrameState) -> bool {
+        let previous_code_line_limit = self.selected_entry().map(|entry| {
+            self.preview_code_line_limit_for_entry_with_rows(
+                entry,
+                self.frame_state.preview_rows_visible,
+            )
+        });
         self.frame_state = frame_state;
-        let dirty = self.sync_scroll() | self.sync_search_scroll() | self.sync_preview_scroll();
+        let mut dirty = self.sync_scroll() | self.sync_search_scroll() | self.sync_preview_scroll();
+        let next_code_line_limit = self.selected_entry().map(|entry| {
+            self.preview_code_line_limit_for_entry_with_rows(
+                entry,
+                self.frame_state.preview_rows_visible,
+            )
+        });
+        if previous_code_line_limit != next_code_line_limit {
+            self.refresh_preview();
+            dirty = true;
+        }
         if !self.browser_wheel_burst_active() {
             self.queue_visible_directory_item_counts();
         }

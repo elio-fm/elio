@@ -1,5 +1,5 @@
-use super::*;
 use super::text_edit::*;
+use super::*;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::{env, fs, path::Path};
 
@@ -36,22 +36,32 @@ impl App {
         let Some(c) = &self.create else {
             return "Create".to_string();
         };
-        let files = c.lines.iter().filter(|l| {
-            let t = l.trim();
-            !t.is_empty() && !t.starts_with('/') && !t.ends_with('/')
-        }).count();
-        let dirs = c.lines.iter().filter(|l| {
-            let t = l.trim();
-            !t.is_empty() && (t.starts_with('/') || t.ends_with('/'))
-        }).count();
+        let files = c
+            .lines
+            .iter()
+            .filter(|l| {
+                let t = l.trim();
+                !t.is_empty() && !t.starts_with('/') && !t.ends_with('/')
+            })
+            .count();
+        let dirs = c
+            .lines
+            .iter()
+            .filter(|l| {
+                let t = l.trim();
+                !t.is_empty() && (t.starts_with('/') || t.ends_with('/'))
+            })
+            .count();
         match (files, dirs) {
             (0, 0) => "Create".to_string(),
             (f, 0) => format!("Create {} file{}", f, if f == 1 { "" } else { "s" }),
             (0, d) => format!("Create {} folder{}", d, if d == 1 { "" } else { "s" }),
             (f, d) => format!(
                 "Create {} file{} and {} folder{}",
-                f, if f == 1 { "" } else { "s" },
-                d, if d == 1 { "" } else { "s" },
+                f,
+                if f == 1 { "" } else { "s" },
+                d,
+                if d == 1 { "" } else { "s" },
             ),
         }
     }
@@ -62,8 +72,6 @@ impl App {
             .and_then(|c| c.line_errors.get(index))
             .and_then(Option::as_deref)
     }
-
-
 }
 
 // ---------------------------------------------------------------------------
@@ -90,9 +98,7 @@ impl App {
 
 impl App {
     pub(in crate::app) fn handle_create_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key.code, KeyCode::Char('c'))
-        {
+        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.create = None;
             return Ok(());
         }
@@ -243,22 +249,22 @@ impl App {
                     return Ok(());
                 }
                 // Click inside list area — move cursor to clicked line and column.
-                if let Some(list_area) = self.frame_state.create_list_area {
-                    if rect_contains(list_area, mouse.column, mouse.row) {
-                        let scroll_top = self.frame_state.create_scroll_top;
-                        let row_offset = (mouse.row - list_area.y) as usize;
-                        let line_idx = scroll_top + row_offset;
-                        let line_count = self.create_line_count();
-                        if line_idx < line_count {
-                            let line_len = self.create_line(line_idx).chars().count();
-                            // Text starts after icon (3 cells).
-                            let char_col = (mouse.column.saturating_sub(list_area.x + 3)) as usize;
-                            let cursor_col = char_col.min(line_len);
-                            if let Some(c) = &mut self.create {
-                                c.cursor_line = line_idx;
-                                c.cursor_col = cursor_col;
-                                c.preferred_col = cursor_col;
-                            }
+                if let Some(list_area) = self.frame_state.create_list_area
+                    && rect_contains(list_area, mouse.column, mouse.row)
+                {
+                    let scroll_top = self.frame_state.create_scroll_top;
+                    let row_offset = (mouse.row - list_area.y) as usize;
+                    let line_idx = scroll_top + row_offset;
+                    let line_count = self.create_line_count();
+                    if line_idx < line_count {
+                        let line_len = self.create_line(line_idx).chars().count();
+                        // Text starts after icon (3 cells).
+                        let char_col = (mouse.column.saturating_sub(list_area.x + 3)) as usize;
+                        let cursor_col = char_col.min(line_len);
+                        if let Some(c) = &mut self.create {
+                            c.cursor_line = line_idx;
+                            c.cursor_col = cursor_col;
+                            c.preferred_col = cursor_col;
                         }
                     }
                 }
@@ -328,8 +334,8 @@ impl App {
 
     fn create_move_vertical(&mut self, delta: isize) {
         let Some(c) = &mut self.create else { return };
-        let new_line = (c.cursor_line as isize + delta)
-            .clamp(0, c.lines.len() as isize - 1) as usize;
+        let new_line =
+            (c.cursor_line as isize + delta).clamp(0, c.lines.len() as isize - 1) as usize;
         if new_line == c.cursor_line {
             return;
         }
@@ -531,8 +537,14 @@ impl App {
         let files = items.iter().filter(|(_, i)| !i.is_dir).count();
         let dirs = items.iter().filter(|(_, i)| i.is_dir).count();
         let status = match (files, dirs) {
-            (1, 0) => format!("Created \"{}\"", items.iter().find(|(_, i)| !i.is_dir).unwrap().1.name),
-            (0, 1) => format!("Created \"{}\"", items.iter().find(|(_, i)| i.is_dir).unwrap().1.name),
+            (1, 0) => format!(
+                "Created \"{}\"",
+                items.iter().find(|(_, i)| !i.is_dir).unwrap().1.name
+            ),
+            (0, 1) => format!(
+                "Created \"{}\"",
+                items.iter().find(|(_, i)| i.is_dir).unwrap().1.name
+            ),
             (f, 0) => format!("Created {f} files"),
             (0, d) => format!("Created {d} folders"),
             (f, d) => format!(
@@ -617,7 +629,12 @@ impl App {
         self.help_open = false;
         self.search = None;
         self.create = None;
-        self.trash = Some(TrashOverlay { targets, scroll: 0, confirmed: true, permanent });
+        self.trash = Some(TrashOverlay {
+            targets,
+            scroll: 0,
+            confirmed: true,
+            permanent,
+        });
     }
 
     pub fn trash_is_open(&self) -> bool {
@@ -628,11 +645,19 @@ impl App {
         let Some(t) = &self.trash else {
             return String::new();
         };
-        let verb = if t.permanent { "Delete permanently" } else { "Trash" };
+        let verb = if t.permanent {
+            "Delete permanently"
+        } else {
+            "Trash"
+        };
         match t.targets.len() {
             0 => String::new(),
             1 => {
-                let kind = if t.targets[0].is_dir { "folder" } else { "file" };
+                let kind = if t.targets[0].is_dir {
+                    "folder"
+                } else {
+                    "file"
+                };
                 format!("{verb} 1 selected {kind}?")
             }
             _ => {
@@ -682,7 +707,7 @@ impl App {
         self.trash
             .as_ref()
             .and_then(|t| t.targets.get(index))
-            .map_or(false, |t| t.is_dir)
+            .is_some_and(|t| t.is_dir)
     }
 
     pub fn trash_confirmed(&self) -> bool {
@@ -690,9 +715,7 @@ impl App {
     }
 
     pub(in crate::app) fn handle_trash_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key.code, KeyCode::Char('c'))
-        {
+        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.trash = None;
             return Ok(());
         }
@@ -750,11 +773,15 @@ impl App {
                     self.trash = None;
                     return Ok(());
                 }
-                if self.frame_state.trash_confirm_btn
+                if self
+                    .frame_state
+                    .trash_confirm_btn
                     .is_some_and(|r| rect_contains(r, mouse.column, mouse.row))
                 {
                     self.confirm_trash()?;
-                } else if self.frame_state.trash_cancel_btn
+                } else if self
+                    .frame_state
+                    .trash_cancel_btn
                     .is_some_and(|r| rect_contains(r, mouse.column, mouse.row))
                 {
                     self.trash = None;
@@ -784,11 +811,13 @@ impl App {
         for target in &t.targets {
             if t.permanent {
                 if target.is_dir {
-                    fs::remove_dir_all(&target.path)
-                        .map_err(|e| anyhow::anyhow!("Could not delete \"{}\": {e}", target.name))?;
+                    fs::remove_dir_all(&target.path).map_err(|e| {
+                        anyhow::anyhow!("Could not delete \"{}\": {e}", target.name)
+                    })?;
                 } else {
-                    fs::remove_file(&target.path)
-                        .map_err(|e| anyhow::anyhow!("Could not delete \"{}\": {e}", target.name))?;
+                    fs::remove_file(&target.path).map_err(|e| {
+                        anyhow::anyhow!("Could not delete \"{}\": {e}", target.name)
+                    })?;
                 }
             } else {
                 trash::delete(&target.path)
@@ -796,7 +825,11 @@ impl App {
             }
         }
         self.selected_paths.clear();
-        let verb = if t.permanent { "Permanently deleted" } else { "Trashed" };
+        let verb = if t.permanent {
+            "Permanently deleted"
+        } else {
+            "Trashed"
+        };
         let status = match t.targets.len() {
             0 => String::new(),
             1 => format!("{verb} \"{}\"", t.targets[0].name),
@@ -900,7 +933,7 @@ impl App {
         self.bulk_rename
             .as_ref()
             .and_then(|r| r.items.get(index))
-            .map_or(false, |i| i.is_dir)
+            .is_some_and(|i| i.is_dir)
     }
 
     pub fn bulk_rename_line_error(&self, index: usize) -> Option<&str> {
@@ -919,9 +952,7 @@ impl App {
     }
 
     pub(in crate::app) fn handle_bulk_rename_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key.code, KeyCode::Char('c'))
-        {
+        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.bulk_rename = None;
             return Ok(());
         }
@@ -997,30 +1028,28 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.bulk_rename {
-                    if r.cursor_col > 0 {
-                        let start =
-                            previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
-                        remove_char_range(&mut r.new_names[r.cursor_line], start, r.cursor_col);
-                        r.cursor_col = start;
-                        r.preferred_col = start;
-                        r.line_errors[r.cursor_line] = None;
-                    }
+                if let Some(r) = &mut self.bulk_rename
+                    && r.cursor_col > 0
+                {
+                    let start = previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
+                    remove_char_range(&mut r.new_names[r.cursor_line], start, r.cursor_col);
+                    r.cursor_col = start;
+                    r.preferred_col = start;
+                    r.line_errors[r.cursor_line] = None;
                 }
             }
             KeyCode::Char('h' | 'w')
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.bulk_rename {
-                    if r.cursor_col > 0 {
-                        let start =
-                            previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
-                        remove_char_range(&mut r.new_names[r.cursor_line], start, r.cursor_col);
-                        r.cursor_col = start;
-                        r.preferred_col = start;
-                        r.line_errors[r.cursor_line] = None;
-                    }
+                if let Some(r) = &mut self.bulk_rename
+                    && r.cursor_col > 0
+                {
+                    let start = previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
+                    remove_char_range(&mut r.new_names[r.cursor_line], start, r.cursor_col);
+                    r.cursor_col = start;
+                    r.preferred_col = start;
+                    r.line_errors[r.cursor_line] = None;
                 }
             }
             KeyCode::Delete
@@ -1044,16 +1073,15 @@ impl App {
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.bulk_rename {
-                    if r.cursor_col > 0 {
-                        let start =
-                            char_to_byte(&r.new_names[r.cursor_line], r.cursor_col - 1);
-                        let end = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col);
-                        r.new_names[r.cursor_line].replace_range(start..end, "");
-                        r.cursor_col -= 1;
-                        r.preferred_col = r.cursor_col;
-                        r.line_errors[r.cursor_line] = None;
-                    }
+                if let Some(r) = &mut self.bulk_rename
+                    && r.cursor_col > 0
+                {
+                    let start = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col - 1);
+                    let end = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col);
+                    r.new_names[r.cursor_line].replace_range(start..end, "");
+                    r.cursor_col -= 1;
+                    r.preferred_col = r.cursor_col;
+                    r.line_errors[r.cursor_line] = None;
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
@@ -1092,8 +1120,8 @@ impl App {
         let Some(r) = &mut self.bulk_rename else {
             return;
         };
-        let new_line = (r.cursor_line as isize + delta)
-            .clamp(0, r.items.len() as isize - 1) as usize;
+        let new_line =
+            (r.cursor_line as isize + delta).clamp(0, r.items.len() as isize - 1) as usize;
         if new_line == r.cursor_line {
             return;
         }
@@ -1113,24 +1141,22 @@ impl App {
                     self.bulk_rename = None;
                     return Ok(());
                 }
-                if let Some(list_area) = self.frame_state.bulk_rename_list_area {
-                    if rect_contains(list_area, mouse.column, mouse.row) {
-                        let scroll_top = self.frame_state.bulk_rename_scroll_top;
-                        let row_offset = (mouse.row - list_area.y) as usize;
-                        let line_idx = scroll_top + row_offset;
-                        let count = self.bulk_rename_item_count();
-                        if line_idx < count {
-                            let line_len =
-                                self.bulk_rename_new_name(line_idx).chars().count();
-                            // Text starts after icon (3 cells).
-                            let char_col =
-                                (mouse.column.saturating_sub(list_area.x + 3)) as usize;
-                            let cursor_col = char_col.min(line_len);
-                            if let Some(r) = &mut self.bulk_rename {
-                                r.cursor_line = line_idx;
-                                r.cursor_col = cursor_col;
-                                r.preferred_col = cursor_col;
-                            }
+                if let Some(list_area) = self.frame_state.bulk_rename_list_area
+                    && rect_contains(list_area, mouse.column, mouse.row)
+                {
+                    let scroll_top = self.frame_state.bulk_rename_scroll_top;
+                    let row_offset = (mouse.row - list_area.y) as usize;
+                    let line_idx = scroll_top + row_offset;
+                    let count = self.bulk_rename_item_count();
+                    if line_idx < count {
+                        let line_len = self.bulk_rename_new_name(line_idx).chars().count();
+                        // Text starts after icon (3 cells).
+                        let char_col = (mouse.column.saturating_sub(list_area.x + 3)) as usize;
+                        let cursor_col = char_col.min(line_len);
+                        if let Some(r) = &mut self.bulk_rename {
+                            r.cursor_line = line_idx;
+                            r.cursor_col = cursor_col;
+                            r.preferred_col = cursor_col;
                         }
                     }
                 }
@@ -1195,8 +1221,7 @@ impl App {
             if let Some(r) = &mut self.bulk_rename {
                 r.line_errors = errors;
                 r.cursor_line = err_line;
-                r.cursor_col =
-                    r.cursor_col.min(r.new_names[err_line].chars().count());
+                r.cursor_col = r.cursor_col.min(r.new_names[err_line].chars().count());
                 r.preferred_col = r.cursor_col;
             }
             return Ok(());
@@ -1256,8 +1281,7 @@ impl App {
         let status = match renamed {
             0 => "No files renamed".to_string(),
             1 => {
-                let (_, orig, new_name) =
-                    ops.iter().find(|(_, o, n)| o != n).unwrap();
+                let (_, orig, new_name) = ops.iter().find(|(_, o, n)| o != n).unwrap();
                 format!("Renamed \"{}\" → \"{}\"", orig, new_name)
             }
             n => format!("Renamed {} items", n),
@@ -1325,7 +1349,7 @@ impl App {
     }
 
     pub fn rename_item_is_dir(&self) -> bool {
-        self.rename.as_ref().map_or(false, |r| r.is_dir)
+        self.rename.as_ref().is_some_and(|r| r.is_dir)
     }
 
     pub fn rename_error(&self) -> Option<&str> {
@@ -1333,9 +1357,7 @@ impl App {
     }
 
     pub(in crate::app) fn handle_rename_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key.code, KeyCode::Char('c'))
-        {
+        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.rename = None;
             return Ok(());
         }
@@ -1397,26 +1419,26 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.rename {
-                    if r.cursor_col > 0 {
-                        let start = previous_delete_start(&r.input, r.cursor_col);
-                        remove_char_range(&mut r.input, start, r.cursor_col);
-                        r.cursor_col = start;
-                        r.error = None;
-                    }
+                if let Some(r) = &mut self.rename
+                    && r.cursor_col > 0
+                {
+                    let start = previous_delete_start(&r.input, r.cursor_col);
+                    remove_char_range(&mut r.input, start, r.cursor_col);
+                    r.cursor_col = start;
+                    r.error = None;
                 }
             }
             KeyCode::Char('h' | 'w')
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.rename {
-                    if r.cursor_col > 0 {
-                        let start = previous_delete_start(&r.input, r.cursor_col);
-                        remove_char_range(&mut r.input, start, r.cursor_col);
-                        r.cursor_col = start;
-                        r.error = None;
-                    }
+                if let Some(r) = &mut self.rename
+                    && r.cursor_col > 0
+                {
+                    let start = previous_delete_start(&r.input, r.cursor_col);
+                    remove_char_range(&mut r.input, start, r.cursor_col);
+                    r.cursor_col = start;
+                    r.error = None;
                 }
             }
             KeyCode::Delete
@@ -1440,14 +1462,14 @@ impl App {
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.rename {
-                    if r.cursor_col > 0 {
-                        let start = char_to_byte(&r.input, r.cursor_col - 1);
-                        let end = char_to_byte(&r.input, r.cursor_col);
-                        r.input.replace_range(start..end, "");
-                        r.cursor_col -= 1;
-                        r.error = None;
-                    }
+                if let Some(r) = &mut self.rename
+                    && r.cursor_col > 0
+                {
+                    let start = char_to_byte(&r.input, r.cursor_col - 1);
+                    let end = char_to_byte(&r.input, r.cursor_col);
+                    r.input.replace_range(start..end, "");
+                    r.cursor_col -= 1;
+                    r.error = None;
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
@@ -1482,17 +1504,14 @@ impl App {
     }
 
     pub(in crate::app) fn handle_rename_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        match mouse.kind {
-            MouseEventKind::Down(MouseButton::Left) => {
-                let inside = self
-                    .frame_state
-                    .rename_panel
-                    .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
-                if !inside {
-                    self.rename = None;
-                }
+        if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
+            let inside = self
+                .frame_state
+                .rename_panel
+                .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+            if !inside {
+                self.rename = None;
             }
-            _ => {}
         }
         Ok(())
     }
@@ -1616,7 +1635,11 @@ impl App {
         self.search = None;
         self.create = None;
         self.trash = None;
-        self.restore = Some(RestoreOverlay { targets, scroll: 0, confirmed: true });
+        self.restore = Some(RestoreOverlay {
+            targets,
+            scroll: 0,
+            confirmed: true,
+        });
     }
 
     pub fn restore_is_open(&self) -> bool {
@@ -1630,7 +1653,11 @@ impl App {
         match r.targets.len() {
             0 => String::new(),
             1 => {
-                let kind = if r.targets[0].is_dir { "folder" } else { "file" };
+                let kind = if r.targets[0].is_dir {
+                    "folder"
+                } else {
+                    "file"
+                };
                 format!("Restore 1 selected {kind}?")
             }
             _ => {
@@ -1680,7 +1707,7 @@ impl App {
         self.restore
             .as_ref()
             .and_then(|r| r.targets.get(index))
-            .map_or(false, |t| t.is_dir)
+            .is_some_and(|t| t.is_dir)
     }
 
     pub fn restore_confirmed(&self) -> bool {
@@ -1688,9 +1715,7 @@ impl App {
     }
 
     pub(in crate::app) fn handle_restore_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key.code, KeyCode::Char('c'))
-        {
+        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.restore = None;
             return Ok(());
         }
@@ -1748,11 +1773,15 @@ impl App {
                     self.restore = None;
                     return Ok(());
                 }
-                if self.frame_state.restore_confirm_btn
+                if self
+                    .frame_state
+                    .restore_confirm_btn
                     .is_some_and(|r| rect_contains(r, mouse.column, mouse.row))
                 {
                     self.confirm_restore()?;
-                } else if self.frame_state.restore_cancel_btn
+                } else if self
+                    .frame_state
+                    .restore_cancel_btn
                     .is_some_and(|r| rect_contains(r, mouse.column, mouse.row))
                 {
                     self.restore = None;

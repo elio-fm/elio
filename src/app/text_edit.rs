@@ -1,5 +1,4 @@
-/// Shared text editing primitives used by the create and search overlays.
-
+//! Shared text editing primitives used by the create and search overlays.
 pub(super) fn is_word_char(ch: char) -> bool {
     ch.is_alphanumeric() || ch == '_'
 }

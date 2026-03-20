@@ -1337,9 +1337,10 @@ macro = "#fedcba"
 
     #[test]
     fn blush_light_example_theme_parses_and_applies_custom_icon_and_code_colors() {
-        let theme =
-            Theme::from_config_str(include_str!("../../../examples/themes/blush-light/theme.toml"))
-                .expect("blush-light theme should parse");
+        let theme = Theme::from_config_str(include_str!(
+            "../../../examples/themes/blush-light/theme.toml"
+        ))
+        .expect("blush-light theme should parse");
 
         assert_eq!(theme.preview.code.keyword, rgb(0xd8, 0x63, 0x92));
         assert_eq!(theme.preview.code.function, rgb(0x8f, 0x71, 0xbf));
@@ -1362,9 +1363,10 @@ macro = "#fedcba"
 
     #[test]
     fn default_light_example_theme_parses_and_preserves_default_icon_mappings() {
-        let theme =
-            Theme::from_config_str(include_str!("../../../examples/themes/default-light/theme.toml"))
-                .expect("default-light theme should parse");
+        let theme = Theme::from_config_str(include_str!(
+            "../../../examples/themes/default-light/theme.toml"
+        ))
+        .expect("default-light theme should parse");
 
         assert_eq!(theme.palette.bg, rgb(0xef, 0xf2, 0xf5));
         assert_eq!(theme.preview.code.keyword, rgb(0x7a, 0xae, 0xff));
@@ -1425,9 +1427,10 @@ macro = "#fedcba"
 
     #[test]
     fn amber_dusk_example_theme_parses_and_applies_warm_dark_palette() {
-        let theme =
-            Theme::from_config_str(include_str!("../../../examples/themes/amber-dusk/theme.toml"))
-                .expect("amber-dusk theme should parse");
+        let theme = Theme::from_config_str(include_str!(
+            "../../../examples/themes/amber-dusk/theme.toml"
+        ))
+        .expect("amber-dusk theme should parse");
 
         assert_eq!(theme.palette.bg, rgb(0x12, 0x0f, 0x0d));
         assert_eq!(theme.preview.code.keyword, rgb(0xcf, 0x98, 0x51));
@@ -1515,9 +1518,10 @@ macro = "#fedcba"
 
     #[test]
     fn tokyo_night_example_theme_parses_and_applies_palette_consistently() {
-        let theme =
-            Theme::from_config_str(include_str!("../../../examples/themes/tokyo-night/theme.toml"))
-                .expect("tokyo-night theme should parse");
+        let theme = Theme::from_config_str(include_str!(
+            "../../../examples/themes/tokyo-night/theme.toml"
+        ))
+        .expect("tokyo-night theme should parse");
 
         assert_eq!(theme.palette.bg, rgb(0x1a, 0x1b, 0x26));
         assert_eq!(theme.preview.code.keyword, rgb(0xbb, 0x9a, 0xf7));
@@ -1594,7 +1598,10 @@ macro = "#fedcba"
             "docs",
         ];
         let themes = [
-            ("default", include_str!("../../../examples/themes/default/theme.toml")),
+            (
+                "default",
+                include_str!("../../../examples/themes/default/theme.toml"),
+            ),
             (
                 "default-light",
                 include_str!("../../../examples/themes/default-light/theme.toml"),
@@ -1611,8 +1618,14 @@ macro = "#fedcba"
                 "catppuccin-mocha",
                 include_str!("../../../examples/themes/catppuccin-mocha/theme.toml"),
             ),
-            ("tokyo-night", include_str!("../../../examples/themes/tokyo-night/theme.toml")),
-            ("navi", include_str!("../../../examples/themes/navi/theme.toml")),
+            (
+                "tokyo-night",
+                include_str!("../../../examples/themes/tokyo-night/theme.toml"),
+            ),
+            (
+                "navi",
+                include_str!("../../../examples/themes/navi/theme.toml"),
+            ),
             (
                 "neon-cherry",
                 include_str!("../../../examples/themes/neon-cherry/theme.toml"),
@@ -1622,7 +1635,9 @@ macro = "#fedcba"
         for (label, config) in themes {
             let theme = Theme::from_config_str(config)
                 .unwrap_or_else(|error| panic!("{label} theme should parse: {error}"));
-            let normal_folder_color = theme.resolve(Path::new("projects"), EntryKind::Directory).color;
+            let normal_folder_color = theme
+                .resolve(Path::new("projects"), EntryKind::Directory)
+                .color;
 
             for directory in generic_dirs {
                 let resolved = theme.resolve(Path::new(directory), EntryKind::Directory);
@@ -1632,8 +1647,7 @@ macro = "#fedcba"
                     "{label}: {directory} should resolve as a directory",
                 );
                 assert_eq!(
-                    resolved.color,
-                    normal_folder_color,
+                    resolved.color, normal_folder_color,
                     "{label}: {directory} should use the normal folder color",
                 );
             }

@@ -714,7 +714,9 @@ impl App {
     }
 
     fn remember_static_image_inline_payload(&mut self, key: StaticImageKey, payload: Arc<str>) {
-        self.image_preview.inline_payloads.insert(key.clone(), payload);
+        self.image_preview
+            .inline_payloads
+            .insert(key.clone(), payload);
         self.image_preview
             .payload_order
             .retain(|queued| queued != &key);
@@ -828,7 +830,9 @@ impl App {
         let key = StaticImageKey::from_request(request);
         if self.image_preview.failed_images.contains(&key)
             || self.image_preview.pending_prepares.contains(&key)
-            || self.cached_prepared_static_image_for_overlay(&key, request).is_some()
+            || self
+                .cached_prepared_static_image_for_overlay(&key, request)
+                .is_some()
         {
             return;
         }
@@ -1010,7 +1014,9 @@ fn union_rect(a: Rect, b: Rect) -> Rect {
     let left = a.x.min(b.x);
     let top = a.y.min(b.y);
     let right = a.x.saturating_add(a.width).max(b.x.saturating_add(b.width));
-    let bottom = a.y.saturating_add(a.height).max(b.y.saturating_add(b.height));
+    let bottom =
+        a.y.saturating_add(a.height)
+            .max(b.y.saturating_add(b.height));
     Rect {
         x: left,
         y: top,
@@ -1089,7 +1095,9 @@ where
         if !request.prepare_inline_payload {
             return Some(None);
         }
-        Some(Some(super::inline_image::encode_iterm_inline_payload(path)?))
+        Some(Some(super::inline_image::encode_iterm_inline_payload(
+            path,
+        )?))
     };
 
     if static_image_supports_iterm_source_passthrough_for_prepare(request, format) {

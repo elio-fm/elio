@@ -25,9 +25,30 @@ pub(super) fn render_code_preview(
     language: Option<HighlightLanguage>,
     line_numbers: bool,
 ) -> Vec<Line<'static>> {
+    render_code_preview_with(
+        text,
+        language,
+        line_numbers,
+        super::default_code_preview_line_limit(),
+        &|| false,
+    )
+}
+
+pub(super) fn render_code_preview_with<F>(
+    text: &str,
+    language: Option<HighlightLanguage>,
+    line_numbers: bool,
+    code_line_limit: usize,
+    canceled: &F,
+) -> Vec<Line<'static>>
+where
+    F: Fn() -> bool,
+{
     match language {
-        Some(language) => render_highlighted_code_preview(text, language, line_numbers),
-        None => render_plain_code_preview(text, line_numbers),
+        Some(language) => {
+            render_highlighted_code_preview(text, language, line_numbers, code_line_limit, canceled)
+        }
+        None => render_plain_code_preview(text, line_numbers, code_line_limit, canceled),
     }
 }
 
@@ -56,9 +77,14 @@ fn render_highlighted_code_preview(
     text: &str,
     language: HighlightLanguage,
     line_numbers: bool,
+    code_line_limit: usize,
+    canceled: &impl Fn() -> bool,
 ) -> Vec<Line<'static>> {
     let code_palette = theme::code_preview_palette();
-    let source_lines = super::collect_preview_lines(text);
+    let source_lines = super::collect_preview_lines_with_limit(
+        text,
+        super::clamp_code_preview_line_limit(code_line_limit),
+    );
     let number_width = super::line_number_width(source_lines.len());
     let mut rendered = Vec::new();
     let mut jsonc_block_comment = false;
@@ -70,6 +96,9 @@ fn render_highlighted_code_preview(
     let mut shell_state = shell::ShellState::default();
 
     for (index, line) in source_lines.iter().enumerate() {
+        if canceled() {
+            break;
+        }
         let mut spans = Vec::new();
         if line_numbers {
             spans.push(super::line_number_span(index + 1, number_width));
@@ -123,19 +152,30 @@ fn render_highlighted_code_preview(
         rendered.push(Line::from(spans));
     }
 
-    if rendered.is_empty() {
+    if rendered.is_empty() && !canceled() {
         rendered.push(Line::from("File is empty"));
     }
     rendered
 }
 
-fn render_plain_code_preview(text: &str, line_numbers: bool) -> Vec<Line<'static>> {
+fn render_plain_code_preview(
+    text: &str,
+    line_numbers: bool,
+    code_line_limit: usize,
+    canceled: &impl Fn() -> bool,
+) -> Vec<Line<'static>> {
     let code_palette = theme::code_preview_palette();
-    let source_lines = super::collect_preview_lines(text);
+    let source_lines = super::collect_preview_lines_with_limit(
+        text,
+        super::clamp_code_preview_line_limit(code_line_limit),
+    );
     let number_width = super::line_number_width(source_lines.len());
     let mut rendered = Vec::new();
 
     for (index, line) in source_lines.iter().enumerate() {
+        if canceled() {
+            break;
+        }
         let mut spans = Vec::new();
         if line_numbers {
             spans.push(super::line_number_span(index + 1, number_width));
@@ -152,7 +192,7 @@ fn render_plain_code_preview(text: &str, line_numbers: bool) -> Vec<Line<'static
         rendered.push(Line::from(spans));
     }
 
-    if rendered.is_empty() {
+    if rendered.is_empty() && !canceled() {
         rendered.push(Line::from("File is empty"));
     }
     rendered

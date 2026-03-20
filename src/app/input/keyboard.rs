@@ -51,9 +51,8 @@ impl App {
                 self.help_open = false;
                 return Ok(());
             }
-            match key.code {
-                KeyCode::Esc => self.help_open = false,
-                _ => {}
+            if key.code == KeyCode::Esc {
+                self.help_open = false;
             }
             if is_help_shortcut(key) {
                 self.help_open = false;
@@ -132,9 +131,7 @@ impl App {
                     }
                 }
                 KeyCode::Char(']') => {
-                    if self.step_epub_section(1)
-                        || self.step_comic_page(1)
-                        || self.step_pdf_page(1)
+                    if self.step_epub_section(1) || self.step_comic_page(1) || self.step_pdf_page(1)
                     {
                         return Ok(());
                     }

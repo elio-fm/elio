@@ -6,7 +6,7 @@ pub(crate) mod watch;
 mod directory;
 mod sort;
 
-pub(self) fn is_hidden(file_name: &std::ffi::OsStr) -> bool {
+fn is_hidden(file_name: &std::ffi::OsStr) -> bool {
     file_name.to_string_lossy().starts_with('.')
 }
 

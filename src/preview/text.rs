@@ -104,6 +104,33 @@ pub(super) fn finalize_text_preview(
     preview
 }
 
+pub(super) fn finalize_text_preview_with_line_limit(
+    mut preview: PreviewContent,
+    source_line_count: usize,
+    bytes_truncated: bool,
+    line_truncated: bool,
+    truncation_note: Option<String>,
+    shown_line_limit: usize,
+) -> PreviewContent {
+    let shown_lines = if line_truncated {
+        shown_line_limit
+    } else {
+        source_line_count
+    };
+    preview = preview.with_line_coverage(
+        shown_lines,
+        (!bytes_truncated).then_some(source_line_count),
+        bytes_truncated || line_truncated,
+    );
+    if !bytes_truncated {
+        preview = preview.with_source_lines(source_line_count);
+    }
+    if let Some(note) = truncation_note {
+        preview = preview.with_truncation(note);
+    }
+    preview
+}
+
 pub(super) fn truncation_note(bytes_truncated: bool, line_truncated: bool) -> Option<String> {
     let mut parts = Vec::new();
     if bytes_truncated {
@@ -111,6 +138,25 @@ pub(super) fn truncation_note(bytes_truncated: bool, line_truncated: bool) -> Op
     }
     if line_truncated {
         parts.push(format!("showing first {PREVIEW_RENDER_LINE_LIMIT} lines"));
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("  •  "))
+    }
+}
+
+pub(super) fn truncation_note_with_line_limit(
+    bytes_truncated: bool,
+    line_truncated: bool,
+    shown_line_limit: usize,
+) -> Option<String> {
+    let mut parts = Vec::new();
+    if bytes_truncated {
+        parts.push("truncated to 64 KiB".to_string());
+    }
+    if line_truncated {
+        parts.push(format!("showing first {shown_line_limit} lines"));
     }
     if parts.is_empty() {
         None
@@ -191,8 +237,12 @@ pub(crate) fn count_total_text_lines(path: &Path) -> anyhow::Result<usize> {
 }
 
 pub(super) fn collect_preview_lines(text: &str) -> Vec<String> {
+    collect_preview_lines_with_limit(text, PREVIEW_RENDER_LINE_LIMIT)
+}
+
+pub(super) fn collect_preview_lines_with_limit(text: &str, line_limit: usize) -> Vec<String> {
     text.lines()
-        .take(PREVIEW_RENDER_LINE_LIMIT)
+        .take(line_limit)
         .map(trim_trailing_line_endings)
         .collect()
 }
@@ -241,7 +291,11 @@ fn count_utf8_lines(mut reader: BufReader<File>, prefix: &[u8]) -> anyhow::Resul
         last_byte = chunk.last().copied();
     }
 
-    Ok(finalize_counted_lines(saw_bytes, newline_count, last_byte == Some(b'\n')))
+    Ok(finalize_counted_lines(
+        saw_bytes,
+        newline_count,
+        last_byte == Some(b'\n'),
+    ))
 }
 
 fn count_utf16_lines(mut reader: BufReader<File>, endian: Utf16Endian) -> anyhow::Result<usize> {
@@ -282,7 +336,11 @@ fn count_utf16_lines(mut reader: BufReader<File>, endian: Utf16Endian) -> anyhow
     ))
 }
 
-fn finalize_counted_lines(saw_content: bool, newline_count: usize, ends_with_newline: bool) -> usize {
+fn finalize_counted_lines(
+    saw_content: bool,
+    newline_count: usize,
+    ends_with_newline: bool,
+) -> usize {
     if !saw_content {
         return 1;
     }

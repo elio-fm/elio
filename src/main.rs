@@ -231,16 +231,16 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             // event we accumulate all queued events first and render the final state once.
             loop {
                 let event = event::read()?;
-                if std::env::var_os("ELIO_LOG_MOUSE").is_some() {
-                    if let Event::Mouse(m) = &event {
-                        let _ = std::fs::OpenOptions::new()
-                            .create(true)
-                            .append(true)
-                            .open("/tmp/elio-mouse.log")
-                            .and_then(|mut f| {
-                                writeln!(f, "{:?} col={} row={}", m.kind, m.column, m.row)
-                            });
-                    }
+                if std::env::var_os("ELIO_LOG_MOUSE").is_some()
+                    && let Event::Mouse(m) = &event
+                {
+                    let _ = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open("/tmp/elio-mouse.log")
+                        .and_then(|mut f| {
+                            writeln!(f, "{:?} col={} row={}", m.kind, m.column, m.row)
+                        });
                 }
                 if matches!(event, Event::Resize(_, _)) {
                     app.handle_terminal_image_resize();

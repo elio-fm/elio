@@ -1327,7 +1327,7 @@ fn build_preview_visual(
     }
 }
 
-fn resolve_epub_cover_item<'a>(package: &'a EpubPackageDocument) -> Option<&'a EpubManifestItem> {
+fn resolve_epub_cover_item(package: &EpubPackageDocument) -> Option<&EpubManifestItem> {
     package
         .manifest
         .values()

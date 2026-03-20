@@ -480,11 +480,7 @@ pub(super) fn render_create_overlay(
         } else {
             0
         };
-        let h_start = if col > text_width {
-            col - text_width
-        } else {
-            0
-        };
+        let h_start = col.saturating_sub(text_width);
 
         let mut visible_text: String = chars.iter().skip(h_start).take(text_width).collect();
         if h_start > 0 && !visible_text.is_empty() {
@@ -683,11 +679,7 @@ pub(super) fn render_bulk_rename_overlay(
         } else {
             0
         };
-        let h_start = if col > text_width {
-            col - text_width
-        } else {
-            0
-        };
+        let h_start = col.saturating_sub(text_width);
         let mut visible_text: String = chars.iter().skip(h_start).take(text_width).collect();
         if h_start > 0 && !visible_text.is_empty() {
             visible_text.remove(0);
@@ -811,7 +803,7 @@ pub(super) fn render_rename_overlay(
     let chars: Vec<char> = input.chars().collect();
     let col = cursor_col.min(chars.len());
     let available = input_area.width.saturating_sub(3) as usize; // 3 for icon prefix
-    let h_start = if col > available { col - available } else { 0 };
+    let h_start = col.saturating_sub(available);
 
     let mut visible_text: String = chars.iter().skip(h_start).take(available).collect();
     if h_start > 0 && !visible_text.is_empty() {
