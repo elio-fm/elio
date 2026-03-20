@@ -543,6 +543,14 @@ impl Theme {
                     color: Some(rgb(104, 179, 120)),
                 },
             ),
+            (
+                "dart".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(56, 213, 255)),
+                },
+            ),
             ("java".to_string(), rule_class(FileClass::Code)),
             ("lua".to_string(), rule_class(FileClass::Code)),
             ("php".to_string(), rule_class(FileClass::Code)),
@@ -2083,6 +2091,11 @@ macro = "#fedcba"
         assert_eq!(csharp_script.class, FileClass::Code);
         assert_eq!(csharp_script.icon, "󰌛");
         assert_eq!(csharp_script.color, rgb(104, 179, 120));
+
+        let dart = theme.resolve(Path::new("main.dart"), EntryKind::File);
+        assert_eq!(dart.class, FileClass::Code);
+        assert_eq!(dart.icon, "");
+        assert_eq!(dart.color, rgb(56, 213, 255));
 
         let elixir = theme.resolve(Path::new("main.ex"), EntryKind::File);
         assert_eq!(elixir.class, FileClass::Code);
