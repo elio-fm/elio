@@ -310,11 +310,6 @@ fn source_preview_detail(
     type_detail
         .map(ToString::to_string)
         .or_else(|| preview_spec.language_hint.map(display_language_hint))
-        .or_else(|| {
-            preview_spec
-                .highlight_language()
-                .map(file_info::HighlightLanguage::detail_label)
-        })
 }
 
 fn display_language_hint(language_hint: &str) -> String {

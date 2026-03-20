@@ -65,143 +65,6 @@ pub(crate) enum CustomCodeKind {
     Log,
 }
 
-impl CustomCodeKind {
-    pub(crate) const fn highlight_language(self) -> HighlightLanguage {
-        match self {
-            Self::DirectiveConf => HighlightLanguage::DirectiveConf,
-            Self::Ini => HighlightLanguage::Ini,
-            Self::DesktopEntry => HighlightLanguage::DesktopEntry,
-            Self::Json => HighlightLanguage::Json,
-            Self::Jsonc => HighlightLanguage::Jsonc,
-            Self::Toml => HighlightLanguage::Toml,
-            Self::Yaml => HighlightLanguage::Yaml,
-            Self::Log => HighlightLanguage::Log,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum HighlightLanguage {
-    JsLike,
-    CLike,
-    DirectiveConf,
-    Lua,
-    Python,
-    Make,
-    Shell,
-    Nix,
-    CMake,
-    Markup,
-    Css,
-    Toml,
-    Json,
-    Jsonc,
-    Yaml,
-    Log,
-    Ini,
-    DesktopEntry,
-}
-
-impl HighlightLanguage {
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Self::JsLike => "JavaScript / TypeScript",
-            Self::CLike => "C-style code",
-            Self::DirectiveConf => "Directive config",
-            Self::Lua => "Lua",
-            Self::Python => "Python",
-            Self::Make => "Makefile",
-            Self::Shell => "Shell",
-            Self::Nix => "Nix",
-            Self::CMake => "CMake",
-            Self::Markup => "Markup",
-            Self::Css => "CSS",
-            Self::Toml => "TOML",
-            Self::Json => "JSON",
-            Self::Jsonc => "JSONC",
-            Self::Yaml => "YAML",
-            Self::Log => "Log",
-            Self::Ini => "INI",
-            Self::DesktopEntry => "Desktop Entry",
-        }
-    }
-
-    pub(crate) fn detail_label(self) -> String {
-        self.label().to_string()
-    }
-
-    pub(crate) const fn code_backend(self) -> CodeBackend {
-        match self {
-            Self::JsLike
-            | Self::CLike
-            | Self::Lua
-            | Self::Python
-            | Self::Make
-            | Self::Shell
-            | Self::Nix
-            | Self::CMake
-            | Self::Markup
-            | Self::Css => CodeBackend::Syntect,
-            Self::DirectiveConf => CodeBackend::Custom(CustomCodeKind::DirectiveConf),
-            Self::Toml => CodeBackend::Custom(CustomCodeKind::Toml),
-            Self::Json => CodeBackend::Custom(CustomCodeKind::Json),
-            Self::Jsonc => CodeBackend::Custom(CustomCodeKind::Jsonc),
-            Self::Yaml => CodeBackend::Custom(CustomCodeKind::Yaml),
-            Self::Log => CodeBackend::Custom(CustomCodeKind::Log),
-            Self::Ini => CodeBackend::Custom(CustomCodeKind::Ini),
-            Self::DesktopEntry => CodeBackend::Custom(CustomCodeKind::DesktopEntry),
-        }
-    }
-
-    pub(crate) const fn default_code_syntax(self) -> Option<&'static str> {
-        match self {
-            Self::JsLike => Some("typescript"),
-            Self::CLike => Some("c"),
-            Self::DirectiveConf => Some("config"),
-            Self::Lua => Some("lua"),
-            Self::Python => Some("python"),
-            Self::Make => Some("make"),
-            Self::Shell => Some("shell"),
-            Self::Nix => Some("nix"),
-            Self::CMake => Some("cmake"),
-            Self::Markup => Some("markup"),
-            Self::Css => Some("css"),
-            Self::Toml => Some("toml"),
-            Self::Json => Some("json"),
-            Self::Jsonc => Some("jsonc"),
-            Self::Yaml => Some("yaml"),
-            Self::Log => Some("log"),
-            Self::Ini => Some("ini"),
-            Self::DesktopEntry => Some("desktop"),
-        }
-    }
-
-    pub(crate) fn from_code_syntax(code_syntax: &str) -> Option<Self> {
-        match code_syntax {
-            "javascript" | "jsx" | "typescript" | "tsx" => Some(Self::JsLike),
-            "c" | "cpp" | "rust" | "go" | "cs" | "java" | "dart" | "zig" | "kotlin" | "php"
-            | "swift" | "elixir" => Some(Self::CLike),
-            "config" | "kitty" | "mpv" | "btop" => Some(Self::DirectiveConf),
-            "lua" => Some(Self::Lua),
-            "python" | "ruby" => Some(Self::Python),
-            "make" => Some(Self::Make),
-            "sh" | "bash" | "zsh" | "ksh" | "fish" => Some(Self::Shell),
-            "nix" => Some(Self::Nix),
-            "cmake" => Some(Self::CMake),
-            "html" | "xml" => Some(Self::Markup),
-            "css" | "scss" | "sass" | "less" => Some(Self::Css),
-            "toml" => Some(Self::Toml),
-            "json" => Some(Self::Json),
-            "jsonc" | "json5" => Some(Self::Jsonc),
-            "yaml" => Some(Self::Yaml),
-            "log" => Some(Self::Log),
-            "ini" | "dotenv" => Some(Self::Ini),
-            "desktop" => Some(Self::DesktopEntry),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum StructuredFormat {
     Json,
@@ -223,18 +86,6 @@ impl StructuredFormat {
             Self::Yaml => "YAML",
             Self::Dotenv => ".env",
             Self::Log => "Log",
-        }
-    }
-
-    pub(crate) const fn code_syntax(self) -> &'static str {
-        match self {
-            Self::Json => "json",
-            Self::Jsonc => "jsonc",
-            Self::Json5 => "json5",
-            Self::Toml => "toml",
-            Self::Yaml => "yaml",
-            Self::Dotenv => "dotenv",
-            Self::Log => "log",
         }
     }
 }
@@ -394,17 +245,13 @@ impl PreviewSpec {
         }
     }
 
-    pub(super) const fn source(
-        language_hint: Option<&'static str>,
-        highlight_language: Option<HighlightLanguage>,
-        structured_format: Option<StructuredFormat>,
-    ) -> Self {
+    pub(super) const fn source(language_hint: Option<&'static str>) -> Self {
         Self {
             kind: PreviewKind::Source,
             language_hint,
-            code_syntax: resolve_code_syntax(language_hint, highlight_language, structured_format),
-            code_backend: resolve_code_backend(highlight_language),
-            structured_format,
+            code_syntax: language_hint,
+            code_backend: CodeBackend::Plain,
+            structured_format: None,
             document_format: None,
         }
     }
@@ -432,16 +279,6 @@ impl PreviewSpec {
             code_backend: CodeBackend::Plain,
             structured_format: None,
             document_format: Some(document_format),
-        }
-    }
-
-    pub(crate) fn highlight_language(self) -> Option<HighlightLanguage> {
-        match self.code_backend {
-            CodeBackend::Plain => None,
-            CodeBackend::Syntect => self
-                .code_syntax
-                .and_then(HighlightLanguage::from_code_syntax),
-            CodeBackend::Custom(kind) => Some(kind.highlight_language()),
         }
     }
 }
@@ -472,34 +309,10 @@ pub(super) const fn source_only(
     FileFacts {
         builtin_class: class,
         specific_type_label,
-        preview: PreviewSpec::source(language_hint, None, None),
+        preview: PreviewSpec::source(language_hint),
     }
 }
 
 pub(super) const fn disk_image_file_facts(kind: DiskImageKind) -> FileFacts {
     plain(FileClass::File, Some(kind.detail_label()))
-}
-
-const fn resolve_code_backend(highlight_language: Option<HighlightLanguage>) -> CodeBackend {
-    match highlight_language {
-        Some(language) => language.code_backend(),
-        None => CodeBackend::Plain,
-    }
-}
-
-const fn resolve_code_syntax(
-    language_hint: Option<&'static str>,
-    highlight_language: Option<HighlightLanguage>,
-    structured_format: Option<StructuredFormat>,
-) -> Option<&'static str> {
-    match structured_format {
-        Some(format) => Some(format.code_syntax()),
-        None => match language_hint {
-            Some(language_hint) => Some(language_hint),
-            None => match highlight_language {
-                Some(language) => language.default_code_syntax(),
-                None => None,
-            },
-        },
-    }
 }
