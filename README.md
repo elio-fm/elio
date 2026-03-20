@@ -1,46 +1,48 @@
 # elio
 
-A mouse-capable terminal file manager with a soft folder-first layout.
+A terminal-native, mouse-capable file manager with a soft folder-first layout and rich previews.
 
 ![elio — default theme](examples/themes/default/screenshot.png)
 
-Three-pane interface: pinned places on the left, a grid or list browser in the center, and a detail and preview pane on the right. Works entirely in the terminal with full keyboard and mouse support.
+Three panes, strong keyboard and mouse support, and built-in previews for the file types you hit most often.
+
+---
+
+## Why Elio
+
+Elio is designed to feel terminal-native rather than like a GUI file manager squeezed into a TUI: keyboard and mouse navigation are both first-class, common previews are built in, and richer preview features layer on through optional external tools instead of forcing a heavy baseline install.
 
 ---
 
 ## Features
 
-- **Grid and list views** — switch with `v`; grid by default, denser list on demand
-- **Full mouse support** — click, double-click, scroll, preview scrolling, Shift+scroll for sideways panning
-- **Type-aware previews** — directories, text, Markdown, code, structured data, archives, EPUB, comic archives, images, and PDFs
-- **Inline image previews** — rendered images and PDF pages directly inside the terminal on supported terminals
-- **Fuzzy search** — `f` to search folders, `Ctrl+F` to search files, both scoped to the current directory tree
-- **Auto-reload** — watches the current directory for changes, with polling fallback
-- **Back/forward history**, parent navigation, hidden-file toggle, sort cycling
-- **Configurable** via `config.toml` for behavior and `theme.toml` for appearance
+- **Terminal-native navigation** — keyboard and mouse are both first-class
+- **Rich previews** — text, code, structured data, archives, EPUB, comics, images, and PDFs
+- **Inline image support** — rendered images and PDF pages in supported terminals
+- **Fast browsing** — grid/list views, fuzzy search, history, sorting, and hidden-file toggle
+- **Live updates** — watches the current directory with a polling fallback
+- **Configurable** — behavior via `config.toml`, appearance via `theme.toml`
 
 ---
 
-## Screenshots
+<details>
+<summary><strong>Screenshots</strong></summary>
 
-| Default | Catppuccin Mocha | Tokyo Night |
-|---|---|---|
-| ![Default](examples/themes/default/screenshot.png) | ![Catppuccin Mocha](examples/themes/catppuccin-mocha/screenshot.png) | ![Tokyo Night](examples/themes/tokyo-night/screenshot.png) |
+| Catppuccin Mocha | Tokyo Night |
+|---|---|
+| ![Catppuccin Mocha](examples/themes/catppuccin-mocha/screenshot.png) | ![Tokyo Night](examples/themes/tokyo-night/screenshot.png) |
 
-| Neon Cherry | Amber Dusk | Blush Light |
-|---|---|---|
-| ![Neon Cherry](examples/themes/neon-cherry/screenshot.png) | ![Amber Dusk](examples/themes/amber-dusk/screenshot.png) | ![Blush Light](examples/themes/blush-light/screenshot.png) |
+| Amber Dusk | Blush Light |
+|---|---|
+| ![Amber Dusk](examples/themes/amber-dusk/screenshot.png) | ![Blush Light](examples/themes/blush-light/screenshot.png) |
+</details>
 
----
-
-## Requirements
-
-- Rust (stable toolchain) — for building from source
-- A terminal that supports 24-bit color and mouse reporting
-
----
 
 ## Installation
+
+Requirements:
+- Rust (stable toolchain) to build from source
+- A terminal that supports 24-bit color and mouse reporting
 
 **Run directly from the repository:**
 
@@ -56,20 +58,6 @@ elio
 ```
 
 `elio` starts in your current working directory.
-
----
-
-## Optional Tools
-
-`elio` works without extra setup. These tools unlock additional behavior when present:
-
-| Tool | What it enables |
-|---|---|
-| `pdfinfo` + `pdftocairo` | Rendered PDF page previews |
-| `gio open` or `xdg-open` | Open files externally with `o` |
-| `ffmpeg` | Broader raster image format rendering |
-| `resvg` | Preferred SVG rasterization for image previews |
-| `magick` | SVG rasterization fallback and broader image format rendering |
 
 ---
 
@@ -95,6 +83,46 @@ elio
 | `ELIO_IMAGE_PREVIEWS=1` | Force-enable image previews on unrecognized terminals that support the Kitty Graphics Protocol |
 | `ELIO_DEBUG_PREVIEW` | Log image preview activity to `/tmp/elio-preview.log` |
 | `ELIO_LOG_MOUSE` | Log raw mouse events to `/tmp/elio-mouse.log` |
+
+---
+
+## Preview Notes
+
+> Inline image and PDF page previews depend on terminal graphics protocol support. Some preview types also use optional external tools for richer coverage or better fallback behavior. `elio` still works without them, but preview coverage is reduced when they are missing.
+
+---
+
+## Optional Tools
+
+`elio` works without extra setup. These tools unlock additional behavior when present:
+
+### PDF
+
+| Package / Tool | Commands | What it enables |
+|---|---|---|
+| Poppler utilities | `pdfinfo`, `pdftocairo` | PDF metadata and rendered PDF page previews |
+
+### Images
+
+| Package / Tool | Commands | What it enables |
+|---|---|---|
+| `ffmpeg` | `ffmpeg` | Broader raster image format rendering |
+| `resvg` | `resvg` | Preferred SVG rasterization for image previews |
+| ImageMagick | `magick` | SVG rasterization fallback and broader image format rendering |
+
+### Archives
+
+| Package / Tool | Commands | What it enables |
+|---|---|---|
+| 7-Zip | `7z` | Comic archive preview and broad edge-case archive fallback |
+| libarchive / bsdtar | `bsdtar` | Rare archive-family listing and ISO fallback |
+| An `isoinfo` provider | `isoinfo` | Additional ISO listing fallback |
+
+### External Open
+
+| Package / Tool | Commands | What it enables |
+|---|---|---|
+| Desktop opener | `gio open` or `xdg-open` | Open files externally with `o` |
 
 ---
 
@@ -173,7 +201,8 @@ Ready-to-use themes are in [examples/themes/](examples/themes/). Copy any `theme
 
 ---
 
-## Controls
+<details>
+<summary><strong>Controls and Navigation</strong></summary>
 
 ### Browser
 
@@ -192,7 +221,21 @@ Ready-to-use themes are in [examples/themes/](examples/themes/). Copy any `theme
 | `f` | Fuzzy-find folders in the current tree |
 | `Ctrl+F` | Fuzzy-find files in the current tree |
 | `?` | Open help overlay |
-| `q` · `Esc` | Quit |
+| `q` | Quit |
+
+### File Actions
+
+| Key / Action | Description |
+|---|---|
+| `Space` | Toggle selection |
+| `Ctrl+A` | Select all visible items |
+| `a` | Create file or folder |
+| `d` | Move selected item(s) to trash; permanently delete when already in trash |
+| `r` | Restore in trash, or rename / bulk rename outside trash depending on selection |
+| `F2` | Rename current item or bulk rename selected items |
+| `Enter` | Confirm create, rename, bulk rename, trash, or restore prompts |
+| `Esc` | Cancel active prompt, clear selection, close overlays, or quit |
+| `Alt+Enter` / `Ctrl+J` | Add another line in the create prompt |
 
 ### Mouse
 
@@ -213,6 +256,7 @@ Ready-to-use themes are in [examples/themes/](examples/themes/). Copy any `theme
 | `Up` / `Down` | Move through results |
 | `Enter` | Open selected result |
 | `Esc` | Close finder |
+</details>
 
 ---
 
