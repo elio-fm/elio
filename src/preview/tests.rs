@@ -2173,6 +2173,43 @@ fn sh_preview_highlights_plain_commands_and_options() {
 }
 
 #[test]
+fn sh_preview_highlights_common_builtins_and_redirections() {
+    let root = temp_path("sh-builtins-preview");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("deploy.sh");
+    fs::write(
+        &path,
+        "#!/bin/sh\nset -e\ncd /tmp\ntrap 'cleanup' EXIT\nexport PATH=\"$HOME/bin:$PATH\"\nsource ./env.sh\nread -r NAME\nexec \"$NAME\" > /tmp/out.log\n",
+    )
+    .expect("failed to write sh builtins script");
+
+    let preview = build_preview(&file_entry(path));
+    let code_palette = theme::code_preview_palette();
+
+    assert_eq!(preview.kind, PreviewKind::Code);
+    assert_eq!(
+        span_color(&preview.lines[0], "#!"),
+        Some(code_palette.r#macro)
+    );
+    assert_ne!(span_color(&preview.lines[1], "set"), Some(code_palette.fg));
+    assert_ne!(span_color(&preview.lines[2], "cd"), Some(code_palette.fg));
+    assert_ne!(span_color(&preview.lines[3], "trap"), Some(code_palette.fg));
+    assert_ne!(
+        span_color(&preview.lines[4], "export"),
+        Some(code_palette.fg)
+    );
+    assert_ne!(
+        span_color(&preview.lines[5], "source"),
+        Some(code_palette.fg)
+    );
+    assert_ne!(span_color(&preview.lines[6], "read"), Some(code_palette.fg));
+    assert_ne!(span_color(&preview.lines[7], "exec"), Some(code_palette.fg));
+    assert_ne!(span_color(&preview.lines[7], ">"), Some(code_palette.fg));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn shell_dotfile_preview_uses_code_renderer() {
     let root = temp_path("shell-dotfile");
     fs::create_dir_all(&root).expect("failed to create temp root");
