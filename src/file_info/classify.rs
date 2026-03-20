@@ -157,6 +157,7 @@ fn sniff_shebang_script_type(buffer: &[u8]) -> Option<FileFacts> {
         "ksh" => Some("KornShell script"),
         "sh" => Some("Shell script"),
         "fish" => Some("Fish script"),
+        "elixir" => Some("Elixir script"),
         _ => None,
     }?;
 

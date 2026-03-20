@@ -421,7 +421,7 @@ fn markdown_preview_routes_fence_aliases_through_registry() {
     let path = root.join("README.md");
     fs::write(
         &path,
-        "```js\nconst value = 1;\n```\n\n```kitty\nfont_size 11.5\n```\n",
+        "```js\nconst value = 1;\n```\n\n```csharp\npublic class Greeter {}\n```\n\n```exs\ndefmodule Greeter do\nend\n```\n\n```kitty\nfont_size 11.5\n```\n",
     )
     .expect("failed to write markdown");
 
@@ -458,6 +458,20 @@ fn markdown_preview_routes_fence_aliases_through_registry() {
         span_color(kitty_line, "font_size"),
         Some(code_palette.function)
     );
+
+    let csharp_line = preview
+        .lines
+        .iter()
+        .find(|line| line_text(line).contains("public class Greeter {}"))
+        .expect("expected highlighted csharp line");
+    assert_ne!(span_color(csharp_line, "public"), Some(code_palette.fg));
+
+    let elixir_line = preview
+        .lines
+        .iter()
+        .find(|line| line_text(line).contains("defmodule Greeter do"))
+        .expect("expected highlighted elixir line");
+    assert_ne!(span_color(elixir_line, "defmodule"), Some(code_palette.fg));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -3233,6 +3247,12 @@ fn curated_syntect_languages_render_with_theme_colors() {
             "struct Greeter { func greet(name: String) -> String { name } }\n",
             "Swift",
             "func",
+        ),
+        (
+            "main.exs",
+            "defmodule Greeter do\n  def greet(name), do: \"hi #{name}\"\nend\n",
+            "Elixir",
+            "defmodule",
         ),
     ] {
         let path = root.join(name);

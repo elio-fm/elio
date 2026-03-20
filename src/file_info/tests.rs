@@ -256,14 +256,21 @@ fn js_like_files_use_syntax_highlighting() {
 #[test]
 fn curated_generic_languages_use_syntect_preview_support() {
     let cs = inspect_path(Path::new("Program.cs"), EntryKind::File);
+    let csx = inspect_path(Path::new("Program.csx"), EntryKind::File);
     let dart = inspect_path(Path::new("main.dart"), EntryKind::File);
     let zig = inspect_path(Path::new("main.zig"), EntryKind::File);
     let swift = inspect_path(Path::new("main.swift"), EntryKind::File);
     let kotlin = inspect_path(Path::new("main.kts"), EntryKind::File);
+    let elixir = inspect_path(Path::new("main.ex"), EntryKind::File);
+    let elixir_script = inspect_path(Path::new("mix.exs"), EntryKind::File);
 
     assert_eq!(cs.builtin_class, FileClass::Code);
     assert_eq!(cs.specific_type_label, Some("C# source file"));
     assert_code_spec(cs.preview, Some("cs"), CodeBackend::Syntect);
+
+    assert_eq!(csx.builtin_class, FileClass::Code);
+    assert_eq!(csx.specific_type_label, Some("C# script"));
+    assert_code_spec(csx.preview, Some("cs"), CodeBackend::Syntect);
 
     assert_eq!(dart.builtin_class, FileClass::Code);
     assert_eq!(dart.specific_type_label, Some("Dart source file"));
@@ -278,8 +285,34 @@ fn curated_generic_languages_use_syntect_preview_support() {
     assert_code_spec(swift.preview, Some("swift"), CodeBackend::Syntect);
 
     assert_eq!(kotlin.builtin_class, FileClass::Code);
-    assert_eq!(kotlin.specific_type_label, Some("Kotlin source file"));
+    assert_eq!(kotlin.specific_type_label, Some("Kotlin script"));
     assert_code_spec(kotlin.preview, Some("kotlin"), CodeBackend::Syntect);
+
+    assert_eq!(elixir.builtin_class, FileClass::Code);
+    assert_eq!(elixir.specific_type_label, Some("Elixir source file"));
+    assert_code_spec(elixir.preview, Some("elixir"), CodeBackend::Syntect);
+
+    assert_eq!(elixir_script.builtin_class, FileClass::Code);
+    assert_eq!(elixir_script.specific_type_label, Some("Elixir script"));
+    assert_code_spec(elixir_script.preview, Some("elixir"), CodeBackend::Syntect);
+}
+
+#[test]
+fn extensionless_elixir_scripts_are_classified_as_code() {
+    let (root, path) = write_temp_file(
+        "extensionless-elixir-script",
+        "mix-task",
+        "#!/usr/bin/env elixir\nIO.puts(\"hello\")\n",
+    );
+
+    let facts = inspect_path(&path, EntryKind::File);
+
+    assert_eq!(facts.builtin_class, FileClass::Code);
+    assert_eq!(facts.specific_type_label, Some("Elixir script"));
+    assert_eq!(facts.preview.language_hint, Some("elixir"));
+    assert_code_spec(facts.preview, Some("elixir"), CodeBackend::Syntect);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
 #[test]

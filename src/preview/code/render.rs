@@ -144,6 +144,10 @@ mod tests {
                 "kotlin",
                 "class Greeter { fun greet(name: String): String = name }\n",
             ),
+            (
+                "elixir",
+                "defmodule Greeter do\n  def greet(name), do: \"hi #{name}\"\nend\n",
+            ),
             ("python", "class Greeter:\n    pass\n"),
             ("ruby", "class Greeter\nend\n"),
             ("lua", "local name = \"elio\"\n"),

@@ -118,6 +118,11 @@ pub const CURATED_SYNTAXES: &[CuratedSyntax] = &[
         source: SyntaxSource::Vendored,
     },
     CuratedSyntax {
+        canonical_id: "elixir",
+        lookup_token: "elixir",
+        source: SyntaxSource::Vendored,
+    },
+    CuratedSyntax {
         canonical_id: "ruby",
         lookup_token: "rb",
         source: SyntaxSource::BundledDefault,

@@ -248,12 +248,18 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         },
         "kt" | "kts" => FileFacts {
             builtin_class: FileClass::Code,
-            specific_type_label: Some("Kotlin source file"),
+            specific_type_label: Some(match ext {
+                "kts" => "Kotlin script",
+                _ => "Kotlin source file",
+            }),
             preview: preview_for_extension(ext),
         },
         "cs" | "csx" => FileFacts {
             builtin_class: FileClass::Code,
-            specific_type_label: Some("C# source file"),
+            specific_type_label: Some(match ext {
+                "csx" => "C# script",
+                _ => "C# source file",
+            }),
             preview: preview_for_extension(ext),
         },
         "dart" => FileFacts {
@@ -264,6 +270,14 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         "zig" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Zig source file"),
+            preview: preview_for_extension(ext),
+        },
+        "ex" | "exs" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some(match ext {
+                "exs" => "Elixir script",
+                _ => "Elixir source file",
+            }),
             preview: preview_for_extension(ext),
         },
         "rb" => FileFacts {

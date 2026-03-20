@@ -1009,9 +1009,25 @@ fn stale_preview_results_are_counted_in_metrics() {
     fs::write(&text, "plain text").expect("failed to write text file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.set_selected(1);
+    wait_for_directory_load(&mut app);
+    let stale_entry = app
+        .selected_entry()
+        .cloned()
+        .expect("archive entry should be selected first");
 
-    thread::sleep(Duration::from_millis(50));
+    app.set_selected(1);
+    app.scheduler
+        .defer_result(JobResult::Preview(Box::new(PreviewBuild {
+            token: app.preview_state.token.wrapping_add(1),
+            entry: stale_entry,
+            variant: preview::PreviewRequestOptions::Default,
+            code_line_limit: 0,
+            result: preview::PreviewContent::new(
+                preview::PreviewKind::Text,
+                vec![ratatui::text::Line::from("stale preview")],
+            ),
+        })));
+
     let _ = app.process_background_jobs();
 
     let metrics = app.preview_metrics();

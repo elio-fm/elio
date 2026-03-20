@@ -386,6 +386,10 @@ mod tests {
                 "swift",
                 "struct Greeter { func greet(name: String) -> String { name } }\n",
             ),
+            (
+                "elixir",
+                "defmodule Greeter do\n  def greet(name), do: \"hi #{name}\"\nend\n",
+            ),
         ] {
             let rendered = render_syntect_code_preview(code_syntax, snippet, true, 20, &|| false)
                 .expect("vendored syntax should render through syntect");

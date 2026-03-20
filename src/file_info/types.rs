@@ -180,7 +180,7 @@ impl HighlightLanguage {
         match code_syntax {
             "javascript" | "jsx" | "typescript" | "tsx" => Some(Self::JsLike),
             "c" | "cpp" | "rust" | "go" | "cs" | "java" | "dart" | "zig" | "kotlin" | "php"
-            | "swift" => Some(Self::CLike),
+            | "swift" | "elixir" => Some(Self::CLike),
             "config" | "kitty" | "mpv" | "btop" => Some(Self::DirectiveConf),
             "lua" => Some(Self::Lua),
             "python" | "ruby" => Some(Self::Python),

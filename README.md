@@ -268,7 +268,7 @@ The current curated syntect bundle explicitly supports these code syntaxes:
 
 - `html`, `xml`, `css`, `scss`, `sass`, `less`
 - `javascript`, `jsx`, `typescript`, `tsx`
-- `rust`, `go`, `c`, `cpp`, `cs`, `java`, `dart`, `zig`, `php`, `swift`, `kotlin`, `ruby`, `python`, `lua`
+- `rust`, `go`, `c`, `cpp`, `cs`, `java`, `dart`, `zig`, `php`, `swift`, `kotlin`, `elixir`, `ruby`, `python`, `lua`
 - `make`, `sh`, `bash`, `zsh`, `ksh`, `fish`, `nix`, `cmake`
 
 Anything outside that matrix falls back to plain code preview instead of advertising unsupported highlighting.

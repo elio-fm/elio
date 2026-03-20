@@ -387,6 +387,14 @@ const LANGUAGES: &[RegistryEntry] = &[
         markdown_fences: &["kotlin", "kt", "kts"],
     },
     RegistryEntry {
+        language: language("elixir", "Elixir", CodeBackend::Syntect, None),
+        extensions: &["ex", "exs"],
+        exact_filenames: &[],
+        shebang_interpreters: &["elixir"],
+        modelines: &["elixir", "ex", "exs"],
+        markdown_fences: &["elixir", "ex", "exs"],
+    },
+    RegistryEntry {
         language: language("ruby", "Ruby", CodeBackend::Syntect, None),
         extensions: &["rb"],
         exact_filenames: &[],
@@ -571,8 +579,16 @@ mod tests {
             Some("javascript")
         );
         assert_eq!(
+            language_for_extension("csx").map(|language| language.canonical_id),
+            Some("cs")
+        );
+        assert_eq!(
             language_for_extension("kts").map(|language| language.canonical_id),
             Some("kotlin")
+        );
+        assert_eq!(
+            language_for_extension("exs").map(|language| language.canonical_id),
+            Some("elixir")
         );
         assert_eq!(
             language_for_extension("tsx").map(|language| language.canonical_id),
@@ -603,12 +619,24 @@ mod tests {
             Some("bash")
         );
         assert_eq!(
+            language_for_shebang("elixir").map(|language| language.canonical_id),
+            Some("elixir")
+        );
+        assert_eq!(
             language_for_modeline(" kitty ").map(|language| language.canonical_id),
             Some("kitty")
         );
         assert_eq!(
             language_for_modeline("json5").map(|language| language.canonical_id),
             Some("json5")
+        );
+        assert_eq!(
+            language_for_modeline("csharp").map(|language| language.canonical_id),
+            Some("cs")
+        );
+        assert_eq!(
+            language_for_modeline("kts").map(|language| language.canonical_id),
+            Some("kotlin")
         );
     }
 
@@ -629,6 +657,10 @@ mod tests {
         assert_eq!(
             language_for_markdown_fence("c#").map(|language| language.canonical_id),
             Some("cs")
+        );
+        assert_eq!(
+            language_for_markdown_fence("exs").map(|language| language.canonical_id),
+            Some("elixir")
         );
     }
 

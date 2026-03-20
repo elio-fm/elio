@@ -1,0 +1,63 @@
+%YAML 1.2
+---
+name: Elixir
+file_extensions:
+  - ex
+  - exs
+  - elixir
+scope: source.elixir
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9_?!]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - match: ':[A-Za-z_][A-Za-z0-9_?!]*'
+      scope: constant.other.symbol.elixir
+    - match: '@{{identifier}}'
+      scope: variable.parameter.elixir
+    - match: '\b(?:defmodule|defprotocol|defimpl|def|defp|defmacro|defmacrop|defdelegate|defguard|defguardp|fn|do|end|case|cond|if|unless|receive|after|try|catch|rescue|raise|with|for|quote|unquote|import|require|use|alias)\b'
+      scope: keyword.control.elixir
+    - match: '\b(?:true|false|nil)\b'
+      scope: constant.language.elixir
+    - match: '\b[A-Z][A-Za-z0-9_.]*\b'
+      scope: entity.name.type.elixir
+    - match: '\b{{identifier}}(?=\s*(?:\(|do\b))'
+      scope: entity.name.function.elixir
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.elixir
+    - match: '\|>|[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.elixir
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.elixir
+  strings:
+    - match: '"""'
+      push: heredoc-string
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+    - match: '~[A-Za-z]/'
+      push: sigil-string
+  heredoc-string:
+    - meta_scope: string.quoted.double.elixir
+    - match: '"""'
+      pop: true
+  double-quoted-string:
+    - meta_scope: string.quoted.double.elixir
+    - match: '\\.'
+      scope: constant.character.escape.elixir
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.elixir
+    - match: '\\.'
+      scope: constant.character.escape.elixir
+    - match: "'"
+      pop: true
+  sigil-string:
+    - meta_scope: string.quoted.other.elixir
+    - match: '/'
+      pop: true
