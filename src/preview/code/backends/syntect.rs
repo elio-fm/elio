@@ -1,4 +1,8 @@
-use super::syntect_manifest::{CURATED_SYNTAXES, CuratedSyntax, curated_syntax};
+use super::syntect_manifest::curated_syntax;
+#[cfg(test)]
+use super::syntect_manifest::CURATED_SYNTAXES;
+#[cfg(test)]
+use super::syntect_manifest::CuratedSyntax;
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
@@ -46,6 +50,7 @@ pub(in crate::preview::code) fn is_enabled(code_syntax: &str) -> bool {
     curated_syntax(code_syntax).is_some()
 }
 
+#[cfg(test)]
 pub(in crate::preview::code) fn supported_syntaxes() -> &'static [CuratedSyntax] {
     CURATED_SYNTAXES
 }
