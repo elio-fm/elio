@@ -58,7 +58,22 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::file_info::{CodeBackend, CustomCodeKind, PreviewSpec};
+    use crate::file_info::{
+        CodeBackend, CustomCodeKind, HighlightLanguage, PreviewKind, PreviewSpec,
+    };
+    use ratatui::text::Line;
+    use std::cell::Cell;
+
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>()
+    }
+
+    fn line_texts(lines: &[Line<'_>]) -> Vec<String> {
+        lines.iter().map(line_text).collect()
+    }
 
     #[test]
     fn enabled_javascript_preview_specs_use_syntect() {
@@ -164,13 +179,15 @@ mod tests {
             20,
             &|| false,
         );
-
-        assert!(
-            preview[0]
-                .spans
-                .iter()
-                .any(|span| span.content.contains("project"))
+        let expected = legacy::render_legacy_code_preview(
+            "project(elio)\n",
+            Some(HighlightLanguage::CMake),
+            true,
+            20,
+            &|| false,
         );
+
+        assert_eq!(preview, expected);
     }
 
     #[test]
@@ -191,5 +208,136 @@ mod tests {
         );
 
         assert_eq!(preview, expected);
+    }
+
+    #[test]
+    fn unknown_syntect_preview_specs_fall_back_to_plain_text() {
+        let text = "first()\nsecond()\n";
+        let preview = render_code_preview(
+            PreviewSpec::code("totally-unknown-syntax", CodeBackend::Syntect, None),
+            text,
+            true,
+            20,
+            &|| false,
+        );
+        let expected = plain::render_plain_code_preview(text, true, 20, &|| false);
+
+        assert_eq!(preview, expected);
+        assert_eq!(
+            line_texts(&preview),
+            vec![" 1 first()".to_string(), " 2 second()".to_string()]
+        );
+    }
+
+    #[test]
+    fn missing_syntect_code_syntax_falls_back_to_plain_text() {
+        let text = "plain text\nstill visible\n";
+        let preview = render_code_preview(
+            PreviewSpec {
+                kind: PreviewKind::Source,
+                language_hint: Some("unknown"),
+                code_syntax: None,
+                code_backend: CodeBackend::Syntect,
+                structured_format: None,
+                document_format: None,
+            },
+            text,
+            true,
+            20,
+            &|| false,
+        );
+        let expected = plain::render_plain_code_preview(text, true, 20, &|| false);
+
+        assert_eq!(preview, expected);
+    }
+
+    #[test]
+    fn golden_code_previews_keep_expected_text_layout_across_backends() {
+        let syntect_preview = render_code_preview(
+            PreviewSpec::code("rust", CodeBackend::Syntect, None),
+            "fn main() {\n    println!(\"hi\");\n}\n",
+            true,
+            20,
+            &|| false,
+        );
+        assert_eq!(
+            line_texts(&syntect_preview),
+            vec![
+                " 1 fn main() {".to_string(),
+                " 2     println!(\"hi\");".to_string(),
+                " 3 }".to_string(),
+            ]
+        );
+
+        let custom_preview = render_code_preview(
+            PreviewSpec::code("jsonc", CodeBackend::Custom(CustomCodeKind::Jsonc), None),
+            "{\n  // keep me\n  \"name\": \"elio\"\n}\n",
+            true,
+            20,
+            &|| false,
+        );
+        assert_eq!(
+            line_texts(&custom_preview),
+            vec![
+                " 1 {".to_string(),
+                " 2   // keep me".to_string(),
+                " 3   \"name\": \"elio\"".to_string(),
+                " 4 }".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn renderer_respects_line_limit_before_backend_dispatch() {
+        let syntect_preview = render_code_preview(
+            PreviewSpec::code("rust", CodeBackend::Syntect, None),
+            "fn one() {}\nfn two() {}\nfn three() {}\n",
+            true,
+            2,
+            &|| false,
+        );
+        assert_eq!(
+            line_texts(&syntect_preview),
+            vec![" 1 fn one() {}".to_string(), " 2 fn two() {}".to_string()]
+        );
+
+        let custom_preview = render_code_preview(
+            PreviewSpec::code("jsonc", CodeBackend::Custom(CustomCodeKind::Jsonc), None),
+            "{\n  // first\n  // second\n}\n",
+            true,
+            2,
+            &|| false,
+        );
+        assert_eq!(
+            line_texts(&custom_preview),
+            vec![" 1 {".to_string(), " 2   // first".to_string()]
+        );
+    }
+
+    #[test]
+    fn renderer_stops_on_cancellation_without_empty_placeholder() {
+        let calls = Cell::new(0usize);
+        let preview = render_code_preview(
+            PreviewSpec::code("rust", CodeBackend::Syntect, None),
+            "fn first() {}\nfn second() {}\nfn third() {}\n",
+            true,
+            20,
+            &|| {
+                let current = calls.get();
+                calls.set(current + 1);
+                current >= 1
+            },
+        );
+
+        assert_eq!(line_texts(&preview), vec![" 1 fn first() {}".to_string()]);
+
+        let canceled_immediately = render_code_preview(
+            PreviewSpec::code("rust", CodeBackend::Syntect, None),
+            "fn hidden() {}\n",
+            true,
+            20,
+            &|| true,
+        );
+        assert!(canceled_immediately.is_empty());
     }
 }

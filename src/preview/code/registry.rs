@@ -525,6 +525,20 @@ fn is_env_name(name: &str) -> bool {
 mod tests {
     use super::*;
 
+    fn assert_registered_language(
+        language: Option<RegisteredLanguage>,
+        canonical_id: &'static str,
+        display_label: &'static str,
+        backend: CodeBackend,
+        structured_format: Option<StructuredFormat>,
+    ) {
+        let language = language.expect("language should resolve");
+        assert_eq!(language.canonical_id, canonical_id);
+        assert_eq!(language.display_label, display_label);
+        assert_eq!(language.backend, backend);
+        assert_eq!(language.structured_format, structured_format);
+    }
+
     #[test]
     fn extension_lookup_returns_canonical_language_ids() {
         assert_eq!(
@@ -583,5 +597,71 @@ mod tests {
             language_for_markdown_fence("c++").map(|language| language.canonical_id),
             Some("cpp")
         );
+    }
+
+    #[test]
+    fn registry_resolution_preserves_backend_and_structured_metadata() {
+        assert_registered_language(
+            language_for_extension("yaml"),
+            "yaml",
+            "YAML",
+            CodeBackend::Custom(CustomCodeKind::Yaml),
+            Some(StructuredFormat::Yaml),
+        );
+        assert_registered_language(
+            language_for_exact_name(".env.production"),
+            "dotenv",
+            ".env",
+            CodeBackend::Custom(CustomCodeKind::Ini),
+            Some(StructuredFormat::Dotenv),
+        );
+        assert_registered_language(
+            language_for_exact_name("Cargo.lock"),
+            "toml",
+            "TOML",
+            CodeBackend::Custom(CustomCodeKind::Toml),
+            Some(StructuredFormat::Toml),
+        );
+        assert_registered_language(
+            language_for_shebang("bash"),
+            "bash",
+            "Bash",
+            CodeBackend::Syntect,
+            None,
+        );
+        assert_registered_language(
+            language_for_modeline(" c++ "),
+            "cpp",
+            "C++",
+            CodeBackend::Syntect,
+            None,
+        );
+        assert_registered_language(
+            language_for_markdown_fence("shell"),
+            "sh",
+            "Shell",
+            CodeBackend::Syntect,
+            None,
+        );
+    }
+
+    #[test]
+    fn preview_specs_round_trip_registry_metadata() {
+        let json5 = language_for_code_syntax("json5")
+            .expect("json5 should be available")
+            .preview_spec();
+        assert_eq!(json5.code_syntax, Some("json5"));
+        assert_eq!(
+            json5.code_backend,
+            CodeBackend::Custom(CustomCodeKind::Jsonc)
+        );
+        assert_eq!(json5.structured_format, Some(StructuredFormat::Json5));
+
+        let bash = language_for_code_syntax("bash")
+            .expect("bash should be available")
+            .preview_spec();
+        assert_eq!(bash.code_syntax, Some("bash"));
+        assert_eq!(bash.code_backend, CodeBackend::Syntect);
+        assert_eq!(bash.structured_format, None);
     }
 }
