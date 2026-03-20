@@ -3584,6 +3584,41 @@ fn line_truncated_preview_reports_visible_limit() {
 }
 
 #[test]
+fn code_preview_respects_custom_line_limit() {
+    let root = temp_path("code-line-limit");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("main.rs");
+    let text = (1..=12)
+        .map(|index| format!("let value_{index} = {index};"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(&path, text).expect("failed to write code");
+
+    let preview = build_preview_with_options_and_code_line_limit(
+        &file_entry(path),
+        &PreviewRequestOptions::Default,
+        4,
+        &|| false,
+    );
+    let header = preview
+        .header_detail(0, 20)
+        .expect("header detail should be present");
+
+    assert_eq!(preview.kind, PreviewKind::Code);
+    assert_eq!(preview.lines.len(), 4);
+    assert_eq!(
+        preview.line_coverage.map(|coverage| coverage.shown_lines),
+        Some(4)
+    );
+    assert!(
+        header.contains("showing first 4 lines"),
+        "unexpected header: {header}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 #[cfg(unix)]
 fn protected_directory_preview_reports_permission_denied() {
     let root = temp_path("protected-dir-preview");

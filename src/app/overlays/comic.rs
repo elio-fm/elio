@@ -223,6 +223,7 @@ impl App {
                 entry: entry.clone(),
                 work_class: preview_work_class(&entry, &variant),
                 variant,
+                code_line_limit: self.preview_code_line_limit_for_entry(&entry),
                 priority: PreviewPriority::Low,
             });
         }
@@ -264,7 +265,7 @@ impl App {
                 (key.path == entry.path
                     && cached.size == entry.size
                     && cached.modified == entry.modified)
-                    .then(|| cached.preview.navigation_position.as_ref())
+                    .then_some(cached.preview.navigation_position.as_ref())
                     .flatten()
                     .filter(|position| position.label == "Page")
                     .map(|position| position.count)
@@ -282,6 +283,7 @@ impl App {
             .contains_key(&PreviewCacheKey {
                 path: path.to_path_buf(),
                 variant: preview::PreviewRequestOptions::ComicPage(page),
+                code_line_limit: preview::default_code_preview_line_limit(),
             })
     }
 }

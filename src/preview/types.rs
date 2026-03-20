@@ -15,6 +15,7 @@ use unicode_width::UnicodeWidthStr;
 
 pub(super) const PREVIEW_LIMIT_BYTES: usize = 64 * 1024;
 pub(super) const PREVIEW_RENDER_LINE_LIMIT: usize = 240;
+pub(crate) const MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT: usize = 80;
 pub(super) const ARCHIVE_ENTRY_SCAN_LIMIT: usize = 50_000;
 pub(super) const ZIP_MANIFEST_LIMIT_BYTES: u64 = 64 * 1024;
 pub(super) const ISO_METADATA_SCAN_BYTES: u64 = 128 * 1024;
@@ -114,6 +115,14 @@ pub(crate) enum PreviewVisualKind {
 pub(crate) enum PreviewVisualLayout {
     Inline,
     FullHeight,
+}
+
+pub(crate) fn default_code_preview_line_limit() -> usize {
+    PREVIEW_RENDER_LINE_LIMIT
+}
+
+pub(crate) fn clamp_code_preview_line_limit(line_limit: usize) -> usize {
+    line_limit.clamp(1, PREVIEW_RENDER_LINE_LIMIT)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -733,10 +742,12 @@ fn wrap_preview_line<'a>(
         non_whitespace_previous = !is_whitespace;
     }
 
-    if pending_line.is_empty() && pending_word.is_empty() && !pending_whitespace.is_empty() {
-        if !push_wrapped_line(wrapped, empty_wrapped_preview_line(alignment), line_limit) {
-            return false;
-        }
+    if pending_line.is_empty()
+        && pending_word.is_empty()
+        && !pending_whitespace.is_empty()
+        && !push_wrapped_line(wrapped, empty_wrapped_preview_line(alignment), line_limit)
+    {
+        return false;
     }
     if !pending_line.is_empty() || !trim {
         pending_line.extend(pending_whitespace.drain(..));
@@ -771,15 +782,18 @@ fn push_wrapped_preview_line(
     alignment: Option<Alignment>,
     line_limit: usize,
 ) -> bool {
-    let mut line = line_from_graphemes(graphemes);
-    line.alignment = alignment;
+    let line = Line {
+        alignment,
+        ..line_from_graphemes(graphemes)
+    };
     push_wrapped_line(wrapped, line, line_limit)
 }
 
 fn empty_wrapped_preview_line(alignment: Option<Alignment>) -> Line<'static> {
-    let mut line = Line::default();
-    line.alignment = alignment;
-    line
+    Line {
+        alignment,
+        ..Line::default()
+    }
 }
 
 fn line_from_graphemes(graphemes: &[StyledGrapheme<'_>]) -> Line<'static> {

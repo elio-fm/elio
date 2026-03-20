@@ -172,6 +172,7 @@ pub(super) struct CachedPreview {
 pub(super) struct PreviewCacheKey {
     pub(super) path: PathBuf,
     pub(super) variant: preview::PreviewRequestOptions,
+    pub(super) code_line_limit: usize,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

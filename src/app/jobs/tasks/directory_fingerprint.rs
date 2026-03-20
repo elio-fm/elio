@@ -49,17 +49,15 @@ impl DirectoryFingerprintPool {
             workers.push(thread::spawn(move || {
                 while let Some(request) = DirectoryFingerprintShared::pop(&shared) {
                     let key = DirectoryFingerprintJobKey::from_request(&request);
-                    let result = crate::fs::scan_directory_fingerprint(
-                        &request.cwd,
-                        request.show_hidden,
-                    )
-                    .map_err(|error| {
-                        error
-                            .downcast_ref::<std::io::Error>()
-                            .map(crate::fs::describe_io_error)
-                            .unwrap_or("Read error")
-                            .to_string()
-                    });
+                    let result =
+                        crate::fs::scan_directory_fingerprint(&request.cwd, request.show_hidden)
+                            .map_err(|error| {
+                                error
+                                    .downcast_ref::<std::io::Error>()
+                                    .map(crate::fs::describe_io_error)
+                                    .unwrap_or("Read error")
+                                    .to_string()
+                            });
                     DirectoryFingerprintShared::finish(&shared, &key);
                     if result_tx
                         .send(JobResult::DirectoryFingerprint(DirectoryFingerprintBuild {

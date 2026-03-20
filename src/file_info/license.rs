@@ -275,7 +275,7 @@ fn detect_spdx_identifier(text: &str) -> Option<LicenseDetection> {
         };
         let value = cleaned[index + "spdx-license-identifier:".len()..]
             .trim()
-            .trim_end_matches(|ch: char| matches!(ch, '*' | '/' | ';' | '-' | '>'))
+            .trim_end_matches(['*', '/', ';', '-', '>'])
             .trim();
         if value.is_empty() {
             return Some(LicenseDetection::Generic);

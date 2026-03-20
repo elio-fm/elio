@@ -66,9 +66,7 @@ pub(crate) fn loading_preview_for(
     } else {
         loading_preview_kind(&facts)
     };
-    let lines = if is_comic_page_preview {
-        Vec::new()
-    } else if is_epub_section_preview {
+    let lines = if is_comic_page_preview || is_epub_section_preview {
         Vec::new()
     } else if facts.builtin_class == FileClass::Archive {
         vec![
@@ -115,10 +113,28 @@ pub(crate) fn build_preview(entry: &Entry) -> PreviewContent {
     build_preview_with_options(entry, &PreviewRequestOptions::Default)
 }
 
+#[cfg(test)]
 pub(crate) fn build_preview_with_options(
     entry: &Entry,
     options: &PreviewRequestOptions,
 ) -> PreviewContent {
+    build_preview_with_options_and_code_line_limit(
+        entry,
+        options,
+        default_code_preview_line_limit(),
+        &|| false,
+    )
+}
+
+pub(crate) fn build_preview_with_options_and_code_line_limit<F>(
+    entry: &Entry,
+    options: &PreviewRequestOptions,
+    code_line_limit: usize,
+    canceled: &F,
+) -> PreviewContent
+where
+    F: Fn() -> bool,
+{
     if entry.is_dir() {
         return directory::build_directory_preview(entry);
     }
@@ -170,6 +186,7 @@ pub(crate) fn build_preview_with_options(
         }
     };
     let source_line_count = count_source_lines(&text_preview.text);
+    let effective_code_line_limit = clamp_code_preview_line_limit(code_line_limit);
     let line_truncated = source_line_count > PREVIEW_RENDER_LINE_LIMIT;
     let mut preview_truncation_note = truncation_note(text_preview.bytes_truncated, line_truncated);
 
@@ -213,23 +230,34 @@ pub(crate) fn build_preview_with_options(
             }
         }
 
+        let code_line_truncated = source_line_count > effective_code_line_limit;
+        let code_truncation_note = truncation_note_with_line_limit(
+            text_preview.bytes_truncated,
+            code_line_truncated,
+            effective_code_line_limit,
+        );
+        preview_truncation_note =
+            combine_preview_notes(preview_truncation_note, code_truncation_note.as_deref());
         let mut preview = PreviewContent::new(
             PreviewKind::Code,
-            highlighting::render_code_preview(
+            highlighting::render_code_preview_with(
                 &text_preview.text,
                 preview_spec.highlight_language,
                 true,
+                effective_code_line_limit,
+                canceled,
             ),
         );
         if let Some(detail) = source_preview_detail(type_detail, preview_spec) {
             preview = preview.with_detail(detail);
         }
-        return finalize_text_preview(
+        return finalize_text_preview_with_line_limit(
             preview,
             source_line_count,
             text_preview.bytes_truncated,
-            line_truncated,
+            code_line_truncated,
             preview_truncation_note,
+            effective_code_line_limit,
         );
     }
 

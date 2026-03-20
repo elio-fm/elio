@@ -1,7 +1,8 @@
 use super::*;
 use crate::preview::{
-    PreviewContent, PreviewKind, PreviewLineCoverage, PreviewRequestOptions, PreviewWorkClass,
-    loading_preview_for, preview_work_class, should_build_preview_in_background,
+    MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT, PreviewContent, PreviewKind, PreviewLineCoverage,
+    PreviewRequestOptions, PreviewWorkClass, default_code_preview_line_limit, loading_preview_for,
+    preview_work_class, should_build_preview_in_background,
 };
 use std::sync::Arc;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -187,10 +188,12 @@ impl App {
                     self.preview_state.metrics.cache_misses += 1;
                     let loading_path = entry.path.clone();
                     let work_class = preview_work_class(&entry, &preview_options);
+                    let code_line_limit = self.preview_code_line_limit_for_entry(&entry);
                     let request = PreviewRequest {
                         token: self.preview_state.token,
                         entry,
                         variant: preview_options.clone(),
+                        code_line_limit,
                         priority: PreviewPriority::High,
                         work_class,
                     };
@@ -212,10 +215,12 @@ impl App {
                     );
                     let loading_path = entry.path.clone();
                     let work_class = preview_work_class(&entry, &preview_options);
+                    let code_line_limit = self.preview_code_line_limit_for_entry(&entry);
                     let request = PreviewRequest {
                         token: self.preview_state.token,
                         entry,
                         variant: preview_options.clone(),
+                        code_line_limit,
                         priority: PreviewPriority::High,
                         work_class,
                     };
@@ -293,6 +298,7 @@ impl App {
         let cached = self.preview_state.result_cache.get(&PreviewCacheKey {
             path: entry.path.clone(),
             variant: variant.clone(),
+            code_line_limit: self.preview_code_line_limit_for_entry(entry),
         })?;
         if cached.size == entry.size && cached.modified == entry.modified {
             Some(cached.preview.clone())
@@ -311,19 +317,33 @@ impl App {
             .get(&PreviewCacheKey {
                 path: entry.path.clone(),
                 variant: variant.clone(),
+                code_line_limit: self.preview_code_line_limit_for_entry(entry),
             })
             .map(|cached| cached.preview.clone())
     }
 
+    #[cfg(test)]
     pub(in crate::app) fn cache_preview_result(
         &mut self,
         entry: &Entry,
         variant: &PreviewRequestOptions,
         preview: &PreviewContent,
     ) {
+        let code_line_limit = self.preview_code_line_limit_for_entry(entry);
+        self.cache_preview_result_with_code_line_limit(entry, variant, code_line_limit, preview);
+    }
+
+    pub(in crate::app) fn cache_preview_result_with_code_line_limit(
+        &mut self,
+        entry: &Entry,
+        variant: &PreviewRequestOptions,
+        code_line_limit: usize,
+        preview: &PreviewContent,
+    ) {
         let key = PreviewCacheKey {
             path: entry.path.clone(),
             variant: variant.clone(),
+            code_line_limit,
         };
         self.preview_state.result_cache.insert(
             key.clone(),
@@ -434,10 +454,12 @@ impl App {
                 continue;
             }
 
+            let code_line_limit = self.preview_code_line_limit_for_entry(&entry);
             let request = PreviewRequest {
                 token: self.preview_state.token,
                 entry,
                 variant,
+                code_line_limit,
                 priority: PreviewPriority::Low,
                 work_class: PreviewWorkClass::Light,
             };
@@ -457,6 +479,32 @@ impl App {
         self.comic_preview_request_options_for_entry(entry)
             .or_else(|| self.epub_preview_request_options_for_entry(entry))
             .unwrap_or_default()
+    }
+
+    pub(in crate::app) fn preview_code_line_limit_for_entry(&self, entry: &Entry) -> usize {
+        self.preview_code_line_limit_for_entry_with_rows(
+            entry,
+            self.frame_state.preview_rows_visible,
+        )
+    }
+
+    pub(in crate::app) fn preview_code_line_limit_for_entry_with_rows(
+        &self,
+        entry: &Entry,
+        preview_rows_visible: usize,
+    ) -> usize {
+        let facts = crate::file_info::inspect_path_cached(
+            &entry.path,
+            entry.kind,
+            entry.size,
+            entry.modified,
+        );
+        if facts.preview.kind == crate::file_info::PreviewKind::Source
+            && facts.preview.structured_format.is_none()
+        {
+            return preview_code_line_limit(preview_rows_visible);
+        }
+        default_code_preview_line_limit()
     }
 
     #[cfg(test)]
@@ -506,6 +554,16 @@ impl App {
             .content
             .set_total_line_count_pending(pending);
     }
+}
+
+fn preview_code_line_limit(preview_rows_visible: usize) -> usize {
+    if preview_rows_visible == 0 {
+        return default_code_preview_line_limit();
+    }
+    preview_rows_visible.saturating_mul(3).clamp(
+        MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT,
+        default_code_preview_line_limit(),
+    )
 }
 
 impl App {

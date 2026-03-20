@@ -397,9 +397,13 @@ fn render_list(
                 .constraints([Constraint::Length(1), Constraint::Min(1)])
                 .split(row);
             frame.render_widget(
-                Paragraph::new(if selected || multi_selected { "▌" } else { " " })
-                    .alignment(Alignment::Left)
-                    .style(Style::default().bg(bg).fg(bar_color)),
+                Paragraph::new(if selected || multi_selected {
+                    "▌"
+                } else {
+                    " "
+                })
+                .alignment(Alignment::Left)
+                .style(Style::default().bg(bg).fg(bar_color)),
                 columns[0],
             );
             let secondary = if entry.is_dir() {
@@ -542,8 +546,7 @@ fn render_preview_body(
     let body_area = body[0];
     let scrollbar_area = body.get(1).copied();
     state.preview_body_area = Some(sections[1]);
-    let (media_area, text_area) = if let Some(media_rows) = app.preview_visual_rows(body_area)
-    {
+    let (media_area, text_area) = if let Some(media_rows) = app.preview_visual_rows(body_area) {
         let split = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(media_rows), Constraint::Min(0)])
@@ -905,7 +908,11 @@ fn render_compact_list_row(
 
     Line::from(vec![
         Span::styled(
-            if selected || multi_selected { "▌" } else { " " },
+            if selected || multi_selected {
+                "▌"
+            } else {
+                " "
+            },
             Style::default().fg(marker_color),
         ),
         Span::raw(" "),

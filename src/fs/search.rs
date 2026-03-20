@@ -198,7 +198,11 @@ fn compare_scored(
                 &candidates[left.0].relative_key,
                 &candidates[right.0].relative_key,
             )
-            .then_with(|| candidates[left.0].relative.cmp(&candidates[right.0].relative))
+            .then_with(|| {
+                candidates[left.0]
+                    .relative
+                    .cmp(&candidates[right.0].relative)
+            })
         })
 }
 

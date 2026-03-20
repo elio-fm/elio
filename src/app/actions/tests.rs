@@ -19,7 +19,7 @@ fn make_auto_reload_ready(app: &mut App) {
 }
 
 fn wait_for_directory_load(app: &mut App) {
-    for _ in 0..100 {
+    for _ in 0..300 {
         let _ = app.process_background_jobs();
         if app.directory_runtime.pending_load.is_none() {
             return;
@@ -30,7 +30,7 @@ fn wait_for_directory_load(app: &mut App) {
 }
 
 fn wait_for_directory_reload_to_queue(app: &mut App) {
-    for _ in 0..100 {
+    for _ in 0..300 {
         let _ = app.process_background_jobs();
         if app.directory_runtime.pending_load.is_some() {
             return;
@@ -194,6 +194,46 @@ fn selection_summary_marks_directories_with_trailing_slash() {
 
     let app = App::new_at(root.clone()).expect("failed to create app");
     assert_eq!(app.selection_summary(), "1/1  child/");
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn set_frame_state_refreshes_code_preview_when_visible_rows_change() {
+    let root = temp_path("code-preview-resize");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("main.rs"), "fn main() {}\n").expect("failed to write code file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    let initial_preview_token = app.preview_state.token;
+
+    app.set_frame_state(FrameState {
+        preview_rows_visible: 12,
+        preview_cols_visible: 80,
+        ..FrameState::default()
+    });
+
+    assert!(app.preview_state.token > initial_preview_token);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn set_frame_state_does_not_refresh_plain_text_preview_when_visible_rows_change() {
+    let root = temp_path("text-preview-resize");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("notes.txt"), "plain text\n").expect("failed to write text file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    let initial_preview_token = app.preview_state.token;
+
+    app.set_frame_state(FrameState {
+        preview_rows_visible: 12,
+        preview_cols_visible: 80,
+        ..FrameState::default()
+    });
+
+    assert_eq!(app.preview_state.token, initial_preview_token);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

@@ -708,7 +708,10 @@ fn high_frequency_preview_wheel_scrolls_preview_after_entries_scroll() {
         fs::write(root.join(name), name).expect("failed to write temp file");
     }
     let long_file = root.join("long.txt");
-    let contents = (0..60).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+    let contents = (0..60)
+        .map(|i| format!("line {i}"))
+        .collect::<Vec<_>>()
+        .join("\n");
     fs::write(&long_file, &contents).expect("failed to write long file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
@@ -725,11 +728,24 @@ fn high_frequency_preview_wheel_scrolls_preview_after_entries_scroll() {
 
     // Side-by-side layout: entries on the left, preview on the right
     app.set_frame_state(FrameState {
-        entries_panel: Some(Rect { x: 0, y: 0, width: 40, height: 20 }),
-        preview_panel: Some(Rect { x: 40, y: 0, width: 40, height: 20 }),
+        entries_panel: Some(Rect {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 20,
+        }),
+        preview_panel: Some(Rect {
+            x: 40,
+            y: 0,
+            width: 40,
+            height: 20,
+        }),
         preview_rows_visible: 16,
         preview_cols_visible: 38,
-        metrics: ViewMetrics { cols: 1, rows_visible: 8 },
+        metrics: ViewMetrics {
+            cols: 1,
+            rows_visible: 8,
+        },
         ..FrameState::default()
     });
     wait_for_background_preview(&mut app);
@@ -765,8 +781,14 @@ fn high_frequency_preview_wheel_scrolls_preview_after_entries_scroll() {
     }))
     .expect("preview scroll should be handled");
 
-    assert_eq!(app.selected, before_selected, "entry selection must not change when scrolling preview");
-    assert!(app.preview_state.scroll > before_scroll, "preview must have scrolled");
+    assert_eq!(
+        app.selected, before_selected,
+        "entry selection must not change when scrolling preview"
+    );
+    assert!(
+        app.preview_state.scroll > before_scroll,
+        "preview must have scrolled"
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -778,7 +800,10 @@ fn high_frequency_preview_wheel_scrolls_preview_without_prior_moved_event() {
     let root = temp_path("wheel-hf-preview-no-moved");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let long_file = root.join("long.txt");
-    let contents = (0..60).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+    let contents = (0..60)
+        .map(|i| format!("line {i}"))
+        .collect::<Vec<_>>()
+        .join("\n");
     fs::write(&long_file, &contents).expect("failed to write long file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
@@ -796,11 +821,24 @@ fn high_frequency_preview_wheel_scrolls_preview_without_prior_moved_event() {
     app.select_index(long_index);
 
     app.set_frame_state(FrameState {
-        entries_panel: Some(Rect { x: 0, y: 0, width: 40, height: 20 }),
-        preview_panel: Some(Rect { x: 40, y: 0, width: 40, height: 20 }),
+        entries_panel: Some(Rect {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 20,
+        }),
+        preview_panel: Some(Rect {
+            x: 40,
+            y: 0,
+            width: 40,
+            height: 20,
+        }),
         preview_rows_visible: 16,
         preview_cols_visible: 38,
-        metrics: ViewMetrics { cols: 1, rows_visible: 8 },
+        metrics: ViewMetrics {
+            cols: 1,
+            rows_visible: 8,
+        },
         ..FrameState::default()
     });
     wait_for_background_preview(&mut app);
@@ -817,8 +855,14 @@ fn high_frequency_preview_wheel_scrolls_preview_without_prior_moved_event() {
     }))
     .expect("preview scroll should be handled");
 
-    assert_eq!(app.selected, before_selected, "entry selection must not change when scrolling preview");
-    assert!(app.preview_state.scroll > before_scroll, "preview must have scrolled without a prior Moved event");
+    assert_eq!(
+        app.selected, before_selected,
+        "entry selection must not change when scrolling preview"
+    );
+    assert!(
+        app.preview_state.scroll > before_scroll,
+        "preview must have scrolled without a prior Moved event"
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -831,7 +875,10 @@ fn hover_panel_routes_scroll_when_event_coords_are_outside_panels() {
     let root = temp_path("wheel-hover-panel-routing");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let long_file = root.join("long.txt");
-    let contents = (0..60).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+    let contents = (0..60)
+        .map(|i| format!("line {i}"))
+        .collect::<Vec<_>>()
+        .join("\n");
     fs::write(&long_file, &contents).expect("failed to write long file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
@@ -848,11 +895,24 @@ fn hover_panel_routes_scroll_when_event_coords_are_outside_panels() {
     app.select_index(long_index);
 
     app.set_frame_state(FrameState {
-        entries_panel: Some(Rect { x: 0, y: 0, width: 40, height: 20 }),
-        preview_panel: Some(Rect { x: 40, y: 0, width: 40, height: 20 }),
+        entries_panel: Some(Rect {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 20,
+        }),
+        preview_panel: Some(Rect {
+            x: 40,
+            y: 0,
+            width: 40,
+            height: 20,
+        }),
         preview_rows_visible: 16,
         preview_cols_visible: 38,
-        metrics: ViewMetrics { cols: 1, rows_visible: 8 },
+        metrics: ViewMetrics {
+            cols: 1,
+            rows_visible: 8,
+        },
         ..FrameState::default()
     });
     wait_for_background_preview(&mut app);
@@ -879,7 +939,10 @@ fn hover_panel_routes_scroll_when_event_coords_are_outside_panels() {
     }))
     .expect("scroll should be handled");
 
-    assert_eq!(app.selected, before_selected, "entry selection must not change");
+    assert_eq!(
+        app.selected, before_selected,
+        "entry selection must not change"
+    );
     assert!(
         app.preview_state.scroll > before_scroll,
         "hover_panel should have routed scroll to preview despite wrong coords"

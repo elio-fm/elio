@@ -3,7 +3,7 @@ use crate::{file_info, fs::natural_cmp, ui::theme};
 use flate2::read::GzDecoder;
 use ratatui::text::Line;
 use std::{
-    collections::{hash_map::DefaultHasher, BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, VecDeque, hash_map::DefaultHasher},
     env,
     fs::{self, File},
     hash::{Hash, Hasher},

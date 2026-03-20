@@ -1,6 +1,6 @@
 use super::super::*;
-use super::inline_image::ImageProtocol;
 use super::images;
+use super::inline_image::ImageProtocol;
 use ratatui::layout::Rect;
 
 const PREVIEW_INLINE_COVER_MIN_HEIGHT: u16 = 6;

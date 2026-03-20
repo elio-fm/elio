@@ -1,6 +1,6 @@
 use super::super::*;
-use crate::preview::preview_work_class;
 use crate::file_info::{self, DocumentFormat};
+use crate::preview::preview_work_class;
 use std::{
     path::PathBuf,
     time::{Instant, SystemTime},
@@ -182,6 +182,7 @@ impl App {
                 entry: entry.clone(),
                 work_class: preview_work_class(&entry, &variant),
                 variant,
+                code_line_limit: self.preview_code_line_limit_for_entry(&entry),
                 priority: PreviewPriority::Low,
             });
         }
@@ -239,6 +240,7 @@ impl App {
             .contains_key(&PreviewCacheKey {
                 path: path.to_path_buf(),
                 variant: preview::PreviewRequestOptions::EpubSection(section),
+                code_line_limit: preview::default_code_preview_line_limit(),
             })
     }
 }

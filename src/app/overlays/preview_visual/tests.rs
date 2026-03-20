@@ -89,8 +89,10 @@ fn write_binary_zip_entries(path: &Path, entries: &[(&str, &[u8])]) {
 }
 
 fn wait_for_displayed_preview_overlay(app: &mut App) {
-    for _ in 0..200 {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
         let _ = app.process_background_jobs();
+        let _ = app.process_image_preview_timers();
         app.present_preview_overlay()
             .expect("presenting preview overlay should not fail");
         if app.static_image_overlay_displayed() {

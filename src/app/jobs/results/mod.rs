@@ -1,5 +1,9 @@
 use super::*;
-use std::{collections::HashMap, sync::Arc, time::{Duration, Instant}};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 const JOB_RESULT_APPLY_MAX_PER_TICK: usize = 12;
 const JOB_RESULT_APPLY_TIME_BUDGET: Duration = Duration::from_millis(2);
@@ -155,7 +159,12 @@ impl App {
                     }
                 }
                 JobResult::Preview(build) => {
-                    self.cache_preview_result(&build.entry, &build.variant, &build.result);
+                    self.cache_preview_result_with_code_line_limit(
+                        &build.entry,
+                        &build.variant,
+                        build.code_line_limit,
+                        &build.result,
+                    );
                     let build_is_comic = build.result.kind == preview::PreviewKind::Comic;
                     let build_is_epub_section = matches!(
                         build.variant,
@@ -178,6 +187,8 @@ impl App {
                     if build.token != self.preview_state.token
                         || !is_current_entry
                         || !is_current_variant
+                        || build.code_line_limit
+                            != self.preview_code_line_limit_for_entry(&build.entry)
                     {
                         self.refresh_static_image_preloads_for_cached_selected_page_preview(
                             build_has_page_image,
@@ -207,12 +218,11 @@ impl App {
             }
         }
 
-        if processed == JOB_RESULT_APPLY_MAX_PER_TICK
-            || (processed > 0 && started_at.elapsed() >= JOB_RESULT_APPLY_TIME_BUDGET)
+        if (processed == JOB_RESULT_APPLY_MAX_PER_TICK
+            || (processed > 0 && started_at.elapsed() >= JOB_RESULT_APPLY_TIME_BUDGET))
+            && let Ok(job) = self.scheduler.try_recv()
         {
-            if let Ok(job) = self.scheduler.try_recv() {
-                self.scheduler.defer_result(job);
-            }
+            self.scheduler.defer_result(job);
         }
 
         dirty

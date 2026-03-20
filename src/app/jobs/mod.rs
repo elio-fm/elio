@@ -18,8 +18,8 @@ use self::{
 use super::overlays::images::PreparedStaticImageAsset;
 use super::overlays::pdf::PdfProbeResult;
 use super::*;
-use crate::preview::PreviewWorkClass;
 use crate::fs::search::SearchCandidate;
+use crate::preview::PreviewWorkClass;
 use std::{
     collections::VecDeque,
     path::{Path, PathBuf},
@@ -270,6 +270,7 @@ pub(super) struct PreviewBuild {
     pub token: u64,
     pub entry: Entry,
     pub variant: preview::PreviewRequestOptions,
+    pub code_line_limit: usize,
     pub result: preview::PreviewContent,
 }
 
@@ -278,6 +279,7 @@ pub(super) struct PreviewRequest {
     pub token: u64,
     pub entry: Entry,
     pub variant: preview::PreviewRequestOptions,
+    pub code_line_limit: usize,
     pub priority: PreviewPriority,
     pub work_class: PreviewWorkClass,
 }
