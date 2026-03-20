@@ -67,7 +67,9 @@ elio
 |---|---|
 | `pdfinfo` + `pdftocairo` | Rendered PDF page previews |
 | `gio open` or `xdg-open` | Open files externally with `o` |
-| `ffmpeg` or `magick` | Broader image format rendering |
+| `ffmpeg` | Broader raster image format rendering |
+| `resvg` | Preferred SVG rasterization for image previews |
+| `magick` | SVG rasterization fallback and broader image format rendering |
 
 ---
 

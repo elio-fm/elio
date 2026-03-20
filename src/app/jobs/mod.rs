@@ -221,6 +221,7 @@ pub(super) struct ImagePrepareRequest {
     pub target_width_px: u32,
     pub target_height_px: u32,
     pub ffmpeg_available: bool,
+    pub resvg_available: bool,
     pub magick_available: bool,
     pub force_render_to_cache: bool,
     pub prepare_inline_payload: bool,

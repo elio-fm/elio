@@ -10,6 +10,7 @@ fn image_prepare_request(name: &str) -> ImagePrepareRequest {
         target_width_px: 640,
         target_height_px: 480,
         ffmpeg_available: true,
+        resvg_available: true,
         magick_available: true,
         force_render_to_cache: false,
         prepare_inline_payload: false,

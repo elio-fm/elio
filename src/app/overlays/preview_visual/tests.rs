@@ -506,6 +506,7 @@ fn concurrent_inline_raster_prepares_keep_shared_render_cache_readable() {
         target_width_px: 384,
         target_height_px: 640,
         ffmpeg_available: false,
+        resvg_available: false,
         magick_available: false,
         force_render_to_cache: false,
         prepare_inline_payload: false,

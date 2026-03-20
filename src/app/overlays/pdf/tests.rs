@@ -590,6 +590,7 @@ fn oriented_jpeg_fallback_preview_uses_exif_corrected_dimensions() {
             target_width_px: 60,
             target_height_px: 60,
             ffmpeg_available: false,
+            resvg_available: false,
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
@@ -638,6 +639,7 @@ fn oriented_jpeg_ffmpeg_preview_uses_exif_corrected_dimensions() {
             target_width_px: 60,
             target_height_px: 60,
             ffmpeg_available: true,
+            resvg_available: false,
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
@@ -679,6 +681,7 @@ fn extensionless_png_static_image_preparation_succeeds() {
             target_width_px: 768,
             target_height_px: 540,
             ffmpeg_available: true,
+            resvg_available: false,
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
@@ -742,6 +745,7 @@ fn raster_static_images_use_png_display_paths() {
                 target_width_px: 768,
                 target_height_px: 540,
                 ffmpeg_available: true,
+                resvg_available: false,
                 magick_available: true,
                 force_render_to_cache: false,
                 prepare_inline_payload: false,
@@ -768,7 +772,11 @@ fn raster_static_images_use_png_display_paths() {
 }
 
 #[test]
-fn svg_static_images_are_normalized_to_cached_png_overlays() {
+fn svg_static_images_prefer_resvg_when_available() {
+    if !crate::app::overlays::inline_image::command_exists("resvg") {
+        return;
+    }
+
     let (_app, root) = build_selected_static_image_app("svg-cache", "demo.svg");
     let path = root.join("demo.svg");
     let metadata = fs::metadata(&path).expect("svg metadata should exist");
@@ -780,7 +788,8 @@ fn svg_static_images_are_normalized_to_cached_png_overlays() {
             target_width_px: 768,
             target_height_px: 540,
             ffmpeg_available: true,
-            magick_available: true,
+            resvg_available: true,
+            magick_available: false,
             force_render_to_cache: false,
             prepare_inline_payload: false,
         },
@@ -808,7 +817,56 @@ fn svg_static_images_are_normalized_to_cached_png_overlays() {
 }
 
 #[test]
+fn svg_static_images_fall_back_to_magick_when_resvg_is_unavailable() {
+    if !crate::app::overlays::inline_image::command_exists("magick") {
+        return;
+    }
+
+    let (_app, root) = build_selected_static_image_app("svg-magick-fallback", "demo.svg");
+    let path = root.join("demo.svg");
+    let metadata = fs::metadata(&path).expect("svg metadata should exist");
+    let prepared = crate::app::overlays::images::prepare_static_image_asset(
+        &jobs::ImagePrepareRequest {
+            path: path.clone(),
+            size: metadata.len(),
+            modified: None,
+            target_width_px: 768,
+            target_height_px: 540,
+            ffmpeg_available: true,
+            resvg_available: false,
+            magick_available: true,
+            force_render_to_cache: false,
+            prepare_inline_payload: false,
+        },
+        || false,
+    )
+    .expect("svg image should prepare successfully via magick fallback");
+
+    assert_eq!(
+        prepared
+            .display_path
+            .extension()
+            .and_then(|extension| extension.to_str()),
+        Some("png")
+    );
+    assert_eq!(
+        prepared.dimensions,
+        RenderedImageDimensions {
+            width_px: 600,
+            height_px: 300,
+        }
+    );
+    assert_ne!(prepared.display_path, path);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn extensionless_svg_static_image_preparation_succeeds() {
+    if !crate::app::overlays::inline_image::command_exists("resvg") {
+        return;
+    }
+
     let root = temp_root("svg-noext-cache");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("logo");
@@ -823,7 +881,8 @@ fn extensionless_svg_static_image_preparation_succeeds() {
             target_width_px: 768,
             target_height_px: 540,
             ffmpeg_available: true,
-            magick_available: true,
+            resvg_available: true,
+            magick_available: false,
             force_render_to_cache: false,
             prepare_inline_payload: false,
         },
@@ -866,6 +925,7 @@ fn oversized_png_static_images_are_normalized_to_cached_overlays() {
             target_width_px: 768,
             target_height_px: 540,
             ffmpeg_available: true,
+            resvg_available: false,
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
@@ -918,6 +978,7 @@ fn forced_png_preview_renders_a_cached_overlay_asset() {
             target_width_px: 768,
             target_height_px: 540,
             ffmpeg_available: true,
+            resvg_available: false,
             magick_available: true,
             force_render_to_cache: true,
             prepare_inline_payload: false,
@@ -970,6 +1031,7 @@ fn oversized_extensionless_png_static_images_are_normalized_to_cached_overlays()
             target_width_px: 768,
             target_height_px: 540,
             ffmpeg_available: true,
+            resvg_available: false,
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
@@ -1226,6 +1288,7 @@ fn png_static_image_preparation_preserves_alpha_channel() {
             target_width_px: 8,
             target_height_px: 8,
             ffmpeg_available: true,
+            resvg_available: false,
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
@@ -1268,6 +1331,7 @@ fn iterm_png_and_jpeg_static_images_use_direct_source_payloads() {
                 target_width_px: 768,
                 target_height_px: 540,
                 ffmpeg_available: true,
+                resvg_available: false,
                 magick_available: true,
                 force_render_to_cache: false,
                 prepare_inline_payload: true,

@@ -43,6 +43,7 @@ pub(in crate::app) struct ImagePreviewState {
     activation_ready_at: Option<Instant>,
     pub(in crate::app) selection_activation_delay: Duration,
     ffmpeg_available: Option<bool>,
+    resvg_available: Option<bool>,
     magick_available: Option<bool>,
     preload_viewport: Option<StaticImagePreloadViewport>,
 }
@@ -477,6 +478,13 @@ impl App {
             .get_or_insert_with(|| command_exists("magick"))
     }
 
+    fn resvg_available(&mut self) -> bool {
+        *self
+            .image_preview
+            .resvg_available
+            .get_or_insert_with(|| command_exists("resvg"))
+    }
+
     fn ffmpeg_available(&mut self) -> bool {
         *self
             .image_preview
@@ -820,8 +828,7 @@ impl App {
         let key = StaticImageKey::from_request(request);
         if self.image_preview.failed_images.contains(&key)
             || self.image_preview.pending_prepares.contains(&key)
-            || self.cached_prepared_static_image_for_overlay(&key, request)
-                .is_some()
+            || self.cached_prepared_static_image_for_overlay(&key, request).is_some()
         {
             return;
         }
@@ -847,6 +854,7 @@ impl App {
             target_width_px: request.target_width_px,
             target_height_px: request.target_height_px,
             ffmpeg_available: self.ffmpeg_available(),
+            resvg_available: self.resvg_available(),
             magick_available: self.magick_available(),
             force_render_to_cache: request.force_render_to_cache,
             prepare_inline_payload: request.prepare_inline_payload,
@@ -1103,15 +1111,24 @@ where
             });
         }
         let temp_path = static_image_render_temp_path(&cache_path)?;
-        if request.magick_available
-            && render_svg_to_png(
+        let rendered = (request.resvg_available
+            && render_svg_to_png_with_resvg(
                 &request.path,
                 &temp_path,
+                source_dimensions,
                 target_width_px,
                 target_height_px,
                 &canceled,
-            )
-        {
+            ))
+            || (request.magick_available
+                && render_svg_to_png_with_magick(
+                    &request.path,
+                    &temp_path,
+                    target_width_px,
+                    target_height_px,
+                    &canceled,
+                ));
+        if rendered {
             finalize_static_image_render(&temp_path, &cache_path)?;
             let payload = inline_payload(&cache_path)?;
             return Some(PreparedStaticImageAsset {
@@ -1262,9 +1279,7 @@ fn static_image_can_prepare_inline(
     }
 }
 
-fn static_image_supports_iterm_source_passthrough(
-    request: &StaticImageOverlayRequest,
-) -> bool {
+fn static_image_supports_iterm_source_passthrough(request: &StaticImageOverlayRequest) -> bool {
     static_image_format_for_overlay_request(request)
         .is_some_and(|format| static_image_supports_iterm_source_format(&request.path, format))
         && !request.force_render_to_cache
@@ -1332,7 +1347,40 @@ fn static_image_format_for_path(path: &Path) -> Option<StaticImageFormat> {
         .and_then(StaticImageFormat::from_label)
 }
 
-fn render_svg_to_png(
+fn render_svg_to_png_with_resvg(
+    input_path: &Path,
+    output_path: &Path,
+    source_dimensions: RenderedImageDimensions,
+    target_width_px: u32,
+    target_height_px: u32,
+    canceled: &impl Fn() -> bool,
+) -> bool {
+    if let Some(parent) = output_path.parent()
+        && fs::create_dir_all(parent).is_err()
+    {
+        return false;
+    }
+
+    let (width_arg, height_arg) =
+        fit_svg_render_dimensions(source_dimensions, target_width_px, target_height_px);
+    let mut command = Command::new("resvg");
+    if let Some(width_px) = width_arg {
+        command.arg("--width").arg(width_px.to_string());
+    }
+    if let Some(height_px) = height_arg {
+        command.arg("--height").arg(height_px.to_string());
+    }
+    command
+        .arg(input_path)
+        .arg(output_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    run_cancelable_command(&mut command, canceled)
+        .is_some_and(|status| status.success() && output_path.exists())
+}
+
+fn render_svg_to_png_with_magick(
     input_path: &Path,
     output_path: &Path,
     target_width_px: u32,
@@ -1360,6 +1408,31 @@ fn render_svg_to_png(
         canceled,
     )
     .is_some_and(|status| status.success() && output_path.exists())
+}
+
+fn fit_svg_render_dimensions(
+    source_dimensions: RenderedImageDimensions,
+    target_width_px: u32,
+    target_height_px: u32,
+) -> (Option<u32>, Option<u32>) {
+    let source_width = source_dimensions.width_px.max(1) as f32;
+    let source_height = source_dimensions.height_px.max(1) as f32;
+    let scale = (target_width_px.max(1) as f32 / source_width)
+        .min(target_height_px.max(1) as f32 / source_height)
+        .min(1.0);
+    if scale >= 1.0 {
+        return (None, None);
+    }
+
+    let fitted_width = (source_width * scale).round().max(1.0) as u32;
+    let fitted_height = (source_height * scale).round().max(1.0) as u32;
+    let width_ratio = target_width_px.max(1) as f32 / source_width;
+    let height_ratio = target_height_px.max(1) as f32 / source_height;
+    if width_ratio <= height_ratio {
+        (Some(fitted_width), None)
+    } else {
+        (None, Some(fitted_height))
+    }
 }
 
 fn render_raster_to_png_with_ffmpeg(
