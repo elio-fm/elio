@@ -1,4 +1,5 @@
 mod backends;
+pub(crate) mod custom;
 pub(crate) mod registry;
 mod render;
 

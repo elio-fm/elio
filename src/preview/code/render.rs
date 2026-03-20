@@ -1,4 +1,4 @@
-use super::backends::{legacy, plain, syntect};
+use super::backends::{custom, legacy, plain, syntect};
 use crate::file_info::{CodeBackend, PreviewSpec};
 use ratatui::text::Line;
 
@@ -16,13 +16,9 @@ where
         CodeBackend::Plain => {
             plain::render_plain_code_preview(text, line_numbers, line_limit, canceled)
         }
-        CodeBackend::Custom(_) => legacy::render_legacy_code_preview(
-            text,
-            spec.highlight_language(),
-            line_numbers,
-            line_limit,
-            canceled,
-        ),
+        CodeBackend::Custom(kind) => {
+            custom::render_custom_code_preview(kind, text, line_numbers, line_limit, canceled)
+        }
         CodeBackend::Syntect => {
             render_syntect_with_fallback(spec, text, line_numbers, line_limit, canceled)
         }
@@ -62,7 +58,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::file_info::{CodeBackend, PreviewSpec};
+    use crate::file_info::{CodeBackend, CustomCodeKind, PreviewSpec};
 
     #[test]
     fn enabled_javascript_preview_specs_use_syntect() {
@@ -175,5 +171,25 @@ mod tests {
                 .iter()
                 .any(|span| span.content.contains("project"))
         );
+    }
+
+    #[test]
+    fn custom_preview_specs_use_custom_backend() {
+        let preview = render_code_preview(
+            PreviewSpec::code("jsonc", CodeBackend::Custom(CustomCodeKind::Jsonc), None),
+            "{\n  // comment\n}\n",
+            true,
+            20,
+            &|| false,
+        );
+        let expected = crate::preview::code::custom::render_custom_code_preview(
+            CustomCodeKind::Jsonc,
+            "{\n  // comment\n}\n",
+            true,
+            20,
+            &|| false,
+        );
+
+        assert_eq!(preview, expected);
     }
 }

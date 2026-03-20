@@ -1,4 +1,4 @@
-use super::common::{looks_numeric, scan_quoted_segment, styled_text};
+use super::{looks_numeric, scan_quoted_segment, styled_text};
 use crate::ui::theme;
 use ratatui::{style::Modifier, text::Span};
 
@@ -238,7 +238,7 @@ fn scan_hex_color(input: &str, start: usize) -> Option<usize> {
     if input[index..]
         .chars()
         .next()
-        .is_some_and(|next| !next.is_whitespace() && !matches!(next, ',' | ')' | ']' | '}'))
+        .is_some_and(|ch| !ch.is_whitespace() && !matches!(ch, ',' | ';' | ')' | ']' | '}'))
     {
         return None;
     }
@@ -246,14 +246,9 @@ fn scan_hex_color(input: &str, start: usize) -> Option<usize> {
     Some(index)
 }
 
-fn is_comment_start(input: &str, start: usize) -> bool {
-    if !input[start..].starts_with('#') {
-        return false;
-    }
-
-    start == 0
-        || input[..start]
-            .chars()
-            .next_back()
-            .is_some_and(char::is_whitespace)
+fn is_comment_start(input: &str, index: usize) -> bool {
+    input[index..].starts_with('#')
+        || input[index..].starts_with(';')
+        || (input[index..].starts_with("//")
+            && !input[..index].chars().last().is_some_and(|ch| ch == ':'))
 }

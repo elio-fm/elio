@@ -1,4 +1,4 @@
-use super::common::{looks_numeric, split_unquoted_once, styled_text};
+use super::{looks_numeric, split_unquoted_once, styled_text};
 use crate::ui::theme;
 use ratatui::{style::Color, style::Modifier, text::Span};
 
@@ -137,8 +137,7 @@ fn split_leading_whitespace(input: &str) -> Option<(&str, &str)> {
 fn split_log_level(input: &str) -> Option<(&str, &str)> {
     let trimmed = input.trim_start();
     let offset = input.len().saturating_sub(trimmed.len());
-    let mut chars = trimmed.char_indices();
-    let (start, first) = chars.next()?;
+    let (start, first) = trimmed.char_indices().next()?;
 
     let (level, consumed) = if first == '[' {
         let end = trimmed.find(']')?;

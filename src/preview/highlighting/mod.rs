@@ -1,10 +1,7 @@
 mod brace_like;
 mod cmake;
 mod common;
-mod data;
-mod directive;
 mod js_like;
-mod logs;
 mod lua;
 mod make;
 mod markup;
@@ -14,7 +11,10 @@ mod shell;
 #[cfg(test)]
 mod tests;
 
-use crate::{file_info::HighlightLanguage, ui::theme};
+use crate::{
+    file_info::{CustomCodeKind, HighlightLanguage},
+    ui::theme,
+};
 use ratatui::{
     style::Style,
     text::{Line, Span},
@@ -46,7 +46,23 @@ where
 {
     match language {
         Some(language) => {
-            render_highlighted_code_preview(text, language, line_numbers, code_line_limit, canceled)
+            if let Some(kind) = custom_kind(language) {
+                super::code::custom::render_custom_code_preview(
+                    kind,
+                    text,
+                    line_numbers,
+                    code_line_limit,
+                    canceled,
+                )
+            } else {
+                render_highlighted_code_preview(
+                    text,
+                    language,
+                    line_numbers,
+                    code_line_limit,
+                    canceled,
+                )
+            }
         }
         None => render_plain_code_preview(text, line_numbers, code_line_limit, canceled),
     }
@@ -75,7 +91,6 @@ fn render_highlighted_code_preview(
     );
     let number_width = super::line_number_width(source_lines.len());
     let mut rendered = Vec::new();
-    let mut jsonc_block_comment = false;
     let mut markup_block_comment = false;
     let mut css_block_comment = false;
     let mut brace_like_block_comment = false;
@@ -104,9 +119,6 @@ fn render_highlighted_code_preview(
                 code_palette,
                 &mut brace_like_block_comment,
             ),
-            HighlightLanguage::DirectiveConf => {
-                directive::highlight_directive_conf_line(line, code_palette)
-            }
             HighlightLanguage::Lua => lua::highlight_lua_line(line, code_palette, &mut lua_state),
             HighlightLanguage::Python => {
                 python::highlight_python_line(line, code_palette, &mut python_state)
@@ -123,18 +135,16 @@ fn render_highlighted_code_preview(
             HighlightLanguage::Css => {
                 markup::highlight_css_line(line, code_palette, &mut css_block_comment)
             }
-            HighlightLanguage::Toml => data::highlight_toml_line(line, code_palette),
-            HighlightLanguage::Json => data::highlight_json_line(line, code_palette),
-            HighlightLanguage::Jsonc => {
-                data::highlight_jsonc_line(line, code_palette, &mut jsonc_block_comment)
+            HighlightLanguage::DirectiveConf
+            | HighlightLanguage::Toml
+            | HighlightLanguage::Json
+            | HighlightLanguage::Jsonc
+            | HighlightLanguage::Yaml
+            | HighlightLanguage::Log
+            | HighlightLanguage::Ini
+            | HighlightLanguage::DesktopEntry => {
+                unreachable!("custom renderers are handled earlier")
             }
-            HighlightLanguage::Yaml => data::highlight_yaml_line(line, code_palette),
-            HighlightLanguage::Log => logs::highlight_log_line(line, code_palette),
-            HighlightLanguage::Ini | HighlightLanguage::DesktopEntry => data::highlight_ini_line(
-                line,
-                code_palette,
-                language == HighlightLanguage::DesktopEntry,
-            ),
         };
         spans.extend(body);
         rendered.push(Line::from(spans));
@@ -144,6 +154,29 @@ fn render_highlighted_code_preview(
         rendered.push(Line::from("File is empty"));
     }
     rendered
+}
+
+fn custom_kind(language: HighlightLanguage) -> Option<CustomCodeKind> {
+    match language {
+        HighlightLanguage::DirectiveConf => Some(CustomCodeKind::DirectiveConf),
+        HighlightLanguage::Toml => Some(CustomCodeKind::Toml),
+        HighlightLanguage::Json => Some(CustomCodeKind::Json),
+        HighlightLanguage::Jsonc => Some(CustomCodeKind::Jsonc),
+        HighlightLanguage::Yaml => Some(CustomCodeKind::Yaml),
+        HighlightLanguage::Log => Some(CustomCodeKind::Log),
+        HighlightLanguage::Ini => Some(CustomCodeKind::Ini),
+        HighlightLanguage::DesktopEntry => Some(CustomCodeKind::DesktopEntry),
+        HighlightLanguage::JsLike
+        | HighlightLanguage::CLike
+        | HighlightLanguage::Lua
+        | HighlightLanguage::Python
+        | HighlightLanguage::Make
+        | HighlightLanguage::Shell
+        | HighlightLanguage::Nix
+        | HighlightLanguage::CMake
+        | HighlightLanguage::Markup
+        | HighlightLanguage::Css => None,
+    }
 }
 
 fn render_plain_code_preview(
