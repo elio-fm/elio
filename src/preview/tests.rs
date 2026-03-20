@@ -421,7 +421,7 @@ fn markdown_preview_routes_fence_aliases_through_registry() {
     let path = root.join("README.md");
     fs::write(
         &path,
-        "```js\nconst value = 1;\n```\n\n```csharp\npublic class Greeter {}\n```\n\n```exs\ndefmodule Greeter do\nend\n```\n\n```kitty\nfont_size 11.5\n```\n",
+        "```js\nconst value = 1;\n```\n\n```csharp\npublic class Greeter {}\n```\n\n```exs\ndefmodule Greeter do\nend\n```\n\n```pwsh\nfunction Invoke-Greeting { Write-Host \"hello\" }\n```\n\n```kitty\nfont_size 11.5\n```\n",
     )
     .expect("failed to write markdown");
 
@@ -472,6 +472,16 @@ fn markdown_preview_routes_fence_aliases_through_registry() {
         .find(|line| line_text(line).contains("defmodule Greeter do"))
         .expect("expected highlighted elixir line");
     assert_ne!(span_color(elixir_line, "defmodule"), Some(code_palette.fg));
+
+    let powershell_line = preview
+        .lines
+        .iter()
+        .find(|line| line_text(line).contains("function Invoke-Greeting"))
+        .expect("expected highlighted powershell line");
+    assert_ne!(
+        span_color(powershell_line, "function"),
+        Some(code_palette.fg)
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -2150,6 +2160,51 @@ fn zsh_preview_uses_shell_specific_support() {
 }
 
 #[test]
+fn powershell_preview_uses_curated_syntect_support() {
+    let root = temp_path("powershell");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("build.ps1");
+    fs::write(
+        &path,
+        "function Invoke-Greeting([string]$Name) {\n  Write-Host \"Hello $Name\"\n}\n",
+    )
+    .expect("failed to write powershell script");
+
+    let preview = build_preview(&file_entry(path));
+    let code_palette = theme::code_preview_palette();
+
+    assert_eq!(preview.kind, PreviewKind::Code);
+    assert!(
+        preview
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("PowerShell"))
+    );
+    assert_eq!(
+        span_color(&preview.lines[0], "function"),
+        Some(code_palette.keyword)
+    );
+    assert_eq!(
+        span_color(&preview.lines[0], "Invoke-Greeting"),
+        Some(code_palette.function)
+    );
+    assert_eq!(
+        span_color(&preview.lines[0], "[string]"),
+        Some(code_palette.r#type)
+    );
+    assert_eq!(
+        span_color(&preview.lines[1], "\"Hello "),
+        Some(code_palette.string)
+    );
+    assert_eq!(
+        span_color(&preview.lines[1], "$Name"),
+        Some(code_palette.string)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn keys_preview_uses_custom_code_renderer() {
     let root = temp_path("keys");
     fs::create_dir_all(&root).expect("failed to create temp root");
@@ -3253,6 +3308,12 @@ fn curated_syntect_languages_render_with_theme_colors() {
             "defmodule Greeter do\n  def greet(name), do: \"hi #{name}\"\nend\n",
             "Elixir",
             "defmodule",
+        ),
+        (
+            "build.ps1",
+            "function Invoke-Greeting([string]$Name) {\n  Write-Host \"Hello $Name\"\n}\n",
+            "PowerShell",
+            "function",
         ),
     ] {
         let path = root.join(name);

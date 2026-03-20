@@ -474,6 +474,14 @@ const LANGUAGES: &[RegistryEntry] = &[
         markdown_fences: &["fish"],
     },
     RegistryEntry {
+        language: language("powershell", "PowerShell", CodeBackend::Syntect, None),
+        extensions: &["ps1", "psm1", "psd1"],
+        exact_filenames: &[],
+        shebang_interpreters: &["pwsh", "powershell"],
+        modelines: &["powershell", "pwsh", "ps1"],
+        markdown_fences: &["powershell", "pwsh", "ps1"],
+    },
+    RegistryEntry {
         language: language("nix", "Nix", CodeBackend::Syntect, None),
         extensions: &["nix"],
         exact_filenames: &[],
@@ -595,6 +603,10 @@ mod tests {
             Some("tsx")
         );
         assert_eq!(
+            language_for_extension("ps1").map(|language| language.canonical_id),
+            Some("powershell")
+        );
+        assert_eq!(
             language_for_extension("json5").map(|language| language.canonical_id),
             Some("json5")
         );
@@ -623,6 +635,10 @@ mod tests {
             Some("elixir")
         );
         assert_eq!(
+            language_for_shebang("pwsh").map(|language| language.canonical_id),
+            Some("powershell")
+        );
+        assert_eq!(
             language_for_modeline(" kitty ").map(|language| language.canonical_id),
             Some("kitty")
         );
@@ -637,6 +653,10 @@ mod tests {
         assert_eq!(
             language_for_modeline("kts").map(|language| language.canonical_id),
             Some("kotlin")
+        );
+        assert_eq!(
+            language_for_modeline("powershell").map(|language| language.canonical_id),
+            Some("powershell")
         );
     }
 
@@ -661,6 +681,10 @@ mod tests {
         assert_eq!(
             language_for_markdown_fence("exs").map(|language| language.canonical_id),
             Some("elixir")
+        );
+        assert_eq!(
+            language_for_markdown_fence("pwsh").map(|language| language.canonical_id),
+            Some("powershell")
         );
     }
 
@@ -705,6 +729,13 @@ mod tests {
             language_for_markdown_fence("shell"),
             "sh",
             "Shell",
+            CodeBackend::Syntect,
+            None,
+        );
+        assert_registered_language(
+            language_for_shebang("pwsh"),
+            "powershell",
+            "PowerShell",
             CodeBackend::Syntect,
             None,
         );

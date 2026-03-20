@@ -263,6 +263,9 @@ fn curated_generic_languages_use_syntect_preview_support() {
     let kotlin = inspect_path(Path::new("main.kts"), EntryKind::File);
     let elixir = inspect_path(Path::new("main.ex"), EntryKind::File);
     let elixir_script = inspect_path(Path::new("mix.exs"), EntryKind::File);
+    let powershell = inspect_path(Path::new("build.ps1"), EntryKind::File);
+    let powershell_module = inspect_path(Path::new("ElioTools.psm1"), EntryKind::File);
+    let powershell_data = inspect_path(Path::new("ElioTools.psd1"), EntryKind::File);
 
     assert_eq!(cs.builtin_class, FileClass::Code);
     assert_eq!(cs.specific_type_label, Some("C# source file"));
@@ -295,6 +298,32 @@ fn curated_generic_languages_use_syntect_preview_support() {
     assert_eq!(elixir_script.builtin_class, FileClass::Code);
     assert_eq!(elixir_script.specific_type_label, Some("Elixir script"));
     assert_code_spec(elixir_script.preview, Some("elixir"), CodeBackend::Syntect);
+
+    assert_eq!(powershell.builtin_class, FileClass::Code);
+    assert_eq!(powershell.specific_type_label, Some("PowerShell script"));
+    assert_code_spec(powershell.preview, Some("powershell"), CodeBackend::Syntect);
+
+    assert_eq!(powershell_module.builtin_class, FileClass::Code);
+    assert_eq!(
+        powershell_module.specific_type_label,
+        Some("PowerShell module")
+    );
+    assert_code_spec(
+        powershell_module.preview,
+        Some("powershell"),
+        CodeBackend::Syntect,
+    );
+
+    assert_eq!(powershell_data.builtin_class, FileClass::Config);
+    assert_eq!(
+        powershell_data.specific_type_label,
+        Some("PowerShell data file")
+    );
+    assert_code_spec(
+        powershell_data.preview,
+        Some("powershell"),
+        CodeBackend::Syntect,
+    );
 }
 
 #[test]
@@ -311,6 +340,24 @@ fn extensionless_elixir_scripts_are_classified_as_code() {
     assert_eq!(facts.specific_type_label, Some("Elixir script"));
     assert_eq!(facts.preview.language_hint, Some("elixir"));
     assert_code_spec(facts.preview, Some("elixir"), CodeBackend::Syntect);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn extensionless_powershell_scripts_are_classified_as_code() {
+    let (root, path) = write_temp_file(
+        "extensionless-powershell-script",
+        "elio-tool",
+        "#!/usr/bin/env pwsh\nWrite-Host \"hello\"\n",
+    );
+
+    let facts = inspect_path(&path, EntryKind::File);
+
+    assert_eq!(facts.builtin_class, FileClass::Code);
+    assert_eq!(facts.specific_type_label, Some("PowerShell script"));
+    assert_eq!(facts.preview.language_hint, Some("powershell"));
+    assert_code_spec(facts.preview, Some("powershell"), CodeBackend::Syntect);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

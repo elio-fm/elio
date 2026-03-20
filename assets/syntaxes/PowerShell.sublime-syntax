@@ -1,0 +1,85 @@
+%YAML 1.2
+---
+name: PowerShell
+file_extensions:
+  - ps1
+  - psm1
+  - psd1
+scope: source.powershell
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9_]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - include: variables
+    - match: '(?i)\b(function|filter|workflow)\b(?:\s+)([A-Za-z_][A-Za-z0-9_.-]*)'
+      captures:
+        1: storage.type.powershell
+        2: entity.name.function.powershell
+    - match: '(?i)\b(?:class|enum)\b'
+      scope: storage.type.powershell
+    - match: '(?i)\b(?:if|else|elseif|switch|foreach|for|while|do|until|break|continue|return|param|begin|process|end|try|catch|finally|throw|trap|default|in|data)\b'
+      scope: keyword.control.powershell
+    - match: '(?i)\b[A-Za-z][A-Za-z0-9]*-[A-Za-z][A-Za-z0-9-]*\b'
+      scope: support.function.powershell
+    - match: '(?i)\[(?:bool|byte|char|datetime|decimal|double|float|guid|hashtable|int|int16|int32|int64|long|object|pscustomobject|string|switch|timespan|version|xml|array)\]'
+      scope: support.type.powershell
+    - match: '(?i)\[[A-Z][A-Za-z0-9_.]+\]'
+      scope: support.type.powershell
+    - match: '(?i)-(?:eq|ne|gt|ge|lt|le|like|notlike|match|notmatch|contains|notcontains|in|notin|replace|split|join|and|or|not|xor|band|bor|bnot|bxor|shl|shr|as|is|isnot)\b'
+      scope: keyword.operator.powershell
+    - match: '\+=|-=|\*=|/=|%=|=|::|\|\||&&|\||\.{2}|[+*/%!-]'
+      scope: keyword.operator.powershell
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.powershell
+  comments:
+    - match: '<#'
+      push: block-comment
+    - match: '#.*$'
+      scope: comment.line.number-sign.powershell
+  block-comment:
+    - meta_scope: comment.block.powershell
+    - match: '#>'
+      pop: true
+  strings:
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+    - match: '@"'
+      push: double-heredoc
+    - match: "@'"
+      push: single-heredoc
+  double-quoted-string:
+    - meta_scope: string.quoted.double.powershell
+    - include: variables
+    - match: '`.'
+      scope: constant.character.escape.powershell
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.powershell
+    - match: "''"
+      scope: constant.character.escape.powershell
+    - match: "'"
+      pop: true
+  double-heredoc:
+    - meta_scope: string.quoted.double.heredoc.powershell
+    - include: variables
+    - match: '^"@'
+      pop: true
+  single-heredoc:
+    - meta_scope: string.quoted.single.heredoc.powershell
+    - match: "^'@"
+      pop: true
+  variables:
+    - match: '(?i)\$(?:true|false|null)\b'
+      scope: constant.language.powershell
+    - match: '(?i)\$(?:global|local|private|script|using|workflow):{{identifier}}\b'
+      scope: variable.parameter.powershell
+    - match: '\$\{[^}]+\}'
+      scope: variable.parameter.powershell
+    - match: '\$[A-Za-z_][A-Za-z0-9_]*\b'
+      scope: variable.parameter.powershell

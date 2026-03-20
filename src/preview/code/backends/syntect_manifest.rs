@@ -168,6 +168,11 @@ pub const CURATED_SYNTAXES: &[CuratedSyntax] = &[
         source: SyntaxSource::BundledDefault,
     },
     CuratedSyntax {
+        canonical_id: "powershell",
+        lookup_token: "ps1",
+        source: SyntaxSource::Vendored,
+    },
+    CuratedSyntax {
         canonical_id: "nix",
         lookup_token: "nix",
         source: SyntaxSource::Vendored,

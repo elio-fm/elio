@@ -216,6 +216,19 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("Fish script"),
             preview: preview_for_extension(ext),
         },
+        "ps1" | "psm1" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some(match ext {
+                "psm1" => "PowerShell module",
+                _ => "PowerShell script",
+            }),
+            preview: preview_for_extension(ext),
+        },
+        "psd1" => FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("PowerShell data file"),
+            preview: preview_for_extension(ext),
+        },
         "py" | "pyi" | "pyw" | "pyx" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: None,

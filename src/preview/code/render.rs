@@ -148,6 +148,10 @@ mod tests {
                 "elixir",
                 "defmodule Greeter do\n  def greet(name), do: \"hi #{name}\"\nend\n",
             ),
+            (
+                "powershell",
+                "function Invoke-Greeting([string]$Name) { Write-Host \"Hello $Name\" }\n",
+            ),
             ("python", "class Greeter:\n    pass\n"),
             ("ruby", "class Greeter\nend\n"),
             ("lua", "local name = \"elio\"\n"),

@@ -422,6 +422,10 @@ mod tests {
                 "elixir",
                 "defmodule Greeter do\n  def greet(name), do: \"hi #{name}\"\nend\n",
             ),
+            (
+                "powershell",
+                "function Invoke-Greeting([string]$Name) {\n  Write-Host \"Hello $Name\"\n}\n",
+            ),
         ] {
             let rendered = render_syntect_code_preview(code_syntax, snippet, true, 20, &|| false)
                 .expect("vendored syntax should render through syntect");
@@ -500,6 +504,25 @@ mod tests {
         .expect("html syntax should render through syntect");
         assert_eq!(span_color(&html[0], "div"), Some(palette.tag));
         assert_eq!(span_color(&html[0], "class"), Some(palette.parameter));
+    }
+
+    #[test]
+    fn powershell_tokens_map_to_semantic_roles() {
+        let palette = theme::code_preview_palette();
+        let sample = "function Invoke-Greeting([string]$Name) {\n  if ($Name) { Write-Host \"Hello $Name\" }\n}\n";
+        let rendered = render_syntect_code_preview("powershell", sample, true, 20, &|| false)
+            .expect("powershell syntax should render through syntect");
+
+        assert_eq!(span_color(&rendered[0], "function"), Some(palette.keyword));
+        assert_eq!(
+            span_color(&rendered[0], "Invoke-Greeting"),
+            Some(palette.function)
+        );
+        assert_eq!(span_color(&rendered[0], "[string]"), Some(palette.r#type));
+        assert_eq!(span_color(&rendered[0], "$Name"), Some(palette.parameter));
+        assert_ne!(span_color(&rendered[1], "Write-Host"), Some(palette.fg));
+        assert_eq!(span_color(&rendered[1], "\"Hello "), Some(palette.string));
+        assert_eq!(span_color(&rendered[1], "$Name"), Some(palette.parameter));
     }
 
     #[test]
