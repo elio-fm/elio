@@ -2102,6 +2102,44 @@ fn shell_script_preview_uses_code_renderer() {
 }
 
 #[test]
+fn sh_file_preview_keeps_core_shell_tokens_non_gray() {
+    let root = temp_path("sh-preview");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("deploy.sh");
+    fs::write(
+        &path,
+        "NAME=elio\nif [ -n \"$HOME\" ]; then\n  echo \"$NAME\"\nfi # done\n",
+    )
+    .expect("failed to write sh script");
+
+    let preview = build_preview(&file_entry(path));
+    let code_palette = theme::code_preview_palette();
+
+    assert_eq!(preview.kind, PreviewKind::Code);
+    assert!(
+        preview
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("Shell"))
+    );
+    assert_ne!(span_color(&preview.lines[0], "NAME"), Some(code_palette.fg));
+    assert_ne!(span_color(&preview.lines[1], "if"), Some(code_palette.fg));
+    assert_ne!(span_color(&preview.lines[1], "$"), Some(code_palette.fg));
+    assert_ne!(span_color(&preview.lines[1], "HOME"), Some(code_palette.fg));
+    assert_ne!(span_color(&preview.lines[2], "echo"), Some(code_palette.fg));
+    assert_eq!(
+        span_color(&preview.lines[3], "#"),
+        Some(code_palette.comment)
+    );
+    assert_eq!(
+        span_color(&preview.lines[3], " done"),
+        Some(code_palette.comment)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn shell_dotfile_preview_uses_code_renderer() {
     let root = temp_path("shell-dotfile");
     fs::create_dir_all(&root).expect("failed to create temp root");

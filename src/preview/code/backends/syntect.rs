@@ -1,8 +1,8 @@
-use super::syntect_manifest::curated_syntax;
 #[cfg(test)]
 use super::syntect_manifest::CURATED_SYNTAXES;
 #[cfg(test)]
 use super::syntect_manifest::CuratedSyntax;
+use super::syntect_manifest::curated_syntax;
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
@@ -44,6 +44,7 @@ struct ScopeSelectors {
     macro_name: [Scope; 4],
     invalid: [Scope; 2],
     variable_readwrite: [Scope; 1],
+    shell_source: [Scope; 1],
 }
 
 pub(in crate::preview::code) fn is_enabled(code_syntax: &str) -> bool {
@@ -174,6 +175,7 @@ fn scope_selectors() -> &'static ScopeSelectors {
             ],
             invalid: [scope("invalid"), scope("invalid.deprecated")],
             variable_readwrite: [scope("variable.other.readwrite")],
+            shell_source: [scope("source.shell")],
         }
     })
 }
@@ -230,9 +232,70 @@ fn semantic_role_for_token(text: &str, scope_stack: &[Scope]) -> SemanticRole {
         SemanticRole::Operator
     } else if scope_stack_matches(scope_stack, &selectors.constant) {
         SemanticRole::Constant
+    } else if let Some(role) = shell_semantic_role_from_heuristics(text, scope_stack, selectors) {
+        role
     } else {
         SemanticRole::Fg
     }
+}
+
+fn shell_semantic_role_from_heuristics(
+    text: &str,
+    scope_stack: &[Scope],
+    selectors: &ScopeSelectors,
+) -> Option<SemanticRole> {
+    if !scope_stack_matches(scope_stack, &selectors.shell_source) {
+        return None;
+    }
+
+    let token = text.trim();
+    if token.is_empty() {
+        return None;
+    }
+
+    if matches!(
+        token,
+        "if" | "then"
+            | "fi"
+            | "for"
+            | "do"
+            | "done"
+            | "case"
+            | "esac"
+            | "while"
+            | "until"
+            | "in"
+            | "elif"
+            | "else"
+            | "select"
+    ) {
+        return Some(SemanticRole::Keyword);
+    }
+
+    if matches!(token, "[" | "]" | "test" | "echo" | "printf") {
+        return Some(SemanticRole::Function);
+    }
+
+    if token.starts_with('$') || token.starts_with("${") || token.starts_with("$(") {
+        return Some(SemanticRole::Parameter);
+    }
+
+    if looks_like_shell_assignment_name(token) {
+        return Some(SemanticRole::Parameter);
+    }
+
+    None
+}
+
+fn looks_like_shell_assignment_name(token: &str) -> bool {
+    let mut chars = token.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_uppercase() || first == '_') {
+        return false;
+    }
+    chars.all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
 }
 
 fn scope_stack_matches(scope_stack: &[Scope], selectors: &[Scope]) -> bool {
@@ -531,7 +594,52 @@ mod tests {
     }
 
     #[test]
-    fn shell_tokens_map_to_semantic_roles() {
+    fn sh_tokens_map_to_semantic_roles() {
+        let palette = theme::code_preview_palette();
+        let sample = "NAME=elio\nif [ -n \"$HOME\" ]; then\n  echo \"$NAME\"\nfi # done\n";
+        let rendered = render_syntect_code_preview("sh", sample, true, 20, &|| false)
+            .expect("sh syntax should render through syntect");
+        let scopes = token_scopes("sh", sample);
+
+        assert_ne!(
+            span_color(&rendered[0], "NAME"),
+            Some(palette.fg),
+            "sh assignment fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[1], "if"),
+            Some(palette.fg),
+            "sh keyword fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[1], "$"),
+            Some(palette.fg),
+            "sh variable marker fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[1], "HOME"),
+            Some(palette.fg),
+            "sh variable fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[2], "echo"),
+            Some(palette.fg),
+            "sh builtin fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_eq!(
+            span_color(&rendered[3], "#"),
+            Some(palette.comment),
+            "sh comment marker did not map to comment color; scopes: {scopes:#?}"
+        );
+        assert_eq!(
+            span_color(&rendered[3], " done"),
+            Some(palette.comment),
+            "sh comment did not map to comment color; scopes: {scopes:#?}"
+        );
+    }
+
+    #[test]
+    fn bash_tokens_map_to_semantic_roles() {
         let palette = theme::code_preview_palette();
         let sample = "NAME=elio\nif [ -n \"$HOME\" ]; then\n  echo \"$NAME\"\nfi # done\n";
         let rendered = render_syntect_code_preview("bash", sample, true, 20, &|| false)
@@ -541,37 +649,37 @@ mod tests {
         assert_ne!(
             span_color(&rendered[0], "NAME"),
             Some(palette.fg),
-            "shell assignment fell back to fg; scopes: {scopes:#?}"
+            "bash assignment fell back to fg; scopes: {scopes:#?}"
         );
         assert_ne!(
             span_color(&rendered[1], "if"),
             Some(palette.fg),
-            "shell keyword fell back to fg; scopes: {scopes:#?}"
+            "bash keyword fell back to fg; scopes: {scopes:#?}"
         );
         assert_ne!(
             span_color(&rendered[1], "$"),
             Some(palette.fg),
-            "shell variable marker fell back to fg; scopes: {scopes:#?}"
+            "bash variable marker fell back to fg; scopes: {scopes:#?}"
         );
         assert_ne!(
             span_color(&rendered[1], "HOME"),
             Some(palette.fg),
-            "shell variable fell back to fg; scopes: {scopes:#?}"
+            "bash variable fell back to fg; scopes: {scopes:#?}"
         );
         assert_ne!(
             span_color(&rendered[2], "echo"),
             Some(palette.fg),
-            "shell builtin fell back to fg; scopes: {scopes:#?}"
+            "bash builtin fell back to fg; scopes: {scopes:#?}"
         );
         assert_eq!(
             span_color(&rendered[3], "#"),
             Some(palette.comment),
-            "shell comment marker did not map to comment color; scopes: {scopes:#?}"
+            "bash comment marker did not map to comment color; scopes: {scopes:#?}"
         );
         assert_eq!(
             span_color(&rendered[3], " done"),
             Some(palette.comment),
-            "shell comment did not map to comment color; scopes: {scopes:#?}"
+            "bash comment did not map to comment color; scopes: {scopes:#?}"
         );
     }
 
@@ -612,6 +720,24 @@ mod tests {
         assert_eq!(
             semantic_role_for_token("Greeter", stack.as_slice()),
             SemanticRole::Type
+        );
+
+        let stack = ScopeStack::from_str("source.shell.bash").unwrap();
+        assert_eq!(
+            semantic_role_for_token("then", stack.as_slice()),
+            SemanticRole::Keyword
+        );
+
+        let stack = ScopeStack::from_str("source.shell.bash").unwrap();
+        assert_eq!(
+            semantic_role_for_token("printf", stack.as_slice()),
+            SemanticRole::Function
+        );
+
+        let stack = ScopeStack::from_str("source.shell.bash").unwrap();
+        assert_eq!(
+            semantic_role_for_token("$HOME", stack.as_slice()),
+            SemanticRole::Parameter
         );
     }
 }
