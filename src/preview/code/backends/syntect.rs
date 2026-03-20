@@ -951,6 +951,23 @@ mod tests {
     }
 
     #[test]
+    fn clojure_support_renders_through_curated_syntect_bundle() {
+        let rendered = render_syntect_code_preview(
+            "clojure",
+            "(ns elio.core)\n(defn greet [name] (str \"hi \" name))\n",
+            true,
+            20,
+            &|| false,
+        )
+        .expect("clojure syntax should render through syntect");
+
+        assert_eq!(
+            span_color(&rendered[1], "defn"),
+            Some(theme::code_preview_palette().keyword)
+        );
+    }
+
+    #[test]
     fn unsupported_syntaxes_return_errors_for_safe_fallback() {
         for code_syntax in ["ziggy", "brainfuck", "totally-unknown-syntax"] {
             assert!(

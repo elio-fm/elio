@@ -303,6 +303,10 @@ fn curated_generic_languages_use_syntect_preview_support() {
     let kotlin = inspect_path(Path::new("main.kts"), EntryKind::File);
     let elixir = inspect_path(Path::new("main.ex"), EntryKind::File);
     let elixir_script = inspect_path(Path::new("mix.exs"), EntryKind::File);
+    let clojure = inspect_path(Path::new("core.clj"), EntryKind::File);
+    let clojurescript = inspect_path(Path::new("app.cljs"), EntryKind::File);
+    let clojure_shared = inspect_path(Path::new("shared.cljc"), EntryKind::File);
+    let edn = inspect_path(Path::new("config.edn"), EntryKind::File);
     let powershell = inspect_path(Path::new("build.ps1"), EntryKind::File);
     let powershell_module = inspect_path(Path::new("ElioTools.psm1"), EntryKind::File);
     let powershell_data = inspect_path(Path::new("ElioTools.psd1"), EntryKind::File);
@@ -379,6 +383,32 @@ fn curated_generic_languages_use_syntect_preview_support() {
     assert_eq!(elixir_script.specific_type_label, Some("Elixir script"));
     assert_code_spec(elixir_script.preview, Some("elixir"), CodeBackend::Syntect);
 
+    assert_eq!(clojure.builtin_class, FileClass::Code);
+    assert_eq!(clojure.specific_type_label, Some("Clojure source file"));
+    assert_code_spec(clojure.preview, Some("clojure"), CodeBackend::Syntect);
+
+    assert_eq!(clojurescript.builtin_class, FileClass::Code);
+    assert_eq!(
+        clojurescript.specific_type_label,
+        Some("ClojureScript source file")
+    );
+    assert_code_spec(clojurescript.preview, Some("clojure"), CodeBackend::Syntect);
+
+    assert_eq!(clojure_shared.builtin_class, FileClass::Code);
+    assert_eq!(
+        clojure_shared.specific_type_label,
+        Some("Portable Clojure source file")
+    );
+    assert_code_spec(
+        clojure_shared.preview,
+        Some("clojure"),
+        CodeBackend::Syntect,
+    );
+
+    assert_eq!(edn.builtin_class, FileClass::Config);
+    assert_eq!(edn.specific_type_label, Some("EDN file"));
+    assert_code_spec(edn.preview, Some("clojure"), CodeBackend::Syntect);
+
     assert_eq!(powershell.builtin_class, FileClass::Code);
     assert_eq!(powershell.specific_type_label, Some("PowerShell script"));
     assert_code_spec(powershell.preview, Some("powershell"), CodeBackend::Syntect);
@@ -453,6 +483,14 @@ fn shebang_and_exact_name_detection_cover_new_languages() {
     let just = inspect_path(Path::new(".justfile"), EntryKind::File);
     assert_eq!(just.preview.language_hint, Some("just"));
     assert_eq!(just.specific_type_label, Some("Justfile"));
+
+    let deps = inspect_path(Path::new("deps.edn"), EntryKind::File);
+    assert_eq!(deps.preview.language_hint, Some("clojure"));
+    assert_eq!(deps.specific_type_label, Some("Clojure deps config"));
+
+    let project = inspect_path(Path::new("project.clj"), EntryKind::File);
+    assert_eq!(project.preview.language_hint, Some("clojure"));
+    assert_eq!(project.specific_type_label, Some("Leiningen project"));
 }
 
 #[test]
@@ -469,6 +507,24 @@ fn extensionless_powershell_scripts_are_classified_as_code() {
     assert_eq!(facts.specific_type_label, Some("PowerShell script"));
     assert_eq!(facts.preview.language_hint, Some("powershell"));
     assert_code_spec(facts.preview, Some("powershell"), CodeBackend::Syntect);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn extensionless_babashka_scripts_are_classified_as_code() {
+    let (root, path) = write_temp_file(
+        "extensionless-babashka-script",
+        "bb-task",
+        "#!/usr/bin/env bb\n(println \"hello\")\n",
+    );
+
+    let facts = inspect_path(&path, EntryKind::File);
+
+    assert_eq!(facts.builtin_class, FileClass::Code);
+    assert_eq!(facts.specific_type_label, Some("Clojure script"));
+    assert_eq!(facts.preview.language_hint, Some("clojure"));
+    assert_code_spec(facts.preview, Some("clojure"), CodeBackend::Syntect);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

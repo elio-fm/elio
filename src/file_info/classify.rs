@@ -164,6 +164,7 @@ fn sniff_shebang_script_type(buffer: &[u8]) -> Option<FileFacts> {
         "julia" => Some("Julia script"),
         "r" => Some("R script"),
         "powershell" => Some("PowerShell script"),
+        "clojure" => Some("Clojure script"),
         _ => None,
     }?;
 

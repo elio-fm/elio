@@ -563,6 +563,38 @@ impl Theme {
                     color: Some(rgb(155, 143, 199)),
                 },
             ),
+            (
+                "clj".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(128, 176, 92)),
+                },
+            ),
+            (
+                "cljs".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(128, 176, 92)),
+                },
+            ),
+            (
+                "cljc".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(128, 176, 92)),
+                },
+            ),
+            (
+                "edn".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Config),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(128, 176, 92)),
+                },
+            ),
             ("swift".to_string(), rule_class(FileClass::Code)),
             ("kt".to_string(), rule_class(FileClass::Code)),
             (
@@ -1000,6 +1032,38 @@ impl Theme {
                     class: Some(FileClass::Config),
                     icon: Some("󰟔".to_string()),
                     color: Some(rgb(95, 153, 219)),
+                },
+            ),
+            (
+                normalize_key("project.clj"),
+                RuleOverride {
+                    class: Some(FileClass::Config),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(128, 176, 92)),
+                },
+            ),
+            (
+                normalize_key("deps.edn"),
+                RuleOverride {
+                    class: Some(FileClass::Config),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(128, 176, 92)),
+                },
+            ),
+            (
+                normalize_key("bb.edn"),
+                RuleOverride {
+                    class: Some(FileClass::Config),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(128, 176, 92)),
+                },
+            ),
+            (
+                normalize_key("shadow-cljs.edn"),
+                RuleOverride {
+                    class: Some(FileClass::Config),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(128, 176, 92)),
                 },
             ),
             (
@@ -2029,6 +2093,26 @@ macro = "#fedcba"
         assert_eq!(elixir_script.class, FileClass::Code);
         assert_eq!(elixir_script.icon, "");
         assert_eq!(elixir_script.color, rgb(155, 143, 199));
+
+        let clojure = theme.resolve(Path::new("core.clj"), EntryKind::File);
+        assert_eq!(clojure.class, FileClass::Code);
+        assert_eq!(clojure.icon, "");
+        assert_eq!(clojure.color, rgb(128, 176, 92));
+
+        let clojurescript = theme.resolve(Path::new("app.cljs"), EntryKind::File);
+        assert_eq!(clojurescript.class, FileClass::Code);
+        assert_eq!(clojurescript.icon, "");
+        assert_eq!(clojurescript.color, rgb(128, 176, 92));
+
+        let clojure_data = theme.resolve(Path::new("deps.edn"), EntryKind::File);
+        assert_eq!(clojure_data.class, FileClass::Config);
+        assert_eq!(clojure_data.icon, "");
+        assert_eq!(clojure_data.color, rgb(128, 176, 92));
+
+        let leiningen = theme.resolve(Path::new("project.clj"), EntryKind::File);
+        assert_eq!(leiningen.class, FileClass::Config);
+        assert_eq!(leiningen.icon, "");
+        assert_eq!(leiningen.color, rgb(128, 176, 92));
 
         let powershell = theme.resolve(Path::new("build.ps1"), EntryKind::File);
         assert_eq!(powershell.class, FileClass::Code);

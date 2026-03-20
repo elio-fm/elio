@@ -183,6 +183,11 @@ pub const CURATED_SYNTAXES: &[CuratedSyntax] = &[
         source: SyntaxSource::Vendored,
     },
     CuratedSyntax {
+        canonical_id: "clojure",
+        lookup_token: "clj",
+        source: SyntaxSource::BundledDefault,
+    },
+    CuratedSyntax {
         canonical_id: "ruby",
         lookup_token: "rb",
         source: SyntaxSource::BundledDefault,

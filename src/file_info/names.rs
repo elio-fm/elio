@@ -49,6 +49,26 @@ pub(super) fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: Some("sbt build definition"),
             preview: preview_for_exact_name(name),
         }),
+        "project.clj" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Leiningen project"),
+            preview: preview_for_exact_name(name),
+        }),
+        "deps.edn" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Clojure deps config"),
+            preview: preview_for_exact_name(name),
+        }),
+        "bb.edn" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Babashka config"),
+            preview: preview_for_exact_name(name),
+        }),
+        "shadow-cljs.edn" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("shadow-cljs config"),
+            preview: preview_for_exact_name(name),
+        }),
         "justfile" | ".justfile" => Some(FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("Justfile"),

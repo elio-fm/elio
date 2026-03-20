@@ -491,6 +491,14 @@ const LANGUAGES: &[RegistryEntry] = &[
         markdown_fences: &["elixir", "ex", "exs"],
     },
     RegistryEntry {
+        language: language("clojure", "Clojure", CodeBackend::Syntect, None),
+        extensions: &["clj", "cljs", "cljc", "edn"],
+        exact_filenames: &["project.clj", "deps.edn", "bb.edn", "shadow-cljs.edn"],
+        shebang_interpreters: &["clojure", "clj", "bb"],
+        modelines: &["clojure", "clj", "cljs", "cljc", "edn"],
+        markdown_fences: &["clojure", "clj", "cljs", "cljc", "edn"],
+    },
+    RegistryEntry {
         language: language("ruby", "Ruby", CodeBackend::Syntect, None),
         extensions: &["rb"],
         exact_filenames: &[],
@@ -711,6 +719,10 @@ mod tests {
             Some("elixir")
         );
         assert_eq!(
+            language_for_extension("cljc").map(|language| language.canonical_id),
+            Some("clojure")
+        );
+        assert_eq!(
             language_for_extension("tsx").map(|language| language.canonical_id),
             Some("tsx")
         );
@@ -747,6 +759,10 @@ mod tests {
             Some("just")
         );
         assert_eq!(
+            language_for_exact_name("deps.edn").map(|language| language.canonical_id),
+            Some("clojure")
+        );
+        assert_eq!(
             language_for_exact_name(".env.local").map(|language| language.canonical_id),
             Some("dotenv")
         );
@@ -775,6 +791,10 @@ mod tests {
             Some("r")
         );
         assert_eq!(
+            language_for_shebang("bb").map(|language| language.canonical_id),
+            Some("clojure")
+        );
+        assert_eq!(
             language_for_modeline(" kitty ").map(|language| language.canonical_id),
             Some("kitty")
         );
@@ -793,6 +813,10 @@ mod tests {
         assert_eq!(
             language_for_modeline("powershell").map(|language| language.canonical_id),
             Some("powershell")
+        );
+        assert_eq!(
+            language_for_modeline("cljs").map(|language| language.canonical_id),
+            Some("clojure")
         );
         assert_eq!(
             language_for_modeline("terraform").map(|language| language.canonical_id),
@@ -829,6 +853,10 @@ mod tests {
         assert_eq!(
             language_for_markdown_fence("pwsh").map(|language| language.canonical_id),
             Some("powershell")
+        );
+        assert_eq!(
+            language_for_markdown_fence("clj").map(|language| language.canonical_id),
+            Some("clojure")
         );
         assert_eq!(
             language_for_markdown_fence("docker").map(|language| language.canonical_id),

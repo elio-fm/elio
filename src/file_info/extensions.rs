@@ -368,6 +368,20 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             }),
             preview: preview_for_extension(ext),
         },
+        "clj" | "cljs" | "cljc" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some(match ext {
+                "cljs" => "ClojureScript source file",
+                "cljc" => "Portable Clojure source file",
+                _ => "Clojure source file",
+            }),
+            preview: preview_for_extension(ext),
+        },
+        "edn" => FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("EDN file"),
+            preview: preview_for_extension(ext),
+        },
         "rb" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Ruby script"),

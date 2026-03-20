@@ -421,7 +421,7 @@ fn markdown_preview_routes_fence_aliases_through_registry() {
     let path = root.join("README.md");
     fs::write(
         &path,
-        "```js\nconst value = 1;\n```\n\n```csharp\npublic class Greeter {}\n```\n\n```exs\ndefmodule Greeter do\nend\n```\n\n```pwsh\nfunction Invoke-Greeting { Write-Host \"hello\" }\n```\n\n```kitty\nfont_size 11.5\n```\n",
+        "```js\nconst value = 1;\n```\n\n```csharp\npublic class Greeter {}\n```\n\n```exs\ndefmodule Greeter do\nend\n```\n\n```clj\n(defn greet [name] (str \"hi \" name))\n```\n\n```pwsh\nfunction Invoke-Greeting { Write-Host \"hello\" }\n```\n\n```kitty\nfont_size 11.5\n```\n",
     )
     .expect("failed to write markdown");
 
@@ -482,6 +482,13 @@ fn markdown_preview_routes_fence_aliases_through_registry() {
         span_color(powershell_line, "function"),
         Some(code_palette.fg)
     );
+
+    let clojure_line = preview
+        .lines
+        .iter()
+        .find(|line| line_text(line).contains("(defn greet [name]"))
+        .expect("expected highlighted clojure line");
+    assert_ne!(span_color(clojure_line, "defn"), Some(code_palette.fg));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -3477,6 +3484,12 @@ fn curated_syntect_languages_render_with_theme_colors() {
             "defmodule Greeter do\n  def greet(name), do: \"hi #{name}\"\nend\n",
             "Elixir",
             "defmodule",
+        ),
+        (
+            "core.clj",
+            "(ns elio.core)\n(defn greet [name] (str \"hi \" name))\n",
+            "Clojure",
+            "defn",
         ),
         (
             "build.ps1",
