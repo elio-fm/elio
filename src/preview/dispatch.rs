@@ -240,9 +240,9 @@ where
             combine_preview_notes(preview_truncation_note, code_truncation_note.as_deref());
         let mut preview = PreviewContent::new(
             PreviewKind::Code,
-            highlighting::render_code_preview_with(
+            code::render_code_preview(
+                preview_spec,
                 &text_preview.text,
-                preview_spec.highlight_language(),
                 true,
                 effective_code_line_limit,
                 canceled,
