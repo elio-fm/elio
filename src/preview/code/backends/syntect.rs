@@ -10,7 +10,30 @@ use syntect::{
 };
 
 // Enable only language families that have been validated against the current bundled syntax set.
-const ENABLED_SYNTAXES: &[&str] = &["javascript", "jsx", "typescript", "tsx"];
+const ENABLED_SYNTAXES: &[&str] = &[
+    "javascript",
+    "jsx",
+    "typescript",
+    "tsx",
+    "rust",
+    "go",
+    "c",
+    "cpp",
+    "java",
+    "php",
+    "python",
+    "ruby",
+    "lua",
+    "make",
+    "sh",
+    "bash",
+    "zsh",
+    "ksh",
+    "fish",
+    "html",
+    "xml",
+    "css",
+];
 const DEFAULT_THEME_NAMES: &[&str] = &["InspiredGitHub", "base16-ocean.dark"];
 
 pub(in crate::preview::code) fn is_enabled(code_syntax: &str) -> bool {
@@ -107,7 +130,8 @@ fn syntect_lookup_token(code_syntax: &str) -> &str {
         "kotlin" => "kt",
         "ruby" => "rb",
         "python" => "py",
-        "bash" | "zsh" | "ksh" | "fish" => "sh",
+        "bash" => "bash",
+        "zsh" | "ksh" => "sh",
         "make" => "makefile",
         _ => code_syntax,
     }
@@ -141,19 +165,7 @@ mod tests {
     fn bundled_syntaxes_cover_initial_canaries() {
         let syntax_set = syntax_set();
 
-        for code_syntax in [
-            "javascript",
-            "jsx",
-            "typescript",
-            "tsx",
-            "rust",
-            "go",
-            "bash",
-            "html",
-            "xml",
-            "css",
-            "lua",
-        ] {
+        for code_syntax in ENABLED_SYNTAXES {
             assert!(
                 find_syntax(syntax_set, code_syntax).is_some(),
                 "missing syntect syntax for {code_syntax}"
@@ -176,7 +188,7 @@ mod tests {
 
     #[test]
     fn missing_bundled_syntaxes_return_errors_for_safe_fallback() {
-        for code_syntax in ["nix", "cmake"] {
+        for code_syntax in ["nix", "cmake", "kotlin", "swift"] {
             assert!(
                 render_syntect_code_preview(code_syntax, "sample\n", true, 20, &|| false).is_err(),
                 "expected {code_syntax} to fail until a curated syntect bundle is added"
@@ -185,8 +197,8 @@ mod tests {
     }
 
     #[test]
-    fn js_family_is_enabled_for_syntect_dispatch() {
-        for code_syntax in ["javascript", "jsx", "typescript", "tsx"] {
+    fn enabled_syntaxes_are_routed_to_syntect() {
+        for code_syntax in ENABLED_SYNTAXES {
             assert!(
                 is_enabled(code_syntax),
                 "expected {code_syntax} to be enabled"

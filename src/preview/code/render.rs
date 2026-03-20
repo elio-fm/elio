@@ -107,6 +107,45 @@ mod tests {
     }
 
     #[test]
+    fn enabled_generic_source_preview_specs_use_syntect() {
+        for (code_syntax, text) in [
+            ("rust", "fn main() {}\n"),
+            ("go", "package main\nfunc main() {}\n"),
+            ("c", "#include <stdio.h>\nint main(void) { return 0; }\n"),
+            (
+                "cpp",
+                "#include <iostream>\nint main() { std::cout << \"hi\"; }\n",
+            ),
+            (
+                "java",
+                "class Main {\n    public static void main(String[] args) {}\n}\n",
+            ),
+            ("php", "<?php echo \"hi\";\n"),
+            ("python", "class Greeter:\n    pass\n"),
+            ("ruby", "class Greeter\nend\n"),
+            ("lua", "local name = \"elio\"\n"),
+            ("make", "build:\n\tcc main.c\n"),
+            ("bash", "export PATH=\"$HOME/bin:$PATH\"\n"),
+            ("html", "<div class=\"app\">elio</div>\n"),
+            ("xml", "<layout id=\"main\" />\n"),
+            ("css", ".app { color: #fff; }\n"),
+        ] {
+            let preview = render_code_preview(
+                PreviewSpec::code(code_syntax, CodeBackend::Syntect, None),
+                text,
+                true,
+                20,
+                &|| false,
+            );
+            let expected =
+                syntect::render_syntect_code_preview(code_syntax, text, true, 20, &|| false)
+                    .expect("{code_syntax} should render through syntect");
+
+            assert_eq!(preview, expected, "expected {code_syntax} to use syntect");
+        }
+    }
+
+    #[test]
     fn syntect_renderer_returns_error_for_unknown_syntax() {
         assert!(
             syntect::render_syntect_code_preview(
