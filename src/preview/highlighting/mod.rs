@@ -52,14 +52,6 @@ where
     }
 }
 
-pub(super) fn render_markdown_code_preview(
-    text: &str,
-    language: Option<HighlightLanguage>,
-    line_numbers: bool,
-) -> Vec<Line<'static>> {
-    render_code_preview(text, language, line_numbers)
-}
-
 #[cfg(test)]
 fn render_highlighted_code_preview_for_tests(
     text: &str,

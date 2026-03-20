@@ -65,7 +65,7 @@ mod tests {
     use crate::file_info::{CodeBackend, PreviewSpec};
 
     #[test]
-    fn syntect_backends_fall_back_to_legacy_until_migration_enables_them() {
+    fn enabled_javascript_preview_specs_use_syntect() {
         let preview = render_code_preview(
             PreviewSpec::code("javascript", CodeBackend::Syntect, None),
             "const value = 1;\n",
@@ -73,13 +73,37 @@ mod tests {
             20,
             &|| false,
         );
+        let expected = syntect::render_syntect_code_preview(
+            "javascript",
+            "const value = 1;\n",
+            true,
+            20,
+            &|| false,
+        )
+        .expect("javascript should render through syntect");
 
-        assert!(
-            preview[0]
-                .spans
-                .iter()
-                .any(|span| span.content.contains("const"))
+        assert_eq!(preview, expected);
+    }
+
+    #[test]
+    fn enabled_typescript_family_uses_syntect_aliases() {
+        let preview = render_code_preview(
+            PreviewSpec::code("tsx", CodeBackend::Syntect, None),
+            "export function App() { return <div>Hello</div>; }\n",
+            true,
+            20,
+            &|| false,
         );
+        let expected = syntect::render_syntect_code_preview(
+            "tsx",
+            "export function App() { return <div>Hello</div>; }\n",
+            true,
+            20,
+            &|| false,
+        )
+        .expect("tsx should render through syntect");
+
+        assert_eq!(preview, expected);
     }
 
     #[test]
@@ -93,6 +117,24 @@ mod tests {
                 &|| false,
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn unsupported_syntect_specs_still_fall_back_to_legacy_rendering() {
+        let preview = render_code_preview(
+            PreviewSpec::code("cmake", CodeBackend::Syntect, None),
+            "project(elio)\n",
+            true,
+            20,
+            &|| false,
+        );
+
+        assert!(
+            preview[0]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("project"))
         );
     }
 }

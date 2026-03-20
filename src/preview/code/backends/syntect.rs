@@ -9,8 +9,8 @@ use syntect::{
     parsing::{SyntaxReference, SyntaxSet},
 };
 
-// Keep syntect routing opt-in until each language family is verified against the bundled syntax set.
-const ENABLED_SYNTAXES: &[&str] = &[];
+// Enable only language families that have been validated against the current bundled syntax set.
+const ENABLED_SYNTAXES: &[&str] = &["javascript", "jsx", "typescript", "tsx"];
 const DEFAULT_THEME_NAMES: &[&str] = &["InspiredGitHub", "base16-ocean.dark"];
 
 pub(in crate::preview::code) fn is_enabled(code_syntax: &str) -> bool {
@@ -100,8 +100,9 @@ fn find_syntax<'a>(syntax_set: &'a SyntaxSet, code_syntax: &str) -> Option<&'a S
 
 fn syntect_lookup_token(code_syntax: &str) -> &str {
     match code_syntax {
-        "javascript" => "js",
-        "typescript" => "ts",
+        // The stock syntect dump includes JavaScript, but not dedicated TypeScript / TSX syntaxes.
+        // Route the whole JS family through the JavaScript grammar until a curated bundle is added.
+        "javascript" | "jsx" | "typescript" | "tsx" => "js",
         "rust" => "rs",
         "kotlin" => "kt",
         "ruby" => "rb",
@@ -142,6 +143,9 @@ mod tests {
 
         for code_syntax in [
             "javascript",
+            "jsx",
+            "typescript",
+            "tsx",
             "rust",
             "go",
             "bash",
@@ -172,10 +176,20 @@ mod tests {
 
     #[test]
     fn missing_bundled_syntaxes_return_errors_for_safe_fallback() {
-        for code_syntax in ["typescript", "tsx", "nix", "cmake"] {
+        for code_syntax in ["nix", "cmake"] {
             assert!(
                 render_syntect_code_preview(code_syntax, "sample\n", true, 20, &|| false).is_err(),
                 "expected {code_syntax} to fail until a curated syntect bundle is added"
+            );
+        }
+    }
+
+    #[test]
+    fn js_family_is_enabled_for_syntect_dispatch() {
+        for code_syntax in ["javascript", "jsx", "typescript", "tsx"] {
+            assert!(
+                is_enabled(code_syntax),
+                "expected {code_syntax} to be enabled"
             );
         }
     }

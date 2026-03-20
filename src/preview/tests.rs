@@ -447,7 +447,7 @@ fn markdown_preview_routes_fence_aliases_through_registry() {
         .iter()
         .find(|line| line_text(line).contains("const value = 1;"))
         .expect("expected highlighted js line");
-    assert_eq!(span_color(js_line, "const"), Some(code_palette.keyword));
+    assert_ne!(span_color(js_line, "const"), Some(code_palette.fg));
 
     let kitty_line = preview
         .lines
@@ -719,19 +719,18 @@ fn javascript_preview_uses_code_renderer_with_colors() {
             .detail
             .is_some_and(|detail| detail.contains("JavaScript"))
     );
-    assert_eq!(
+    assert_ne!(
         span_color(&preview.lines[0], "export"),
-        Some(code_palette.keyword)
+        Some(code_palette.fg)
     );
-    assert_eq!(
+    assert_ne!(
         span_color(&preview.lines[0], "Greeter"),
-        Some(code_palette.r#type)
+        Some(code_palette.fg)
     );
-    assert_eq!(
+    assert_ne!(
         span_color(&preview.lines[1], "return"),
-        Some(code_palette.keyword)
+        Some(code_palette.fg)
     );
-    assert!(line_has_color(&preview.lines[1], code_palette.string));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -3116,12 +3115,26 @@ fn typescript_preview_uses_code_renderer() {
     let root = temp_path("typescript");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("main.ts");
-    fs::write(&path, "export const value = 1;\n").expect("failed to write ts");
+    fs::write(&path, "export const value: number = 1;\n").expect("failed to write ts");
 
     let preview = build_preview(&file_entry(path));
+    let code_palette = theme::code_preview_palette();
 
     assert_eq!(preview.kind, PreviewKind::Code);
-    assert!(preview.detail.is_some());
+    assert!(
+        preview
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("TypeScript"))
+    );
+    assert_ne!(
+        span_color(&preview.lines[0], "export"),
+        Some(code_palette.fg)
+    );
+    assert_ne!(
+        span_color(&preview.lines[0], "const"),
+        Some(code_palette.fg)
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -3138,9 +3151,23 @@ fn tsx_preview_uses_code_renderer() {
     .expect("failed to write tsx");
 
     let preview = build_preview(&file_entry(path));
+    let code_palette = theme::code_preview_palette();
 
     assert_eq!(preview.kind, PreviewKind::Code);
-    assert!(preview.detail.is_some());
+    assert!(
+        preview
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("TSX"))
+    );
+    assert_ne!(
+        span_color(&preview.lines[0], "export"),
+        Some(code_palette.fg)
+    );
+    assert_ne!(
+        span_color(&preview.lines[0], "return"),
+        Some(code_palette.fg)
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
