@@ -1,38 +1,14 @@
+use super::syntect_manifest::{CURATED_SYNTAXES, CuratedSyntax, curated_syntax};
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
 };
 use std::sync::OnceLock;
 use syntect::{
+    dumps::from_uncompressed_data,
     easy::ScopeRangeIterator,
     parsing::{ParseState, Scope, ScopeStack, SyntaxReference, SyntaxSet},
 };
-
-// Enable only language families that have been validated against the current bundled syntax set.
-const ENABLED_SYNTAXES: &[&str] = &[
-    "javascript",
-    "jsx",
-    "typescript",
-    "tsx",
-    "rust",
-    "go",
-    "c",
-    "cpp",
-    "java",
-    "php",
-    "python",
-    "ruby",
-    "lua",
-    "make",
-    "sh",
-    "bash",
-    "zsh",
-    "ksh",
-    "fish",
-    "html",
-    "xml",
-    "css",
-];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SemanticRole {
@@ -66,7 +42,11 @@ struct ScopeSelectors {
 }
 
 pub(in crate::preview::code) fn is_enabled(code_syntax: &str) -> bool {
-    ENABLED_SYNTAXES.contains(&code_syntax)
+    curated_syntax(code_syntax).is_some()
+}
+
+pub(in crate::preview::code) fn supported_syntaxes() -> &'static [CuratedSyntax] {
+    CURATED_SYNTAXES
 }
 
 pub(in crate::preview::code) fn render_syntect_code_preview<F>(
@@ -130,7 +110,13 @@ where
 
 fn syntax_set() -> &'static SyntaxSet {
     static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
-    SYNTAX_SET.get_or_init(SyntaxSet::load_defaults_newlines)
+    SYNTAX_SET.get_or_init(|| {
+        from_uncompressed_data(include_bytes!(concat!(
+            env!("OUT_DIR"),
+            "/elio-curated-syntaxes.packdump"
+        )))
+        .expect("embedded curated syntect syntax dump should deserialize")
+    })
 }
 
 fn scope_selectors() -> &'static ScopeSelectors {
@@ -181,26 +167,10 @@ fn scope_selectors() -> &'static ScopeSelectors {
 }
 
 fn find_syntax<'a>(syntax_set: &'a SyntaxSet, code_syntax: &str) -> Option<&'a SyntaxReference> {
-    let lookup_token = syntect_lookup_token(code_syntax);
+    let lookup_token = curated_syntax(code_syntax)?.lookup_token;
     syntax_set
         .find_syntax_by_token(lookup_token)
         .or_else(|| syntax_set.find_syntax_by_extension(lookup_token))
-}
-
-fn syntect_lookup_token(code_syntax: &str) -> &str {
-    match code_syntax {
-        // The stock syntect dump includes JavaScript, but not dedicated TypeScript / TSX syntaxes.
-        // Route the whole JS family through the JavaScript grammar until a curated bundle is added.
-        "javascript" | "jsx" | "typescript" | "tsx" => "js",
-        "rust" => "rs",
-        "kotlin" => "kt",
-        "ruby" => "rb",
-        "python" => "py",
-        "bash" => "bash",
-        "zsh" | "ksh" => "sh",
-        "make" => "makefile",
-        _ => code_syntax,
-    }
 }
 
 fn syntect_span(
@@ -320,10 +290,11 @@ mod tests {
     fn bundled_syntaxes_cover_initial_canaries() {
         let syntax_set = syntax_set();
 
-        for code_syntax in ENABLED_SYNTAXES {
+        for syntax in supported_syntaxes() {
             assert!(
-                find_syntax(syntax_set, code_syntax).is_some(),
-                "missing syntect syntax for {code_syntax}"
+                find_syntax(syntax_set, syntax.canonical_id).is_some(),
+                "missing syntect syntax for {}",
+                syntax.canonical_id
             );
         }
     }
@@ -346,21 +317,84 @@ mod tests {
     }
 
     #[test]
-    fn missing_bundled_syntaxes_return_errors_for_safe_fallback() {
-        for code_syntax in ["nix", "cmake", "kotlin", "swift"] {
+    fn unsupported_syntaxes_return_errors_for_safe_fallback() {
+        for code_syntax in ["haskell", "brainfuck", "totally-unknown-syntax"] {
             assert!(
                 render_syntect_code_preview(code_syntax, "sample\n", true, 20, &|| false).is_err(),
-                "expected {code_syntax} to fail until a curated syntect bundle is added"
+                "expected {code_syntax} to fall back safely"
             );
         }
     }
 
     #[test]
     fn enabled_syntaxes_are_routed_to_syntect() {
-        for code_syntax in ENABLED_SYNTAXES {
+        for syntax in supported_syntaxes() {
             assert!(
-                is_enabled(code_syntax),
-                "expected {code_syntax} to be enabled"
+                is_enabled(syntax.canonical_id),
+                "expected {} to be enabled",
+                syntax.canonical_id
+            );
+        }
+    }
+
+    #[test]
+    fn curated_bundle_supports_newly_vendored_languages() {
+        for (code_syntax, snippet) in [
+            (
+                "typescript",
+                "export type User = { name: string }\nconst greet = (user: User) => user.name;\n",
+            ),
+            (
+                "tsx",
+                "export function App() { return <button className=\"cta\">Hi</button>; }\n",
+            ),
+            (
+                "jsx",
+                "export function App() { return <button className=\"cta\">Hi</button>; }\n",
+            ),
+            (
+                "nix",
+                "{ description = \"elio\"; outputs = { self }: { packages.default = self; }; }\n",
+            ),
+            (
+                "cmake",
+                "cmake_minimum_required(VERSION 3.28)\nproject(elio)\nadd_executable(elio main.cpp)\n",
+            ),
+            (
+                "scss",
+                "$fg: #fff;\n.button { color: $fg; @include hover { color: red; } }\n",
+            ),
+            ("sass", "$fg: #fff\n.button\n  color: $fg\n"),
+            ("less", "@fg: #fff;\n.button { color: @fg; }\n"),
+            (
+                "cs",
+                "public class Greeter { public string Greet(string name) => name; }\n",
+            ),
+            (
+                "dart",
+                "class Greeter { String greet(String name) => name; }\n",
+            ),
+            (
+                "zig",
+                "const std = @import(\"std\");\npub fn main() void {}\n",
+            ),
+            (
+                "kotlin",
+                "class Greeter { fun greet(name: String): String = name }\n",
+            ),
+            (
+                "swift",
+                "struct Greeter { func greet(name: String) -> String { name } }\n",
+            ),
+        ] {
+            let rendered = render_syntect_code_preview(code_syntax, snippet, true, 20, &|| false)
+                .expect("vendored syntax should render through syntect");
+            assert!(
+                rendered
+                    .iter()
+                    .flat_map(|line| line.spans.iter())
+                    .any(|span| span.style.fg.is_some()),
+                "expected {code_syntax} to produce styled output"
             );
         }
     }

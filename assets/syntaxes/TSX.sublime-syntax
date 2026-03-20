@@ -1,0 +1,80 @@
+%YAML 1.2
+---
+name: TSX
+file_extensions:
+  - tsx
+scope: source.tsx
+variables:
+  identifier: '[A-Za-z_$][A-Za-z0-9_$]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: jsx-tags
+    - include: strings
+    - include: template-strings
+    - match: '\b(?:interface|type|enum|namespace|implements|readonly|declare|infer|keyof|satisfies|abstract|override)\b'
+      scope: storage.type.tsx
+    - match: '\b(?:import|export|from|as|const|let|var|function|return|if|else|for|while|switch|case|break|continue|new|this|class|extends|public|private|protected|static|async|await|try|catch|finally|throw|typeof)\b'
+      scope: keyword.control.tsx
+    - match: '@{{identifier}}'
+      scope: entity.name.function.tsx
+    - match: '\b(?:string|number|boolean|unknown|never|void|object|symbol|bigint|any)\b'
+      scope: support.type.tsx
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.tsx
+    - match: '\b{{identifier}}(?=\s*(?:<[^>\n]+>\s*)?\()'
+      scope: entity.name.function.tsx
+    - match: '\b{{identifier}}(?=\s*:)'
+      scope: variable.parameter.tsx
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.tsx
+    - match: '=>|[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.tsx
+  jsx-tags:
+    - match: '(</?)([A-Za-z][A-Za-z0-9._:-]*)'
+      captures:
+        1: punctuation.definition.tag.tsx
+        2: entity.name.tag.tsx
+    - match: '(/?>)'
+      scope: punctuation.definition.tag.tsx
+    - match: '\b([A-Za-z_:][-A-Za-z0-9_:.]*)(?=\s*=)'
+      captures:
+        1: entity.other.attribute-name.tsx
+  comments:
+    - match: '//.*$'
+      scope: comment.line.double-slash.tsx
+    - match: '/\*'
+      push: block-comment
+  block-comment:
+    - meta_scope: comment.block.tsx
+    - match: '/\*'
+      push: block-comment
+    - match: '\*/'
+      pop: true
+  strings:
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.tsx
+    - match: '\\.'
+      scope: constant.character.escape.tsx
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.tsx
+    - match: '\\.'
+      scope: constant.character.escape.tsx
+    - match: "'"
+      pop: true
+  template-strings:
+    - match: '`'
+      push: template-string
+  template-string:
+    - meta_scope: string.quoted.template.tsx
+    - match: '\\.'
+      scope: constant.character.escape.tsx
+    - match: '`'
+      pop: true

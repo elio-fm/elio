@@ -1,0 +1,72 @@
+%YAML 1.2
+---
+name: TypeScript
+file_extensions:
+  - ts
+  - mts
+  - cts
+  - typescript
+scope: source.ts
+variables:
+  identifier: '[A-Za-z_$][A-Za-z0-9_$]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - include: template-strings
+    - match: '\b(?:interface|type|enum|namespace|implements|readonly|declare|infer|keyof|satisfies|abstract|override)\b'
+      scope: storage.type.typescript
+    - match: '\b(?:import|export|from|as|const|let|var|function|return|if|else|for|while|switch|case|break|continue|new|this|class|extends|public|private|protected|static|async|await|try|catch|finally|throw|typeof)\b'
+      scope: keyword.control.typescript
+    - match: '@{{identifier}}'
+      scope: entity.name.function.typescript
+    - match: '\b(?:string|number|boolean|unknown|never|void|object|symbol|bigint|any)\b'
+      scope: support.type.typescript
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.typescript
+    - match: '\b{{identifier}}(?=\s*(?:<[^>\n]+>\s*)?\()'
+      scope: entity.name.function.typescript
+    - match: '\b{{identifier}}(?=\s*:)'
+      scope: variable.parameter.typescript
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.typescript
+    - match: '=>|[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.typescript
+  comments:
+    - match: '//.*$'
+      scope: comment.line.double-slash.typescript
+    - match: '/\*'
+      push: block-comment
+  block-comment:
+    - meta_scope: comment.block.typescript
+    - match: '/\*'
+      push: block-comment
+    - match: '\*/'
+      pop: true
+  strings:
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.typescript
+    - match: '\\.'
+      scope: constant.character.escape.typescript
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.typescript
+    - match: '\\.'
+      scope: constant.character.escape.typescript
+    - match: "'"
+      pop: true
+  template-strings:
+    - match: '`'
+      push: template-string
+  template-string:
+    - meta_scope: string.quoted.template.typescript
+    - match: '\\.'
+      scope: constant.character.escape.typescript
+    - match: '`'
+      pop: true

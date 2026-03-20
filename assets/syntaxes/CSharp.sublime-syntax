@@ -1,0 +1,65 @@
+%YAML 1.2
+---
+name: C#
+file_extensions:
+  - cs
+  - csx
+  - csharp
+scope: source.cs
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9_]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - match: '\b(?:using|namespace|class|interface|struct|enum|record|public|private|protected|internal|static|async|await|return|if|else|switch|case|break|continue|for|foreach|while|do|try|catch|finally|throw|new|this|base|where|nameof|partial)\b'
+      scope: keyword.control.csharp
+    - match: '\b(?:void|bool|byte|short|int|long|float|double|decimal|string|char|object|var)\b'
+      scope: support.type.csharp
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.csharp
+    - match: '\b{{identifier}}(?=\s*\()'
+      scope: entity.name.function.csharp
+    - match: '\b{{identifier}}(?=\s*:)'
+      scope: variable.parameter.csharp
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.csharp
+    - match: '=>|[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.csharp
+  comments:
+    - match: '//.*$'
+      scope: comment.line.double-slash.csharp
+    - match: '/\*'
+      push: block-comment
+  block-comment:
+    - meta_scope: comment.block.csharp
+    - match: '/\*'
+      push: block-comment
+    - match: '\*/'
+      pop: true
+  strings:
+    - match: '@"'
+      push: verbatim-string
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+  verbatim-string:
+    - meta_scope: string.quoted.double.csharp
+    - match: '""'
+      scope: constant.character.escape.csharp
+    - match: '"'
+      pop: true
+  double-quoted-string:
+    - meta_scope: string.quoted.double.csharp
+    - match: '\\.'
+      scope: constant.character.escape.csharp
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.csharp
+    - match: '\\.'
+      scope: constant.character.escape.csharp
+    - match: "'"
+      pop: true

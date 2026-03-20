@@ -1,0 +1,49 @@
+%YAML 1.2
+---
+name: Swift
+file_extensions:
+  - swift
+scope: source.swift
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9_]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - match: '@{{identifier}}'
+      scope: entity.name.function.swift
+    - match: '\b(?:import|class|struct|protocol|extension|func|let|var|if|else|guard|switch|case|for|while|defer|return|throws|throw|rethrows|async|await|actor|enum|associatedtype|where|inout|init|deinit)\b'
+      scope: keyword.control.swift
+    - match: '\b(?:Void|Bool|Int|String|Double|Float|Character|Any|Self|Never)\b'
+      scope: support.type.swift
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.swift
+    - match: '\b{{identifier}}(?=\s*\()'
+      scope: entity.name.function.swift
+    - match: '\b{{identifier}}(?=\s*:)'
+      scope: variable.parameter.swift
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.swift
+    - match: '->|[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.swift
+  comments:
+    - match: '//.*$'
+      scope: comment.line.double-slash.swift
+    - match: '/\*'
+      push: block-comment
+  block-comment:
+    - meta_scope: comment.block.swift
+    - match: '/\*'
+      push: block-comment
+    - match: '\*/'
+      pop: true
+  strings:
+    - match: '"'
+      push: double-quoted-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.swift
+    - match: '\\.'
+      scope: constant.character.escape.swift
+    - match: '"'
+      pop: true

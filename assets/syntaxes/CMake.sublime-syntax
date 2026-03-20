@@ -1,0 +1,38 @@
+%YAML 1.2
+---
+name: CMake
+file_extensions:
+  - cmake
+  - cmakelists.txt
+scope: source.cmake
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9_]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - match: '\$\{[A-Za-z_][A-Za-z0-9_]*\}'
+      scope: variable.parameter.cmake
+    - match: '\b(?:if|else|elseif|endif|foreach|endforeach|while|endwhile|function|endfunction|macro|endmacro)\b'
+      scope: keyword.control.cmake
+    - match: '\b(?:ON|OFF|TRUE|FALSE|WIN32|UNIX|APPLE)\b'
+      scope: support.constant.cmake
+    - match: '\b{{identifier}}(?=\s*\()'
+      scope: entity.name.function.cmake
+    - match: '\b(?:AND|OR|NOT|STREQUAL|EQUAL|LESS|GREATER)\b'
+      scope: keyword.operator.cmake
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.cmake
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.cmake
+  strings:
+    - match: '"'
+      push: double-quoted-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.cmake
+    - match: '\\.'
+      scope: constant.character.escape.cmake
+    - match: '"'
+      pop: true

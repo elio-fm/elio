@@ -118,6 +118,9 @@ fn json5_gets_parser_backed_preview_support() {
 fn html_and_css_files_use_code_preview_support() {
     let html = inspect_path(Path::new("index.html"), EntryKind::File);
     let css = inspect_path(Path::new("styles.css"), EntryKind::File);
+    let scss = inspect_path(Path::new("styles.scss"), EntryKind::File);
+    let sass = inspect_path(Path::new("styles.sass"), EntryKind::File);
+    let less = inspect_path(Path::new("styles.less"), EntryKind::File);
 
     assert_eq!(html.builtin_class, FileClass::Code);
     assert_eq!(html.preview.language_hint, Some("html"));
@@ -126,6 +129,18 @@ fn html_and_css_files_use_code_preview_support() {
     assert_eq!(css.builtin_class, FileClass::Code);
     assert_eq!(css.preview.language_hint, Some("css"));
     assert_code_spec(css.preview, Some("css"), CodeBackend::Syntect);
+
+    assert_eq!(scss.builtin_class, FileClass::Code);
+    assert_eq!(scss.preview.language_hint, Some("scss"));
+    assert_code_spec(scss.preview, Some("scss"), CodeBackend::Syntect);
+
+    assert_eq!(sass.builtin_class, FileClass::Code);
+    assert_eq!(sass.preview.language_hint, Some("sass"));
+    assert_code_spec(sass.preview, Some("sass"), CodeBackend::Syntect);
+
+    assert_eq!(less.builtin_class, FileClass::Code);
+    assert_eq!(less.preview.language_hint, Some("less"));
+    assert_code_spec(less.preview, Some("less"), CodeBackend::Syntect);
 }
 
 #[test]
@@ -225,13 +240,46 @@ fn extensionless_shebang_scripts_are_classified_as_shell_code() {
 #[test]
 fn js_like_files_use_syntax_highlighting() {
     let js = inspect_path(Path::new("main.js"), EntryKind::File);
+    let ts = inspect_path(Path::new("main.ts"), EntryKind::File);
     let tsx = inspect_path(Path::new("App.tsx"), EntryKind::File);
 
     assert_eq!(js.builtin_class, FileClass::Code);
     assert_code_spec(js.preview, Some("javascript"), CodeBackend::Syntect);
 
+    assert_eq!(ts.builtin_class, FileClass::Code);
+    assert_code_spec(ts.preview, Some("typescript"), CodeBackend::Syntect);
+
     assert_eq!(tsx.builtin_class, FileClass::Code);
     assert_code_spec(tsx.preview, Some("tsx"), CodeBackend::Syntect);
+}
+
+#[test]
+fn curated_generic_languages_use_syntect_preview_support() {
+    let cs = inspect_path(Path::new("Program.cs"), EntryKind::File);
+    let dart = inspect_path(Path::new("main.dart"), EntryKind::File);
+    let zig = inspect_path(Path::new("main.zig"), EntryKind::File);
+    let swift = inspect_path(Path::new("main.swift"), EntryKind::File);
+    let kotlin = inspect_path(Path::new("main.kts"), EntryKind::File);
+
+    assert_eq!(cs.builtin_class, FileClass::Code);
+    assert_eq!(cs.specific_type_label, Some("C# source file"));
+    assert_code_spec(cs.preview, Some("cs"), CodeBackend::Syntect);
+
+    assert_eq!(dart.builtin_class, FileClass::Code);
+    assert_eq!(dart.specific_type_label, Some("Dart source file"));
+    assert_code_spec(dart.preview, Some("dart"), CodeBackend::Syntect);
+
+    assert_eq!(zig.builtin_class, FileClass::Code);
+    assert_eq!(zig.specific_type_label, Some("Zig source file"));
+    assert_code_spec(zig.preview, Some("zig"), CodeBackend::Syntect);
+
+    assert_eq!(swift.builtin_class, FileClass::Code);
+    assert_eq!(swift.specific_type_label, Some("Swift source file"));
+    assert_code_spec(swift.preview, Some("swift"), CodeBackend::Syntect);
+
+    assert_eq!(kotlin.builtin_class, FileClass::Code);
+    assert_eq!(kotlin.specific_type_label, Some("Kotlin source file"));
+    assert_code_spec(kotlin.preview, Some("kotlin"), CodeBackend::Syntect);
 }
 
 #[test]

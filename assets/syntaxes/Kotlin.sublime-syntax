@@ -1,0 +1,57 @@
+%YAML 1.2
+---
+name: Kotlin
+file_extensions:
+  - kt
+  - kts
+  - kotlin
+scope: source.kotlin
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9_]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - match: '@{{identifier}}'
+      scope: entity.name.function.kotlin
+    - match: '\b(?:package|import|class|interface|object|fun|val|var|when|if|else|for|while|do|return|break|continue|is|in|as|typealias|data|sealed|inner|open|override|lateinit|companion|suspend|tailrec|operator|infix|reified|where|by)\b'
+      scope: keyword.control.kotlin
+    - match: '\b(?:Unit|Boolean|Byte|Short|Int|Long|Float|Double|Char|String|Any|Nothing)\b'
+      scope: support.type.kotlin
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.kotlin
+    - match: '\b{{identifier}}(?=\s*\()'
+      scope: entity.name.function.kotlin
+    - match: '\b{{identifier}}(?=\s*:)'
+      scope: variable.parameter.kotlin
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.kotlin
+    - match: '->|[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.kotlin
+  comments:
+    - match: '//.*$'
+      scope: comment.line.double-slash.kotlin
+    - match: '/\*'
+      push: block-comment
+  block-comment:
+    - meta_scope: comment.block.kotlin
+    - match: '/\*'
+      push: block-comment
+    - match: '\*/'
+      pop: true
+  strings:
+    - match: '"""'
+      push: triple-quoted-string
+    - match: '"'
+      push: double-quoted-string
+  triple-quoted-string:
+    - meta_scope: string.quoted.double.kotlin
+    - match: '"""'
+      pop: true
+  double-quoted-string:
+    - meta_scope: string.quoted.double.kotlin
+    - match: '\\.'
+      scope: constant.character.escape.kotlin
+    - match: '"'
+      pop: true

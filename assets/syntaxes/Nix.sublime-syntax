@@ -1,0 +1,45 @@
+%YAML 1.2
+---
+name: Nix
+file_extensions:
+  - nix
+scope: source.nix
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9_''-]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - match: "''"
+      push: indented-string
+    - match: '\b(?:let|in|with|if|then|else|inherit|rec|assert|or)\b'
+      scope: keyword.control.nix
+    - match: '\b(?:builtins|true|false|null)\b'
+      scope: constant.language.nix
+    - match: '\b{{identifier}}(?=\s*=)'
+      scope: variable.parameter.nix
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: support.type.nix
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.nix
+    - match: '/[A-Za-z0-9_./+-]+'
+      scope: string.unquoted.path.nix
+    - match: '[-+*/=<>!?:|]+'
+      scope: keyword.operator.nix
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.nix
+  strings:
+    - match: '"'
+      push: double-quoted-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.nix
+    - match: '\\.'
+      scope: constant.character.escape.nix
+    - match: '"'
+      pop: true
+  indented-string:
+    - meta_scope: string.quoted.other.nix
+    - match: "''"
+      pop: true

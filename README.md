@@ -260,6 +260,21 @@ Ready-to-use themes are in [examples/themes/](examples/themes/). Copy any `theme
 
 ---
 
+## Code Preview Support
+
+Structured previews take priority over generic syntax highlighting for Markdown, JSON, JSONC / JSON5, TOML, YAML, `.env`, logs, directive configs, and INI / Desktop Entry files.
+
+The current curated syntect bundle explicitly supports these code syntaxes:
+
+- `html`, `xml`, `css`, `scss`, `sass`, `less`
+- `javascript`, `jsx`, `typescript`, `tsx`
+- `rust`, `go`, `c`, `cpp`, `cs`, `java`, `dart`, `zig`, `php`, `swift`, `kotlin`, `ruby`, `python`, `lua`
+- `make`, `sh`, `bash`, `zsh`, `ksh`, `fish`, `nix`, `cmake`
+
+Anything outside that matrix falls back to plain code preview instead of advertising unsupported highlighting.
+
+---
+
 ## License
 
 [MIT](LICENSE-MIT)

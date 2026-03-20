@@ -331,12 +331,36 @@ const LANGUAGES: &[RegistryEntry] = &[
         markdown_fences: &["cpp", "c++", "cc", "cxx", "hpp", "hh", "hxx"],
     },
     RegistryEntry {
+        language: language("cs", "C#", CodeBackend::Syntect, None),
+        extensions: &["cs", "csx"],
+        exact_filenames: &[],
+        shebang_interpreters: &[],
+        modelines: &["cs", "csharp", "c#"],
+        markdown_fences: &["cs", "csharp", "c#"],
+    },
+    RegistryEntry {
         language: language("java", "Java", CodeBackend::Syntect, None),
         extensions: &["java"],
         exact_filenames: &[],
         shebang_interpreters: &[],
         modelines: &["java"],
         markdown_fences: &["java"],
+    },
+    RegistryEntry {
+        language: language("dart", "Dart", CodeBackend::Syntect, None),
+        extensions: &["dart"],
+        exact_filenames: &[],
+        shebang_interpreters: &[],
+        modelines: &["dart"],
+        markdown_fences: &["dart"],
+    },
+    RegistryEntry {
+        language: language("zig", "Zig", CodeBackend::Syntect, None),
+        extensions: &["zig"],
+        exact_filenames: &[],
+        shebang_interpreters: &[],
+        modelines: &["zig"],
+        markdown_fences: &["zig"],
     },
     RegistryEntry {
         language: language("php", "PHP", CodeBackend::Syntect, None),
@@ -356,11 +380,11 @@ const LANGUAGES: &[RegistryEntry] = &[
     },
     RegistryEntry {
         language: language("kotlin", "Kotlin", CodeBackend::Syntect, None),
-        extensions: &["kt"],
+        extensions: &["kt", "kts"],
         exact_filenames: &[],
         shebang_interpreters: &[],
-        modelines: &["kotlin", "kt"],
-        markdown_fences: &["kotlin", "kt"],
+        modelines: &["kotlin", "kt", "kts"],
+        markdown_fences: &["kotlin", "kt", "kts"],
     },
     RegistryEntry {
         language: language("ruby", "Ruby", CodeBackend::Syntect, None),
@@ -524,6 +548,7 @@ fn is_env_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::preview::code::backends::syntect_manifest::CURATED_SYNTAXES;
 
     fn assert_registered_language(
         language: Option<RegisteredLanguage>,
@@ -544,6 +569,10 @@ mod tests {
         assert_eq!(
             language_for_extension("js").map(|language| language.canonical_id),
             Some("javascript")
+        );
+        assert_eq!(
+            language_for_extension("kts").map(|language| language.canonical_id),
+            Some("kotlin")
         );
         assert_eq!(
             language_for_extension("tsx").map(|language| language.canonical_id),
@@ -596,6 +625,10 @@ mod tests {
         assert_eq!(
             language_for_markdown_fence("c++").map(|language| language.canonical_id),
             Some("cpp")
+        );
+        assert_eq!(
+            language_for_markdown_fence("c#").map(|language| language.canonical_id),
+            Some("cs")
         );
     }
 
@@ -663,5 +696,23 @@ mod tests {
         assert_eq!(bash.code_syntax, Some("bash"));
         assert_eq!(bash.code_backend, CodeBackend::Syntect);
         assert_eq!(bash.structured_format, None);
+    }
+
+    #[test]
+    fn syntect_registry_entries_match_curated_support_matrix() {
+        let mut registered = LANGUAGES
+            .iter()
+            .filter(|entry| entry.language.backend == CodeBackend::Syntect)
+            .map(|entry| entry.language.canonical_id)
+            .collect::<Vec<_>>();
+        registered.sort_unstable();
+
+        let mut curated = CURATED_SYNTAXES
+            .iter()
+            .map(|syntax| syntax.canonical_id)
+            .collect::<Vec<_>>();
+        curated.sort_unstable();
+
+        assert_eq!(registered, curated);
     }
 }

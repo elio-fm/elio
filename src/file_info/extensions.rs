@@ -246,9 +246,24 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("Swift source file"),
             preview: preview_for_extension(ext),
         },
-        "kt" => FileFacts {
+        "kt" | "kts" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Kotlin source file"),
+            preview: preview_for_extension(ext),
+        },
+        "cs" | "csx" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("C# source file"),
+            preview: preview_for_extension(ext),
+        },
+        "dart" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Dart source file"),
+            preview: preview_for_extension(ext),
+        },
+        "zig" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Zig source file"),
             preview: preview_for_extension(ext),
         },
         "rb" => FileFacts {

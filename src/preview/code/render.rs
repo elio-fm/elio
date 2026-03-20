@@ -120,10 +120,30 @@ mod tests {
                 "#include <iostream>\nint main() { std::cout << \"hi\"; }\n",
             ),
             (
+                "cs",
+                "public class Greeter { public string Greet(string name) => name; }\n",
+            ),
+            (
                 "java",
                 "class Main {\n    public static void main(String[] args) {}\n}\n",
             ),
+            (
+                "dart",
+                "class Greeter { String greet(String name) => name; }\n",
+            ),
+            (
+                "zig",
+                "const std = @import(\"std\");\npub fn main() void {}\n",
+            ),
             ("php", "<?php echo \"hi\";\n"),
+            (
+                "swift",
+                "struct Greeter { func greet(name: String) -> String { name } }\n",
+            ),
+            (
+                "kotlin",
+                "class Greeter { fun greet(name: String): String = name }\n",
+            ),
             ("python", "class Greeter:\n    pass\n"),
             ("ruby", "class Greeter\nend\n"),
             ("lua", "local name = \"elio\"\n"),
@@ -132,6 +152,17 @@ mod tests {
             ("html", "<div class=\"app\">elio</div>\n"),
             ("xml", "<layout id=\"main\" />\n"),
             ("css", ".app { color: #fff; }\n"),
+            ("scss", "$fg: #fff;\n.button { color: $fg; }\n"),
+            ("sass", "$fg: #fff\n.button\n  color: $fg\n"),
+            ("less", "@fg: #fff;\n.button { color: @fg; }\n"),
+            (
+                "nix",
+                "{ description = \"elio\"; outputs = { self }: { packages.default = self; }; }\n",
+            ),
+            (
+                "cmake",
+                "cmake_minimum_required(VERSION 3.28)\nproject(elio)\n",
+            ),
         ] {
             let preview = render_code_preview(
                 PreviewSpec::code(code_syntax, CodeBackend::Syntect, None),
@@ -165,13 +196,13 @@ mod tests {
     #[test]
     fn unsupported_syntect_specs_still_fall_back_to_plain_rendering() {
         let preview = render_code_preview(
-            PreviewSpec::code("cmake", CodeBackend::Syntect, None),
-            "project(elio)\n",
+            PreviewSpec::code("totally-unknown-syntax", CodeBackend::Syntect, None),
+            "still plain\n",
             true,
             20,
             &|| false,
         );
-        let expected = plain::render_plain_code_preview("project(elio)\n", true, 20, &|| false);
+        let expected = plain::render_plain_code_preview("still plain\n", true, 20, &|| false);
 
         assert_eq!(preview, expected);
     }

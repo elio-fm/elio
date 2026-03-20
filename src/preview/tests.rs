@@ -730,7 +730,7 @@ fn javascript_preview_uses_code_renderer_with_colors() {
 }
 
 #[test]
-fn nix_preview_falls_back_to_plain_code_when_syntect_support_is_unavailable() {
+fn nix_preview_uses_curated_syntect_support() {
     let root = temp_path("nix");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("flake.nix");
@@ -745,11 +745,11 @@ fn nix_preview_falls_back_to_plain_code_when_syntect_support_is_unavailable() {
 
     assert_eq!(preview.kind, PreviewKind::Code);
     assert!(preview.detail.is_some_and(|detail| detail.contains("Nix")));
-    assert_eq!(
+    assert_ne!(
         span_color(&preview.lines[0], "description"),
         Some(code_palette.fg)
     );
-    assert!(!line_has_color(&preview.lines[0], code_palette.string));
+    assert!(line_has_color(&preview.lines[0], code_palette.string));
     assert!(
         preview
             .lines
@@ -762,7 +762,7 @@ fn nix_preview_falls_back_to_plain_code_when_syntect_support_is_unavailable() {
 }
 
 #[test]
-fn cmake_preview_falls_back_to_plain_code_when_syntect_support_is_unavailable() {
+fn cmake_preview_uses_curated_syntect_support() {
     let root = temp_path("cmake");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("CMakeLists.txt");
@@ -781,8 +781,12 @@ fn cmake_preview_falls_back_to_plain_code_when_syntect_support_is_unavailable() 
             .detail
             .is_some_and(|detail| detail.contains("CMake"))
     );
-    assert_eq!(
+    assert_ne!(
         span_color(&preview.lines[2], "add_executable"),
+        Some(code_palette.fg)
+    );
+    assert_ne!(
+        span_color(&preview.lines[1], "project"),
         Some(code_palette.fg)
     );
     assert!(
@@ -3129,6 +3133,10 @@ fn typescript_preview_uses_code_renderer() {
         span_color(&preview.lines[0], "const"),
         Some(code_palette.fg)
     );
+    assert_ne!(
+        span_color(&preview.lines[0], "number"),
+        Some(code_palette.fg)
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -3140,7 +3148,7 @@ fn tsx_preview_uses_code_renderer() {
     let path = root.join("App.tsx");
     fs::write(
         &path,
-        "export function App() { return <div>Hello</div>; }\n",
+        "export function App() { return <div className=\"greeting\">Hello</div>; }\n",
     )
     .expect("failed to write tsx");
 
@@ -3162,6 +3170,89 @@ fn tsx_preview_uses_code_renderer() {
         span_color(&preview.lines[0], "return"),
         Some(code_palette.fg)
     );
+    assert_eq!(span_color(&preview.lines[0], "div"), Some(code_palette.tag));
+    assert_eq!(
+        span_color(&preview.lines[0], "className"),
+        Some(code_palette.parameter)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn curated_syntect_languages_render_with_theme_colors() {
+    let root = temp_path("curated-syntect");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let code_palette = theme::code_preview_palette();
+
+    for (name, contents, detail, token) in [
+        (
+            "styles.scss",
+            "$fg: #fff;\n.button { color: $fg; }\n",
+            "SCSS",
+            "$fg",
+        ),
+        (
+            "theme.sass",
+            "$fg: #fff\n.button\n  color: $fg\n",
+            "Sass",
+            "$fg",
+        ),
+        (
+            "theme.less",
+            "@fg: #fff;\n.button { color: @fg; }\n",
+            "Less",
+            "@fg",
+        ),
+        (
+            "Program.cs",
+            "public class Greeter { public string Greet(string name) => name; }\n",
+            "C#",
+            "public",
+        ),
+        (
+            "main.dart",
+            "class Greeter { String greet(String name) => name; }\n",
+            "Dart",
+            "class",
+        ),
+        (
+            "main.zig",
+            "const std = @import(\"std\");\npub fn main() void {}\n",
+            "Zig",
+            "@import",
+        ),
+        (
+            "main.kt",
+            "class Greeter { fun greet(name: String): String = name }\n",
+            "Kotlin",
+            "fun",
+        ),
+        (
+            "main.swift",
+            "struct Greeter { func greet(name: String) -> String { name } }\n",
+            "Swift",
+            "func",
+        ),
+    ] {
+        let path = root.join(name);
+        fs::write(&path, contents).expect("failed to write curated syntax fixture");
+        let preview = build_preview(&file_entry(path));
+
+        assert_eq!(preview.kind, PreviewKind::Code);
+        assert!(
+            preview
+                .detail
+                .as_deref()
+                .is_some_and(|rendered| rendered.contains(detail)),
+            "expected preview detail to mention {detail}"
+        );
+        assert_ne!(
+            span_color(&preview.lines[0], token),
+            Some(code_palette.fg),
+            "expected {name} to highlight {token}"
+        );
+    }
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

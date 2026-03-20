@@ -1,0 +1,69 @@
+%YAML 1.2
+---
+name: Dart
+file_extensions:
+  - dart
+scope: source.dart
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9_]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - match: '@{{identifier}}'
+      scope: entity.name.function.dart
+    - match: '\b(?:import|export|library|part|class|mixin|enum|extension|typedef|implements|extends|with|abstract|final|const|var|late|required|async|await|yield|return|if|else|switch|case|break|continue|for|while|try|catch|finally|throw|new|this|super)\b'
+      scope: keyword.control.dart
+    - match: '\b(?:void|bool|int|double|num|String|Object|dynamic|Never)\b'
+      scope: support.type.dart
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.dart
+    - match: '\b{{identifier}}(?=\s*\()'
+      scope: entity.name.function.dart
+    - match: '\b{{identifier}}(?=\s*:)'
+      scope: variable.parameter.dart
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.dart
+    - match: '=>|[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.dart
+  comments:
+    - match: '//.*$'
+      scope: comment.line.double-slash.dart
+    - match: '/\*'
+      push: block-comment
+  block-comment:
+    - meta_scope: comment.block.dart
+    - match: '/\*'
+      push: block-comment
+    - match: '\*/'
+      pop: true
+  strings:
+    - match: 'r"'
+      push: raw-double-quoted-string
+    - match: "r'"
+      push: raw-single-quoted-string
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+  raw-double-quoted-string:
+    - meta_scope: string.quoted.double.dart
+    - match: '"'
+      pop: true
+  raw-single-quoted-string:
+    - meta_scope: string.quoted.single.dart
+    - match: "'"
+      pop: true
+  double-quoted-string:
+    - meta_scope: string.quoted.double.dart
+    - match: '\\.'
+      scope: constant.character.escape.dart
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.dart
+    - match: '\\.'
+      scope: constant.character.escape.dart
+    - match: "'"
+      pop: true

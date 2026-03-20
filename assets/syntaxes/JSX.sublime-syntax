@@ -1,0 +1,72 @@
+%YAML 1.2
+---
+name: JSX
+file_extensions:
+  - jsx
+scope: source.jsx
+variables:
+  identifier: '[A-Za-z_$][A-Za-z0-9_$]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: jsx-tags
+    - include: strings
+    - include: template-strings
+    - match: '\b(?:import|export|from|as|const|let|var|function|return|if|else|for|while|switch|case|break|continue|new|this|class|extends|static|async|await|try|catch|finally|throw)\b'
+      scope: keyword.control.jsx
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.jsx
+    - match: '\b{{identifier}}(?=\s*\()'
+      scope: entity.name.function.jsx
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.jsx
+    - match: '=>|[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.jsx
+  jsx-tags:
+    - match: '(</?)([A-Za-z][A-Za-z0-9._:-]*)'
+      captures:
+        1: punctuation.definition.tag.jsx
+        2: entity.name.tag.jsx
+    - match: '(/?>)'
+      scope: punctuation.definition.tag.jsx
+    - match: '\b([A-Za-z_:][-A-Za-z0-9_:.]*)(?=\s*=)'
+      captures:
+        1: entity.other.attribute-name.jsx
+  comments:
+    - match: '//.*$'
+      scope: comment.line.double-slash.jsx
+    - match: '/\*'
+      push: block-comment
+  block-comment:
+    - meta_scope: comment.block.jsx
+    - match: '/\*'
+      push: block-comment
+    - match: '\*/'
+      pop: true
+  strings:
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.jsx
+    - match: '\\.'
+      scope: constant.character.escape.jsx
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.jsx
+    - match: '\\.'
+      scope: constant.character.escape.jsx
+    - match: "'"
+      pop: true
+  template-strings:
+    - match: '`'
+      push: template-string
+  template-string:
+    - meta_scope: string.quoted.template.jsx
+    - match: '\\.'
+      scope: constant.character.escape.jsx
+    - match: '`'
+      pop: true
