@@ -34,6 +34,7 @@ struct ScopeSelectors {
     function: [Scope; 3],
     type_name: [Scope; 4],
     parameter: [Scope; 3],
+    shell_variable: [Scope; 4],
     tag: [Scope; 3],
     operator: [Scope; 3],
     macro_name: [Scope; 4],
@@ -144,6 +145,12 @@ fn scope_selectors() -> &'static ScopeSelectors {
                 scope("entity.other.attribute-name"),
                 scope("variable.other.readwrite.assignment"),
             ],
+            shell_variable: [
+                scope("meta.group.expansion.parameter"),
+                scope("punctuation.definition.variable"),
+                scope("variable.other.readwrite.shell"),
+                scope("variable.language.shell"),
+            ],
             tag: [
                 scope("entity.name.tag"),
                 scope("meta.tag"),
@@ -198,6 +205,8 @@ fn semantic_role_for_token(text: &str, scope_stack: &[Scope]) -> SemanticRole {
         SemanticRole::String
     } else if scope_stack_matches(scope_stack, &selectors.macro_name) {
         SemanticRole::Macro
+    } else if scope_stack_matches(scope_stack, &selectors.shell_variable) {
+        SemanticRole::Parameter
     } else if scope_stack_matches(scope_stack, &selectors.parameter) {
         SemanticRole::Parameter
     } else if scope_stack_matches(scope_stack, &selectors.tag) {
@@ -284,6 +293,29 @@ mod tests {
             palette.r#macro,
             palette.invalid,
         ]
+    }
+
+    fn token_scopes(code_syntax: &str, text: &str) -> Vec<(String, String)> {
+        let syntax_set = syntax_set();
+        let syntax = find_syntax(syntax_set, code_syntax).expect("syntax should exist");
+        let mut parse_state = ParseState::new(syntax);
+        let mut scope_stack = ScopeStack::new();
+        let mut tokens = Vec::new();
+
+        for line in text.lines() {
+            let ops = parse_state
+                .parse_line(line, syntax_set)
+                .expect("line should parse");
+            for (range, op) in ScopeRangeIterator::new(&ops, line) {
+                scope_stack.apply(op).expect("scope op should apply");
+                let token = &line[range];
+                if !token.is_empty() {
+                    tokens.push((token.to_string(), scope_stack.to_string()));
+                }
+            }
+        }
+
+        tokens
     }
 
     #[test]
@@ -468,6 +500,51 @@ mod tests {
         .expect("html syntax should render through syntect");
         assert_eq!(span_color(&html[0], "div"), Some(palette.tag));
         assert_eq!(span_color(&html[0], "class"), Some(palette.parameter));
+    }
+
+    #[test]
+    fn shell_tokens_map_to_semantic_roles() {
+        let palette = theme::code_preview_palette();
+        let sample = "NAME=elio\nif [ -n \"$HOME\" ]; then\n  echo \"$NAME\"\nfi # done\n";
+        let rendered = render_syntect_code_preview("bash", sample, true, 20, &|| false)
+            .expect("bash syntax should render through syntect");
+        let scopes = token_scopes("bash", sample);
+
+        assert_ne!(
+            span_color(&rendered[0], "NAME"),
+            Some(palette.fg),
+            "shell assignment fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[1], "if"),
+            Some(palette.fg),
+            "shell keyword fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[1], "$"),
+            Some(palette.fg),
+            "shell variable marker fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[1], "HOME"),
+            Some(palette.fg),
+            "shell variable fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[2], "echo"),
+            Some(palette.fg),
+            "shell builtin fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_eq!(
+            span_color(&rendered[3], "#"),
+            Some(palette.comment),
+            "shell comment marker did not map to comment color; scopes: {scopes:#?}"
+        );
+        assert_eq!(
+            span_color(&rendered[3], " done"),
+            Some(palette.comment),
+            "shell comment did not map to comment color; scopes: {scopes:#?}"
+        );
     }
 
     #[test]
