@@ -47,6 +47,40 @@ impl DocumentFormat {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CodeBackend {
+    Plain,
+    Syntect,
+    Custom(CustomCodeKind),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CustomCodeKind {
+    DirectiveConf,
+    Ini,
+    DesktopEntry,
+    Json,
+    Jsonc,
+    Toml,
+    Yaml,
+    Log,
+}
+
+impl CustomCodeKind {
+    pub(crate) const fn highlight_language(self) -> HighlightLanguage {
+        match self {
+            Self::DirectiveConf => HighlightLanguage::DirectiveConf,
+            Self::Ini => HighlightLanguage::Ini,
+            Self::DesktopEntry => HighlightLanguage::DesktopEntry,
+            Self::Json => HighlightLanguage::Json,
+            Self::Jsonc => HighlightLanguage::Jsonc,
+            Self::Toml => HighlightLanguage::Toml,
+            Self::Yaml => HighlightLanguage::Yaml,
+            Self::Log => HighlightLanguage::Log,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum HighlightLanguage {
     JsLike,
     CLike,
@@ -96,6 +130,52 @@ impl HighlightLanguage {
         self.label().to_string()
     }
 
+    pub(crate) const fn code_backend(self) -> CodeBackend {
+        match self {
+            Self::JsLike
+            | Self::CLike
+            | Self::Lua
+            | Self::Python
+            | Self::Make
+            | Self::Shell
+            | Self::Nix
+            | Self::CMake
+            | Self::Markup
+            | Self::Css => CodeBackend::Syntect,
+            Self::DirectiveConf => CodeBackend::Custom(CustomCodeKind::DirectiveConf),
+            Self::Toml => CodeBackend::Custom(CustomCodeKind::Toml),
+            Self::Json => CodeBackend::Custom(CustomCodeKind::Json),
+            Self::Jsonc => CodeBackend::Custom(CustomCodeKind::Jsonc),
+            Self::Yaml => CodeBackend::Custom(CustomCodeKind::Yaml),
+            Self::Log => CodeBackend::Custom(CustomCodeKind::Log),
+            Self::Ini => CodeBackend::Custom(CustomCodeKind::Ini),
+            Self::DesktopEntry => CodeBackend::Custom(CustomCodeKind::DesktopEntry),
+        }
+    }
+
+    pub(crate) const fn default_code_syntax(self) -> Option<&'static str> {
+        match self {
+            Self::JsLike => Some("typescript"),
+            Self::CLike => Some("c"),
+            Self::DirectiveConf => Some("config"),
+            Self::Lua => Some("lua"),
+            Self::Python => Some("python"),
+            Self::Make => Some("make"),
+            Self::Shell => Some("shell"),
+            Self::Nix => Some("nix"),
+            Self::CMake => Some("cmake"),
+            Self::Markup => Some("markup"),
+            Self::Css => Some("css"),
+            Self::Toml => Some("toml"),
+            Self::Json => Some("json"),
+            Self::Jsonc => Some("jsonc"),
+            Self::Yaml => Some("yaml"),
+            Self::Log => Some("log"),
+            Self::Ini => Some("ini"),
+            Self::DesktopEntry => Some("desktop"),
+        }
+    }
+
     pub(crate) fn from_language_token(token: &str) -> Option<Self> {
         match token.trim().to_ascii_lowercase().as_str() {
             "js" | "jsx" | "javascript" | "ts" | "tsx" | "typescript" => Some(Self::JsLike),
@@ -121,6 +201,10 @@ impl HighlightLanguage {
             _ => None,
         }
     }
+
+    pub(crate) fn from_code_syntax(code_syntax: &str) -> Option<Self> {
+        Self::from_language_token(code_syntax)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -144,6 +228,18 @@ impl StructuredFormat {
             Self::Yaml => "YAML",
             Self::Dotenv => ".env",
             Self::Log => "Log",
+        }
+    }
+
+    pub(crate) const fn code_syntax(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Jsonc => "jsonc",
+            Self::Json5 => "json5",
+            Self::Toml => "toml",
+            Self::Yaml => "yaml",
+            Self::Dotenv => "dotenv",
+            Self::Log => "log",
         }
     }
 }
@@ -252,7 +348,8 @@ impl DiskImageKind {
 pub(crate) struct PreviewSpec {
     pub kind: PreviewKind,
     pub language_hint: Option<&'static str>,
-    pub highlight_language: Option<HighlightLanguage>,
+    pub code_syntax: Option<&'static str>,
+    pub code_backend: CodeBackend,
     pub structured_format: Option<StructuredFormat>,
     pub document_format: Option<DocumentFormat>,
 }
@@ -262,7 +359,8 @@ impl PreviewSpec {
         Self {
             kind: PreviewKind::PlainText,
             language_hint: None,
-            highlight_language: None,
+            code_syntax: None,
+            code_backend: CodeBackend::Plain,
             structured_format: None,
             document_format: None,
         }
@@ -272,7 +370,8 @@ impl PreviewSpec {
         Self {
             kind: PreviewKind::Markdown,
             language_hint: None,
-            highlight_language: None,
+            code_syntax: None,
+            code_backend: CodeBackend::Plain,
             structured_format: None,
             document_format: None,
         }
@@ -282,7 +381,8 @@ impl PreviewSpec {
         Self {
             kind: PreviewKind::Iso,
             language_hint: None,
-            highlight_language: None,
+            code_syntax: None,
+            code_backend: CodeBackend::Plain,
             structured_format: None,
             document_format: None,
         }
@@ -292,7 +392,8 @@ impl PreviewSpec {
         Self {
             kind: PreviewKind::Torrent,
             language_hint: None,
-            highlight_language: None,
+            code_syntax: None,
+            code_backend: CodeBackend::Plain,
             structured_format: None,
             document_format: None,
         }
@@ -306,7 +407,8 @@ impl PreviewSpec {
         Self {
             kind: PreviewKind::Source,
             language_hint,
-            highlight_language,
+            code_syntax: resolve_code_syntax(language_hint, highlight_language, structured_format),
+            code_backend: resolve_code_backend(highlight_language),
             structured_format,
             document_format: None,
         }
@@ -316,7 +418,8 @@ impl PreviewSpec {
         Self {
             kind: PreviewKind::PlainText,
             language_hint: None,
-            highlight_language: None,
+            code_syntax: None,
+            code_backend: CodeBackend::Plain,
             structured_format: None,
             document_format: Some(document_format),
         }
@@ -326,12 +429,16 @@ impl PreviewSpec {
         language_hint: Option<&'static str>,
         highlight_language: HighlightLanguage,
     ) -> Self {
-        Self {
-            kind: PreviewKind::Source,
-            language_hint,
-            highlight_language: Some(highlight_language),
-            structured_format: None,
-            document_format: None,
+        Self::source(language_hint, Some(highlight_language), None)
+    }
+
+    pub(crate) fn highlight_language(self) -> Option<HighlightLanguage> {
+        match self.code_backend {
+            CodeBackend::Plain => None,
+            CodeBackend::Syntect => self
+                .code_syntax
+                .and_then(HighlightLanguage::from_code_syntax),
+            CodeBackend::Custom(kind) => Some(kind.highlight_language()),
         }
     }
 }
@@ -433,7 +540,36 @@ impl FileFacts {
         mut self,
         highlight_language: HighlightLanguage,
     ) -> Self {
-        self.preview.highlight_language = Some(highlight_language);
+        self.preview.code_syntax = resolve_code_syntax(
+            self.preview.language_hint,
+            Some(highlight_language),
+            self.preview.structured_format,
+        );
+        self.preview.code_backend = highlight_language.code_backend();
         self
+    }
+}
+
+const fn resolve_code_backend(highlight_language: Option<HighlightLanguage>) -> CodeBackend {
+    match highlight_language {
+        Some(language) => language.code_backend(),
+        None => CodeBackend::Plain,
+    }
+}
+
+const fn resolve_code_syntax(
+    language_hint: Option<&'static str>,
+    highlight_language: Option<HighlightLanguage>,
+    structured_format: Option<StructuredFormat>,
+) -> Option<&'static str> {
+    match structured_format {
+        Some(format) => Some(format.code_syntax()),
+        None => match language_hint {
+            Some(language_hint) => Some(language_hint),
+            None => match highlight_language {
+                Some(language) => language.default_code_syntax(),
+                None => None,
+            },
+        },
     }
 }

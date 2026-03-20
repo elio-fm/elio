@@ -22,6 +22,15 @@ fn write_temp_file(label: &str, file_name: &str, contents: &str) -> (PathBuf, Pa
     (root, path)
 }
 
+fn assert_code_spec(
+    preview: PreviewSpec,
+    code_syntax: Option<&'static str>,
+    code_backend: CodeBackend,
+) {
+    assert_eq!(preview.code_syntax, code_syntax);
+    assert_eq!(preview.code_backend, code_backend);
+}
+
 #[test]
 fn package_lock_uses_one_shared_definition() {
     let facts = inspect_path(Path::new("package-lock.json"), EntryKind::File);
@@ -31,9 +40,10 @@ fn package_lock_uses_one_shared_definition() {
         facts.preview.structured_format,
         Some(StructuredFormat::Json)
     );
-    assert_eq!(
-        facts.preview.highlight_language,
-        Some(HighlightLanguage::Json)
+    assert_code_spec(
+        facts.preview,
+        Some("json"),
+        CodeBackend::Custom(CustomCodeKind::Json),
     );
 }
 
@@ -45,24 +55,34 @@ fn lockfile_variants_get_targeted_preview_support() {
     let generic = inspect_path(Path::new("deps.lock"), EntryKind::File);
 
     assert_eq!(uv.preview.structured_format, Some(StructuredFormat::Toml));
-    assert_eq!(uv.preview.highlight_language, Some(HighlightLanguage::Toml));
+    assert_code_spec(
+        uv.preview,
+        Some("toml"),
+        CodeBackend::Custom(CustomCodeKind::Toml),
+    );
 
     assert_eq!(
         flake.preview.structured_format,
         Some(StructuredFormat::Json)
     );
-    assert_eq!(
-        flake.preview.highlight_language,
-        Some(HighlightLanguage::Json)
+    assert_code_spec(
+        flake.preview,
+        Some("json"),
+        CodeBackend::Custom(CustomCodeKind::Json),
     );
 
     assert_eq!(gem.specific_type_label, Some("Lockfile"));
-    assert_eq!(gem.preview.highlight_language, Some(HighlightLanguage::Ini));
+    assert_code_spec(
+        gem.preview,
+        Some("ini"),
+        CodeBackend::Custom(CustomCodeKind::Ini),
+    );
 
     assert_eq!(generic.specific_type_label, Some("Lockfile"));
-    assert_eq!(
-        generic.preview.highlight_language,
-        Some(HighlightLanguage::Ini)
+    assert_code_spec(
+        generic.preview,
+        Some("ini"),
+        CodeBackend::Custom(CustomCodeKind::Ini),
     );
 }
 
@@ -87,9 +107,10 @@ fn json5_gets_parser_backed_preview_support() {
         facts.preview.structured_format,
         Some(StructuredFormat::Json5)
     );
-    assert_eq!(
-        facts.preview.highlight_language,
-        Some(HighlightLanguage::Jsonc)
+    assert_code_spec(
+        facts.preview,
+        Some("json5"),
+        CodeBackend::Custom(CustomCodeKind::Jsonc),
     );
 }
 
@@ -100,14 +121,11 @@ fn html_and_css_files_use_code_preview_support() {
 
     assert_eq!(html.builtin_class, FileClass::Code);
     assert_eq!(html.preview.language_hint, Some("html"));
-    assert_eq!(
-        html.preview.highlight_language,
-        Some(HighlightLanguage::Markup)
-    );
+    assert_code_spec(html.preview, Some("html"), CodeBackend::Syntect);
 
     assert_eq!(css.builtin_class, FileClass::Code);
     assert_eq!(css.preview.language_hint, Some("css"));
-    assert_eq!(css.preview.highlight_language, Some(HighlightLanguage::Css));
+    assert_code_spec(css.preview, Some("css"), CodeBackend::Syntect);
 }
 
 #[test]
@@ -119,20 +137,15 @@ fn nix_and_cmake_files_use_code_preview_support() {
     assert_eq!(nix.builtin_class, FileClass::Config);
     assert_eq!(nix.specific_type_label, Some("Nix expression"));
     assert_eq!(nix.preview.language_hint, Some("nix"));
+    assert_code_spec(nix.preview, Some("nix"), CodeBackend::Syntect);
 
     assert_eq!(cmake.builtin_class, FileClass::Config);
     assert_eq!(cmake.specific_type_label, Some("CMake script"));
-    assert_eq!(
-        cmake.preview.highlight_language,
-        Some(HighlightLanguage::CMake)
-    );
+    assert_code_spec(cmake.preview, Some("cmake"), CodeBackend::Syntect);
 
     assert_eq!(cmakelists.builtin_class, FileClass::Config);
     assert_eq!(cmakelists.specific_type_label, Some("CMake project"));
-    assert_eq!(
-        cmakelists.preview.highlight_language,
-        Some(HighlightLanguage::CMake)
-    );
+    assert_code_spec(cmakelists.preview, Some("cmake"), CodeBackend::Syntect);
 }
 
 #[test]
@@ -144,26 +157,17 @@ fn make_and_c_files_get_targeted_preview_support() {
     assert_eq!(makefile.builtin_class, FileClass::Config);
     assert_eq!(makefile.specific_type_label, Some("Makefile"));
     assert_eq!(makefile.preview.language_hint, Some("make"));
-    assert_eq!(
-        makefile.preview.highlight_language,
-        Some(HighlightLanguage::Make)
-    );
+    assert_code_spec(makefile.preview, Some("make"), CodeBackend::Syntect);
 
     assert_eq!(c_source.builtin_class, FileClass::Code);
     assert_eq!(c_source.specific_type_label, Some("C source file"));
     assert_eq!(c_source.preview.language_hint, Some("c"));
-    assert_eq!(
-        c_source.preview.highlight_language,
-        Some(HighlightLanguage::CLike)
-    );
+    assert_code_spec(c_source.preview, Some("c"), CodeBackend::Syntect);
 
     assert_eq!(c_header.builtin_class, FileClass::Code);
     assert_eq!(c_header.specific_type_label, Some("C header"));
     assert_eq!(c_header.preview.language_hint, Some("c"));
-    assert_eq!(
-        c_header.preview.highlight_language,
-        Some(HighlightLanguage::CLike)
-    );
+    assert_code_spec(c_header.preview, Some("c"), CodeBackend::Syntect);
 }
 
 #[test]
@@ -177,42 +181,27 @@ fn shell_files_and_dotfiles_get_targeted_preview_support() {
     assert_eq!(shell.builtin_class, FileClass::Code);
     assert_eq!(shell.specific_type_label, Some("Shell script"));
     assert_eq!(shell.preview.language_hint, Some("sh"));
-    assert_eq!(
-        shell.preview.highlight_language,
-        Some(HighlightLanguage::Shell)
-    );
+    assert_code_spec(shell.preview, Some("sh"), CodeBackend::Syntect);
 
     assert_eq!(bashrc.builtin_class, FileClass::Config);
     assert_eq!(bashrc.specific_type_label, Some("Bash config"));
     assert_eq!(bashrc.preview.language_hint, Some("bash"));
-    assert_eq!(
-        bashrc.preview.highlight_language,
-        Some(HighlightLanguage::Shell)
-    );
+    assert_code_spec(bashrc.preview, Some("bash"), CodeBackend::Syntect);
 
     assert_eq!(zsh.builtin_class, FileClass::Code);
     assert_eq!(zsh.specific_type_label, Some("Zsh script"));
     assert_eq!(zsh.preview.language_hint, Some("zsh"));
-    assert_eq!(
-        zsh.preview.highlight_language,
-        Some(HighlightLanguage::Shell)
-    );
+    assert_code_spec(zsh.preview, Some("zsh"), CodeBackend::Syntect);
 
     assert_eq!(fish.builtin_class, FileClass::Code);
     assert_eq!(fish.specific_type_label, Some("Fish script"));
     assert_eq!(fish.preview.language_hint, Some("fish"));
-    assert_eq!(
-        fish.preview.highlight_language,
-        Some(HighlightLanguage::Shell)
-    );
+    assert_code_spec(fish.preview, Some("fish"), CodeBackend::Syntect);
 
     assert_eq!(zshrc.builtin_class, FileClass::Config);
     assert_eq!(zshrc.specific_type_label, Some("Zsh config"));
     assert_eq!(zshrc.preview.language_hint, Some("zsh"));
-    assert_eq!(
-        zshrc.preview.highlight_language,
-        Some(HighlightLanguage::Shell)
-    );
+    assert_code_spec(zshrc.preview, Some("zsh"), CodeBackend::Syntect);
 }
 
 #[test]
@@ -228,10 +217,7 @@ fn extensionless_shebang_scripts_are_classified_as_shell_code() {
     assert_eq!(facts.builtin_class, FileClass::Code);
     assert_eq!(facts.specific_type_label, Some("Bash script"));
     assert_eq!(facts.preview.language_hint, Some("bash"));
-    assert_eq!(
-        facts.preview.highlight_language,
-        Some(HighlightLanguage::Shell)
-    );
+    assert_code_spec(facts.preview, Some("bash"), CodeBackend::Syntect);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -242,16 +228,10 @@ fn js_like_files_use_syntax_highlighting() {
     let tsx = inspect_path(Path::new("App.tsx"), EntryKind::File);
 
     assert_eq!(js.builtin_class, FileClass::Code);
-    assert_eq!(
-        js.preview.highlight_language,
-        Some(HighlightLanguage::JsLike)
-    );
+    assert_code_spec(js.preview, Some("typescript"), CodeBackend::Syntect);
 
     assert_eq!(tsx.builtin_class, FileClass::Code);
-    assert_eq!(
-        tsx.preview.highlight_language,
-        Some(HighlightLanguage::JsLike)
-    );
+    assert_code_spec(tsx.preview, Some("typescript"), CodeBackend::Syntect);
 }
 
 #[test]
@@ -261,17 +241,11 @@ fn python_family_files_use_syntax_highlighting() {
 
     assert_eq!(py.builtin_class, FileClass::Code);
     assert_eq!(py.preview.language_hint, Some("python"));
-    assert_eq!(
-        py.preview.highlight_language,
-        Some(HighlightLanguage::Python)
-    );
+    assert_code_spec(py.preview, Some("python"), CodeBackend::Syntect);
 
     assert_eq!(pyi.builtin_class, FileClass::Code);
     assert_eq!(pyi.preview.language_hint, Some("python"));
-    assert_eq!(
-        pyi.preview.highlight_language,
-        Some(HighlightLanguage::Python)
-    );
+    assert_code_spec(pyi.preview, Some("python"), CodeBackend::Syntect);
 }
 
 #[test]
@@ -281,7 +255,7 @@ fn lua_files_use_syntax_highlighting() {
     assert_eq!(lua.builtin_class, FileClass::Code);
     assert_eq!(lua.specific_type_label, Some("Lua script"));
     assert_eq!(lua.preview.language_hint, Some("lua"));
-    assert_eq!(lua.preview.highlight_language, Some(HighlightLanguage::Lua));
+    assert_code_spec(lua.preview, Some("lua"), CodeBackend::Syntect);
 }
 
 #[test]
@@ -296,9 +270,10 @@ fn ini_style_conf_is_detected_from_contents() {
 
     assert_eq!(facts.builtin_class, FileClass::Config);
     assert_eq!(facts.preview.language_hint, Some("ini"));
-    assert_eq!(
-        facts.preview.highlight_language,
-        Some(HighlightLanguage::Ini)
+    assert_code_spec(
+        facts.preview,
+        Some("ini"),
+        CodeBackend::Custom(CustomCodeKind::Ini),
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -316,10 +291,7 @@ fn shell_style_conf_is_detected_from_contents() {
 
     assert_eq!(facts.builtin_class, FileClass::Config);
     assert_eq!(facts.preview.language_hint, Some("shell"));
-    assert_eq!(
-        facts.preview.highlight_language,
-        Some(HighlightLanguage::Shell)
-    );
+    assert_code_spec(facts.preview, Some("shell"), CodeBackend::Syntect);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -336,9 +308,10 @@ fn ambiguous_conf_defaults_to_directive_config() {
 
     assert_eq!(facts.builtin_class, FileClass::Config);
     assert_eq!(facts.preview.language_hint, None);
-    assert_eq!(
-        facts.preview.highlight_language,
-        Some(HighlightLanguage::DirectiveConf)
+    assert_code_spec(
+        facts.preview,
+        Some("config"),
+        CodeBackend::Custom(CustomCodeKind::DirectiveConf),
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -355,9 +328,10 @@ fn cfg_files_use_the_same_content_based_detection() {
     let facts = inspect_path(&path, EntryKind::File);
 
     assert_eq!(facts.builtin_class, FileClass::Config);
-    assert_eq!(
-        facts.preview.highlight_language,
-        Some(HighlightLanguage::DirectiveConf)
+    assert_code_spec(
+        facts.preview,
+        Some("config"),
+        CodeBackend::Custom(CustomCodeKind::DirectiveConf),
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -375,9 +349,10 @@ fn config_modelines_can_force_directive_conf_without_name_overrides() {
 
     assert_eq!(facts.builtin_class, FileClass::Config);
     assert_eq!(facts.preview.language_hint, Some("kitty"));
-    assert_eq!(
-        facts.preview.highlight_language,
-        Some(HighlightLanguage::DirectiveConf)
+    assert_code_spec(
+        facts.preview,
+        Some("kitty"),
+        CodeBackend::Custom(CustomCodeKind::DirectiveConf),
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -395,9 +370,10 @@ fn unsupported_modelines_are_ignored_for_conf_detection() {
 
     assert_eq!(facts.builtin_class, FileClass::Config);
     assert_eq!(facts.preview.language_hint, Some("ini"));
-    assert_eq!(
-        facts.preview.highlight_language,
-        Some(HighlightLanguage::Ini)
+    assert_code_spec(
+        facts.preview,
+        Some("ini"),
+        CodeBackend::Custom(CustomCodeKind::Ini),
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -410,10 +386,7 @@ fn svg_keeps_image_identity_while_using_markup_preview() {
     assert_eq!(facts.builtin_class, FileClass::Image);
     assert_eq!(facts.specific_type_label, Some("SVG image"));
     assert_eq!(facts.preview.language_hint, Some("xml"));
-    assert_eq!(
-        facts.preview.highlight_language,
-        Some(HighlightLanguage::Markup)
-    );
+    assert_code_spec(facts.preview, Some("xml"), CodeBackend::Syntect);
 }
 
 #[test]

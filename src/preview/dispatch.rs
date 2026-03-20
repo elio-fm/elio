@@ -242,7 +242,7 @@ where
             PreviewKind::Code,
             highlighting::render_code_preview_with(
                 &text_preview.text,
-                preview_spec.highlight_language,
+                preview_spec.highlight_language(),
                 true,
                 effective_code_line_limit,
                 canceled,
@@ -312,7 +312,7 @@ fn source_preview_detail(
         .or_else(|| preview_spec.language_hint.map(display_language_hint))
         .or_else(|| {
             preview_spec
-                .highlight_language
+                .highlight_language()
                 .map(file_info::HighlightLanguage::detail_label)
         })
 }
