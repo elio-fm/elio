@@ -747,4 +747,35 @@ mod tests {
 
         assert_eq!(registered, curated);
     }
+
+    #[test]
+    fn custom_registry_entries_stay_limited_to_product_specific_renderers() {
+        let mut custom_entries = LANGUAGES
+            .iter()
+            .filter_map(|entry| match entry.language.backend {
+                CodeBackend::Custom(kind) => Some((entry.language.canonical_id, kind)),
+                CodeBackend::Plain | CodeBackend::Syntect => None,
+            })
+            .collect::<Vec<_>>();
+        custom_entries.sort_unstable_by_key(|(canonical_id, _)| *canonical_id);
+
+        assert_eq!(
+            custom_entries,
+            vec![
+                ("btop", CustomCodeKind::DirectiveConf),
+                ("config", CustomCodeKind::DirectiveConf),
+                ("desktop", CustomCodeKind::DesktopEntry),
+                ("dotenv", CustomCodeKind::Ini),
+                ("ini", CustomCodeKind::Ini),
+                ("json", CustomCodeKind::Json),
+                ("json5", CustomCodeKind::Jsonc),
+                ("jsonc", CustomCodeKind::Jsonc),
+                ("kitty", CustomCodeKind::DirectiveConf),
+                ("log", CustomCodeKind::Log),
+                ("mpv", CustomCodeKind::DirectiveConf),
+                ("toml", CustomCodeKind::Toml),
+                ("yaml", CustomCodeKind::Yaml),
+            ]
+        );
+    }
 }
