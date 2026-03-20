@@ -462,11 +462,10 @@ impl MarkdownRenderer {
             ),
         ]));
 
-        let rendered = super::highlighting::render_markdown_code_preview(
-            &code_block.text,
-            &code_block.language,
-            false,
-        );
+        let language = super::code::registry::language_for_markdown_fence(&code_block.language)
+            .and_then(|language| language.preview_spec().highlight_language());
+        let rendered =
+            super::highlighting::render_markdown_code_preview(&code_block.text, language, false);
         for line in rendered {
             if self.is_full() {
                 break;

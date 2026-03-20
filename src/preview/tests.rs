@@ -415,6 +415,54 @@ fn markdown_preview_renders_fenced_code_blocks() {
 }
 
 #[test]
+fn markdown_preview_routes_fence_aliases_through_registry() {
+    let root = temp_path("markdown-fence-aliases");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("README.md");
+    fs::write(
+        &path,
+        "```js\nconst value = 1;\n```\n\n```kitty\nfont_size 11.5\n```\n",
+    )
+    .expect("failed to write markdown");
+
+    let preview = build_preview(&file_entry(path.clone()));
+    let code_palette = theme::code_preview_palette();
+
+    assert_eq!(preview.kind, PreviewKind::Markdown);
+    assert!(
+        preview
+            .lines
+            .iter()
+            .any(|line| line.spans.iter().any(|span| span.content == "js"))
+    );
+    assert!(
+        preview
+            .lines
+            .iter()
+            .any(|line| line.spans.iter().any(|span| span.content == "kitty"))
+    );
+
+    let js_line = preview
+        .lines
+        .iter()
+        .find(|line| line_text(line).contains("const value = 1;"))
+        .expect("expected highlighted js line");
+    assert_eq!(span_color(js_line, "const"), Some(code_palette.keyword));
+
+    let kitty_line = preview
+        .lines
+        .iter()
+        .find(|line| line_text(line).contains("font_size 11.5"))
+        .expect("expected highlighted kitty line");
+    assert_eq!(
+        span_color(kitty_line, "font_size"),
+        Some(code_palette.function)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn markdown_preview_renders_links() {
     let root = temp_path("markdown-links");
     fs::create_dir_all(&root).expect("failed to create temp root");

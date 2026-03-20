@@ -176,16 +176,6 @@ impl HighlightLanguage {
         }
     }
 
-    pub(crate) fn from_language_token(token: &str) -> Option<Self> {
-        crate::preview::code::registry::language_for_markdown_fence(token).and_then(|language| {
-            match language.backend {
-                CodeBackend::Plain => None,
-                CodeBackend::Syntect => Self::from_code_syntax(language.canonical_id),
-                CodeBackend::Custom(kind) => Some(kind.highlight_language()),
-            }
-        })
-    }
-
     pub(crate) fn from_code_syntax(code_syntax: &str) -> Option<Self> {
         match code_syntax {
             "javascript" | "jsx" | "typescript" | "tsx" => Some(Self::JsLike),

@@ -1,4 +1,5 @@
 use super::*;
+use crate::preview::code::registry;
 
 fn line_text(line: &Line<'_>) -> String {
     line.spans
@@ -34,11 +35,13 @@ fn directive_conf_detail_label_is_plain() {
         "Directive config"
     );
     assert_eq!(
-        HighlightLanguage::from_language_token(" kitty "),
+        registry::language_for_markdown_fence(" kitty ")
+            .and_then(|language| language.preview_spec().highlight_language()),
         Some(HighlightLanguage::DirectiveConf)
     );
     assert_eq!(
-        HighlightLanguage::from_language_token(" conf "),
+        registry::language_for_markdown_fence(" conf ")
+            .and_then(|language| language.preview_spec().highlight_language()),
         Some(HighlightLanguage::DirectiveConf)
     );
 }
@@ -47,7 +50,8 @@ fn directive_conf_detail_label_is_plain() {
 fn lua_detail_label_is_plain() {
     assert_eq!(HighlightLanguage::Lua.detail_label(), "Lua");
     assert_eq!(
-        HighlightLanguage::from_language_token(" lua "),
+        registry::language_for_markdown_fence(" lua ")
+            .and_then(|language| language.preview_spec().highlight_language()),
         Some(HighlightLanguage::Lua)
     );
 }
