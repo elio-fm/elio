@@ -4,9 +4,8 @@ use ratatui::{
 };
 use std::sync::OnceLock;
 use syntect::{
-    easy::HighlightLines,
-    highlighting::{FontStyle, Style as SyntectStyle, Theme, ThemeSet},
-    parsing::{SyntaxReference, SyntaxSet},
+    easy::ScopeRangeIterator,
+    parsing::{ParseState, Scope, ScopeStack, SyntaxReference, SyntaxSet},
 };
 
 // Enable only language families that have been validated against the current bundled syntax set.
@@ -34,7 +33,37 @@ const ENABLED_SYNTAXES: &[&str] = &[
     "xml",
     "css",
 ];
-const DEFAULT_THEME_NAMES: &[&str] = &["InspiredGitHub", "base16-ocean.dark"];
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SemanticRole {
+    Fg,
+    Comment,
+    String,
+    Constant,
+    Keyword,
+    Function,
+    Type,
+    Parameter,
+    Tag,
+    Operator,
+    Macro,
+    Invalid,
+}
+
+struct ScopeSelectors {
+    comment: [Scope; 1],
+    string: [Scope; 1],
+    constant: [Scope; 2],
+    keyword: [Scope; 2],
+    function: [Scope; 3],
+    type_name: [Scope; 4],
+    parameter: [Scope; 3],
+    tag: [Scope; 3],
+    operator: [Scope; 3],
+    macro_name: [Scope; 4],
+    invalid: [Scope; 2],
+    variable_readwrite: [Scope; 1],
+}
 
 pub(in crate::preview::code) fn is_enabled(code_syntax: &str) -> bool {
     ENABLED_SYNTAXES.contains(&code_syntax)
@@ -50,9 +79,6 @@ pub(in crate::preview::code) fn render_syntect_code_preview<F>(
 where
     F: Fn() -> bool,
 {
-    let Some(theme) = theme() else {
-        return Err(());
-    };
     let syntax_set = syntax_set();
     let Some(syntax) = find_syntax(syntax_set, code_syntax) else {
         return Err(());
@@ -64,7 +90,8 @@ where
     );
     let number_width = crate::preview::line_number_width(source_lines.len());
     let code_palette = crate::ui::theme::code_preview_palette();
-    let mut highlighter = HighlightLines::new(syntax, theme);
+    let mut parse_state = ParseState::new(syntax);
+    let mut scope_stack = ScopeStack::new();
     let mut rendered = Vec::new();
 
     for (index, line) in source_lines.iter().enumerate() {
@@ -82,10 +109,15 @@ where
             ));
         }
 
-        let highlighted = highlighter
-            .highlight_line(line, syntax_set)
-            .map_err(|_| ())?;
-        spans.extend(highlighted.iter().map(syntect_span));
+        let ops = parse_state.parse_line(line, syntax_set).map_err(|_| ())?;
+        for (range, op) in ScopeRangeIterator::new(&ops, line) {
+            scope_stack.apply(op).map_err(|_| ())?;
+            let text = &line[range];
+            if text.is_empty() {
+                continue;
+            }
+            spans.push(syntect_span(text, scope_stack.as_slice(), code_palette));
+        }
         rendered.push(Line::from(spans));
     }
 
@@ -101,17 +133,51 @@ fn syntax_set() -> &'static SyntaxSet {
     SYNTAX_SET.get_or_init(SyntaxSet::load_defaults_newlines)
 }
 
-fn theme() -> Option<&'static Theme> {
-    static THEME: OnceLock<Option<Theme>> = OnceLock::new();
-    THEME
-        .get_or_init(|| {
-            let themes = ThemeSet::load_defaults().themes;
-            DEFAULT_THEME_NAMES
-                .iter()
-                .find_map(|name| themes.get(*name).cloned())
-                .or_else(|| themes.into_values().next())
-        })
-        .as_ref()
+fn scope_selectors() -> &'static ScopeSelectors {
+    static SELECTORS: OnceLock<ScopeSelectors> = OnceLock::new();
+    SELECTORS.get_or_init(|| {
+        let scope = |value| Scope::new(value).expect("valid syntect scope selector");
+        ScopeSelectors {
+            comment: [scope("comment")],
+            string: [scope("string")],
+            constant: [scope("constant"), scope("support.constant")],
+            keyword: [scope("keyword"), scope("storage")],
+            function: [
+                scope("entity.name.function"),
+                scope("support.function"),
+                scope("variable.function"),
+            ],
+            type_name: [
+                scope("entity.name.type"),
+                scope("entity.name.class"),
+                scope("support.type"),
+                scope("support.class"),
+            ],
+            parameter: [
+                scope("variable.parameter"),
+                scope("entity.other.attribute-name"),
+                scope("variable.other.readwrite.assignment"),
+            ],
+            tag: [
+                scope("entity.name.tag"),
+                scope("meta.tag"),
+                scope("punctuation.definition.tag"),
+            ],
+            operator: [
+                scope("keyword.operator"),
+                scope("punctuation.separator.key-value"),
+                scope("punctuation.accessor"),
+            ],
+            macro_name: [
+                scope("entity.name.function.preprocessor"),
+                scope("support.function.preprocessor"),
+                scope("meta.preprocessor"),
+                scope("keyword.directive"),
+            ],
+            invalid: [scope("invalid"), scope("invalid.deprecated")],
+            variable_readwrite: [scope("variable.other.readwrite")],
+        }
+    })
 }
 
 fn find_syntax<'a>(syntax_set: &'a SyntaxSet, code_syntax: &str) -> Option<&'a SyntaxReference> {
@@ -137,29 +203,118 @@ fn syntect_lookup_token(code_syntax: &str) -> &str {
     }
 }
 
-fn syntect_span(style: &(SyntectStyle, &str)) -> Span<'static> {
-    let mut rendered_style = Style::default().fg(ratatui::style::Color::Rgb(
-        style.0.foreground.r,
-        style.0.foreground.g,
-        style.0.foreground.b,
-    ));
-
-    if style.0.font_style.contains(FontStyle::BOLD) {
-        rendered_style = rendered_style.add_modifier(Modifier::BOLD);
-    }
-    if style.0.font_style.contains(FontStyle::ITALIC) {
-        rendered_style = rendered_style.add_modifier(Modifier::ITALIC);
-    }
-    if style.0.font_style.contains(FontStyle::UNDERLINE) {
+fn syntect_span(
+    text: &str,
+    scope_stack: &[Scope],
+    palette: crate::ui::theme::CodePreviewPalette,
+) -> Span<'static> {
+    let role = semantic_role_for_token(text, scope_stack);
+    let mut rendered_style = Style::default().fg(role_color(role, palette));
+    if role == SemanticRole::Invalid {
         rendered_style = rendered_style.add_modifier(Modifier::UNDERLINED);
     }
 
-    Span::styled(crate::preview::expand_tabs(style.1), rendered_style)
+    Span::styled(crate::preview::expand_tabs(text), rendered_style)
+}
+
+fn semantic_role_for_token(text: &str, scope_stack: &[Scope]) -> SemanticRole {
+    let selectors = scope_selectors();
+
+    if scope_stack_matches(scope_stack, &selectors.invalid) {
+        SemanticRole::Invalid
+    } else if scope_stack_matches(scope_stack, &selectors.comment) {
+        SemanticRole::Comment
+    } else if scope_stack_matches(scope_stack, &selectors.string) {
+        SemanticRole::String
+    } else if scope_stack_matches(scope_stack, &selectors.macro_name) {
+        SemanticRole::Macro
+    } else if scope_stack_matches(scope_stack, &selectors.parameter) {
+        SemanticRole::Parameter
+    } else if scope_stack_matches(scope_stack, &selectors.tag) {
+        SemanticRole::Tag
+    } else if scope_stack_matches(scope_stack, &selectors.function) {
+        SemanticRole::Function
+    } else if scope_stack_matches(scope_stack, &selectors.type_name) {
+        SemanticRole::Type
+    } else if scope_stack_matches(scope_stack, &selectors.variable_readwrite)
+        && text.chars().next().is_some_and(char::is_uppercase)
+    {
+        SemanticRole::Type
+    } else if scope_stack_matches(scope_stack, &selectors.keyword) {
+        SemanticRole::Keyword
+    } else if scope_stack_matches(scope_stack, &selectors.operator) {
+        SemanticRole::Operator
+    } else if scope_stack_matches(scope_stack, &selectors.constant) {
+        SemanticRole::Constant
+    } else {
+        SemanticRole::Fg
+    }
+}
+
+fn scope_stack_matches(scope_stack: &[Scope], selectors: &[Scope]) -> bool {
+    scope_stack.iter().rev().any(|scope| {
+        selectors
+            .iter()
+            .any(|selector| selector.is_prefix_of(*scope))
+    })
+}
+
+fn role_color(
+    role: SemanticRole,
+    palette: crate::ui::theme::CodePreviewPalette,
+) -> ratatui::style::Color {
+    match role {
+        SemanticRole::Fg => palette.fg,
+        SemanticRole::Comment => palette.comment,
+        SemanticRole::String => palette.string,
+        SemanticRole::Constant => palette.constant,
+        SemanticRole::Keyword => palette.keyword,
+        SemanticRole::Function => palette.function,
+        SemanticRole::Type => palette.r#type,
+        SemanticRole::Parameter => palette.parameter,
+        SemanticRole::Tag => palette.tag,
+        SemanticRole::Operator => palette.operator,
+        SemanticRole::Macro => palette.r#macro,
+        SemanticRole::Invalid => palette.invalid,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::theme;
+    use std::str::FromStr;
+
+    fn span_color(line: &Line<'_>, token: &str) -> Option<ratatui::style::Color> {
+        line.spans
+            .iter()
+            .find(|span| span.content.contains(token))
+            .and_then(|span| span.style.fg)
+    }
+
+    fn palette_colors() -> Vec<ratatui::style::Color> {
+        let palette = theme::code_preview_palette();
+        vec![
+            palette.fg,
+            palette.bg,
+            palette.selection_bg,
+            palette.selection_fg,
+            palette.caret,
+            palette.line_highlight,
+            palette.line_number,
+            palette.comment,
+            palette.string,
+            palette.constant,
+            palette.keyword,
+            palette.function,
+            palette.r#type,
+            palette.parameter,
+            palette.tag,
+            palette.operator,
+            palette.r#macro,
+            palette.invalid,
+        ]
+    }
 
     #[test]
     fn bundled_syntaxes_cover_initial_canaries() {
@@ -184,6 +339,10 @@ mod tests {
                 .iter()
                 .any(|span| span.content.contains("fn"))
         );
+        assert_eq!(
+            span_color(&rendered[0], "fn"),
+            Some(theme::code_preview_palette().keyword)
+        );
     }
 
     #[test]
@@ -204,5 +363,112 @@ mod tests {
                 "expected {code_syntax} to be enabled"
             );
         }
+    }
+
+    #[test]
+    fn rendered_syntect_colors_only_use_elio_code_palette() {
+        let allowed = palette_colors();
+        let rendered = render_syntect_code_preview(
+            "rust",
+            "fn main() {\n    let answer = 42;\n    println!(\"hi\"); // note\n}\n",
+            true,
+            20,
+            &|| false,
+        )
+        .expect("rust syntax should render through syntect");
+
+        for line in &rendered {
+            for span in &line.spans {
+                if let Some(color) = span.style.fg {
+                    assert!(
+                        allowed.contains(&color),
+                        "found non-Elio syntect color {color:?} in span {:?}",
+                        span.content
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rendered_syntect_tokens_map_to_elio_semantic_roles() {
+        let palette = theme::code_preview_palette();
+        let rust = render_syntect_code_preview(
+            "rust",
+            "fn main() {\n    let answer = 42;\n    println!(\"hi\"); // note\n}\n",
+            true,
+            20,
+            &|| false,
+        )
+        .expect("rust syntax should render through syntect");
+        assert_eq!(span_color(&rust[0], "fn"), Some(palette.keyword));
+        assert_eq!(span_color(&rust[1], "42"), Some(palette.constant));
+        assert!(
+            rust[2]
+                .spans
+                .iter()
+                .any(|span| span.style.fg == Some(palette.string)),
+            "expected a string-colored span in {:?}",
+            rust[2]
+        );
+        assert!(
+            rust[2]
+                .spans
+                .iter()
+                .any(|span| span.style.fg == Some(palette.comment)),
+            "expected a comment-colored span in {:?}",
+            rust[2]
+        );
+
+        let html = render_syntect_code_preview(
+            "html",
+            "<div class=\"app\">elio</div>\n",
+            true,
+            20,
+            &|| false,
+        )
+        .expect("html syntax should render through syntect");
+        assert_eq!(span_color(&html[0], "div"), Some(palette.tag));
+        assert_eq!(span_color(&html[0], "class"), Some(palette.parameter));
+    }
+
+    #[test]
+    fn semantic_role_classifier_covers_expected_scope_families() {
+        let stack = ScopeStack::from_str("source.rust keyword.control.rust").unwrap();
+        assert_eq!(
+            semantic_role_for_token("if", stack.as_slice()),
+            SemanticRole::Keyword
+        );
+
+        let stack =
+            ScopeStack::from_str("text.html.basic meta.tag entity.other.attribute-name.html")
+                .unwrap();
+        assert_eq!(
+            semantic_role_for_token("class", stack.as_slice()),
+            SemanticRole::Parameter
+        );
+
+        let stack = ScopeStack::from_str(
+            "source.c meta.preprocessor.include entity.name.function.preprocessor",
+        )
+        .unwrap();
+        assert_eq!(
+            semantic_role_for_token("include", stack.as_slice()),
+            SemanticRole::Macro
+        );
+
+        let stack =
+            ScopeStack::from_str("source.shell.bash variable.other.readwrite.assignment.shell")
+                .unwrap();
+        assert_eq!(
+            semantic_role_for_token("MAKE", stack.as_slice()),
+            SemanticRole::Parameter
+        );
+
+        let stack = ScopeStack::from_str("source.js variable.other.readwrite.js").unwrap();
+        assert_eq!(
+            semantic_role_for_token("Greeter", stack.as_slice()),
+            SemanticRole::Type
+        );
     }
 }
