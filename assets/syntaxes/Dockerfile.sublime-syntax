@@ -1,0 +1,50 @@
+%YAML 1.2
+---
+name: Dockerfile
+file_extensions:
+  - dockerfile
+  - containerfile
+scope: source.dockerfile
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9._-]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - match: '^\s*(?:FROM|RUN|CMD|LABEL|EXPOSE|ENV|ADD|COPY|ENTRYPOINT|VOLUME|USER|WORKDIR|ARG|ONBUILD|STOPSIGNAL|HEALTHCHECK|SHELL|MAINTAINER)\b'
+      scope: keyword.control.dockerfile
+    - match: '\bAS\b'
+      scope: keyword.control.dockerfile
+    - match: '\$\{?[A-Za-z_][A-Za-z0-9_]*\}?'
+      scope: variable.parameter.dockerfile
+    - match: '--[A-Za-z][A-Za-z0-9-]*'
+      scope: variable.parameter.dockerfile
+    - match: '\b{{identifier}}(?=\s*=)'
+      scope: variable.other.readwrite.assignment.dockerfile
+    - match: '\b[A-Za-z0-9][A-Za-z0-9._/-]*(?::[A-Za-z0-9._-]+)?\b'
+      scope: entity.name.type.dockerfile
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.dockerfile
+    - match: '&&|\|\||[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.dockerfile
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.dockerfile
+  strings:
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.dockerfile
+    - match: '\\.'
+      scope: constant.character.escape.dockerfile
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.dockerfile
+    - match: '\\.'
+      scope: constant.character.escape.dockerfile
+    - match: "'"
+      pop: true

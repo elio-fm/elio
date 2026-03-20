@@ -85,9 +85,36 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: None,
             preview: preview_for_extension(ext),
         },
+        "sql" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("SQL script"),
+            preview: preview_for_extension(ext),
+        },
+        "diff" | "patch" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some(match ext {
+                "patch" => "Patch file",
+                _ => "Diff file",
+            }),
+            preview: preview_for_extension(ext),
+        },
         "nix" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("Nix expression"),
+            preview: preview_for_extension(ext),
+        },
+        "hcl" => FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("HCL config"),
+            preview: preview_for_extension(ext),
+        },
+        "tf" | "tfvars" | "tfbackend" => FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some(match ext {
+                "tfvars" => "Terraform variables",
+                "tfbackend" => "Terraform backend config",
+                _ => "Terraform module",
+            }),
             preview: preview_for_extension(ext),
         },
         "cmake" => FileFacts {
@@ -285,6 +312,54 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("Zig source file"),
             preview: preview_for_extension(ext),
         },
+        "groovy" | "gvy" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Groovy source file"),
+            preview: preview_for_extension(ext),
+        },
+        "gradle" => FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Gradle build script"),
+            preview: preview_for_extension(ext),
+        },
+        "scala" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Scala source file"),
+            preview: preview_for_extension(ext),
+        },
+        "sbt" => FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("sbt build definition"),
+            preview: preview_for_extension(ext),
+        },
+        "pl" | "pm" | "pod" | "t" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some(match ext {
+                "pm" => "Perl module",
+                "pod" => "Perl POD file",
+                "t" => "Perl test script",
+                _ => "Perl script",
+            }),
+            preview: preview_for_extension(ext),
+        },
+        "hs" | "lhs" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some(match ext {
+                "lhs" => "Literate Haskell source file",
+                _ => "Haskell source file",
+            }),
+            preview: preview_for_extension(ext),
+        },
+        "jl" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Julia source file"),
+            preview: preview_for_extension(ext),
+        },
+        "r" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("R script"),
+            preview: preview_for_extension(ext),
+        },
         "ex" | "exs" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some(match ext {
@@ -304,9 +379,7 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             preview: preview_for_extension(ext),
         },
         "ron" => source_only(FileClass::Config, None, None),
-        "csv" | "tsv" | "sql" | "sqlite" | "db" | "parquet" => {
-            source_only(FileClass::Data, None, None)
-        }
+        "csv" | "tsv" | "sqlite" | "db" | "parquet" => source_only(FileClass::Data, None, None),
         "doc" => FileFacts {
             builtin_class: FileClass::Document,
             specific_type_label: Some("DOC document"),

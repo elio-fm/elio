@@ -1,0 +1,47 @@
+%YAML 1.2
+---
+name: Julia
+file_extensions:
+  - jl
+scope: source.julia
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9_!]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - match: '@{{identifier}}'
+      scope: entity.name.function.preprocessor.julia
+    - match: '\b(?:function|macro|module|baremodule|struct|mutable|abstract|primitive|quote|let|if|elseif|else|for|while|begin|end|return|where|try|catch|finally|do|break|continue|const|global|local|using|import|export)\b'
+      scope: keyword.control.julia
+    - match: '\b(?:Bool|Int|Int32|Int64|UInt|UInt32|UInt64|Float16|Float32|Float64|String|Char|Nothing|Any)\b'
+      scope: support.type.julia
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.julia
+    - match: '\b{{identifier}}(?=\s*\()'
+      scope: entity.name.function.julia
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.julia
+    - match: '=>|[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.julia
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.julia
+  strings:
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.julia
+    - match: '\\.'
+      scope: constant.character.escape.julia
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.julia
+    - match: '\\.'
+      scope: constant.character.escape.julia
+    - match: "'"
+      pop: true

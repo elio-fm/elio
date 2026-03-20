@@ -24,6 +24,41 @@ pub(super) fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: Some("CMake project"),
             preview: preview_for_exact_name(name),
         }),
+        "dockerfile" | "containerfile" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Docker build file"),
+            preview: preview_for_exact_name(name),
+        }),
+        "terraform.rc" | ".terraformrc" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Terraform CLI config"),
+            preview: preview_for_exact_name(name),
+        }),
+        ".terraform.lock.hcl" => Some(FileFacts {
+            builtin_class: FileClass::Data,
+            specific_type_label: Some("Terraform lockfile"),
+            preview: preview_for_exact_name(name),
+        }),
+        "build.gradle" | "settings.gradle" | "init.gradle" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Gradle build script"),
+            preview: preview_for_exact_name(name),
+        }),
+        "build.sbt" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("sbt build definition"),
+            preview: preview_for_exact_name(name),
+        }),
+        "justfile" | ".justfile" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Justfile"),
+            preview: preview_for_exact_name(name),
+        }),
+        ".rprofile" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("R profile"),
+            preview: preview_for_exact_name(name),
+        }),
         ".bashrc" | ".bash_profile" | ".bash_login" | ".bash_logout" | ".bash_aliases" => {
             Some(FileFacts {
                 builtin_class: FileClass::Config,

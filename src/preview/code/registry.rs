@@ -299,6 +299,102 @@ const LANGUAGES: &[RegistryEntry] = &[
         markdown_fences: &["tsx"],
     },
     RegistryEntry {
+        language: language("sql", "SQL", CodeBackend::Syntect, None),
+        extensions: &["sql"],
+        exact_filenames: &[],
+        shebang_interpreters: &[],
+        modelines: &["sql"],
+        markdown_fences: &["sql"],
+    },
+    RegistryEntry {
+        language: language("diff", "Diff", CodeBackend::Syntect, None),
+        extensions: &["diff", "patch"],
+        exact_filenames: &[],
+        shebang_interpreters: &[],
+        modelines: &["diff", "patch"],
+        markdown_fences: &["diff", "patch"],
+    },
+    RegistryEntry {
+        language: language("dockerfile", "Dockerfile", CodeBackend::Syntect, None),
+        extensions: &[],
+        exact_filenames: &["dockerfile", "containerfile"],
+        shebang_interpreters: &[],
+        modelines: &["dockerfile"],
+        markdown_fences: &["dockerfile", "docker"],
+    },
+    RegistryEntry {
+        language: language("hcl", "HCL", CodeBackend::Syntect, None),
+        extensions: &["hcl"],
+        exact_filenames: &[".terraform.lock.hcl"],
+        shebang_interpreters: &[],
+        modelines: &["hcl"],
+        markdown_fences: &["hcl"],
+    },
+    RegistryEntry {
+        language: language("terraform", "Terraform", CodeBackend::Syntect, None),
+        extensions: &["tf", "tfvars", "tfbackend"],
+        exact_filenames: &["terraform.rc", ".terraformrc"],
+        shebang_interpreters: &[],
+        modelines: &["terraform", "tf", "tfvars"],
+        markdown_fences: &["terraform", "tf", "tfvars"],
+    },
+    RegistryEntry {
+        language: language("groovy", "Groovy", CodeBackend::Syntect, None),
+        extensions: &["groovy", "gvy", "gradle"],
+        exact_filenames: &["build.gradle", "settings.gradle", "init.gradle"],
+        shebang_interpreters: &["groovy"],
+        modelines: &["groovy", "gradle"],
+        markdown_fences: &["groovy", "gradle"],
+    },
+    RegistryEntry {
+        language: language("scala", "Scala", CodeBackend::Syntect, None),
+        extensions: &["scala", "sbt"],
+        exact_filenames: &["build.sbt"],
+        shebang_interpreters: &["scala"],
+        modelines: &["scala", "sbt"],
+        markdown_fences: &["scala", "sbt"],
+    },
+    RegistryEntry {
+        language: language("perl", "Perl", CodeBackend::Syntect, None),
+        extensions: &["pl", "pm", "pod", "t"],
+        exact_filenames: &["cpanfile"],
+        shebang_interpreters: &["perl"],
+        modelines: &["perl", "pl", "pm"],
+        markdown_fences: &["perl", "pl", "pm"],
+    },
+    RegistryEntry {
+        language: language("haskell", "Haskell", CodeBackend::Syntect, None),
+        extensions: &["hs", "lhs"],
+        exact_filenames: &[],
+        shebang_interpreters: &["runhaskell"],
+        modelines: &["haskell", "hs", "lhs"],
+        markdown_fences: &["haskell", "hs", "lhs"],
+    },
+    RegistryEntry {
+        language: language("julia", "Julia", CodeBackend::Syntect, None),
+        extensions: &["jl"],
+        exact_filenames: &[],
+        shebang_interpreters: &["julia"],
+        modelines: &["julia", "jl"],
+        markdown_fences: &["julia", "jl"],
+    },
+    RegistryEntry {
+        language: language("r", "R", CodeBackend::Syntect, None),
+        extensions: &["r"],
+        exact_filenames: &[".rprofile"],
+        shebang_interpreters: &["rscript"],
+        modelines: &["r"],
+        markdown_fences: &["r", "rscript"],
+    },
+    RegistryEntry {
+        language: language("just", "Just", CodeBackend::Syntect, None),
+        extensions: &[],
+        exact_filenames: &["justfile", ".justfile"],
+        shebang_interpreters: &[],
+        modelines: &["just"],
+        markdown_fences: &["just"],
+    },
+    RegistryEntry {
         language: language("rust", "Rust", CodeBackend::Syntect, None),
         extensions: &["rs"],
         exact_filenames: &[],
@@ -587,6 +683,22 @@ mod tests {
             Some("javascript")
         );
         assert_eq!(
+            language_for_extension("sql").map(|language| language.canonical_id),
+            Some("sql")
+        );
+        assert_eq!(
+            language_for_extension("tfvars").map(|language| language.canonical_id),
+            Some("terraform")
+        );
+        assert_eq!(
+            language_for_extension("groovy").map(|language| language.canonical_id),
+            Some("groovy")
+        );
+        assert_eq!(
+            language_for_extension("hs").map(|language| language.canonical_id),
+            Some("haskell")
+        );
+        assert_eq!(
             language_for_extension("csx").map(|language| language.canonical_id),
             Some("cs")
         );
@@ -619,6 +731,22 @@ mod tests {
             Some("toml")
         );
         assert_eq!(
+            language_for_exact_name("Dockerfile").map(|language| language.canonical_id),
+            Some("dockerfile")
+        );
+        assert_eq!(
+            language_for_exact_name(".terraform.lock.hcl").map(|language| language.canonical_id),
+            Some("hcl")
+        );
+        assert_eq!(
+            language_for_exact_name("build.gradle").map(|language| language.canonical_id),
+            Some("groovy")
+        );
+        assert_eq!(
+            language_for_exact_name("Justfile").map(|language| language.canonical_id),
+            Some("just")
+        );
+        assert_eq!(
             language_for_exact_name(".env.local").map(|language| language.canonical_id),
             Some("dotenv")
         );
@@ -639,6 +767,14 @@ mod tests {
             Some("powershell")
         );
         assert_eq!(
+            language_for_shebang("perl").map(|language| language.canonical_id),
+            Some("perl")
+        );
+        assert_eq!(
+            language_for_shebang("rscript").map(|language| language.canonical_id),
+            Some("r")
+        );
+        assert_eq!(
             language_for_modeline(" kitty ").map(|language| language.canonical_id),
             Some("kitty")
         );
@@ -657,6 +793,14 @@ mod tests {
         assert_eq!(
             language_for_modeline("powershell").map(|language| language.canonical_id),
             Some("powershell")
+        );
+        assert_eq!(
+            language_for_modeline("terraform").map(|language| language.canonical_id),
+            Some("terraform")
+        );
+        assert_eq!(
+            language_for_modeline("gradle").map(|language| language.canonical_id),
+            Some("groovy")
         );
     }
 
@@ -685,6 +829,18 @@ mod tests {
         assert_eq!(
             language_for_markdown_fence("pwsh").map(|language| language.canonical_id),
             Some("powershell")
+        );
+        assert_eq!(
+            language_for_markdown_fence("docker").map(|language| language.canonical_id),
+            Some("dockerfile")
+        );
+        assert_eq!(
+            language_for_markdown_fence("terraform").map(|language| language.canonical_id),
+            Some("terraform")
+        );
+        assert_eq!(
+            language_for_markdown_fence("rscript").map(|language| language.canonical_id),
+            Some("r")
         );
     }
 
@@ -736,6 +892,20 @@ mod tests {
             language_for_shebang("pwsh"),
             "powershell",
             "PowerShell",
+            CodeBackend::Syntect,
+            None,
+        );
+        assert_registered_language(
+            language_for_exact_name("Dockerfile"),
+            "dockerfile",
+            "Dockerfile",
+            CodeBackend::Syntect,
+            None,
+        );
+        assert_registered_language(
+            language_for_markdown_fence("terraform"),
+            "terraform",
+            "Terraform",
             CodeBackend::Syntect,
             None,
         );

@@ -148,6 +148,10 @@ fn nix_and_cmake_files_use_code_preview_support() {
     let nix = inspect_path(Path::new("flake.nix"), EntryKind::File);
     let cmake = inspect_path(Path::new("toolchain.cmake"), EntryKind::File);
     let cmakelists = inspect_path(Path::new("CMakeLists.txt"), EntryKind::File);
+    let hcl = inspect_path(Path::new("terraform.hcl"), EntryKind::File);
+    let terraform = inspect_path(Path::new("main.tf"), EntryKind::File);
+    let terraform_vars = inspect_path(Path::new("prod.tfvars"), EntryKind::File);
+    let terraform_lock = inspect_path(Path::new(".terraform.lock.hcl"), EntryKind::File);
 
     assert_eq!(nix.builtin_class, FileClass::Config);
     assert_eq!(nix.specific_type_label, Some("Nix expression"));
@@ -161,6 +165,32 @@ fn nix_and_cmake_files_use_code_preview_support() {
     assert_eq!(cmakelists.builtin_class, FileClass::Config);
     assert_eq!(cmakelists.specific_type_label, Some("CMake project"));
     assert_code_spec(cmakelists.preview, Some("cmake"), CodeBackend::Syntect);
+
+    assert_eq!(hcl.builtin_class, FileClass::Config);
+    assert_eq!(hcl.specific_type_label, Some("HCL config"));
+    assert_code_spec(hcl.preview, Some("hcl"), CodeBackend::Syntect);
+
+    assert_eq!(terraform.builtin_class, FileClass::Config);
+    assert_eq!(terraform.specific_type_label, Some("Terraform module"));
+    assert_code_spec(terraform.preview, Some("terraform"), CodeBackend::Syntect);
+
+    assert_eq!(terraform_vars.builtin_class, FileClass::Config);
+    assert_eq!(
+        terraform_vars.specific_type_label,
+        Some("Terraform variables")
+    );
+    assert_code_spec(
+        terraform_vars.preview,
+        Some("terraform"),
+        CodeBackend::Syntect,
+    );
+
+    assert_eq!(terraform_lock.builtin_class, FileClass::Data);
+    assert_eq!(
+        terraform_lock.specific_type_label,
+        Some("Terraform lockfile")
+    );
+    assert_code_spec(terraform_lock.preview, Some("hcl"), CodeBackend::Syntect);
 }
 
 #[test]
@@ -255,6 +285,16 @@ fn js_like_files_use_syntax_highlighting() {
 
 #[test]
 fn curated_generic_languages_use_syntect_preview_support() {
+    let sql = inspect_path(Path::new("schema.sql"), EntryKind::File);
+    let diff = inspect_path(Path::new("changes.diff"), EntryKind::File);
+    let dockerfile = inspect_path(Path::new("Dockerfile"), EntryKind::File);
+    let groovy = inspect_path(Path::new("build.gradle"), EntryKind::File);
+    let scala = inspect_path(Path::new("build.sbt"), EntryKind::File);
+    let perl = inspect_path(Path::new("script.pl"), EntryKind::File);
+    let haskell = inspect_path(Path::new("Main.hs"), EntryKind::File);
+    let julia = inspect_path(Path::new("main.jl"), EntryKind::File);
+    let r = inspect_path(Path::new("analysis.r"), EntryKind::File);
+    let just = inspect_path(Path::new("Justfile"), EntryKind::File);
     let cs = inspect_path(Path::new("Program.cs"), EntryKind::File);
     let csx = inspect_path(Path::new("Program.csx"), EntryKind::File);
     let dart = inspect_path(Path::new("main.dart"), EntryKind::File);
@@ -266,6 +306,46 @@ fn curated_generic_languages_use_syntect_preview_support() {
     let powershell = inspect_path(Path::new("build.ps1"), EntryKind::File);
     let powershell_module = inspect_path(Path::new("ElioTools.psm1"), EntryKind::File);
     let powershell_data = inspect_path(Path::new("ElioTools.psd1"), EntryKind::File);
+
+    assert_eq!(sql.builtin_class, FileClass::Code);
+    assert_eq!(sql.specific_type_label, Some("SQL script"));
+    assert_code_spec(sql.preview, Some("sql"), CodeBackend::Syntect);
+
+    assert_eq!(diff.builtin_class, FileClass::Code);
+    assert_eq!(diff.specific_type_label, Some("Diff file"));
+    assert_code_spec(diff.preview, Some("diff"), CodeBackend::Syntect);
+
+    assert_eq!(dockerfile.builtin_class, FileClass::Config);
+    assert_eq!(dockerfile.specific_type_label, Some("Docker build file"));
+    assert_code_spec(dockerfile.preview, Some("dockerfile"), CodeBackend::Syntect);
+
+    assert_eq!(groovy.builtin_class, FileClass::Config);
+    assert_eq!(groovy.specific_type_label, Some("Gradle build script"));
+    assert_code_spec(groovy.preview, Some("groovy"), CodeBackend::Syntect);
+
+    assert_eq!(scala.builtin_class, FileClass::Config);
+    assert_eq!(scala.specific_type_label, Some("sbt build definition"));
+    assert_code_spec(scala.preview, Some("scala"), CodeBackend::Syntect);
+
+    assert_eq!(perl.builtin_class, FileClass::Code);
+    assert_eq!(perl.specific_type_label, Some("Perl script"));
+    assert_code_spec(perl.preview, Some("perl"), CodeBackend::Syntect);
+
+    assert_eq!(haskell.builtin_class, FileClass::Code);
+    assert_eq!(haskell.specific_type_label, Some("Haskell source file"));
+    assert_code_spec(haskell.preview, Some("haskell"), CodeBackend::Syntect);
+
+    assert_eq!(julia.builtin_class, FileClass::Code);
+    assert_eq!(julia.specific_type_label, Some("Julia source file"));
+    assert_code_spec(julia.preview, Some("julia"), CodeBackend::Syntect);
+
+    assert_eq!(r.builtin_class, FileClass::Code);
+    assert_eq!(r.specific_type_label, Some("R script"));
+    assert_code_spec(r.preview, Some("r"), CodeBackend::Syntect);
+
+    assert_eq!(just.builtin_class, FileClass::Config);
+    assert_eq!(just.specific_type_label, Some("Justfile"));
+    assert_code_spec(just.preview, Some("just"), CodeBackend::Syntect);
 
     assert_eq!(cs.builtin_class, FileClass::Code);
     assert_eq!(cs.specific_type_label, Some("C# source file"));
@@ -342,6 +422,37 @@ fn extensionless_elixir_scripts_are_classified_as_code() {
     assert_code_spec(facts.preview, Some("elixir"), CodeBackend::Syntect);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn shebang_and_exact_name_detection_cover_new_languages() {
+    let (perl_root, perl_path) = write_temp_file(
+        "extensionless-perl-script",
+        "tool",
+        "#!/usr/bin/env perl\nprint \"elio\\n\";\n",
+    );
+    let perl = inspect_path(&perl_path, EntryKind::File);
+    assert_eq!(perl.preview.language_hint, Some("perl"));
+    assert_eq!(perl.specific_type_label, Some("Perl script"));
+    fs::remove_dir_all(perl_root).expect("failed to remove temp root");
+
+    let (r_root, r_path) = write_temp_file(
+        "extensionless-r-script",
+        "analysis",
+        "#!/usr/bin/env Rscript\nprint('elio')\n",
+    );
+    let r = inspect_path(&r_path, EntryKind::File);
+    assert_eq!(r.preview.language_hint, Some("r"));
+    assert_eq!(r.specific_type_label, Some("R script"));
+    fs::remove_dir_all(r_root).expect("failed to remove temp root");
+
+    let dockerfile = inspect_path(Path::new("Containerfile"), EntryKind::File);
+    assert_eq!(dockerfile.preview.language_hint, Some("dockerfile"));
+    assert_eq!(dockerfile.specific_type_label, Some("Docker build file"));
+
+    let just = inspect_path(Path::new(".justfile"), EntryKind::File);
+    assert_eq!(just.preview.language_hint, Some("just"));
+    assert_eq!(just.specific_type_label, Some("Justfile"));
 }
 
 #[test]

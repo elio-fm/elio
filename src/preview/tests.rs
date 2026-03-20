@@ -3364,6 +3364,67 @@ fn curated_syntect_languages_render_with_theme_colors() {
 
     for (name, contents, detail, token) in [
         (
+            "schema.sql",
+            "SELECT name FROM users WHERE id = 1;\n",
+            "SQL",
+            "SELECT",
+        ),
+        (
+            "Dockerfile",
+            "FROM rust:1.87\nRUN cargo build --release\n",
+            "Docker build file",
+            "FROM",
+        ),
+        (
+            "main.tf",
+            "terraform { required_version = \">= 1.7\" }\n",
+            "Terraform module",
+            "terraform",
+        ),
+        (
+            "terraform.hcl",
+            "server { listen = \"127.0.0.1\" }\n",
+            "HCL config",
+            "server",
+        ),
+        (
+            "build.gradle",
+            "plugins { id 'java' }\n",
+            "Gradle build script",
+            "'java'",
+        ),
+        (
+            "build.sbt",
+            "lazy val root = (project in file(\".\"))\n",
+            "sbt build definition",
+            "lazy",
+        ),
+        (
+            "script.pl",
+            "sub greet { print \"hi\\n\"; }\n",
+            "Perl",
+            "sub",
+        ),
+        (
+            "Main.hs",
+            "module Main where\nmain = putStrLn \"elio\"\n",
+            "Haskell",
+            "module",
+        ),
+        (
+            "main.jl",
+            "function greet(name)\n  return name\nend\n",
+            "Julia",
+            "function",
+        ),
+        (
+            "analysis.r",
+            "library(ggplot2)\nprint(\"elio\")\n",
+            "R",
+            "library",
+        ),
+        ("Justfile", "build:\n  cargo test\n", "Just", "build"),
+        (
             "styles.scss",
             "$fg: #fff;\n.button { color: $fg; }\n",
             "SCSS",
@@ -3442,6 +3503,42 @@ fn curated_syntect_languages_render_with_theme_colors() {
             "expected {name} to highlight {token}"
         );
     }
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn diff_preview_uses_curated_syntect_support() {
+    let root = temp_path("diff");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("changes.diff");
+    fs::write(
+        &path,
+        "diff --git a/src/main.rs b/src/main.rs\nindex 1111111..2222222 100644\n--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1 +1 @@\n-fn old() {}\n+fn new() {}\n",
+    )
+    .expect("failed to write diff fixture");
+
+    let preview = build_preview(&file_entry(path));
+    let code_palette = theme::code_preview_palette();
+
+    assert_eq!(preview.kind, PreviewKind::Code);
+    assert!(
+        preview
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("Diff"))
+    );
+    assert!(
+        preview.lines.iter().any(|line| {
+            line.spans.iter().any(|span| {
+                span.content.trim() != "│"
+                    && !span.content.trim().is_empty()
+                    && span.style.fg.is_some()
+                    && span.style.fg != Some(code_palette.fg)
+            })
+        }),
+        "expected diff preview to contain at least one highlighted token",
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

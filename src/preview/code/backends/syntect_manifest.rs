@@ -63,6 +63,66 @@ pub const CURATED_SYNTAXES: &[CuratedSyntax] = &[
         source: SyntaxSource::Vendored,
     },
     CuratedSyntax {
+        canonical_id: "sql",
+        lookup_token: "sql",
+        source: SyntaxSource::BundledDefault,
+    },
+    CuratedSyntax {
+        canonical_id: "diff",
+        lookup_token: "diff",
+        source: SyntaxSource::BundledDefault,
+    },
+    CuratedSyntax {
+        canonical_id: "dockerfile",
+        lookup_token: "dockerfile",
+        source: SyntaxSource::Vendored,
+    },
+    CuratedSyntax {
+        canonical_id: "hcl",
+        lookup_token: "hcl",
+        source: SyntaxSource::Vendored,
+    },
+    CuratedSyntax {
+        canonical_id: "terraform",
+        lookup_token: "tf",
+        source: SyntaxSource::Vendored,
+    },
+    CuratedSyntax {
+        canonical_id: "groovy",
+        lookup_token: "groovy",
+        source: SyntaxSource::BundledDefault,
+    },
+    CuratedSyntax {
+        canonical_id: "scala",
+        lookup_token: "scala",
+        source: SyntaxSource::BundledDefault,
+    },
+    CuratedSyntax {
+        canonical_id: "perl",
+        lookup_token: "pl",
+        source: SyntaxSource::BundledDefault,
+    },
+    CuratedSyntax {
+        canonical_id: "haskell",
+        lookup_token: "hs",
+        source: SyntaxSource::BundledDefault,
+    },
+    CuratedSyntax {
+        canonical_id: "julia",
+        lookup_token: "jl",
+        source: SyntaxSource::Vendored,
+    },
+    CuratedSyntax {
+        canonical_id: "r",
+        lookup_token: "r",
+        source: SyntaxSource::BundledDefault,
+    },
+    CuratedSyntax {
+        canonical_id: "just",
+        lookup_token: "just",
+        source: SyntaxSource::Vendored,
+    },
+    CuratedSyntax {
         canonical_id: "rust",
         lookup_token: "rs",
         source: SyntaxSource::BundledDefault,

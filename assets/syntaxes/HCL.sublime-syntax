@@ -1,0 +1,52 @@
+%YAML 1.2
+---
+name: HCL
+file_extensions:
+  - hcl
+  - tf
+  - tfvars
+  - tfbackend
+scope: source.hcl
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9_-]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - match: '\b(?:resource|data|module|variable|output|provider|terraform|locals|backend|provisioner|dynamic|moved|import|check)\b'
+      scope: keyword.control.hcl
+    - match: '\b(?:true|false|null)\b'
+      scope: support.constant.hcl
+    - match: '\b{{identifier}}(?=\s*=)'
+      scope: variable.other.readwrite.assignment.hcl
+    - match: '\b{{identifier}}\b(?=\s*\{)'
+      scope: entity.name.type.hcl
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.hcl
+    - match: '\$\{[^}]+\}'
+      scope: variable.parameter.hcl
+    - match: '=>|[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.hcl
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.hcl
+    - match: '//.*$'
+      scope: comment.line.double-slash.hcl
+    - match: '/\*'
+      push: block-comment
+  block-comment:
+    - meta_scope: comment.block.hcl
+    - match: '\*/'
+      pop: true
+  strings:
+    - match: '"'
+      push: double-quoted-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.hcl
+    - match: '\\.'
+      scope: constant.character.escape.hcl
+    - match: '\$\{[^}]+\}'
+      scope: variable.parameter.hcl
+    - match: '"'
+      pop: true

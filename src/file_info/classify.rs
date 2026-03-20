@@ -158,6 +158,11 @@ fn sniff_shebang_script_type(buffer: &[u8]) -> Option<FileFacts> {
         "sh" => Some("Shell script"),
         "fish" => Some("Fish script"),
         "elixir" => Some("Elixir script"),
+        "groovy" => Some("Groovy script"),
+        "perl" => Some("Perl script"),
+        "haskell" => Some("Haskell script"),
+        "julia" => Some("Julia script"),
+        "r" => Some("R script"),
         "powershell" => Some("PowerShell script"),
         _ => None,
     }?;

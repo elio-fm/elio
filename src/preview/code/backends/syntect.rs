@@ -952,7 +952,7 @@ mod tests {
 
     #[test]
     fn unsupported_syntaxes_return_errors_for_safe_fallback() {
-        for code_syntax in ["haskell", "brainfuck", "totally-unknown-syntax"] {
+        for code_syntax in ["ziggy", "brainfuck", "totally-unknown-syntax"] {
             assert!(
                 render_syntect_code_preview(code_syntax, "sample\n", true, 20, &|| false).is_err(),
                 "expected {code_syntax} to fall back safely"
@@ -974,6 +974,12 @@ mod tests {
     #[test]
     fn curated_bundle_supports_newly_vendored_languages() {
         for (code_syntax, snippet) in [
+            ("dockerfile", "FROM rust:1.87\nRUN cargo build --release\n"),
+            ("hcl", "server { listen = \"127.0.0.1\" enabled = true }\n"),
+            (
+                "terraform",
+                "terraform { required_version = \">= 1.7\" }\nresource \"null_resource\" \"example\" {}\n",
+            ),
             (
                 "typescript",
                 "export type User = { name: string }\nconst greet = (user: User) => user.name;\n",
@@ -1024,6 +1030,8 @@ mod tests {
                 "elixir",
                 "defmodule Greeter do\n  def greet(name), do: \"hi #{name}\"\nend\n",
             ),
+            ("julia", "function greet(name)\n  return name\nend\n"),
+            ("just", "build:\n  cargo test\n"),
             (
                 "powershell",
                 "function Invoke-Greeting([string]$Name) {\n  Write-Host \"Hello $Name\"\n}\n",
