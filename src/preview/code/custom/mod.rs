@@ -288,3 +288,111 @@ pub(super) fn styled_text(
         Style::default().fg(color).add_modifier(modifier),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>()
+    }
+
+    fn assert_span_color(line: &Line<'_>, token: &str, expected: ratatui::style::Color) {
+        assert!(
+            line.spans
+                .iter()
+                .any(|span| span.content.contains(token) && span.style.fg == Some(expected)),
+            "expected token {token:?} with color {expected:?} in line {:?}",
+            line_text(line)
+        );
+    }
+
+    #[test]
+    fn jsonc_renderer_keeps_line_comments_and_block_comments() {
+        let lines = render_custom_code_preview(
+            CustomCodeKind::Jsonc,
+            "{\n  // comment\n  /* block */\n  \"name\": \"elio\"\n}\n",
+            true,
+            20,
+            &|| false,
+        );
+
+        assert!(
+            lines[1]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("// comment"))
+        );
+        assert!(
+            lines[2]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("/* block */"))
+        );
+        assert!(line_text(&lines[3]).contains("\"name\": \"elio\""));
+    }
+
+    #[test]
+    fn directive_renderer_keeps_existing_palette_contract() {
+        let palette = theme::code_preview_palette();
+        let lines = render_custom_code_preview(
+            CustomCodeKind::DirectiveConf,
+            "font_size 11.5\nforeground #c0c6e2\ninclude ~/.config/kitty/theme.conf\n",
+            true,
+            20,
+            &|| false,
+        );
+
+        assert_span_color(&lines[0], "font_size", palette.function);
+        assert_span_color(&lines[0], "11.5", palette.constant);
+        assert_span_color(&lines[1], "foreground", palette.function);
+        assert_span_color(&lines[1], "#c0c6e2", palette.constant);
+        assert_span_color(&lines[2], "include", palette.function);
+        assert_span_color(&lines[2], "~/.config/kitty/theme.conf", palette.string);
+    }
+
+    #[test]
+    fn desktop_entry_renderer_handles_unicode_values() {
+        let lines = render_custom_code_preview(
+            CustomCodeKind::DesktopEntry,
+            "[Desktop Entry]\nName=エリオ\nName[ja]=日本語アプリ\n",
+            true,
+            20,
+            &|| false,
+        );
+
+        assert!(
+            lines
+                .iter()
+                .flat_map(|line| line.spans.iter())
+                .any(|span| span.content.contains("日本語アプリ"))
+        );
+    }
+
+    #[test]
+    fn log_renderer_highlights_levels_and_fields() {
+        let lines = render_custom_code_preview(
+            CustomCodeKind::Log,
+            "2026-03-10T12:00:00Z ERROR request_id=42 path=/login failed\n",
+            true,
+            20,
+            &|| false,
+        );
+
+        assert!(
+            lines[0]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("ERROR"))
+        );
+        assert!(
+            lines[0]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("request_id"))
+        );
+    }
+}

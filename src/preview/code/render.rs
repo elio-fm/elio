@@ -1,4 +1,4 @@
-use super::backends::{custom, legacy, plain, syntect};
+use super::backends::{custom, plain, syntect};
 use crate::file_info::{CodeBackend, PreviewSpec};
 use ratatui::text::Line;
 
@@ -40,13 +40,7 @@ where
     };
 
     if !syntect::is_enabled(code_syntax) {
-        return legacy::render_legacy_code_preview(
-            text,
-            spec.highlight_language(),
-            line_numbers,
-            line_limit,
-            canceled,
-        );
+        return plain::render_plain_code_preview(text, line_numbers, line_limit, canceled);
     }
 
     syntect::render_syntect_code_preview(code_syntax, text, line_numbers, line_limit, canceled)
@@ -58,9 +52,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::file_info::{
-        CodeBackend, CustomCodeKind, HighlightLanguage, PreviewKind, PreviewSpec,
-    };
+    use crate::file_info::{CodeBackend, CustomCodeKind, PreviewKind, PreviewSpec};
     use ratatui::text::Line;
     use std::cell::Cell;
 
@@ -171,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_syntect_specs_still_fall_back_to_legacy_rendering() {
+    fn unsupported_syntect_specs_still_fall_back_to_plain_rendering() {
         let preview = render_code_preview(
             PreviewSpec::code("cmake", CodeBackend::Syntect, None),
             "project(elio)\n",
@@ -179,13 +171,7 @@ mod tests {
             20,
             &|| false,
         );
-        let expected = legacy::render_legacy_code_preview(
-            "project(elio)\n",
-            Some(HighlightLanguage::CMake),
-            true,
-            20,
-            &|| false,
-        );
+        let expected = plain::render_plain_code_preview("project(elio)\n", true, 20, &|| false);
 
         assert_eq!(preview, expected);
     }

@@ -730,7 +730,7 @@ fn javascript_preview_uses_code_renderer_with_colors() {
 }
 
 #[test]
-fn nix_preview_uses_code_renderer() {
+fn nix_preview_falls_back_to_plain_code_when_syntect_support_is_unavailable() {
     let root = temp_path("nix");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("flake.nix");
@@ -747,9 +747,9 @@ fn nix_preview_uses_code_renderer() {
     assert!(preview.detail.is_some_and(|detail| detail.contains("Nix")));
     assert_eq!(
         span_color(&preview.lines[0], "description"),
-        Some(code_palette.parameter)
+        Some(code_palette.fg)
     );
-    assert!(line_has_color(&preview.lines[0], code_palette.string));
+    assert!(!line_has_color(&preview.lines[0], code_palette.string));
     assert!(
         preview
             .lines
@@ -762,7 +762,7 @@ fn nix_preview_uses_code_renderer() {
 }
 
 #[test]
-fn cmake_preview_uses_code_renderer() {
+fn cmake_preview_falls_back_to_plain_code_when_syntect_support_is_unavailable() {
     let root = temp_path("cmake");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("CMakeLists.txt");
@@ -781,7 +781,7 @@ fn cmake_preview_uses_code_renderer() {
             .detail
             .is_some_and(|detail| detail.contains("CMake"))
     );
-    assert_ne!(
+    assert_eq!(
         span_color(&preview.lines[2], "add_executable"),
         Some(code_palette.fg)
     );
@@ -2132,7 +2132,7 @@ fn zsh_preview_uses_shell_specific_support() {
 }
 
 #[test]
-fn keys_preview_uses_highlighting_renderer() {
+fn keys_preview_uses_custom_code_renderer() {
     let root = temp_path("keys");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("bindings.keys");
