@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::overlays::images::StaticImageKey;
-use crate::app::overlays::inline_image::{ImageProtocol, TerminalWindowSize};
+use crate::app::overlays::inline_image::{command_exists, ImageProtocol, TerminalWindowSize};
 use crate::preview::PreviewKind;
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use std::{
@@ -1134,6 +1134,34 @@ fn select_image_protocol_alacritty_disabled_and_other_override_enabled() {
 fn fallback_window_size_pixels_uses_reasonable_cell_defaults() {
     assert_eq!(fallback_window_size_pixels(100, 40), (800, 640));
     assert_eq!(fallback_window_size_pixels(0, 0), (8, 16));
+}
+
+#[cfg(unix)]
+#[test]
+fn command_exists_checks_direct_executable_paths_without_shelling_out() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = temp_root("command-exists-direct-path");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let executable = root.join("demo-tool");
+    fs::write(&executable, b"#!/bin/sh\nexit 0\n").expect("failed to write test executable");
+
+    let mut permissions = fs::metadata(&executable)
+        .expect("test executable metadata should exist")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&executable, permissions).expect("failed to mark test executable");
+
+    assert!(command_exists(
+        executable.to_str().expect("path should be valid utf-8")
+    ));
+
+    let not_executable = root.join("demo-data");
+    fs::write(&not_executable, b"plain data").expect("failed to write plain file");
+    assert!(!command_exists(
+        not_executable.to_str().expect("path should be valid utf-8")
+    ));
 }
 
 #[test]

@@ -8,7 +8,6 @@ use std::{
     fs::{self, File},
     io::{Read, Write as _},
     path::Path,
-    process::Command,
     sync::Arc,
 };
 
@@ -631,11 +630,38 @@ pub(in crate::app) fn build_kitty_clear_sequence() -> &'static str {
 }
 
 pub(in crate::app) fn command_exists(program: &str) -> bool {
-    Command::new("sh")
-        .arg("-lc")
-        .arg(format!("command -v {program} >/dev/null 2>&1"))
-        .status()
-        .is_ok_and(|status| status.success())
+    if program.is_empty() {
+        return false;
+    }
+
+    let program_path = Path::new(program);
+    if program_path.components().count() > 1 {
+        return executable_file_exists(program_path);
+    }
+
+    env::var_os("PATH").is_some_and(|paths| {
+        env::split_paths(&paths).any(|dir| executable_file_exists(&dir.join(program)))
+    })
+}
+
+fn executable_file_exists(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+
+    #[cfg(not(unix))]
+    {
+        true
+    }
 }
 
 fn place_terminal_image_with_kitty_protocol(
@@ -703,7 +729,9 @@ fn intersect_rect(a: Rect, b: Rect) -> Option<Rect> {
     let left = a.x.max(b.x);
     let top = a.y.max(b.y);
     let right = a.x.saturating_add(a.width).min(b.x.saturating_add(b.width));
-    let bottom = a.y.saturating_add(a.height).min(b.y.saturating_add(b.height));
+    let bottom =
+        a.y.saturating_add(a.height)
+            .min(b.y.saturating_add(b.height));
     (right > left && bottom > top).then_some(Rect {
         x: left,
         y: top,
