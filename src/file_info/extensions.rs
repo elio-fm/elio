@@ -1,11 +1,12 @@
-use super::types::{
-    c_like_file_facts, cmake_file_facts, directive_conf_file_facts, disk_image_file_facts,
-    js_like_file_facts, nix_file_facts, plain, python_file_facts, shell_file_facts, source_only,
-};
-use super::{
-    DiskImageKind, DocumentFormat, FileFacts, HighlightLanguage, PreviewSpec, StructuredFormat,
-};
-use crate::app::FileClass;
+use super::types::{disk_image_file_facts, plain, source_only};
+use super::{DiskImageKind, DocumentFormat, FileFacts, PreviewSpec};
+use crate::{app::FileClass, preview::code::registry};
+
+fn preview_for_extension(ext: &str) -> PreviewSpec {
+    registry::language_for_extension(ext)
+        .expect("extension registry entry should exist for code preview")
+        .preview_spec()
+}
 
 pub(super) fn inspect_extension(ext: &str) -> FileFacts {
     match ext {
@@ -27,87 +28,77 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         "json" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: None,
-            preview: PreviewSpec::source(
-                Some("json"),
-                Some(HighlightLanguage::Json),
-                Some(StructuredFormat::Json),
-            ),
+            preview: preview_for_extension(ext),
         },
         "jsonc" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("JSON with comments"),
-            preview: PreviewSpec::source(
-                Some("jsonc"),
-                Some(HighlightLanguage::Jsonc),
-                Some(StructuredFormat::Jsonc),
-            ),
+            preview: preview_for_extension(ext),
         },
         "json5" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("JSON5 file"),
-            preview: PreviewSpec::source(
-                Some("javascript"),
-                Some(HighlightLanguage::Jsonc),
-                Some(StructuredFormat::Json5),
-            ),
+            preview: preview_for_extension(ext),
         },
         "toml" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: None,
-            preview: PreviewSpec::source(
-                Some("toml"),
-                Some(HighlightLanguage::Toml),
-                Some(StructuredFormat::Toml),
-            ),
+            preview: preview_for_extension(ext),
         },
         "yaml" | "yml" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: None,
-            preview: PreviewSpec::source(
-                Some("yaml"),
-                Some(HighlightLanguage::Yaml),
-                Some(StructuredFormat::Yaml),
-            ),
+            preview: preview_for_extension(ext),
         },
         "html" | "htm" | "xhtml" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("HTML document"),
-            preview: PreviewSpec::source(Some("html"), Some(HighlightLanguage::Markup), None),
+            preview: preview_for_extension(ext),
         },
         "xml" | "xsd" | "xsl" | "xslt" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("XML document"),
-            preview: PreviewSpec::source(Some("xml"), Some(HighlightLanguage::Markup), None),
+            preview: preview_for_extension(ext),
         },
         "css" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Stylesheet"),
-            preview: PreviewSpec::source(Some("css"), Some(HighlightLanguage::Css), None),
+            preview: preview_for_extension(ext),
         },
         "scss" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("SCSS stylesheet"),
-            preview: PreviewSpec::source(Some("scss"), Some(HighlightLanguage::Css), None),
+            preview: preview_for_extension(ext),
         },
         "sass" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Sass stylesheet"),
-            preview: PreviewSpec::source(Some("sass"), Some(HighlightLanguage::Css), None),
+            preview: preview_for_extension(ext),
         },
         "less" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Less stylesheet"),
-            preview: PreviewSpec::source(Some("css"), Some(HighlightLanguage::Css), None),
+            preview: preview_for_extension(ext),
         },
-        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => {
-            js_like_file_facts(FileClass::Code, None)
-        }
-        "nix" => nix_file_facts(FileClass::Config, "Nix expression"),
-        "cmake" => cmake_file_facts(FileClass::Config, "CMake script"),
+        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: None,
+            preview: preview_for_extension(ext),
+        },
+        "nix" => FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Nix expression"),
+            preview: preview_for_extension(ext),
+        },
+        "cmake" => FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("CMake script"),
+            preview: preview_for_extension(ext),
+        },
         "lock" => FileFacts {
             builtin_class: FileClass::Data,
             specific_type_label: Some("Lockfile"),
-            preview: PreviewSpec::source(None, Some(HighlightLanguage::Ini), None),
+            preview: preview_for_extension(ext),
         },
         "ini" | "keys" => FileFacts {
             builtin_class: FileClass::Config,
@@ -115,22 +106,22 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
                 "keys" => Some("Keys file"),
                 _ => None,
             },
-            preview: PreviewSpec::source(None, Some(HighlightLanguage::Ini), None),
+            preview: preview_for_extension(ext),
         },
-        "conf" | "cfg" => directive_conf_file_facts(FileClass::Config, None),
+        "conf" | "cfg" => FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: None,
+            preview: preview_for_extension(ext),
+        },
         "env" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("Environment file"),
-            preview: PreviewSpec::source(
-                None,
-                Some(HighlightLanguage::Ini),
-                Some(StructuredFormat::Dotenv),
-            ),
+            preview: preview_for_extension(ext),
         },
         "desktop" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("Desktop Entry"),
-            preview: PreviewSpec::highlighted_source(None, HighlightLanguage::DesktopEntry),
+            preview: preview_for_extension(ext),
         },
         "raw" => disk_image_file_facts(DiskImageKind::Raw),
         "img" => disk_image_file_facts(DiskImageKind::Img),
@@ -142,11 +133,7 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         "log" => FileFacts {
             builtin_class: FileClass::Document,
             specific_type_label: Some("Log file"),
-            preview: PreviewSpec::source(
-                None,
-                Some(HighlightLanguage::Log),
-                Some(StructuredFormat::Log),
-            ),
+            preview: preview_for_extension(ext),
         },
         "xcf" => plain(FileClass::Image, Some("GIMP image")),
         "ico" => plain(FileClass::Image, Some("Icon image")),
@@ -179,57 +166,100 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         "a" => plain(FileClass::File, Some("Static library")),
         "lib" => plain(FileClass::File, Some("Library file")),
         "jar" => plain(FileClass::Archive, Some("Java archive")),
-        "c" => c_like_file_facts(FileClass::Code, "C source file", "c"),
-        "h" => c_like_file_facts(FileClass::Code, "C header", "c"),
-        "cpp" | "cc" | "cxx" => c_like_file_facts(FileClass::Code, "C++ source file", "cpp"),
-        "hpp" | "hh" | "hxx" => c_like_file_facts(FileClass::Code, "C++ header", "cpp"),
-        "mk" | "mak" => source_only(FileClass::Config, Some("Makefile"), Some("make"))
-            .with_highlight_language(HighlightLanguage::Make),
-        "sh" => shell_file_facts(FileClass::Code, "Shell script", "sh"),
-        "bash" => shell_file_facts(FileClass::Code, "Bash script", "bash"),
-        "zsh" => shell_file_facts(FileClass::Code, "Zsh script", "zsh"),
-        "ksh" => shell_file_facts(FileClass::Code, "KornShell script", "ksh"),
-        "fish" => shell_file_facts(FileClass::Code, "Fish script", "fish"),
-        "py" | "pyi" | "pyw" | "pyx" => python_file_facts(FileClass::Code, None),
+        "c" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("C source file"),
+            preview: preview_for_extension(ext),
+        },
+        "h" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("C header"),
+            preview: preview_for_extension(ext),
+        },
+        "cpp" | "cc" | "cxx" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("C++ source file"),
+            preview: preview_for_extension(ext),
+        },
+        "hpp" | "hh" | "hxx" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("C++ header"),
+            preview: preview_for_extension(ext),
+        },
+        "mk" | "mak" => FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Makefile"),
+            preview: preview_for_extension(ext),
+        },
+        "sh" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Shell script"),
+            preview: preview_for_extension(ext),
+        },
+        "bash" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Bash script"),
+            preview: preview_for_extension(ext),
+        },
+        "zsh" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Zsh script"),
+            preview: preview_for_extension(ext),
+        },
+        "ksh" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("KornShell script"),
+            preview: preview_for_extension(ext),
+        },
+        "fish" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Fish script"),
+            preview: preview_for_extension(ext),
+        },
+        "py" | "pyi" | "pyw" | "pyx" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: None,
+            preview: preview_for_extension(ext),
+        },
         "rs" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Rust source file"),
-            preview: PreviewSpec::source(Some("rust"), Some(HighlightLanguage::CLike), None),
+            preview: preview_for_extension(ext),
         },
         "go" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Go source file"),
-            preview: PreviewSpec::source(Some("go"), Some(HighlightLanguage::CLike), None),
+            preview: preview_for_extension(ext),
         },
         "java" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Java source file"),
-            preview: PreviewSpec::source(Some("java"), Some(HighlightLanguage::CLike), None),
+            preview: preview_for_extension(ext),
         },
         "php" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("PHP script"),
-            preview: PreviewSpec::source(Some("php"), Some(HighlightLanguage::CLike), None),
+            preview: preview_for_extension(ext),
         },
         "swift" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Swift source file"),
-            preview: PreviewSpec::source(Some("swift"), Some(HighlightLanguage::CLike), None),
+            preview: preview_for_extension(ext),
         },
         "kt" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Kotlin source file"),
-            preview: PreviewSpec::source(Some("kotlin"), Some(HighlightLanguage::CLike), None),
+            preview: preview_for_extension(ext),
         },
         "rb" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Ruby script"),
-            preview: PreviewSpec::source(Some("ruby"), Some(HighlightLanguage::Python), None),
+            preview: preview_for_extension(ext),
         },
         "lua" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Lua script"),
-            preview: PreviewSpec::highlighted_source(Some("lua"), HighlightLanguage::Lua),
+            preview: preview_for_extension(ext),
         },
         "ron" => source_only(FileClass::Config, None, None),
         "csv" | "tsv" | "sql" | "sqlite" | "db" | "parquet" => {
@@ -306,7 +336,7 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         "svg" => FileFacts {
             builtin_class: FileClass::Image,
             specific_type_label: Some("SVG image"),
-            preview: PreviewSpec::source(Some("xml"), Some(HighlightLanguage::Markup), None),
+            preview: preview_for_extension(ext),
         },
         "png" => plain(FileClass::Image, Some("PNG image")),
         "jpg" | "jpeg" => plain(FileClass::Image, Some("JPEG image")),

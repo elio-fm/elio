@@ -228,10 +228,10 @@ fn js_like_files_use_syntax_highlighting() {
     let tsx = inspect_path(Path::new("App.tsx"), EntryKind::File);
 
     assert_eq!(js.builtin_class, FileClass::Code);
-    assert_code_spec(js.preview, Some("typescript"), CodeBackend::Syntect);
+    assert_code_spec(js.preview, Some("javascript"), CodeBackend::Syntect);
 
     assert_eq!(tsx.builtin_class, FileClass::Code);
-    assert_code_spec(tsx.preview, Some("typescript"), CodeBackend::Syntect);
+    assert_code_spec(tsx.preview, Some("tsx"), CodeBackend::Syntect);
 }
 
 #[test]
@@ -290,8 +290,8 @@ fn shell_style_conf_is_detected_from_contents() {
     let facts = inspect_path(&path, EntryKind::File);
 
     assert_eq!(facts.builtin_class, FileClass::Config);
-    assert_eq!(facts.preview.language_hint, Some("shell"));
-    assert_code_spec(facts.preview, Some("shell"), CodeBackend::Syntect);
+    assert_eq!(facts.preview.language_hint, Some("sh"));
+    assert_code_spec(facts.preview, Some("sh"), CodeBackend::Syntect);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -307,7 +307,7 @@ fn ambiguous_conf_defaults_to_directive_config() {
     let facts = inspect_path(&path, EntryKind::File);
 
     assert_eq!(facts.builtin_class, FileClass::Config);
-    assert_eq!(facts.preview.language_hint, None);
+    assert_eq!(facts.preview.language_hint, Some("config"));
     assert_code_spec(
         facts.preview,
         Some("config"),

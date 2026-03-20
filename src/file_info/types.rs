@@ -177,33 +177,37 @@ impl HighlightLanguage {
     }
 
     pub(crate) fn from_language_token(token: &str) -> Option<Self> {
-        match token.trim().to_ascii_lowercase().as_str() {
-            "js" | "jsx" | "javascript" | "ts" | "tsx" | "typescript" => Some(Self::JsLike),
-            "c" | "h" | "cpp" | "c++" | "cc" | "cxx" | "hpp" | "hh" | "hxx" | "rust" | "rs"
-            | "go" | "golang" | "java" | "kotlin" | "kt" | "swift" | "php" => Some(Self::CLike),
-            "conf" | "cfg" | "config" => Some(Self::DirectiveConf),
+        crate::preview::code::registry::language_for_markdown_fence(token).and_then(|language| {
+            match language.backend {
+                CodeBackend::Plain => None,
+                CodeBackend::Syntect => Self::from_code_syntax(language.canonical_id),
+                CodeBackend::Custom(kind) => Some(kind.highlight_language()),
+            }
+        })
+    }
+
+    pub(crate) fn from_code_syntax(code_syntax: &str) -> Option<Self> {
+        match code_syntax {
+            "javascript" | "jsx" | "typescript" | "tsx" => Some(Self::JsLike),
+            "c" | "cpp" | "rust" | "go" | "java" | "kotlin" | "php" | "swift" => Some(Self::CLike),
+            "config" | "kitty" | "mpv" | "btop" => Some(Self::DirectiveConf),
             "lua" => Some(Self::Lua),
-            "python" | "py" | "ruby" | "rb" => Some(Self::Python),
-            "make" | "makefile" => Some(Self::Make),
-            "sh" | "shell" | "bash" | "zsh" | "ksh" | "fish" => Some(Self::Shell),
+            "python" | "ruby" => Some(Self::Python),
+            "make" => Some(Self::Make),
+            "sh" | "bash" | "zsh" | "ksh" | "fish" => Some(Self::Shell),
             "nix" => Some(Self::Nix),
             "cmake" => Some(Self::CMake),
-            "kitty" | "mpv" | "btop" => Some(Self::DirectiveConf),
-            "html" | "xml" | "xhtml" | "svg" | "markup" => Some(Self::Markup),
+            "html" | "xml" => Some(Self::Markup),
             "css" | "scss" | "sass" | "less" => Some(Self::Css),
             "toml" => Some(Self::Toml),
             "json" => Some(Self::Json),
             "jsonc" | "json5" => Some(Self::Jsonc),
-            "yaml" | "yml" => Some(Self::Yaml),
+            "yaml" => Some(Self::Yaml),
             "log" => Some(Self::Log),
-            "ini" | "dosini" => Some(Self::Ini),
+            "ini" | "dotenv" => Some(Self::Ini),
             "desktop" => Some(Self::DesktopEntry),
             _ => None,
         }
-    }
-
-    pub(crate) fn from_code_syntax(code_syntax: &str) -> Option<Self> {
-        Self::from_language_token(code_syntax)
     }
 }
 
@@ -414,6 +418,21 @@ impl PreviewSpec {
         }
     }
 
+    pub(crate) const fn code(
+        code_syntax: &'static str,
+        code_backend: CodeBackend,
+        structured_format: Option<StructuredFormat>,
+    ) -> Self {
+        Self {
+            kind: PreviewKind::Source,
+            language_hint: Some(code_syntax),
+            code_syntax: Some(code_syntax),
+            code_backend,
+            structured_format,
+            document_format: None,
+        }
+    }
+
     pub(super) const fn document(document_format: DocumentFormat) -> Self {
         Self {
             kind: PreviewKind::PlainText,
@@ -423,13 +442,6 @@ impl PreviewSpec {
             structured_format: None,
             document_format: Some(document_format),
         }
-    }
-
-    pub(super) const fn highlighted_source(
-        language_hint: Option<&'static str>,
-        highlight_language: HighlightLanguage,
-    ) -> Self {
-        Self::source(language_hint, Some(highlight_language), None)
     }
 
     pub(crate) fn highlight_language(self) -> Option<HighlightLanguage> {
@@ -473,81 +485,8 @@ pub(super) const fn source_only(
     }
 }
 
-pub(super) const fn shell_file_facts(
-    class: FileClass,
-    specific_type_label: &'static str,
-    language_hint: &'static str,
-) -> FileFacts {
-    source_only(class, Some(specific_type_label), Some(language_hint))
-        .with_highlight_language(HighlightLanguage::Shell)
-}
-
-pub(super) const fn c_like_file_facts(
-    class: FileClass,
-    specific_type_label: &'static str,
-    language_hint: &'static str,
-) -> FileFacts {
-    source_only(class, Some(specific_type_label), Some(language_hint))
-        .with_highlight_language(HighlightLanguage::CLike)
-}
-
-pub(super) const fn python_file_facts(
-    class: FileClass,
-    specific_type_label: Option<&'static str>,
-) -> FileFacts {
-    source_only(class, specific_type_label, Some("python"))
-        .with_highlight_language(HighlightLanguage::Python)
-}
-
-pub(super) const fn js_like_file_facts(
-    class: FileClass,
-    specific_type_label: Option<&'static str>,
-) -> FileFacts {
-    source_only(class, specific_type_label, Some("typescript"))
-        .with_highlight_language(HighlightLanguage::JsLike)
-}
-
-pub(super) const fn nix_file_facts(
-    class: FileClass,
-    specific_type_label: &'static str,
-) -> FileFacts {
-    source_only(class, Some(specific_type_label), Some("nix"))
-        .with_highlight_language(HighlightLanguage::Nix)
-}
-
-pub(super) const fn cmake_file_facts(
-    class: FileClass,
-    specific_type_label: &'static str,
-) -> FileFacts {
-    source_only(class, Some(specific_type_label), Some("cmake"))
-        .with_highlight_language(HighlightLanguage::CMake)
-}
-
-pub(super) const fn directive_conf_file_facts(
-    class: FileClass,
-    language_hint: Option<&'static str>,
-) -> FileFacts {
-    source_only(class, None, language_hint)
-        .with_highlight_language(HighlightLanguage::DirectiveConf)
-}
-
 pub(super) const fn disk_image_file_facts(kind: DiskImageKind) -> FileFacts {
     plain(FileClass::File, Some(kind.detail_label()))
-}
-
-impl FileFacts {
-    pub(super) const fn with_highlight_language(
-        mut self,
-        highlight_language: HighlightLanguage,
-    ) -> Self {
-        self.preview.code_syntax = resolve_code_syntax(
-            self.preview.language_hint,
-            Some(highlight_language),
-            self.preview.structured_format,
-        );
-        self.preview.code_backend = highlight_language.code_backend();
-        self
-    }
 }
 
 const fn resolve_code_backend(highlight_language: Option<HighlightLanguage>) -> CodeBackend {

@@ -669,7 +669,7 @@ fn javascript_preview_uses_code_renderer_with_colors() {
     assert!(
         preview
             .detail
-            .is_some_and(|detail| detail.contains("TypeScript"))
+            .is_some_and(|detail| detail.contains("JavaScript"))
     );
     assert_eq!(
         span_color(&preview.lines[0], "export"),

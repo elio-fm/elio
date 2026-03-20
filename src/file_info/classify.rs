@@ -1,9 +1,11 @@
 use super::{
-    FileFacts, HighlightLanguage, PreviewSpec, archives::inspect_archive_name,
-    extensions::inspect_extension, license::sniff_license_file_type, names::inspect_exact_name,
-    types::shell_file_facts,
+    FileFacts, PreviewSpec, archives::inspect_archive_name, extensions::inspect_extension,
+    license::sniff_license_file_type, names::inspect_exact_name,
 };
-use crate::app::{EntryKind, FileClass};
+use crate::{
+    app::{EntryKind, FileClass},
+    preview::code::registry,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -147,14 +149,22 @@ fn sniff_shebang_script_type(buffer: &[u8]) -> Option<FileFacts> {
     let text = std::str::from_utf8(buffer).ok()?;
     let first_line = text.lines().next()?.trim_start_matches('\u{feff}');
     let interpreter = shebang_interpreter_name(first_line)?;
+    let language = registry::language_for_shebang(interpreter)?;
 
-    match interpreter {
-        "bash" => Some(shell_file_facts(FileClass::Code, "Bash script", "bash")),
-        "zsh" => Some(shell_file_facts(FileClass::Code, "Zsh script", "zsh")),
-        "ksh" => Some(shell_file_facts(FileClass::Code, "KornShell script", "ksh")),
-        "sh" => Some(shell_file_facts(FileClass::Code, "Shell script", "sh")),
+    let specific_type_label = match language.canonical_id {
+        "bash" => Some("Bash script"),
+        "zsh" => Some("Zsh script"),
+        "ksh" => Some("KornShell script"),
+        "sh" => Some("Shell script"),
+        "fish" => Some("Fish script"),
         _ => None,
-    }
+    }?;
+
+    Some(FileFacts {
+        builtin_class: FileClass::Code,
+        specific_type_label: Some(specific_type_label),
+        preview: language.preview_spec(),
+    })
 }
 
 fn shebang_interpreter_name(first_line: &str) -> Option<&str> {
@@ -186,15 +196,15 @@ fn sniff_config_file_type(path: &Path) -> Option<FileFacts> {
 
     let (ini_score, shell_score) = score_config_prefix(&prefix);
     if ini_score >= STRONG_INI_THRESHOLD && ini_score >= shell_score.saturating_add(SCORE_MARGIN) {
-        return Some(config_file_facts(Some("ini"), HighlightLanguage::Ini));
+        return registry::language_for_code_syntax("ini").map(config_file_facts);
     }
     if shell_score >= STRONG_SHELL_THRESHOLD
         && shell_score >= ini_score.saturating_add(SCORE_MARGIN)
     {
-        return Some(config_file_facts(Some("shell"), HighlightLanguage::Shell));
+        return registry::language_for_code_syntax("sh").map(config_file_facts);
     }
 
-    Some(config_file_facts(None, HighlightLanguage::DirectiveConf))
+    registry::language_for_code_syntax("config").map(config_file_facts)
 }
 
 fn read_text_prefix(path: &Path) -> Option<String> {
@@ -261,47 +271,14 @@ fn extract_vim_mode_hint(line: &str) -> Option<&str> {
 }
 
 fn config_facts_from_hint(token: &str) -> Option<FileFacts> {
-    let token = normalize_key(token);
-    let (language_hint, highlight_language) = match token.as_str() {
-        "ini" | "dosini" => (Some("ini"), HighlightLanguage::Ini),
-        "sh" | "shell" => (Some("shell"), HighlightLanguage::Shell),
-        "bash" => (Some("bash"), HighlightLanguage::Shell),
-        "zsh" => (Some("zsh"), HighlightLanguage::Shell),
-        "ksh" => (Some("ksh"), HighlightLanguage::Shell),
-        "fish" => (Some("fish"), HighlightLanguage::Shell),
-        "kitty" => (Some("kitty"), HighlightLanguage::DirectiveConf),
-        "mpv" => (Some("mpv"), HighlightLanguage::DirectiveConf),
-        "btop" => (Some("btop"), HighlightLanguage::DirectiveConf),
-        "conf" | "cfg" | "config" => (Some("config"), HighlightLanguage::DirectiveConf),
-        "lua" => (Some("lua"), HighlightLanguage::Lua),
-        "python" | "py" => (Some("python"), HighlightLanguage::Python),
-        "nix" => (Some("nix"), HighlightLanguage::Nix),
-        "cmake" => (Some("cmake"), HighlightLanguage::CMake),
-        "css" => (Some("css"), HighlightLanguage::Css),
-        "html" => (Some("html"), HighlightLanguage::Markup),
-        "xml" | "svg" | "markup" => (Some("xml"), HighlightLanguage::Markup),
-        "toml" => (Some("toml"), HighlightLanguage::Toml),
-        "json" => (Some("json"), HighlightLanguage::Json),
-        "jsonc" | "json5" => (Some("jsonc"), HighlightLanguage::Jsonc),
-        "yaml" | "yml" => (Some("yaml"), HighlightLanguage::Yaml),
-        "log" => (Some("log"), HighlightLanguage::Log),
-        "desktop" => (Some("desktop"), HighlightLanguage::DesktopEntry),
-        _ => {
-            return HighlightLanguage::from_language_token(token.as_str())
-                .map(|language| config_file_facts(None, language));
-        }
-    };
-    Some(config_file_facts(language_hint, highlight_language))
+    registry::language_for_modeline(token).map(config_file_facts)
 }
 
-fn config_file_facts(
-    language_hint: Option<&'static str>,
-    highlight_language: HighlightLanguage,
-) -> FileFacts {
+fn config_file_facts(language: registry::RegisteredLanguage) -> FileFacts {
     FileFacts {
         builtin_class: FileClass::Config,
         specific_type_label: None,
-        preview: PreviewSpec::source(language_hint, Some(highlight_language), None),
+        preview: language.preview_spec(),
     }
 }
 

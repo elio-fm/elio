@@ -1,4 +1,5 @@
 mod binary;
+pub(crate) mod code;
 mod container;
 mod directory;
 mod dispatch;
