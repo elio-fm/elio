@@ -3,7 +3,7 @@ use crate::{file_info, fs::natural_cmp, ui::theme};
 use flate2::read::GzDecoder;
 use ratatui::text::Line;
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque, hash_map::DefaultHasher},
+    collections::{hash_map::DefaultHasher, BTreeMap, HashMap, VecDeque},
     env,
     fs::{self, File},
     hash::{Hash, Hasher},
@@ -467,6 +467,9 @@ fn build_external_archive_preview(
     format: ArchiveFormat,
     type_detail: Option<&'static str>,
 ) -> Option<PreviewContent> {
+    // Common ZIP and TAR previews are handled internally above. This path is for
+    // recovery and uncommon archive types, where 7z provides the broadest coverage
+    // and bsdtar remains a final generic fallback.
     let detail = type_detail.unwrap_or(archive_default_label(format));
     if let Some(entries) = collect_preferred_archive_entries(path, format) {
         return Some(render_archive_preview(ArchiveRenderConfig {
@@ -502,7 +505,7 @@ fn build_external_archive_preview(
         }));
     }
 
-    let entries = collect_fallback_archive_entries(path)?;
+    let entries = collect_archive_entries_with_bsdtar_fallback(path)?;
 
     Some(render_archive_preview(ArchiveRenderConfig {
         detail: detail.to_string(),
@@ -583,19 +586,17 @@ fn collect_preferred_archive_entries(
     format: ArchiveFormat,
 ) -> Option<Vec<ArchiveEntry>> {
     if prefers_tar_listing(format) {
+        // If internal TAR parsing fails, keep bsdtar as the only tar-family CLI fallback.
         return collect_internal_tar_listing(path, format)
             .map(|(_, entries, _, _)| entries)
-            .or_else(|| collect_archive_entries_with_bsdtar(path))
-            .or_else(|| collect_archive_entries_with_tar(path));
+            .or_else(|| collect_archive_entries_with_bsdtar(path));
     }
 
     None
 }
 
-fn collect_fallback_archive_entries(path: &Path) -> Option<Vec<ArchiveEntry>> {
+fn collect_archive_entries_with_bsdtar_fallback(path: &Path) -> Option<Vec<ArchiveEntry>> {
     collect_archive_entries_with_bsdtar(path)
-        .or_else(|| collect_archive_entries_with_tar(path))
-        .or_else(|| collect_archive_entries_with_unzip(path))
 }
 
 fn prefers_tar_listing(format: ArchiveFormat) -> bool {
@@ -874,28 +875,6 @@ fn system_time_key(time: SystemTime) -> Option<(u64, u32)> {
 
 fn collect_archive_entries_with_bsdtar(path: &Path) -> Option<Vec<ArchiveEntry>> {
     let output = Command::new("bsdtar").arg("-tf").arg(path).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(normalize_archive_entries(
-        String::from_utf8_lossy(&output.stdout).lines(),
-        false,
-    ))
-}
-
-fn collect_archive_entries_with_tar(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    let output = Command::new("tar").arg("-tf").arg(path).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(normalize_archive_entries(
-        String::from_utf8_lossy(&output.stdout).lines(),
-        false,
-    ))
-}
-
-fn collect_archive_entries_with_unzip(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    let output = Command::new("unzip").arg("-Z1").arg(path).output().ok()?;
     if !output.status.success() {
         return None;
     }
