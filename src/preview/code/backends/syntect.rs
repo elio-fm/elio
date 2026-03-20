@@ -45,6 +45,8 @@ struct ScopeSelectors {
     invalid: [Scope; 2],
     variable_readwrite: [Scope; 1],
     shell_source: [Scope; 1],
+    shell_function_call: [Scope; 1],
+    shell_function_arguments: [Scope; 1],
 }
 
 pub(in crate::preview::code) fn is_enabled(code_syntax: &str) -> bool {
@@ -176,6 +178,8 @@ fn scope_selectors() -> &'static ScopeSelectors {
             invalid: [scope("invalid"), scope("invalid.deprecated")],
             variable_readwrite: [scope("variable.other.readwrite")],
             shell_source: [scope("source.shell")],
+            shell_function_call: [scope("meta.function-call")],
+            shell_function_arguments: [scope("meta.function-call.arguments")],
         }
     })
 }
@@ -276,6 +280,18 @@ fn shell_semantic_role_from_heuristics(
         return Some(SemanticRole::Function);
     }
 
+    if scope_stack_matches(scope_stack, &selectors.shell_function_call)
+        && looks_like_shell_command_name(token)
+    {
+        return Some(SemanticRole::Function);
+    }
+
+    if scope_stack_matches(scope_stack, &selectors.shell_function_arguments)
+        && token.starts_with('-')
+    {
+        return Some(SemanticRole::Parameter);
+    }
+
     if token.starts_with('$') || token.starts_with("${") || token.starts_with("$(") {
         return Some(SemanticRole::Parameter);
     }
@@ -296,6 +312,17 @@ fn looks_like_shell_assignment_name(token: &str) -> bool {
         return false;
     }
     chars.all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
+}
+
+fn looks_like_shell_command_name(token: &str) -> bool {
+    let mut chars = token.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
 }
 
 fn scope_stack_matches(scope_stack: &[Scope], selectors: &[Scope]) -> bool {
@@ -684,6 +711,42 @@ mod tests {
     }
 
     #[test]
+    fn sh_plain_commands_and_functions_map_to_semantic_roles() {
+        let palette = theme::code_preview_palette();
+        let sample =
+            "deploy() {\n  grep -q \"$HOME\" /etc/profile\n  my_tool --flag \"$NAME\"\n}\n";
+        let rendered = render_syntect_code_preview("sh", sample, true, 20, &|| false)
+            .expect("sh syntax should render through syntect");
+        let scopes = token_scopes("sh", sample);
+
+        assert_ne!(
+            span_color(&rendered[0], "deploy"),
+            Some(palette.fg),
+            "sh function name fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[1], "grep"),
+            Some(palette.fg),
+            "sh command fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[1], "-q"),
+            Some(palette.fg),
+            "sh option fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[2], "my_tool"),
+            Some(palette.fg),
+            "sh custom command fell back to fg; scopes: {scopes:#?}"
+        );
+        assert_ne!(
+            span_color(&rendered[2], "--flag"),
+            Some(palette.fg),
+            "sh long option fell back to fg; scopes: {scopes:#?}"
+        );
+    }
+
+    #[test]
     fn semantic_role_classifier_covers_expected_scope_families() {
         let stack = ScopeStack::from_str("source.rust keyword.control.rust").unwrap();
         assert_eq!(
@@ -737,6 +800,19 @@ mod tests {
         let stack = ScopeStack::from_str("source.shell.bash").unwrap();
         assert_eq!(
             semantic_role_for_token("$HOME", stack.as_slice()),
+            SemanticRole::Parameter
+        );
+
+        let stack = ScopeStack::from_str("source.shell.bash meta.function-call.shell").unwrap();
+        assert_eq!(
+            semantic_role_for_token("grep", stack.as_slice()),
+            SemanticRole::Function
+        );
+
+        let stack =
+            ScopeStack::from_str("source.shell.bash meta.function-call.arguments.shell").unwrap();
+        assert_eq!(
+            semantic_role_for_token("--flag", stack.as_slice()),
             SemanticRole::Parameter
         );
     }

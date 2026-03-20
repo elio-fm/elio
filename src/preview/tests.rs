@@ -2140,6 +2140,39 @@ fn sh_file_preview_keeps_core_shell_tokens_non_gray() {
 }
 
 #[test]
+fn sh_preview_highlights_plain_commands_and_options() {
+    let root = temp_path("sh-commands-preview");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("deploy.sh");
+    fs::write(
+        &path,
+        "deploy() {\n  grep -q \"$HOME\" /etc/profile\n  my_tool --flag \"$NAME\"\n}\n",
+    )
+    .expect("failed to write sh commands script");
+
+    let preview = build_preview(&file_entry(path));
+    let code_palette = theme::code_preview_palette();
+
+    assert_eq!(preview.kind, PreviewKind::Code);
+    assert_ne!(
+        span_color(&preview.lines[0], "deploy"),
+        Some(code_palette.fg)
+    );
+    assert_ne!(span_color(&preview.lines[1], "grep"), Some(code_palette.fg));
+    assert_ne!(span_color(&preview.lines[1], "-q"), Some(code_palette.fg));
+    assert_ne!(
+        span_color(&preview.lines[2], "my_tool"),
+        Some(code_palette.fg)
+    );
+    assert_ne!(
+        span_color(&preview.lines[2], "--flag"),
+        Some(code_palette.fg)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn shell_dotfile_preview_uses_code_renderer() {
     let root = temp_path("shell-dotfile");
     fs::create_dir_all(&root).expect("failed to create temp root");
