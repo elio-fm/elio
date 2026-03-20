@@ -1,0 +1,63 @@
+%YAML 1.2
+---
+name: Fortran
+file_extensions:
+  - f
+  - for
+  - f90
+  - f95
+  - f03
+  - f08
+  - fpp
+scope: source.fortran
+variables:
+  identifier: '[A-Za-z][A-Za-z0-9_]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: preprocessor
+    - include: strings
+    - match: '(?i)\b(?:program|module|submodule|subroutine|function|contains|use|implicit|none|parameter|interface|procedure|call|return|stop|cycle|exit|if|then|else|elseif|select|case|where|elsewhere|forall|do|end|block|associate|enum|type|class|extends|abstract|import|allocate|deallocate|open|close|read|write|print|format|rewind|backspace|inquire|continue|go\s+to)\b'
+      scope: keyword.control.fortran
+    - match: '(?i)\b(?:integer|real|double\s+precision|complex|logical|character|kind|len)\b'
+      scope: support.type.fortran
+    - match: '(?i)\b(?:true|false|null)\b'
+      scope: support.constant.fortran
+    - match: '(?i)\b(?:selected_real_kind|selected_int_kind|allocated|present|size|shape|reshape|sum|product|max|min|abs|sqrt|sin|cos|tan|exp|log|mod)\b'
+      scope: support.function.fortran
+    - match: '(?i)\b{{identifier}}(?=\s*\()'
+      scope: entity.name.function.fortran
+    - match: '(?i)\b{{identifier}}\b(?=\s*::)'
+      scope: entity.name.type.fortran
+    - match: '(?i)\b{{identifier}}\b(?=\s*=)'
+      scope: variable.other.readwrite.assignment.fortran
+    - match: '\b(?:\d+(?:\.\d*)?|\.\d+)(?:[eEdD][+-]?\d+)?(?:_[A-Za-z0-9_]+)?\b'
+      scope: constant.numeric.fortran
+    - match: '\*\*|//|=>|[-+*/=<>&:,()%]+'
+      scope: keyword.operator.fortran
+  comments:
+    - match: '!.*$'
+      scope: comment.line.exclamation.fortran
+    - match: '(?i)^[c*].*$'
+      scope: comment.line.fixed-form.fortran
+  preprocessor:
+    - match: '^\s*#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef|include|line|error|warning)\b'
+      scope: meta.preprocessor.fortran
+  strings:
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.fortran
+    - match: '""'
+      scope: constant.character.escape.fortran
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.fortran
+    - match: "''"
+      scope: constant.character.escape.fortran
+    - match: "'"
+      pop: true

@@ -307,6 +307,14 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("Dart source file"),
             preview: preview_for_extension(ext),
         },
+        "f" | "for" | "f90" | "f95" | "f03" | "f08" | "fpp" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some(match ext {
+                "fpp" => "Fortran preprocessor source file",
+                _ => "Fortran source file",
+            }),
+            preview: preview_for_extension(ext),
+        },
         "zig" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Zig source file"),

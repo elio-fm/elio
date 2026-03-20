@@ -551,6 +551,62 @@ impl Theme {
                     color: Some(rgb(56, 213, 255)),
                 },
             ),
+            (
+                "f".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("󱈚".to_string()),
+                    color: Some(rgb(115, 79, 150)),
+                },
+            ),
+            (
+                "for".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("󱈚".to_string()),
+                    color: Some(rgb(115, 79, 150)),
+                },
+            ),
+            (
+                "f90".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("󱈚".to_string()),
+                    color: Some(rgb(115, 79, 150)),
+                },
+            ),
+            (
+                "f95".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("󱈚".to_string()),
+                    color: Some(rgb(115, 79, 150)),
+                },
+            ),
+            (
+                "f03".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("󱈚".to_string()),
+                    color: Some(rgb(115, 79, 150)),
+                },
+            ),
+            (
+                "f08".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("󱈚".to_string()),
+                    color: Some(rgb(115, 79, 150)),
+                },
+            ),
+            (
+                "fpp".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("󱈚".to_string()),
+                    color: Some(rgb(115, 79, 150)),
+                },
+            ),
             ("java".to_string(), rule_class(FileClass::Code)),
             ("lua".to_string(), rule_class(FileClass::Code)),
             ("php".to_string(), rule_class(FileClass::Code)),
@@ -2097,6 +2153,16 @@ macro = "#fedcba"
         assert_eq!(dart.icon, "");
         assert_eq!(dart.color, rgb(56, 213, 255));
 
+        let fortran = theme.resolve(Path::new("solver.f90"), EntryKind::File);
+        assert_eq!(fortran.class, FileClass::Code);
+        assert_eq!(fortran.icon, "󱈚");
+        assert_eq!(fortran.color, rgb(115, 79, 150));
+
+        let fortran_pp = theme.resolve(Path::new("solver.fpp"), EntryKind::File);
+        assert_eq!(fortran_pp.class, FileClass::Code);
+        assert_eq!(fortran_pp.icon, "󱈚");
+        assert_eq!(fortran_pp.color, rgb(115, 79, 150));
+
         let elixir = theme.resolve(Path::new("main.ex"), EntryKind::File);
         assert_eq!(elixir.class, FileClass::Code);
         assert_eq!(elixir.icon, "");
@@ -2217,6 +2283,10 @@ macro = "#fedcba"
         let ziggy = theme.resolve(Path::new("config.ziggy"), EntryKind::File);
         assert_eq!(ziggy.class, FileClass::Config);
         assert_eq!(ziggy.icon, "");
+
+        let fortran = theme.resolve(Path::new("solver.f90"), EntryKind::File);
+        assert_eq!(fortran.class, FileClass::Code);
+        assert_eq!(fortran.icon, "󱈚");
     }
 
     #[test]

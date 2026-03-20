@@ -491,6 +491,14 @@ const LANGUAGES: &[RegistryEntry] = &[
         markdown_fences: &["elixir", "ex", "exs"],
     },
     RegistryEntry {
+        language: language("fortran", "Fortran", CodeBackend::Syntect, None),
+        extensions: &["f", "for", "f90", "f95", "f03", "f08", "fpp"],
+        exact_filenames: &[],
+        shebang_interpreters: &[],
+        modelines: &["fortran", "f90", "f95", "f03", "f08"],
+        markdown_fences: &["fortran", "f90", "f95", "f03", "f08"],
+    },
+    RegistryEntry {
         language: language("clojure", "Clojure", CodeBackend::Syntect, None),
         extensions: &["clj", "cljs", "cljc", "edn"],
         exact_filenames: &["project.clj", "deps.edn", "bb.edn", "shadow-cljs.edn"],
@@ -719,6 +727,10 @@ mod tests {
             Some("elixir")
         );
         assert_eq!(
+            language_for_extension("f90").map(|language| language.canonical_id),
+            Some("fortran")
+        );
+        assert_eq!(
             language_for_extension("cljc").map(|language| language.canonical_id),
             Some("clojure")
         );
@@ -815,6 +827,10 @@ mod tests {
             Some("powershell")
         );
         assert_eq!(
+            language_for_modeline("fortran").map(|language| language.canonical_id),
+            Some("fortran")
+        );
+        assert_eq!(
             language_for_modeline("cljs").map(|language| language.canonical_id),
             Some("clojure")
         );
@@ -853,6 +869,10 @@ mod tests {
         assert_eq!(
             language_for_markdown_fence("pwsh").map(|language| language.canonical_id),
             Some("powershell")
+        );
+        assert_eq!(
+            language_for_markdown_fence("f90").map(|language| language.canonical_id),
+            Some("fortran")
         );
         assert_eq!(
             language_for_markdown_fence("clj").map(|language| language.canonical_id),

@@ -298,6 +298,8 @@ fn curated_generic_languages_use_syntect_preview_support() {
     let cs = inspect_path(Path::new("Program.cs"), EntryKind::File);
     let csx = inspect_path(Path::new("Program.csx"), EntryKind::File);
     let dart = inspect_path(Path::new("main.dart"), EntryKind::File);
+    let fortran = inspect_path(Path::new("solver.f90"), EntryKind::File);
+    let fortran_pp = inspect_path(Path::new("solver.fpp"), EntryKind::File);
     let zig = inspect_path(Path::new("main.zig"), EntryKind::File);
     let swift = inspect_path(Path::new("main.swift"), EntryKind::File);
     let kotlin = inspect_path(Path::new("main.kts"), EntryKind::File);
@@ -362,6 +364,17 @@ fn curated_generic_languages_use_syntect_preview_support() {
     assert_eq!(dart.builtin_class, FileClass::Code);
     assert_eq!(dart.specific_type_label, Some("Dart source file"));
     assert_code_spec(dart.preview, Some("dart"), CodeBackend::Syntect);
+
+    assert_eq!(fortran.builtin_class, FileClass::Code);
+    assert_eq!(fortran.specific_type_label, Some("Fortran source file"));
+    assert_code_spec(fortran.preview, Some("fortran"), CodeBackend::Syntect);
+
+    assert_eq!(fortran_pp.builtin_class, FileClass::Code);
+    assert_eq!(
+        fortran_pp.specific_type_label,
+        Some("Fortran preprocessor source file")
+    );
+    assert_code_spec(fortran_pp.preview, Some("fortran"), CodeBackend::Syntect);
 
     assert_eq!(zig.builtin_class, FileClass::Code);
     assert_eq!(zig.specific_type_label, Some("Zig source file"));

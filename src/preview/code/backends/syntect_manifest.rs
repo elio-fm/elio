@@ -183,6 +183,11 @@ pub const CURATED_SYNTAXES: &[CuratedSyntax] = &[
         source: SyntaxSource::Vendored,
     },
     CuratedSyntax {
+        canonical_id: "fortran",
+        lookup_token: "fortran",
+        source: SyntaxSource::Vendored,
+    },
+    CuratedSyntax {
         canonical_id: "clojure",
         lookup_token: "clj",
         source: SyntaxSource::BundledDefault,

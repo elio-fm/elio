@@ -276,13 +276,15 @@ The current curated syntect bundle explicitly supports these code syntaxes:
 - `html`, `xml`, `css`, `scss`, `sass`, `less`
 - `javascript`, `jsx`, `typescript`, `tsx`
 - `sql`, `diff`, `dockerfile`, `hcl`, `terraform`
-- `rust`, `go`, `c`, `cpp`, `cs`, `java`, `dart`, `zig`, `php`, `swift`, `kotlin`, `elixir`, `clojure`, `ruby`, `python`, `lua`
+- `rust`, `go`, `c`, `cpp`, `cs`, `java`, `dart`, `fortran`, `zig`, `php`, `swift`, `kotlin`, `elixir`, `clojure`, `ruby`, `python`, `lua`
 - `groovy`, `scala`, `perl`, `haskell`, `julia`, `r`
 - `make`, `just`, `sh`, `bash`, `zsh`, `ksh`, `fish`, `powershell`, `nix`, `cmake`
 
 Anything outside that matrix falls back to plain code preview instead of advertising unsupported highlighting.
 
 `clojure` support also covers the common Clojure-family aliases and file shapes used in practice: `clj`, `cljs`, `cljc`, `edn`, `project.clj`, `deps.edn`, `bb.edn`, and `shadow-cljs.edn`.
+
+`fortran` support covers the common source extensions used in practice: `f`, `for`, `f90`, `f95`, `f03`, `f08`, and `fpp`.
 
 ---
 

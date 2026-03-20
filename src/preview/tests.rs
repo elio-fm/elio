@@ -3462,6 +3462,12 @@ fn curated_syntect_languages_render_with_theme_colors() {
             "class",
         ),
         (
+            "solver.f90",
+            "program elio\n  implicit none\n  print *, \"hello\"\nend program elio\n",
+            "Fortran",
+            "program",
+        ),
+        (
             "main.zig",
             "const std = @import(\"std\");\npub fn main() void {}\n",
             "Zig",
