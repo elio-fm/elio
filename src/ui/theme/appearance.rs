@@ -527,12 +527,68 @@ impl Theme {
             ("cpp".to_string(), rule_class(FileClass::Code)),
             ("h".to_string(), rule_class(FileClass::Code)),
             ("hpp".to_string(), rule_class(FileClass::Code)),
+            (
+                "cs".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("󰌛".to_string()),
+                    color: Some(rgb(104, 179, 120)),
+                },
+            ),
+            (
+                "csx".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("󰌛".to_string()),
+                    color: Some(rgb(104, 179, 120)),
+                },
+            ),
             ("java".to_string(), rule_class(FileClass::Code)),
             ("lua".to_string(), rule_class(FileClass::Code)),
             ("php".to_string(), rule_class(FileClass::Code)),
             ("rb".to_string(), rule_class(FileClass::Code)),
+            (
+                "ex".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(155, 143, 199)),
+                },
+            ),
+            (
+                "exs".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(155, 143, 199)),
+                },
+            ),
             ("swift".to_string(), rule_class(FileClass::Code)),
             ("kt".to_string(), rule_class(FileClass::Code)),
+            (
+                "ps1".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("󰨊".to_string()),
+                    color: Some(rgb(95, 153, 219)),
+                },
+            ),
+            (
+                "psm1".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("󰨊".to_string()),
+                    color: Some(rgb(95, 153, 219)),
+                },
+            ),
+            (
+                "psd1".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Config),
+                    icon: Some("󰨊".to_string()),
+                    color: Some(rgb(95, 153, 219)),
+                },
+            ),
             (
                 "sh".to_string(),
                 RuleOverride {
@@ -1953,6 +2009,41 @@ macro = "#fedcba"
         assert_eq!(xml.class, FileClass::Code);
         assert_eq!(xml.icon, "󰗀");
         assert_eq!(xml.color, rgb(179, 140, 255));
+
+        let csharp = theme.resolve(Path::new("Program.cs"), EntryKind::File);
+        assert_eq!(csharp.class, FileClass::Code);
+        assert_eq!(csharp.icon, "󰌛");
+        assert_eq!(csharp.color, rgb(104, 179, 120));
+
+        let csharp_script = theme.resolve(Path::new("Program.csx"), EntryKind::File);
+        assert_eq!(csharp_script.class, FileClass::Code);
+        assert_eq!(csharp_script.icon, "󰌛");
+        assert_eq!(csharp_script.color, rgb(104, 179, 120));
+
+        let elixir = theme.resolve(Path::new("main.ex"), EntryKind::File);
+        assert_eq!(elixir.class, FileClass::Code);
+        assert_eq!(elixir.icon, "");
+        assert_eq!(elixir.color, rgb(155, 143, 199));
+
+        let elixir_script = theme.resolve(Path::new("mix.exs"), EntryKind::File);
+        assert_eq!(elixir_script.class, FileClass::Code);
+        assert_eq!(elixir_script.icon, "");
+        assert_eq!(elixir_script.color, rgb(155, 143, 199));
+
+        let powershell = theme.resolve(Path::new("build.ps1"), EntryKind::File);
+        assert_eq!(powershell.class, FileClass::Code);
+        assert_eq!(powershell.icon, "󰨊");
+        assert_eq!(powershell.color, rgb(95, 153, 219));
+
+        let powershell_module = theme.resolve(Path::new("ElioTools.psm1"), EntryKind::File);
+        assert_eq!(powershell_module.class, FileClass::Code);
+        assert_eq!(powershell_module.icon, "󰨊");
+        assert_eq!(powershell_module.color, rgb(95, 153, 219));
+
+        let powershell_data = theme.resolve(Path::new("ElioTools.psd1"), EntryKind::File);
+        assert_eq!(powershell_data.class, FileClass::Config);
+        assert_eq!(powershell_data.icon, "󰨊");
+        assert_eq!(powershell_data.color, rgb(95, 153, 219));
 
         let shell = theme.resolve(Path::new("deploy.sh"), EntryKind::File);
         assert_eq!(shell.class, FileClass::Code);
