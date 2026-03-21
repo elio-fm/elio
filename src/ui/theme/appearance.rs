@@ -1694,9 +1694,45 @@ fn rgb(red: u8, green: u8, blue: u8) -> Color {
 mod tests {
     use super::*;
     use std::{
+        env,
+        ffi::OsString,
         fs,
+        sync::{Mutex, OnceLock},
         time::{SystemTime, UNIX_EPOCH},
     };
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set_path(key: &'static str, value: &Path) -> Self {
+            let original = env::var_os(key);
+            unsafe {
+                env::set_var(key, value);
+            }
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match self.original.as_ref() {
+                Some(value) => unsafe {
+                    env::set_var(self.key, value);
+                },
+                None => unsafe {
+                    env::remove_var(self.key);
+                },
+            }
+        }
+    }
 
     fn temp_path(label: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -1776,6 +1812,21 @@ mod tests {
             .expect("built-in default theme asset should parse")
     }
 
+    fn write_theme_file(
+        label: &str,
+        contents: &str,
+    ) -> (PathBuf, PathBuf, std::sync::MutexGuard<'static, ()>) {
+        let guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let config_home = temp_path(label);
+        let theme_dir = config_home.join("elio");
+        fs::create_dir_all(&theme_dir).expect("failed to create theme config dir");
+        let path = theme_dir.join("theme.toml");
+        fs::write(&path, contents).expect("failed to write theme file");
+        (config_home, path, guard)
+    }
+
     fn assert_uses_normal_folder_color_for_generic_dev_directories(theme: &Theme, label: &str) {
         let normal_folder_color = theme
             .resolve(Path::new("projects"), EntryKind::Directory)
@@ -1837,6 +1888,72 @@ mod tests {
     }
 
     #[test]
+    fn load_theme_from_disk_reads_theme_file_from_xdg_config_home() {
+        let (config_home, path, _guard) = write_theme_file(
+            "load-theme-from-disk",
+            r##"
+[classes.code]
+icon = "X"
+color = "#112233"
+
+[directories.projects]
+icon = "P"
+color = "#334455"
+
+[preview.code]
+keyword = "#abcdef"
+"##,
+        );
+        let _xdg = EnvVarGuard::set_path("XDG_CONFIG_HOME", &config_home);
+
+        let theme = load_theme_from_disk();
+
+        assert_eq!(theme.preview.code.keyword, rgb(0xab, 0xcd, 0xef));
+        assert_eq!(theme.classes.get(&FileClass::Code).unwrap().icon, "X");
+        assert_eq!(
+            theme.classes.get(&FileClass::Code).unwrap().color,
+            rgb(0x11, 0x22, 0x33)
+        );
+        let projects = theme.resolve(Path::new("projects"), EntryKind::Directory);
+        assert_eq!(projects.class, FileClass::Directory);
+        assert_eq!(projects.icon, "P");
+        assert_eq!(projects.color, rgb(0x33, 0x44, 0x55));
+
+        fs::remove_file(path).expect("failed to remove theme file");
+        fs::remove_dir_all(config_home).expect("failed to remove config root");
+    }
+
+    #[test]
+    fn load_theme_from_disk_falls_back_to_default_theme_for_invalid_theme_file() {
+        let (config_home, path, _guard) = write_theme_file(
+            "load-theme-invalid",
+            r##"
+[preview.code]
+keyword = "#12"
+"##,
+        );
+        let _xdg = EnvVarGuard::set_path("XDG_CONFIG_HOME", &config_home);
+
+        let theme = load_theme_from_disk();
+        let default_theme = Theme::default_theme();
+
+        assert_eq!(theme.palette.bg, default_theme.palette.bg);
+        assert_eq!(
+            theme.preview.code.keyword,
+            default_theme.preview.code.keyword
+        );
+        assert_eq!(
+            theme.resolve(Path::new("Cargo.lock"), EntryKind::File).icon,
+            default_theme
+                .resolve(Path::new("Cargo.lock"), EntryKind::File)
+                .icon,
+        );
+
+        fs::remove_file(path).expect("failed to remove theme file");
+        fs::remove_dir_all(config_home).expect("failed to remove config root");
+    }
+
+    #[test]
     fn exact_file_rules_override_extension_defaults() {
         let theme = Theme::default_theme();
         let resolved = theme.resolve(Path::new("Cargo.lock"), EntryKind::File);
@@ -1883,6 +2000,24 @@ icon = "L"
     }
 
     #[test]
+    fn directory_rules_can_be_overridden_from_config() {
+        let theme = Theme::from_config_str(
+            r##"
+[directories.docs]
+class = "document"
+icon = "D"
+color = "#102030"
+"##,
+        )
+        .expect("theme should parse");
+
+        let resolved = theme.resolve(Path::new("docs"), EntryKind::Directory);
+        assert_eq!(resolved.class, FileClass::Document);
+        assert_eq!(resolved.icon, "D");
+        assert_eq!(resolved.color, rgb(0x10, 0x20, 0x30));
+    }
+
+    #[test]
     fn generic_lock_files_use_file_lock_icon() {
         let theme = Theme::default_theme();
         let resolved = theme.resolve(Path::new("custom.lock"), EntryKind::File);
@@ -1915,6 +2050,24 @@ macro = "#fedcba"
         assert_eq!(theme.preview.code.keyword, rgb(0x12, 0x34, 0x56));
         assert_eq!(theme.preview.code.function, rgb(0xab, 0xcd, 0xef));
         assert_eq!(theme.preview.code.r#macro, rgb(0xfe, 0xdc, 0xba));
+    }
+
+    #[test]
+    fn unknown_rule_classes_are_rejected_during_theme_parsing() {
+        let error = match Theme::from_config_str(
+            r##"
+[extensions.rs]
+class = "not-a-real-class"
+"##,
+        ) {
+            Ok(_) => panic!("theme parsing should reject unknown classes"),
+            Err(error) => error,
+        };
+
+        assert!(
+            error.to_string().contains("unknown class"),
+            "unexpected parse error: {error}",
+        );
     }
 
     #[test]
