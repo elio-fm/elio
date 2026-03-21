@@ -1,5 +1,5 @@
-use super::Palette;
-use super::{FrameState, helpers};
+use crate::app::FrameState;
+use crate::ui::{helpers, theme::Palette};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -9,7 +9,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-pub(in crate::ui) fn render_help(
+pub(super) fn render_help(
     frame: &mut Frame<'_>,
     area: Rect,
     state: &mut FrameState,
