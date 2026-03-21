@@ -1,14 +1,17 @@
+mod state;
+mod types;
+
 use super::super::*;
 use super::inline_image::{
     ImageProtocol, OverlayPresentState, RenderedImageDimensions, TerminalWindowSize,
-    command_exists, fit_image_area, place_terminal_image, preview_log, read_png_dimensions,
+    fit_image_area, place_terminal_image, preview_log, read_png_dimensions,
 };
 use anyhow::Result;
 use image::{DynamicImage, GenericImageView, ImageFormat, ImageReader, imageops::FilterType};
 use quick_xml::{Reader, events::Event};
 use ratatui::layout::Rect;
 use std::{
-    collections::{HashMap, HashSet, VecDeque, hash_map::DefaultHasher},
+    collections::{HashSet, hash_map::DefaultHasher},
     env, fs,
     fs::File,
     hash::{Hash, Hasher},
@@ -16,7 +19,13 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
+    time::SystemTime,
+};
+
+use self::types::{DisplayedStaticImagePreview, StaticImagePreloadViewport};
+pub(in crate::app) use self::types::{
+    ImagePreviewState, PreparedStaticImage, PreparedStaticImageAsset, StaticImageKey,
+    StaticImageOverlayMode, StaticImageOverlayPreparation, StaticImageOverlayRequest,
 };
 
 const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 24;
@@ -29,186 +38,7 @@ const FAST_FORCE_RENDER_FFMPEG_RASTER_ARGS: [&str; 4] =
     ["-compression_level", "1", "-sws_flags", "fast_bilinear"];
 const DEFAULT_FFMPEG_RASTER_ARGS: [&str; 0] = [];
 
-#[derive(Clone, Debug, Default)]
-pub(in crate::app) struct ImagePreviewState {
-    pub(super) dimensions: HashMap<StaticImageKey, RenderedImageDimensions>,
-    pub(super) rendered_images: HashMap<StaticImageKey, PathBuf>,
-    pub(super) render_order: VecDeque<StaticImageKey>,
-    inline_payloads: HashMap<StaticImageKey, Arc<str>>,
-    payload_order: VecDeque<StaticImageKey>,
-    pub(super) failed_images: HashSet<StaticImageKey>,
-    pub(super) pending_prepares: HashSet<StaticImageKey>,
-    displayed: Option<DisplayedStaticImagePreview>,
-    displayed_excluded: Vec<Rect>,
-    activation_ready_at: Option<Instant>,
-    pub(in crate::app) selection_activation_delay: Duration,
-    ffmpeg_available: Option<bool>,
-    resvg_available: Option<bool>,
-    magick_available: Option<bool>,
-    preload_viewport: Option<StaticImagePreloadViewport>,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(in crate::app) struct StaticImageKey {
-    path: PathBuf,
-    size: u64,
-    modified: Option<SystemTime>,
-    target_width_px: u32,
-    target_height_px: u32,
-    force_render_to_cache: bool,
-    prepare_inline_payload: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) enum StaticImageOverlayMode {
-    FullPane,
-    Inline,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(in crate::app) struct StaticImageOverlayRequest {
-    pub(super) path: PathBuf,
-    pub(super) size: u64,
-    pub(super) modified: Option<SystemTime>,
-    pub(super) area: Rect,
-    pub(super) target_width_px: u32,
-    pub(super) target_height_px: u32,
-    pub(super) mode: StaticImageOverlayMode,
-    pub(super) force_render_to_cache: bool,
-    pub(super) prepare_inline_payload: bool,
-}
-
-pub(in crate::app) struct PreparedStaticImage {
-    pub(super) display_path: PathBuf,
-    pub(super) dimensions: RenderedImageDimensions,
-    pub(super) inline_payload: Option<Arc<str>>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DisplayedStaticImagePreview {
-    path: PathBuf,
-    size: u64,
-    modified: Option<SystemTime>,
-    area: Rect,
-    clear_area: Rect,
-    mode: StaticImageOverlayMode,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct StaticImagePreloadViewport {
-    selected: usize,
-    scroll_row: usize,
-    cols: usize,
-    rows_visible: usize,
-    preview_content_area: Option<Rect>,
-    preview_media_area: Option<Rect>,
-    protocol: ImageProtocol,
-    window: Option<TerminalWindowSize>,
-}
-
-#[derive(Debug)]
-pub(in crate::app) struct PreparedStaticImageAsset {
-    pub(super) display_path: PathBuf,
-    pub(super) dimensions: RenderedImageDimensions,
-    pub(super) inline_payload: Option<Arc<str>>,
-}
-
-pub(in crate::app) enum StaticImageOverlayPreparation {
-    Ready(PreparedStaticImage),
-    Pending,
-    Failed,
-}
-
 impl App {
-    fn current_page_preview_visual_active(&self) -> bool {
-        self.preview_state
-            .content
-            .preview_visual
-            .as_ref()
-            .is_some_and(|visual| visual.kind == preview::PreviewVisualKind::PageImage)
-    }
-
-    pub(crate) fn process_image_preview_timers(&mut self) -> bool {
-        let Some(ready_at) = self.image_preview.activation_ready_at else {
-            return false;
-        };
-        if Instant::now() < ready_at {
-            return false;
-        }
-        self.image_preview.activation_ready_at = None;
-        self.active_static_image_overlay_request().is_some()
-            || self.active_preview_visual_overlay_request().is_some()
-    }
-
-    pub(crate) fn pending_image_preview_timer(&self) -> Option<Duration> {
-        self.image_preview
-            .activation_ready_at
-            .map(|ready_at| ready_at.saturating_duration_since(Instant::now()))
-    }
-
-    pub(in crate::app) fn preview_prefers_static_image_surface(&self) -> bool {
-        let Some(request) = self.active_static_image_overlay_request() else {
-            return false;
-        };
-        !self
-            .image_preview
-            .failed_images
-            .contains(&StaticImageKey::from_request(&request))
-    }
-
-    pub(in crate::app) fn static_image_preview_header_detail(&self) -> Option<String> {
-        let request = self.active_static_image_overlay_request()?;
-        let dimensions = self
-            .image_preview
-            .dimensions
-            .get(&StaticImageKey::from_request(&request))
-            .copied()?;
-        Some(format!("{}x{}", dimensions.width_px, dimensions.height_px))
-    }
-
-    pub(in crate::app) fn should_defer_static_image_preview(&self, entry: &Entry) -> bool {
-        static_image_detail_label(entry).is_some() && self.preview_prefers_static_image_surface()
-    }
-
-    pub(in crate::app) fn static_image_preview_detail(
-        &self,
-        entry: &Entry,
-    ) -> Option<&'static str> {
-        static_image_detail_label(entry)
-    }
-
-    pub(in crate::app) fn static_image_overlay_placeholder_message(&self) -> Option<String> {
-        if !self.preview_prefers_static_image_surface() || self.preview_uses_image_overlay() {
-            return None;
-        }
-
-        let request = self.active_static_image_overlay_request()?;
-        let key = StaticImageKey::from_request(&request);
-        if self.image_preview.failed_images.contains(&key) {
-            return Some("Image preview unavailable".to_string());
-        }
-        if !self.image_selection_activation_ready() {
-            return None;
-        }
-        if self.static_image_can_display_directly_now(&request) {
-            return None;
-        }
-        if self.image_preview.dimensions.contains_key(&key) {
-            return None;
-        }
-        if self.image_preview.pending_prepares.contains(&key) {
-            return Some("Preparing image preview".to_string());
-        }
-        Some("Preparing image preview".to_string())
-    }
-
-    pub(in crate::app) fn active_static_image_overlay_request(
-        &self,
-    ) -> Option<StaticImageOverlayRequest> {
-        let entry = self.selected_entry()?;
-        self.static_image_overlay_request_for_entry(entry)
-    }
-
     pub(in crate::app) fn present_static_image_overlay(
         &mut self,
         protocol: ImageProtocol,
@@ -402,31 +232,6 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn clear_failed_static_image_state_if_needed(&mut self) {
-        if let Some(entry) = self.selected_entry()
-            && static_image_detail_label(entry).is_none()
-        {
-            self.image_preview.failed_images.clear();
-        }
-    }
-
-    pub(in crate::app) fn sync_image_preview_selection_activation(&mut self) {
-        self.image_preview.activation_ready_at = self
-            .active_static_image_overlay_request()
-            .or_else(|| self.active_preview_visual_overlay_request())
-            .and_then(|_| {
-                let ready_at =
-                    self.last_selection_change_at + self.image_preview.selection_activation_delay;
-                (Instant::now() < ready_at).then_some(ready_at)
-            });
-    }
-
-    pub(in crate::app) fn mark_static_image_failed(&mut self, request: &StaticImageOverlayRequest) {
-        self.image_preview
-            .failed_images
-            .insert(StaticImageKey::from_request(request));
-    }
-
     fn direct_static_image_for_overlay(
         &mut self,
         request: &StaticImageOverlayRequest,
@@ -451,130 +256,6 @@ impl App {
             dimensions,
             inline_payload: None,
         })
-    }
-
-    fn static_image_can_display_directly_now(&self, request: &StaticImageOverlayRequest) -> bool {
-        self.terminal_images.protocol == ImageProtocol::KittyGraphics
-            && !request.force_render_to_cache
-            && static_image_format_for_overlay_request(request) == Some(StaticImageFormat::Png)
-    }
-
-    fn static_image_can_use_source_path(&self, request: &StaticImageOverlayRequest) -> bool {
-        match self.terminal_images.protocol {
-            ImageProtocol::KittyGraphics => self.static_image_can_display_directly_now(request),
-            ImageProtocol::ItermInline => static_image_supports_iterm_source_passthrough(request),
-            ImageProtocol::None => false,
-        }
-    }
-
-    fn static_image_requires_prepare(&self, request: &StaticImageOverlayRequest) -> bool {
-        request.prepare_inline_payload || !self.static_image_can_display_directly_now(request)
-    }
-
-    fn magick_available(&mut self) -> bool {
-        *self
-            .image_preview
-            .magick_available
-            .get_or_insert_with(|| command_exists("magick"))
-    }
-
-    fn resvg_available(&mut self) -> bool {
-        *self
-            .image_preview
-            .resvg_available
-            .get_or_insert_with(|| command_exists("resvg"))
-    }
-
-    fn ffmpeg_available(&mut self) -> bool {
-        *self
-            .image_preview
-            .ffmpeg_available
-            .get_or_insert_with(|| command_exists("ffmpeg"))
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn set_ffmpeg_available_for_tests(&mut self, available: bool) {
-        self.image_preview.ffmpeg_available = Some(available);
-    }
-
-    pub(in crate::app) fn image_selection_activation_ready(&self) -> bool {
-        self.image_preview.activation_ready_at.is_none()
-    }
-
-    pub(in crate::app) fn static_image_overlay_displayed(&self) -> bool {
-        self.image_preview.displayed.is_some()
-    }
-
-    /// The rect that should be erased for the currently displayed static image
-    /// overlay, if any. On iTerm this may be larger than the fitted image box so
-    /// split preview layouts clear fully when the image goes away.
-    pub(in crate::app) fn displayed_static_image_clear_area(&self) -> Option<Rect> {
-        self.image_preview.displayed.as_ref().map(|d| d.clear_area)
-    }
-
-    pub(in crate::app) fn clear_displayed_static_image(&mut self) {
-        self.image_preview.displayed = None;
-    }
-
-    pub(in crate::app) fn preview_visual_force_render_to_cache(
-        &self,
-        visual: &preview::PreviewVisual,
-    ) -> bool {
-        if visual.kind != preview::PreviewVisualKind::PageImage {
-            return false;
-        }
-
-        let Some(format) = static_image_format_for_path(&visual.path) else {
-            return true;
-        };
-        let ffmpeg_available = self
-            .image_preview
-            .ffmpeg_available
-            .unwrap_or_else(|| command_exists("ffmpeg"));
-        !static_image_can_prepare_inline(visual.size, format, ffmpeg_available)
-    }
-
-    pub(in crate::app) fn displayed_static_image_matches_active(&self) -> bool {
-        self.active_static_image_display_target()
-            .as_ref()
-            .zip(self.image_preview.displayed.as_ref())
-            .is_some_and(|(active, displayed)| active == displayed)
-    }
-
-    pub(in crate::app) fn keep_displayed_static_image_overlay_while_pending(&self) -> bool {
-        let Some(displayed) = self.image_preview.displayed.as_ref() else {
-            return false;
-        };
-        match displayed.mode {
-            StaticImageOverlayMode::Inline => {
-                let loading_current_page_preview = self.current_page_preview_loading_active();
-                if !self.current_page_preview_visual_active() && !loading_current_page_preview {
-                    return false;
-                }
-
-                if loading_current_page_preview {
-                    return true;
-                }
-
-                let Some(request) = self.active_preview_visual_overlay_request_unchecked() else {
-                    return false;
-                };
-                self.keep_displayed_static_image_request_while_pending(&request)
-            }
-            StaticImageOverlayMode::FullPane => self
-                .active_static_image_overlay_request()
-                .is_some_and(|request| {
-                    self.keep_displayed_static_image_request_while_pending(&request)
-                }),
-        }
-    }
-
-    pub(in crate::app) fn displayed_static_image_replaces_preview(&self) -> bool {
-        self.image_preview
-            .displayed
-            .as_ref()
-            .is_some_and(|displayed| displayed.mode == StaticImageOverlayMode::FullPane)
-            && self.displayed_static_image_matches_active()
     }
 
     pub(in crate::app) fn refresh_static_image_preloads(&mut self) {
@@ -770,33 +451,6 @@ impl App {
         }
     }
 
-    fn static_image_overlay_request_for_entry(
-        &self,
-        entry: &Entry,
-    ) -> Option<StaticImageOverlayRequest> {
-        if !self.terminal_image_overlay_available() {
-            return None;
-        }
-        static_image_detail_label(entry)?;
-
-        let area = self.frame_state.preview_content_area?;
-        if area.width == 0 || area.height == 0 {
-            return None;
-        }
-
-        Some(StaticImageOverlayRequest {
-            path: entry.path.clone(),
-            size: entry.size,
-            modified: entry.modified,
-            area,
-            target_width_px: image_target_width_px(area, self.cached_terminal_window()),
-            target_height_px: image_target_height_px(area, self.cached_terminal_window()),
-            mode: StaticImageOverlayMode::FullPane,
-            force_render_to_cache: false,
-            prepare_inline_payload: self.terminal_images.protocol == ImageProtocol::ItermInline,
-        })
-    }
-
     fn nearby_static_image_overlay_requests(
         &self,
         current: Option<&StaticImageOverlayRequest>,
@@ -927,87 +581,6 @@ impl App {
             )
         }
     }
-
-    fn current_page_preview_loading_active(&self) -> bool {
-        self.preview_state
-            .load_state
-            .as_ref()
-            .is_some_and(|load_state| {
-                let loading_path = match load_state {
-                    PreviewLoadState::Placeholder(path) | PreviewLoadState::Refreshing(path) => {
-                        path
-                    }
-                };
-                self.selected_entry()
-                    .is_some_and(|entry| entry.path == *loading_path)
-                    && (self.comic_preview_wheel_capture_active()
-                        || self.epub_preview_wheel_capture_active())
-            })
-    }
-
-    fn keep_displayed_static_image_request_while_pending(
-        &self,
-        request: &StaticImageOverlayRequest,
-    ) -> bool {
-        let key = StaticImageKey::from_request(request);
-        if self.image_preview.failed_images.contains(&key) {
-            return false;
-        }
-        if !self.image_selection_activation_ready() {
-            return true;
-        }
-
-        self.image_preview.pending_prepares.contains(&key)
-            || (self.static_image_requires_prepare(request)
-                && !self.image_preview.dimensions.contains_key(&key))
-    }
-}
-
-impl StaticImageKey {
-    pub(in crate::app) fn from_request(request: &StaticImageOverlayRequest) -> Self {
-        Self {
-            path: request.path.clone(),
-            size: request.size,
-            modified: request.modified,
-            target_width_px: request.target_width_px,
-            target_height_px: request.target_height_px,
-            force_render_to_cache: request.force_render_to_cache,
-            prepare_inline_payload: request.prepare_inline_payload,
-        }
-    }
-
-    pub(in crate::app) fn from_parts(
-        path: PathBuf,
-        size: u64,
-        modified: Option<SystemTime>,
-        target_width_px: u32,
-        target_height_px: u32,
-        force_render_to_cache: bool,
-        prepare_inline_payload: bool,
-    ) -> Self {
-        Self {
-            path,
-            size,
-            modified,
-            target_width_px,
-            target_height_px,
-            force_render_to_cache,
-            prepare_inline_payload,
-        }
-    }
-}
-
-impl DisplayedStaticImagePreview {
-    fn from_request(request: &StaticImageOverlayRequest, area: Rect, clear_area: Rect) -> Self {
-        Self {
-            path: request.path.clone(),
-            size: request.size,
-            modified: request.modified,
-            area,
-            clear_area,
-            mode: request.mode,
-        }
-    }
 }
 
 fn union_rect(a: Rect, b: Rect) -> Rect {
@@ -1026,7 +599,7 @@ fn union_rect(a: Rect, b: Rect) -> Rect {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum StaticImageFormat {
+pub(super) enum StaticImageFormat {
     Png,
     Jpeg,
     Gif,
