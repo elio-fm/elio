@@ -29,15 +29,27 @@ fn wait_for_directory_load(app: &mut App) {
     panic!("timed out waiting for directory load");
 }
 
-fn wait_for_directory_reload_to_queue(app: &mut App) {
-    for _ in 0..300 {
+fn wait_for_directory_reload(app: &mut App, expected_entries: usize) {
+    for _ in 0..500 {
+        let _ = app.process_auto_reload();
         let _ = app.process_background_jobs();
-        if app.directory_runtime.pending_load.is_some() {
+        if app.entries.len() == expected_entries
+            && app.directory_runtime.pending_reload_at.is_none()
+            && app.directory_runtime.pending_fingerprint_scan.is_none()
+            && app.directory_runtime.pending_load.is_none()
+        {
             return;
         }
         std::thread::sleep(Duration::from_millis(10));
     }
-    panic!("timed out waiting for directory reload to queue");
+    panic!(
+        "timed out waiting for directory reload: entries={}, pending_reload={}, pending_fingerprint_scan={}, pending_load={}, pending_background_work={}",
+        app.entries.len(),
+        app.directory_runtime.pending_reload_at.is_some(),
+        app.directory_runtime.pending_fingerprint_scan.is_some(),
+        app.directory_runtime.pending_load.is_some(),
+        app.has_pending_background_work(),
+    );
 }
 
 #[test]
@@ -69,8 +81,7 @@ fn watcher_reload_detects_new_visible_entries() {
             .expect("auto reload should succeed"),
         "watch-driven reload should schedule an async fingerprint scan first",
     );
-    wait_for_directory_reload_to_queue(&mut app);
-    wait_for_directory_load(&mut app);
+    wait_for_directory_reload(&mut app, 2);
     assert_eq!(app.entries.len(), 2);
     assert!(app.entries.iter().any(|entry| entry.name == "two.txt"));
 
@@ -105,8 +116,7 @@ fn watcher_rescan_event_triggers_reload() {
             .expect("auto reload should succeed"),
         "rescan-driven reload should schedule an async fingerprint scan first",
     );
-    wait_for_directory_reload_to_queue(&mut app);
-    wait_for_directory_load(&mut app);
+    wait_for_directory_reload(&mut app, 2);
     assert_eq!(app.entries.len(), 2);
     assert!(app.entries.iter().any(|entry| entry.name == "two.txt"));
 
@@ -167,8 +177,7 @@ fn polling_fallback_respects_its_throttle_window() {
             .expect("auto reload should succeed"),
         "reload should schedule an async fingerprint scan once the throttle window has elapsed",
     );
-    wait_for_directory_reload_to_queue(&mut app);
-    wait_for_directory_load(&mut app);
+    wait_for_directory_reload(&mut app, 2);
     assert_eq!(app.entries.len(), 2);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
