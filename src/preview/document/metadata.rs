@@ -1,5 +1,8 @@
-use super::{PreviewContent, PreviewKind};
-use crate::{file_info::DocumentFormat, ui::theme};
+use crate::{
+    file_info::DocumentFormat,
+    preview::{PreviewContent, PreviewKind},
+    ui::theme,
+};
 use ratatui::{
     style::Style,
     text::{Line, Span},
