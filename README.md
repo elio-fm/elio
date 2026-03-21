@@ -153,6 +153,8 @@ If the file does not exist, `elio` uses built-in defaults. See [examples/config.
 
 Theme files layer on top of the built-in defaults — only the keys you set are overridden. If the file is missing or unparseable, `elio` falls back to the built-in theme silently (parse errors are reported to `stderr`).
 
+The built-in default theme source is [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml). Use it as the reference if you want to start from the shipped default and customize it.
+
 ### Supported Sections
 
 | Section | Controls |
@@ -197,7 +199,7 @@ icon = "󰌾"
 color = "#59de94"
 ```
 
-Ready-to-use themes are in [examples/themes/](examples/themes/). Copy any `theme.toml` to `~/.config/elio/theme.toml` to apply it.
+Alternate ready-to-use sample themes remain in [examples/themes/](examples/themes/). Copy any of those `theme.toml` files to `~/.config/elio/theme.toml` to apply them.
 
 ---
 
