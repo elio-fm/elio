@@ -1,12 +1,12 @@
 use std::path::Path;
 
-pub(super) struct ParsedCreateItem {
-    pub(super) raw: String,
-    pub(super) name: String,
-    pub(super) is_dir: bool,
+pub(in crate::app::create) struct ParsedCreateItem {
+    pub(in crate::app::create) raw: String,
+    pub(in crate::app::create) name: String,
+    pub(in crate::app::create) is_dir: bool,
 }
 
-pub(super) fn parse_create_line(line: &str) -> ParsedCreateItem {
+pub(in crate::app::create) fn parse_create_line(line: &str) -> ParsedCreateItem {
     let is_dir = line.starts_with('/') || line.ends_with('/');
     let name = line.trim_matches('/').to_string();
     ParsedCreateItem {
@@ -16,7 +16,10 @@ pub(super) fn parse_create_line(line: &str) -> ParsedCreateItem {
     }
 }
 
-pub(super) fn validate_parsed_item(item: &ParsedCreateItem, cwd: &Path) -> Option<String> {
+pub(in crate::app::create) fn validate_parsed_item(
+    item: &ParsedCreateItem,
+    cwd: &Path,
+) -> Option<String> {
     if item.name.is_empty() {
         return Some("Name cannot be empty".to_string());
     }

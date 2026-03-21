@@ -212,7 +212,7 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn confirm_rename(&mut self) -> Result<()> {
+    pub(in crate::app::create) fn confirm_rename(&mut self) -> Result<()> {
         let Some(r) = &self.rename else {
             return Ok(());
         };
@@ -283,7 +283,7 @@ impl App {
     }
 }
 
-pub(super) fn cursor_before_extension(name: &str) -> usize {
+pub(in crate::app::create) fn cursor_before_extension(name: &str) -> usize {
     let total = name.chars().count();
     if let Some(dot_pos) = name.rfind('.') {
         let dot_char = name[..dot_pos].chars().count();

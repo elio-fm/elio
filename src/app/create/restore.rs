@@ -1,9 +1,6 @@
 use super::super::{
     App,
-    state::{
-        DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad, RestoreOverlay,
-        TrashTarget,
-    },
+    state::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad, RestoreOverlay},
 };
 use crate::fs::rect_contains;
 use anyhow::Result;
@@ -14,26 +11,7 @@ impl App {
         if !self.in_trash {
             return;
         }
-        let targets: Vec<TrashTarget> = if !self.selected_paths.is_empty() {
-            self.entries
-                .iter()
-                .filter(|entry| self.selected_paths.contains(&entry.path))
-                .map(|entry| TrashTarget {
-                    path: entry.path.clone(),
-                    name: entry.name.clone(),
-                    is_dir: entry.is_dir(),
-                })
-                .collect()
-        } else {
-            let Some(entry) = self.selected_entry() else {
-                return;
-            };
-            vec![TrashTarget {
-                path: entry.path.clone(),
-                name: entry.name.clone(),
-                is_dir: entry.is_dir(),
-            }]
-        };
+        let targets = self.selected_trash_targets();
 
         if targets.is_empty() {
             return;
@@ -212,7 +190,7 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn confirm_restore(&mut self) -> Result<()> {
+    pub(in crate::app::create) fn confirm_restore(&mut self) -> Result<()> {
         let Some(r) = self.restore.take() else {
             return Ok(());
         };

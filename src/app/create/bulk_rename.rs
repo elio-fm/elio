@@ -323,7 +323,7 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn confirm_bulk_rename(&mut self) -> Result<()> {
+    pub(in crate::app::create) fn confirm_bulk_rename(&mut self) -> Result<()> {
         let Some(r) = &self.bulk_rename else {
             return Ok(());
         };

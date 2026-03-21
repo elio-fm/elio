@@ -33,8 +33,8 @@ impl App {
 }
 
 impl App {
-    pub(in crate::app) fn open_trash_prompt(&mut self) {
-        let targets: Vec<TrashTarget> = if !self.selected_paths.is_empty() {
+    pub(in crate::app::create) fn selected_trash_targets(&self) -> Vec<TrashTarget> {
+        if !self.selected_paths.is_empty() {
             self.entries
                 .iter()
                 .filter(|entry| self.selected_paths.contains(&entry.path))
@@ -45,15 +45,20 @@ impl App {
                 })
                 .collect()
         } else {
-            let Some(entry) = self.selected_entry() else {
-                return;
-            };
-            vec![TrashTarget {
-                path: entry.path.clone(),
-                name: entry.name.clone(),
-                is_dir: entry.is_dir(),
-            }]
-        };
+            self.selected_entry()
+                .map(|entry| {
+                    vec![TrashTarget {
+                        path: entry.path.clone(),
+                        name: entry.name.clone(),
+                        is_dir: entry.is_dir(),
+                    }]
+                })
+                .unwrap_or_default()
+        }
+    }
+
+    pub(in crate::app) fn open_trash_prompt(&mut self) {
+        let targets = self.selected_trash_targets();
 
         if targets.is_empty() {
             return;
@@ -238,7 +243,7 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn confirm_trash(&mut self) -> Result<()> {
+    pub(in crate::app::create) fn confirm_trash(&mut self) -> Result<()> {
         let Some(t) = self.trash.take() else {
             return Ok(());
         };

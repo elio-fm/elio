@@ -244,7 +244,7 @@ impl App {
 }
 
 impl App {
-    pub(super) fn confirm_create(&mut self) -> Result<()> {
+    pub(in crate::app::create) fn confirm_create(&mut self) -> Result<()> {
         let Some(c) = &self.create else {
             return Ok(());
         };
