@@ -1,7 +1,12 @@
+use super::format::{
+    StaticImageFormat, static_image_format_for_overlay_request, static_image_format_for_path,
+};
+use super::prepare::{
+    static_image_can_prepare_inline, static_image_supports_iterm_source_passthrough,
+};
+use super::render::{image_target_height_px, image_target_width_px};
 use super::{
-    StaticImageFormat, StaticImageKey, StaticImageOverlayMode, StaticImageOverlayRequest,
-    static_image_can_prepare_inline, static_image_detail_label,
-    static_image_format_for_overlay_request, static_image_format_for_path,
+    StaticImageKey, StaticImageOverlayMode, StaticImageOverlayRequest, static_image_detail_label,
 };
 use crate::app::overlays::inline_image::{ImageProtocol, command_exists};
 use crate::app::state::PreviewLoadState;
@@ -140,9 +145,7 @@ impl App {
     ) -> bool {
         match self.terminal_images.protocol {
             ImageProtocol::KittyGraphics => self.static_image_can_display_directly_now(request),
-            ImageProtocol::ItermInline => {
-                super::static_image_supports_iterm_source_passthrough(request)
-            }
+            ImageProtocol::ItermInline => static_image_supports_iterm_source_passthrough(request),
             ImageProtocol::None => false,
         }
     }
@@ -279,8 +282,8 @@ impl App {
             size: entry.size,
             modified: entry.modified,
             area,
-            target_width_px: super::image_target_width_px(area, self.cached_terminal_window()),
-            target_height_px: super::image_target_height_px(area, self.cached_terminal_window()),
+            target_width_px: image_target_width_px(area, self.cached_terminal_window()),
+            target_height_px: image_target_height_px(area, self.cached_terminal_window()),
             mode: StaticImageOverlayMode::FullPane,
             force_render_to_cache: false,
             prepare_inline_payload: self.terminal_images.protocol == ImageProtocol::ItermInline,
