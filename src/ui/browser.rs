@@ -945,7 +945,7 @@ fn pad_right(text: String, width: usize) -> String {
 mod tests {
     use super::*;
     use crate::ui;
-    use crossterm::event::{Event, KeyCode, KeyEvent};
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
     use std::{
         fs,
@@ -996,6 +996,18 @@ mod tests {
         panic!("timed out waiting for background preview");
     }
 
+    fn wait_for_search_index(app: &mut App) {
+        for _ in 0..200 {
+            let _ = app.process_background_jobs();
+            if app.search_is_open() && !app.search_is_loading() && app.search_candidate_count() > 0
+            {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("timed out waiting for search index");
+    }
+
     fn row_text(buffer: &Buffer, y: u16) -> String {
         (0..buffer.area.width)
             .map(|x| buffer[(x, y)].symbol())
@@ -1044,6 +1056,251 @@ mod tests {
         assert!(
             icon_cell.modifier.contains(Modifier::BOLD),
             "create overlay icon should use the same bold styling as other file icon surfaces",
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn create_overlay_scrolls_to_keep_the_active_line_visible() {
+        let root = temp_path("create-overlay-scroll");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('a'))))
+            .expect("create overlay should open");
+        for index in 0..10 {
+            for ch in format!("file-{index:02}.txt").chars() {
+                app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(ch))))
+                    .expect("typing create line should succeed");
+            }
+            if index < 9 {
+                app.handle_event(Event::Key(KeyEvent::new(
+                    KeyCode::Char('j'),
+                    KeyModifiers::CONTROL,
+                )))
+                .expect("inserting another create line should succeed");
+            }
+        }
+
+        let state = draw_ui(&mut terminal, &mut app);
+        let list_area = state
+            .create_list_area
+            .expect("create overlay should render a list area");
+
+        assert_eq!(
+            state.create_scroll_top, 2,
+            "create overlay should scroll once the cursor moves past the eighth visible line"
+        );
+        assert!(
+            rect_row_text(terminal.backend().buffer(), list_area, list_area.y)
+                .contains("file-02.txt"),
+            "expected the first visible create row to track the computed scroll top"
+        );
+        assert!(
+            rect_row_text(
+                terminal.backend().buffer(),
+                list_area,
+                list_area
+                    .y
+                    .saturating_add(list_area.height.saturating_sub(1)),
+            )
+            .contains("file-09.txt"),
+            "expected the active create line to remain visible at the bottom of the list"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn bulk_rename_overlay_scrolls_to_keep_the_active_row_visible() {
+        let root = temp_path("bulk-rename-overlay-scroll");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        for index in 0..10 {
+            fs::write(root.join(format!("file-{index:02}.txt")), "content")
+                .expect("failed to write test file");
+        }
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        app.view_mode = crate::app::ViewMode::List;
+        let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+
+        for _ in 0..10 {
+            app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(' '))))
+                .expect("selection toggle should succeed");
+        }
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('r'))))
+            .expect("bulk rename overlay should open");
+        for _ in 0..9 {
+            app.handle_event(Event::Key(KeyEvent::from(KeyCode::Down)))
+                .expect("bulk rename cursor movement should succeed");
+        }
+
+        let state = draw_ui(&mut terminal, &mut app);
+        let list_area = state
+            .bulk_rename_list_area
+            .expect("bulk rename overlay should render a list area");
+
+        assert!(
+            state.rename_panel.is_some(),
+            "bulk rename overlay should keep using the shared rename panel slot"
+        );
+        assert_eq!(
+            state.bulk_rename_scroll_top, 2,
+            "bulk rename overlay should scroll once the active row moves past the eighth visible line"
+        );
+        assert!(
+            rect_row_text(terminal.backend().buffer(), list_area, list_area.y)
+                .contains("file-02.txt"),
+            "expected the first visible bulk rename row to match the computed scroll top"
+        );
+        assert!(
+            rect_row_text(
+                terminal.backend().buffer(),
+                list_area,
+                list_area
+                    .y
+                    .saturating_add(list_area.height.saturating_sub(1)),
+            )
+            .contains("file-09.txt"),
+            "expected the active bulk rename row to remain visible at the bottom of the list"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn trash_overlay_tabs_focus_between_confirm_and_cancel_buttons() {
+        let root = temp_path("trash-overlay-focus");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("draft.txt"), "hello\n").expect("failed to write temp file");
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+        let palette = theme::palette();
+
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
+            .expect("trash overlay should open");
+        let initial_state = draw_ui(&mut terminal, &mut app);
+        let confirm_rect = initial_state
+            .trash_confirm_btn
+            .expect("trash confirm button should be rendered");
+        let cancel_rect = initial_state
+            .trash_cancel_btn
+            .expect("trash cancel button should be rendered");
+
+        let confirm_cell = &terminal.backend().buffer()[(
+            confirm_rect.x.saturating_add(confirm_rect.width / 2),
+            confirm_rect.y,
+        )];
+        let cancel_cell = &terminal.backend().buffer()[(
+            cancel_rect.x.saturating_add(cancel_rect.width / 2),
+            cancel_rect.y,
+        )];
+        assert_eq!(
+            confirm_cell.bg, palette.selected_bg,
+            "confirm button should start focused"
+        );
+        assert_eq!(
+            cancel_cell.bg, palette.chrome_alt,
+            "cancel button should start unfocused"
+        );
+
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
+            .expect("focus toggle should succeed");
+        let toggled_state = draw_ui(&mut terminal, &mut app);
+        let confirm_cell = &terminal.backend().buffer()[(
+            toggled_state
+                .trash_confirm_btn
+                .expect("confirm button should remain rendered")
+                .x
+                .saturating_add(confirm_rect.width / 2),
+            confirm_rect.y,
+        )];
+        let cancel_cell = &terminal.backend().buffer()[(
+            toggled_state
+                .trash_cancel_btn
+                .expect("cancel button should remain rendered")
+                .x
+                .saturating_add(cancel_rect.width / 2),
+            cancel_rect.y,
+        )];
+        assert_eq!(
+            confirm_cell.bg, palette.chrome_alt,
+            "confirm button should lose focus after tabbing"
+        );
+        assert_eq!(
+            cancel_cell.bg, palette.selected_bg,
+            "cancel button should receive focus after tabbing"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn search_overlay_scrolls_selected_results_and_tracks_hit_rects() {
+        let root = temp_path("search-overlay-scroll");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        for index in 0..12 {
+            fs::create_dir_all(root.join(format!("folder-{index:02}")))
+                .expect("failed to create search folder");
+        }
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+        let palette = theme::palette();
+
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('f'))))
+            .expect("search overlay should open");
+        wait_for_search_index(&mut app);
+
+        let initial_state = draw_ui(&mut terminal, &mut app);
+        assert!(
+            initial_state.search_panel.is_some(),
+            "search overlay should render a popup panel"
+        );
+        assert!(
+            initial_state.search_rows_visible > 0,
+            "search overlay should expose the visible row budget through frame state"
+        );
+
+        for _ in 0..8 {
+            app.handle_event(Event::Key(KeyEvent::from(KeyCode::Down)))
+                .expect("search selection movement should succeed");
+        }
+
+        let state = draw_ui(&mut terminal, &mut app);
+        let visible_rows = app.search_rows(state.search_rows_visible);
+        let selected_offset = visible_rows
+            .iter()
+            .position(|row| row.selected)
+            .expect("search overlay should keep one visible row selected");
+        let selected_rect = state
+            .search_hits
+            .get(selected_offset)
+            .expect("search overlay should expose hit rects for visible rows")
+            .rect;
+        let selected_cell =
+            &terminal.backend().buffer()[(selected_rect.x.saturating_add(2), selected_rect.y)];
+
+        assert!(
+            visible_rows.first().is_some_and(|row| row.index > 0),
+            "search overlay should scroll once the selected result moves past the visible window"
+        );
+        assert_eq!(
+            state.search_hits.len(),
+            visible_rows.len(),
+            "search hit rects should stay aligned with the rendered visible rows"
+        );
+        assert_eq!(
+            state.search_hits[selected_offset].index, visible_rows[selected_offset].index,
+            "search hit rect indexes should stay aligned with the visible search rows"
+        );
+        assert_eq!(
+            selected_cell.bg, palette.selected_bg,
+            "selected search rows should keep the focused row background after scrolling"
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
