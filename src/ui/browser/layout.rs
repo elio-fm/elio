@@ -8,7 +8,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
 };
 
-pub(super) fn render_body(
+pub(in crate::ui) fn render_body(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,

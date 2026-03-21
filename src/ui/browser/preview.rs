@@ -1,7 +1,7 @@
 use super::super::theme::Palette;
 use super::super::{helpers, theme};
 use super::scrollbar::render_preview_scrollbar;
-use crate::app::{App, Entry, FrameState};
+use crate::app::{App, FrameState};
 use ratatui::{
     Frame,
     buffer::Buffer,
@@ -57,13 +57,13 @@ pub(super) fn render_preview(
     let inner = helpers::inner_with_padding(area);
     helpers::fill_area(frame, inner, palette.panel, palette.text);
 
-    let Some(entry) = app.selected_entry() else {
+    if app.selected_entry().is_none() {
         helpers::render_empty_state(frame, inner, "Nothing selected", palette);
         return;
-    };
+    }
 
     if inner.height > 0 {
-        render_preview_body(frame, inner, app, state, entry, palette);
+        render_preview_body(frame, inner, app, state, palette);
     }
 }
 
@@ -72,7 +72,6 @@ fn render_preview_body(
     area: Rect,
     app: &App,
     state: &mut FrameState,
-    _entry: &Entry,
     palette: Palette,
 ) {
     let sections = Layout::default()

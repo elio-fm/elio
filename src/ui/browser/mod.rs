@@ -6,19 +6,7 @@ mod preview;
 mod scrollbar;
 mod sidebar;
 
-use super::theme::Palette;
-use crate::app::{App, FrameState};
-use ratatui::{Frame, layout::Rect};
-
-pub(super) fn render_body(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    app: &App,
-    state: &mut FrameState,
-    palette: Palette,
-) {
-    layout::render_body(frame, area, app, state, palette);
-}
+pub(super) use self::layout::render_body;
 
 #[cfg(test)]
 mod tests {
