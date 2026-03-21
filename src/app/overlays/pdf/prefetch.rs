@@ -6,7 +6,7 @@ use super::{
 use crate::app::{App, jobs};
 
 impl App {
-    pub(in crate::app::overlays::pdf) fn refresh_pdf_prefetch_window(&mut self) {
+    pub(super) fn refresh_pdf_prefetch_window(&mut self) {
         let Some(session) = self.pdf_preview.session.as_ref() else {
             self.clear_pending_pdf_work();
             return;
@@ -93,7 +93,7 @@ impl App {
         pages
     }
 
-    pub(in crate::app::overlays::pdf) fn pdf_prefetch_probe_pages(&self) -> Vec<usize> {
+    pub(super) fn pdf_prefetch_probe_pages(&self) -> Vec<usize> {
         let Some(session) = self.pdf_preview.session.as_ref() else {
             return Vec::new();
         };
@@ -105,7 +105,7 @@ impl App {
         )
     }
 
-    pub(in crate::app::overlays::pdf) fn pdf_prefetch_render_pages(&self) -> Vec<usize> {
+    pub(super) fn pdf_prefetch_render_pages(&self) -> Vec<usize> {
         let Some(session) = self.pdf_preview.session.as_ref() else {
             return Vec::new();
         };
@@ -127,10 +127,7 @@ impl App {
             })
     }
 
-    pub(in crate::app::overlays::pdf) fn pdf_overlay_request_for_page(
-        &self,
-        page: usize,
-    ) -> Option<PdfOverlayRequest> {
+    pub(super) fn pdf_overlay_request_for_page(&self, page: usize) -> Option<PdfOverlayRequest> {
         if !self.terminal_image_overlay_available() {
             return None;
         }
@@ -150,10 +147,7 @@ impl App {
         })
     }
 
-    pub(in crate::app::overlays::pdf) fn pdf_render_key_for_page(
-        &self,
-        page: usize,
-    ) -> Option<PdfRenderKey> {
+    pub(super) fn pdf_render_key_for_page(&self, page: usize) -> Option<PdfRenderKey> {
         let request = self.pdf_overlay_request_for_page(page)?;
         let placement = self.overlay_placement_for_request(&request)?;
         Some(PdfRenderKey::from_request(&request, placement))

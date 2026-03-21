@@ -13,10 +13,7 @@ use std::{
 };
 
 impl App {
-    pub(in crate::app::overlays::pdf) fn ensure_pdf_render(
-        &mut self,
-        key: &PdfRenderKey,
-    ) -> Option<PathBuf> {
+    pub(super) fn ensure_pdf_render(&mut self, key: &PdfRenderKey) -> Option<PathBuf> {
         if let Some(path) = self.cached_pdf_render_path(key) {
             return Some(path);
         }
@@ -43,7 +40,7 @@ impl App {
         None
     }
 
-    pub(in crate::app::overlays::pdf) fn ensure_pdf_page_probe(
+    pub(super) fn ensure_pdf_page_probe(
         &mut self,
         request: &PdfOverlayRequest,
     ) -> Option<PdfPageDimensions> {
@@ -72,7 +69,7 @@ impl App {
         None
     }
 
-    pub(in crate::app::overlays::pdf) fn overlay_placement_for_request(
+    pub(super) fn overlay_placement_for_request(
         &self,
         request: &PdfOverlayRequest,
     ) -> Option<FittedPdfPlacement> {
@@ -88,10 +85,7 @@ impl App {
             .copied()
     }
 
-    pub(in crate::app::overlays::pdf) fn cached_pdf_render_path(
-        &mut self,
-        key: &PdfRenderKey,
-    ) -> Option<PathBuf> {
+    pub(super) fn cached_pdf_render_path(&mut self, key: &PdfRenderKey) -> Option<PathBuf> {
         if let Some(path) = self.pdf_preview.rendered_pages.get(key)
             && path.exists()
         {
@@ -104,11 +98,11 @@ impl App {
         None
     }
 
-    pub(in crate::app::overlays::pdf) fn cached_render_exists(&self, key: &PdfRenderKey) -> bool {
+    pub(super) fn cached_render_exists(&self, key: &PdfRenderKey) -> bool {
         self.pdf_preview.rendered_pages.contains_key(key)
     }
 
-    pub(in crate::app::overlays::pdf) fn remember_rendered_pdf(
+    pub(super) fn remember_rendered_pdf(
         &mut self,
         key: PdfRenderKey,
         path: PathBuf,
@@ -134,13 +128,13 @@ impl App {
         }
     }
 
-    pub(in crate::app::overlays::pdf) fn active_pdf_render_key(&self) -> Option<PdfRenderKey> {
+    pub(super) fn active_pdf_render_key(&self) -> Option<PdfRenderKey> {
         let request = self.active_pdf_overlay_request()?;
         let placement = self.overlay_placement_for_request(&request)?;
         Some(self.pdf_render_key_from_request(&request, placement))
     }
 
-    pub(in crate::app::overlays::pdf) fn resolved_pdf_display_placement(
+    pub(super) fn resolved_pdf_display_placement(
         &mut self,
         request: &PdfOverlayRequest,
         render_key: &PdfRenderKey,
@@ -181,7 +175,7 @@ impl App {
         Some(dimensions)
     }
 
-    pub(in crate::app::overlays::pdf) fn cached_display_placement_for_request(
+    pub(super) fn cached_display_placement_for_request(
         &self,
         request: &PdfOverlayRequest,
         fallback: FittedPdfPlacement,
@@ -203,14 +197,11 @@ impl App {
         })
     }
 
-    pub(in crate::app::overlays::pdf) fn pdf_page_key_from_request(
-        &self,
-        request: &PdfOverlayRequest,
-    ) -> PdfPageKey {
+    pub(super) fn pdf_page_key_from_request(&self, request: &PdfOverlayRequest) -> PdfPageKey {
         PdfPageKey::from_request(request)
     }
 
-    pub(in crate::app::overlays::pdf) fn pdf_render_key_from_request(
+    pub(super) fn pdf_render_key_from_request(
         &self,
         request: &PdfOverlayRequest,
         placement: FittedPdfPlacement,

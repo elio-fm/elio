@@ -117,9 +117,7 @@ impl App {
         self.clear_pdf_page_status();
     }
 
-    pub(in crate::app::overlays::pdf) fn active_pdf_overlay_request(
-        &self,
-    ) -> Option<PdfOverlayRequest> {
+    pub(super) fn active_pdf_overlay_request(&self) -> Option<PdfOverlayRequest> {
         if !self.terminal_image_overlay_available() {
             return None;
         }
@@ -258,7 +256,7 @@ impl App {
             .copied()
     }
 
-    pub(in crate::app::overlays::pdf) fn pdf_selection_activation_ready(&self) -> bool {
+    pub(super) fn pdf_selection_activation_ready(&self) -> bool {
         self.pdf_preview
             .activation_ready_at
             .is_none_or(|ready_at| Instant::now() >= ready_at)
@@ -268,7 +266,7 @@ impl App {
         is_pdf_entry(entry) && self.preview_prefers_pdf_surface()
     }
 
-    pub(in crate::app::overlays::pdf) fn clear_pending_pdf_work(&mut self) {
+    pub(super) fn clear_pending_pdf_work(&mut self) {
         self.pdf_preview.pending_page_probes.clear();
         self.pdf_preview.pending_renders.clear();
         self.scheduler.clear_pending_pdf_jobs();
