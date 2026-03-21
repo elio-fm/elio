@@ -1339,6 +1339,40 @@ mod tests {
     }
 
     #[test]
+    fn sh_heredoc_markers_and_pipeline_commands_map_to_semantic_roles() {
+        let palette = theme::code_preview_palette();
+        let sample = "cat <<EOF | grep -i \"$needle\"\n";
+        let rendered = render_syntect_code_preview("sh", sample, true, 20, &|| false)
+            .expect("sh syntax should render through shell-aware renderer");
+
+        assert_eq!(span_color(&rendered[0], "cat"), Some(palette.function));
+        assert_eq!(span_color(&rendered[0], "<<"), Some(palette.operator));
+        assert_eq!(span_color(&rendered[0], "EOF"), Some(palette.parameter));
+        assert_eq!(span_color(&rendered[0], "|"), Some(palette.operator));
+        assert_eq!(span_color(&rendered[0], "grep"), Some(palette.function));
+        assert_eq!(span_color(&rendered[0], "-i"), Some(palette.parameter));
+        assert_eq!(span_color(&rendered[0], "$needle"), Some(palette.parameter));
+    }
+
+    #[test]
+    fn sh_export_like_builtins_keep_assignment_context_for_following_names() {
+        let palette = theme::code_preview_palette();
+        let sample = "export PATH=\"$HOME/bin\"\nreadonly NAME=elio\nlocal count=1\n";
+        let rendered = render_syntect_code_preview("sh", sample, true, 20, &|| false)
+            .expect("sh syntax should render through shell-aware renderer");
+
+        assert_eq!(span_color(&rendered[0], "export"), Some(palette.function));
+        assert_eq!(span_color(&rendered[0], "PATH"), Some(palette.parameter));
+        assert_eq!(span_color(&rendered[0], "="), Some(palette.operator));
+        assert_eq!(span_color(&rendered[1], "readonly"), Some(palette.function));
+        assert_eq!(span_color(&rendered[1], "NAME"), Some(palette.parameter));
+        assert_eq!(span_color(&rendered[1], "="), Some(palette.operator));
+        assert_eq!(span_color(&rendered[2], "local"), Some(palette.function));
+        assert_eq!(span_color(&rendered[2], "count"), Some(palette.parameter));
+        assert_eq!(span_color(&rendered[2], "="), Some(palette.operator));
+    }
+
+    #[test]
     fn semantic_role_classifier_covers_expected_scope_families() {
         let stack = ScopeStack::from_str("source.rust keyword.control.rust").unwrap();
         assert_eq!(
@@ -1405,6 +1439,23 @@ mod tests {
             ScopeStack::from_str("source.shell.bash meta.function-call.arguments.shell").unwrap();
         assert_eq!(
             semantic_role_for_token("--flag", stack.as_slice()),
+            SemanticRole::Parameter
+        );
+    }
+
+    #[test]
+    fn semantic_role_classifier_keeps_shell_heuristics_scoped_to_shell_sources() {
+        let rust_stack =
+            ScopeStack::from_str("source.rust meta.function-call.arguments.rust").unwrap();
+        assert_eq!(
+            semantic_role_for_token("--flag", rust_stack.as_slice()),
+            SemanticRole::Fg
+        );
+
+        let shell_stack =
+            ScopeStack::from_str("source.shell.bash meta.function-call.arguments.shell").unwrap();
+        assert_eq!(
+            semantic_role_for_token("--flag", shell_stack.as_slice()),
             SemanticRole::Parameter
         );
     }
