@@ -1016,6 +1016,7 @@ fn stale_preview_results_are_counted_in_metrics() {
         .expect("archive entry should be selected first");
 
     app.set_selected(1);
+    let metrics_before = app.preview_metrics();
     app.scheduler
         .defer_result(JobResult::Preview(Box::new(PreviewBuild {
             token: app.preview_state.token.wrapping_add(1),
@@ -1031,8 +1032,8 @@ fn stale_preview_results_are_counted_in_metrics() {
     let _ = app.process_background_jobs();
 
     let metrics = app.preview_metrics();
-    assert!(metrics.stale_results_dropped >= 1);
-    assert!(metrics.applied_results <= 1);
+    assert!(metrics.stale_results_dropped > metrics_before.stale_results_dropped);
+    assert!(metrics.applied_results <= metrics_before.applied_results + 1);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
