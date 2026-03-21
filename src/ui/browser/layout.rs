@@ -1,6 +1,6 @@
 use super::super::theme::Palette;
 use super::entries::render_entries;
-use super::render_preview;
+use super::preview::render_preview;
 use super::sidebar::render_sidebar;
 use crate::app::{App, FrameState};
 use ratatui::{

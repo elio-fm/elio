@@ -1,6 +1,6 @@
 use super::super::theme::Palette;
 use super::super::{helpers, theme};
-use super::{render_grid, render_list};
+use super::{grid::render_grid, list::render_list};
 use crate::app::{App, Entry, FrameState, format_size, format_time_ago};
 use ratatui::{
     Frame,
