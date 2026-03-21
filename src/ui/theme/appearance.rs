@@ -1717,6 +1717,82 @@ mod tests {
         (root, path)
     }
 
+    const GENERIC_DEV_DIRECTORIES: &[&str] = &[
+        "node_modules",
+        "tests",
+        "test",
+        "__tests__",
+        "scripts",
+        "build",
+        "dist",
+        ".next",
+        ".nuxt",
+        ".svelte-kit",
+        ".astro",
+        "assets",
+        "coverage",
+        "tmp",
+        "temp",
+        "out",
+        "target",
+        "bin",
+        "lib",
+        "vendor",
+        "src",
+        "config",
+        "docs",
+    ];
+
+    const ALTERNATE_EXAMPLE_THEME_NAMES: &[&str] = &[
+        "default-light",
+        "blush-light",
+        "amber-dusk",
+        "catppuccin-mocha",
+        "tokyo-night",
+        "navi",
+        "neon-cherry",
+    ];
+
+    fn alternate_example_theme_config(name: &str) -> &'static str {
+        match name {
+            "default-light" => include_str!("../../../examples/themes/default-light/theme.toml"),
+            "blush-light" => include_str!("../../../examples/themes/blush-light/theme.toml"),
+            "amber-dusk" => include_str!("../../../examples/themes/amber-dusk/theme.toml"),
+            "catppuccin-mocha" => {
+                include_str!("../../../examples/themes/catppuccin-mocha/theme.toml")
+            }
+            "tokyo-night" => include_str!("../../../examples/themes/tokyo-night/theme.toml"),
+            "navi" => include_str!("../../../examples/themes/navi/theme.toml"),
+            "neon-cherry" => include_str!("../../../examples/themes/neon-cherry/theme.toml"),
+            _ => panic!("unknown alternate example theme fixture: {name}"),
+        }
+    }
+
+    fn load_alternate_example_theme(name: &str) -> Theme {
+        Theme::from_config_str(alternate_example_theme_config(name)).unwrap_or_else(|error| {
+            panic!("{name} example theme should parse as a user theme: {error}")
+        })
+    }
+
+    fn assert_uses_normal_folder_color_for_generic_dev_directories(theme: &Theme, label: &str) {
+        let normal_folder_color = theme
+            .resolve(Path::new("projects"), EntryKind::Directory)
+            .color;
+
+        for directory in GENERIC_DEV_DIRECTORIES {
+            let resolved = theme.resolve(Path::new(directory), EntryKind::Directory);
+            assert_eq!(
+                resolved.class,
+                FileClass::Directory,
+                "{label}: {directory} should resolve as a directory",
+            );
+            assert_eq!(
+                resolved.color, normal_folder_color,
+                "{label}: {directory} should use the normal folder color",
+            );
+        }
+    }
+
     #[test]
     fn exact_file_rules_override_extension_defaults() {
         let theme = Theme::default_theme();
@@ -1799,11 +1875,8 @@ macro = "#fedcba"
     }
 
     #[test]
-    fn blush_light_example_theme_parses_and_applies_custom_icon_and_code_colors() {
-        let theme = Theme::from_config_str(include_str!(
-            "../../../examples/themes/blush-light/theme.toml"
-        ))
-        .expect("blush-light theme should parse");
+    fn blush_light_example_theme_parses_as_user_theme_and_applies_custom_icon_and_code_colors() {
+        let theme = load_alternate_example_theme("blush-light");
 
         assert_eq!(theme.preview.code.keyword, rgb(0xd8, 0x63, 0x92));
         assert_eq!(theme.preview.code.function, rgb(0x8f, 0x71, 0xbf));
@@ -1825,11 +1898,8 @@ macro = "#fedcba"
     }
 
     #[test]
-    fn default_light_example_theme_parses_and_preserves_default_icon_mappings() {
-        let theme = Theme::from_config_str(include_str!(
-            "../../../examples/themes/default-light/theme.toml"
-        ))
-        .expect("default-light theme should parse");
+    fn default_light_example_theme_parses_as_user_theme_and_preserves_default_icon_mappings() {
+        let theme = load_alternate_example_theme("default-light");
 
         assert_eq!(theme.palette.bg, rgb(0xef, 0xf2, 0xf5));
         assert_eq!(theme.preview.code.keyword, rgb(0x7a, 0xae, 0xff));
@@ -1889,11 +1959,8 @@ macro = "#fedcba"
     }
 
     #[test]
-    fn amber_dusk_example_theme_parses_and_applies_warm_dark_palette() {
-        let theme = Theme::from_config_str(include_str!(
-            "../../../examples/themes/amber-dusk/theme.toml"
-        ))
-        .expect("amber-dusk theme should parse");
+    fn amber_dusk_example_theme_parses_as_user_theme_and_applies_warm_dark_palette() {
+        let theme = load_alternate_example_theme("amber-dusk");
 
         assert_eq!(theme.palette.bg, rgb(0x12, 0x0f, 0x0d));
         assert_eq!(theme.preview.code.keyword, rgb(0xcf, 0x98, 0x51));
@@ -1926,11 +1993,8 @@ macro = "#fedcba"
     }
 
     #[test]
-    fn catppuccin_mocha_example_theme_parses_and_applies_palette_consistently() {
-        let theme = Theme::from_config_str(include_str!(
-            "../../../examples/themes/catppuccin-mocha/theme.toml"
-        ))
-        .expect("catppuccin-mocha theme should parse");
+    fn catppuccin_mocha_example_theme_parses_as_user_theme_and_applies_palette_consistently() {
+        let theme = load_alternate_example_theme("catppuccin-mocha");
 
         assert_eq!(theme.palette.bg, rgb(0x1e, 0x1e, 0x2e));
         assert_eq!(theme.palette.selected_bg, rgb(0x45, 0x47, 0x5a));
@@ -1982,11 +2046,8 @@ macro = "#fedcba"
     }
 
     #[test]
-    fn tokyo_night_example_theme_parses_and_applies_palette_consistently() {
-        let theme = Theme::from_config_str(include_str!(
-            "../../../examples/themes/tokyo-night/theme.toml"
-        ))
-        .expect("tokyo-night theme should parse");
+    fn tokyo_night_example_theme_parses_as_user_theme_and_applies_palette_consistently() {
+        let theme = load_alternate_example_theme("tokyo-night");
 
         assert_eq!(theme.palette.bg, rgb(0x1a, 0x1b, 0x26));
         assert_eq!(theme.preview.code.keyword, rgb(0xbb, 0x9a, 0xf7));
@@ -2036,86 +2097,16 @@ macro = "#fedcba"
     }
 
     #[test]
-    fn example_themes_use_normal_folder_color_for_generic_dev_directories() {
-        let generic_dirs = [
-            "node_modules",
-            "tests",
-            "test",
-            "__tests__",
-            "scripts",
-            "build",
-            "dist",
-            ".next",
-            ".nuxt",
-            ".svelte-kit",
-            ".astro",
-            "assets",
-            "coverage",
-            "tmp",
-            "temp",
-            "out",
-            "target",
-            "bin",
-            "lib",
-            "vendor",
-            "src",
-            "config",
-            "docs",
-        ];
-        let themes = [
-            (
-                "default",
-                include_str!("../../../examples/themes/default/theme.toml"),
-            ),
-            (
-                "default-light",
-                include_str!("../../../examples/themes/default-light/theme.toml"),
-            ),
-            (
-                "blush-light",
-                include_str!("../../../examples/themes/blush-light/theme.toml"),
-            ),
-            (
-                "amber-dusk",
-                include_str!("../../../examples/themes/amber-dusk/theme.toml"),
-            ),
-            (
-                "catppuccin-mocha",
-                include_str!("../../../examples/themes/catppuccin-mocha/theme.toml"),
-            ),
-            (
-                "tokyo-night",
-                include_str!("../../../examples/themes/tokyo-night/theme.toml"),
-            ),
-            (
-                "navi",
-                include_str!("../../../examples/themes/navi/theme.toml"),
-            ),
-            (
-                "neon-cherry",
-                include_str!("../../../examples/themes/neon-cherry/theme.toml"),
-            ),
-        ];
+    fn built_in_default_theme_uses_normal_folder_color_for_generic_dev_directories() {
+        let theme = Theme::default_theme();
+        assert_uses_normal_folder_color_for_generic_dev_directories(&theme, "built-in default");
+    }
 
-        for (label, config) in themes {
-            let theme = Theme::from_config_str(config)
-                .unwrap_or_else(|error| panic!("{label} theme should parse: {error}"));
-            let normal_folder_color = theme
-                .resolve(Path::new("projects"), EntryKind::Directory)
-                .color;
-
-            for directory in generic_dirs {
-                let resolved = theme.resolve(Path::new(directory), EntryKind::Directory);
-                assert_eq!(
-                    resolved.class,
-                    FileClass::Directory,
-                    "{label}: {directory} should resolve as a directory",
-                );
-                assert_eq!(
-                    resolved.color, normal_folder_color,
-                    "{label}: {directory} should use the normal folder color",
-                );
-            }
+    #[test]
+    fn alternate_example_themes_use_normal_folder_color_for_generic_dev_directories() {
+        for label in ALTERNATE_EXAMPLE_THEME_NAMES {
+            let theme = load_alternate_example_theme(label);
+            assert_uses_normal_folder_color_for_generic_dev_directories(&theme, label);
         }
     }
 
