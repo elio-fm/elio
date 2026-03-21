@@ -1,10 +1,12 @@
+mod access;
+mod cache;
+mod request;
+
 use super::*;
 use crate::preview::{
-    MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT, PreviewContent, PreviewKind, PreviewLineCoverage,
-    PreviewRequestOptions, PreviewWorkClass, default_code_preview_line_limit, loading_preview_for,
-    preview_work_class, should_build_preview_in_background,
+    PreviewContent, PreviewKind, PreviewLineCoverage, PreviewRequestOptions, PreviewWorkClass,
+    loading_preview_for, preview_work_class, should_build_preview_in_background,
 };
-use std::sync::Arc;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 const FITTED_HEADER_SEPARATOR: &str = " • ";
@@ -51,106 +53,6 @@ impl PreviewHeaderSegment {
 }
 
 impl App {
-    pub fn preview_lines(&self) -> Vec<Line<'static>> {
-        self.preview_state.content.lines()
-    }
-
-    pub fn preview_wrapped_lines(&self, visible_cols: usize) -> Arc<[Line<'static>]> {
-        self.preview_state.content.wrapped_lines(visible_cols)
-    }
-
-    pub fn preview_section_label(&self) -> &'static str {
-        self.preview_state.content.section_label()
-    }
-
-    pub fn preview_scroll_offset(&self) -> usize {
-        self.preview_state.scroll
-    }
-
-    pub fn preview_horizontal_scroll_offset(&self) -> usize {
-        self.preview_state.horizontal_scroll
-    }
-
-    pub fn preview_total_lines(&self, visible_cols: usize) -> usize {
-        self.preview_state.content.visual_line_count(visible_cols)
-    }
-
-    pub fn preview_wraps(&self) -> bool {
-        self.preview_state.content.kind.wraps_in_preview()
-    }
-
-    pub fn preview_allows_horizontal_scroll(&self) -> bool {
-        self.preview_state.content.kind.allows_horizontal_scroll()
-    }
-
-    pub fn preview_max_horizontal_scroll(&self, visible_cols: usize) -> usize {
-        if !self.preview_allows_horizontal_scroll() {
-            return 0;
-        }
-        self.preview_state
-            .content
-            .max_line_width()
-            .saturating_sub(visible_cols.max(1))
-    }
-
-    #[cfg(test)]
-    pub fn preview_header_detail(&self, visible_rows: usize) -> Option<String> {
-        let visible_cols = self.frame_state.preview_cols_visible;
-        let detail = self
-            .preview_state
-            .content
-            .header_detail(self.preview_state.scroll, visible_rows);
-        let wrapped_note =
-            if self.preview_state.content.truncation_note.is_none() && visible_cols > 0 {
-                self.preview_state
-                    .content
-                    .wrapped_truncation_note(visible_cols)
-            } else {
-                None
-            };
-        let mut detail = match (detail, wrapped_note) {
-            (Some(detail), Some(note)) if !note.is_empty() => Some(format!("{detail}  •  {note}")),
-            (Some(detail), Some(_)) => Some(detail),
-            (Some(detail), None) => Some(detail),
-            (None, Some(note)) => Some(note),
-            (None, None) => None,
-        };
-        if let Some(navigation_detail) = self.preview_state.content.navigation_header_detail() {
-            detail = Some(match detail {
-                Some(detail) if !detail.is_empty() => format!("{detail}  •  {navigation_detail}"),
-                _ => navigation_detail,
-            });
-        }
-        if let Some(pdf_detail) = self.pdf_preview_header_detail() {
-            detail = Some(match detail {
-                Some(detail) if !detail.is_empty() => format!("{detail}  •  {pdf_detail}"),
-                _ => pdf_detail,
-            });
-        }
-        if let Some(image_detail) = self.static_image_preview_header_detail() {
-            detail = Some(match detail {
-                Some(detail) if !detail.is_empty() => format!("{detail}  •  {image_detail}"),
-                _ => image_detail,
-            });
-        }
-        detail
-    }
-
-    pub(crate) fn preview_header_detail_for_width(
-        &self,
-        visible_rows: usize,
-        available_width: usize,
-    ) -> Option<String> {
-        let segments = self.preview_header_segments(visible_rows);
-        fit_preview_header_segments(&segments, available_width)
-    }
-
-    pub(in crate::app) fn current_preview_request_options(&self) -> PreviewRequestOptions {
-        self.comic_preview_request_options()
-            .or_else(|| self.epub_preview_request_options())
-            .unwrap_or_default()
-    }
-
     pub(in crate::app) fn refresh_preview(&mut self) {
         self.preview_state.deferred_refresh_at = None;
         self.preview_state.prefetch_ready_at = None;
@@ -290,108 +192,6 @@ impl App {
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))
     }
 
-    pub(in crate::app) fn cached_preview_for(
-        &self,
-        entry: &Entry,
-        variant: &PreviewRequestOptions,
-    ) -> Option<PreviewContent> {
-        let cached = self.preview_state.result_cache.get(&PreviewCacheKey {
-            path: entry.path.clone(),
-            variant: variant.clone(),
-            code_line_limit: self.preview_code_line_limit_for_entry(entry),
-        })?;
-        if cached.size == entry.size && cached.modified == entry.modified {
-            Some(cached.preview.clone())
-        } else {
-            None
-        }
-    }
-
-    fn stale_cached_preview_for(
-        &self,
-        entry: &Entry,
-        variant: &PreviewRequestOptions,
-    ) -> Option<PreviewContent> {
-        self.preview_state
-            .result_cache
-            .get(&PreviewCacheKey {
-                path: entry.path.clone(),
-                variant: variant.clone(),
-                code_line_limit: self.preview_code_line_limit_for_entry(entry),
-            })
-            .map(|cached| cached.preview.clone())
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn cache_preview_result(
-        &mut self,
-        entry: &Entry,
-        variant: &PreviewRequestOptions,
-        preview: &PreviewContent,
-    ) {
-        let code_line_limit = self.preview_code_line_limit_for_entry(entry);
-        self.cache_preview_result_with_code_line_limit(entry, variant, code_line_limit, preview);
-    }
-
-    pub(in crate::app) fn cache_preview_result_with_code_line_limit(
-        &mut self,
-        entry: &Entry,
-        variant: &PreviewRequestOptions,
-        code_line_limit: usize,
-        preview: &PreviewContent,
-    ) {
-        let key = PreviewCacheKey {
-            path: entry.path.clone(),
-            variant: variant.clone(),
-            code_line_limit,
-        };
-        self.preview_state.result_cache.insert(
-            key.clone(),
-            CachedPreview {
-                size: entry.size,
-                modified: entry.modified,
-                preview: preview.clone(),
-            },
-        );
-        self.preview_state
-            .result_order
-            .retain(|cached| cached != &key);
-        self.preview_state.result_order.push_back(key);
-
-        while self.preview_state.result_order.len() > PREVIEW_CACHE_LIMIT {
-            if let Some(stale_key) = self.preview_state.result_order.pop_front() {
-                self.preview_state.result_cache.remove(&stale_key);
-            }
-        }
-    }
-
-    pub(in crate::app) fn cache_preview_line_count(
-        &mut self,
-        path: PathBuf,
-        size: u64,
-        modified: Option<SystemTime>,
-        total_lines: usize,
-    ) {
-        let key = PreviewLineCountKey {
-            path,
-            size,
-            modified,
-        };
-        self.preview_state
-            .line_count_cache
-            .insert(key.clone(), total_lines.max(1));
-        self.preview_state
-            .line_count_order
-            .retain(|cached| cached != &key);
-        self.preview_state.line_count_order.push_back(key);
-
-        while self.preview_state.line_count_order.len() > PREVIEW_LINE_COUNT_CACHE_LIMIT {
-            if let Some(stale_key) = self.preview_state.line_count_order.pop_front() {
-                self.preview_state.line_count_cache.remove(&stale_key);
-            }
-        }
-    }
-
     pub(in crate::app) fn apply_preview_line_count_result(
         &mut self,
         path: &std::path::Path,
@@ -475,46 +275,6 @@ impl App {
             .map(|_| Instant::now() + PREVIEW_PREFETCH_IDLE_DELAY);
     }
 
-    fn preview_request_options_for_entry(&self, entry: &Entry) -> PreviewRequestOptions {
-        self.comic_preview_request_options_for_entry(entry)
-            .or_else(|| self.epub_preview_request_options_for_entry(entry))
-            .unwrap_or_default()
-    }
-
-    pub(in crate::app) fn preview_code_line_limit_for_entry(&self, entry: &Entry) -> usize {
-        self.preview_code_line_limit_for_entry_with_rows(
-            entry,
-            self.frame_state.preview_rows_visible,
-        )
-    }
-
-    pub(in crate::app) fn preview_code_line_limit_for_entry_with_rows(
-        &self,
-        entry: &Entry,
-        preview_rows_visible: usize,
-    ) -> usize {
-        let facts = crate::file_info::inspect_path_cached(
-            &entry.path,
-            entry.kind,
-            entry.size,
-            entry.modified,
-        );
-        if facts.preview.kind == crate::file_info::PreviewKind::Source
-            && facts.preview.structured_format.is_none()
-        {
-            return preview_code_line_limit(preview_rows_visible);
-        }
-        default_code_preview_line_limit()
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn has_cached_preview_for_path(&self, path: &std::path::Path) -> bool {
-        self.preview_state
-            .result_cache
-            .keys()
-            .any(|key| key.path == path)
-    }
-
     pub(in crate::app) fn sync_current_preview_line_count(&mut self) {
         let needs_total_line_count = self.preview_state.content.needs_total_line_count();
         let Some(entry) = self.selected_entry().cloned() else {
@@ -554,16 +314,6 @@ impl App {
             .content
             .set_total_line_count_pending(pending);
     }
-}
-
-fn preview_code_line_limit(preview_rows_visible: usize) -> usize {
-    if preview_rows_visible == 0 {
-        return default_code_preview_line_limit();
-    }
-    preview_rows_visible.saturating_mul(3).clamp(
-        MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT,
-        default_code_preview_line_limit(),
-    )
 }
 
 impl App {
