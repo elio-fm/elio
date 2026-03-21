@@ -1,6 +1,11 @@
 use super::super::text_edit::char_to_byte;
+use super::super::{
+    App,
+    state::{CreateOverlay, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad},
+};
 use super::validation::{ParsedCreateItem, parse_create_line, validate_parsed_item};
-use super::*;
+use crate::fs::rect_contains;
+use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::fs;
 

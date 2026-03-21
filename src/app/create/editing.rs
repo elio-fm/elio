@@ -1,8 +1,8 @@
+use super::super::App;
 use super::super::text_edit::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
 };
-use super::*;
 
 impl App {
     pub(super) fn create_insert_newline(&mut self) {

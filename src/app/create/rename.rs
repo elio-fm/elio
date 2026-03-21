@@ -2,7 +2,12 @@ use super::super::text_edit::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
 };
-use super::*;
+use super::super::{
+    App,
+    state::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad, RenameOverlay},
+};
+use crate::fs::rect_contains;
+use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::fs;
 
