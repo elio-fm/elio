@@ -1027,6 +1027,153 @@ mod tests {
             .join("\n")
     }
 
+    fn rect_inside(outer: Rect, inner: Rect) -> bool {
+        inner.x >= outer.x
+            && inner.y >= outer.y
+            && inner.x.saturating_add(inner.width) <= outer.x.saturating_add(outer.width)
+            && inner.y.saturating_add(inner.height) <= outer.y.saturating_add(outer.height)
+    }
+
+    #[test]
+    fn wide_browser_layout_keeps_entries_and_preview_side_by_side() {
+        let root = temp_path("wide-browser-layout");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("report.txt"), "hello\nworld\n").expect("failed to write temp file");
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        let mut terminal = Terminal::new(TestBackend::new(140, 30)).expect("terminal should init");
+
+        let state = draw_ui(&mut terminal, &mut app);
+        let entries_panel = state
+            .entries_panel
+            .expect("entries panel should be rendered");
+        let preview_panel = state
+            .preview_panel
+            .expect("preview panel should be rendered");
+        let sidebar_rect = state
+            .sidebar_hits
+            .first()
+            .map(|hit| hit.rect)
+            .expect("sidebar should expose at least one hit rect");
+
+        assert!(
+            sidebar_rect.x.saturating_add(sidebar_rect.width) <= entries_panel.x,
+            "wide layout should keep the sidebar to the left of the entries panel"
+        );
+        assert_eq!(
+            entries_panel.y, preview_panel.y,
+            "wide layout should align entries and preview panels on the same row"
+        );
+        assert_eq!(
+            entries_panel.height, preview_panel.height,
+            "wide layout should keep entries and preview panels at the same height"
+        );
+        assert!(
+            entries_panel.x.saturating_add(entries_panel.width) <= preview_panel.x,
+            "wide layout should place the preview panel to the right of the entries panel"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn narrow_browser_layout_stacks_preview_below_entries() {
+        let root = temp_path("narrow-browser-layout");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("report.txt"), "hello\nworld\n").expect("failed to write temp file");
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        let mut terminal = Terminal::new(TestBackend::new(110, 30)).expect("terminal should init");
+
+        let state = draw_ui(&mut terminal, &mut app);
+        let entries_panel = state
+            .entries_panel
+            .expect("entries panel should be rendered");
+        let preview_panel = state
+            .preview_panel
+            .expect("preview panel should be rendered");
+
+        assert_eq!(
+            entries_panel.x, preview_panel.x,
+            "narrow layout should keep entries and preview aligned on the same right column"
+        );
+        assert_eq!(
+            entries_panel.width, preview_panel.width,
+            "narrow layout should keep entries and preview at the same width"
+        );
+        assert!(
+            entries_panel.y.saturating_add(entries_panel.height) <= preview_panel.y,
+            "narrow layout should stack the preview panel below the entries panel"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn split_scrollbar_area_only_reserves_a_column_when_width_allows() {
+        let tight = Rect {
+            x: 3,
+            y: 4,
+            width: 5,
+            height: 7,
+        };
+        let (content, scrollbar) = split_scrollbar_area(tight);
+        assert_eq!(content, tight);
+        assert_eq!(scrollbar, None);
+
+        let roomy = Rect {
+            x: 8,
+            y: 2,
+            width: 6,
+            height: 9,
+        };
+        let (content, scrollbar) = split_scrollbar_area(roomy);
+        let scrollbar = scrollbar.expect("wide enough areas should reserve a scrollbar column");
+        assert_eq!(content.width, 5);
+        assert_eq!(scrollbar.width, 1);
+        assert_eq!(content.height, roomy.height);
+        assert_eq!(scrollbar.height, roomy.height);
+        assert_eq!(scrollbar.x, content.x.saturating_add(content.width));
+    }
+
+    #[test]
+    fn grid_view_keeps_entry_hits_inside_the_entries_panel() {
+        let root = temp_path("grid-layout-hits");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        for index in 0..12 {
+            fs::write(root.join(format!("item-{index:02}.txt")), "content\n")
+                .expect("failed to write temp file");
+        }
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        app.view_mode = crate::app::ViewMode::Grid;
+        let mut terminal = Terminal::new(TestBackend::new(140, 30)).expect("terminal should init");
+
+        let state = draw_ui(&mut terminal, &mut app);
+        let entries_panel = state
+            .entries_panel
+            .expect("entries panel should be rendered");
+
+        assert!(
+            state.metrics.cols >= 2,
+            "wide grid layouts should expose multiple columns through view metrics"
+        );
+        assert!(
+            !state.entry_hits.is_empty(),
+            "grid rendering should expose hit rects for visible entries"
+        );
+        for hit in &state.entry_hits {
+            assert!(
+                rect_inside(entries_panel, hit.rect),
+                "entry hit {:?} should stay inside the entries panel {:?}",
+                hit.rect,
+                entries_panel
+            );
+        }
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
     #[test]
     fn create_overlay_uses_themed_bold_icon_for_live_json_names() {
         let root = temp_path("create-overlay-json-icon");
