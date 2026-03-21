@@ -1,8 +1,10 @@
+mod entries;
+mod layout;
+mod sidebar;
+
 use super::theme::Palette;
 use super::{helpers, theme};
-use crate::app::{
-    App, Entry, EntryHit, FrameState, PathHit, ViewMetrics, format_size, format_time_ago,
-};
+use crate::app::{App, Entry, EntryHit, FrameState, ViewMetrics};
 use ratatui::{
     Frame,
     buffer::Buffer,
@@ -12,6 +14,11 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph, Widget},
 };
 
+use self::entries::{
+    browser_directory_secondary, browser_entry_detail, browser_entry_modified,
+    render_compact_list_row,
+};
+
 pub(super) fn render_body(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -19,142 +26,7 @@ pub(super) fn render_body(
     state: &mut FrameState,
     palette: Palette,
 ) {
-    let columns = if area.width >= 126 {
-        let outer = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(24), Constraint::Min(80)])
-            .split(area);
-        let content = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(54), Constraint::Percentage(46)])
-            .split(outer[1]);
-        vec![outer[0], content[0], content[1]]
-    } else {
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(22), Constraint::Min(42)])
-            .split(area)
-            .to_vec()
-    };
-
-    render_sidebar(frame, columns[0], app, state, palette);
-
-    if columns.len() == 3 {
-        render_entries(frame, columns[1], app, state, palette);
-        render_preview(frame, columns[2], app, state, palette);
-    } else {
-        let right = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Min(12), Constraint::Length(11)])
-            .split(columns[1]);
-        render_entries(frame, right[0], app, state, palette);
-        render_preview(frame, right[1], app, state, palette);
-    }
-}
-
-fn render_sidebar(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    app: &App,
-    state: &mut FrameState,
-    palette: Palette,
-) {
-    let block = helpers::panel_block(" Places ", palette.panel, palette);
-    frame.render_widget(block, area);
-    let inner = helpers::inner_with_padding(area);
-    helpers::fill_area(frame, inner, palette.panel, palette.text);
-    let mut y = inner.y;
-    let row_height = 1u16;
-    for item in &app.sidebar {
-        if y.saturating_add(row_height) > inner.y.saturating_add(inner.height) {
-            break;
-        }
-        let row = Rect {
-            x: inner.x,
-            y,
-            width: inner.width,
-            height: row_height,
-        };
-        let active = helpers::path_is_active(&app.cwd, &item.path);
-        let bg = if active {
-            palette.sidebar_active
-        } else {
-            palette.panel
-        };
-        let top_line = Line::from(vec![
-            Span::styled(
-                if active { "▌" } else { " " },
-                Style::default().fg(if active { palette.accent } else { bg }),
-            ),
-            Span::raw(" "),
-            Span::styled(
-                item.icon,
-                Style::default()
-                    .fg(palette.accent)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(
-                item.title.clone(),
-                Style::default()
-                    .fg(palette.text)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]);
-        frame.render_widget(
-            Paragraph::new(vec![top_line]).style(Style::default().bg(bg).fg(palette.text)),
-            row,
-        );
-        state.sidebar_hits.push(PathHit {
-            rect: row,
-            path: item.path.clone(),
-        });
-        y = y.saturating_add(row_height);
-    }
-}
-
-fn render_entries(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    app: &App,
-    state: &mut FrameState,
-    palette: Palette,
-) {
-    state.entries_panel = Some(area);
-    let path_text = helpers::stable_path_label(&app.cwd, area.width.saturating_sub(10) as usize);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .style(Style::default().bg(palette.panel_alt).fg(palette.text))
-        .border_style(Style::default().fg(palette.border));
-    frame.render_widget(&block, area);
-    helpers::render_panel_title(
-        frame,
-        area,
-        Line::from(vec![
-            Span::styled(
-                " 󰉖 ",
-                Style::default()
-                    .fg(palette.accent)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                path_text,
-                Style::default()
-                    .fg(palette.accent_text)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" "),
-        ]),
-    );
-    let inner = block.inner(area);
-    helpers::fill_area(frame, inner, palette.panel_alt, palette.text);
-
-    if app.view_mode == crate::app::ViewMode::Grid {
-        render_grid(frame, inner, app, state, palette);
-    } else {
-        render_list(frame, inner, app, state, palette);
-    }
+    layout::render_body(frame, area, app, state, palette);
 }
 
 fn render_grid(
@@ -718,28 +590,6 @@ impl Widget for PreviewLinesWidget<'_> {
     }
 }
 
-fn browser_entry_detail(app: &App, entry: &Entry) -> Option<String> {
-    if entry.is_dir() {
-        app.directory_item_count_label(entry)
-    } else {
-        Some(format_size(entry.size))
-    }
-}
-
-fn browser_entry_modified(entry: &Entry) -> String {
-    entry
-        .modified
-        .map(format_time_ago)
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
-fn browser_directory_secondary(app: &App, entry: &Entry) -> String {
-    match app.directory_item_count_label(entry) {
-        Some(count) => format!("{count}  •  {}", browser_entry_modified(entry)),
-        None => browser_entry_modified(entry),
-    }
-}
-
 fn render_preview_scrollbar(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -865,80 +715,6 @@ fn render_browser_scrollbar(
         .style(Style::default().bg(palette.panel_alt)),
         thumb,
     );
-}
-
-fn render_compact_list_row(
-    app: &App,
-    entry: &Entry,
-    selected: bool,
-    row_width: u16,
-    palette: Palette,
-) -> Line<'static> {
-    let detail_width = 12usize;
-    let modified_width = 10usize;
-    let multi_selected = app.is_selected(&entry.path);
-    let marker_color = if selected {
-        palette.selected_border
-    } else if multi_selected {
-        palette.selection_bar
-    } else {
-        palette.panel_alt
-    };
-    let icon = theme::entry_symbol(entry);
-    let icon_style = Style::default()
-        .fg(theme::entry_color(entry, palette))
-        .add_modifier(Modifier::BOLD);
-    let name_style = if selected {
-        Style::default()
-            .fg(palette.text)
-            .add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().fg(palette.text)
-    };
-    let muted_style = Style::default().fg(palette.muted);
-    let name_width = row_width
-        .saturating_sub(1 + 3 + detail_width as u16 + modified_width as u16)
-        .max(1) as usize;
-    let name = helpers::clamp_label(&entry.name, name_width);
-    let detail = pad_left(
-        browser_entry_detail(app, entry).unwrap_or_default(),
-        detail_width,
-    );
-    let modified = pad_left(browser_entry_modified(entry), modified_width);
-
-    Line::from(vec![
-        Span::styled(
-            if selected || multi_selected {
-                "▌"
-            } else {
-                " "
-            },
-            Style::default().fg(marker_color),
-        ),
-        Span::raw(" "),
-        Span::styled(icon.to_string(), icon_style),
-        Span::raw(" "),
-        Span::styled(pad_right(name, name_width), name_style),
-        Span::styled(detail, muted_style),
-        Span::styled(modified, muted_style),
-    ])
-}
-
-fn pad_left(mut text: String, width: usize) -> String {
-    let visible = helpers::display_width(&text);
-    if visible >= width {
-        return helpers::clamp_label(&text, width);
-    }
-    text = format!("{}{}", " ".repeat(width - visible), text);
-    text
-}
-
-fn pad_right(text: String, width: usize) -> String {
-    let visible = helpers::display_width(&text);
-    if visible >= width {
-        return helpers::clamp_label(&text, width);
-    }
-    format!("{text}{}", " ".repeat(width - visible))
 }
 
 #[cfg(test)]
