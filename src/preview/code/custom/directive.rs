@@ -250,5 +250,5 @@ fn is_comment_start(input: &str, index: usize) -> bool {
     input[index..].starts_with('#')
         || input[index..].starts_with(';')
         || (input[index..].starts_with("//")
-            && !input[..index].chars().last().is_some_and(|ch| ch == ':'))
+            && input[..index].chars().last().is_none_or(|ch| ch != ':'))
 }
