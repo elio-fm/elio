@@ -1,0 +1,66 @@
+name: Rust
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  quality:
+    name: fmt, clippy, test, docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install preview test tooling
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            ffmpeg \
+            genisoimage \
+            imagemagick \
+            libarchive-tools \
+            poppler-utils \
+            xz-utils
+
+          if ! command -v 7z >/dev/null 2>&1; then
+            if sudo apt-get install -y p7zip-full; then
+              :
+            else
+              sudo apt-get install -y 7zip
+              if command -v 7zz >/dev/null 2>&1 && ! command -v 7z >/dev/null 2>&1; then
+                sudo ln -s "$(command -v 7zz)" /usr/local/bin/7z
+              fi
+            fi
+          fi
+
+      - name: Install Rust 1.93.0
+        uses: dtolnay/rust-toolchain@1.93.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test
+
+      - name: cargo doc --no-deps
+        run: cargo doc --no-deps
