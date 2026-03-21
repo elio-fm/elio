@@ -93,6 +93,6 @@ impl App {
         available_width: usize,
     ) -> Option<String> {
         let segments = self.preview_header_segments(visible_rows);
-        fit_preview_header_segments(&segments, available_width)
+        super::headers::fit_preview_header_segments(&segments, available_width)
     }
 }
