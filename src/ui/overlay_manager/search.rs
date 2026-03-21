@@ -1,0 +1,279 @@
+use super::theme::{self, Palette};
+use super::{App, FrameState, SearchHit, SearchScope, helpers};
+use ratatui::{
+    Frame,
+    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
+    style::{Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Clear, Paragraph},
+};
+
+pub(in crate::ui) fn render_search_overlay(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    state: &mut FrameState,
+    palette: Palette,
+) {
+    let popup_width = area.width.saturating_sub(8).clamp(48, 88);
+    let popup_height = area.height.saturating_sub(6).clamp(12, 22);
+    let popup = helpers::centered_rect(area, popup_width, popup_height);
+    state.search_panel = Some(popup);
+
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        helpers::panel_block(" Fuzzy Find ", palette.chrome_alt, palette),
+        popup,
+    );
+
+    let inner = helpers::inner_with_padding(popup);
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Min(4),
+            Constraint::Length(1),
+        ])
+        .split(inner);
+
+    let scope_label = app
+        .search_scope()
+        .map(|scope| scope.label())
+        .unwrap_or("Search");
+    let summary = if app.search_is_loading() {
+        "indexing…".to_string()
+    } else {
+        format!(
+            "{} results  •  {} indexed",
+            app.search_match_count(),
+            app.search_candidate_count()
+        )
+    };
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                scope_label,
+                Style::default()
+                    .fg(palette.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  current folder tree", Style::default().fg(palette.muted)),
+            Span::raw("  "),
+            helpers::chip_span(&summary, palette.accent_soft, palette.accent_text, true),
+        ]))
+        .style(Style::default().bg(palette.chrome_alt).fg(palette.text)),
+        rows[0],
+    );
+
+    frame.render_widget(
+        helpers::rounded_block(palette.path_bg, palette.border),
+        rows[1],
+    );
+    let query = if app.search_query().is_empty() {
+        match app.search_scope() {
+            Some(SearchScope::Folders) => "type to filter folders".to_string(),
+            Some(SearchScope::Files) => "type to filter files".to_string(),
+            None => "type to filter results".to_string(),
+        }
+    } else {
+        app.search_query().to_string()
+    };
+    let query_style = if app.search_query().is_empty() {
+        Style::default().fg(palette.muted)
+    } else {
+        Style::default()
+            .fg(palette.text)
+            .add_modifier(Modifier::BOLD)
+    };
+    let query_area = rows[1].inner(Margin {
+        horizontal: 2,
+        vertical: 1,
+    });
+    let (query_line, cursor_x) = if app.search_query().is_empty() {
+        (
+            Line::from(vec![
+                Span::styled("󰍉", Style::default().fg(palette.accent)),
+                Span::raw("  "),
+                Span::styled(query, query_style),
+            ]),
+            query_area.x.saturating_add(3),
+        )
+    } else {
+        render_query_line(
+            app.search_query(),
+            app.search_query_cursor(),
+            query_area.width,
+            query_area.x,
+            palette,
+        )
+    };
+    frame.render_widget(
+        Paragraph::new(query_line).style(Style::default().bg(palette.path_bg).fg(palette.text)),
+        query_area,
+    );
+    frame.set_cursor_position((cursor_x, query_area.y));
+
+    let results_area = rows[2];
+    let row_height = 2u16;
+    let visible_rows = (results_area.height / row_height).max(1) as usize;
+    state.search_rows_visible = visible_rows;
+
+    let rows_data = app.search_rows(visible_rows);
+    if app.search_is_loading() {
+        helpers::render_empty_state(
+            frame,
+            results_area,
+            "Indexing current folder tree…",
+            palette,
+        );
+    } else if let Some(error) = app.search_error() {
+        helpers::render_empty_state(
+            frame,
+            results_area,
+            &helpers::truncate_middle(error, results_area.width.saturating_sub(4) as usize),
+            palette,
+        );
+    } else if rows_data.is_empty() {
+        helpers::render_empty_state(
+            frame,
+            results_area,
+            app.search_scope()
+                .map(|scope| scope.empty_label())
+                .unwrap_or("No matches in this folder tree"),
+            palette,
+        );
+    } else {
+        for (offset, row) in rows_data.iter().enumerate() {
+            let rect = Rect {
+                x: results_area.x,
+                y: results_area.y + offset as u16 * row_height,
+                width: results_area.width,
+                height: row_height.min(
+                    results_area
+                        .height
+                        .saturating_sub(offset as u16 * row_height),
+                ),
+            };
+
+            let bg = if row.selected {
+                palette.selected_bg
+            } else {
+                palette.surface
+            };
+            frame.render_widget(Block::default().style(Style::default().bg(bg)), rect);
+            if row.selected {
+                frame.render_widget(
+                    Paragraph::new("▎").style(Style::default().bg(bg).fg(palette.selected_border)),
+                    Rect {
+                        x: rect.x,
+                        y: rect.y,
+                        width: 1,
+                        height: rect.height,
+                    },
+                );
+            }
+
+            let icon = theme::path_symbol(std::path::Path::new(&row.relative), row.is_dir);
+            let icon_color =
+                theme::path_color(std::path::Path::new(&row.relative), row.is_dir, palette);
+            let name_width = rect.width.saturating_sub(6) as usize;
+            let path_width = rect.width.saturating_sub(4) as usize;
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(icon, Style::default().fg(icon_color)),
+                    Span::raw("  "),
+                    Span::styled(
+                        helpers::clamp_label(&row.name, name_width.max(8)),
+                        Style::default()
+                            .fg(palette.text)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]))
+                .style(Style::default().bg(bg).fg(palette.text)),
+                Rect {
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width,
+                    height: 1,
+                },
+            );
+            if rect.height > 1 {
+                frame.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled(
+                            helpers::stable_path_label(
+                                std::path::Path::new(&row.relative),
+                                path_width.max(10),
+                            ),
+                            Style::default().fg(palette.muted),
+                        ),
+                    ]))
+                    .style(Style::default().bg(bg).fg(palette.muted)),
+                    Rect {
+                        x: rect.x,
+                        y: rect.y + 1,
+                        width: rect.width,
+                        height: 1,
+                    },
+                );
+            }
+
+            state.search_hits.push(SearchHit {
+                rect,
+                index: row.index,
+            });
+        }
+    }
+
+    frame.render_widget(
+        Paragraph::new("Enter open  Esc close  ↑↓ move")
+            .alignment(Alignment::Right)
+            .style(Style::default().bg(palette.chrome_alt).fg(palette.muted)),
+        rows[3],
+    );
+}
+
+fn render_query_line(
+    query: &str,
+    cursor: usize,
+    width: u16,
+    origin_x: u16,
+    palette: Palette,
+) -> (Line<'static>, u16) {
+    let chars = query.chars().collect::<Vec<_>>();
+    let cursor = cursor.min(chars.len());
+    let available = width.saturating_sub(3) as usize;
+
+    let mut start = 0usize;
+    if cursor > available {
+        start = cursor - available;
+    }
+    let mut visible = chars.iter().skip(start).take(available).collect::<String>();
+    if start > 0 && !visible.is_empty() {
+        visible.remove(0);
+        visible.insert(0, '…');
+    }
+
+    let visible_chars = visible.chars().collect::<Vec<_>>();
+    let visible_cursor = cursor.saturating_sub(start).min(visible_chars.len());
+
+    let mut spans = vec![
+        Span::styled("󰍉", Style::default().fg(palette.accent)),
+        Span::raw("  "),
+    ];
+    spans.push(Span::styled(
+        visible,
+        Style::default()
+            .fg(palette.text)
+            .add_modifier(Modifier::BOLD),
+    ));
+
+    let cursor_x = origin_x
+        .saturating_add(3)
+        .saturating_add(visible_cursor as u16)
+        .min(origin_x.saturating_add(width.saturating_sub(1)));
+    (Line::from(spans), cursor_x)
+}
