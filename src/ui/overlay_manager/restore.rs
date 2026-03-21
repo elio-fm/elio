@@ -1,5 +1,8 @@
-use super::theme::{self, Palette};
-use super::{App, FrameState, helpers};
+use crate::app::{App, FrameState};
+use crate::ui::{
+    helpers,
+    theme::{self, Palette},
+};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Margin, Rect},
@@ -8,7 +11,7 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-pub(in crate::ui) fn render_restore_overlay(
+pub(super) fn render_restore_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,

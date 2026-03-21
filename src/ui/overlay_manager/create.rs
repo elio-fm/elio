@@ -1,5 +1,9 @@
-use super::theme::{self, Palette};
-use super::{App, FrameState, compute_create_scroll_top, helpers};
+use super::compute_scroll_top;
+use crate::app::{App, FrameState};
+use crate::ui::{
+    helpers,
+    theme::{self, Palette},
+};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
@@ -8,7 +12,7 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-pub(in crate::ui) fn render_create_overlay(
+pub(super) fn render_create_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
@@ -76,7 +80,7 @@ pub(in crate::ui) fn render_create_overlay(
 
     let cursor_line = app.create_cursor_line();
     let cursor_col = app.create_cursor_col();
-    let scroll_top = compute_create_scroll_top(cursor_line, line_count, visible_lines as usize);
+    let scroll_top = compute_scroll_top(cursor_line, visible_lines as usize);
     state.create_list_area = Some(list_area);
     state.create_scroll_top = scroll_top;
 

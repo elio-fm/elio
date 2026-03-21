@@ -1,5 +1,8 @@
-use super::theme::{self, Palette};
-use super::{App, FrameState, SearchHit, SearchScope, helpers};
+use crate::app::{App, FrameState, SearchHit, SearchScope};
+use crate::ui::{
+    helpers,
+    theme::{self, Palette},
+};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
@@ -8,7 +11,7 @@ use ratatui::{
     widgets::{Block, Clear, Paragraph},
 };
 
-pub(in crate::ui) fn render_search_overlay(
+pub(super) fn render_search_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
