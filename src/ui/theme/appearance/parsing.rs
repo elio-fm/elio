@@ -1,5 +1,5 @@
 use super::{
-    default_class_style, rgb, rule_class,
+    rules::{default_class_style, normalize_key, rgb, rule_class},
     types::{CodePreviewPalette, Palette, PreviewTheme, RuleOverride, Theme},
 };
 use crate::app::FileClass;
@@ -257,10 +257,6 @@ pub(super) fn parse_class_name(name: &str) -> Option<FileClass> {
         "file" | "plain" => Some(FileClass::File),
         _ => None,
     }
-}
-
-pub(super) fn normalize_key(value: &str) -> String {
-    value.trim().to_ascii_lowercase()
 }
 
 pub(super) fn parse_color(value: &str) -> anyhow::Result<Color> {
