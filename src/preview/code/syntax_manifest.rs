@@ -1,17 +1,17 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SyntaxSource {
+pub(crate) enum SyntaxSource {
     BundledDefault,
     Vendored,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CuratedSyntax {
+pub(crate) struct CuratedSyntax {
     pub canonical_id: &'static str,
     pub lookup_token: &'static str,
     pub source: SyntaxSource,
 }
 
-pub const CURATED_SYNTAXES: &[CuratedSyntax] = &[
+pub(crate) const CURATED_SYNTAXES: &[CuratedSyntax] = &[
     CuratedSyntax {
         canonical_id: "html",
         lookup_token: "html",
@@ -260,7 +260,7 @@ pub const CURATED_SYNTAXES: &[CuratedSyntax] = &[
 ];
 
 #[allow(dead_code)]
-pub fn curated_syntax(code_syntax: &str) -> Option<&'static CuratedSyntax> {
+pub(crate) fn curated_syntax(code_syntax: &str) -> Option<&'static CuratedSyntax> {
     CURATED_SYNTAXES
         .iter()
         .find(|syntax| syntax.canonical_id == code_syntax)

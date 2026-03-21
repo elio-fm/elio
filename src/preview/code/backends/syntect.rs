@@ -1,8 +1,8 @@
 #[cfg(test)]
-use super::syntect_manifest::CURATED_SYNTAXES;
+use crate::preview::code::syntax_manifest::CURATED_SYNTAXES;
 #[cfg(test)]
-use super::syntect_manifest::CuratedSyntax;
-use super::syntect_manifest::curated_syntax;
+use crate::preview::code::syntax_manifest::CuratedSyntax;
+use crate::preview::code::syntax_manifest::curated_syntax;
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},

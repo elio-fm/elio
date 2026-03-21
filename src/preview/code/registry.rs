@@ -684,7 +684,7 @@ fn is_env_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::preview::code::backends::syntect_manifest::CURATED_SYNTAXES;
+    use crate::preview::code::syntax_manifest::CURATED_SYNTAXES;
 
     fn assert_registered_language(
         language: Option<RegisteredLanguage>,
