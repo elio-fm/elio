@@ -1,8 +1,15 @@
 mod geometry;
 mod pipeline;
+mod session;
+mod types;
 
 use self::geometry::fit_pdf_page;
 pub(crate) use self::pipeline::{probe_pdf_page, render_pdf_page_to_cache};
+pub(in crate::app::overlays::pdf) use self::types::{
+    DisplayedPdfPreview, FittedPdfPlacement, PdfDocumentKey, PdfOverlayRequest, PdfPageDimensions,
+    PdfPageKey, PdfRenderKey, PdfSession,
+};
+pub(in crate::app) use self::types::{PdfPreviewState, PdfProbeResult};
 #[cfg(test)]
 use self::{
     geometry::bucket_render_dimensions,
@@ -19,17 +26,16 @@ use super::inline_image::{
     build_kitty_upload_sequence, fallback_window_size_pixels, parse_window_size,
     select_image_protocol,
 };
-use crate::file_info::{self, DocumentFormat};
 use anyhow::{Context, Result};
 #[cfg(test)]
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use ratatui::layout::Rect;
+#[cfg(test)]
+use std::time::Instant;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
     fs,
-    hash::Hash,
     path::{Path, PathBuf},
-    time::{Duration, Instant, SystemTime},
+    time::Duration,
 };
 
 const PDF_RENDER_CACHE_LIMIT: usize = 12;
@@ -46,125 +52,7 @@ const PDF_SELECTION_ACTIVATION_DELAY: Duration = Duration::from_millis(16);
 #[cfg(test)]
 mod tests;
 
-#[derive(Clone, Debug, Default)]
-pub(in crate::app) struct PdfPreviewState {
-    pub(super) pdf_tools_available: bool,
-    session: Option<PdfSession>,
-    document_page_counts: HashMap<PdfDocumentKey, usize>,
-    page_dimensions: HashMap<PdfPageKey, PdfPageDimensions>,
-    pending_page_probes: HashSet<PdfPageKey>,
-    failed_page_probes: HashSet<PdfPageKey>,
-    rendered_pages: HashMap<PdfRenderKey, PathBuf>,
-    rendered_page_dimensions: HashMap<PdfRenderKey, RenderedImageDimensions>,
-    render_order: VecDeque<PdfRenderKey>,
-    pending_renders: HashSet<PdfRenderKey>,
-    failed_renders: HashSet<PdfRenderKey>,
-    displayed: Option<DisplayedPdfPreview>,
-    displayed_excluded: Vec<Rect>,
-    activation_ready_at: Option<Instant>,
-    last_navigation_direction: isize,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct PdfSession {
-    path: PathBuf,
-    size: u64,
-    modified: Option<SystemTime>,
-    current_page: usize,
-    total_pages: Option<usize>,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct PdfDocumentKey {
-    path: PathBuf,
-    size: u64,
-    modified: Option<SystemTime>,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct PdfPageKey {
-    path: PathBuf,
-    size: u64,
-    modified: Option<SystemTime>,
-    page: usize,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct PdfPageDimensions {
-    width_pts: f32,
-    height_pts: f32,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct PdfRenderKey {
-    path: PathBuf,
-    size: u64,
-    modified: Option<SystemTime>,
-    page: usize,
-    width_px: u32,
-    height_px: u32,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DisplayedPdfPreview {
-    path: PathBuf,
-    size: u64,
-    modified: Option<SystemTime>,
-    page: usize,
-    area: Rect,
-    render_width_px: u32,
-    render_height_px: u32,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct PdfOverlayRequest {
-    path: PathBuf,
-    size: u64,
-    modified: Option<SystemTime>,
-    page: usize,
-    area: Rect,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-struct FittedPdfPlacement {
-    image_area: Rect,
-    render_width_px: u32,
-    render_height_px: u32,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub(in crate::app) struct PdfProbeResult {
-    pub total_pages: Option<usize>,
-    pub width_pts: Option<f32>,
-    pub height_pts: Option<f32>,
-}
-
 impl App {
-    pub(in crate::app) fn handle_pdf_overlay_resize(&mut self) {
-        if self.pdf_preview.session.is_some() {
-            self.pdf_preview.activation_ready_at = None;
-            self.refresh_pdf_prefetch_window();
-        }
-    }
-
-    pub(crate) fn process_pdf_preview_timers(&mut self) -> bool {
-        let Some(ready_at) = self.pdf_preview.activation_ready_at else {
-            return false;
-        };
-        if Instant::now() < ready_at {
-            return false;
-        }
-
-        self.pdf_preview.activation_ready_at = None;
-        self.pdf_preview.session.is_some()
-    }
-
-    pub(crate) fn pending_pdf_preview_timer(&self) -> Option<Duration> {
-        self.pdf_preview
-            .activation_ready_at
-            .map(|ready_at| ready_at.saturating_duration_since(Instant::now()))
-    }
-
     pub(in crate::app) fn present_pdf_overlay(
         &mut self,
         protocol: ImageProtocol,
@@ -298,110 +186,6 @@ impl App {
         None
     }
 
-    pub(in crate::app) fn pdf_preview_header_detail(&self) -> Option<String> {
-        let session = self.pdf_preview.session.as_ref()?;
-        if !self.terminal_image_overlay_available() {
-            return None;
-        }
-
-        let page_label = match session.total_pages {
-            Some(total_pages) => format!("Page {}/{}", session.current_page, total_pages),
-            None => format!("Page {}", session.current_page),
-        };
-        Some(page_label)
-    }
-
-    pub(in crate::app) fn step_pdf_page(&mut self, delta: isize) -> bool {
-        let Some(session) = &mut self.pdf_preview.session else {
-            return false;
-        };
-
-        let previous_page = session.current_page;
-        let next_page = if delta.is_negative() {
-            session.current_page.saturating_sub(delta.unsigned_abs())
-        } else {
-            session.current_page.saturating_add(delta as usize)
-        };
-
-        let max_page = session.total_pages.unwrap_or(next_page.max(PDF_PAGE_MIN));
-        session.current_page = next_page.clamp(PDF_PAGE_MIN, max_page.max(PDF_PAGE_MIN));
-        let changed = session.current_page != previous_page;
-        if changed {
-            self.pdf_preview.last_navigation_direction = delta.signum();
-            self.pdf_preview.activation_ready_at = None;
-            self.refresh_pdf_prefetch_window();
-        }
-        changed
-    }
-
-    pub(in crate::app) fn sync_pdf_preview_selection(&mut self) {
-        self.clear_failed_static_image_state_if_needed();
-        if !self.terminal_image_overlay_available() || !self.pdf_preview.pdf_tools_available {
-            self.pdf_preview.session = None;
-            self.pdf_preview.activation_ready_at = None;
-            self.clear_pending_pdf_work();
-            self.clear_pdf_page_status();
-            return;
-        }
-
-        let Some(entry) = self.selected_entry() else {
-            self.pdf_preview.session = None;
-            self.pdf_preview.activation_ready_at = None;
-            self.clear_pending_pdf_work();
-            self.clear_pdf_page_status();
-            return;
-        };
-        if !is_pdf_entry(entry) {
-            self.pdf_preview.session = None;
-            self.pdf_preview.activation_ready_at = None;
-            self.clear_pending_pdf_work();
-            self.clear_pdf_page_status();
-            return;
-        }
-
-        let should_keep_session = self.pdf_preview.session.as_ref().is_some_and(|session| {
-            session.path == entry.path
-                && session.size == entry.size
-                && session.modified == entry.modified
-        });
-        if should_keep_session {
-            return;
-        }
-
-        self.pdf_preview.session = Some(PdfSession {
-            path: entry.path.clone(),
-            size: entry.size,
-            modified: entry.modified,
-            current_page: PDF_PAGE_MIN,
-            total_pages: self.cached_pdf_total_pages(entry),
-        });
-        self.pdf_preview.last_navigation_direction = 0;
-        self.pdf_preview.activation_ready_at =
-            Some(Instant::now() + PDF_SELECTION_ACTIVATION_DELAY);
-        self.refresh_pdf_prefetch_window();
-        self.clear_pdf_page_status();
-    }
-
-    fn active_pdf_overlay_request(&self) -> Option<PdfOverlayRequest> {
-        if !self.terminal_image_overlay_available() {
-            return None;
-        }
-
-        let session = self.pdf_preview.session.as_ref()?;
-        let area = self.frame_state.preview_content_area?;
-        if area.width == 0 || area.height == 0 {
-            return None;
-        }
-
-        Some(PdfOverlayRequest {
-            path: session.path.clone(),
-            size: session.size,
-            modified: session.modified,
-            page: session.current_page,
-            area,
-        })
-    }
-
     fn ensure_pdf_render(&mut self, key: &PdfRenderKey) -> Option<PathBuf> {
         if let Some(path) = self.cached_pdf_render_path(key) {
             return Some(path);
@@ -453,135 +237,6 @@ impl App {
         }
         self.pdf_preview.pending_page_probes.insert(key);
         None
-    }
-
-    pub(in crate::app) fn apply_pdf_probe_build(&mut self, build: jobs::PdfProbeBuild) -> bool {
-        let key = PdfPageKey {
-            path: build.path.clone(),
-            size: build.size,
-            modified: build.modified,
-            page: build.page,
-        };
-        self.pdf_preview.pending_page_probes.remove(&key);
-
-        let current_request = self.active_pdf_overlay_request();
-        let current_key = current_request.as_ref().map(PdfPageKey::from_request);
-        let is_current_key = current_key.as_ref() == Some(&key);
-        let current_document = self
-            .pdf_preview
-            .session
-            .as_ref()
-            .map(PdfDocumentKey::from_session);
-
-        match build.result {
-            Ok(result) => {
-                self.pdf_preview.failed_page_probes.remove(&key);
-                let mut dirty = current_key.as_ref() == Some(&key);
-                if let Some(total_pages) = result.total_pages {
-                    let document_key = PdfDocumentKey::from_page_key(&key);
-                    self.pdf_preview
-                        .document_page_counts
-                        .insert(document_key.clone(), total_pages);
-                    if current_document.as_ref() == Some(&document_key)
-                        && let Some(session) = &mut self.pdf_preview.session
-                    {
-                        let previous_total = session.total_pages;
-                        session.total_pages = Some(total_pages);
-                        let clamped_page = session
-                            .current_page
-                            .clamp(PDF_PAGE_MIN, total_pages.max(PDF_PAGE_MIN));
-                        if clamped_page != session.current_page {
-                            session.current_page = clamped_page;
-                            self.pdf_preview.activation_ready_at = Some(Instant::now());
-                            dirty = true;
-                        }
-                        if previous_total != session.total_pages {
-                            dirty = true;
-                        }
-                    }
-                }
-                if let (Some(width_pts), Some(height_pts)) = (result.width_pts, result.height_pts) {
-                    self.pdf_preview.page_dimensions.insert(
-                        key.clone(),
-                        PdfPageDimensions {
-                            width_pts,
-                            height_pts,
-                        },
-                    );
-                    dirty |= current_key.as_ref() == Some(&key);
-                }
-                self.refresh_pdf_prefetch_window();
-                dirty
-            }
-            Err(_) => {
-                self.pdf_preview.failed_page_probes.insert(key);
-                if is_current_key {
-                    self.refresh_preview();
-                    true
-                } else {
-                    false
-                }
-            }
-        }
-    }
-
-    pub(in crate::app) fn apply_pdf_render_build(&mut self, build: jobs::PdfRenderBuild) -> bool {
-        let key = PdfRenderKey {
-            path: build.path.clone(),
-            size: build.size,
-            modified: build.modified,
-            page: build.page,
-            width_px: build.width_px,
-            height_px: build.height_px,
-        };
-        self.pdf_preview.pending_renders.remove(&key);
-        let is_current_key = self
-            .active_pdf_render_key()
-            .as_ref()
-            .is_some_and(|active| active == &key);
-
-        match build.result {
-            Ok(Some(path)) => {
-                self.pdf_preview.failed_renders.remove(&key);
-                let image_dimensions = read_png_dimensions(&path);
-                self.remember_rendered_pdf(key.clone(), path, image_dimensions);
-                let dirty = is_current_key;
-                self.refresh_pdf_prefetch_window();
-                dirty
-            }
-            Ok(None) | Err(_) => {
-                self.pdf_preview.failed_renders.insert(key);
-                if is_current_key {
-                    self.refresh_preview();
-                    true
-                } else {
-                    false
-                }
-            }
-        }
-    }
-
-    fn clear_pdf_page_status(&mut self) {
-        if self.status.starts_with(PDF_PAGE_STATUS_PREFIX) {
-            self.status.clear();
-        }
-    }
-
-    fn cached_pdf_total_pages(&self, entry: &Entry) -> Option<usize> {
-        self.pdf_preview
-            .document_page_counts
-            .get(&PdfDocumentKey::from_entry(entry))
-            .copied()
-    }
-
-    fn pdf_selection_activation_ready(&self) -> bool {
-        self.pdf_preview
-            .activation_ready_at
-            .is_none_or(|ready_at| Instant::now() >= ready_at)
-    }
-
-    pub(in crate::app) fn should_defer_pdf_document_preview(&self, entry: &Entry) -> bool {
-        is_pdf_entry(entry) && self.preview_prefers_pdf_surface()
     }
 
     fn overlay_placement_for_request(
@@ -677,12 +332,6 @@ impl App {
         let request = self.active_pdf_overlay_request()?;
         let placement = self.overlay_placement_for_request(&request)?;
         Some(self.pdf_render_key_from_request(&request, placement))
-    }
-
-    fn clear_pending_pdf_work(&mut self) {
-        self.pdf_preview.pending_page_probes.clear();
-        self.pdf_preview.pending_renders.clear();
-        self.scheduler.clear_pending_pdf_jobs();
     }
 
     fn resolved_pdf_display_placement(
@@ -1040,75 +689,4 @@ impl App {
     ) -> PdfRenderKey {
         PdfRenderKey::from_request(request, placement)
     }
-}
-
-impl PdfRenderKey {
-    fn from_request(request: &PdfOverlayRequest, placement: FittedPdfPlacement) -> Self {
-        Self {
-            path: request.path.clone(),
-            size: request.size,
-            modified: request.modified,
-            page: request.page,
-            width_px: placement.render_width_px,
-            height_px: placement.render_height_px,
-        }
-    }
-}
-
-impl PdfPageKey {
-    fn from_request(request: &PdfOverlayRequest) -> Self {
-        Self {
-            path: request.path.clone(),
-            size: request.size,
-            modified: request.modified,
-            page: request.page,
-        }
-    }
-}
-
-impl DisplayedPdfPreview {
-    fn from_request(request: &PdfOverlayRequest, placement: FittedPdfPlacement) -> Self {
-        Self {
-            path: request.path.clone(),
-            size: request.size,
-            modified: request.modified,
-            page: request.page,
-            area: request.area,
-            render_width_px: placement.render_width_px,
-            render_height_px: placement.render_height_px,
-        }
-    }
-}
-
-impl PdfDocumentKey {
-    fn from_entry(entry: &Entry) -> Self {
-        Self {
-            path: entry.path.clone(),
-            size: entry.size,
-            modified: entry.modified,
-        }
-    }
-
-    fn from_page_key(key: &PdfPageKey) -> Self {
-        Self {
-            path: key.path.clone(),
-            size: key.size,
-            modified: key.modified,
-        }
-    }
-
-    fn from_session(session: &PdfSession) -> Self {
-        Self {
-            path: session.path.clone(),
-            size: session.size,
-            modified: session.modified,
-        }
-    }
-}
-
-fn is_pdf_entry(entry: &Entry) -> bool {
-    file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified)
-        .preview
-        .document_format
-        == Some(DocumentFormat::Pdf)
 }
