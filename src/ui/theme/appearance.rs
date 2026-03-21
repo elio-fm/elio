@@ -1933,6 +1933,8 @@ macro = "#fedcba"
         .expect("catppuccin-mocha theme should parse");
 
         assert_eq!(theme.palette.bg, rgb(0x1e, 0x1e, 0x2e));
+        assert_eq!(theme.palette.selected_bg, rgb(0x45, 0x47, 0x5a));
+        assert_ne!(theme.palette.selected_bg, theme.palette.surface);
         assert_eq!(theme.preview.code.keyword, rgb(0xcb, 0xa6, 0xf7));
         assert_eq!(theme.preview.code.function, rgb(0x89, 0xb4, 0xfa));
         assert_eq!(theme.preview.code.string, rgb(0xa6, 0xe3, 0xa1));
