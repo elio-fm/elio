@@ -188,6 +188,11 @@ pub const CURATED_SYNTAXES: &[CuratedSyntax] = &[
         source: SyntaxSource::Vendored,
     },
     CuratedSyntax {
+        canonical_id: "cobol",
+        lookup_token: "cobol",
+        source: SyntaxSource::Vendored,
+    },
+    CuratedSyntax {
         canonical_id: "clojure",
         lookup_token: "clj",
         source: SyntaxSource::BundledDefault,

@@ -1,0 +1,60 @@
+%YAML 1.2
+---
+name: COBOL
+file_extensions:
+  - cbl
+  - cob
+  - cobol
+  - cpy
+scope: source.cobol
+variables:
+  identifier: '[A-Za-z][A-Za-z0-9-]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - include: strings
+    - match: '(?i)\b(?:identification|environment|data|procedure|division|section|paragraph|program-id|author|date-written|working-storage|local-storage|linkage|file|configuration|input-output)\b'
+      scope: keyword.control.cobol
+    - match: '(?i)\b(?:move|add|subtract|multiply|divide|compute|perform|call|if|else|end-if|evaluate|when|end-evaluate|read|write|rewrite|open|close|accept|display|stop|run|goback|initialize|inspect|string|unstring|search|set|sort|merge|continue|exit)\b'
+      scope: keyword.control.cobol
+    - match: '(?i)\b(?:pic|picture|value|values|occurs|depending|redefines|indexed|by|ascending|descending|key|usage|comp|comp-1|comp-2|comp-3|binary|packed-decimal|sign|separate|leading|trailing)\b'
+      scope: storage.modifier.cobol
+    - match: '(?i)\b(?:fd|sd|01|05|10|15|20|30|40|49|66|77|88)\b'
+      scope: support.type.cobol
+    - match: '(?i)\b(?:x|a|9|s9|v9)\b'
+      scope: support.constant.cobol
+    - match: '(?i)\b{{identifier}}\b(?=\s*\.)'
+      scope: entity.name.function.cobol
+    - match: '(?i)\b{{identifier}}\b(?=\s+pic\b|\s+picture\b|\s+value\b|\s+occurs\b|\s+redefines\b)'
+      scope: variable.other.readwrite.assignment.cobol
+    - match: '\b\d+\b'
+      scope: constant.numeric.cobol
+    - match: '[=+\-*/<>(),.:]+'
+      scope: keyword.operator.cobol
+  comments:
+    - match: '^\s{0,6}\*.*$'
+      scope: comment.line.asterisk.cobol
+    - match: '^\s{0,6}/.*$'
+      scope: comment.line.slash.cobol
+    - match: '^\s{0,6}>>.*$'
+      scope: meta.preprocessor.cobol
+    - match: '^\s*>.*$'
+      scope: comment.line.greater-than.cobol
+  strings:
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.cobol
+    - match: '""'
+      scope: constant.character.escape.cobol
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.cobol
+    - match: "''"
+      scope: constant.character.escape.cobol
+    - match: "'"
+      pop: true

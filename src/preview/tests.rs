@@ -3468,6 +3468,12 @@ fn curated_syntect_languages_render_with_theme_colors() {
             "program",
         ),
         (
+            "ledger.cbl",
+            "       IDENTIFICATION DIVISION.\n       PROGRAM-ID. ELIOTEST.\n       PROCEDURE DIVISION.\n           DISPLAY \"HELLO\".\n",
+            "COBOL",
+            "IDENTIFICATION",
+        ),
+        (
             "main.zig",
             "const std = @import(\"std\");\npub fn main() void {}\n",
             "Zig",

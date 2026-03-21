@@ -985,6 +985,23 @@ mod tests {
     }
 
     #[test]
+    fn cobol_support_renders_through_curated_syntect_bundle() {
+        let rendered = render_syntect_code_preview(
+            "cobol",
+            "       IDENTIFICATION DIVISION.\n       PROGRAM-ID. ELIOTEST.\n       PROCEDURE DIVISION.\n           DISPLAY \"HELLO\".\n           STOP RUN.\n",
+            true,
+            20,
+            &|| false,
+        )
+        .expect("cobol syntax should render through syntect");
+
+        assert_eq!(
+            span_color(&rendered[0], "IDENTIFICATION"),
+            Some(theme::code_preview_palette().keyword)
+        );
+    }
+
+    #[test]
     fn unsupported_syntaxes_return_errors_for_safe_fallback() {
         for code_syntax in ["ziggy", "brainfuck", "totally-unknown-syntax"] {
             assert!(
@@ -1067,6 +1084,10 @@ mod tests {
             (
                 "fortran",
                 "program elio\n  implicit none\n  print *, \"hello\"\nend program elio\n",
+            ),
+            (
+                "cobol",
+                "       IDENTIFICATION DIVISION.\n       PROGRAM-ID. ELIOTEST.\n       PROCEDURE DIVISION.\n           DISPLAY \"HELLO\".\n           STOP RUN.\n",
             ),
             ("julia", "function greet(name)\n  return name\nend\n"),
             ("just", "build:\n  cargo test\n"),

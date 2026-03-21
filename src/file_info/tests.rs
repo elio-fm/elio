@@ -300,6 +300,8 @@ fn curated_generic_languages_use_syntect_preview_support() {
     let dart = inspect_path(Path::new("main.dart"), EntryKind::File);
     let fortran = inspect_path(Path::new("solver.f90"), EntryKind::File);
     let fortran_pp = inspect_path(Path::new("solver.fpp"), EntryKind::File);
+    let cobol = inspect_path(Path::new("ledger.cbl"), EntryKind::File);
+    let cobol_copybook = inspect_path(Path::new("customer.cpy"), EntryKind::File);
     let zig = inspect_path(Path::new("main.zig"), EntryKind::File);
     let swift = inspect_path(Path::new("main.swift"), EntryKind::File);
     let kotlin = inspect_path(Path::new("main.kts"), EntryKind::File);
@@ -375,6 +377,14 @@ fn curated_generic_languages_use_syntect_preview_support() {
         Some("Fortran preprocessor source file")
     );
     assert_code_spec(fortran_pp.preview, Some("fortran"), CodeBackend::Syntect);
+
+    assert_eq!(cobol.builtin_class, FileClass::Code);
+    assert_eq!(cobol.specific_type_label, Some("COBOL source file"));
+    assert_code_spec(cobol.preview, Some("cobol"), CodeBackend::Syntect);
+
+    assert_eq!(cobol_copybook.builtin_class, FileClass::Code);
+    assert_eq!(cobol_copybook.specific_type_label, Some("COBOL copybook"));
+    assert_code_spec(cobol_copybook.preview, Some("cobol"), CodeBackend::Syntect);
 
     assert_eq!(zig.builtin_class, FileClass::Code);
     assert_eq!(zig.specific_type_label, Some("Zig source file"));

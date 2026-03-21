@@ -607,6 +607,38 @@ impl Theme {
                     color: Some(rgb(115, 79, 150)),
                 },
             ),
+            (
+                "cbl".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(0, 92, 165)),
+                },
+            ),
+            (
+                "cob".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(0, 92, 165)),
+                },
+            ),
+            (
+                "cobol".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(0, 92, 165)),
+                },
+            ),
+            (
+                "cpy".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Code),
+                    icon: Some("".to_string()),
+                    color: Some(rgb(0, 92, 165)),
+                },
+            ),
             ("java".to_string(), rule_class(FileClass::Code)),
             ("lua".to_string(), rule_class(FileClass::Code)),
             ("php".to_string(), rule_class(FileClass::Code)),
@@ -2163,6 +2195,16 @@ macro = "#fedcba"
         assert_eq!(fortran_pp.icon, "󱈚");
         assert_eq!(fortran_pp.color, rgb(115, 79, 150));
 
+        let cobol = theme.resolve(Path::new("ledger.cbl"), EntryKind::File);
+        assert_eq!(cobol.class, FileClass::Code);
+        assert_eq!(cobol.icon, "");
+        assert_eq!(cobol.color, rgb(0, 92, 165));
+
+        let cobol_copybook = theme.resolve(Path::new("customer.cpy"), EntryKind::File);
+        assert_eq!(cobol_copybook.class, FileClass::Code);
+        assert_eq!(cobol_copybook.icon, "");
+        assert_eq!(cobol_copybook.color, rgb(0, 92, 165));
+
         let elixir = theme.resolve(Path::new("main.ex"), EntryKind::File);
         assert_eq!(elixir.class, FileClass::Code);
         assert_eq!(elixir.icon, "");
@@ -2287,6 +2329,10 @@ macro = "#fedcba"
         let fortran = theme.resolve(Path::new("solver.f90"), EntryKind::File);
         assert_eq!(fortran.class, FileClass::Code);
         assert_eq!(fortran.icon, "󱈚");
+
+        let cobol = theme.resolve(Path::new("ledger.cbl"), EntryKind::File);
+        assert_eq!(cobol.class, FileClass::Code);
+        assert_eq!(cobol.icon, "");
     }
 
     #[test]

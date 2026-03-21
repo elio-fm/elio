@@ -315,6 +315,14 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             }),
             preview: preview_for_extension(ext),
         },
+        "cbl" | "cob" | "cobol" | "cpy" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some(match ext {
+                "cpy" => "COBOL copybook",
+                _ => "COBOL source file",
+            }),
+            preview: preview_for_extension(ext),
+        },
         "zig" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("Zig source file"),

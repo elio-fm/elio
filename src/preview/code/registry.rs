@@ -499,6 +499,14 @@ const LANGUAGES: &[RegistryEntry] = &[
         markdown_fences: &["fortran", "f90", "f95", "f03", "f08"],
     },
     RegistryEntry {
+        language: language("cobol", "COBOL", CodeBackend::Syntect, None),
+        extensions: &["cbl", "cob", "cobol", "cpy"],
+        exact_filenames: &[],
+        shebang_interpreters: &[],
+        modelines: &["cobol", "cbl", "cob", "cpy"],
+        markdown_fences: &["cobol", "cbl", "cob", "cpy"],
+    },
+    RegistryEntry {
         language: language("clojure", "Clojure", CodeBackend::Syntect, None),
         extensions: &["clj", "cljs", "cljc", "edn"],
         exact_filenames: &["project.clj", "deps.edn", "bb.edn", "shadow-cljs.edn"],
@@ -731,6 +739,10 @@ mod tests {
             Some("fortran")
         );
         assert_eq!(
+            language_for_extension("cpy").map(|language| language.canonical_id),
+            Some("cobol")
+        );
+        assert_eq!(
             language_for_extension("cljc").map(|language| language.canonical_id),
             Some("clojure")
         );
@@ -831,6 +843,10 @@ mod tests {
             Some("fortran")
         );
         assert_eq!(
+            language_for_modeline("cobol").map(|language| language.canonical_id),
+            Some("cobol")
+        );
+        assert_eq!(
             language_for_modeline("cljs").map(|language| language.canonical_id),
             Some("clojure")
         );
@@ -873,6 +889,10 @@ mod tests {
         assert_eq!(
             language_for_markdown_fence("f90").map(|language| language.canonical_id),
             Some("fortran")
+        );
+        assert_eq!(
+            language_for_markdown_fence("cob").map(|language| language.canonical_id),
+            Some("cobol")
         );
         assert_eq!(
             language_for_markdown_fence("clj").map(|language| language.canonical_id),
