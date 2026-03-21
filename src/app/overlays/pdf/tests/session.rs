@@ -88,6 +88,24 @@ fn process_pdf_preview_timers_releases_selection_activation_once() {
 }
 
 #[test]
+fn pdf_prefetch_pages_prefers_backward_order_after_reverse_navigation() {
+    let (mut app, root) = build_pdf_overlay_test_app("prefetch-backward-order");
+    let session = app
+        .pdf_preview
+        .session
+        .as_mut()
+        .expect("PDF session should exist");
+    session.current_page = 4;
+    session.total_pages = Some(6);
+    app.pdf_preview.last_navigation_direction = -1;
+
+    assert_eq!(app.pdf_prefetch_probe_pages(), vec![3, 2, 5]);
+    assert_eq!(app.pdf_prefetch_render_pages(), vec![3, 2, 5]);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn sync_pdf_preview_selection_reuses_cached_total_page_count() {
     let root = temp_root("cached-page-count");
     fs::create_dir_all(&root).expect("failed to create temp root");
@@ -318,6 +336,69 @@ fn step_pdf_page_queues_render_immediately_when_dimensions_are_cached() {
         .expect("overlay placement should be available");
     let render_key = PdfRenderKey::from_request(&active_request, placement);
     assert!(app.pdf_preview.pending_renders.contains(&render_key));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn handle_pdf_overlay_resize_prunes_stale_render_variant_and_queues_new_current_render() {
+    let (mut app, root) = build_pdf_overlay_test_app("resize-render-prune");
+    app.terminal_images.window = Some(TerminalWindowSize {
+        cells_width: 100,
+        cells_height: 50,
+        pixels_width: 1000,
+        pixels_height: 1000,
+    });
+    app.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 16,
+        height: 8,
+    });
+
+    let request = app
+        .active_pdf_overlay_request()
+        .expect("PDF overlay request should be available");
+    let page_key = PdfPageKey::from_request(&request);
+    app.pdf_preview.page_dimensions.insert(
+        page_key,
+        PdfPageDimensions {
+            width_pts: 612.0,
+            height_pts: 792.0,
+        },
+    );
+    let old_placement = app
+        .overlay_placement_for_request(&request)
+        .expect("original placement should be available");
+    let old_render_key = PdfRenderKey::from_request(&request, old_placement);
+    app.pdf_preview
+        .pending_renders
+        .insert(old_render_key.clone());
+
+    app.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 64,
+        height: 32,
+    });
+    app.handle_pdf_overlay_resize();
+
+    let resized_request = app
+        .active_pdf_overlay_request()
+        .expect("resized PDF overlay request should be available");
+    let resized_placement = app
+        .overlay_placement_for_request(&resized_request)
+        .expect("resized placement should be available");
+    let resized_render_key = PdfRenderKey::from_request(&resized_request, resized_placement);
+
+    assert_ne!(old_render_key, resized_render_key);
+    assert!(app.pdf_preview.activation_ready_at.is_none());
+    assert!(!app.pdf_preview.pending_renders.contains(&old_render_key));
+    assert!(
+        app.pdf_preview
+            .pending_renders
+            .contains(&resized_render_key)
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

@@ -57,6 +57,38 @@ fn apply_pdf_probe_build_updates_current_session_and_cached_dimensions() {
 }
 
 #[test]
+fn cached_pdf_render_path_drops_missing_files_from_cache() {
+    let (mut app, root) = build_pdf_overlay_test_app("missing-render-cache");
+    let key = PdfRenderKey {
+        path: root.join("demo.pdf"),
+        size: 128,
+        modified: None,
+        page: 1,
+        width_px: 704,
+        height_px: 960,
+    };
+    let missing_path = root.join("missing-render.png");
+    app.pdf_preview
+        .rendered_pages
+        .insert(key.clone(), missing_path.clone());
+    app.pdf_preview.rendered_page_dimensions.insert(
+        key.clone(),
+        RenderedImageDimensions {
+            width_px: 704,
+            height_px: 960,
+        },
+    );
+    app.pdf_preview.render_order.push_back(key.clone());
+
+    assert_eq!(app.cached_pdf_render_path(&key), None);
+    assert!(!app.pdf_preview.rendered_pages.contains_key(&key));
+    assert!(!app.pdf_preview.rendered_page_dimensions.contains_key(&key));
+    assert!(!app.pdf_preview.render_order.contains(&key));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn apply_pdf_probe_build_queues_render_for_current_page() {
     let (mut app, root) = build_pdf_overlay_test_app("probe-render-queue");
     let request = app
@@ -170,6 +202,53 @@ fn apply_pdf_probe_build_prefetches_adjacent_page_probes_once_total_is_known() {
         modified: request.modified,
         page: 4,
     }));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn remember_rendered_pdf_evicts_oldest_cached_page_when_limit_is_exceeded() {
+    let (mut app, root) = build_pdf_overlay_test_app("render-cache-eviction");
+    let first_key = PdfRenderKey {
+        path: root.join("demo.pdf"),
+        size: 128,
+        modified: None,
+        page: 1,
+        width_px: 704,
+        height_px: 960,
+    };
+    let first_path = root.join("page-1.png");
+
+    for page in 1..=(PDF_RENDER_CACHE_LIMIT + 1) {
+        let key = PdfRenderKey {
+            path: root.join("demo.pdf"),
+            size: 128,
+            modified: None,
+            page,
+            width_px: 704,
+            height_px: 960,
+        };
+        let rendered_path = root.join(format!("page-{page}.png"));
+        write_test_png(&rendered_path, 704, 960);
+        app.remember_rendered_pdf(
+            key,
+            rendered_path,
+            Some(RenderedImageDimensions {
+                width_px: 704,
+                height_px: 960,
+            }),
+        );
+    }
+
+    assert_eq!(app.pdf_preview.rendered_pages.len(), PDF_RENDER_CACHE_LIMIT);
+    assert_eq!(app.pdf_preview.render_order.len(), PDF_RENDER_CACHE_LIMIT);
+    assert!(!app.pdf_preview.rendered_pages.contains_key(&first_key));
+    assert!(
+        !app.pdf_preview
+            .rendered_page_dimensions
+            .contains_key(&first_key)
+    );
+    assert!(!first_path.exists());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
