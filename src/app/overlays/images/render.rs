@@ -165,20 +165,14 @@ pub(super) fn shrink_image_to_fit(
     }
 }
 
-pub(in crate::app) fn image_target_width_px(
-    area: Rect,
-    window_size: Option<TerminalWindowSize>,
-) -> u32 {
+pub(super) fn image_target_width_px(area: Rect, window_size: Option<TerminalWindowSize>) -> u32 {
     let (cell_width_px, _) = image_cell_pixels(window_size);
     (f32::from(area.width.max(1)) * cell_width_px)
         .round()
         .max(1.0) as u32
 }
 
-pub(in crate::app) fn image_target_height_px(
-    area: Rect,
-    window_size: Option<TerminalWindowSize>,
-) -> u32 {
+pub(super) fn image_target_height_px(area: Rect, window_size: Option<TerminalWindowSize>) -> u32 {
     let (_, cell_height_px) = image_cell_pixels(window_size);
     (f32::from(area.height.max(1)) * cell_height_px)
         .round()

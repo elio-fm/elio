@@ -4,9 +4,9 @@ use super::format::{
 use super::prepare::{
     static_image_can_prepare_inline, static_image_supports_iterm_source_passthrough,
 };
-use super::render::{image_target_height_px, image_target_width_px};
 use super::{
-    StaticImageKey, StaticImageOverlayMode, StaticImageOverlayRequest, static_image_detail_label,
+    StaticImageKey, StaticImageOverlayMode, StaticImageOverlayRequest, image_target_height_px,
+    image_target_width_px, static_image_detail_label,
 };
 use crate::app::overlays::inline_image::{ImageProtocol, command_exists};
 use crate::app::state::PreviewLoadState;

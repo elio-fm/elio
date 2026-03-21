@@ -1,3 +1,4 @@
+use super::StaticImageOverlayRequest;
 use crate::app::overlays::inline_image::RenderedImageDimensions;
 use crate::app::{Entry, EntryKind, jobs};
 use quick_xml::{Reader, events::Event};
@@ -39,14 +40,14 @@ pub(super) fn static_image_detail_label(entry: &Entry) -> Option<&'static str> {
     static_image_format_for_entry(entry).map(StaticImageFormat::detail_label)
 }
 
-pub(super) fn static_image_format_for_entry(entry: &Entry) -> Option<StaticImageFormat> {
+fn static_image_format_for_entry(entry: &Entry) -> Option<StaticImageFormat> {
     crate::file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified)
         .specific_type_label
         .and_then(StaticImageFormat::from_label)
 }
 
 pub(super) fn static_image_format_for_overlay_request(
-    request: &crate::app::overlays::images::StaticImageOverlayRequest,
+    request: &StaticImageOverlayRequest,
 ) -> Option<StaticImageFormat> {
     crate::file_info::inspect_path_cached(
         &request.path,
@@ -175,7 +176,7 @@ fn parse_exif_orientation(tiff: &[u8]) -> Option<u16> {
     None
 }
 
-pub(super) fn exif_orientation_swaps_dimensions(orientation: u16) -> bool {
+fn exif_orientation_swaps_dimensions(orientation: u16) -> bool {
     matches!(orientation, 5..=8)
 }
 
