@@ -1,4 +1,5 @@
 use super::*;
+use crate::preview::{PreviewContent, PreviewRequestOptions};
 
 impl App {
     pub(in crate::app) fn cached_preview_for(

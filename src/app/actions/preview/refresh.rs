@@ -1,4 +1,5 @@
 use super::*;
+use crate::preview::{PreviewContent, PreviewKind, loading_preview_for, preview_work_class};
 
 impl App {
     pub(in crate::app) fn refresh_preview(&mut self) {

@@ -6,14 +6,11 @@ mod refresh;
 mod request;
 
 use super::*;
-use crate::preview::{
-    PreviewContent, PreviewKind, PreviewRequestOptions, PreviewWorkClass, loading_preview_for,
-    preview_work_class, should_build_preview_in_background,
-};
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::preview::{PreviewContent, PreviewKind, PreviewRequestOptions};
     use std::{
         fs,
         path::PathBuf,

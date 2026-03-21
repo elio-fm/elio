@@ -1,5 +1,7 @@
 use super::*;
-use crate::preview::{MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT, default_code_preview_line_limit};
+use crate::preview::{
+    MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT, PreviewRequestOptions, default_code_preview_line_limit,
+};
 
 impl App {
     pub(in crate::app) fn current_preview_request_options(&self) -> PreviewRequestOptions {

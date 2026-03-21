@@ -1,4 +1,5 @@
 use super::*;
+use crate::preview::{PreviewWorkClass, preview_work_class, should_build_preview_in_background};
 
 impl App {
     pub(crate) fn process_preview_prefetch_timers(&mut self) -> bool {
