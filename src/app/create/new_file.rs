@@ -1,3 +1,4 @@
+use super::super::text_edit::char_to_byte;
 use super::validation::{ParsedCreateItem, parse_create_line, validate_parsed_item};
 use super::*;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
