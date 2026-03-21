@@ -1,4 +1,5 @@
 mod appearance;
+mod builtin_themes;
 
 use crate::app::Entry;
 use ratatui::style::Color;

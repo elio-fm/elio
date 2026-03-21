@@ -1,3 +1,4 @@
+use super::builtin_themes::DEFAULT_THEME_TOML;
 use crate::{
     app::{Entry, EntryKind, FileClass},
     config, file_info,
@@ -250,11 +251,7 @@ fn theme_path() -> Option<PathBuf> {
 
 impl Theme {
     fn default_theme() -> Self {
-        Self::apply_config_on(
-            Self::base_theme(),
-            include_str!("../../../examples/themes/default/theme.toml"),
-        )
-        .unwrap_or_else(|error| {
+        Self::apply_config_on(Self::base_theme(), DEFAULT_THEME_TOML).unwrap_or_else(|error| {
             eprintln!("elio: failed to load built-in default theme: {error}");
             Self::base_theme()
         })
@@ -1774,6 +1771,11 @@ mod tests {
         })
     }
 
+    fn load_built_in_default_theme_asset() -> Theme {
+        Theme::apply_config_on(Theme::base_theme(), DEFAULT_THEME_TOML)
+            .expect("built-in default theme asset should parse")
+    }
+
     fn assert_uses_normal_folder_color_for_generic_dev_directories(theme: &Theme, label: &str) {
         let normal_folder_color = theme
             .resolve(Path::new("projects"), EntryKind::Directory)
@@ -1789,6 +1791,47 @@ mod tests {
             assert_eq!(
                 resolved.color, normal_folder_color,
                 "{label}: {directory} should use the normal folder color",
+            );
+        }
+    }
+
+    #[test]
+    fn built_in_default_theme_asset_matches_runtime_default_theme() {
+        let built_in_asset = load_built_in_default_theme_asset();
+        let runtime_default = Theme::default_theme();
+
+        assert_eq!(built_in_asset.palette.bg, runtime_default.palette.bg);
+        assert_eq!(
+            built_in_asset.palette.selected_bg,
+            runtime_default.palette.selected_bg
+        );
+        assert_eq!(
+            built_in_asset.preview.code.keyword,
+            runtime_default.preview.code.keyword,
+        );
+        assert_eq!(
+            built_in_asset.preview.code.function,
+            runtime_default.preview.code.function,
+        );
+
+        for (path, kind) in [
+            ("projects", EntryKind::Directory),
+            ("Downloads", EntryKind::Directory),
+            ("Cargo.toml", EntryKind::File),
+            ("Cargo.lock", EntryKind::File),
+            ("README.md", EntryKind::File),
+            ("main.rs", EntryKind::File),
+        ] {
+            let built_in = built_in_asset.resolve(Path::new(path), kind);
+            let runtime = runtime_default.resolve(Path::new(path), kind);
+            assert_eq!(
+                built_in.class, runtime.class,
+                "{path} should keep its class"
+            );
+            assert_eq!(built_in.icon, runtime.icon, "{path} should keep its icon");
+            assert_eq!(
+                built_in.color, runtime.color,
+                "{path} should keep its color"
             );
         }
     }
@@ -2098,7 +2141,7 @@ macro = "#fedcba"
 
     #[test]
     fn built_in_default_theme_uses_normal_folder_color_for_generic_dev_directories() {
-        let theme = Theme::default_theme();
+        let theme = load_built_in_default_theme_asset();
         assert_uses_normal_folder_color_for_generic_dev_directories(&theme, "built-in default");
     }
 
