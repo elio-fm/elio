@@ -21,7 +21,7 @@ impl App {
             work_class,
             ffprobe_available: self.ffprobe_available(),
             ffmpeg_available: self.terminal_image_overlay_available()
-                && self.video_ffmpeg_available(),
+                && self.media_ffmpeg_available(),
         }
     }
 

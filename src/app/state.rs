@@ -252,7 +252,7 @@ pub(super) struct DirectoryViewMemory {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(super) struct VideoPreviewState {
+pub(super) struct MediaPreviewState {
     pub(super) ffprobe_available: Option<bool>,
     pub(super) ffmpeg_available: Option<bool>,
 }
@@ -347,7 +347,7 @@ pub struct App {
     pub(super) comic_preview: comic::ComicPreviewState,
     pub(super) epub_preview: epub::EpubPreviewState,
     pub(super) image_preview: images::ImagePreviewState,
-    pub(super) video_preview: VideoPreviewState,
+    pub(super) media_preview: MediaPreviewState,
     pub(super) pdf_preview: pdf::PdfPreviewState,
     pub(super) terminal_images: inline_image::TerminalImageState,
     pub(super) frame_state: FrameState,
@@ -425,7 +425,7 @@ impl App {
             comic_preview: comic::ComicPreviewState::default(),
             epub_preview: epub::EpubPreviewState::default(),
             image_preview: images::ImagePreviewState::default(),
-            video_preview: VideoPreviewState::default(),
+            media_preview: MediaPreviewState::default(),
             pdf_preview: pdf::PdfPreviewState::default(),
             terminal_images: inline_image::TerminalImageState::default(),
             frame_state: FrameState::default(),
@@ -490,26 +490,26 @@ impl App {
 
     pub(in crate::app) fn ffprobe_available(&mut self) -> bool {
         *self
-            .video_preview
+            .media_preview
             .ffprobe_available
             .get_or_insert_with(|| inline_image::command_exists("ffprobe"))
     }
 
-    pub(in crate::app) fn video_ffmpeg_available(&mut self) -> bool {
+    pub(in crate::app) fn media_ffmpeg_available(&mut self) -> bool {
         *self
-            .video_preview
+            .media_preview
             .ffmpeg_available
             .get_or_insert_with(|| inline_image::command_exists("ffmpeg"))
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn set_ffprobe_available_for_tests(&mut self, available: bool) {
-        self.video_preview.ffprobe_available = Some(available);
+    pub(in crate::app) fn set_media_ffprobe_available_for_tests(&mut self, available: bool) {
+        self.media_preview.ffprobe_available = Some(available);
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn set_video_ffmpeg_available_for_tests(&mut self, available: bool) {
-        self.video_preview.ffmpeg_available = Some(available);
+    pub(in crate::app) fn set_media_ffmpeg_available_for_tests(&mut self, available: bool) {
+        self.media_preview.ffmpeg_available = Some(available);
     }
 }
 
