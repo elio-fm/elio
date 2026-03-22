@@ -1234,4 +1234,72 @@ Packed Size = 40
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
+
+    #[test]
+    fn parse_7z_listing_collects_external_fallback_metadata_and_entries() {
+        let output = r#"
+Path = app.AppImage
+Type = SquashFS
+Physical Size = 12345
+Comment = portable build
+
+----------
+Path = AppRun
+Folder = -
+Size = 12
+Packed Size = 10
+
+Path = usr/bin/elio
+Folder = -
+Size = 52
+Packed Size = 20
+
+Path = usr/share/icons
+Folder = +
+Size = 0
+Packed Size = 0
+"#;
+
+        let (metadata, entries) =
+            parse_7z_listing(output).expect("7z listing should parse archive metadata");
+
+        assert_eq!(metadata.format_label.as_deref(), Some("SquashFS"));
+        assert_eq!(metadata.physical_size, Some(12_345));
+        assert_eq!(metadata.comment.as_deref(), Some("portable build"));
+        assert_eq!(metadata.unpacked_size, Some(64));
+        assert_eq!(metadata.compressed_size, Some(30));
+        assert_eq!(entries.len(), 3);
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "AppRun" && !entry.is_dir)
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "usr/bin/elio" && !entry.is_dir)
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "usr/share/icons" && entry.is_dir)
+        );
+    }
+
+    #[test]
+    fn parse_zip_manifest_supports_bundle_fallback_and_continuations() {
+        let manifest = parse_zip_manifest(concat!(
+            "Bundle-Name: Elio Runtime\n",
+            "Bundle-Version: 2.0.0\n",
+            "Main-Class: io.elio.Main\n",
+            "Automatic-Module-Name: io.elio.\n",
+            " core\n",
+        ));
+
+        assert_eq!(manifest.title.as_deref(), Some("Elio Runtime"));
+        assert_eq!(manifest.version.as_deref(), Some("2.0.0"));
+        assert_eq!(manifest.main_class.as_deref(), Some("io.elio.Main"));
+        assert_eq!(manifest.automatic_module.as_deref(), Some("io.elio.core"));
+        assert!(manifest.created_by.is_none());
+    }
 }
