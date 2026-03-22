@@ -23,5 +23,6 @@ mod images;
 mod markdown;
 mod structured;
 mod text;
+mod videos;
 
 use self::helpers::*;

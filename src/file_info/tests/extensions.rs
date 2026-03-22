@@ -15,6 +15,23 @@ fn json5_gets_parser_backed_preview_support() {
         CodeBackend::Custom(CustomCodeKind::Jsonc),
     );
 }
+
+#[test]
+fn supported_video_extensions_keep_specific_video_labels() {
+    let cases = [
+        ("clip.mp4", "MP4 video"),
+        ("clip.mkv", "Matroska video"),
+        ("clip.mov", "QuickTime video"),
+        ("clip.webm", "WebM video"),
+        ("clip.avi", "AVI video"),
+    ];
+
+    for (path, label) in cases {
+        let facts = inspect_path(Path::new(path), EntryKind::File);
+        assert_eq!(facts.builtin_class, FileClass::Video);
+        assert_eq!(facts.specific_type_label, Some(label));
+    }
+}
 #[test]
 fn html_and_css_files_use_code_preview_support() {
     let html = inspect_path(Path::new("index.html"), EntryKind::File);
