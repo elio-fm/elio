@@ -20,22 +20,22 @@ const COMIC_ARCHIVE_IMAGE_ENTRY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 const COMIC_ARCHIVE_CACHE_LIMIT: usize = 16;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum ComicArchiveBackend {
+enum ComicArchiveBackend {
     Zip,
     SevenZip,
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct ComicArchivePage {
-    pub(super) entry_name: String,
-    pub(super) sort_key: String,
-    pub(super) extension: String,
+struct ComicArchivePage {
+    entry_name: String,
+    sort_key: String,
+    extension: String,
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct CachedComicArchive {
-    pub(super) backend: ComicArchiveBackend,
-    pub(super) page_entries: Vec<ComicArchivePage>,
+struct CachedComicArchive {
+    backend: ComicArchiveBackend,
+    page_entries: Vec<ComicArchivePage>,
 }
 
 #[derive(Debug, Default)]
@@ -164,7 +164,7 @@ fn parse_comic_archive_with_7z(path: &Path) -> Option<CachedComicArchive> {
     parse_comic_archive_from_7z_output(&String::from_utf8_lossy(&output.stdout))
 }
 
-pub(super) fn parse_comic_archive_from_7z_output(output: &str) -> Option<CachedComicArchive> {
+fn parse_comic_archive_from_7z_output(output: &str) -> Option<CachedComicArchive> {
     let mut page_entries = Vec::new();
     let mut in_entries = false;
     let mut current = BTreeMap::<String, String>::new();
@@ -335,4 +335,180 @@ fn archive_asset_cache_path(
     let cache_dir = env::temp_dir().join("elio-archive-asset");
     fs::create_dir_all(&cache_dir).ok()?;
     Some(cache_dir.join(format!("comic-{:016x}.{extension}", hasher.finish())))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::build_archive_preview;
+    use super::{
+        ComicArchiveBackend, build_comic_archive_preview, parse_comic_archive_from_7z_output,
+    };
+    use crate::preview::{ArchiveFormat, PreviewKind};
+    use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
+    use std::{
+        env, fs,
+        path::PathBuf,
+        process::Command,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn temp_path(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        env::temp_dir().join(format!("elio-comic-archive-{label}-{unique}"))
+    }
+
+    #[test]
+    fn parses_comic_pages_from_7z_listing_output() {
+        let output = r#"
+Path = /tmp/berserk.cbz
+Type = Rar
+Physical Size = 1024
+
+----------
+Path = 010.jpg
+Folder = -
+Size = 10
+Packed Size = 10
+
+Path = 002.jpg
+Folder = -
+Size = 20
+Packed Size = 20
+
+Path = notes/readme.txt
+Folder = -
+Size = 30
+Packed Size = 30
+
+Path = 001.jpg
+Folder = -
+Size = 40
+Packed Size = 40
+"#;
+
+        let comic =
+            parse_comic_archive_from_7z_output(output).expect("7z output should yield comic pages");
+
+        assert_eq!(comic.backend, ComicArchiveBackend::SevenZip);
+        assert_eq!(comic.page_entries.len(), 3);
+        assert_eq!(comic.page_entries[0].entry_name, "001.jpg");
+        assert_eq!(comic.page_entries[1].entry_name, "002.jpg");
+        assert_eq!(comic.page_entries[2].entry_name, "010.jpg");
+    }
+
+    #[test]
+    fn build_comic_archive_preview_falls_back_to_7z_for_mislabeled_cbz() {
+        let root = temp_path("mislabeled-cbz");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let first = root.join("001.png");
+        let second = root.join("010.png");
+        let image = DynamicImage::ImageRgba8(RgbaImage::from_pixel(1, 1, Rgba([1, 2, 3, 255])));
+        image
+            .save_with_format(&first, ImageFormat::Png)
+            .expect("failed to write first image");
+        image
+            .save_with_format(&second, ImageFormat::Png)
+            .expect("failed to write second image");
+
+        let archive = root.join("broken.cbz");
+        let status = Command::new("7z")
+            .current_dir(&root)
+            .arg("a")
+            .arg("-t7z")
+            .arg(&archive)
+            .arg("001.png")
+            .arg("010.png")
+            .status();
+        let Ok(status) = status else {
+            fs::remove_dir_all(&root).expect("failed to remove temp root");
+            return;
+        };
+        if !status.success() {
+            fs::remove_dir_all(&root).expect("failed to remove temp root");
+            return;
+        }
+
+        let preview = build_comic_archive_preview(
+            &archive,
+            ArchiveFormat::ComicZip,
+            Some("Comic ZIP archive"),
+            0,
+        )
+        .expect("mislabeled cbz should still build comic preview");
+
+        assert_eq!(preview.kind, PreviewKind::Comic);
+        assert_eq!(preview.detail.as_deref(), Some("Comic ZIP archive"));
+        assert_eq!(
+            preview
+                .navigation_position
+                .as_ref()
+                .map(|position| position.count),
+            Some(2)
+        );
+        let visual = preview
+            .preview_visual
+            .as_ref()
+            .expect("comic preview should expose a page visual");
+        let dimensions = image::ImageReader::open(&visual.path)
+            .expect("extracted page should open")
+            .with_guessed_format()
+            .expect("page format should be detected")
+            .into_dimensions()
+            .expect("page dimensions should be readable");
+        assert_eq!(dimensions, (1, 1));
+
+        fs::remove_dir_all(&root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn build_archive_preview_detects_cbr_as_comic_when_7z_backend_is_needed() {
+        let root = temp_path("cbr-7z-backend");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let first = root.join("001.png");
+        let second = root.join("010.png");
+        let image = DynamicImage::ImageRgba8(RgbaImage::from_pixel(1, 1, Rgba([1, 2, 3, 255])));
+        image
+            .save_with_format(&first, ImageFormat::Png)
+            .expect("failed to write first image");
+        image
+            .save_with_format(&second, ImageFormat::Png)
+            .expect("failed to write second image");
+
+        let archive = root.join("issue.cbr");
+        let status = Command::new("7z")
+            .current_dir(&root)
+            .arg("a")
+            .arg("-t7z")
+            .arg(&archive)
+            .arg("001.png")
+            .arg("010.png")
+            .status();
+        let Ok(status) = status else {
+            fs::remove_dir_all(&root).expect("failed to remove temp root");
+            return;
+        };
+        if !status.success() {
+            fs::remove_dir_all(&root).expect("failed to remove temp root");
+            return;
+        }
+
+        let preview = build_archive_preview(&archive, Some("Comic RAR archive"), Some(0))
+            .expect("cbr should build comic preview");
+
+        assert_eq!(preview.kind, PreviewKind::Comic);
+        assert_eq!(preview.detail.as_deref(), Some("Comic RAR archive"));
+        assert_eq!(
+            preview
+                .navigation_position
+                .as_ref()
+                .map(|position| position.count),
+            Some(2)
+        );
+        assert!(preview.preview_visual.is_some());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
 }

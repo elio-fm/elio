@@ -98,7 +98,3 @@ pub(super) fn archive_format_name(format: ArchiveFormat) -> &'static str {
         ArchiveFormat::Unknown => "Archive",
     }
 }
-
-pub(super) fn archive_is_empty_label(_format: ArchiveFormat) -> &'static str {
-    "Archive is empty"
-}

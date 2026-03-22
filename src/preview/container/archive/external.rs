@@ -48,7 +48,7 @@ pub(super) fn collect_archive_listing_with_7z(
     parse_7z_listing(&String::from_utf8_lossy(&output.stdout))
 }
 
-pub(super) fn parse_7z_listing(output: &str) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>)> {
+fn parse_7z_listing(output: &str) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>)> {
     let mut metadata = ArchiveMetadata::default();
     let mut entries = Vec::new();
     let mut in_entries = false;
@@ -124,4 +124,60 @@ fn push_7z_entry(
         metadata.compressed_size = Some(metadata.compressed_size.unwrap_or(0).saturating_add(size));
     }
     current.clear();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_7z_listing;
+
+    #[test]
+    fn parse_7z_listing_collects_external_fallback_metadata_and_entries() {
+        let output = r#"
+Path = app.AppImage
+Type = SquashFS
+Physical Size = 12345
+Comment = portable build
+
+----------
+Path = AppRun
+Folder = -
+Size = 12
+Packed Size = 10
+
+Path = usr/bin/elio
+Folder = -
+Size = 52
+Packed Size = 20
+
+Path = usr/share/icons
+Folder = +
+Size = 0
+Packed Size = 0
+"#;
+
+        let (metadata, entries) =
+            parse_7z_listing(output).expect("7z listing should parse archive metadata");
+
+        assert_eq!(metadata.format_label.as_deref(), Some("SquashFS"));
+        assert_eq!(metadata.physical_size, Some(12_345));
+        assert_eq!(metadata.comment.as_deref(), Some("portable build"));
+        assert_eq!(metadata.unpacked_size, Some(64));
+        assert_eq!(metadata.compressed_size, Some(30));
+        assert_eq!(entries.len(), 3);
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "AppRun" && !entry.is_dir)
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "usr/bin/elio" && !entry.is_dir)
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "usr/share/icons" && entry.is_dir)
+        );
+    }
 }
