@@ -1,57 +1,25 @@
+mod comic;
+mod common;
+mod format;
+
+use self::comic::build_comic_archive_preview;
+use self::common::{normalize_archive_path, parse_key_value_line, parse_u64};
+use self::format::{
+    archive_default_label, archive_format_name, archive_is_empty_label, detect_archive_format,
+};
 use super::*;
-use crate::{file_info, fs::natural_cmp, ui::theme};
+use crate::ui::theme;
 use flate2::read::GzDecoder;
 use ratatui::text::Line;
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque, hash_map::DefaultHasher},
-    env,
+    collections::BTreeMap,
     fs::{self, File},
-    hash::{Hash, Hasher},
     io::Read,
-    path::{Path, PathBuf},
+    path::Path,
     process::Command,
-    sync::{Arc, Mutex, OnceLock},
-    time::SystemTime,
 };
 use tar::Archive as TarArchive;
 use zip::ZipArchive;
-
-const COMIC_ARCHIVE_IMAGE_ENTRY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
-const COMIC_ARCHIVE_CACHE_LIMIT: usize = 16;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ComicArchiveBackend {
-    Zip,
-    SevenZip,
-}
-
-#[derive(Clone, Debug)]
-struct ComicArchivePage {
-    entry_name: String,
-    sort_key: String,
-    extension: String,
-}
-
-#[derive(Clone, Debug)]
-struct CachedComicArchive {
-    backend: ComicArchiveBackend,
-    page_entries: Vec<ComicArchivePage>,
-}
-
-#[derive(Debug, Default)]
-struct ComicArchiveCache {
-    archives: HashMap<ComicArchiveCacheKey, Arc<CachedComicArchive>>,
-    order: VecDeque<ComicArchiveCacheKey>,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct ComicArchiveCacheKey {
-    path: PathBuf,
-    size: u64,
-    modified: Option<(u64, u32)>,
-}
-
-static COMIC_ARCHIVE_CACHE: OnceLock<Mutex<ComicArchiveCache>> = OnceLock::new();
 
 pub(in crate::preview) fn build_archive_preview(
     path: &Path,
@@ -72,103 +40,6 @@ pub(in crate::preview) fn build_archive_preview(
         return Some(preview);
     }
     build_external_archive_preview(path, format, type_detail)
-}
-
-fn detect_archive_format(path: &Path) -> ArchiveFormat {
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| name.to_ascii_lowercase())
-        .unwrap_or_default();
-    if let Some(kind) = file_info::inspect_compound_archive_name(&name) {
-        return match kind {
-            file_info::CompoundArchiveKind::TarGzip => ArchiveFormat::TarGzip,
-            file_info::CompoundArchiveKind::TarXz => ArchiveFormat::TarXz,
-            file_info::CompoundArchiveKind::TarBzip2 => ArchiveFormat::TarBzip2,
-            file_info::CompoundArchiveKind::TarZstd => ArchiveFormat::TarZstd,
-            file_info::CompoundArchiveKind::CompressedDiskImage {
-                compression: file_info::CompressionKind::Gzip,
-                ..
-            } => ArchiveFormat::Gzip,
-            file_info::CompoundArchiveKind::CompressedDiskImage {
-                compression: file_info::CompressionKind::Xz,
-                ..
-            } => ArchiveFormat::Xz,
-            file_info::CompoundArchiveKind::CompressedDiskImage {
-                compression: file_info::CompressionKind::Bzip2,
-                ..
-            } => ArchiveFormat::Bzip2,
-            file_info::CompoundArchiveKind::CompressedDiskImage {
-                compression: file_info::CompressionKind::Zstd,
-                ..
-            } => ArchiveFormat::Zstd,
-        };
-    }
-
-    match path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("cbz") => ArchiveFormat::ComicZip,
-        Some("cbr") => ArchiveFormat::ComicRar,
-        Some("zip" | "jar" | "apk" | "aab" | "apkg") => ArchiveFormat::Zip,
-        Some("7z") => ArchiveFormat::SevenZip,
-        Some("tar") => ArchiveFormat::Tar,
-        Some("gz") => ArchiveFormat::Gzip,
-        Some("xz") => ArchiveFormat::Xz,
-        Some("bz2") => ArchiveFormat::Bzip2,
-        Some("zst") => ArchiveFormat::Zstd,
-        Some("deb") => ArchiveFormat::Deb,
-        Some("rpm") => ArchiveFormat::Rpm,
-        Some("appimage") => ArchiveFormat::AppImage,
-        _ => ArchiveFormat::Unknown,
-    }
-}
-
-fn archive_default_label(format: ArchiveFormat) -> &'static str {
-    match format {
-        ArchiveFormat::ComicZip => "Comic ZIP archive",
-        ArchiveFormat::ComicRar => "Comic RAR archive",
-        ArchiveFormat::Zip => "ZIP archive",
-        ArchiveFormat::SevenZip => "7z archive",
-        ArchiveFormat::Tar => "TAR archive",
-        ArchiveFormat::TarGzip => "TAR.GZ archive",
-        ArchiveFormat::TarXz => "TAR.XZ archive",
-        ArchiveFormat::TarBzip2 => "TAR.BZ2 archive",
-        ArchiveFormat::TarZstd => "TAR.ZST archive",
-        ArchiveFormat::Gzip => "Gzip archive",
-        ArchiveFormat::Xz => "XZ archive",
-        ArchiveFormat::Bzip2 => "Bzip2 archive",
-        ArchiveFormat::Zstd => "Zstandard archive",
-        ArchiveFormat::Deb => "Debian package",
-        ArchiveFormat::Rpm => "RPM package",
-        ArchiveFormat::AppImage => "AppImage bundle",
-        ArchiveFormat::Unknown => "Archive",
-    }
-}
-
-fn archive_format_name(format: ArchiveFormat) -> &'static str {
-    match format {
-        ArchiveFormat::ComicZip => "ZIP",
-        ArchiveFormat::ComicRar => "RAR",
-        ArchiveFormat::Zip => "ZIP",
-        ArchiveFormat::SevenZip => "7z",
-        ArchiveFormat::Tar => "TAR",
-        ArchiveFormat::TarGzip => "TAR.GZ",
-        ArchiveFormat::TarXz => "TAR.XZ",
-        ArchiveFormat::TarBzip2 => "TAR.BZ2",
-        ArchiveFormat::TarZstd => "TAR.ZST",
-        ArchiveFormat::Gzip => "Gzip",
-        ArchiveFormat::Xz => "XZ",
-        ArchiveFormat::Bzip2 => "Bzip2",
-        ArchiveFormat::Zstd => "Zstandard",
-        ArchiveFormat::Deb => "DEB",
-        ArchiveFormat::Rpm => "RPM",
-        ArchiveFormat::AppImage => "AppImage",
-        ArchiveFormat::Unknown => "Archive",
-    }
 }
 
 fn build_zip_archive_preview(
@@ -267,199 +138,6 @@ fn build_tar_archive_preview(
         extra_sections: Vec::new(),
         scan_truncated,
     }))
-}
-
-fn build_comic_archive_preview(
-    path: &Path,
-    format: ArchiveFormat,
-    type_detail: Option<&'static str>,
-    page_index: usize,
-) -> Option<PreviewContent> {
-    let comic = load_comic_archive(path)?;
-    if comic.page_entries.is_empty() {
-        return None;
-    }
-
-    let current_index = page_index.min(comic.page_entries.len().saturating_sub(1));
-    let detail = type_detail
-        .unwrap_or(archive_default_label(format))
-        .to_string();
-    let mut preview = PreviewContent::new(PreviewKind::Comic, Vec::new())
-        .with_detail(detail)
-        .with_navigation_position("Page", current_index, comic.page_entries.len(), None);
-
-    if let Some(visual) =
-        extract_comic_archive_page_visual(path, &comic, &comic.page_entries[current_index])
-    {
-        preview = preview.with_preview_visual(visual);
-    } else {
-        preview = preview.with_status_note("Unable to extract selected page");
-    }
-
-    Some(preview)
-}
-
-fn load_comic_archive(path: &Path) -> Option<Arc<CachedComicArchive>> {
-    let key = comic_archive_cache_key(path)?;
-    if let Some(cached) = comic_archive_cache()
-        .lock()
-        .unwrap_or_else(|poison| poison.into_inner())
-        .archives
-        .get(&key)
-        .cloned()
-    {
-        return Some(cached);
-    }
-
-    let parsed = Arc::new(parse_comic_archive(path)?);
-    let mut cache = comic_archive_cache()
-        .lock()
-        .unwrap_or_else(|poison| poison.into_inner());
-    if let Some(existing) = cache.archives.get(&key).cloned() {
-        return Some(existing);
-    }
-    cache.order.retain(|cached_key| cached_key != &key);
-    cache.order.push_back(key.clone());
-    cache.archives.insert(key.clone(), Arc::clone(&parsed));
-    while cache.order.len() > COMIC_ARCHIVE_CACHE_LIMIT {
-        if let Some(stale_key) = cache.order.pop_front() {
-            cache.archives.remove(&stale_key);
-        }
-    }
-    Some(parsed)
-}
-
-fn parse_comic_archive(path: &Path) -> Option<CachedComicArchive> {
-    parse_zip_comic_archive(path).or_else(|| parse_comic_archive_with_7z(path))
-}
-
-fn parse_zip_comic_archive(path: &Path) -> Option<CachedComicArchive> {
-    let file = File::open(path).ok()?;
-    let mut archive = ZipArchive::new(file).ok()?;
-    let mut page_entries = Vec::new();
-
-    for index in 0..archive.len() {
-        let entry = archive.by_index(index).ok()?;
-        if entry.is_dir() {
-            continue;
-        }
-
-        let name = entry.name().to_string();
-        let Some(extension) = archive_image_extension(&name) else {
-            continue;
-        };
-        let sort_key = normalize_archive_path(&name, false)
-            .unwrap_or_else(|| name.clone())
-            .to_lowercase();
-        page_entries.push(ComicArchivePage {
-            entry_name: name,
-            sort_key,
-            extension: extension.to_string(),
-        });
-    }
-
-    page_entries.sort_by(|left, right| natural_cmp(&left.sort_key, &right.sort_key));
-
-    Some(CachedComicArchive {
-        backend: ComicArchiveBackend::Zip,
-        page_entries,
-    })
-}
-
-fn parse_comic_archive_with_7z(path: &Path) -> Option<CachedComicArchive> {
-    let output = Command::new("7z")
-        .arg("l")
-        .arg("-slt")
-        .arg(path)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-
-    parse_comic_archive_from_7z_output(&String::from_utf8_lossy(&output.stdout))
-}
-
-fn parse_comic_archive_from_7z_output(output: &str) -> Option<CachedComicArchive> {
-    let mut page_entries = Vec::new();
-    let mut in_entries = false;
-    let mut current = BTreeMap::<String, String>::new();
-
-    for raw_line in output.lines() {
-        let line = raw_line.trim_end();
-        if line == "----------" {
-            in_entries = true;
-            continue;
-        }
-
-        if !in_entries {
-            continue;
-        }
-
-        if line.is_empty() {
-            push_7z_comic_page_entry(&mut current, &mut page_entries);
-            continue;
-        }
-
-        if let Some((field, value)) = parse_key_value_line(line) {
-            current.insert(field.to_string(), value.to_string());
-        }
-    }
-    push_7z_comic_page_entry(&mut current, &mut page_entries);
-
-    if page_entries.is_empty() {
-        return None;
-    }
-
-    page_entries.sort_by(|left, right| natural_cmp(&left.sort_key, &right.sort_key));
-    Some(CachedComicArchive {
-        backend: ComicArchiveBackend::SevenZip,
-        page_entries,
-    })
-}
-
-fn push_7z_comic_page_entry(
-    current: &mut BTreeMap<String, String>,
-    page_entries: &mut Vec<ComicArchivePage>,
-) {
-    if current.is_empty() {
-        return;
-    }
-
-    let entry_name = current.get("Path").cloned();
-    let is_dir = current.get("Folder").is_some_and(|value| value == "+")
-        || current
-            .get("Attributes")
-            .is_some_and(|value| value.starts_with('D'));
-
-    if !is_dir
-        && let Some(entry_name) = entry_name
-        && let Some(extension) = archive_image_extension(&entry_name)
-    {
-        let sort_key = normalize_archive_path(&entry_name, false)
-            .unwrap_or_else(|| entry_name.clone())
-            .to_lowercase();
-        page_entries.push(ComicArchivePage {
-            entry_name,
-            sort_key,
-            extension: extension.to_string(),
-        });
-    }
-
-    current.clear();
-}
-
-fn comic_archive_cache() -> &'static Mutex<ComicArchiveCache> {
-    COMIC_ARCHIVE_CACHE.get_or_init(|| Mutex::new(ComicArchiveCache::default()))
-}
-
-fn comic_archive_cache_key(path: &Path) -> Option<ComicArchiveCacheKey> {
-    let metadata = fs::metadata(path).ok()?;
-    Some(ComicArchiveCacheKey {
-        path: path.to_path_buf(),
-        size: metadata.len(),
-        modified: metadata.modified().ok().and_then(system_time_key),
-    })
 }
 
 fn build_external_archive_preview(
@@ -737,142 +415,6 @@ struct ArchiveRenderConfig {
     scan_truncated: bool,
 }
 
-fn archive_is_empty_label(format: ArchiveFormat) -> &'static str {
-    match format {
-        ArchiveFormat::ComicZip => "Archive is empty",
-        ArchiveFormat::ComicRar => "Archive is empty",
-        ArchiveFormat::Zip => "Archive is empty",
-        ArchiveFormat::SevenZip => "Archive is empty",
-        ArchiveFormat::Tar
-        | ArchiveFormat::TarGzip
-        | ArchiveFormat::TarXz
-        | ArchiveFormat::TarBzip2
-        | ArchiveFormat::TarZstd
-        | ArchiveFormat::Gzip
-        | ArchiveFormat::Xz
-        | ArchiveFormat::Bzip2
-        | ArchiveFormat::Zstd
-        | ArchiveFormat::Deb
-        | ArchiveFormat::Rpm
-        | ArchiveFormat::AppImage
-        | ArchiveFormat::Unknown => "Archive is empty",
-    }
-}
-
-fn extract_comic_archive_page_visual(
-    archive_path: &Path,
-    comic: &CachedComicArchive,
-    page: &ComicArchivePage,
-) -> Option<PreviewVisual> {
-    let cache_path = archive_asset_cache_path(archive_path, &page.entry_name, &page.extension)?;
-    if !cache_path.exists() {
-        let bytes = match comic.backend {
-            ComicArchiveBackend::Zip => {
-                let file = File::open(archive_path).ok()?;
-                let mut archive = ZipArchive::new(file).ok()?;
-                read_zip_entry_bytes_limited(
-                    &mut archive,
-                    &page.entry_name,
-                    COMIC_ARCHIVE_IMAGE_ENTRY_LIMIT_BYTES,
-                )?
-            }
-            ComicArchiveBackend::SevenZip => read_7z_entry_bytes_limited(
-                archive_path,
-                &page.entry_name,
-                COMIC_ARCHIVE_IMAGE_ENTRY_LIMIT_BYTES,
-            )?,
-        };
-        fs::write(&cache_path, bytes).ok()?;
-    }
-    let metadata = fs::metadata(&cache_path).ok()?;
-    Some(PreviewVisual {
-        kind: PreviewVisualKind::PageImage,
-        layout: PreviewVisualLayout::FullHeight,
-        path: cache_path,
-        size: metadata.len(),
-        modified: metadata.modified().ok(),
-    })
-}
-
-fn read_zip_entry_bytes_limited<R: Read + std::io::Seek>(
-    archive: &mut ZipArchive<R>,
-    name: &str,
-    limit_bytes: usize,
-) -> Option<Vec<u8>> {
-    let entry = archive.by_name(name).ok()?;
-    let limit = (entry.size() as usize).min(limit_bytes);
-    let mut bytes = Vec::with_capacity(limit);
-    entry
-        .take(limit_bytes as u64)
-        .read_to_end(&mut bytes)
-        .ok()?;
-    (!bytes.is_empty()).then_some(bytes)
-}
-
-fn read_7z_entry_bytes_limited(
-    archive_path: &Path,
-    entry_name: &str,
-    limit_bytes: usize,
-) -> Option<Vec<u8>> {
-    let output = Command::new("7z")
-        .arg("x")
-        .arg("-so")
-        .arg(archive_path)
-        .arg(entry_name)
-        .output()
-        .ok()?;
-    if !output.status.success() || output.stdout.is_empty() || output.stdout.len() > limit_bytes {
-        return None;
-    }
-    Some(output.stdout)
-}
-
-fn archive_image_extension(path: &str) -> Option<&'static str> {
-    let lower = path.to_ascii_lowercase();
-    if lower.ends_with(".png") {
-        Some("png")
-    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
-        Some("jpg")
-    } else if lower.ends_with(".gif") {
-        Some("gif")
-    } else if lower.ends_with(".webp") {
-        Some("webp")
-    } else if lower.ends_with(".svg") {
-        Some("svg")
-    } else {
-        None
-    }
-}
-
-fn archive_asset_cache_path(
-    archive_path: &Path,
-    entry_name: &str,
-    extension: &str,
-) -> Option<PathBuf> {
-    let metadata = fs::metadata(archive_path).ok();
-    let modified = metadata
-        .as_ref()
-        .and_then(|metadata| metadata.modified().ok())
-        .and_then(system_time_key);
-    let mut hasher = DefaultHasher::new();
-    archive_path.hash(&mut hasher);
-    entry_name.hash(&mut hasher);
-    metadata
-        .as_ref()
-        .map(|metadata| metadata.len())
-        .hash(&mut hasher);
-    modified.hash(&mut hasher);
-    let cache_dir = env::temp_dir().join("elio-archive-asset");
-    fs::create_dir_all(&cache_dir).ok()?;
-    Some(cache_dir.join(format!("comic-{:016x}.{extension}", hasher.finish())))
-}
-
-fn system_time_key(time: SystemTime) -> Option<(u64, u32)> {
-    time.duration_since(SystemTime::UNIX_EPOCH)
-        .ok()
-        .map(|duration| (duration.as_secs(), duration.subsec_nanos()))
-}
-
 fn collect_archive_entries_with_bsdtar(path: &Path) -> Option<Vec<ArchiveEntry>> {
     let output = Command::new("bsdtar").arg("-tf").arg(path).output().ok()?;
     if !output.status.success() {
@@ -975,19 +517,6 @@ fn push_7z_entry(
     current.clear();
 }
 
-fn parse_key_value_line(line: &str) -> Option<(&str, &str)> {
-    let (key, value) = line.split_once(" = ")?;
-    Some((key.trim(), value.trim()))
-}
-
-fn parse_u64(value: &str) -> Option<u64> {
-    value.trim().parse().ok()
-}
-
-fn normalize_archive_path(item: &str, strip_version_suffix: bool) -> Option<String> {
-    normalize_archive_entry(item, strip_version_suffix).map(|entry| entry.path)
-}
-
 fn parse_zip_manifest(contents: &str) -> ZipManifestMetadata {
     let mut fields = BTreeMap::<String, String>::new();
     let mut current_key: Option<String> = None;
@@ -1066,6 +595,9 @@ fn zip_manifest_sections(
 
 #[cfg(test)]
 mod tests {
+    use super::comic::{
+        ComicArchiveBackend, build_comic_archive_preview, parse_comic_archive_from_7z_output,
+    };
     use super::*;
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use std::{
