@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::{Arc, Barrier};
 
 #[test]
 fn page_image_overlay_request_uses_asset_metadata_without_forcing_render_cache() {

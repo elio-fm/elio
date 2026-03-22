@@ -1,4 +1,48 @@
 use super::*;
+use std::{
+    fs::File,
+    io::{Cursor, Write},
+};
+use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
+
+fn raster_image_bytes(format: ImageFormat, width_px: u32, height_px: u32) -> Vec<u8> {
+    let mut image = RgbaImage::new(width_px, height_px);
+    for pixel in image.pixels_mut() {
+        *pixel = Rgba([32, 128, 224, 255]);
+    }
+
+    let mut bytes = Vec::new();
+    DynamicImage::ImageRgba8(image)
+        .write_to(&mut Cursor::new(&mut bytes), format)
+        .expect("failed to write raster image bytes");
+    bytes
+}
+
+fn write_binary_zip_entries(path: &Path, entries: &[(&str, &[u8])]) {
+    let file = File::create(path).expect("failed to create zip");
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+
+    for (name, contents) in entries {
+        zip.start_file(name, options)
+            .expect("failed to start zip entry");
+        zip.write_all(contents).expect("failed to write zip entry");
+    }
+
+    zip.finish().expect("failed to finish zip");
+}
+
+fn wait_for_preview_prefetch(app: &mut App) {
+    for _ in 0..200 {
+        let _ = app.process_background_jobs();
+        let _ = app.process_preview_prefetch_timers();
+        if app.pending_preview_prefetch_timer().is_none() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for preview prefetch");
+}
 
 #[test]
 fn cached_adjacent_comic_page_queues_background_image_prepare() {
