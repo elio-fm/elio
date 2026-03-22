@@ -1,5 +1,16 @@
 use super::*;
 
+fn configure_iterm_image_support(app: &mut App) {
+    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
+    app.terminal_images.protocol = ImageProtocol::ItermInline;
+    app.terminal_images.window = Some(TerminalWindowSize {
+        cells_width,
+        cells_height,
+        pixels_width: 1920,
+        pixels_height: 1080,
+    });
+}
+
 #[test]
 fn page_image_visual_uses_full_preview_height() {
     let root = temp_root("full-height");
