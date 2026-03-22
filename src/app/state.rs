@@ -501,6 +501,16 @@ impl App {
             .ffmpeg_available
             .get_or_insert_with(|| inline_image::command_exists("ffmpeg"))
     }
+
+    #[cfg(test)]
+    pub(in crate::app) fn set_ffprobe_available_for_tests(&mut self, available: bool) {
+        self.video_preview.ffprobe_available = Some(available);
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn set_video_ffmpeg_available_for_tests(&mut self, available: bool) {
+        self.video_preview.ffmpeg_available = Some(available);
+    }
 }
 
 pub(super) fn detect_wheel_profile() -> WheelProfile {

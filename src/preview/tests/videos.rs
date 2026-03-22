@@ -101,6 +101,33 @@ fn video_preview_attaches_inline_cover_when_tools_are_available() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
+#[test]
+fn video_preview_skips_thumbnail_without_ffprobe_even_if_ffmpeg_is_available() {
+    let root = temp_path("video-no-ffprobe");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("clip.avi");
+    let contents = b"still-not-a-real-video";
+    fs::write(&path, contents).expect("failed to write video fixture");
+
+    let preview = build_preview_with_options_and_code_line_limit(
+        &file_entry(path),
+        &PreviewRequestOptions::Default,
+        default_code_preview_line_limit(),
+        false,
+        true,
+        &|| false,
+    );
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+    assert_eq!(preview.kind, PreviewKind::Video);
+    assert_eq!(preview.detail.as_deref(), Some("AVI video"));
+    assert!(preview.preview_visual.is_none());
+    assert!(line_texts.iter().any(|line| line.contains("File Size")
+        && line.contains(&crate::app::format_size(contents.len() as u64))));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
 fn video_tools_available() -> bool {
     Command::new("ffprobe").arg("-version").output().is_ok()
         && Command::new("ffmpeg").arg("-version").output().is_ok()

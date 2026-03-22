@@ -11,12 +11,17 @@ use std::{
     env, fs,
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
-    process::Command,
-    time::SystemTime,
+    process::{Command, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
+    thread,
+    time::{Duration, SystemTime},
 };
 
 const VIDEO_THUMBNAIL_CACHE_VERSION: usize = 1;
 const VIDEO_FALLBACK_THUMBNAIL_TIMESTAMP_MS: [u64; 2] = [1_000, 0];
+const CANCELLABLE_COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(5);
+
+static COMMAND_CAPTURE_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug, Default, PartialEq)]
 struct VideoMetadata {
@@ -47,30 +52,48 @@ struct FfprobeFormat {
     duration: Option<String>,
 }
 
-pub(super) fn build_video_preview(
+pub(super) fn build_video_preview<F>(
     entry: &Entry,
     type_detail: Option<&'static str>,
     ffprobe_available: bool,
     ffmpeg_available: bool,
-) -> PreviewContent {
+    canceled: &F,
+) -> PreviewContent
+where
+    F: Fn() -> bool,
+{
     let detail = type_detail.unwrap_or("Video");
     let (byte_size, modified) = video_source_identity(entry);
-    let metadata = ffprobe_available
-        .then(|| probe_video_metadata(entry))
-        .flatten()
-        .unwrap_or_default();
-    let lines = render_video_metadata_lines(&metadata, byte_size);
+    let metadata = if canceled() || !ffprobe_available {
+        None
+    } else {
+        probe_video_metadata(entry, canceled)
+    };
+    let lines = render_video_metadata_lines(metadata.as_ref(), byte_size);
     let mut preview = PreviewContent::new(PreviewKind::Video, lines).with_detail(detail);
+    if canceled() {
+        return preview;
+    }
     if ffmpeg_available
-        && let Some(visual) = extract_video_thumbnail(entry, byte_size, modified, &metadata)
+        && let Some(metadata) = metadata.as_ref()
+        && let Some(visual) =
+            extract_video_thumbnail(entry, byte_size, modified, metadata, canceled)
     {
         preview = preview.with_preview_visual(visual);
     }
     preview
 }
 
-fn probe_video_metadata(entry: &Entry) -> Option<VideoMetadata> {
-    let output = Command::new("ffprobe")
+fn probe_video_metadata<F>(entry: &Entry, canceled: &F) -> Option<VideoMetadata>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
+    let mut command = Command::new("ffprobe");
+    command
         .args([
             "-v",
             "error",
@@ -81,14 +104,13 @@ fn probe_video_metadata(entry: &Entry) -> Option<VideoMetadata> {
             "-of",
             "json",
         ])
-        .arg(&entry.path)
-        .output()
-        .ok()?;
-    if !output.status.success() {
+        .arg(&entry.path);
+    let output = run_command_capture_stdout_cancellable(command, "video-ffprobe", canceled)?;
+    if canceled() {
         return None;
     }
 
-    parse_ffprobe_metadata(&String::from_utf8_lossy(&output.stdout))
+    parse_ffprobe_metadata(&String::from_utf8_lossy(&output))
 }
 
 fn parse_ffprobe_metadata(raw: &str) -> Option<VideoMetadata> {
@@ -143,19 +165,22 @@ fn codec_display_name(raw: &str) -> String {
     raw.replace('_', " ")
 }
 
-fn render_video_metadata_lines(metadata: &VideoMetadata, byte_size: u64) -> Vec<Line<'static>> {
+fn render_video_metadata_lines(
+    metadata: Option<&VideoMetadata>,
+    byte_size: u64,
+) -> Vec<Line<'static>> {
     let palette = theme::palette();
     let mut fields = vec![("File Size", crate::app::format_size(byte_size))];
-    if let Some((width, height)) = metadata.dimensions {
+    if let Some((width, height)) = metadata.and_then(|metadata| metadata.dimensions) {
         fields.insert(0, ("Dimensions", format!("{width}x{height}")));
     }
-    if let Some(duration_seconds) = metadata.duration_seconds {
+    if let Some(duration_seconds) = metadata.and_then(|metadata| metadata.duration_seconds) {
         fields.push(("Duration", format_duration(duration_seconds)));
     }
-    if let Some(codec) = metadata.codec.as_deref() {
+    if let Some(codec) = metadata.and_then(|metadata| metadata.codec.as_deref()) {
         fields.push(("Video Codec", codec.to_string()));
     }
-    if let Some(fps) = metadata.fps {
+    if let Some(fps) = metadata.and_then(|metadata| metadata.fps) {
         fields.push(("FPS", format_fps(fps)));
     }
 
@@ -171,33 +196,58 @@ fn render_video_metadata_lines(metadata: &VideoMetadata, byte_size: u64) -> Vec<
     lines
 }
 
-fn extract_video_thumbnail(
+fn extract_video_thumbnail<F>(
     entry: &Entry,
     size: u64,
     modified: Option<SystemTime>,
     metadata: &VideoMetadata,
-) -> Option<PreviewVisual> {
+    canceled: &F,
+) -> Option<PreviewVisual>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
     for timestamp_ms in thumbnail_candidate_timestamps_ms(metadata.duration_seconds) {
-        if let Some(visual) = extract_video_thumbnail_at(entry, size, modified, timestamp_ms) {
+        if canceled() {
+            return None;
+        }
+        if let Some(visual) =
+            extract_video_thumbnail_at(entry, size, modified, timestamp_ms, canceled)
+        {
             return Some(visual);
         }
     }
     None
 }
 
-fn extract_video_thumbnail_at(
+fn extract_video_thumbnail_at<F>(
     entry: &Entry,
     size: u64,
     modified: Option<SystemTime>,
     timestamp_ms: u64,
-) -> Option<PreviewVisual> {
+    canceled: &F,
+) -> Option<PreviewVisual>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
     let cache_path = video_thumbnail_cache_path(&entry.path, size, modified, timestamp_ms)?;
     if cache_path.exists() {
         return preview_visual_from_path(cache_path);
     }
 
     let temp_path = video_thumbnail_temp_path(&cache_path)?;
-    if render_video_thumbnail_with_ffmpeg(&entry.path, &temp_path, timestamp_ms) {
+    if render_video_thumbnail_with_ffmpeg(&entry.path, &temp_path, timestamp_ms, canceled) {
+        if canceled() {
+            let _ = fs::remove_file(&temp_path);
+            return None;
+        }
         finalize_video_thumbnail(&temp_path, &cache_path)?;
         return preview_visual_from_path(cache_path);
     }
@@ -236,15 +286,32 @@ fn video_source_identity(entry: &Entry) -> (u64, Option<SystemTime>) {
     (size, modified)
 }
 
-fn render_video_thumbnail_with_ffmpeg(path: &Path, output_path: &Path, timestamp_ms: u64) -> bool {
+fn render_video_thumbnail_with_ffmpeg<F>(
+    path: &Path,
+    output_path: &Path,
+    timestamp_ms: u64,
+    canceled: &F,
+) -> bool
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return false;
+    }
+
     let timestamp_arg = format_timestamp_arg(timestamp_ms);
-    Command::new("ffmpeg")
+    let mut command = Command::new("ffmpeg");
+    command
         .args(["-loglevel", "error", "-y", "-ss", &timestamp_arg, "-i"])
         .arg(path)
         .args(["-frames:v", "1"])
-        .arg(output_path)
-        .status()
-        .is_ok_and(|status| status.success())
+        .arg(output_path);
+    let success = run_command_status_cancellable(command, canceled).unwrap_or(false);
+    if canceled() {
+        let _ = fs::remove_file(output_path);
+        return false;
+    }
+    success
 }
 
 fn format_timestamp_arg(timestamp_ms: u64) -> String {
@@ -306,6 +373,86 @@ fn finalize_video_thumbnail(temp_path: &Path, cache_path: &Path) -> Option<()> {
     }
 }
 
+fn run_command_capture_stdout_cancellable<F>(
+    mut command: Command,
+    capture_label: &str,
+    canceled: &F,
+) -> Option<Vec<u8>>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
+    let capture_path = command_capture_path(capture_label);
+    let stdout = fs::File::create(&capture_path).ok()?;
+    let mut child = match command
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(_) => {
+            let _ = fs::remove_file(&capture_path);
+            return None;
+        }
+    };
+
+    loop {
+        if canceled() {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = fs::remove_file(&capture_path);
+            return None;
+        }
+
+        match child.try_wait().ok()? {
+            Some(status) => {
+                let output = status
+                    .success()
+                    .then(|| fs::read(&capture_path).ok())
+                    .flatten();
+                let _ = fs::remove_file(&capture_path);
+                return output;
+            }
+            None => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
+        }
+    }
+}
+
+fn run_command_status_cancellable<F>(mut command: Command, canceled: &F) -> Option<bool>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
+    let mut child = command
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    loop {
+        if canceled() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+
+        match child.try_wait().ok()? {
+            Some(status) => return Some(status.success()),
+            None => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
+        }
+    }
+}
+
+fn command_capture_path(label: &str) -> PathBuf {
+    let id = COMMAND_CAPTURE_ID.fetch_add(1, Ordering::Relaxed);
+    env::temp_dir().join(format!("elio-{label}-{}-{id}.tmp", std::process::id()))
+}
+
 fn system_time_key(time: SystemTime) -> Option<(u64, u32)> {
     time.duration_since(SystemTime::UNIX_EPOCH)
         .ok()
@@ -358,7 +505,14 @@ fn preview_field_line(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{path::Path, time::Duration};
+    use std::{
+        path::Path,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::{Duration, Instant},
+    };
 
     #[test]
     fn thumbnail_timestamp_clamps_to_supported_range() {
@@ -408,5 +562,44 @@ mod tests {
 
         assert_eq!(current, same);
         assert_ne!(current, different);
+    }
+
+    #[test]
+    fn thumbnail_candidate_timestamps_include_clamped_target_and_fallbacks() {
+        assert_eq!(thumbnail_candidate_timestamps_ms(None), vec![1_000, 0]);
+        assert_eq!(
+            thumbnail_candidate_timestamps_ms(Some(120.0)),
+            vec![12_000, 1_000, 0]
+        );
+    }
+
+    #[test]
+    fn cancellable_command_helper_stops_long_running_process_promptly() {
+        let canceled = Arc::new(AtomicBool::new(false));
+        let cancel_flag = Arc::clone(&canceled);
+        let cancel_thread = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(25));
+            cancel_flag.store(true, Ordering::Relaxed);
+        });
+
+        let mut command = Command::new("bash");
+        command.arg("-lc").arg("sleep 1; printf late");
+        let started_at = Instant::now();
+        let output =
+            run_command_capture_stdout_cancellable(command, "video-cancel-command", &|| {
+                canceled.load(Ordering::Relaxed)
+            });
+        cancel_thread
+            .join()
+            .expect("cancel thread should finish cleanly");
+
+        assert!(
+            output.is_none(),
+            "canceled command output should be discarded"
+        );
+        assert!(
+            started_at.elapsed() < Duration::from_millis(500),
+            "canceled command should stop promptly"
+        );
     }
 }

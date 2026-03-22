@@ -203,4 +203,32 @@ mod tests {
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
+
+    #[test]
+    fn build_preview_request_disables_video_thumbnails_without_image_overlay_support() {
+        let root = temp_path("video-request-gating");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("clip.mp4");
+        fs::write(&path, b"video").expect("failed to write video fixture");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        let entry = app
+            .selected_entry()
+            .cloned()
+            .expect("video entry should be selected");
+        app.set_ffprobe_available_for_tests(true);
+        app.set_video_ffmpeg_available_for_tests(true);
+
+        let request = app.build_preview_request(
+            entry,
+            PreviewRequestOptions::Default,
+            PreviewPriority::High,
+            crate::preview::PreviewWorkClass::Heavy,
+        );
+
+        assert!(request.ffprobe_available);
+        assert!(!request.ffmpeg_available);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
 }

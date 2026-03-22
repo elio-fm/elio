@@ -191,7 +191,13 @@ where
         return image_metadata_preview(entry, type_detail);
     }
     if facts.builtin_class == FileClass::Video {
-        return video::build_video_preview(entry, type_detail, ffprobe_available, ffmpeg_available);
+        return video::build_video_preview(
+            entry,
+            type_detail,
+            ffprobe_available,
+            ffmpeg_available,
+            canceled,
+        );
     }
 
     let text_preview = match read_text_preview(&entry.path) {
