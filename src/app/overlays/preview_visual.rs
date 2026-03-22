@@ -4,7 +4,8 @@ use super::inline_image::ImageProtocol;
 use ratatui::layout::Rect;
 
 const PREVIEW_INLINE_COVER_MIN_HEIGHT: u16 = 6;
-const PREVIEW_INLINE_COVER_MAX_HEIGHT: u16 = 18;
+const PREVIEW_INLINE_COVER_MAX_HEIGHT: u16 = 12;
+const PREVIEW_INLINE_VIDEO_COVER_MAX_HEIGHT: u16 = 18;
 const PREVIEW_INLINE_MIN_TEXT_HEIGHT: u16 = 6;
 const PREVIEW_INLINE_PAGE_MIN_HEIGHT: u16 = 8;
 const PREVIEW_INLINE_PAGE_MIN_TEXT_HEIGHT: u16 = 6;
@@ -41,12 +42,21 @@ impl App {
             return None;
         }
 
-        let rows = (area.height / 2)
-            .clamp(
-                PREVIEW_INLINE_COVER_MIN_HEIGHT,
-                PREVIEW_INLINE_COVER_MAX_HEIGHT,
-            )
-            .min(area.height.saturating_sub(PREVIEW_INLINE_MIN_TEXT_HEIGHT));
+        let rows = if self.preview_state.content.kind == preview::PreviewKind::Video {
+            (area.height / 2)
+                .clamp(
+                    PREVIEW_INLINE_COVER_MIN_HEIGHT,
+                    PREVIEW_INLINE_VIDEO_COVER_MAX_HEIGHT,
+                )
+                .min(area.height.saturating_sub(PREVIEW_INLINE_MIN_TEXT_HEIGHT))
+        } else {
+            (area.height / 3)
+                .clamp(
+                    PREVIEW_INLINE_COVER_MIN_HEIGHT,
+                    PREVIEW_INLINE_COVER_MAX_HEIGHT,
+                )
+                .min(area.height.saturating_sub(PREVIEW_INLINE_MIN_TEXT_HEIGHT))
+        };
         (!self.preview_visual_failed_for_rows(area, rows)).then_some(rows)
     }
 

@@ -142,6 +142,35 @@ fn inline_cover_uses_more_of_the_preview_panel_height() {
 }
 
 #[test]
+fn non_video_inline_cover_keeps_default_compact_height() {
+    let root = temp_root("inline-cover-document");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_terminal_image_support(&mut app);
+    app.preview_state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
+        .with_preview_visual(PreviewVisual {
+            kind: PreviewVisualKind::Cover,
+            layout: PreviewVisualLayout::Inline,
+            path: root.join("cover.png"),
+            size: 11 * 1024,
+            modified: None,
+        });
+
+    assert_eq!(
+        app.preview_visual_rows(Rect {
+            x: 0,
+            y: 0,
+            width: 48,
+            height: 20,
+        }),
+        Some(6)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn page_image_placeholder_message_stays_silent() {
     let root = temp_root("page-placeholder");
     fs::create_dir_all(&root).expect("failed to create temp root");
