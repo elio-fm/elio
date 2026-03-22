@@ -59,6 +59,7 @@ pub(crate) enum PreviewKind {
     Directory,
     Document,
     Image,
+    Video,
     Markdown,
     Code,
     Text,
@@ -74,6 +75,7 @@ impl PreviewKind {
             Self::Directory => "Contents",
             Self::Document => "Document",
             Self::Image => "Image",
+            Self::Video => "Video",
             Self::Markdown => "Markdown",
             Self::Code => "Code",
             Self::Text => "Text",
@@ -87,6 +89,7 @@ impl PreviewKind {
             Self::Comic
                 | Self::Document
                 | Self::Image
+                | Self::Video
                 | Self::Markdown
                 | Self::Text
                 | Self::Binary

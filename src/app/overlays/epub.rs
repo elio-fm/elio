@@ -177,14 +177,13 @@ impl App {
                 continue;
             }
 
-            let _ = self.scheduler.submit_preview(PreviewRequest {
-                token: self.preview_state.token,
-                entry: entry.clone(),
-                work_class: preview_work_class(&entry, &variant),
-                variant,
-                code_line_limit: self.preview_code_line_limit_for_entry(&entry),
-                priority: PreviewPriority::Low,
-            });
+            let request = self.build_preview_request(
+                entry.clone(),
+                variant.clone(),
+                PreviewPriority::Low,
+                preview_work_class(&entry, &variant),
+            );
+            let _ = self.scheduler.submit_preview(request);
         }
     }
 

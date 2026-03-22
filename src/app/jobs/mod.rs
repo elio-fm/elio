@@ -282,6 +282,8 @@ pub(super) struct PreviewRequest {
     pub code_line_limit: usize,
     pub priority: PreviewPriority,
     pub work_class: PreviewWorkClass,
+    pub ffprobe_available: bool,
+    pub ffmpeg_available: bool,
 }
 
 #[derive(Debug)]

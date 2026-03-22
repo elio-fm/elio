@@ -86,6 +86,8 @@ impl PreviewPool {
                         &request.entry,
                         &request.variant,
                         request.code_line_limit,
+                        request.ffprobe_available,
+                        request.ffmpeg_available,
                         &|| canceled.load(Ordering::Relaxed),
                     );
                     PreviewShared::finish(&shared, &key);

@@ -8,6 +8,7 @@ mod markdown;
 mod structured;
 mod text;
 mod types;
+mod video;
 
 #[cfg(test)]
 pub(crate) use self::dispatch::build_preview;

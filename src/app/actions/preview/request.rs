@@ -4,6 +4,26 @@ use crate::preview::{
 };
 
 impl App {
+    pub(in crate::app) fn build_preview_request(
+        &mut self,
+        entry: Entry,
+        variant: PreviewRequestOptions,
+        priority: PreviewPriority,
+        work_class: crate::preview::PreviewWorkClass,
+    ) -> PreviewRequest {
+        let code_line_limit = self.preview_code_line_limit_for_entry(&entry);
+        PreviewRequest {
+            token: self.preview_state.token,
+            entry,
+            variant,
+            code_line_limit,
+            priority,
+            work_class,
+            ffprobe_available: self.ffprobe_available(),
+            ffmpeg_available: self.video_ffmpeg_available(),
+        }
+    }
+
     pub(in crate::app) fn current_preview_request_options(&self) -> PreviewRequestOptions {
         self.comic_preview_request_options()
             .or_else(|| self.epub_preview_request_options())

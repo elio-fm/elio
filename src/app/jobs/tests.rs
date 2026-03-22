@@ -25,6 +25,8 @@ fn preview_request(entry: Entry, token: u64, priority: PreviewPriority) -> Previ
         code_line_limit: default_code_preview_line_limit(),
         priority,
         work_class: PreviewWorkClass::Light,
+        ffprobe_available: false,
+        ffmpeg_available: false,
     }
 }
 
@@ -237,6 +239,8 @@ fn low_priority_heavy_preview_does_not_start_a_second_heavy_job() {
         code_line_limit: default_code_preview_line_limit(),
         priority: PreviewPriority::Low,
         work_class: PreviewWorkClass::Heavy,
+        ffprobe_available: false,
+        ffmpeg_available: false,
     }));
     assert!(scheduler.submit_preview(PreviewRequest {
         token: 2,
@@ -245,6 +249,8 @@ fn low_priority_heavy_preview_does_not_start_a_second_heavy_job() {
         code_line_limit: default_code_preview_line_limit(),
         priority: PreviewPriority::Low,
         work_class: PreviewWorkClass::Heavy,
+        ffprobe_available: false,
+        ffmpeg_available: false,
     }));
 
     let started = scheduler
@@ -294,6 +300,8 @@ fn low_priority_light_preview_can_start_while_heavy_preview_is_active() {
         code_line_limit: default_code_preview_line_limit(),
         priority: PreviewPriority::Low,
         work_class: PreviewWorkClass::Heavy,
+        ffprobe_available: false,
+        ffmpeg_available: false,
     }));
     assert!(scheduler.submit_preview(PreviewRequest {
         token: 2,
@@ -302,6 +310,8 @@ fn low_priority_light_preview_can_start_while_heavy_preview_is_active() {
         code_line_limit: default_code_preview_line_limit(),
         priority: PreviewPriority::Low,
         work_class: PreviewWorkClass::Light,
+        ffprobe_available: false,
+        ffmpeg_available: false,
     }));
 
     let started_heavy = scheduler

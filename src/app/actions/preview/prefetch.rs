@@ -56,15 +56,12 @@ impl App {
                 continue;
             }
 
-            let code_line_limit = self.preview_code_line_limit_for_entry(&entry);
-            let request = PreviewRequest {
-                token: self.preview_state.token,
+            let request = self.build_preview_request(
                 entry,
                 variant,
-                code_line_limit,
-                priority: PreviewPriority::Low,
-                work_class: PreviewWorkClass::Light,
-            };
+                PreviewPriority::Low,
+                PreviewWorkClass::Light,
+            );
             if self.scheduler.submit_preview(request) {
                 queued += 1;
             }

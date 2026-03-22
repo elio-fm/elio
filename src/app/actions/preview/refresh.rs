@@ -39,15 +39,12 @@ impl App {
                     self.preview_state.metrics.cache_misses += 1;
                     let loading_path = entry.path.clone();
                     let work_class = preview_work_class(&entry, &preview_options);
-                    let code_line_limit = self.preview_code_line_limit_for_entry(&entry);
-                    let request = PreviewRequest {
-                        token: self.preview_state.token,
+                    let request = self.build_preview_request(
                         entry,
-                        variant: preview_options.clone(),
-                        code_line_limit,
-                        priority: PreviewPriority::High,
+                        preview_options.clone(),
+                        PreviewPriority::High,
                         work_class,
-                    };
+                    );
                     if !self.scheduler.submit_preview(request) {
                         self.preview_state.load_state = None;
                         stale_preview.with_status_note("Refresh unavailable")
@@ -66,15 +63,12 @@ impl App {
                     );
                     let loading_path = entry.path.clone();
                     let work_class = preview_work_class(&entry, &preview_options);
-                    let code_line_limit = self.preview_code_line_limit_for_entry(&entry);
-                    let request = PreviewRequest {
-                        token: self.preview_state.token,
+                    let request = self.build_preview_request(
                         entry,
-                        variant: preview_options.clone(),
-                        code_line_limit,
-                        priority: PreviewPriority::High,
+                        preview_options.clone(),
+                        PreviewPriority::High,
                         work_class,
-                    };
+                    );
                     if !self.scheduler.submit_preview(request) {
                         self.preview_state.load_state = None;
                         PreviewContent::placeholder("Preview worker unavailable")

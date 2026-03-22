@@ -23,6 +23,7 @@ pub(crate) fn preview_work_class(
     if options.comic_page_index().is_some()
         || options.epub_section_index().is_some()
         || facts.builtin_class == FileClass::Archive
+        || facts.builtin_class == FileClass::Video
         || facts.preview.kind == file_info::PreviewKind::Iso
         || facts.preview.kind == file_info::PreviewKind::Torrent
         || facts.preview.document_format.is_some()
@@ -49,6 +50,7 @@ pub(crate) fn loading_preview_for(
                 .document_format
                 .map(|format| format.detail_label())
         })
+        .or((facts.builtin_class == FileClass::Video).then_some("Video"))
         .unwrap_or("Preview")
         .to_string();
     let is_comic_page_preview = matches!(
@@ -78,6 +80,11 @@ pub(crate) fn loading_preview_for(
             Line::from("Loading preview"),
             Line::from("Extracting document metadata in background"),
         ]
+    } else if facts.builtin_class == FileClass::Video {
+        vec![
+            Line::from("Loading preview"),
+            Line::from("Extracting video metadata in background"),
+        ]
     } else {
         vec![
             Line::from("Loading preview"),
@@ -98,6 +105,9 @@ fn loading_preview_kind(facts: &file_info::FileFacts) -> PreviewKind {
         && facts.preview.kind != file_info::PreviewKind::Source
     {
         return PreviewKind::Image;
+    }
+    if facts.builtin_class == FileClass::Video {
+        return PreviewKind::Video;
     }
 
     match facts.preview.kind {
@@ -122,6 +132,8 @@ pub(crate) fn build_preview_with_options(
         entry,
         options,
         default_code_preview_line_limit(),
+        false,
+        false,
         &|| false,
     )
 }
@@ -130,6 +142,8 @@ pub(crate) fn build_preview_with_options_and_code_line_limit<F>(
     entry: &Entry,
     options: &PreviewRequestOptions,
     code_line_limit: usize,
+    ffprobe_available: bool,
+    ffmpeg_available: bool,
     canceled: &F,
 ) -> PreviewContent
 where
@@ -178,6 +192,9 @@ where
         && preview_spec.kind != file_info::PreviewKind::Source
     {
         return image_metadata_preview(entry, type_detail);
+    }
+    if facts.builtin_class == FileClass::Video {
+        return video::build_video_preview(entry, type_detail, ffprobe_available, ffmpeg_available);
     }
 
     let text_preview = match read_text_preview(&entry.path) {

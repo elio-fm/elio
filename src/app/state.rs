@@ -251,6 +251,12 @@ pub(super) struct DirectoryViewMemory {
     pub(super) scroll_row: usize,
 }
 
+#[derive(Clone, Debug, Default)]
+pub(super) struct VideoPreviewState {
+    pub(super) ffprobe_available: Option<bool>,
+    pub(super) ffmpeg_available: Option<bool>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct DirectoryCountViewport {
     pub(super) fingerprint: crate::fs::DirectoryFingerprint,
@@ -341,6 +347,7 @@ pub struct App {
     pub(super) comic_preview: comic::ComicPreviewState,
     pub(super) epub_preview: epub::EpubPreviewState,
     pub(super) image_preview: images::ImagePreviewState,
+    pub(super) video_preview: VideoPreviewState,
     pub(super) pdf_preview: pdf::PdfPreviewState,
     pub(super) terminal_images: inline_image::TerminalImageState,
     pub(super) frame_state: FrameState,
@@ -418,6 +425,7 @@ impl App {
             comic_preview: comic::ComicPreviewState::default(),
             epub_preview: epub::EpubPreviewState::default(),
             image_preview: images::ImagePreviewState::default(),
+            video_preview: VideoPreviewState::default(),
             pdf_preview: pdf::PdfPreviewState::default(),
             terminal_images: inline_image::TerminalImageState::default(),
             frame_state: FrameState::default(),
@@ -478,6 +486,20 @@ impl App {
         app.refresh_preview();
         app.reset_directory_watch();
         Ok(app)
+    }
+
+    pub(in crate::app) fn ffprobe_available(&mut self) -> bool {
+        *self
+            .video_preview
+            .ffprobe_available
+            .get_or_insert_with(|| inline_image::command_exists("ffprobe"))
+    }
+
+    pub(in crate::app) fn video_ffmpeg_available(&mut self) -> bool {
+        *self
+            .video_preview
+            .ffmpeg_available
+            .get_or_insert_with(|| inline_image::command_exists("ffmpeg"))
     }
 }
 

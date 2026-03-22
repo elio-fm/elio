@@ -53,6 +53,8 @@ fn code_preview_respects_custom_line_limit() {
         &file_entry(path),
         &PreviewRequestOptions::Default,
         4,
+        false,
+        false,
         &|| false,
     );
     let header = preview
