@@ -114,23 +114,25 @@ pub(super) fn put_iso_u16_le(bytes: &mut [u8], offset: usize, value: u16) {
 }
 
 pub(super) fn sample_iso_descriptors() -> Vec<u8> {
-    let mut bytes = vec![0u8; (ISO_DESCRIPTOR_START_SECTOR + 3) * ISO_SECTOR_SIZE];
-    let start = ISO_DESCRIPTOR_START_SECTOR * ISO_SECTOR_SIZE;
+    let mut bytes =
+        vec![0u8; (container::ISO_DESCRIPTOR_START_SECTOR + 3) * container::ISO_SECTOR_SIZE];
+    let start = container::ISO_DESCRIPTOR_START_SECTOR * container::ISO_SECTOR_SIZE;
 
-    let boot = &mut bytes[start..start + ISO_SECTOR_SIZE];
+    let boot = &mut bytes[start..start + container::ISO_SECTOR_SIZE];
     boot[0] = 0;
     boot[1..6].copy_from_slice(b"CD001");
     boot[6] = 1;
-    write_iso_field(boot, 7, 39, ISO_BOOT_SYSTEM_ID);
+    write_iso_field(boot, 7, 39, container::ISO_BOOT_SYSTEM_ID);
 
-    let primary = &mut bytes[start + ISO_SECTOR_SIZE..start + ISO_SECTOR_SIZE * 2];
+    let primary =
+        &mut bytes[start + container::ISO_SECTOR_SIZE..start + container::ISO_SECTOR_SIZE * 2];
     primary[0] = 1;
     primary[1..6].copy_from_slice(b"CD001");
     primary[6] = 1;
     write_iso_field(primary, 8, 40, "ELIO_SYS");
     write_iso_field(primary, 40, 72, "ELIO_INSTALL");
     put_iso_u32_le(primary, 80, 640);
-    put_iso_u16_le(primary, 128, ISO_SECTOR_SIZE as u16);
+    put_iso_u16_le(primary, 128, container::ISO_SECTOR_SIZE as u16);
     write_iso_field(primary, 318, 446, "Elio Publisher");
     write_iso_field(primary, 446, 574, "Elio Builder");
     write_iso_field(primary, 574, 702, "Elio Image Tool");
@@ -138,7 +140,8 @@ pub(super) fn sample_iso_descriptors() -> Vec<u8> {
     write_iso_field(primary, 830, 847, "20260311101500000");
     write_iso_field(primary, 864, 881, "20260312000000000");
 
-    let terminator = &mut bytes[start + ISO_SECTOR_SIZE * 2..start + ISO_SECTOR_SIZE * 3];
+    let terminator =
+        &mut bytes[start + container::ISO_SECTOR_SIZE * 2..start + container::ISO_SECTOR_SIZE * 3];
     terminator[0] = 255;
     terminator[1..6].copy_from_slice(b"CD001");
     terminator[6] = 1;

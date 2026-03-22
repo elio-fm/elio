@@ -339,11 +339,12 @@ fn archive_asset_cache_path(
 
 #[cfg(test)]
 mod tests {
+    use super::super::ArchiveFormat;
     use super::super::build_archive_preview;
     use super::{
         ComicArchiveBackend, build_comic_archive_preview, parse_comic_archive_from_7z_output,
     };
-    use crate::preview::{ArchiveFormat, PreviewKind};
+    use crate::preview::PreviewKind;
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use std::{
         env, fs,

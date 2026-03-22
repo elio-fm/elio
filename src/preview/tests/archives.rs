@@ -185,7 +185,10 @@ fn iso_metadata_parser_reads_primary_volume_descriptor() {
         metadata.effective_at.as_deref(),
         Some("2026-03-12 00:00:00")
     );
-    assert_eq!(metadata.total_size, Some(640 * ISO_SECTOR_SIZE as u64));
+    assert_eq!(
+        metadata.total_size,
+        Some(640 * container::ISO_SECTOR_SIZE as u64)
+    );
     assert!(metadata.bootable);
 }
 
@@ -226,13 +229,13 @@ fn iso_entry_normalization_reconstructs_parents_and_strips_versions() {
 #[test]
 fn iso_preview_renders_metadata_and_tree() {
     let preview = container::render_iso_preview(
-        IsoMetadata {
+        container::IsoMetadata {
             volume_id: Some("ELIO_INSTALL".to_string()),
             system_id: Some("ELIO_SYS".to_string()),
-            total_size: Some(640 * ISO_SECTOR_SIZE as u64),
+            total_size: Some(640 * container::ISO_SECTOR_SIZE as u64),
             bootable: true,
             created_at: Some("2026-03-11 09:00:00".to_string()),
-            ..IsoMetadata::default()
+            ..container::IsoMetadata::default()
         },
         container::normalize_archive_entries(
             ["boot/", "boot/grub/", "boot/grub/grub.cfg", "README.txt"],
@@ -269,9 +272,9 @@ fn iso_preview_reports_tree_truncation() {
         .map(|index| format!("dir/file-{index:03}.txt"))
         .collect::<Vec<_>>();
     let preview = container::render_iso_preview(
-        IsoMetadata {
+        container::IsoMetadata {
             volume_id: Some("BIG_IMAGE".to_string()),
-            ..IsoMetadata::default()
+            ..container::IsoMetadata::default()
         },
         container::normalize_archive_entries(items.iter().map(String::as_str), true),
     );

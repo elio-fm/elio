@@ -6,6 +6,9 @@ mod internal;
 mod manifest;
 mod render;
 
+const ARCHIVE_ENTRY_SCAN_LIMIT: usize = 50_000;
+const ZIP_MANIFEST_LIMIT_BYTES: u64 = 64 * 1024;
+
 pub(super) use self::common::{ArchiveEntry, ArchiveTreeNode};
 pub(in crate::preview) use self::format::ArchiveFormat;
 
