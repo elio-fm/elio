@@ -879,6 +879,48 @@ mod tests {
     }
 
     #[test]
+    fn access_logs_keep_optional_referer_and_user_agent_fields() {
+        let preview = render_log_preview(
+            "127.0.0.1 app elio [10/Mar/2026:12:00:00 +0000] \"GET /login HTTP/1.1\" 404 321 \"https://elio.dev/docs\" \"Mozilla/5.0\"\n",
+        )
+        .expect("access log with optional fields should render");
+
+        let rendered = preview
+            .lines
+            .iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered.contains("WARN"));
+        assert!(rendered.contains("ident"));
+        assert!(rendered.contains("elio"));
+        assert!(rendered.contains("referer"));
+        assert!(rendered.contains("https://elio.dev/docs"));
+        assert!(rendered.contains("user-agent"));
+        assert!(rendered.contains("Mozilla/5.0"));
+    }
+
+    #[test]
+    fn json_logs_accept_alias_fields_and_stringify_nested_values() {
+        let preview = render_log_preview(
+            "{\"@timestamp\":\"2026-03-10T12:00:00Z\",\"severity\":\"warning\",\"summary\":\"cache miss\",\"http\":{\"path\":\"/login\",\"status\":404}}\n",
+        )
+        .expect("json alias fields should render");
+
+        let rendered = preview
+            .lines
+            .iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered.contains("JSON lines"));
+        assert!(rendered.contains("WARN"));
+        assert!(rendered.contains("cache miss"));
+        assert!(rendered.contains("http"));
+        assert!(rendered.contains("/login"));
+    }
+
+    #[test]
     fn multiline_logs_keep_stack_traces_attached() {
         let preview = render_log_preview(
             "2026-03-10T12:00:00Z ERROR request_id=42 msg=\"request failed\"\n\
@@ -915,6 +957,26 @@ mod tests {
             .join("\n");
         assert!(rendered.contains("WARN"));
         assert!(rendered.contains("ERROR"));
+    }
+
+    #[test]
+    fn general_logs_preserve_quoted_field_values_and_month_timestamps() {
+        let preview = render_log_preview(
+            "Mar 10 12:00:00 level=info request_id=42 msg=\"cache rebuilt successfully\"\n",
+        )
+        .expect("general log with quoted fields should render");
+
+        let rendered = preview
+            .lines
+            .iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered.contains("Application log"));
+        assert!(rendered.contains("Mar 10 12:00:00"));
+        assert!(rendered.contains("INFO"));
+        assert!(rendered.contains("request_id"));
+        assert!(rendered.contains("cache rebuilt successfully"));
     }
 
     #[test]
