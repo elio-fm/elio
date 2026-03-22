@@ -1,4 +1,4 @@
-use super::PreviewContent;
+use super::{PreviewContent, PreviewKind, PreviewVisual, PreviewVisualKind, PreviewVisualLayout};
 use crate::app::Entry;
 use crate::ui::theme;
 use ratatui::{
@@ -6,8 +6,21 @@ use ratatui::{
     text::{Line, Span},
 };
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::process::Command;
+use std::{
+    collections::{HashMap, hash_map::DefaultHasher},
+    env, fs,
+    hash::{Hash, Hasher},
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
+    thread,
+    time::{Duration, SystemTime},
+};
+
+const AUDIO_ARTWORK_CACHE_VERSION: usize = 1;
+const CANCELLABLE_COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(5);
+
+static COMMAND_CAPTURE_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug, Default, PartialEq)]
 struct AudioMetadata {
@@ -22,6 +35,12 @@ struct AudioMetadata {
     channels: Option<u32>,
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+struct AudioProbeResult {
+    metadata: AudioMetadata,
+    artwork_stream_index: Option<u32>,
+}
+
 #[derive(Deserialize)]
 struct FfprobeOutput {
     #[serde(default)]
@@ -31,12 +50,22 @@ struct FfprobeOutput {
 
 #[derive(Deserialize)]
 struct FfprobeStream {
+    index: Option<u32>,
+    codec_type: Option<String>,
     codec_name: Option<String>,
     sample_rate: Option<String>,
     channels: Option<u32>,
     bit_rate: Option<String>,
     #[serde(default)]
+    disposition: FfprobeDisposition,
+    #[serde(default)]
     tags: HashMap<String, String>,
+}
+
+#[derive(Default, Deserialize)]
+struct FfprobeDisposition {
+    #[serde(default)]
+    attached_pic: u8,
 }
 
 #[derive(Deserialize)]
@@ -47,46 +76,72 @@ struct FfprobeFormat {
     tags: HashMap<String, String>,
 }
 
-pub(super) fn build_audio_preview(
+pub(super) fn build_audio_preview<F>(
     entry: &Entry,
     type_detail: Option<&'static str>,
     ffprobe_available: bool,
-) -> PreviewContent {
+    ffmpeg_available: bool,
+    canceled: &F,
+) -> PreviewContent
+where
+    F: Fn() -> bool,
+{
     let detail = type_detail.unwrap_or("Audio");
-    let byte_size = audio_source_size(entry);
-    let metadata = ffprobe_available
-        .then(|| probe_audio_metadata(entry))
-        .flatten();
-    let lines = render_audio_metadata_lines(metadata.as_ref(), byte_size);
-
-    PreviewContent::new(super::PreviewKind::Audio, lines).with_detail(detail)
+    let (byte_size, modified) = audio_source_identity(entry);
+    let probe = if canceled() || !ffprobe_available {
+        None
+    } else {
+        probe_audio_metadata(entry, canceled)
+    };
+    let lines = render_audio_metadata_lines(probe.as_ref().map(|probe| &probe.metadata), byte_size);
+    let mut preview = PreviewContent::new(PreviewKind::Audio, lines).with_detail(detail);
+    if canceled() {
+        return preview;
+    }
+    if ffmpeg_available
+        && let Some(probe) = probe.as_ref()
+        && let Some(stream_index) = probe.artwork_stream_index
+        && let Some(visual) =
+            extract_audio_artwork(entry, byte_size, modified, stream_index, canceled)
+    {
+        preview = preview.with_preview_visual(visual);
+    }
+    preview
 }
 
-fn probe_audio_metadata(entry: &Entry) -> Option<AudioMetadata> {
-    let output = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-select_streams",
-            "a:0",
-            "-show_entries",
-            "stream=codec_name,sample_rate,channels,bit_rate:stream_tags=title,artist,album,track,tracknumber:format=duration,bit_rate:format_tags=title,artist,album,track,tracknumber",
-            "-of",
-            "json",
-        ])
-        .arg(&entry.path)
-        .output()
-        .ok()?;
-    if !output.status.success() {
+fn probe_audio_metadata<F>(entry: &Entry, canceled: &F) -> Option<AudioProbeResult>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
         return None;
     }
 
-    parse_ffprobe_metadata(&String::from_utf8_lossy(&output.stdout))
+    let mut command = Command::new("ffprobe");
+    command
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=index,codec_type,codec_name,sample_rate,channels,bit_rate:stream_disposition=attached_pic:stream_tags=title,artist,album,track,tracknumber:format=duration,bit_rate:format_tags=title,artist,album,track,tracknumber",
+            "-of",
+            "json",
+        ])
+        .arg(&entry.path);
+    let output = run_command_capture_stdout_cancellable(command, "audio-ffprobe", canceled)?;
+    if canceled() {
+        return None;
+    }
+
+    parse_ffprobe_metadata(&String::from_utf8_lossy(&output))
 }
 
-fn parse_ffprobe_metadata(raw: &str) -> Option<AudioMetadata> {
+fn parse_ffprobe_metadata(raw: &str) -> Option<AudioProbeResult> {
     let parsed = serde_json::from_str::<FfprobeOutput>(raw).ok()?;
-    let stream = parsed.streams.first()?;
+    let stream = parsed
+        .streams
+        .iter()
+        .find(|stream| stream.codec_type.as_deref() == Some("audio"))?;
     let format = parsed.format.as_ref();
 
     let title = format
@@ -111,18 +166,228 @@ fn parse_ffprobe_metadata(raw: &str) -> Option<AudioMetadata> {
         .or_else(|| stream.bit_rate.as_deref().and_then(parse_u64));
     let sample_rate_hz = stream.sample_rate.as_deref().and_then(parse_u32);
     let channels = stream.channels;
+    let artwork_stream_index = parsed
+        .streams
+        .iter()
+        .find(|stream| stream.disposition.attached_pic == 1)
+        .and_then(|stream| stream.index);
 
-    Some(AudioMetadata {
-        title,
-        artist,
-        album,
-        track,
-        duration_seconds,
-        codec,
-        bitrate_bps,
-        sample_rate_hz,
-        channels,
+    Some(AudioProbeResult {
+        metadata: AudioMetadata {
+            title,
+            artist,
+            album,
+            track,
+            duration_seconds,
+            codec,
+            bitrate_bps,
+            sample_rate_hz,
+            channels,
+        },
+        artwork_stream_index,
     })
+}
+
+fn extract_audio_artwork<F>(
+    entry: &Entry,
+    size: u64,
+    modified: Option<SystemTime>,
+    artwork_stream_index: u32,
+    canceled: &F,
+) -> Option<PreviewVisual>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
+    let cache_path = audio_artwork_cache_path(&entry.path, size, modified, artwork_stream_index)?;
+    if cache_path.exists() {
+        return preview_visual_from_path(cache_path);
+    }
+
+    let temp_path = audio_artwork_temp_path(&cache_path)?;
+    if extract_audio_artwork_with_ffmpeg(&entry.path, &temp_path, artwork_stream_index, canceled) {
+        if canceled() {
+            let _ = fs::remove_file(&temp_path);
+            return None;
+        }
+        finalize_audio_artwork(&temp_path, &cache_path)?;
+        return preview_visual_from_path(cache_path);
+    }
+
+    let _ = fs::remove_file(temp_path);
+    None
+}
+
+fn extract_audio_artwork_with_ffmpeg<F>(
+    path: &Path,
+    output_path: &Path,
+    artwork_stream_index: u32,
+    canceled: &F,
+) -> bool
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return false;
+    }
+
+    let map_arg = format!("0:{artwork_stream_index}");
+    let mut command = Command::new("ffmpeg");
+    command
+        .args(["-loglevel", "error", "-y", "-i"])
+        .arg(path)
+        .args(["-map", &map_arg, "-frames:v", "1", "-c:v", "png"])
+        .arg(output_path);
+    let success = run_command_status_cancellable(command, canceled).unwrap_or(false);
+    if canceled() {
+        let _ = fs::remove_file(output_path);
+        return false;
+    }
+    success
+}
+
+fn audio_artwork_cache_path(
+    path: &Path,
+    size: u64,
+    modified: Option<SystemTime>,
+    artwork_stream_index: u32,
+) -> Option<PathBuf> {
+    let mut hasher = DefaultHasher::new();
+    AUDIO_ARTWORK_CACHE_VERSION.hash(&mut hasher);
+    path.hash(&mut hasher);
+    size.hash(&mut hasher);
+    modified.and_then(system_time_key).hash(&mut hasher);
+    artwork_stream_index.hash(&mut hasher);
+    let cache_dir =
+        env::temp_dir().join(format!("elio-audio-cover-v{AUDIO_ARTWORK_CACHE_VERSION}"));
+    fs::create_dir_all(&cache_dir).ok()?;
+    Some(cache_dir.join(format!("cover-{:016x}.png", hasher.finish())))
+}
+
+fn audio_artwork_temp_path(path: &Path) -> Option<PathBuf> {
+    let parent = path.parent()?;
+    fs::create_dir_all(parent).ok()?;
+    let unique = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let stem = path.file_stem()?.to_string_lossy();
+    Some(parent.join(format!(".{stem}.tmp-{}-{unique}.png", std::process::id())))
+}
+
+fn finalize_audio_artwork(temp_path: &Path, cache_path: &Path) -> Option<()> {
+    match fs::rename(temp_path, cache_path) {
+        Ok(()) => Some(()),
+        Err(_) if cache_path.exists() => {
+            let _ = fs::remove_file(temp_path);
+            Some(())
+        }
+        Err(_) => {
+            let _ = fs::remove_file(temp_path);
+            None
+        }
+    }
+}
+
+fn run_command_capture_stdout_cancellable<F>(
+    mut command: Command,
+    capture_label: &str,
+    canceled: &F,
+) -> Option<Vec<u8>>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
+    let capture_path = command_capture_path(capture_label);
+    let stdout = fs::File::create(&capture_path).ok()?;
+    let mut child = match command
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(_) => {
+            let _ = fs::remove_file(&capture_path);
+            return None;
+        }
+    };
+
+    loop {
+        if canceled() {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = fs::remove_file(&capture_path);
+            return None;
+        }
+
+        match child.try_wait().ok()? {
+            Some(status) => {
+                let output = status
+                    .success()
+                    .then(|| fs::read(&capture_path).ok())
+                    .flatten();
+                let _ = fs::remove_file(&capture_path);
+                return output;
+            }
+            None => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
+        }
+    }
+}
+
+fn run_command_status_cancellable<F>(mut command: Command, canceled: &F) -> Option<bool>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
+    let mut child = command
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    loop {
+        if canceled() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+
+        match child.try_wait().ok()? {
+            Some(status) => return Some(status.success()),
+            None => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
+        }
+    }
+}
+
+fn command_capture_path(label: &str) -> PathBuf {
+    let id = COMMAND_CAPTURE_ID.fetch_add(1, Ordering::Relaxed);
+    env::temp_dir().join(format!("elio-{label}-{}-{id}.tmp", std::process::id()))
+}
+
+fn preview_visual_from_path(path: PathBuf) -> Option<PreviewVisual> {
+    let metadata = fs::metadata(&path).ok()?;
+    Some(PreviewVisual {
+        kind: PreviewVisualKind::Cover,
+        layout: PreviewVisualLayout::Inline,
+        path,
+        size: metadata.len(),
+        modified: metadata.modified().ok(),
+    })
+}
+
+fn system_time_key(time: SystemTime) -> Option<(u64, u32)> {
+    time.duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .map(|duration| (duration.as_secs(), duration.subsec_nanos()))
 }
 
 fn tag_value(tags: &HashMap<String, String>, keys: &[&str]) -> Option<String> {
@@ -153,10 +418,17 @@ fn codec_display_name(raw: &str) -> String {
     raw.replace('_', " ")
 }
 
-fn audio_source_size(entry: &Entry) -> u64 {
-    std::fs::metadata(&entry.path)
+fn audio_source_identity(entry: &Entry) -> (u64, Option<SystemTime>) {
+    let metadata = fs::metadata(&entry.path).ok();
+    let size = metadata
+        .as_ref()
         .map(|metadata| metadata.len())
-        .unwrap_or(entry.size)
+        .unwrap_or(entry.size);
+    let modified = metadata
+        .as_ref()
+        .and_then(|metadata| metadata.modified().ok())
+        .or(entry.modified);
+    (size, modified)
 }
 
 fn render_audio_metadata_lines(

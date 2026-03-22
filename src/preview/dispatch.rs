@@ -199,7 +199,13 @@ where
         return image_metadata_preview(entry, type_detail);
     }
     if facts.builtin_class == FileClass::Audio {
-        return audio::build_audio_preview(entry, type_detail, ffprobe_available);
+        return audio::build_audio_preview(
+            entry,
+            type_detail,
+            ffprobe_available,
+            ffmpeg_available,
+            canceled,
+        );
     }
     if facts.builtin_class == FileClass::Video {
         return video::build_video_preview(
