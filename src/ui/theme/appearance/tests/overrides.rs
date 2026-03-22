@@ -1,0 +1,214 @@
+use super::*;
+
+#[test]
+fn load_theme_from_disk_reads_theme_file_from_xdg_config_home() {
+    let (config_home, path, _guard) = write_theme_file(
+        "load-theme-from-disk",
+        r##"
+[classes.code]
+icon = "X"
+color = "#112233"
+
+[directories.projects]
+icon = "P"
+color = "#334455"
+
+[preview.code]
+keyword = "#abcdef"
+"##,
+    );
+    let _xdg = EnvVarGuard::set_path("XDG_CONFIG_HOME", &config_home);
+
+    let theme = load_theme_from_disk();
+
+    assert_eq!(theme.preview.code.keyword, rgb(0xab, 0xcd, 0xef));
+    assert_eq!(theme.classes.get(&FileClass::Code).unwrap().icon, "X");
+    assert_eq!(
+        theme.classes.get(&FileClass::Code).unwrap().color,
+        rgb(0x11, 0x22, 0x33)
+    );
+    let projects = theme.resolve(Path::new("projects"), EntryKind::Directory);
+    assert_eq!(projects.class, FileClass::Directory);
+    assert_eq!(projects.icon, "P");
+    assert_eq!(projects.color, rgb(0x33, 0x44, 0x55));
+
+    fs::remove_file(path).expect("failed to remove theme file");
+    fs::remove_dir_all(config_home).expect("failed to remove config root");
+}
+
+#[test]
+fn load_theme_from_disk_falls_back_to_default_theme_for_invalid_theme_file() {
+    let (config_home, path, _guard) = write_theme_file(
+        "load-theme-invalid",
+        r##"
+[preview.code]
+keyword = "#12"
+"##,
+    );
+    let _xdg = EnvVarGuard::set_path("XDG_CONFIG_HOME", &config_home);
+
+    let theme = load_theme_from_disk();
+    let default_theme = Theme::default_theme();
+
+    assert_eq!(theme.palette.bg, default_theme.palette.bg);
+    assert_eq!(
+        theme.preview.code.keyword,
+        default_theme.preview.code.keyword
+    );
+    assert_eq!(
+        theme.resolve(Path::new("Cargo.lock"), EntryKind::File).icon,
+        default_theme
+            .resolve(Path::new("Cargo.lock"), EntryKind::File)
+            .icon,
+    );
+
+    fs::remove_file(path).expect("failed to remove theme file");
+    fs::remove_dir_all(config_home).expect("failed to remove config root");
+}
+
+#[test]
+fn exact_file_rules_override_extension_defaults() {
+    let theme = Theme::default_theme();
+    let resolved = theme.resolve(Path::new("Cargo.lock"), EntryKind::File);
+    assert_eq!(resolved.class, FileClass::Data);
+    assert_eq!(resolved.icon, "󰈡");
+}
+
+#[test]
+fn theme_file_overrides_class_icon_and_palette() {
+    let theme = Theme::from_config_str(
+        r##"
+[classes.code]
+icon = "X"
+color = "#112233"
+
+[files."special.rs"]
+icon = "Y"
+color = "#abcdef"
+class = "document"
+"##,
+    )
+    .expect("theme should parse");
+
+    let resolved = theme.resolve(Path::new("special.rs"), EntryKind::File);
+    assert_eq!(resolved.class, FileClass::Document);
+    assert_eq!(resolved.icon, "Y");
+    assert_eq!(resolved.color, rgb(0xab, 0xcd, 0xef));
+}
+
+#[test]
+fn extension_rules_can_be_overridden_from_config() {
+    let theme = Theme::from_config_str(
+        r##"
+[extensions.lock]
+class = "data"
+icon = "L"
+"##,
+    )
+    .expect("theme should parse");
+
+    let resolved = theme.resolve(Path::new("custom.lock"), EntryKind::File);
+    assert_eq!(resolved.class, FileClass::Data);
+    assert_eq!(resolved.icon, "L");
+}
+
+#[test]
+fn directory_rules_can_be_overridden_from_config() {
+    let theme = Theme::from_config_str(
+        r##"
+[directories.docs]
+class = "document"
+icon = "D"
+color = "#102030"
+"##,
+    )
+    .expect("theme should parse");
+
+    let resolved = theme.resolve(Path::new("docs"), EntryKind::Directory);
+    assert_eq!(resolved.class, FileClass::Document);
+    assert_eq!(resolved.icon, "D");
+    assert_eq!(resolved.color, rgb(0x10, 0x20, 0x30));
+}
+
+#[test]
+fn code_preview_colors_can_be_overridden_from_config() {
+    let theme = Theme::from_config_str(
+        r##"
+[preview.code]
+keyword = "#123456"
+function = "#abcdef"
+macro = "#fedcba"
+"##,
+    )
+    .expect("theme should parse");
+
+    assert_eq!(theme.preview.code.keyword, rgb(0x12, 0x34, 0x56));
+    assert_eq!(theme.preview.code.function, rgb(0xab, 0xcd, 0xef));
+    assert_eq!(theme.preview.code.r#macro, rgb(0xfe, 0xdc, 0xba));
+}
+
+#[test]
+fn unknown_rule_classes_are_rejected_during_theme_parsing() {
+    let error = match Theme::from_config_str(
+        r##"
+[extensions.rs]
+class = "not-a-real-class"
+"##,
+    ) {
+        Ok(_) => panic!("theme parsing should reject unknown classes"),
+        Err(error) => error,
+    };
+
+    assert!(
+        error.to_string().contains("unknown class"),
+        "unexpected parse error: {error}",
+    );
+}
+
+#[test]
+fn exact_name_rules_win_over_extension_rules() {
+    let theme = Theme::from_config_str(
+        r##"
+[extensions.toml]
+class = "data"
+icon = "E"
+
+[files."Cargo.toml"]
+class = "config"
+icon = "F"
+"##,
+    )
+    .expect("theme should parse");
+
+    let resolved = theme.resolve(Path::new("Cargo.toml"), EntryKind::File);
+    assert_eq!(resolved.class, FileClass::Config);
+    assert_eq!(resolved.icon, "F");
+}
+
+#[test]
+fn matching_is_case_insensitive_and_trimmed() {
+    let theme = Theme::from_config_str(
+        r##"
+[classes." folder "]
+icon = "D"
+color = "#010203"
+
+[extensions." LOCK "]
+class = "data"
+icon = "L"
+
+[files." cargo.lock "]
+class = "data"
+icon = "F"
+"##,
+    )
+    .expect("theme should parse");
+
+    let dir = theme.resolve(Path::new("projects"), EntryKind::Directory);
+    assert_eq!(dir.class, FileClass::Directory);
+    assert_eq!(theme.classes.get(&FileClass::Directory).unwrap().icon, "D");
+
+    let file = theme.resolve(Path::new("CARGO.LOCK"), EntryKind::File);
+    assert_eq!(file.class, FileClass::Data);
+    assert_eq!(file.icon, "F");
+}
