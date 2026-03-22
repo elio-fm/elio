@@ -10,8 +10,6 @@ mod text;
 mod types;
 
 #[cfg(test)]
-use self::container::{ArchiveFormat, IsoMetadata};
-#[cfg(test)]
 pub(crate) use self::dispatch::build_preview;
 #[cfg(test)]
 pub(crate) use self::dispatch::build_preview_with_options;

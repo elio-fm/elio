@@ -3,6 +3,11 @@ use crate::ui::theme;
 use ratatui::text::Line;
 use std::{fs::File, io::Read, path::Path, process::Command};
 
+pub(in crate::preview) const ISO_METADATA_SCAN_BYTES: u64 = 128 * 1024;
+pub(in crate::preview) const ISO_DESCRIPTOR_START_SECTOR: usize = 16;
+pub(in crate::preview) const ISO_SECTOR_SIZE: usize = 2048;
+pub(in crate::preview) const ISO_BOOT_SYSTEM_ID: &str = "EL TORITO SPECIFICATION";
+
 #[derive(Default)]
 pub(in crate::preview) struct IsoMetadata {
     pub(in crate::preview) system_id: Option<String>,
