@@ -3,6 +3,8 @@ mod common;
 mod external;
 mod format;
 mod internal;
+mod manifest;
+mod render;
 
 use self::comic::build_comic_archive_preview;
 use self::common::normalize_archive_path;
@@ -14,11 +16,10 @@ use self::format::{
     archive_default_label, archive_format_name, archive_is_empty_label, detect_archive_format,
 };
 use self::internal::{collect_internal_archive_listing, collect_preferred_archive_entries};
+use self::manifest::{parse_zip_manifest, zip_manifest_sections};
+use self::render::{ArchiveRenderConfig, render_archive_preview};
 use super::*;
-use crate::ui::theme;
-use ratatui::text::Line;
 use std::{
-    collections::BTreeMap,
     fs::{self, File},
     io::Read,
     path::Path,
@@ -204,199 +205,13 @@ fn build_external_archive_preview(
     }))
 }
 
-fn render_archive_preview(config: ArchiveRenderConfig) -> PreviewContent {
-    let palette = theme::palette();
-    let mut lines = Vec::new();
-    let entries = expand_archive_entries(config.entries.unwrap_or_default());
-    let total_items = entries.len().max(config.total_entries_hint.unwrap_or(0));
-    let folder_count = entries.iter().filter(|entry| entry.is_dir).count();
-    let file_count = total_items.saturating_sub(folder_count);
-
-    let summary = vec![
-        ("Format", config.metadata.format_label),
-        (
-            "Entries",
-            (total_items > 0).then(|| format!("{total_items} total")),
-        ),
-        (
-            "Folders",
-            (folder_count > 0).then(|| folder_count.to_string()),
-        ),
-        ("Files", (file_count > 0).then(|| file_count.to_string())),
-        (
-            "Packed",
-            config.metadata.compressed_size.map(crate::app::format_size),
-        ),
-        (
-            "Unpacked",
-            config.metadata.unpacked_size.map(crate::app::format_size),
-        ),
-        (
-            "Archive Size",
-            config.metadata.physical_size.map(crate::app::format_size),
-        ),
-        ("Comment", config.metadata.comment),
-    ];
-    push_preview_section(&mut lines, "Summary", &summary, palette);
-
-    for (title, fields) in config.extra_sections {
-        push_preview_values_section(&mut lines, title, &fields, palette);
-    }
-
-    let mut rendered_items = 0usize;
-    let mut tree_truncated = false;
-    if !lines.is_empty() {
-        lines.push(Line::from(""));
-    }
-    lines.push(section_line("Contents", palette));
-
-    if entries.is_empty() {
-        lines.push(Line::from(if total_items == 0 {
-            config.empty_label.to_string()
-        } else {
-            config.unavailable_label.to_string()
-        }));
-    } else {
-        let mut root = ArchiveTreeNode::default();
-        for entry in &entries {
-            insert_archive_tree_entry(&mut root, entry);
-        }
-        let available_lines = PREVIEW_RENDER_LINE_LIMIT.saturating_sub(lines.len());
-        let mut remaining = available_lines;
-        if remaining == 0 {
-            tree_truncated = true;
-        } else {
-            let children = ordered_archive_children(&root.children);
-            render_archive_tree(
-                &children,
-                "",
-                &mut remaining,
-                &mut rendered_items,
-                &mut lines,
-                palette,
-            );
-            tree_truncated = rendered_items < entries.len();
-        }
-    }
-
-    let mut notes = Vec::new();
-    if config.scan_truncated {
-        notes.push(format!(
-            "scanned first {} of {} entries",
-            entries.len(),
-            total_items
-        ));
-    }
-    if tree_truncated {
-        notes.push(format!(
-            "showing first {} of {} entries",
-            rendered_items.max(entries.len().min(PREVIEW_RENDER_LINE_LIMIT)),
-            total_items
-        ));
-    }
-
-    let mut preview = PreviewContent::new(PreviewKind::Archive, lines)
-        .with_detail(config.detail)
-        .with_directory_counts(total_items, folder_count, file_count);
-    if !notes.is_empty() {
-        preview = preview.with_truncation(notes.join("  •  "));
-    }
-    preview
-}
-
-struct ArchiveRenderConfig {
-    detail: String,
-    metadata: ArchiveMetadata,
-    entries: Option<Vec<ArchiveEntry>>,
-    total_entries_hint: Option<usize>,
-    empty_label: &'static str,
-    unavailable_label: &'static str,
-    extra_sections: Vec<(&'static str, Vec<(&'static str, String)>)>,
-    scan_truncated: bool,
-}
-
-fn parse_zip_manifest(contents: &str) -> ZipManifestMetadata {
-    let mut fields = BTreeMap::<String, String>::new();
-    let mut current_key: Option<String> = None;
-
-    for line in contents.lines() {
-        let line = line.trim_end_matches('\r');
-        if let Some(rest) = line.strip_prefix(' ') {
-            if let Some(key) = &current_key
-                && let Some(value) = fields.get_mut(key)
-            {
-                value.push_str(rest);
-            }
-            continue;
-        }
-
-        let Some((key, value)) = line.split_once(':') else {
-            current_key = None;
-            continue;
-        };
-        let key = key.trim().to_string();
-        let value = value.trim().to_string();
-        current_key = Some(key.clone());
-        fields.insert(key, value);
-    }
-
-    ZipManifestMetadata {
-        title: fields
-            .get("Implementation-Title")
-            .cloned()
-            .or_else(|| fields.get("Bundle-Name").cloned()),
-        version: fields
-            .get("Implementation-Version")
-            .cloned()
-            .or_else(|| fields.get("Bundle-Version").cloned()),
-        main_class: fields.get("Main-Class").cloned(),
-        created_by: fields.get("Created-By").cloned(),
-        automatic_module: fields.get("Automatic-Module-Name").cloned(),
-    }
-}
-
-impl ZipManifestMetadata {
-    fn is_empty(&self) -> bool {
-        self.title.is_none()
-            && self.version.is_none()
-            && self.main_class.is_none()
-            && self.created_by.is_none()
-            && self.automatic_module.is_none()
-    }
-}
-
-fn zip_manifest_sections(
-    manifest: &ZipManifestMetadata,
-) -> Vec<(&'static str, Vec<(&'static str, String)>)> {
-    if manifest.is_empty() {
-        return Vec::new();
-    }
-
-    let mut fields = Vec::new();
-    if let Some(value) = &manifest.title {
-        fields.push(("Title", value.clone()));
-    }
-    if let Some(value) = &manifest.version {
-        fields.push(("Version", value.clone()));
-    }
-    if let Some(value) = &manifest.main_class {
-        fields.push(("Main-Class", value.clone()));
-    }
-    if let Some(value) = &manifest.automatic_module {
-        fields.push(("Module", value.clone()));
-    }
-    if let Some(value) = &manifest.created_by {
-        fields.push(("Created By", value.clone()));
-    }
-    vec![("Manifest", fields)]
-}
-
 #[cfg(test)]
 mod tests {
     use super::comic::{
         ComicArchiveBackend, build_comic_archive_preview, parse_comic_archive_from_7z_output,
     };
     use super::external::parse_7z_listing;
+    use super::manifest::parse_zip_manifest;
     use super::*;
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use std::{
