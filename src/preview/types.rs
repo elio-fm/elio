@@ -879,4 +879,44 @@ mod tests {
             Some("first 240 wrapped")
         );
     }
+
+    #[test]
+    fn preview_line_coverage_tracks_pending_and_total_counts() {
+        let mut preview = PreviewContent::new(PreviewKind::Text, vec![Line::from("alpha")])
+            .with_line_coverage(5, None, true);
+
+        assert!(preview.needs_total_line_count());
+        assert_eq!(
+            preview.line_coverage,
+            Some(PreviewLineCoverage {
+                shown_lines: 5,
+                total_lines: None,
+                total_lines_pending: false,
+                partial: true,
+            })
+        );
+
+        preview.set_total_line_count_pending(true);
+        assert_eq!(
+            preview.line_coverage,
+            Some(PreviewLineCoverage {
+                shown_lines: 5,
+                total_lines: None,
+                total_lines_pending: true,
+                partial: true,
+            })
+        );
+
+        preview.apply_total_line_count(3);
+        assert_eq!(
+            preview.line_coverage,
+            Some(PreviewLineCoverage {
+                shown_lines: 5,
+                total_lines: Some(5),
+                total_lines_pending: false,
+                partial: true,
+            })
+        );
+        assert!(!preview.needs_total_line_count());
+    }
 }
