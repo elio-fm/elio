@@ -54,6 +54,7 @@ impl PreviewRequestOptions {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PreviewKind {
+    Audio,
     Archive,
     Comic,
     Directory,
@@ -70,6 +71,7 @@ pub(crate) enum PreviewKind {
 impl PreviewKind {
     pub(crate) fn section_label(self) -> &'static str {
         match self {
+            Self::Audio => "Audio",
             Self::Archive => "Archive",
             Self::Comic => "Comic",
             Self::Directory => "Contents",
@@ -86,7 +88,8 @@ impl PreviewKind {
     pub(crate) fn wraps_in_preview(self) -> bool {
         matches!(
             self,
-            Self::Comic
+            Self::Audio
+                | Self::Comic
                 | Self::Document
                 | Self::Image
                 | Self::Video

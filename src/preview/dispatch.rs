@@ -22,6 +22,7 @@ pub(crate) fn preview_work_class(
     let facts = file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified);
     if options.comic_page_index().is_some()
         || options.epub_section_index().is_some()
+        || facts.builtin_class == FileClass::Audio
         || facts.builtin_class == FileClass::Archive
         || facts.builtin_class == FileClass::Video
         || facts.preview.kind == file_info::PreviewKind::Iso
@@ -50,6 +51,7 @@ pub(crate) fn loading_preview_for(
                 .document_format
                 .map(|format| format.detail_label())
         })
+        .or((facts.builtin_class == FileClass::Audio).then_some("Audio"))
         .or((facts.builtin_class == FileClass::Video).then_some("Video"))
         .unwrap_or("Preview")
         .to_string();
@@ -68,7 +70,10 @@ pub(crate) fn loading_preview_for(
     } else {
         loading_preview_kind(&facts)
     };
-    let lines = if is_comic_page_preview || is_epub_section_preview {
+    let lines = if is_comic_page_preview
+        || is_epub_section_preview
+        || facts.builtin_class == FileClass::Audio
+    {
         Vec::new()
     } else if facts.builtin_class == FileClass::Archive {
         vec![
@@ -97,6 +102,9 @@ fn loading_preview_kind(facts: &file_info::FileFacts) -> PreviewKind {
     }
     if facts.preview.document_format.is_some() {
         return PreviewKind::Document;
+    }
+    if facts.builtin_class == FileClass::Audio {
+        return PreviewKind::Audio;
     }
     if facts.builtin_class == FileClass::Image
         && facts.preview.kind != file_info::PreviewKind::Source
@@ -189,6 +197,9 @@ where
         && preview_spec.kind != file_info::PreviewKind::Source
     {
         return image_metadata_preview(entry, type_detail);
+    }
+    if facts.builtin_class == FileClass::Audio {
+        return audio::build_audio_preview(entry, type_detail, ffprobe_available);
     }
     if facts.builtin_class == FileClass::Video {
         return video::build_video_preview(
