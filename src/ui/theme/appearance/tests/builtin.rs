@@ -1,4 +1,55 @@
+use super::super::rules::rgb;
 use super::*;
+
+const GENERIC_DEV_DIRECTORIES: &[&str] = &[
+    "node_modules",
+    "tests",
+    "test",
+    "__tests__",
+    "scripts",
+    "build",
+    "dist",
+    ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".astro",
+    "assets",
+    "coverage",
+    "tmp",
+    "temp",
+    "out",
+    "target",
+    "bin",
+    "lib",
+    "vendor",
+    "src",
+    "config",
+    "docs",
+];
+
+fn load_built_in_default_theme_asset() -> Theme {
+    Theme::apply_config_on(Theme::base_theme(), DEFAULT_THEME_TOML)
+        .expect("built-in default theme asset should parse")
+}
+
+fn assert_uses_normal_folder_color_for_generic_dev_directories(theme: &Theme, label: &str) {
+    let normal_folder_color = theme
+        .resolve(Path::new("projects"), EntryKind::Directory)
+        .color;
+
+    for directory in GENERIC_DEV_DIRECTORIES {
+        let resolved = theme.resolve(Path::new(directory), EntryKind::Directory);
+        assert_eq!(
+            resolved.class,
+            FileClass::Directory,
+            "{label}: {directory} should resolve as a directory",
+        );
+        assert_eq!(
+            resolved.color, normal_folder_color,
+            "{label}: {directory} should use the normal folder color",
+        );
+    }
+}
 
 #[test]
 fn built_in_default_theme_asset_matches_runtime_default_theme() {

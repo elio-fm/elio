@@ -1,4 +1,81 @@
+use super::super::rules::rgb;
 use super::*;
+
+const ALTERNATE_EXAMPLE_THEME_NAMES: &[&str] = &[
+    "default-light",
+    "blush-light",
+    "amber-dusk",
+    "catppuccin-mocha",
+    "tokyo-night",
+    "navi",
+    "neon-cherry",
+];
+
+const GENERIC_DEV_DIRECTORIES: &[&str] = &[
+    "node_modules",
+    "tests",
+    "test",
+    "__tests__",
+    "scripts",
+    "build",
+    "dist",
+    ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".astro",
+    "assets",
+    "coverage",
+    "tmp",
+    "temp",
+    "out",
+    "target",
+    "bin",
+    "lib",
+    "vendor",
+    "src",
+    "config",
+    "docs",
+];
+
+fn alternate_example_theme_config(name: &str) -> &'static str {
+    match name {
+        "default-light" => include_str!("../../../../../examples/themes/default-light/theme.toml"),
+        "blush-light" => include_str!("../../../../../examples/themes/blush-light/theme.toml"),
+        "amber-dusk" => include_str!("../../../../../examples/themes/amber-dusk/theme.toml"),
+        "catppuccin-mocha" => {
+            include_str!("../../../../../examples/themes/catppuccin-mocha/theme.toml")
+        }
+        "tokyo-night" => include_str!("../../../../../examples/themes/tokyo-night/theme.toml"),
+        "navi" => include_str!("../../../../../examples/themes/navi/theme.toml"),
+        "neon-cherry" => include_str!("../../../../../examples/themes/neon-cherry/theme.toml"),
+        _ => panic!("unknown alternate example theme fixture: {name}"),
+    }
+}
+
+fn load_alternate_example_theme(name: &str) -> Theme {
+    Theme::from_config_str(alternate_example_theme_config(name)).unwrap_or_else(|error| {
+        panic!("{name} example theme should parse as a user theme: {error}")
+    })
+}
+
+fn assert_uses_normal_folder_color_for_generic_dev_directories(theme: &Theme, label: &str) {
+    let normal_folder_color = theme
+        .resolve(Path::new("projects"), EntryKind::Directory)
+        .color;
+
+    for directory in GENERIC_DEV_DIRECTORIES {
+        let resolved = theme.resolve(Path::new(directory), EntryKind::Directory);
+        assert_eq!(
+            resolved.class,
+            FileClass::Directory,
+            "{label}: {directory} should resolve as a directory",
+        );
+        assert_eq!(
+            resolved.color, normal_folder_color,
+            "{label}: {directory} should use the normal folder color",
+        );
+    }
+}
 
 #[test]
 fn blush_light_example_theme_parses_as_user_theme_and_applies_custom_icon_and_code_colors() {

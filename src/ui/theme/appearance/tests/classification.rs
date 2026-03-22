@@ -1,4 +1,13 @@
+use super::super::{resolve::builtin_classify_path, rules::rgb};
 use super::*;
+
+fn write_temp_file(label: &str, file_name: &str, contents: &str) -> (PathBuf, PathBuf) {
+    let root = temp_path(label);
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join(file_name);
+    fs::write(&path, contents).expect("failed to write temp file");
+    (root, path)
+}
 
 #[test]
 fn generic_lock_files_use_file_lock_icon() {
