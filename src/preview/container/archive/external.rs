@@ -1,6 +1,5 @@
 use super::common::{normalize_archive_path, parse_key_value_line, parse_u64};
 use super::*;
-use crate::preview::ArchiveFormat;
 use std::{collections::BTreeMap, path::Path, process::Command};
 
 pub(super) fn fallback_single_file_archive_entry(

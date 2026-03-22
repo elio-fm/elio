@@ -6,7 +6,11 @@ mod internal;
 mod manifest;
 mod render;
 
+pub(super) use self::common::{ArchiveEntry, ArchiveTreeNode};
+pub(in crate::preview) use self::format::ArchiveFormat;
+
 use self::comic::build_comic_archive_preview;
+use self::common::ArchiveMetadata;
 use self::common::normalize_archive_path;
 use self::external::{
     collect_archive_entries_with_bsdtar, collect_archive_listing_with_7z,
@@ -14,7 +18,7 @@ use self::external::{
 };
 use self::format::{archive_default_label, archive_format_name, detect_archive_format};
 use self::internal::{collect_internal_archive_listing, collect_preferred_archive_entries};
-use self::manifest::{parse_zip_manifest, zip_manifest_sections};
+use self::manifest::{ZipManifestMetadata, parse_zip_manifest, zip_manifest_sections};
 use self::render::{ArchiveRenderConfig, render_archive_preview};
 use super::*;
 use std::{

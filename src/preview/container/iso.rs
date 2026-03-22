@@ -3,6 +3,20 @@ use crate::ui::theme;
 use ratatui::text::Line;
 use std::{fs::File, io::Read, path::Path, process::Command};
 
+#[derive(Default)]
+pub(in crate::preview) struct IsoMetadata {
+    pub(in crate::preview) system_id: Option<String>,
+    pub(in crate::preview) volume_id: Option<String>,
+    pub(in crate::preview) publisher_id: Option<String>,
+    pub(in crate::preview) preparer_id: Option<String>,
+    pub(in crate::preview) application_id: Option<String>,
+    pub(in crate::preview) created_at: Option<String>,
+    pub(in crate::preview) modified_at: Option<String>,
+    pub(in crate::preview) effective_at: Option<String>,
+    pub(in crate::preview) total_size: Option<u64>,
+    pub(in crate::preview) bootable: bool,
+}
+
 pub(in crate::preview) fn build_iso_preview(path: &Path) -> Option<PreviewContent> {
     let metadata = read_iso_metadata(path);
     let entries = collect_iso_entries(path);

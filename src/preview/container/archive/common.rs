@@ -1,5 +1,28 @@
 use super::*;
+use std::collections::BTreeMap;
 use std::time::SystemTime;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::preview) struct ArchiveEntry {
+    pub(in crate::preview) path: String,
+    pub(in crate::preview) is_dir: bool,
+}
+
+#[derive(Default)]
+pub(in crate::preview::container) struct ArchiveTreeNode {
+    pub(in crate::preview::container) path: String,
+    pub(in crate::preview::container) is_dir: bool,
+    pub(in crate::preview::container) children: BTreeMap<String, ArchiveTreeNode>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(super) struct ArchiveMetadata {
+    pub(in crate::preview::container::archive) format_label: Option<String>,
+    pub(in crate::preview::container::archive) physical_size: Option<u64>,
+    pub(in crate::preview::container::archive) compressed_size: Option<u64>,
+    pub(in crate::preview::container::archive) unpacked_size: Option<u64>,
+    pub(in crate::preview::container::archive) comment: Option<String>,
+}
 
 pub(super) fn normalize_archive_path(item: &str, strip_version_suffix: bool) -> Option<String> {
     normalize_archive_entry(item, strip_version_suffix).map(|entry| entry.path)

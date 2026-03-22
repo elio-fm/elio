@@ -6,7 +6,7 @@ use ratatui::{
     text::{Line, Span, StyledGrapheme},
 };
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{HashMap, VecDeque},
     path::PathBuf,
     sync::{Arc, Mutex},
     time::SystemTime,
@@ -182,101 +182,6 @@ struct WrappedLayoutCache {
 struct WrappedPreviewLines {
     lines: Arc<[Line<'static>]>,
     truncated: bool,
-}
-
-#[derive(Default)]
-pub(super) struct TorrentMetadata {
-    pub(super) name: Option<String>,
-    pub(super) announce: Option<String>,
-    pub(super) announce_tiers: Vec<Vec<String>>,
-    pub(super) comment: Option<String>,
-    pub(super) created_by: Option<String>,
-    pub(super) piece_length: Option<u64>,
-    pub(super) piece_count: Option<usize>,
-    pub(super) private: Option<bool>,
-    pub(super) mode: Option<TorrentMode>,
-    pub(super) file_count: usize,
-    pub(super) total_size: Option<u64>,
-    pub(super) files: Vec<TorrentFileEntry>,
-    pub(super) file_sample_truncated: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum TorrentMode {
-    SingleFile,
-    MultiFile,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct TorrentFileEntry {
-    pub(super) path: String,
-    pub(super) length: u64,
-}
-
-#[derive(Default)]
-pub(super) struct IsoMetadata {
-    pub(super) system_id: Option<String>,
-    pub(super) volume_id: Option<String>,
-    pub(super) publisher_id: Option<String>,
-    pub(super) preparer_id: Option<String>,
-    pub(super) application_id: Option<String>,
-    pub(super) created_at: Option<String>,
-    pub(super) modified_at: Option<String>,
-    pub(super) effective_at: Option<String>,
-    pub(super) total_size: Option<u64>,
-    pub(super) bootable: bool,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct ArchiveEntry {
-    pub(super) path: String,
-    pub(super) is_dir: bool,
-}
-
-#[derive(Default)]
-pub(super) struct ArchiveTreeNode {
-    pub(super) path: String,
-    pub(super) is_dir: bool,
-    pub(super) children: BTreeMap<String, ArchiveTreeNode>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub(super) struct ArchiveMetadata {
-    pub(super) format_label: Option<String>,
-    pub(super) physical_size: Option<u64>,
-    pub(super) compressed_size: Option<u64>,
-    pub(super) unpacked_size: Option<u64>,
-    pub(super) comment: Option<String>,
-}
-
-#[derive(Default)]
-pub(super) struct ZipManifestMetadata {
-    pub(super) title: Option<String>,
-    pub(super) version: Option<String>,
-    pub(super) main_class: Option<String>,
-    pub(super) created_by: Option<String>,
-    pub(super) automatic_module: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum ArchiveFormat {
-    ComicZip,
-    ComicRar,
-    Zip,
-    SevenZip,
-    Tar,
-    TarGzip,
-    TarXz,
-    TarBzip2,
-    TarZstd,
-    Gzip,
-    Xz,
-    Bzip2,
-    Zstd,
-    Deb,
-    Rpm,
-    AppImage,
-    Unknown,
 }
 
 impl PreviewContent {

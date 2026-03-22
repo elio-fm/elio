@@ -11,7 +11,11 @@ use ratatui::{
 };
 use std::{collections::BTreeMap, path::Path};
 
+use self::archive::{ArchiveEntry, ArchiveTreeNode};
+
+pub(in crate::preview) use self::archive::ArchiveFormat;
 pub(super) use self::archive::build_archive_preview;
+pub(in crate::preview) use self::iso::IsoMetadata;
 pub(super) use self::iso::build_iso_preview;
 #[cfg(test)]
 pub(super) use self::iso::{parse_iso_metadata, render_iso_preview};

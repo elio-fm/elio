@@ -1,7 +1,6 @@
 use super::external::collect_archive_entries_with_bsdtar;
 use super::format::archive_format_name;
 use super::*;
-use crate::preview::ArchiveFormat;
 use flate2::read::GzDecoder;
 use std::{
     fs::{self, File},

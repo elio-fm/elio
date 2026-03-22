@@ -1,5 +1,13 @@
-use super::*;
 use std::collections::BTreeMap;
+
+#[derive(Default)]
+pub(super) struct ZipManifestMetadata {
+    pub(super) title: Option<String>,
+    pub(super) version: Option<String>,
+    pub(super) main_class: Option<String>,
+    pub(super) created_by: Option<String>,
+    pub(super) automatic_module: Option<String>,
+}
 
 pub(super) fn parse_zip_manifest(contents: &str) -> ZipManifestMetadata {
     let mut fields = BTreeMap::<String, String>::new();

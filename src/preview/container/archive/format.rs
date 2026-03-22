@@ -1,6 +1,26 @@
-use super::*;
 use crate::file_info;
 use std::path::Path;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::preview) enum ArchiveFormat {
+    ComicZip,
+    ComicRar,
+    Zip,
+    SevenZip,
+    Tar,
+    TarGzip,
+    TarXz,
+    TarBzip2,
+    TarZstd,
+    Gzip,
+    Xz,
+    Bzip2,
+    Zstd,
+    Deb,
+    Rpm,
+    AppImage,
+    Unknown,
+}
 
 pub(super) fn detect_archive_format(path: &Path) -> ArchiveFormat {
     let name = path

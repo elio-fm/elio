@@ -3,6 +3,35 @@ use crate::ui::theme;
 use ratatui::text::Line;
 use std::{fs::File, io::Read, path::Path};
 
+#[derive(Default)]
+struct TorrentMetadata {
+    name: Option<String>,
+    announce: Option<String>,
+    announce_tiers: Vec<Vec<String>>,
+    comment: Option<String>,
+    created_by: Option<String>,
+    piece_length: Option<u64>,
+    piece_count: Option<usize>,
+    private: Option<bool>,
+    mode: Option<TorrentMode>,
+    file_count: usize,
+    total_size: Option<u64>,
+    files: Vec<TorrentFileEntry>,
+    file_sample_truncated: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TorrentMode {
+    SingleFile,
+    MultiFile,
+}
+
+#[derive(Clone, Debug)]
+struct TorrentFileEntry {
+    path: String,
+    length: u64,
+}
+
 pub(in crate::preview) fn build_torrent_preview(path: &Path) -> Option<PreviewContent> {
     const TORRENT_PREVIEW_LIMIT_BYTES: u64 = 1024 * 1024;
     const TORRENT_CONTENT_SAMPLE_LIMIT: usize = 200;
