@@ -1,24 +1,28 @@
 mod comic;
 mod common;
+mod external;
 mod format;
+mod internal;
 
 use self::comic::build_comic_archive_preview;
-use self::common::{normalize_archive_path, parse_key_value_line, parse_u64};
+use self::common::normalize_archive_path;
+use self::external::{
+    collect_archive_entries_with_bsdtar, collect_archive_listing_with_7z,
+    fallback_single_file_archive_entry,
+};
 use self::format::{
     archive_default_label, archive_format_name, archive_is_empty_label, detect_archive_format,
 };
+use self::internal::{collect_internal_archive_listing, collect_preferred_archive_entries};
 use super::*;
 use crate::ui::theme;
-use flate2::read::GzDecoder;
 use ratatui::text::Line;
 use std::{
     collections::BTreeMap,
     fs::{self, File},
     io::Read,
     path::Path,
-    process::Command,
 };
-use tar::Archive as TarArchive;
 use zip::ZipArchive;
 
 pub(in crate::preview) fn build_archive_preview(
@@ -125,7 +129,7 @@ fn build_tar_archive_preview(
     type_detail: Option<&'static str>,
 ) -> Option<PreviewContent> {
     let (metadata, entries, total_entries, scan_truncated) =
-        collect_internal_tar_listing(path, format)?;
+        collect_internal_archive_listing(path, format)?;
     let detail = type_detail.unwrap_or(archive_default_label(format));
 
     Some(render_archive_preview(ArchiveRenderConfig {
@@ -167,7 +171,7 @@ fn build_external_archive_preview(
 
     if let Some((metadata, mut entries)) = collect_archive_listing_with_7z(path) {
         if entries.is_empty()
-            && let Some(entry) = synthetic_single_file_archive_entry(path, format)
+            && let Some(entry) = fallback_single_file_archive_entry(path, format)
         {
             entries.push(entry);
         }
@@ -183,7 +187,7 @@ fn build_external_archive_preview(
         }));
     }
 
-    let entries = collect_archive_entries_with_bsdtar_fallback(path)?;
+    let entries = collect_archive_entries_with_bsdtar(path)?;
 
     Some(render_archive_preview(ArchiveRenderConfig {
         detail: detail.to_string(),
@@ -198,110 +202,6 @@ fn build_external_archive_preview(
         extra_sections: Vec::new(),
         scan_truncated: false,
     }))
-}
-
-fn collect_internal_tar_listing(
-    path: &Path,
-    format: ArchiveFormat,
-) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>, usize, bool)> {
-    match format {
-        ArchiveFormat::Tar => {
-            let file = File::open(path).ok()?;
-            collect_tar_listing_from_reader(file, path, format)
-        }
-        ArchiveFormat::TarGzip => {
-            let file = File::open(path).ok()?;
-            collect_tar_listing_from_reader(GzDecoder::new(file), path, format)
-        }
-        _ => None,
-    }
-}
-
-fn collect_tar_listing_from_reader<R: Read>(
-    reader: R,
-    path: &Path,
-    format: ArchiveFormat,
-) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>, usize, bool)> {
-    let mut archive = TarArchive::new(reader);
-    let entries = archive.entries().ok()?;
-    let mut normalized_entries = Vec::new();
-    let mut metadata = ArchiveMetadata {
-        format_label: Some(archive_format_name(format).to_string()),
-        physical_size: fs::metadata(path).ok().map(|metadata| metadata.len()),
-        ..ArchiveMetadata::default()
-    };
-    let mut total_entries = 0usize;
-    let mut scan_truncated = false;
-
-    for entry in entries {
-        let entry = entry.ok()?;
-        total_entries = total_entries.saturating_add(1);
-        if total_entries > ARCHIVE_ENTRY_SCAN_LIMIT {
-            scan_truncated = true;
-            break;
-        }
-
-        let is_dir = entry.header().entry_type().is_dir();
-        metadata.unpacked_size = Some(
-            metadata
-                .unpacked_size
-                .unwrap_or(0)
-                .saturating_add(entry.header().size().ok().unwrap_or(0)),
-        );
-
-        let path = entry.path().ok()?;
-        let path = path.to_string_lossy();
-        if let Some(path) = normalize_archive_path(&path, false) {
-            normalized_entries.push(ArchiveEntry { path, is_dir });
-        }
-    }
-
-    Some((metadata, normalized_entries, total_entries, scan_truncated))
-}
-
-fn collect_preferred_archive_entries(
-    path: &Path,
-    format: ArchiveFormat,
-) -> Option<Vec<ArchiveEntry>> {
-    if prefers_tar_listing(format) {
-        // If internal TAR parsing fails, keep bsdtar as the only tar-family CLI fallback.
-        return collect_internal_tar_listing(path, format)
-            .map(|(_, entries, _, _)| entries)
-            .or_else(|| collect_archive_entries_with_bsdtar(path));
-    }
-
-    None
-}
-
-fn collect_archive_entries_with_bsdtar_fallback(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    collect_archive_entries_with_bsdtar(path)
-}
-
-fn prefers_tar_listing(format: ArchiveFormat) -> bool {
-    matches!(
-        format,
-        ArchiveFormat::Tar
-            | ArchiveFormat::TarGzip
-            | ArchiveFormat::TarXz
-            | ArchiveFormat::TarBzip2
-            | ArchiveFormat::TarZstd
-    )
-}
-
-fn synthetic_single_file_archive_entry(path: &Path, format: ArchiveFormat) -> Option<ArchiveEntry> {
-    if !matches!(
-        format,
-        ArchiveFormat::Gzip | ArchiveFormat::Xz | ArchiveFormat::Bzip2 | ArchiveFormat::Zstd
-    ) {
-        return None;
-    }
-
-    let name = path.file_stem()?.to_str()?;
-    let path = normalize_archive_path(name, false)?;
-    Some(ArchiveEntry {
-        path,
-        is_dir: false,
-    })
 }
 
 fn render_archive_preview(config: ArchiveRenderConfig) -> PreviewContent {
@@ -415,108 +315,6 @@ struct ArchiveRenderConfig {
     scan_truncated: bool,
 }
 
-fn collect_archive_entries_with_bsdtar(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    let output = Command::new("bsdtar").arg("-tf").arg(path).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(normalize_archive_entries(
-        String::from_utf8_lossy(&output.stdout).lines(),
-        false,
-    ))
-}
-
-fn collect_archive_listing_with_7z(path: &Path) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>)> {
-    let output = Command::new("7z")
-        .arg("l")
-        .arg("-slt")
-        .arg(path)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    parse_7z_listing(&String::from_utf8_lossy(&output.stdout))
-}
-
-fn parse_7z_listing(output: &str) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>)> {
-    let mut metadata = ArchiveMetadata::default();
-    let mut entries = Vec::new();
-    let mut in_entries = false;
-    let mut current = BTreeMap::<String, String>::new();
-
-    for raw_line in output.lines() {
-        let line = raw_line.trim_end();
-        if line == "----------" {
-            in_entries = true;
-            continue;
-        }
-
-        if !in_entries {
-            if let Some((key, value)) = parse_key_value_line(line) {
-                match key {
-                    "Type" => metadata.format_label = Some(value.to_string()),
-                    "Physical Size" => metadata.physical_size = parse_u64(value),
-                    "Comment" if !value.is_empty() => metadata.comment = Some(value.to_string()),
-                    _ => {}
-                }
-            }
-            continue;
-        }
-
-        if line.is_empty() {
-            push_7z_entry(&mut current, &mut entries, &mut metadata);
-            continue;
-        }
-
-        if let Some((key, value)) = parse_key_value_line(line) {
-            current.insert(key.to_string(), value.to_string());
-        }
-    }
-    push_7z_entry(&mut current, &mut entries, &mut metadata);
-
-    if entries.is_empty()
-        && metadata.format_label.is_none()
-        && metadata.physical_size.is_none()
-        && metadata.comment.is_none()
-    {
-        None
-    } else {
-        Some((metadata, entries))
-    }
-}
-
-fn push_7z_entry(
-    current: &mut BTreeMap<String, String>,
-    entries: &mut Vec<ArchiveEntry>,
-    metadata: &mut ArchiveMetadata,
-) {
-    if current.is_empty() {
-        return;
-    }
-
-    let path = current.get("Path").cloned();
-    let is_dir = current.get("Folder").is_some_and(|value| value == "+")
-        || current
-            .get("Attributes")
-            .is_some_and(|value| value.starts_with('D'));
-
-    if let Some(path) = path.and_then(|path| normalize_archive_path(&path, false)) {
-        entries.push(ArchiveEntry { path, is_dir });
-    }
-
-    if let Some(size) = current.get("Size").and_then(|value| parse_u64(value)) {
-        metadata.unpacked_size = Some(metadata.unpacked_size.unwrap_or(0).saturating_add(size));
-    }
-    if let Some(size) = current
-        .get("Packed Size")
-        .and_then(|value| parse_u64(value))
-    {
-        metadata.compressed_size = Some(metadata.compressed_size.unwrap_or(0).saturating_add(size));
-    }
-    current.clear();
-}
-
 fn parse_zip_manifest(contents: &str) -> ZipManifestMetadata {
     let mut fields = BTreeMap::<String, String>::new();
     let mut current_key: Option<String> = None;
@@ -598,6 +396,7 @@ mod tests {
     use super::comic::{
         ComicArchiveBackend, build_comic_archive_preview, parse_comic_archive_from_7z_output,
     };
+    use super::external::parse_7z_listing;
     use super::*;
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use std::{

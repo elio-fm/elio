@@ -1,4 +1,6 @@
-use super::common::{archive_image_extension, normalize_archive_path, system_time_key};
+use super::common::{
+    archive_image_extension, normalize_archive_path, parse_key_value_line, system_time_key,
+};
 use super::format::archive_default_label;
 use super::*;
 use crate::fs::natural_cmp;
