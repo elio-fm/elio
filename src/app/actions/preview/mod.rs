@@ -216,8 +216,8 @@ mod tests {
             .selected_entry()
             .cloned()
             .expect("video entry should be selected");
-        app.set_ffprobe_available_for_tests(true);
-        app.set_video_ffmpeg_available_for_tests(true);
+        app.set_media_ffprobe_available_for_tests(true);
+        app.set_media_ffmpeg_available_for_tests(true);
 
         let request = app.build_preview_request(
             entry,
