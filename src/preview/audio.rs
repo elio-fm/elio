@@ -91,9 +91,14 @@ where
     let (byte_size, modified) = audio_source_identity(entry);
 
     // Fast path: native in-process reading — no subprocess, completes in < 1ms.
-    if let Some(preview) =
-        build_audio_preview_native(entry, type_detail, byte_size, modified, ffmpeg_available, canceled)
-    {
+    if let Some(preview) = build_audio_preview_native(
+        entry,
+        type_detail,
+        byte_size,
+        modified,
+        ffmpeg_available,
+        canceled,
+    ) {
         return preview;
     }
 
@@ -134,7 +139,9 @@ where
     use lofty::prelude::*;
 
     let tagged_file = lofty::read_from_path(&entry.path).ok()?;
-    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag());
     let props = tagged_file.properties();
 
     let metadata = AudioMetadata {
@@ -156,20 +163,20 @@ where
     let detail = type_detail.unwrap_or("Audio");
     let mut preview = PreviewContent::new(PreviewKind::Audio, lines).with_detail(detail);
 
-    if !canceled() && ffmpeg_available {
-        if let Some(tag) = tag {
-            let picture = tag
-                .pictures()
-                .iter()
-                .find(|p| p.pic_type() == lofty::picture::PictureType::CoverFront)
-                .or_else(|| tag.pictures().first());
-            if let Some(pic) = picture {
-                if let Some(visual) =
-                    extract_audio_artwork_native(entry, byte_size, modified, pic.data(), canceled)
-                {
-                    preview = preview.with_preview_visual(visual);
-                }
-            }
+    if !canceled()
+        && ffmpeg_available
+        && let Some(tag) = tag
+    {
+        let picture = tag
+            .pictures()
+            .iter()
+            .find(|p| p.pic_type() == lofty::picture::PictureType::CoverFront)
+            .or_else(|| tag.pictures().first());
+        if let Some(pic) = picture
+            && let Some(visual) =
+                extract_audio_artwork_native(entry, byte_size, modified, pic.data(), canceled)
+        {
+            preview = preview.with_preview_visual(visual);
         }
     }
 
@@ -205,8 +212,13 @@ where
     F: Fn() -> bool,
 {
     let ext = picture_data_extension(picture_data);
-    let cache_path =
-        audio_artwork_cache_path(&entry.path, size, modified, NATIVE_ARTWORK_STREAM_INDEX, ext)?;
+    let cache_path = audio_artwork_cache_path(
+        &entry.path,
+        size,
+        modified,
+        NATIVE_ARTWORK_STREAM_INDEX,
+        ext,
+    )?;
     if cache_path.exists() {
         return preview_visual_from_path(cache_path);
     }
