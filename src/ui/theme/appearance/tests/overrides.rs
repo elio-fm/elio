@@ -1,4 +1,58 @@
+use super::super::{loading::load_theme_from_disk, rules::rgb};
 use super::*;
+use std::{
+    env,
+    ffi::OsString,
+    sync::{Mutex, OnceLock},
+};
+
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+struct EnvVarGuard {
+    key: &'static str,
+    original: Option<OsString>,
+}
+
+impl EnvVarGuard {
+    fn set_path(key: &'static str, value: &Path) -> Self {
+        let original = env::var_os(key);
+        unsafe {
+            env::set_var(key, value);
+        }
+        Self { key, original }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match self.original.as_ref() {
+            Some(value) => unsafe {
+                env::set_var(self.key, value);
+            },
+            None => unsafe {
+                env::remove_var(self.key);
+            },
+        }
+    }
+}
+
+fn write_theme_file(
+    label: &str,
+    contents: &str,
+) -> (PathBuf, PathBuf, std::sync::MutexGuard<'static, ()>) {
+    let guard = env_lock()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let config_home = temp_path(label);
+    let theme_dir = config_home.join("elio");
+    fs::create_dir_all(&theme_dir).expect("failed to create theme config dir");
+    let path = theme_dir.join("theme.toml");
+    fs::write(&path, contents).expect("failed to write theme file");
+    (config_home, path, guard)
+}
 
 #[test]
 fn load_theme_from_disk_reads_theme_file_from_xdg_config_home() {
