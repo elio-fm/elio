@@ -1,10 +1,13 @@
+mod access;
+mod json;
 mod render;
 mod types;
 
-use self::render::{render_parsed_log, truncate_display};
+use self::access::parse_access_log_document;
+use self::json::parse_json_log_document;
+use self::render::render_parsed_log;
 use self::types::{LogSource, ParsedLogDocument, ParsedLogEntry, RawLogEntry};
 use super::StructuredPreview;
-use serde_json::Value;
 
 pub(super) fn render_log_preview(text: &str) -> Option<StructuredPreview> {
     if text.trim().is_empty() {
@@ -19,173 +22,6 @@ pub(super) fn render_log_preview(text: &str) -> Option<StructuredPreview> {
         .or_else(|| parse_access_log_document(text))
         .or_else(|| parse_general_log_document(text))?;
     Some(render_parsed_log(parsed))
-}
-
-fn parse_json_log_document(text: &str) -> Option<ParsedLogDocument> {
-    let mut entries = Vec::new();
-    let mut non_empty = 0usize;
-    let mut parsed = 0usize;
-
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        non_empty += 1;
-        let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
-            continue;
-        };
-        let Some(entry) = parse_json_log_value(value) else {
-            continue;
-        };
-        parsed += 1;
-        entries.push(entry);
-    }
-
-    if non_empty == 0 || parsed == 0 || parsed * 100 < non_empty * 80 {
-        return None;
-    }
-
-    Some(ParsedLogDocument {
-        source: LogSource::Json,
-        entries,
-    })
-}
-
-fn parse_json_log_value(value: Value) -> Option<ParsedLogEntry> {
-    let Value::Object(map) = value else {
-        return None;
-    };
-
-    let mut timestamp = None;
-    let mut level = None;
-    let mut message = None;
-    let mut fields = Vec::new();
-
-    for (key, value) in map {
-        let normalized = key.to_ascii_lowercase();
-        if timestamp.is_none()
-            && matches!(
-                normalized.as_str(),
-                "ts" | "time" | "timestamp" | "@timestamp"
-            )
-        {
-            timestamp = json_scalar_to_string(&value);
-            continue;
-        }
-        if level.is_none()
-            && matches!(
-                normalized.as_str(),
-                "level" | "lvl" | "severity" | "log.level"
-            )
-        {
-            level = json_scalar_to_string(&value).and_then(|value| canonical_level(&value));
-            continue;
-        }
-        if message.is_none()
-            && matches!(
-                normalized.as_str(),
-                "msg" | "message" | "event" | "error" | "summary"
-            )
-        {
-            message = json_scalar_to_string(&value);
-            continue;
-        }
-
-        if let Some(stringified) = json_value_to_field(&value) {
-            fields.push((key, stringified));
-        }
-    }
-
-    if timestamp.is_none() && level.is_none() && message.is_none() && fields.is_empty() {
-        return None;
-    }
-
-    Some(ParsedLogEntry {
-        timestamp,
-        level,
-        message: message.unwrap_or_else(|| "JSON log entry".to_string()),
-        fields,
-        continuations: Vec::new(),
-    })
-}
-
-fn parse_access_log_document(text: &str) -> Option<ParsedLogDocument> {
-    let mut entries = Vec::new();
-    let mut non_empty = 0usize;
-    let mut parsed = 0usize;
-
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        non_empty += 1;
-        let Some(entry) = parse_access_log_line(trimmed) else {
-            continue;
-        };
-        parsed += 1;
-        entries.push(entry);
-    }
-
-    if non_empty == 0 || parsed == 0 || parsed * 100 < non_empty * 70 {
-        return None;
-    }
-
-    Some(ParsedLogDocument {
-        source: LogSource::Access,
-        entries,
-    })
-}
-
-fn parse_access_log_line(line: &str) -> Option<ParsedLogEntry> {
-    let mut rest = line.trim();
-    let host = take_token(&mut rest)?;
-    let ident = take_token(&mut rest)?;
-    let user = take_token(&mut rest)?;
-    let timestamp = take_wrapped(&mut rest, '[', ']')?;
-    let request = take_wrapped(&mut rest, '"', '"')?;
-    let status = take_token(&mut rest)?;
-    let bytes = take_token(&mut rest)?;
-    let referer = take_optional_wrapped(&mut rest, '"', '"');
-    let user_agent = take_optional_wrapped(&mut rest, '"', '"');
-
-    let method = request.split_whitespace().next().unwrap_or("REQUEST");
-    let path = request
-        .split_whitespace()
-        .nth(1)
-        .unwrap_or(request.as_str())
-        .to_string();
-    let level = access_status_level(&status);
-    let mut fields = vec![
-        ("host".to_string(), host),
-        ("status".to_string(), status),
-        ("bytes".to_string(), bytes),
-    ];
-    if ident != "-" {
-        fields.push(("ident".to_string(), ident));
-    }
-    if user != "-" {
-        fields.push(("user".to_string(), user));
-    }
-    if let Some(referer) = referer
-        && referer != "-"
-    {
-        fields.push(("referer".to_string(), referer));
-    }
-    if let Some(user_agent) = user_agent
-        && user_agent != "-"
-    {
-        fields.push(("user-agent".to_string(), user_agent));
-    }
-
-    Some(ParsedLogEntry {
-        timestamp: Some(timestamp),
-        level,
-        message: format!("{method} {path}"),
-        fields,
-        continuations: Vec::new(),
-    })
 }
 
 fn parse_general_log_document(text: &str) -> Option<ParsedLogDocument> {
@@ -498,66 +334,6 @@ fn tokenize_preserving_quotes(line: &str) -> Vec<String> {
         tokens.push(current);
     }
     tokens
-}
-
-fn take_token(input: &mut &str) -> Option<String> {
-    *input = input.trim_start();
-    let end = input.find(char::is_whitespace).unwrap_or(input.len());
-    if end == 0 {
-        return None;
-    }
-    let token = input[..end].to_string();
-    *input = &input[end..];
-    Some(token)
-}
-
-fn take_wrapped(input: &mut &str, open: char, close: char) -> Option<String> {
-    *input = input.trim_start();
-    let trimmed = *input;
-    if !trimmed.starts_with(open) {
-        return None;
-    }
-    let end = trimmed[1..].find(close)? + 1;
-    let content = trimmed[1..end].to_string();
-    *input = &trimmed[end + 1..];
-    Some(content)
-}
-
-fn take_optional_wrapped(input: &mut &str, open: char, close: char) -> Option<String> {
-    let trimmed = input.trim_start();
-    if trimmed.is_empty() || !trimmed.starts_with(open) {
-        *input = trimmed;
-        return None;
-    }
-    take_wrapped(input, open, close)
-}
-
-fn access_status_level(status: &str) -> Option<String> {
-    match status.parse::<u16>().ok()? / 100 {
-        5 => Some("ERROR".to_string()),
-        4 => Some("WARN".to_string()),
-        1..=3 => Some("INFO".to_string()),
-        _ => None,
-    }
-}
-
-fn json_scalar_to_string(value: &Value) -> Option<String> {
-    match value {
-        Value::String(string) => Some(string.clone()),
-        Value::Number(number) => Some(number.to_string()),
-        Value::Bool(boolean) => Some(boolean.to_string()),
-        _ => None,
-    }
-}
-
-fn json_value_to_field(value: &Value) -> Option<String> {
-    match value {
-        Value::Null => None,
-        Value::String(string) => Some(string.clone()),
-        Value::Number(number) => Some(number.to_string()),
-        Value::Bool(boolean) => Some(boolean.to_string()),
-        other => Some(truncate_display(&other.to_string(), 96)),
-    }
 }
 
 fn clean_wrapped(token: &str) -> String {
