@@ -1,4 +1,4 @@
-use super::{PreviewContent, PreviewKind};
+use super::{PreviewContent, PreviewKind, PreviewVisual, PreviewVisualKind, PreviewVisualLayout};
 use crate::app::Entry;
 use crate::ui::theme;
 use ratatui::{
@@ -6,7 +6,17 @@ use ratatui::{
     text::{Line, Span},
 };
 use serde::Deserialize;
-use std::process::Command;
+use std::{
+    collections::hash_map::DefaultHasher,
+    env, fs,
+    hash::{Hash, Hasher},
+    path::{Path, PathBuf},
+    process::Command,
+    time::SystemTime,
+};
+
+const VIDEO_THUMBNAIL_CACHE_VERSION: usize = 1;
+const VIDEO_FALLBACK_THUMBNAIL_TIMESTAMP_MS: [u64; 2] = [1_000, 0];
 
 #[derive(Clone, Debug, Default, PartialEq)]
 struct VideoMetadata {
@@ -41,19 +51,22 @@ pub(super) fn build_video_preview(
     entry: &Entry,
     type_detail: Option<&'static str>,
     ffprobe_available: bool,
-    _ffmpeg_available: bool,
+    ffmpeg_available: bool,
 ) -> PreviewContent {
     let detail = type_detail.unwrap_or("Video");
-    let byte_size = std::fs::metadata(&entry.path)
-        .map(|metadata| metadata.len())
-        .unwrap_or(entry.size);
+    let (byte_size, modified) = video_source_identity(entry);
     let metadata = ffprobe_available
         .then(|| probe_video_metadata(entry))
         .flatten()
         .unwrap_or_default();
     let lines = render_video_metadata_lines(&metadata, byte_size);
-
-    PreviewContent::new(PreviewKind::Video, lines).with_detail(detail)
+    let mut preview = PreviewContent::new(PreviewKind::Video, lines).with_detail(detail);
+    if ffmpeg_available
+        && let Some(visual) = extract_video_thumbnail(entry, byte_size, modified, &metadata)
+    {
+        preview = preview.with_preview_visual(visual);
+    }
+    preview
 }
 
 fn probe_video_metadata(entry: &Entry) -> Option<VideoMetadata> {
@@ -156,6 +169,147 @@ fn render_video_metadata_lines(metadata: &VideoMetadata, byte_size: u64) -> Vec<
         lines.push(preview_field_line(label, &value, label_width, palette));
     }
     lines
+}
+
+fn extract_video_thumbnail(
+    entry: &Entry,
+    size: u64,
+    modified: Option<SystemTime>,
+    metadata: &VideoMetadata,
+) -> Option<PreviewVisual> {
+    for timestamp_ms in thumbnail_candidate_timestamps_ms(metadata.duration_seconds) {
+        if let Some(visual) = extract_video_thumbnail_at(entry, size, modified, timestamp_ms) {
+            return Some(visual);
+        }
+    }
+    None
+}
+
+fn extract_video_thumbnail_at(
+    entry: &Entry,
+    size: u64,
+    modified: Option<SystemTime>,
+    timestamp_ms: u64,
+) -> Option<PreviewVisual> {
+    let cache_path = video_thumbnail_cache_path(&entry.path, size, modified, timestamp_ms)?;
+    if cache_path.exists() {
+        return preview_visual_from_path(cache_path);
+    }
+
+    let temp_path = video_thumbnail_temp_path(&cache_path)?;
+    if render_video_thumbnail_with_ffmpeg(&entry.path, &temp_path, timestamp_ms) {
+        finalize_video_thumbnail(&temp_path, &cache_path)?;
+        return preview_visual_from_path(cache_path);
+    }
+
+    let _ = fs::remove_file(temp_path);
+    None
+}
+
+fn thumbnail_candidate_timestamps_ms(duration_seconds: Option<f64>) -> Vec<u64> {
+    let mut timestamps = Vec::new();
+    if let Some(duration_seconds) = duration_seconds {
+        timestamps.push(clamp_thumbnail_timestamp_ms(duration_seconds));
+    }
+    for fallback in VIDEO_FALLBACK_THUMBNAIL_TIMESTAMP_MS {
+        if !timestamps.contains(&fallback) {
+            timestamps.push(fallback);
+        }
+    }
+    timestamps
+}
+
+fn clamp_thumbnail_timestamp_ms(duration_seconds: f64) -> u64 {
+    ((duration_seconds * 0.1).clamp(1.0, 30.0) * 1000.0).round() as u64
+}
+
+fn video_source_identity(entry: &Entry) -> (u64, Option<SystemTime>) {
+    let metadata = fs::metadata(&entry.path).ok();
+    let size = metadata
+        .as_ref()
+        .map(|metadata| metadata.len())
+        .unwrap_or(entry.size);
+    let modified = metadata
+        .as_ref()
+        .and_then(|metadata| metadata.modified().ok())
+        .or(entry.modified);
+    (size, modified)
+}
+
+fn render_video_thumbnail_with_ffmpeg(path: &Path, output_path: &Path, timestamp_ms: u64) -> bool {
+    let timestamp_arg = format_timestamp_arg(timestamp_ms);
+    Command::new("ffmpeg")
+        .args(["-loglevel", "error", "-y", "-ss", &timestamp_arg, "-i"])
+        .arg(path)
+        .args(["-frames:v", "1"])
+        .arg(output_path)
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+fn format_timestamp_arg(timestamp_ms: u64) -> String {
+    format!("{:.3}", timestamp_ms as f64 / 1000.0)
+}
+
+fn preview_visual_from_path(path: PathBuf) -> Option<PreviewVisual> {
+    let metadata = fs::metadata(&path).ok()?;
+    Some(PreviewVisual {
+        kind: PreviewVisualKind::Cover,
+        layout: PreviewVisualLayout::Inline,
+        path,
+        size: metadata.len(),
+        modified: metadata.modified().ok(),
+    })
+}
+
+fn video_thumbnail_cache_path(
+    path: &Path,
+    size: u64,
+    modified: Option<SystemTime>,
+    timestamp_ms: u64,
+) -> Option<PathBuf> {
+    let mut hasher = DefaultHasher::new();
+    VIDEO_THUMBNAIL_CACHE_VERSION.hash(&mut hasher);
+    path.hash(&mut hasher);
+    size.hash(&mut hasher);
+    modified.and_then(system_time_key).hash(&mut hasher);
+    timestamp_ms.hash(&mut hasher);
+    let cache_dir =
+        env::temp_dir().join(format!("elio-video-thumb-v{VIDEO_THUMBNAIL_CACHE_VERSION}"));
+    fs::create_dir_all(&cache_dir).ok()?;
+    Some(cache_dir.join(format!("thumb-{:016x}.png", hasher.finish())))
+}
+
+fn video_thumbnail_temp_path(path: &Path) -> Option<PathBuf> {
+    let parent = path.parent()?;
+    fs::create_dir_all(parent).ok()?;
+    let unique = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let stem = path.file_stem()?.to_string_lossy();
+    Some(parent.join(format!(".{stem}.tmp-{}-{unique}.png", std::process::id())))
+}
+
+fn finalize_video_thumbnail(temp_path: &Path, cache_path: &Path) -> Option<()> {
+    match fs::rename(temp_path, cache_path) {
+        Ok(()) => Some(()),
+        Err(_) if cache_path.exists() => {
+            let _ = fs::remove_file(temp_path);
+            Some(())
+        }
+        Err(_) => {
+            let _ = fs::remove_file(temp_path);
+            None
+        }
+    }
+}
+
+fn system_time_key(time: SystemTime) -> Option<(u64, u32)> {
+    time.duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .map(|duration| (duration.as_secs(), duration.subsec_nanos()))
 }
 
 fn format_duration(duration_seconds: f64) -> String {
