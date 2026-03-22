@@ -546,3 +546,143 @@ fn preview_field_line(
         Span::styled(value.to_string(), Style::default().fg(palette.text)),
     ])
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        path::Path,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::{Duration, Instant},
+    };
+
+    #[test]
+    fn artwork_detection_requires_attached_pic_disposition() {
+        let without_attached_pic = parse_ffprobe_metadata(
+            r#"{
+                "streams": [
+                    {
+                        "index": 0,
+                        "codec_type": "audio",
+                        "codec_name": "mp3",
+                        "sample_rate": "44100",
+                        "channels": 2,
+                        "bit_rate": "192000",
+                        "tags": {
+                            "title": "Signal",
+                            "track": "5"
+                        }
+                    },
+                    {
+                        "index": 1,
+                        "codec_type": "video",
+                        "codec_name": "mjpeg",
+                        "disposition": {
+                            "attached_pic": 0
+                        }
+                    }
+                ],
+                "format": {
+                    "duration": "123.456",
+                    "bit_rate": "256000",
+                    "tags": {
+                        "artist": "Elio",
+                        "album": "Preview Suite"
+                    }
+                }
+            }"#,
+        )
+        .expect("ffprobe payload should parse");
+        let with_attached_pic = parse_ffprobe_metadata(
+            r#"{
+                "streams": [
+                    {
+                        "index": 0,
+                        "codec_type": "audio",
+                        "codec_name": "mp3",
+                        "sample_rate": "44100",
+                        "channels": 2,
+                        "bit_rate": "192000"
+                    },
+                    {
+                        "index": 1,
+                        "codec_type": "video",
+                        "codec_name": "png",
+                        "disposition": {
+                            "attached_pic": 1
+                        }
+                    }
+                ],
+                "format": {
+                    "duration": "123.456",
+                    "bit_rate": "256000"
+                }
+            }"#,
+        )
+        .expect("ffprobe payload should parse");
+
+        assert_eq!(without_attached_pic.artwork_stream_index, None);
+        assert_eq!(
+            without_attached_pic.metadata.title.as_deref(),
+            Some("Signal")
+        );
+        assert_eq!(
+            without_attached_pic.metadata.artist.as_deref(),
+            Some("Elio")
+        );
+        assert_eq!(
+            without_attached_pic.metadata.album.as_deref(),
+            Some("Preview Suite")
+        );
+        assert_eq!(without_attached_pic.metadata.track.as_deref(), Some("5"));
+        assert_eq!(with_attached_pic.artwork_stream_index, Some(1));
+    }
+
+    #[test]
+    fn audio_artwork_cache_path_is_stable_for_same_input_and_changes_with_stream() {
+        let modified = Some(SystemTime::UNIX_EPOCH + Duration::from_secs(123));
+        let path = Path::new("/tmp/demo.mp3");
+        let current = audio_artwork_cache_path(path, 42, modified, 1)
+            .expect("cache path should be available");
+        let same = audio_artwork_cache_path(path, 42, modified, 1)
+            .expect("cache path should be available");
+        let different = audio_artwork_cache_path(path, 42, modified, 2)
+            .expect("cache path should be available");
+
+        assert_eq!(current, same);
+        assert_ne!(current, different);
+    }
+
+    #[test]
+    fn cancellable_command_helper_stops_long_running_process_promptly() {
+        let canceled = Arc::new(AtomicBool::new(false));
+        let cancel_flag = Arc::clone(&canceled);
+        let cancel_thread = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(25));
+            cancel_flag.store(true, Ordering::Relaxed);
+        });
+
+        let mut command = Command::new("bash");
+        command.arg("-lc").arg("sleep 1; printf late");
+        let started_at = Instant::now();
+        let output =
+            run_command_capture_stdout_cancellable(command, "audio-cancel-command", &|| {
+                canceled.load(Ordering::Relaxed)
+            });
+        cancel_thread
+            .join()
+            .expect("cancel thread should finish cleanly");
+
+        assert!(
+            output.is_none(),
+            "canceled command output should be discarded"
+        );
+        assert!(
+            started_at.elapsed() < Duration::from_millis(500),
+            "canceled command should stop promptly"
+        );
+    }
+}

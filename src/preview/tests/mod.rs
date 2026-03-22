@@ -15,6 +15,7 @@ use std::{
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
 mod archives;
+mod audio;
 mod binaries;
 mod code;
 mod documents;
