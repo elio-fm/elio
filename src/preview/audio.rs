@@ -327,8 +327,8 @@ where
             return None;
         }
 
-        match child.try_wait().ok()? {
-            Some(status) => {
+        match child.try_wait() {
+            Ok(Some(status)) => {
                 let output = status
                     .success()
                     .then(|| fs::read(&capture_path).ok())
@@ -336,7 +336,13 @@ where
                 let _ = fs::remove_file(&capture_path);
                 return output;
             }
-            None => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
+            Ok(None) => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = fs::remove_file(&capture_path);
+                return None;
+            }
         }
     }
 }
@@ -361,9 +367,14 @@ where
             return None;
         }
 
-        match child.try_wait().ok()? {
-            Some(status) => return Some(status.success()),
-            None => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
+        match child.try_wait() {
+            Ok(Some(status)) => return Some(status.success()),
+            Ok(None) => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
         }
     }
 }
