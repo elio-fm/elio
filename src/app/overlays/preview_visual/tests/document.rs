@@ -112,6 +112,36 @@ fn inline_page_image_leaves_room_for_summary_text() {
 }
 
 #[test]
+fn inline_cover_uses_more_of_the_preview_panel_height() {
+    let root = temp_root("inline-cover");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_terminal_image_support(&mut app);
+    app.set_ffmpeg_available_for_tests(true);
+    app.preview_state.content = PreviewContent::new(PreviewKind::Video, Vec::new())
+        .with_preview_visual(PreviewVisual {
+            kind: PreviewVisualKind::Cover,
+            layout: PreviewVisualLayout::Inline,
+            path: root.join("cover.png"),
+            size: 11 * 1024,
+            modified: None,
+        });
+
+    assert_eq!(
+        app.preview_visual_rows(Rect {
+            x: 0,
+            y: 0,
+            width: 48,
+            height: 20,
+        }),
+        Some(10)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn page_image_placeholder_message_stays_silent() {
     let root = temp_root("page-placeholder");
     fs::create_dir_all(&root).expect("failed to create temp root");
