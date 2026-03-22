@@ -81,10 +81,7 @@ pub(crate) fn loading_preview_for(
             Line::from("Extracting document metadata in background"),
         ]
     } else if facts.builtin_class == FileClass::Video {
-        vec![
-            Line::from("Loading preview"),
-            Line::from("Extracting video metadata in background"),
-        ]
+        Vec::new()
     } else {
         vec![
             Line::from("Loading preview"),

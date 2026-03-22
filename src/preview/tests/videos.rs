@@ -42,6 +42,22 @@ fn video_preview_falls_back_to_file_metadata_without_tools() {
 }
 
 #[test]
+fn video_loading_preview_uses_empty_body() {
+    let root = temp_path("video-loading");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("clip.webm");
+    fs::write(&path, b"still-loading").expect("failed to write video fixture");
+
+    let preview = loading_preview_for(&file_entry(path), &PreviewRequestOptions::Default);
+
+    assert_eq!(preview.kind, PreviewKind::Video);
+    assert_eq!(preview.detail.as_deref(), Some("WebM video"));
+    assert!(preview.lines.is_empty());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn video_preview_attaches_inline_cover_when_tools_are_available() {
     if !video_tools_available() {
         return;
