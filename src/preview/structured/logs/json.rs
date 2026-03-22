@@ -60,7 +60,8 @@ fn parse_json_log_value(value: Value) -> Option<ParsedLogEntry> {
                 "level" | "lvl" | "severity" | "log.level"
             )
         {
-            level = json_scalar_to_string(&value).and_then(|value| super::canonical_level(&value));
+            level = json_scalar_to_string(&value)
+                .and_then(|value| super::tokenize::canonical_level(&value));
             continue;
         }
         if message.is_none()
