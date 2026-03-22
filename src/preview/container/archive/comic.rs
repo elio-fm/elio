@@ -11,13 +11,21 @@ use std::{
     hash::{Hash, Hasher},
     io::Read,
     path::{Path, PathBuf},
-    process::Command,
-    sync::{Arc, Mutex, OnceLock},
+    process::{Command, Stdio},
+    sync::{
+        Arc, Mutex, OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
+    thread,
+    time::Duration,
 };
 use zip::ZipArchive;
 
 const COMIC_ARCHIVE_IMAGE_ENTRY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 const COMIC_ARCHIVE_CACHE_LIMIT: usize = 16;
+const CANCELLABLE_COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(5);
+
+static COMMAND_CAPTURE_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ComicArchiveBackend {
@@ -53,13 +61,21 @@ struct ComicArchiveCacheKey {
 
 static COMIC_ARCHIVE_CACHE: OnceLock<Mutex<ComicArchiveCache>> = OnceLock::new();
 
-pub(super) fn build_comic_archive_preview(
+pub(super) fn build_comic_archive_preview<F>(
     path: &Path,
     format: ArchiveFormat,
     type_detail: Option<&'static str>,
     page_index: usize,
-) -> Option<PreviewContent> {
-    let comic = load_comic_archive(path)?;
+    canceled: &F,
+) -> Option<PreviewContent>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
+    let comic = load_comic_archive(path, canceled)?;
     if comic.page_entries.is_empty() {
         return None;
     }
@@ -72,9 +88,16 @@ pub(super) fn build_comic_archive_preview(
         .with_detail(detail)
         .with_navigation_position("Page", current_index, comic.page_entries.len(), None);
 
-    if let Some(visual) =
-        extract_comic_archive_page_visual(path, &comic, &comic.page_entries[current_index])
-    {
+    if canceled() {
+        return None;
+    }
+
+    if let Some(visual) = extract_comic_archive_page_visual(
+        path,
+        &comic,
+        &comic.page_entries[current_index],
+        canceled,
+    ) {
         preview = preview.with_preview_visual(visual);
     } else {
         preview = preview.with_status_note("Unable to extract selected page");
@@ -83,7 +106,14 @@ pub(super) fn build_comic_archive_preview(
     Some(preview)
 }
 
-fn load_comic_archive(path: &Path) -> Option<Arc<CachedComicArchive>> {
+fn load_comic_archive<F>(path: &Path, canceled: &F) -> Option<Arc<CachedComicArchive>>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
     let key = comic_archive_cache_key(path)?;
     if let Some(cached) = comic_archive_cache()
         .lock()
@@ -95,7 +125,10 @@ fn load_comic_archive(path: &Path) -> Option<Arc<CachedComicArchive>> {
         return Some(cached);
     }
 
-    let parsed = Arc::new(parse_comic_archive(path)?);
+    let parsed = Arc::new(parse_comic_archive(path, canceled)?);
+    if canceled() {
+        return None;
+    }
     let mut cache = comic_archive_cache()
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
@@ -113,16 +146,25 @@ fn load_comic_archive(path: &Path) -> Option<Arc<CachedComicArchive>> {
     Some(parsed)
 }
 
-fn parse_comic_archive(path: &Path) -> Option<CachedComicArchive> {
-    parse_zip_comic_archive(path).or_else(|| parse_comic_archive_with_7z(path))
+fn parse_comic_archive<F>(path: &Path, canceled: &F) -> Option<CachedComicArchive>
+where
+    F: Fn() -> bool,
+{
+    parse_zip_comic_archive(path, canceled).or_else(|| parse_comic_archive_with_7z(path, canceled))
 }
 
-fn parse_zip_comic_archive(path: &Path) -> Option<CachedComicArchive> {
+fn parse_zip_comic_archive<F>(path: &Path, canceled: &F) -> Option<CachedComicArchive>
+where
+    F: Fn() -> bool,
+{
     let file = File::open(path).ok()?;
     let mut archive = ZipArchive::new(file).ok()?;
     let mut page_entries = Vec::new();
 
     for index in 0..archive.len() {
+        if canceled() {
+            return None;
+        }
         let entry = archive.by_index(index).ok()?;
         if entry.is_dir() {
             continue;
@@ -142,6 +184,9 @@ fn parse_zip_comic_archive(path: &Path) -> Option<CachedComicArchive> {
         });
     }
 
+    if canceled() {
+        return None;
+    }
     page_entries.sort_by(|left, right| natural_cmp(&left.sort_key, &right.sort_key));
 
     Some(CachedComicArchive {
@@ -150,26 +195,29 @@ fn parse_zip_comic_archive(path: &Path) -> Option<CachedComicArchive> {
     })
 }
 
-fn parse_comic_archive_with_7z(path: &Path) -> Option<CachedComicArchive> {
-    let output = Command::new("7z")
-        .arg("l")
-        .arg("-slt")
-        .arg(path)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
+fn parse_comic_archive_with_7z<F>(path: &Path, canceled: &F) -> Option<CachedComicArchive>
+where
+    F: Fn() -> bool,
+{
+    let mut command = Command::new("7z");
+    command.arg("l").arg("-slt").arg(path);
+    let output = run_command_capture_stdout_cancellable(command, "comic-list", canceled)?;
 
-    parse_comic_archive_from_7z_output(&String::from_utf8_lossy(&output.stdout))
+    parse_comic_archive_from_7z_output(&String::from_utf8_lossy(&output), canceled)
 }
 
-fn parse_comic_archive_from_7z_output(output: &str) -> Option<CachedComicArchive> {
+fn parse_comic_archive_from_7z_output<F>(output: &str, canceled: &F) -> Option<CachedComicArchive>
+where
+    F: Fn() -> bool,
+{
     let mut page_entries = Vec::new();
     let mut in_entries = false;
     let mut current = BTreeMap::<String, String>::new();
 
     for raw_line in output.lines() {
+        if canceled() {
+            return None;
+        }
         let line = raw_line.trim_end();
         if line == "----------" {
             in_entries = true;
@@ -191,7 +239,7 @@ fn parse_comic_archive_from_7z_output(output: &str) -> Option<CachedComicArchive
     }
     push_7z_comic_page_entry(&mut current, &mut page_entries);
 
-    if page_entries.is_empty() {
+    if canceled() || page_entries.is_empty() {
         return None;
     }
 
@@ -246,13 +294,24 @@ fn comic_archive_cache_key(path: &Path) -> Option<ComicArchiveCacheKey> {
     })
 }
 
-fn extract_comic_archive_page_visual(
+fn extract_comic_archive_page_visual<F>(
     archive_path: &Path,
     comic: &CachedComicArchive,
     page: &ComicArchivePage,
-) -> Option<PreviewVisual> {
+    canceled: &F,
+) -> Option<PreviewVisual>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
     let cache_path = archive_asset_cache_path(archive_path, &page.entry_name, &page.extension)?;
     if !cache_path.exists() {
+        if canceled() {
+            return None;
+        }
         let bytes = match comic.backend {
             ComicArchiveBackend::Zip => {
                 let file = File::open(archive_path).ok()?;
@@ -261,15 +320,23 @@ fn extract_comic_archive_page_visual(
                     &mut archive,
                     &page.entry_name,
                     COMIC_ARCHIVE_IMAGE_ENTRY_LIMIT_BYTES,
+                    canceled,
                 )?
             }
             ComicArchiveBackend::SevenZip => read_7z_entry_bytes_limited(
                 archive_path,
                 &page.entry_name,
                 COMIC_ARCHIVE_IMAGE_ENTRY_LIMIT_BYTES,
+                canceled,
             )?,
         };
+        if canceled() {
+            return None;
+        }
         fs::write(&cache_path, bytes).ok()?;
+    }
+    if canceled() {
+        return None;
     }
     let metadata = fs::metadata(&cache_path).ok()?;
     Some(PreviewVisual {
@@ -281,37 +348,54 @@ fn extract_comic_archive_page_visual(
     })
 }
 
-fn read_zip_entry_bytes_limited<R: Read + std::io::Seek>(
+fn read_zip_entry_bytes_limited<R, F>(
     archive: &mut ZipArchive<R>,
     name: &str,
     limit_bytes: usize,
-) -> Option<Vec<u8>> {
-    let entry = archive.by_name(name).ok()?;
+    canceled: &F,
+) -> Option<Vec<u8>>
+where
+    R: Read + std::io::Seek,
+    F: Fn() -> bool,
+{
+    let mut entry = archive.by_name(name).ok()?;
     let limit = (entry.size() as usize).min(limit_bytes);
     let mut bytes = Vec::with_capacity(limit);
-    entry
-        .take(limit_bytes as u64)
-        .read_to_end(&mut bytes)
-        .ok()?;
+    let mut buffer = [0_u8; 64 * 1024];
+    while bytes.len() < limit {
+        if canceled() {
+            return None;
+        }
+        let remaining = (limit - bytes.len()).min(buffer.len());
+        let read = entry.read(&mut buffer[..remaining]).ok()?;
+        if read == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&buffer[..read]);
+    }
     (!bytes.is_empty()).then_some(bytes)
 }
 
-fn read_7z_entry_bytes_limited(
+fn read_7z_entry_bytes_limited<F>(
     archive_path: &Path,
     entry_name: &str,
     limit_bytes: usize,
-) -> Option<Vec<u8>> {
-    let output = Command::new("7z")
+    canceled: &F,
+) -> Option<Vec<u8>>
+where
+    F: Fn() -> bool,
+{
+    let mut command = Command::new("7z");
+    command
         .arg("x")
         .arg("-so")
         .arg(archive_path)
-        .arg(entry_name)
-        .output()
-        .ok()?;
-    if !output.status.success() || output.stdout.is_empty() || output.stdout.len() > limit_bytes {
+        .arg(entry_name);
+    let output = run_command_capture_stdout_cancellable(command, "comic-extract", canceled)?;
+    if output.is_empty() || output.len() > limit_bytes {
         return None;
     }
-    Some(output.stdout)
+    Some(output)
 }
 
 fn archive_asset_cache_path(
@@ -337,20 +421,81 @@ fn archive_asset_cache_path(
     Some(cache_dir.join(format!("comic-{:016x}.{extension}", hasher.finish())))
 }
 
+fn run_command_capture_stdout_cancellable<F>(
+    mut command: Command,
+    capture_label: &str,
+    canceled: &F,
+) -> Option<Vec<u8>>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
+
+    let capture_path = command_capture_path(capture_label);
+    let stdout = File::create(&capture_path).ok()?;
+    let mut child = match command
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(_) => {
+            let _ = fs::remove_file(&capture_path);
+            return None;
+        }
+    };
+
+    loop {
+        if canceled() {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = fs::remove_file(&capture_path);
+            return None;
+        }
+
+        match child.try_wait().ok()? {
+            Some(status) => {
+                let output = status
+                    .success()
+                    .then(|| fs::read(&capture_path).ok())
+                    .flatten();
+                let _ = fs::remove_file(&capture_path);
+                return output;
+            }
+            None => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
+        }
+    }
+}
+
+fn command_capture_path(label: &str) -> PathBuf {
+    let id = COMMAND_CAPTURE_ID.fetch_add(1, Ordering::Relaxed);
+    env::temp_dir().join(format!("elio-{label}-{}-{id}.tmp", std::process::id()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::ArchiveFormat;
     use super::super::build_archive_preview;
     use super::{
         ComicArchiveBackend, build_comic_archive_preview, parse_comic_archive_from_7z_output,
+        parse_zip_comic_archive, run_command_capture_stdout_cancellable,
     };
     use crate::preview::PreviewKind;
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use std::{
-        env, fs,
+        env,
+        fs::{self, File},
+        io::Write,
         path::PathBuf,
         process::Command,
-        time::{SystemTime, UNIX_EPOCH},
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        thread,
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
 
     fn temp_path(label: &str) -> PathBuf {
@@ -390,14 +535,68 @@ Size = 40
 Packed Size = 40
 "#;
 
-        let comic =
-            parse_comic_archive_from_7z_output(output).expect("7z output should yield comic pages");
+        let comic = parse_comic_archive_from_7z_output(output, &|| false)
+            .expect("7z output should yield comic pages");
 
         assert_eq!(comic.backend, ComicArchiveBackend::SevenZip);
         assert_eq!(comic.page_entries.len(), 3);
         assert_eq!(comic.page_entries[0].entry_name, "001.jpg");
         assert_eq!(comic.page_entries[1].entry_name, "002.jpg");
         assert_eq!(comic.page_entries[2].entry_name, "010.jpg");
+    }
+
+    #[test]
+    fn parse_zip_comic_archive_returns_none_when_canceled() {
+        let root = temp_path("zip-cancel");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let archive = root.join("issue.cbz");
+        let file = File::create(&archive).expect("failed to create comic zip");
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("001.jpg", options)
+            .expect("failed to start first page");
+        zip.write_all(b"page-one")
+            .expect("failed to write first page");
+        zip.start_file("002.jpg", options)
+            .expect("failed to start second page");
+        zip.write_all(b"page-two")
+            .expect("failed to write second page");
+        zip.finish().expect("failed to finish comic zip");
+
+        let canceled = AtomicBool::new(true);
+        let parsed = parse_zip_comic_archive(&archive, &|| canceled.load(Ordering::Relaxed));
+        assert!(parsed.is_none(), "canceled zip parsing should stop early");
+
+        fs::remove_dir_all(&root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn cancellable_command_helper_stops_long_running_process_promptly() {
+        let canceled = Arc::new(AtomicBool::new(false));
+        let cancel_flag = Arc::clone(&canceled);
+        let cancel_thread = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(25));
+            cancel_flag.store(true, Ordering::Relaxed);
+        });
+
+        let mut command = Command::new("bash");
+        command.arg("-lc").arg("sleep 1; printf late");
+        let started_at = Instant::now();
+        let output = run_command_capture_stdout_cancellable(command, "cancel-command", &|| {
+            canceled.load(Ordering::Relaxed)
+        });
+        cancel_thread
+            .join()
+            .expect("cancel thread should finish cleanly");
+
+        assert!(
+            output.is_none(),
+            "canceled command output should be discarded"
+        );
+        assert!(
+            started_at.elapsed() < Duration::from_millis(500),
+            "canceled command should stop promptly"
+        );
     }
 
     #[test]
@@ -437,6 +636,7 @@ Packed Size = 40
             ArchiveFormat::ComicZip,
             Some("Comic ZIP archive"),
             0,
+            &|| false,
         )
         .expect("mislabeled cbz should still build comic preview");
 
@@ -496,8 +696,9 @@ Packed Size = 40
             return;
         }
 
-        let preview = build_archive_preview(&archive, Some("Comic RAR archive"), Some(0))
-            .expect("cbr should build comic preview");
+        let preview =
+            build_archive_preview(&archive, Some("Comic RAR archive"), Some(0), &|| false)
+                .expect("cbr should build comic preview");
 
         assert_eq!(preview.kind, PreviewKind::Comic);
         assert_eq!(preview.detail.as_deref(), Some("Comic RAR archive"));

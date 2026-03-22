@@ -15,6 +15,7 @@ impl App {
 
         self.preview_state.prefetch_ready_at = None;
         self.prefetch_nearby_comic_pages();
+        self.prefetch_nearby_comic_entries();
         self.prefetch_nearby_epub_sections();
         self.prefetch_nearby_previews();
         false

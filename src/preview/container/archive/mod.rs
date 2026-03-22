@@ -33,15 +33,27 @@ use zip::ZipArchive;
 
 const ARCHIVE_EMPTY_LABEL: &str = "Archive is empty";
 
-pub(in crate::preview) fn build_archive_preview(
+pub(in crate::preview) fn build_archive_preview<F>(
     path: &Path,
     type_detail: Option<&'static str>,
     comic_page_index: Option<usize>,
-) -> Option<PreviewContent> {
+    canceled: &F,
+) -> Option<PreviewContent>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
+        return None;
+    }
     let format = detect_archive_format(path);
     if matches!(format, ArchiveFormat::ComicZip | ArchiveFormat::ComicRar)
-        && let Some(preview) =
-            build_comic_archive_preview(path, format, type_detail, comic_page_index.unwrap_or(0))
+        && let Some(preview) = build_comic_archive_preview(
+            path,
+            format,
+            type_detail,
+            comic_page_index.unwrap_or(0),
+            canceled,
+        )
     {
         return Some(preview);
     }

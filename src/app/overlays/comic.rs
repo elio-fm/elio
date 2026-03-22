@@ -6,6 +6,7 @@ use std::{
 };
 
 const COMIC_PAGE_PREFETCH_OFFSETS: [isize; 3] = [1, 2, -1];
+const COMIC_ENTRY_PREFETCH_OFFSETS: [isize; 2] = [1, -1];
 
 #[derive(Clone, Debug, Default)]
 pub(in crate::app) struct ComicPreviewState {
@@ -229,6 +230,38 @@ impl App {
         }
     }
 
+    pub(in crate::app) fn prefetch_nearby_comic_entries(&mut self) {
+        let Some(current_entry) = self.selected_entry() else {
+            return;
+        };
+        if !is_comic_entry(current_entry) {
+            return;
+        }
+        let current_variant = self.current_preview_request_options();
+        if self
+            .cached_preview_for(current_entry, &current_variant)
+            .is_none()
+        {
+            return;
+        }
+
+        for entry in self.nearby_comic_entry_candidates() {
+            let variant = preview::PreviewRequestOptions::ComicPage(0);
+            if self.cached_preview_for(&entry, &variant).is_some() {
+                continue;
+            }
+
+            let _ = self.scheduler.submit_preview(PreviewRequest {
+                token: self.preview_state.token,
+                entry: entry.clone(),
+                work_class: preview_work_class(&entry, &variant),
+                variant,
+                code_line_limit: self.preview_code_line_limit_for_entry(&entry),
+                priority: PreviewPriority::Low,
+            });
+        }
+    }
+
     pub(in crate::app) fn nearby_comic_preview_visual_overlay_requests(
         &self,
     ) -> Vec<crate::app::overlays::images::StaticImageOverlayRequest> {
@@ -255,6 +288,44 @@ impl App {
                     })
             })
             .collect()
+    }
+
+    pub(in crate::app) fn nearby_comic_entry_preview_visual_overlay_requests(
+        &self,
+    ) -> Vec<crate::app::overlays::images::StaticImageOverlayRequest> {
+        let Some(area) = self.frame_state.preview_media_area else {
+            return Vec::new();
+        };
+
+        self.nearby_comic_entry_candidates()
+            .into_iter()
+            .filter_map(|entry| {
+                let variant = preview::PreviewRequestOptions::ComicPage(0);
+                let cached = self.cached_preview_for(&entry, &variant)?;
+                let visual = cached.preview_visual.as_ref()?;
+                (cached.kind == preview::PreviewKind::Comic
+                    && visual.kind == preview::PreviewVisualKind::PageImage)
+                    .then(|| {
+                        self.preview_visual_overlay_request_for_visual(cached.kind, visual, area)
+                    })
+            })
+            .collect()
+    }
+
+    pub(in crate::app) fn refreshes_image_preloads_for_nearby_comic_entry_preview(
+        &self,
+        entry: &Entry,
+        variant: &preview::PreviewRequestOptions,
+    ) -> bool {
+        variant == &preview::PreviewRequestOptions::ComicPage(0)
+            && self
+                .nearby_comic_entry_candidates()
+                .into_iter()
+                .any(|candidate| {
+                    candidate.path == entry.path
+                        && candidate.size == entry.size
+                        && candidate.modified == entry.modified
+                })
     }
 
     fn cached_comic_page_count(&self, entry: &Entry) -> Option<usize> {
@@ -285,6 +356,27 @@ impl App {
                 variant: preview::PreviewRequestOptions::ComicPage(page),
                 code_line_limit: preview::default_code_preview_line_limit(),
             })
+    }
+
+    fn nearby_comic_entry_candidates(&self) -> Vec<Entry> {
+        let Some(entry) = self.selected_entry() else {
+            return Vec::new();
+        };
+        if !is_comic_entry(entry) {
+            return Vec::new();
+        }
+
+        COMIC_ENTRY_PREFETCH_OFFSETS
+            .into_iter()
+            .filter_map(|offset| {
+                let target = self.selected as isize + offset;
+                (target >= 0)
+                    .then_some(target as usize)
+                    .and_then(|index| self.entries.get(index))
+                    .filter(|candidate| is_comic_entry(candidate))
+                    .cloned()
+            })
+            .collect()
     }
 }
 

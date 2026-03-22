@@ -15,6 +15,7 @@ impl App {
             self.nearby_static_image_overlay_requests(Some(request))
         } else if current_preview_visual.is_some() {
             let mut requests = self.nearby_comic_preview_visual_overlay_requests();
+            requests.extend(self.nearby_comic_entry_preview_visual_overlay_requests());
             requests.extend(self.nearby_epub_preview_visual_overlay_requests());
             requests
         } else {

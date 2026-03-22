@@ -146,3 +146,44 @@ fn nearby_archive_preview_skips_heavy_prefetch_work() {
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[test]
+fn nearby_comic_entry_prefetch_warms_adjacent_file_preview() {
+    let root = temp_path("comic-entry-prefetch");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let first = root.join("001.cbz");
+    let second = root.join("002.cbz");
+    write_binary_zip_entries(&first, &[("1.jpg", b"page-one")]);
+    write_binary_zip_entries(&second, &[("1.jpg", b"page-two")]);
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_background_preview(&mut app);
+    wait_for_preview_prefetch(&mut app);
+
+    for _ in 0..200 {
+        let _ = app.process_preview_prefetch_timers();
+        let _ = app.process_background_jobs();
+        if app.has_cached_comic_preview_page(&second, 0) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    assert!(app.has_cached_comic_preview_page(&second, 0));
+    assert!(app.scheduler_metrics().preview_jobs_submitted_low >= 1);
+
+    let preview_metrics = app.preview_metrics();
+    app.set_selected(1);
+    assert_eq!(
+        app.preview_metrics().cache_hits,
+        preview_metrics.cache_hits + 1
+    );
+    assert_eq!(app.preview_section_label(), "Comic");
+    assert!(
+        app.preview_lines()
+            .iter()
+            .all(|line| !line.to_string().contains("Loading preview"))
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}

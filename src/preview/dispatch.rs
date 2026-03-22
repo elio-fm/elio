@@ -152,11 +152,18 @@ where
     {
         return preview;
     }
-    if facts.builtin_class == FileClass::Archive
-        && let Some(preview) =
-            container::build_archive_preview(&entry.path, type_detail, options.comic_page_index())
-    {
-        return preview;
+    if facts.builtin_class == FileClass::Archive {
+        if let Some(preview) = container::build_archive_preview(
+            &entry.path,
+            type_detail,
+            options.comic_page_index(),
+            canceled,
+        ) {
+            return preview;
+        }
+        if canceled() {
+            return loading_preview_for(entry, options);
+        }
     }
     if let Some(document_format) = preview_spec.document_format
         && let Some(preview) = document::build_document_preview(

@@ -11,10 +11,18 @@ const JOB_RESULT_APPLY_TIME_BUDGET: Duration = Duration::from_millis(2);
 impl App {
     fn refresh_static_image_preloads_for_cached_selected_page_preview(
         &mut self,
+        build_entry: &Entry,
+        build_variant: &preview::PreviewRequestOptions,
         build_has_page_image: bool,
         is_current_entry: bool,
     ) {
-        if build_has_page_image && is_current_entry {
+        if build_has_page_image
+            && (is_current_entry
+                || self.refreshes_image_preloads_for_nearby_comic_entry_preview(
+                    build_entry,
+                    build_variant,
+                ))
+        {
             self.refresh_static_image_preloads();
         }
     }
@@ -191,6 +199,8 @@ impl App {
                             != self.preview_code_line_limit_for_entry(&build.entry)
                     {
                         self.refresh_static_image_preloads_for_cached_selected_page_preview(
+                            &build.entry,
+                            &build.variant,
                             build_has_page_image,
                             is_current_entry,
                         );

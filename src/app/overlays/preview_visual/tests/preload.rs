@@ -251,3 +251,54 @@ fn stale_adjacent_comic_preview_result_immediately_queues_image_prepare() {
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[test]
+fn cached_adjacent_comic_entry_preview_immediately_queues_image_prepare() {
+    let root = temp_root("comic-entry-adjacent-image-prepare");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let first = root.join("001.cbz");
+    let second = root.join("002.cbz");
+    let first_page = raster_image_bytes(ImageFormat::Jpeg, 1600, 900);
+    let second_page = raster_image_bytes(ImageFormat::Jpeg, 1600, 900);
+    write_binary_zip_entries(&first, &[("1.jpg", &first_page)]);
+    write_binary_zip_entries(&second, &[("1.jpg", &second_page)]);
+
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_terminal_image_support(&mut app);
+    app.frame_state.preview_media_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+    wait_for_displayed_preview_overlay(&mut app);
+    wait_for_preview_prefetch(&mut app);
+
+    let mut adjacent_key = None;
+    for _ in 0..200 {
+        let _ = app.process_preview_prefetch_timers();
+        let _ = app.process_background_jobs();
+        if !app.has_cached_comic_preview_page(&second, 0) {
+            thread::sleep(Duration::from_millis(10));
+            continue;
+        }
+
+        adjacent_key = app
+            .nearby_comic_entry_preview_visual_overlay_requests()
+            .into_iter()
+            .next()
+            .map(|request| StaticImageKey::from_request(&request));
+        if adjacent_key.is_some() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    let adjacent_key = adjacent_key.expect("adjacent comic entry preview should be cached");
+    assert!(
+        app.image_preview.pending_prepares.contains(&adjacent_key)
+            || app.image_preview.dimensions.contains_key(&adjacent_key)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
