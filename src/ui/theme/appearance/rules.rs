@@ -1022,6 +1022,8 @@ impl Theme {
                 selected_bg: rgb(32, 64, 100),
                 selected_border: rgb(149, 211, 255),
                 selection_bar: rgb(255, 178, 86),
+                yank_bar: rgb(87, 201, 87),
+                cut_bar: rgb(224, 90, 90),
                 sidebar_active: rgb(27, 56, 88),
                 button_bg: rgb(14, 23, 38),
                 button_disabled_bg: rgb(8, 16, 27),

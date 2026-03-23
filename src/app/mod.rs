@@ -1,4 +1,5 @@
 mod actions;
+mod clipboard;
 mod constants;
 mod create;
 mod directory_counts;
@@ -32,6 +33,7 @@ pub(crate) use crate::fs::{
     format_item_count, format_size, format_time_ago, rect_contains, sanitize_terminal_text,
 };
 
+pub(crate) use self::types::ClipOp;
 pub(crate) use self::types::FileClass;
 pub use self::types::{
     Entry, EntryHit, EntryKind, FrameState, PathHit, SearchHit, SearchRow, SearchScope,

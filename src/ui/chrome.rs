@@ -1,6 +1,6 @@
 use super::helpers;
 use super::theme::Palette;
-use crate::app::{App, FrameState};
+use crate::app::{App, ClipOp, FrameState};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
@@ -114,36 +114,53 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
     } else {
         helpers::truncate_middle(app.status_message(), sections[1].width as usize)
     };
-    let count = app.selection_count();
-    let left_line = if count > 0 {
-        let chip = format!(" {count} selected ");
-        let summary = helpers::truncate_middle(
-            &app.selection_summary(),
-            sections[0].width.saturating_sub(chip.len() as u16 + 2) as usize,
-        );
-        Line::from(vec![
-            Span::styled(
+    let clip = app.clipboard_info();
+    let sel_count = app.selection_count();
+
+    // Build the left line: optional clipboard chip, optional selection chip,
+    // then the path/position summary truncated to whatever space remains.
+    let left_line = {
+        let mut spans: Vec<Span<'_>> = Vec::new();
+        let mut chips_width: u16 = 0;
+
+        if let Some((clip_count, clip_op)) = clip {
+            let (label, color) = match clip_op {
+                ClipOp::Yank => (format!(" {clip_count} yanked "), palette.yank_bar),
+                ClipOp::Cut => (format!(" {clip_count} cut "), palette.cut_bar),
+            };
+            chips_width += label.len() as u16 + 2;
+            spans.push(Span::styled(
+                label,
+                Style::default()
+                    .bg(color)
+                    .fg(palette.chrome)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::raw("  "));
+        }
+
+        if sel_count > 0 {
+            let chip = format!(" {sel_count} selected ");
+            chips_width += chip.len() as u16 + 2;
+            spans.push(Span::styled(
                 chip,
                 Style::default()
                     .bg(palette.selection_bar)
                     .fg(palette.chrome)
                     .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(
-                summary,
-                Style::default()
-                    .fg(palette.text)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ])
-    } else {
-        Line::from(Span::styled(
-            helpers::truncate_middle(&app.selection_summary(), sections[0].width as usize),
+            ));
+            spans.push(Span::raw("  "));
+        }
+
+        let summary_width = sections[0].width.saturating_sub(chips_width) as usize;
+        spans.push(Span::styled(
+            helpers::truncate_middle(&app.selection_summary(), summary_width),
             Style::default()
                 .fg(palette.text)
                 .add_modifier(Modifier::BOLD),
-        ))
+        ));
+
+        Line::from(spans)
     };
     frame.render_widget(
         Paragraph::new(left_line).style(Style::default().bg(palette.chrome)),

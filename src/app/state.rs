@@ -79,6 +79,12 @@ pub(super) enum NavigationRepeatKey {
 }
 
 #[derive(Clone, Debug)]
+pub(super) struct Clipboard {
+    pub(super) paths: Vec<PathBuf>,
+    pub(super) op: ClipOp,
+}
+
+#[derive(Clone, Debug)]
 pub(super) struct TrashTarget {
     pub(super) path: std::path::PathBuf,
     pub(super) name: String,
@@ -352,6 +358,7 @@ pub struct App {
     pub(super) terminal_images: inline_image::TerminalImageState,
     pub(super) frame_state: FrameState,
     pub(super) selected_paths: HashSet<PathBuf>,
+    pub(super) clipboard: Option<Clipboard>,
     pub(super) trash: Option<TrashOverlay>,
     pub(super) restore: Option<RestoreOverlay>,
     pub(super) create: Option<CreateOverlay>,
@@ -430,6 +437,7 @@ impl App {
             terminal_images: inline_image::TerminalImageState::default(),
             frame_state: FrameState::default(),
             selected_paths: HashSet::new(),
+            clipboard: None,
             trash: None,
             restore: None,
             create: None,

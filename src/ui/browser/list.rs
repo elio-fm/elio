@@ -5,7 +5,7 @@ use super::entries::{
     render_compact_list_row,
 };
 use super::scrollbar::{render_browser_scrollbar, split_scrollbar_area};
-use crate::app::{App, EntryHit, FrameState, ViewMetrics};
+use crate::app::{App, ClipOp, EntryHit, FrameState, ViewMetrics};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -52,6 +52,7 @@ pub(super) fn render_list(
         };
         let selected = entry_index == app.selected;
         let multi_selected = app.is_selected(&entry.path);
+        let clip_op = app.clipboard_op_for(&entry.path);
         let icon_color = theme::entry_color(entry, palette);
         let bg = if selected {
             palette.selected_bg
@@ -67,7 +68,13 @@ pub(super) fn render_list(
                 row,
             );
         } else {
-            let bar_color = if selected {
+            // Clipboard state takes priority over cursor colour for the bar —
+            // the cursor position is already communicated by the row background.
+            let bar_color = if clip_op == Some(ClipOp::Yank) {
+                palette.yank_bar
+            } else if clip_op == Some(ClipOp::Cut) {
+                palette.cut_bar
+            } else if selected {
                 palette.selected_border
             } else if multi_selected {
                 palette.selection_bar
@@ -79,7 +86,7 @@ pub(super) fn render_list(
                 .constraints([Constraint::Length(1), Constraint::Min(1)])
                 .split(row);
             frame.render_widget(
-                Paragraph::new(if selected || multi_selected {
+                Paragraph::new(if selected || multi_selected || clip_op.is_some() {
                     "▌"
                 } else {
                     " "
