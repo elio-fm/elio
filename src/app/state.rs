@@ -92,6 +92,11 @@ pub(super) struct PasteProgress {
 }
 
 #[derive(Clone, Debug)]
+pub(super) struct TrashProgress {
+    pub(super) completed: usize,
+}
+
+#[derive(Clone, Debug)]
 pub(super) struct TrashTarget {
     pub(super) path: std::path::PathBuf,
     pub(super) name: String,
@@ -368,6 +373,8 @@ pub struct App {
     pub(super) clipboard: Option<Clipboard>,
     pub(super) paste_token: u64,
     pub(super) paste_progress: Option<PasteProgress>,
+    pub(super) trash_token: u64,
+    pub(super) trash_progress: Option<TrashProgress>,
     pub(super) trash: Option<TrashOverlay>,
     pub(super) restore: Option<RestoreOverlay>,
     pub(super) create: Option<CreateOverlay>,
@@ -449,6 +456,8 @@ impl App {
             clipboard: None,
             paste_token: 0,
             paste_progress: None,
+            trash_token: 0,
+            trash_progress: None,
             trash: None,
             restore: None,
             create: None,

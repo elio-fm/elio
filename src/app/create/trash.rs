@@ -1,15 +1,12 @@
 use super::super::{
     App,
-    state::{
-        DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad, TrashOverlay,
-        TrashTarget,
-    },
+    jobs::TrashRequest,
+    state::{TrashOverlay, TrashProgress, TrashTarget},
 };
 use crate::fs::rect_contains;
-use ::trash::delete;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use std::{env, fs, path::Path};
+use std::{env, path::Path};
 
 impl App {
     pub(in crate::app) fn cwd_is_trash(&self) -> bool {
@@ -244,48 +241,29 @@ impl App {
     }
 
     pub(in crate::app::create) fn confirm_trash(&mut self) -> Result<()> {
+        if self.trash_progress.is_some() {
+            self.status = "Trash in progress".to_string();
+            self.trash = None;
+            return Ok(());
+        }
         let Some(t) = self.trash.take() else {
             return Ok(());
         };
-        for target in &t.targets {
-            if t.permanent {
-                if target.is_dir {
-                    fs::remove_dir_all(&target.path).map_err(|error| {
-                        anyhow::anyhow!("Could not delete \"{}\": {error}", target.name)
-                    })?;
-                } else {
-                    fs::remove_file(&target.path).map_err(|error| {
-                        anyhow::anyhow!("Could not delete \"{}\": {error}", target.name)
-                    })?;
-                }
-            } else {
-                delete(&target.path).map_err(|error| {
-                    anyhow::anyhow!("Could not trash \"{}\": {error}", target.name)
-                })?;
-            }
+        if t.targets.is_empty() {
+            return Ok(());
         }
         self.selected_paths.clear();
-        let verb = if t.permanent {
-            "Permanently deleted"
-        } else {
-            "Trashed"
-        };
-        let status = match t.targets.len() {
-            0 => String::new(),
-            1 => format!("{verb} \"{}\"", t.targets[0].name),
-            n => format!("{verb} {n} items"),
-        };
-        self.queue_directory_load(PendingDirectoryLoad {
-            token: 0,
-            target_cwd: self.cwd.clone(),
-            previous_cwd: self.cwd.clone(),
-            previous_selected_path: None,
-            previous_selection_name: None,
-            reselect_path: None,
-            history_mode: DirectoryHistoryMode::None,
-            refresh_search: false,
-            completion: DirectoryLoadCompletion::Status(status),
-        })?;
+
+        let token = self.trash_token.wrapping_add(1);
+        self.trash_token = token;
+        self.trash_progress = Some(TrashProgress { completed: 0 });
+
+        self.scheduler.submit_trash(TrashRequest {
+            token,
+            targets: t.targets,
+            permanent: t.permanent,
+        });
+
         Ok(())
     }
 }

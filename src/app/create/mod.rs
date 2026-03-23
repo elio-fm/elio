@@ -13,8 +13,27 @@ mod tests {
     use std::{
         fs,
         path::{Path, PathBuf},
-        time::{SystemTime, UNIX_EPOCH},
+        time::{Duration, SystemTime, UNIX_EPOCH},
     };
+
+    /// Drive background jobs until both the trash worker and the subsequent
+    /// directory reload have both completed.  Checking only `trash_progress`
+    /// is not enough: a single `process_background_jobs` call can consume
+    /// the `Trash(done=true)` result *and* the immediately-queued
+    /// `Directory` reload in the same batch (a tiny directory scan completes
+    /// before the loop's next `try_recv`).  Driving until `pending_load` is
+    /// also gone guarantees that `app.status_message()` holds the final
+    /// status in all cases.
+    fn wait_for_trash_and_reload(app: &mut App) {
+        for _ in 0..500 {
+            let _ = app.process_background_jobs();
+            if app.trash_progress.is_none() && app.directory_runtime.pending_load.is_none() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("timed out waiting for trash and directory reload to complete");
+    }
 
     fn temp_path(label: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -257,12 +276,15 @@ mod tests {
         app.confirm_trash().expect("trash should succeed");
 
         assert!(app.trash.is_none());
-        assert!(!root.join("gone.txt").exists());
         assert!(app.selected_paths.is_empty());
 
-        let (status, reselect_path) = take_pending_status(&mut app);
-        assert_eq!(status, "Permanently deleted \"gone.txt\"");
-        assert_eq!(reselect_path, None);
+        // Deletion is async — wait for the background worker *and* the
+        // subsequent directory reload to both finish.
+        wait_for_trash_and_reload(&mut app);
+
+        assert!(!root.join("gone.txt").exists());
+        // Status is set by apply_directory_snapshot once the reload completes.
+        assert_eq!(app.status_message(), "Permanently deleted \"gone.txt\"");
 
         app.directory_runtime.watch = None;
         drop(app);

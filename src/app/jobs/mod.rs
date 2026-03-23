@@ -13,7 +13,7 @@ use self::{
         directory::DirectoryPool, directory_fingerprint::DirectoryFingerprintPool,
         image::ImagePreparePool, item_count::DirectoryItemCountPool,
         line_count::PreviewLineCountPool, paste::PastePool, pdf_probe::PdfProbePool,
-        pdf_render::PdfRenderPool,
+        pdf_render::PdfRenderPool, trash::TrashPool,
     },
 };
 use super::overlays::images::PreparedStaticImageAsset;
@@ -305,6 +305,23 @@ pub(super) struct PasteBuild {
     pub status: Option<String>,
 }
 
+#[derive(Clone, Debug)]
+pub(super) struct TrashRequest {
+    pub token: u64,
+    pub targets: Vec<crate::app::state::TrashTarget>,
+    pub permanent: bool,
+}
+
+#[derive(Debug)]
+pub(super) struct TrashBuild {
+    pub token: u64,
+    pub completed: usize,
+    /// `true` on the final result; `false` on intermediate progress updates.
+    pub done: bool,
+    /// Populated only when `done = true`.
+    pub status: Option<String>,
+}
+
 #[derive(Debug)]
 pub(super) enum JobResult {
     Directory(DirectoryBuild),
@@ -317,6 +334,7 @@ pub(super) enum JobResult {
     Search(SearchBuild),
     Preview(Box<PreviewBuild>),
     Paste(PasteBuild),
+    Trash(TrashBuild),
 }
 
 #[cfg(test)]
@@ -342,6 +360,7 @@ pub(super) struct JobScheduler {
     directory: DirectoryPool,
     directory_fingerprint: DirectoryFingerprintPool,
     paste: PastePool,
+    trash: TrashPool,
     directory_item_count: DirectoryItemCountPool,
     preview_line_count: PreviewLineCountPool,
     image_prepare: ImagePreparePool,
@@ -366,6 +385,7 @@ impl JobScheduler {
         Self {
             directory: DirectoryPool::new(1, result_tx.clone(), Arc::clone(&metrics)),
             paste: PastePool::new(result_tx.clone()),
+            trash: TrashPool::new(result_tx.clone()),
             directory_fingerprint: DirectoryFingerprintPool::new(
                 config.directory_fingerprint_worker_count,
                 result_tx.clone(),
@@ -500,6 +520,10 @@ impl JobScheduler {
         self.paste.cancel_paste(token);
     }
 
+    pub(super) fn submit_trash(&self, request: TrashRequest) -> bool {
+        self.trash.submit(request)
+    }
+
     pub(super) fn submit_search(&self, request: SearchRequest) -> bool {
         self.search.submit(request)
     }
@@ -524,6 +548,7 @@ impl JobScheduler {
             || self.directory.has_pending_work()
             || self.directory_fingerprint.has_pending_work()
             || self.paste.has_pending_work()
+            || self.trash.has_pending_work()
             || self.directory_item_count.has_pending_work()
             || self.preview_line_count.has_pending_work()
             || self.image_prepare.has_pending_work()

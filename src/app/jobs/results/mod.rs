@@ -203,6 +203,29 @@ impl App {
                     }
                     dirty = true;
                 }
+                JobResult::Trash(build) => {
+                    if build.token != self.trash_token {
+                        continue;
+                    }
+                    if build.done {
+                        self.trash_progress = None;
+                        let status = build.status.unwrap_or_default();
+                        let _ = self.queue_directory_load(PendingDirectoryLoad {
+                            token: 0,
+                            target_cwd: self.cwd.clone(),
+                            previous_cwd: self.cwd.clone(),
+                            previous_selected_path: None,
+                            previous_selection_name: None,
+                            reselect_path: None,
+                            history_mode: DirectoryHistoryMode::None,
+                            refresh_search: false,
+                            completion: DirectoryLoadCompletion::Status(status),
+                        });
+                    } else if let Some(prog) = &mut self.trash_progress {
+                        prog.completed = build.completed;
+                    }
+                    dirty = true;
+                }
                 JobResult::Preview(build) => {
                     self.cache_preview_result_with_code_line_limit(
                         &build.entry,
