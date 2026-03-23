@@ -62,6 +62,7 @@ impl App {
 
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.clear_selection();
+            self.clipboard = None;
             return Ok(());
         }
         if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -144,6 +145,7 @@ impl App {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Esc => {
                 self.clear_selection();
+                self.clipboard = None;
             }
             _ if is_help_shortcut(key) => {
                 self.clear_wheel_scroll();
@@ -205,6 +207,9 @@ impl App {
             }
             KeyCode::Char('f') => self.open_search_with_status(SearchScope::Folders),
             KeyCode::Char('o') => self.open_in_system()?,
+            KeyCode::Char('y') => self.yank(),
+            KeyCode::Char('x') => self.cut(),
+            KeyCode::Char('p') => self.paste()?,
             _ => {}
         }
         Ok(())

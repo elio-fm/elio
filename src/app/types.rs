@@ -55,6 +55,12 @@ pub enum EntryKind {
     File,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ClipOp {
+    Yank,
+    Cut,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub(crate) enum FileClass {
     Directory,

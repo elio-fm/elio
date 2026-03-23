@@ -1,7 +1,7 @@
 use super::super::theme::Palette;
 use super::super::{helpers, theme};
 use super::{grid::render_grid, list::render_list};
-use crate::app::{App, Entry, FrameState, format_size, format_time_ago};
+use crate::app::{App, ClipOp, Entry, FrameState, format_size, format_time_ago};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -86,7 +86,14 @@ pub(super) fn render_compact_list_row(
     let detail_width = 12usize;
     let modified_width = 10usize;
     let multi_selected = app.is_selected(&entry.path);
-    let marker_color = if selected {
+    let clip_op = app.clipboard_op_for(&entry.path);
+    // Clipboard state takes priority over cursor colour for the bar — the
+    // cursor position is already communicated by the row background.
+    let marker_color = if clip_op == Some(ClipOp::Yank) {
+        palette.yank_bar
+    } else if clip_op == Some(ClipOp::Cut) {
+        palette.cut_bar
+    } else if selected {
         palette.selected_border
     } else if multi_selected {
         palette.selection_bar
@@ -101,6 +108,8 @@ pub(super) fn render_compact_list_row(
         Style::default()
             .fg(palette.text)
             .add_modifier(Modifier::BOLD)
+    } else if clip_op == Some(ClipOp::Cut) {
+        Style::default().fg(palette.muted)
     } else {
         Style::default().fg(palette.text)
     };
@@ -117,7 +126,7 @@ pub(super) fn render_compact_list_row(
 
     Line::from(vec![
         Span::styled(
-            if selected || multi_selected {
+            if selected || multi_selected || clip_op.is_some() {
                 "▌"
             } else {
                 " "
