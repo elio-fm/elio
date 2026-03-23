@@ -375,8 +375,15 @@ pub struct App {
     pub(super) clipboard: Option<Clipboard>,
     pub(super) paste_token: u64,
     pub(super) paste_progress: Option<PasteProgress>,
+    /// Destination directory of the in-flight paste.  Kept separately from
+    /// `paste_progress` so that cancelling the chip does not lose the context
+    /// needed by the completion handler to reload the right directory.
+    pub(super) paste_dest_dir: Option<PathBuf>,
     pub(super) trash_token: u64,
     pub(super) trash_progress: Option<TrashProgress>,
+    /// Source directory of the in-flight trash.  Kept separately from
+    /// `trash_progress` for the same reason as `paste_dest_dir`.
+    pub(super) trash_source_cwd: Option<PathBuf>,
     pub(super) trash: Option<TrashOverlay>,
     pub(super) restore: Option<RestoreOverlay>,
     pub(super) create: Option<CreateOverlay>,
@@ -458,8 +465,10 @@ impl App {
             clipboard: None,
             paste_token: 0,
             paste_progress: None,
+            paste_dest_dir: None,
             trash_token: 0,
             trash_progress: None,
+            trash_source_cwd: None,
             trash: None,
             restore: None,
             create: None,
