@@ -86,15 +86,17 @@ impl App {
 
         let token = self.paste_token.wrapping_add(1);
         self.paste_token = token;
+        let dest_dir = self.cwd.clone();
         self.paste_progress = Some(PasteProgress {
             completed: 0,
             total: clipboard.paths.len(),
             op: clipboard.op,
         });
+        self.paste_dest_dir = Some(dest_dir.clone());
 
         self.scheduler.submit_paste(PasteRequest {
             token,
-            dest_dir: self.cwd.clone(),
+            dest_dir,
             paths: clipboard.paths,
             op: clipboard.op,
         });

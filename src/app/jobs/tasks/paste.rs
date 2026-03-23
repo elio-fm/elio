@@ -8,7 +8,13 @@ use std::{
         mpsc,
     },
     thread,
+    time::{Duration, Instant},
 };
+
+/// Minimum time between intermediate progress results sent to the UI.
+/// Prevents a per-file result flood from turning into a constant redraw storm
+/// when pasting or trashing large numbers of small files.
+const PROGRESS_SEND_INTERVAL: Duration = Duration::from_millis(80);
 
 pub(in crate::app::jobs) struct PastePool {
     shared: Arc<PasteShared>,
@@ -163,8 +169,8 @@ impl PasteShared {
     }
 }
 
-/// Execute the paste operation, sending intermediate progress results through
-/// `result_tx` after each item.  Returns `(completed, errors, stopped_early)`.
+/// Execute the paste operation, sending throttled intermediate progress
+/// results through `result_tx`.  Returns `(completed, errors, stopped_early)`.
 ///
 /// `stopped_early` is `true` if the loop was cut short by a cancel flag rather
 /// than running to completion.
@@ -177,6 +183,9 @@ fn run_paste(
     let mut completed = 0usize;
     let mut errors: Vec<String> = Vec::new();
     let mut stopped_early = false;
+    // Tracks when we last sent a progress result.  None = never sent, which
+    // causes the first update to go through immediately.
+    let mut last_progress_at: Option<Instant> = None;
 
     for src in &request.paths {
         if cancelled.load(Ordering::Relaxed)
@@ -187,24 +196,17 @@ fn run_paste(
         }
         let Some(file_name) = src.file_name().and_then(|n| n.to_str()) else {
             errors.push(format!("Cannot determine name for {}", src.display()));
-            // Still send progress so the chip stays fresh.
-            let _ = result_tx.send(JobResult::Paste(PasteBuild {
-                token: request.token,
-                completed,
-                done: false,
-                status: None,
-            }));
+            if !send_paste_progress(result_tx, request.token, completed, &mut last_progress_at) {
+                break;
+            }
             continue;
         };
 
         if !src.exists() {
             errors.push(format!("\"{}\" no longer exists", file_name));
-            let _ = result_tx.send(JobResult::Paste(PasteBuild {
-                token: request.token,
-                completed,
-                done: false,
-                status: None,
-            }));
+            if !send_paste_progress(result_tx, request.token, completed, &mut last_progress_at) {
+                break;
+            }
             continue;
         }
 
@@ -213,12 +215,10 @@ fn run_paste(
             let natural = request.dest_dir.join(file_name);
             if natural == *src {
                 completed += 1;
-                let _ = result_tx.send(JobResult::Paste(PasteBuild {
-                    token: request.token,
-                    completed,
-                    done: false,
-                    status: None,
-                }));
+                if !send_paste_progress(result_tx, request.token, completed, &mut last_progress_at)
+                {
+                    break;
+                }
                 continue;
             }
         }
@@ -273,21 +273,36 @@ fn run_paste(
             completed += 1;
         }
 
-        // Send intermediate progress after each item.
-        if result_tx
-            .send(JobResult::Paste(PasteBuild {
-                token: request.token,
-                completed,
-                done: false,
-                status: None,
-            }))
-            .is_err()
-        {
+        if !send_paste_progress(result_tx, request.token, completed, &mut last_progress_at) {
             break;
         }
     }
 
     (completed, errors, stopped_early)
+}
+
+/// Send a throttled intermediate progress result for the paste worker.
+/// Returns `false` if the receiver has been dropped (loop should break).
+fn send_paste_progress(
+    result_tx: &mpsc::Sender<JobResult>,
+    token: u64,
+    completed: usize,
+    last_progress_at: &mut Option<Instant>,
+) -> bool {
+    let now = Instant::now();
+    let due = last_progress_at.is_none_or(|t| now.duration_since(t) >= PROGRESS_SEND_INTERVAL);
+    if due {
+        *last_progress_at = Some(now);
+        return result_tx
+            .send(JobResult::Paste(PasteBuild {
+                token,
+                completed,
+                done: false,
+                status: None,
+            }))
+            .is_ok();
+    }
+    true
 }
 
 /// Return a destination path inside `dir` for an item named `name` that does

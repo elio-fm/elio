@@ -7,7 +7,13 @@ use std::{
         mpsc,
     },
     thread,
+    time::{Duration, Instant},
 };
+
+/// Minimum time between intermediate progress results sent to the UI.
+/// Prevents a per-file result flood from turning into a constant redraw storm
+/// when pasting or trashing large numbers of small files.
+const PROGRESS_SEND_INTERVAL: Duration = Duration::from_millis(80);
 
 pub(in crate::app::jobs) struct TrashPool {
     shared: Arc<TrashShared>,
@@ -113,6 +119,13 @@ impl TrashPool {
         true
     }
 
+    /// Signal the worker to stop after the current item if it is processing
+    /// the trash request with the given token.  A concurrent or future request
+    /// with a different token is unaffected.
+    pub(in crate::app::jobs) fn cancel_trash(&self, token: u64) {
+        self.shared.cancel_token.store(token, Ordering::Relaxed);
+    }
+
     pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         state.pending.is_some() || state.active
@@ -167,6 +180,9 @@ fn run_trash(
     let mut completed = 0usize;
     let mut errors: Vec<String> = Vec::new();
     let mut stopped_early = false;
+    // Tracks when we last sent a progress result.  None = never sent, which
+    // causes the first update to go through immediately.
+    let mut last_progress_at: Option<Instant> = None;
 
     for target in &request.targets {
         if cancelled.load(Ordering::Relaxed)
@@ -207,18 +223,34 @@ fn run_trash(
             completed += 1;
         }
 
-        if result_tx
-            .send(JobResult::Trash(TrashBuild {
-                token: request.token,
-                completed,
-                done: false,
-                status: None,
-            }))
-            .is_err()
-        {
+        if !send_trash_progress(result_tx, request.token, completed, &mut last_progress_at) {
             break;
         }
     }
 
     (completed, errors, stopped_early)
+}
+
+/// Send a throttled intermediate progress result for the trash worker.
+/// Returns `false` if the receiver has been dropped (loop should break).
+fn send_trash_progress(
+    result_tx: &mpsc::Sender<JobResult>,
+    token: u64,
+    completed: usize,
+    last_progress_at: &mut Option<Instant>,
+) -> bool {
+    let now = Instant::now();
+    let due = last_progress_at.is_none_or(|t| now.duration_since(t) >= PROGRESS_SEND_INTERVAL);
+    if due {
+        *last_progress_at = Some(now);
+        return result_tx
+            .send(JobResult::Trash(TrashBuild {
+                token,
+                completed,
+                done: false,
+                status: None,
+            }))
+            .is_ok();
+    }
+    true
 }

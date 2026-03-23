@@ -186,18 +186,37 @@ impl App {
                     }
                     if build.done {
                         self.paste_progress = None;
+                        let dest_dir = self
+                            .paste_dest_dir
+                            .take()
+                            .unwrap_or_else(|| self.cwd.clone());
                         let status = build.status.unwrap_or_default();
-                        let _ = self.queue_directory_load(PendingDirectoryLoad {
-                            token: 0,
-                            target_cwd: self.cwd.clone(),
-                            previous_cwd: self.cwd.clone(),
-                            previous_selected_path: None,
-                            previous_selection_name: None,
-                            reselect_path: None,
-                            history_mode: DirectoryHistoryMode::None,
-                            refresh_search: false,
-                            completion: DirectoryLoadCompletion::Status(status),
-                        });
+                        // Only reload in-place when the user is still in the
+                        // destination directory and not mid-navigation to
+                        // somewhere else (which would cancel their navigation).
+                        let nav_target = self
+                            .directory_runtime
+                            .pending_load
+                            .as_ref()
+                            .map(|l| l.target_cwd.as_path());
+                        let nav_to_dest = nav_target == Some(dest_dir.as_path());
+                        if dest_dir == self.cwd && (nav_target.is_none() || nav_to_dest) {
+                            let _ = self.queue_directory_load(PendingDirectoryLoad {
+                                token: 0,
+                                target_cwd: dest_dir,
+                                previous_cwd: self.cwd.clone(),
+                                previous_selected_path: None,
+                                previous_selection_name: None,
+                                reselect_path: None,
+                                history_mode: DirectoryHistoryMode::None,
+                                refresh_search: false,
+                                completion: DirectoryLoadCompletion::Status(status),
+                            });
+                        } else {
+                            // User navigated away — just surface the status.
+                            // Navigation will load dest_dir fresh if they return.
+                            self.status = status;
+                        }
                     } else if let Some(prog) = &mut self.paste_progress {
                         prog.completed = build.completed;
                     }
@@ -209,18 +228,37 @@ impl App {
                     }
                     if build.done {
                         self.trash_progress = None;
+                        let source_cwd = self
+                            .trash_source_cwd
+                            .take()
+                            .unwrap_or_else(|| self.cwd.clone());
                         let status = build.status.unwrap_or_default();
-                        let _ = self.queue_directory_load(PendingDirectoryLoad {
-                            token: 0,
-                            target_cwd: self.cwd.clone(),
-                            previous_cwd: self.cwd.clone(),
-                            previous_selected_path: None,
-                            previous_selection_name: None,
-                            reselect_path: None,
-                            history_mode: DirectoryHistoryMode::None,
-                            refresh_search: false,
-                            completion: DirectoryLoadCompletion::Status(status),
-                        });
+                        // Only reload in-place when the user is still in the
+                        // source directory and not mid-navigation to somewhere
+                        // else (which would cancel their navigation).
+                        let nav_target = self
+                            .directory_runtime
+                            .pending_load
+                            .as_ref()
+                            .map(|l| l.target_cwd.as_path());
+                        let nav_to_source = nav_target == Some(source_cwd.as_path());
+                        if source_cwd == self.cwd && (nav_target.is_none() || nav_to_source) {
+                            let _ = self.queue_directory_load(PendingDirectoryLoad {
+                                token: 0,
+                                target_cwd: source_cwd,
+                                previous_cwd: self.cwd.clone(),
+                                previous_selected_path: None,
+                                previous_selection_name: None,
+                                reselect_path: None,
+                                history_mode: DirectoryHistoryMode::None,
+                                refresh_search: false,
+                                completion: DirectoryLoadCompletion::Status(status),
+                            });
+                        } else {
+                            // User navigated away — just surface the status.
+                            // Navigation will load source_cwd fresh if they return.
+                            self.status = status;
+                        }
                     } else if let Some(prog) = &mut self.trash_progress {
                         prog.completed = build.completed;
                     }
