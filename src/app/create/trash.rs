@@ -77,6 +77,14 @@ impl App {
         self.trash.is_some()
     }
 
+    /// Returns `(completed, total, permanent)` for an in-progress
+    /// trash/delete, or `None` when idle.
+    pub fn trash_progress(&self) -> Option<(usize, usize, bool)> {
+        self.trash_progress
+            .as_ref()
+            .map(|p| (p.completed, p.total, p.permanent))
+    }
+
     pub fn trash_title(&self) -> String {
         let Some(t) = &self.trash else {
             return String::new();
@@ -256,7 +264,11 @@ impl App {
 
         let token = self.trash_token.wrapping_add(1);
         self.trash_token = token;
-        self.trash_progress = Some(TrashProgress { completed: 0 });
+        self.trash_progress = Some(TrashProgress {
+            completed: 0,
+            total: t.targets.len(),
+            permanent: t.permanent,
+        });
 
         self.scheduler.submit_trash(TrashRequest {
             token,

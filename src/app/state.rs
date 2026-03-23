@@ -94,6 +94,8 @@ pub(super) struct PasteProgress {
 #[derive(Clone, Debug)]
 pub(super) struct TrashProgress {
     pub(super) completed: usize,
+    pub(super) total: usize,
+    pub(super) permanent: bool,
 }
 
 #[derive(Clone, Debug)]

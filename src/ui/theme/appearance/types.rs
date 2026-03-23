@@ -22,6 +22,7 @@ pub(crate) struct Palette {
     pub selection_bar: Color,
     pub yank_bar: Color,
     pub cut_bar: Color,
+    pub trash_bar: Color,
     pub sidebar_active: Color,
     pub button_bg: Color,
     pub button_disabled_bg: Color,
