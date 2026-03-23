@@ -68,16 +68,16 @@ pub(super) fn render_list(
                 row,
             );
         } else {
-            // Clipboard state takes priority over cursor colour for the bar —
+            // All mark states take priority over the cursor colour for the bar —
             // the cursor position is already communicated by the row background.
             let bar_color = if clip_op == Some(ClipOp::Yank) {
                 palette.yank_bar
             } else if clip_op == Some(ClipOp::Cut) {
                 palette.cut_bar
-            } else if selected {
-                palette.selected_border
             } else if multi_selected {
                 palette.selection_bar
+            } else if selected {
+                palette.selected_border
             } else {
                 bg
             };

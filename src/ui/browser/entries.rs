@@ -87,16 +87,16 @@ pub(super) fn render_compact_list_row(
     let modified_width = 10usize;
     let multi_selected = app.is_selected(&entry.path);
     let clip_op = app.clipboard_op_for(&entry.path);
-    // Clipboard state takes priority over cursor colour for the bar — the
+    // All mark states take priority over the cursor colour for the bar — the
     // cursor position is already communicated by the row background.
     let marker_color = if clip_op == Some(ClipOp::Yank) {
         palette.yank_bar
     } else if clip_op == Some(ClipOp::Cut) {
         palette.cut_bar
-    } else if selected {
-        palette.selected_border
     } else if multi_selected {
         palette.selection_bar
+    } else if selected {
+        palette.selected_border
     } else {
         palette.panel_alt
     };
