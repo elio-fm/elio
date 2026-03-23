@@ -5,5 +5,6 @@ pub(super) mod directory_fingerprint;
 pub(super) mod image;
 pub(super) mod item_count;
 pub(super) mod line_count;
+pub(super) mod paste;
 pub(super) mod pdf_probe;
 pub(super) mod pdf_render;

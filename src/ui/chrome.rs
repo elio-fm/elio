@@ -116,14 +116,35 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
     };
     let clip = app.clipboard_info();
     let sel_count = app.selection_count();
+    let paste_prog = app.paste_progress();
 
-    // Build the left line: optional clipboard chip, optional selection chip,
-    // then the path/position summary truncated to whatever space remains.
+    // Build the left line: optional paste-progress chip (takes over the
+    // clipboard slot during an active paste), optional selection chip, then
+    // the path/position summary truncated to whatever space remains.
     let left_line = {
         let mut spans: Vec<Span<'_>> = Vec::new();
         let mut chips_width: u16 = 0;
 
-        if let Some((clip_count, clip_op)) = clip {
+        if let Some((completed, total, op)) = paste_prog {
+            let verb = match op {
+                ClipOp::Yank => "Copying",
+                ClipOp::Cut => "Moving",
+            };
+            let color = match op {
+                ClipOp::Yank => palette.yank_bar,
+                ClipOp::Cut => palette.cut_bar,
+            };
+            let label = format!(" {verb} {completed}/{total} ");
+            chips_width += label.len() as u16 + 2;
+            spans.push(Span::styled(
+                label,
+                Style::default()
+                    .bg(color)
+                    .fg(palette.chrome)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::raw("  "));
+        } else if let Some((clip_count, clip_op)) = clip {
             let (label, color) = match clip_op {
                 ClipOp::Yank => (format!(" {clip_count} yanked "), palette.yank_bar),
                 ClipOp::Cut => (format!(" {clip_count} cut "), palette.cut_bar),

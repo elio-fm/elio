@@ -1,0 +1,216 @@
+use super::super::App;
+use crate::app::ClipOp;
+use std::{
+    fs,
+    path::PathBuf,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+fn temp_path(label: &str) -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be after unix epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!("elio-clipboard-{label}-{unique}"))
+}
+
+/// Poll `process_background_jobs` until `paste_progress` is `None` (meaning
+/// the worker sent its final `done=true` result and the directory reload was
+/// queued) or the timeout expires.
+fn wait_for_paste(app: &mut App) {
+    for _ in 0..500 {
+        let _ = app.process_background_jobs();
+        if app.paste_progress().is_none() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for paste to complete");
+}
+
+// ── yank / copy path ─────────────────────────────────────────────────────────
+
+#[test]
+fn yank_and_paste_copies_file_to_destination() {
+    let src_dir = temp_path("yank-src");
+    let dst_dir = temp_path("yank-dst");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst_dir).unwrap();
+    fs::write(src_dir.join("hello.txt"), "data").unwrap();
+
+    // Navigate into src_dir so the entry appears in the list.
+    let mut app = App::new_at(src_dir.clone()).unwrap();
+    assert_eq!(app.entries.len(), 1);
+
+    // Yank the selected entry.
+    app.yank();
+    assert_eq!(
+        app.clipboard_info(),
+        Some((1, ClipOp::Yank)),
+        "clipboard should hold the yanked path"
+    );
+
+    // Point cwd at the destination (direct assignment avoids the async
+    // directory-load path; we only care about the paste behaviour here).
+    app.cwd = dst_dir.clone();
+    app.paste().unwrap();
+
+    // paste() should immediately set up paste_progress.
+    assert!(
+        app.paste_progress().is_some(),
+        "paste_progress should be set while paste is in flight"
+    );
+    let (_, total, op) = app.paste_progress().unwrap();
+    assert_eq!(total, 1);
+    assert_eq!(op, ClipOp::Yank);
+
+    // Clipboard is consumed immediately on paste().
+    assert!(
+        app.clipboard_info().is_none(),
+        "clipboard should be cleared after paste"
+    );
+
+    wait_for_paste(&mut app);
+
+    // File should exist in the destination.
+    assert!(
+        dst_dir.join("hello.txt").exists(),
+        "copied file should exist in destination"
+    );
+    // Source must still exist for yank (copy).
+    assert!(
+        src_dir.join("hello.txt").exists(),
+        "source file should still exist after yank-paste"
+    );
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst_dir).unwrap();
+}
+
+// ── cut / move path ───────────────────────────────────────────────────────────
+
+#[test]
+fn cut_and_paste_moves_file_to_destination() {
+    let src_dir = temp_path("cut-src");
+    let dst_dir = temp_path("cut-dst");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst_dir).unwrap();
+    fs::write(src_dir.join("move_me.txt"), "payload").unwrap();
+
+    let mut app = App::new_at(src_dir.clone()).unwrap();
+    assert_eq!(app.entries.len(), 1);
+
+    app.cut();
+    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Cut)));
+
+    app.cwd = dst_dir.clone();
+    app.paste().unwrap();
+    wait_for_paste(&mut app);
+
+    assert!(
+        dst_dir.join("move_me.txt").exists(),
+        "file should be present at destination after move"
+    );
+    assert!(
+        !src_dir.join("move_me.txt").exists(),
+        "source file should be gone after move"
+    );
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst_dir).unwrap();
+}
+
+// ── progress state machine ────────────────────────────────────────────────────
+
+#[test]
+fn paste_progress_reflects_total_and_is_cleared_after_completion() {
+    let src_dir = temp_path("progress-src");
+    let dst_dir = temp_path("progress-dst");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst_dir).unwrap();
+    fs::write(src_dir.join("a.txt"), "a").unwrap();
+    fs::write(src_dir.join("b.txt"), "b").unwrap();
+
+    let mut app = App::new_at(src_dir.clone()).unwrap();
+    // Insert both paths into the multi-selection directly (selected_paths is
+    // pub(super) within crate::app, which includes this test module).
+    app.selected_paths.insert(src_dir.join("a.txt"));
+    app.selected_paths.insert(src_dir.join("b.txt"));
+    app.yank();
+
+    app.cwd = dst_dir.clone();
+    app.paste().unwrap();
+
+    // Immediately after paste() the progress should be live with total = 2.
+    assert_eq!(
+        app.paste_progress().map(|(_, t, _)| t),
+        Some(2),
+        "paste_progress total should match the number of yanked items"
+    );
+
+    wait_for_paste(&mut app);
+
+    assert!(
+        app.paste_progress().is_none(),
+        "paste_progress should be None after done"
+    );
+    assert!(dst_dir.join("a.txt").exists());
+    assert!(dst_dir.join("b.txt").exists());
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst_dir).unwrap();
+}
+
+// ── stale-token rejection ─────────────────────────────────────────────────────
+
+#[test]
+fn stale_token_paste_results_are_ignored() {
+    let src_dir = temp_path("stale-src");
+    let dst_dir = temp_path("stale-dst");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst_dir).unwrap();
+    fs::write(src_dir.join("file.txt"), "x").unwrap();
+
+    let mut app = App::new_at(src_dir.clone()).unwrap();
+    app.yank();
+    app.cwd = dst_dir.clone();
+    app.paste().unwrap();
+
+    // Simulate a newer paste superseding the old one: bump paste_token and
+    // clear paste_progress manually so we can verify nothing revives it.
+    app.paste_token = app.paste_token.wrapping_add(1);
+    app.paste_progress = None;
+
+    // Drain all incoming results.  Because none carry the current token they
+    // must all be silently discarded.
+    for _ in 0..300 {
+        let _ = app.process_background_jobs();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    assert!(
+        app.paste_progress().is_none(),
+        "stale results must not update paste_progress"
+    );
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst_dir).unwrap();
+}
+
+// ── nothing-to-paste ─────────────────────────────────────────────────────────
+
+#[test]
+fn paste_with_empty_clipboard_sets_status_and_leaves_no_progress() {
+    let dir = temp_path("empty-paste");
+    fs::create_dir_all(&dir).unwrap();
+
+    let mut app = App::new_at(dir.clone()).unwrap();
+    app.paste().unwrap();
+
+    assert_eq!(app.status, "Nothing to paste");
+    assert!(app.paste_progress().is_none());
+
+    fs::remove_dir_all(&dir).unwrap();
+}

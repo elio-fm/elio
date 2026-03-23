@@ -12,7 +12,8 @@ use self::{
     tasks::{
         directory::DirectoryPool, directory_fingerprint::DirectoryFingerprintPool,
         image::ImagePreparePool, item_count::DirectoryItemCountPool,
-        line_count::PreviewLineCountPool, pdf_probe::PdfProbePool, pdf_render::PdfRenderPool,
+        line_count::PreviewLineCountPool, paste::PastePool, pdf_probe::PdfProbePool,
+        pdf_render::PdfRenderPool,
     },
 };
 use super::overlays::images::PreparedStaticImageAsset;
@@ -286,6 +287,24 @@ pub(super) struct PreviewRequest {
     pub ffmpeg_available: bool,
 }
 
+#[derive(Clone, Debug)]
+pub(super) struct PasteRequest {
+    pub token: u64,
+    pub dest_dir: std::path::PathBuf,
+    pub paths: Vec<std::path::PathBuf>,
+    pub op: ClipOp,
+}
+
+#[derive(Debug)]
+pub(super) struct PasteBuild {
+    pub token: u64,
+    pub completed: usize,
+    /// `true` on the final result; `false` on intermediate progress updates.
+    pub done: bool,
+    /// Populated only when `done = true`.
+    pub status: Option<String>,
+}
+
 #[derive(Debug)]
 pub(super) enum JobResult {
     Directory(DirectoryBuild),
@@ -297,6 +316,7 @@ pub(super) enum JobResult {
     PdfRender(PdfRenderBuild),
     Search(SearchBuild),
     Preview(Box<PreviewBuild>),
+    Paste(PasteBuild),
 }
 
 #[cfg(test)]
@@ -321,6 +341,7 @@ pub struct SchedulerMetricsSnapshot {
 pub(super) struct JobScheduler {
     directory: DirectoryPool,
     directory_fingerprint: DirectoryFingerprintPool,
+    paste: PastePool,
     directory_item_count: DirectoryItemCountPool,
     preview_line_count: PreviewLineCountPool,
     image_prepare: ImagePreparePool,
@@ -344,6 +365,7 @@ impl JobScheduler {
         let metrics = Arc::new(Mutex::new(SchedulerMetrics::default()));
         Self {
             directory: DirectoryPool::new(1, result_tx.clone(), Arc::clone(&metrics)),
+            paste: PastePool::new(result_tx.clone()),
             directory_fingerprint: DirectoryFingerprintPool::new(
                 config.directory_fingerprint_worker_count,
                 result_tx.clone(),
@@ -470,6 +492,10 @@ impl JobScheduler {
             .retain_pending(path, size, modified, keep_variants);
     }
 
+    pub(super) fn submit_paste(&self, request: PasteRequest) -> bool {
+        self.paste.submit(request)
+    }
+
     pub(super) fn submit_search(&self, request: SearchRequest) -> bool {
         self.search.submit(request)
     }
@@ -493,6 +519,7 @@ impl JobScheduler {
         !lock_unpoison(&self.buffered_results).is_empty()
             || self.directory.has_pending_work()
             || self.directory_fingerprint.has_pending_work()
+            || self.paste.has_pending_work()
             || self.directory_item_count.has_pending_work()
             || self.preview_line_count.has_pending_work()
             || self.image_prepare.has_pending_work()
