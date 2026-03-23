@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc, Condvar, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
     thread,
@@ -18,9 +18,13 @@ pub(in crate::app::jobs) struct PastePool {
 struct PasteShared {
     state: Mutex<PasteState>,
     available: Condvar,
-    /// Set to `true` in `Drop` so the worker stops between items rather than
-    /// running the full batch to completion on shutdown.
+    /// Set by `Drop` — signals the worker to stop for shutdown.
     cancelled: AtomicBool,
+    /// Token of the paste the user explicitly cancelled.  The worker stops
+    /// when its request token matches this value.  A new paste carries a
+    /// different token so it is never accidentally cancelled by an older
+    /// cancellation request — no reset needed on new submits.
+    cancel_token: AtomicU64,
 }
 
 struct PasteState {
@@ -39,19 +43,31 @@ impl PastePool {
             }),
             available: Condvar::new(),
             cancelled: AtomicBool::new(false),
+            cancel_token: AtomicU64::new(0), // 0 = "nothing cancelled" (tokens start at 1)
         });
         let shared_worker = Arc::clone(&shared);
         let worker = thread::spawn(move || {
             while let Some(request) = PasteShared::pop(&shared_worker) {
                 PasteShared::set_active(&shared_worker, true);
-                let (completed, errors) = run_paste(&request, &result_tx, &shared_worker.cancelled);
+                let (completed, errors, stopped_early) = run_paste(
+                    &request,
+                    &result_tx,
+                    &shared_worker.cancelled,
+                    &shared_worker.cancel_token,
+                );
                 PasteShared::set_active(&shared_worker, false);
 
                 let verb = match request.op {
                     ClipOp::Yank => "Copied",
                     ClipOp::Cut => "Moved",
                 };
-                let status = if errors.is_empty() {
+                let status = if stopped_early {
+                    match completed {
+                        0 => "Paste cancelled".to_string(),
+                        1 => format!("Paste cancelled — {verb} 1 item"),
+                        n => format!("Paste cancelled — {verb} {n} items"),
+                    }
+                } else if errors.is_empty() {
                     match completed {
                         0 => "Nothing was pasted".to_string(),
                         1 => format!("{verb} 1 item"),
@@ -100,6 +116,13 @@ impl PastePool {
         true
     }
 
+    /// Signal the worker to stop after the current item if it is processing
+    /// the paste with the given token.  A concurrent or future paste with a
+    /// different token is unaffected.
+    pub(in crate::app::jobs) fn cancel_paste(&self, token: u64) {
+        self.shared.cancel_token.store(token, Ordering::Relaxed);
+    }
+
     pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         state.pending.is_some() || state.active
@@ -141,21 +164,25 @@ impl PasteShared {
 }
 
 /// Execute the paste operation, sending intermediate progress results through
-/// `result_tx` after each item.  Returns `(completed_count, errors)`.
+/// `result_tx` after each item.  Returns `(completed, errors, stopped_early)`.
 ///
-/// Checks `cancelled` between items so that dropping the pool during a large
-/// batch stops promptly after the current item finishes rather than running
-/// the entire batch to completion.
+/// `stopped_early` is `true` if the loop was cut short by a cancel flag rather
+/// than running to completion.
 fn run_paste(
     request: &PasteRequest,
     result_tx: &mpsc::Sender<JobResult>,
     cancelled: &AtomicBool,
-) -> (usize, Vec<String>) {
+    cancel_token: &AtomicU64,
+) -> (usize, Vec<String>, bool) {
     let mut completed = 0usize;
     let mut errors: Vec<String> = Vec::new();
+    let mut stopped_early = false;
 
     for src in &request.paths {
-        if cancelled.load(Ordering::Relaxed) {
+        if cancelled.load(Ordering::Relaxed)
+            || cancel_token.load(Ordering::Relaxed) == request.token
+        {
+            stopped_early = true;
             break;
         }
         let Some(file_name) = src.file_name().and_then(|n| n.to_str()) else {
@@ -260,7 +287,7 @@ fn run_paste(
         }
     }
 
-    (completed, errors)
+    (completed, errors, stopped_early)
 }
 
 /// Return a destination path inside `dir` for an item named `name` that does

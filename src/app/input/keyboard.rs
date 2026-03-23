@@ -61,8 +61,13 @@ impl App {
         }
 
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.clear_selection();
-            self.clipboard = None;
+            if self.paste_progress.is_some() {
+                self.scheduler.cancel_paste(self.paste_token);
+                self.paste_progress = None;
+            } else {
+                self.clear_selection();
+                self.clipboard = None;
+            }
             return Ok(());
         }
         if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -144,8 +149,13 @@ impl App {
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Esc => {
-                self.clear_selection();
-                self.clipboard = None;
+                if self.paste_progress.is_some() {
+                    self.scheduler.cancel_paste(self.paste_token);
+                    self.paste_progress = None;
+                } else {
+                    self.clear_selection();
+                    self.clipboard = None;
+                }
             }
             _ if is_help_shortcut(key) => {
                 self.clear_wheel_scroll();

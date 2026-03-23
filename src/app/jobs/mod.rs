@@ -496,6 +496,10 @@ impl JobScheduler {
         self.paste.submit(request)
     }
 
+    pub(super) fn cancel_paste(&self, token: u64) {
+        self.paste.cancel_paste(token);
+    }
+
     pub(super) fn submit_search(&self, request: SearchRequest) -> bool {
         self.search.submit(request)
     }

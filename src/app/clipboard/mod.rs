@@ -70,6 +70,11 @@ impl App {
     /// Paste the clipboard contents into the current directory (async with
     /// progress reporting).
     pub(in crate::app) fn paste(&mut self) -> Result<()> {
+        if self.paste_progress.is_some() {
+            self.status = "Paste in progress — press Esc to cancel".to_string();
+            return Ok(());
+        }
+
         let Some(clipboard) = self.clipboard.take() else {
             self.status = "Nothing to paste".to_string();
             return Ok(());
