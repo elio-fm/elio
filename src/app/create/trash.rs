@@ -250,7 +250,7 @@ impl App {
 
     pub(in crate::app::create) fn confirm_trash(&mut self) -> Result<()> {
         if self.trash_progress.is_some() {
-            self.status = "Trash in progress".to_string();
+            self.status = "Trash in progress — press Esc to cancel".to_string();
             self.trash = None;
             return Ok(());
         }
@@ -269,6 +269,7 @@ impl App {
             total: t.targets.len(),
             permanent: t.permanent,
         });
+        self.trash_source_cwd = Some(self.cwd.clone());
 
         self.scheduler.submit_trash(TrashRequest {
             token,

@@ -524,6 +524,10 @@ impl JobScheduler {
         self.trash.submit(request)
     }
 
+    pub(super) fn cancel_trash(&self, token: u64) {
+        self.trash.cancel_trash(token);
+    }
+
     pub(super) fn submit_search(&self, request: SearchRequest) -> bool {
         self.search.submit(request)
     }

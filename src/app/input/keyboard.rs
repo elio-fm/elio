@@ -61,7 +61,10 @@ impl App {
         }
 
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            if self.paste_progress.is_some() {
+            if self.trash_progress.is_some() {
+                self.scheduler.cancel_trash(self.trash_token);
+                self.trash_progress = None;
+            } else if self.paste_progress.is_some() {
                 self.scheduler.cancel_paste(self.paste_token);
                 self.paste_progress = None;
             } else {
@@ -149,7 +152,10 @@ impl App {
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Esc => {
-                if self.paste_progress.is_some() {
+                if self.trash_progress.is_some() {
+                    self.scheduler.cancel_trash(self.trash_token);
+                    self.trash_progress = None;
+                } else if self.paste_progress.is_some() {
                     self.scheduler.cancel_paste(self.paste_token);
                     self.paste_progress = None;
                 } else {
