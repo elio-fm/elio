@@ -27,7 +27,7 @@ mod tests {
     fn wait_for_trash_and_reload(app: &mut App) {
         for _ in 0..500 {
             let _ = app.process_background_jobs();
-            if app.trash_progress.is_none() && app.directory_runtime.pending_load.is_none() {
+            if app.trash_progress().is_none() && app.directory_runtime.pending_load.is_none() {
                 return;
             }
             std::thread::sleep(Duration::from_millis(10));

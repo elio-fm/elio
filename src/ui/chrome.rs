@@ -117,15 +117,28 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
     let clip = app.clipboard_info();
     let sel_count = app.selection_count();
     let paste_prog = app.paste_progress();
+    let trash_prog = app.trash_progress();
 
-    // Build the left line: optional paste-progress chip (takes over the
-    // clipboard slot during an active paste), optional selection chip, then
-    // the path/position summary truncated to whatever space remains.
+    // Build the left line: optional progress chips (trash takes priority,
+    // then paste; both take over the clipboard slot), optional selection
+    // chip, then the path/position summary.
     let left_line = {
         let mut spans: Vec<Span<'_>> = Vec::new();
         let mut chips_width: u16 = 0;
 
-        if let Some((completed, total, op)) = paste_prog {
+        if let Some((completed, total, permanent)) = trash_prog {
+            let verb = if permanent { "Deleting" } else { "Trashing" };
+            let label = format!(" {verb} {completed}/{total} ");
+            chips_width += label.len() as u16 + 2;
+            spans.push(Span::styled(
+                label,
+                Style::default()
+                    .bg(palette.trash_bar)
+                    .fg(palette.chrome)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::raw("  "));
+        } else if let Some((completed, total, op)) = paste_prog {
             let verb = match op {
                 ClipOp::Yank => "Copying",
                 ClipOp::Cut => "Moving",

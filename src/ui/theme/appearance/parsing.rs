@@ -37,6 +37,7 @@ struct PaletteOverride {
     selection_bar: Option<String>,
     yank_bar: Option<String>,
     cut_bar: Option<String>,
+    trash_bar: Option<String>,
     sidebar_active: Option<String>,
     button_bg: Option<String>,
     button_disabled_bg: Option<String>,
@@ -159,6 +160,7 @@ fn apply_palette_overrides(
     apply_palette_color(&mut palette.selection_bar, overrides.selection_bar)?;
     apply_palette_color(&mut palette.yank_bar, overrides.yank_bar)?;
     apply_palette_color(&mut palette.cut_bar, overrides.cut_bar)?;
+    apply_palette_color(&mut palette.trash_bar, overrides.trash_bar)?;
     apply_palette_color(&mut palette.sidebar_active, overrides.sidebar_active)?;
     apply_palette_color(&mut palette.button_bg, overrides.button_bg)?;
     apply_palette_color(
