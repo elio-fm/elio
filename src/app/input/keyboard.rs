@@ -61,9 +61,14 @@ impl App {
         }
 
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            if self.trash_progress.is_some() {
+            if let Some(prog) = &self.trash_progress {
                 self.scheduler.cancel_trash(self.trash_token);
-                self.trash_progress = None;
+                if prog.permanent {
+                    // Permanent delete can be stopped between items; clear chip immediately.
+                    self.trash_progress = None;
+                }
+                // Non-permanent: the batch OS call is atomic and may already be
+                // in flight.  Keep the chip visible; done=true will clear it.
             } else if self.paste_progress.is_some() {
                 self.scheduler.cancel_paste(self.paste_token);
                 self.paste_progress = None;
@@ -152,9 +157,11 @@ impl App {
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Esc => {
-                if self.trash_progress.is_some() {
+                if let Some(prog) = &self.trash_progress {
                     self.scheduler.cancel_trash(self.trash_token);
-                    self.trash_progress = None;
+                    if prog.permanent {
+                        self.trash_progress = None;
+                    }
                 } else if self.paste_progress.is_some() {
                     self.scheduler.cancel_paste(self.paste_token);
                     self.paste_progress = None;

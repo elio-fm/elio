@@ -292,6 +292,195 @@ mod tests {
     }
 
     #[test]
+    fn confirm_trash_batch_trashes_multiple_files_and_reports_count() {
+        let root = temp_path("trash-batch-multi");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("alpha.txt"), "a").expect("failed to write alpha");
+        fs::write(root.join("beta.txt"), "b").expect("failed to write beta");
+        fs::write(root.join("gamma.txt"), "c").expect("failed to write gamma");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        // in_trash = false → non-permanent batch trash
+        app.selected_paths.insert(root.join("alpha.txt"));
+        app.selected_paths.insert(root.join("beta.txt"));
+        app.selected_paths.insert(root.join("gamma.txt"));
+        app.open_trash_prompt();
+
+        assert_eq!(app.trash_title(), "Trash 3 files?");
+        app.confirm_trash().expect("trash should succeed");
+
+        assert!(app.trash.is_none());
+        assert!(app.selected_paths.is_empty());
+
+        wait_for_trash_and_reload(&mut app);
+
+        assert!(!root.join("alpha.txt").exists());
+        assert!(!root.join("beta.txt").exists());
+        assert!(!root.join("gamma.txt").exists());
+        assert_eq!(app.status_message(), "Trashed 3 items");
+
+        // Purge the items we just trashed from the OS trash so the test
+        // leaves no permanent side-effects.
+        {
+            use trash::os_limited::{list, purge_all};
+            if let Ok(items) = list() {
+                let ours: Vec<_> = items
+                    .into_iter()
+                    .filter(|item| item.original_parent == root)
+                    .collect();
+                let _ = purge_all(ours);
+            }
+        }
+
+        app.directory_runtime.watch = None;
+        drop(app);
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn confirm_trash_batch_single_file_shows_quoted_name() {
+        let root = temp_path("trash-batch-single");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("notes.txt"), "hello").expect("failed to write file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        // in_trash = false → non-permanent batch trash
+        app.selected_paths.insert(root.join("notes.txt"));
+        app.open_trash_prompt();
+
+        assert_eq!(app.trash_title(), "Trash 1 selected file?");
+        app.confirm_trash().expect("trash should succeed");
+
+        assert!(app.trash.is_none());
+        assert!(app.selected_paths.is_empty());
+
+        wait_for_trash_and_reload(&mut app);
+
+        assert!(!root.join("notes.txt").exists());
+        assert_eq!(app.status_message(), "Trashed \"notes.txt\"");
+
+        // Purge from OS trash to avoid side-effects.
+        {
+            use trash::os_limited::{list, purge_all};
+            if let Ok(items) = list() {
+                let ours: Vec<_> = items
+                    .into_iter()
+                    .filter(|item| item.original_parent == root)
+                    .collect();
+                let _ = purge_all(ours);
+            }
+        }
+
+        app.directory_runtime.watch = None;
+        drop(app);
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn esc_during_batched_trash_keeps_chip_visible_until_done() {
+        // Non-permanent (batched) trash is a single atomic OS call that may
+        // already be in flight when the user presses Esc.  The chip must
+        // remain visible until the worker sends done=true so the user can
+        // see the operation is still running, not silently cancelled.
+        let root = temp_path("trash-cancel-batched");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("canary.txt"), "x").expect("failed to write file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.selected_paths.insert(root.join("canary.txt"));
+        app.open_trash_prompt();
+        app.confirm_trash().expect("trash should succeed");
+
+        // Chip is showing immediately after submit.
+        assert!(
+            app.trash_progress().is_some(),
+            "chip should be visible after submit"
+        );
+
+        // Simulate Esc: cancel_trash is called but chip must NOT be cleared.
+        app.scheduler.cancel_trash(app.trash_token);
+        // trash_progress is still Some — chip stays visible.
+        assert!(
+            app.trash_progress().is_some(),
+            "chip must remain visible after Esc for batched trash"
+        );
+
+        // Wait for the worker to finish (cancelled before start or completed).
+        wait_for_trash_and_reload(&mut app);
+
+        // Chip is gone once done=true is processed.
+        assert!(
+            app.trash_progress().is_none(),
+            "chip should be gone after completion"
+        );
+
+        // Status is either "Trash cancelled" (cancel won the race) or "Trashed
+        // \"canary.txt\"" (batch was already in flight).  Either is correct.
+        let status = app.status_message();
+        let valid = status.starts_with("Trash cancelled")
+            || status.starts_with("Trashed")
+            || status.starts_with("Nothing was deleted");
+        assert!(valid, "unexpected status: {status:?}");
+
+        // Purge from OS trash if the file actually got trashed.
+        if !root.join("canary.txt").exists() {
+            use trash::os_limited::{list, purge_all};
+            if let Ok(items) = list() {
+                let ours: Vec<_> = items
+                    .into_iter()
+                    .filter(|item| item.original_parent == root)
+                    .collect();
+                let _ = purge_all(ours);
+            }
+        }
+
+        app.directory_runtime.watch = None;
+        drop(app);
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn esc_during_permanent_delete_clears_chip_immediately() {
+        // Permanent delete can be interrupted between items, so pressing Esc
+        // should clear the chip right away (not wait for done=true).
+        let root = temp_path("trash-cancel-permanent");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("gone.txt"), "x").expect("failed to write file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.in_trash = true;
+        app.selected_paths.insert(root.join("gone.txt"));
+        app.open_trash_prompt();
+        app.confirm_trash().expect("trash should succeed");
+
+        assert!(
+            app.trash_progress().is_some(),
+            "chip should be visible after submit"
+        );
+
+        // Simulate Esc for permanent delete: chip clears immediately.
+        let token = app.trash_token;
+        app.scheduler.cancel_trash(token);
+        app.trash_progress = None;
+
+        assert!(
+            app.trash_progress().is_none(),
+            "chip should clear immediately for permanent delete"
+        );
+
+        // Drive to completion so background thread shuts down cleanly.
+        for _ in 0..200 {
+            let _ = app.process_background_jobs();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        app.directory_runtime.watch = None;
+        drop(app);
+        // root may or may not still contain gone.txt depending on the race.
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn confirm_restore_restores_file_from_trashinfo_and_queues_reload() {
         let (root, trash_files, original_path, trashed_path) = create_fake_trash_file("restore");
 

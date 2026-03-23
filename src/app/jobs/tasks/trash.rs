@@ -11,8 +11,9 @@ use std::{
 };
 
 /// Minimum time between intermediate progress results sent to the UI.
-/// Prevents a per-file result flood from turning into a constant redraw storm
-/// when pasting or trashing large numbers of small files.
+/// Only applies to permanent delete, which processes files one at a time.
+/// Non-permanent trash is a single batched OS call with no intermediate
+/// progress.
 const PROGRESS_SEND_INTERVAL: Duration = Duration::from_millis(80);
 
 pub(in crate::app::jobs) struct TrashPool {
@@ -177,11 +178,27 @@ fn run_trash(
     cancelled: &AtomicBool,
     cancel_token: &AtomicU64,
 ) -> (usize, Vec<String>, bool) {
+    if request.permanent {
+        run_permanent_delete(request, result_tx, cancelled, cancel_token)
+    } else {
+        run_trash_batch(request, cancelled, cancel_token)
+    }
+}
+
+/// Delete each target permanently using per-item `fs` calls.
+///
+/// Sends throttled intermediate progress results so the UI chip updates
+/// during long operations, and supports mid-batch cancellation between
+/// items.
+fn run_permanent_delete(
+    request: &TrashRequest,
+    result_tx: &mpsc::Sender<JobResult>,
+    cancelled: &AtomicBool,
+    cancel_token: &AtomicU64,
+) -> (usize, Vec<String>, bool) {
     let mut completed = 0usize;
     let mut errors: Vec<String> = Vec::new();
     let mut stopped_early = false;
-    // Tracks when we last sent a progress result.  None = never sent, which
-    // causes the first update to go through immediately.
     let mut last_progress_at: Option<Instant> = None;
 
     for target in &request.targets {
@@ -192,35 +209,17 @@ fn run_trash(
             break;
         }
 
-        let ok = if request.permanent {
-            let result = if target.is_dir {
-                fs::remove_dir_all(&target.path)
-                    .map_err(|e| anyhow::anyhow!("Could not delete \"{}\": {e}", target.name))
-            } else {
-                fs::remove_file(&target.path)
-                    .map_err(|e| anyhow::anyhow!("Could not delete \"{}\": {e}", target.name))
-            };
-            match result {
-                Ok(()) => true,
-                Err(e) => {
-                    errors.push(e.to_string());
-                    false
-                }
-            }
+        let result = if target.is_dir {
+            fs::remove_dir_all(&target.path)
+                .map_err(|e| anyhow::anyhow!("Could not delete \"{}\": {e}", target.name))
         } else {
-            match ::trash::delete(&target.path)
-                .map_err(|e| anyhow::anyhow!("Could not trash \"{}\": {e}", target.name))
-            {
-                Ok(()) => true,
-                Err(e) => {
-                    errors.push(e.to_string());
-                    false
-                }
-            }
+            fs::remove_file(&target.path)
+                .map_err(|e| anyhow::anyhow!("Could not delete \"{}\": {e}", target.name))
         };
 
-        if ok {
-            completed += 1;
+        match result {
+            Ok(()) => completed += 1,
+            Err(e) => errors.push(e.to_string()),
         }
 
         if !send_trash_progress(result_tx, request.token, completed, &mut last_progress_at) {
@@ -231,8 +230,39 @@ fn run_trash(
     (completed, errors, stopped_early)
 }
 
-/// Send a throttled intermediate progress result for the trash worker.
-/// Returns `false` if the receiver has been dropped (loop should break).
+/// Move all targets to the OS trash in a single batched call to
+/// `trash::delete_all`.
+///
+/// This is significantly faster than per-item trashing because the `trash`
+/// crate amortizes expensive setup work — reading `/proc/mounts`, resolving
+/// the trash directory, checking for name collisions — across the whole
+/// batch instead of repeating it for every file.
+///
+/// Cancellation is checked once before the batch starts.  The batch itself
+/// is treated as atomic from Elio's perspective: once the OS call is in
+/// flight it cannot be interrupted mid-way.  No intermediate progress
+/// results are sent; the UI chip stays at 0/N until the call returns.
+fn run_trash_batch(
+    request: &TrashRequest,
+    cancelled: &AtomicBool,
+    cancel_token: &AtomicU64,
+) -> (usize, Vec<String>, bool) {
+    if cancelled.load(Ordering::Relaxed) || cancel_token.load(Ordering::Relaxed) == request.token {
+        return (0, Vec::new(), true);
+    }
+
+    let paths: Vec<_> = request.targets.iter().map(|t| &t.path).collect();
+    let total = paths.len();
+
+    match ::trash::delete_all(paths) {
+        Ok(()) => (total, Vec::new(), false),
+        Err(e) => (0, vec![e.to_string()], false),
+    }
+}
+
+/// Send a throttled intermediate progress result for the permanent-delete
+/// worker.  Returns `false` if the receiver has been dropped (loop should
+/// break).
 fn send_trash_progress(
     result_tx: &mpsc::Sender<JobResult>,
     token: u64,

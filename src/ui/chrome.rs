@@ -127,8 +127,14 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
         let mut chips_width: u16 = 0;
 
         if let Some((completed, total, permanent)) = trash_prog {
-            let verb = if permanent { "Deleting" } else { "Trashing" };
-            let label = format!(" {verb} {completed}/{total} ");
+            let label = if permanent {
+                format!(" Deleting {completed}/{total} ")
+            } else {
+                // Batched trash has no per-item progress; show an
+                // indeterminate indicator rather than a misleading 0/N.
+                let noun = if total == 1 { "item" } else { "items" };
+                format!(" Trashing {total} {noun}… ")
+            };
             chips_width += label.len() as u16 + 2;
             spans.push(Span::styled(
                 label,

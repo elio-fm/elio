@@ -249,8 +249,14 @@ impl App {
     }
 
     pub(in crate::app::create) fn confirm_trash(&mut self) -> Result<()> {
-        if self.trash_progress.is_some() {
-            self.status = "Trash in progress — press Esc to cancel".to_string();
+        if let Some(prog) = &self.trash_progress {
+            self.status = if prog.permanent {
+                "Delete in progress — press Esc to cancel".to_string()
+            } else {
+                // Batched trash is a single atomic OS call that cannot be
+                // reliably interrupted once started.
+                "Trash in progress".to_string()
+            };
             self.trash = None;
             return Ok(());
         }
