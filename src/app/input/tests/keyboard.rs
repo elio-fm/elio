@@ -208,6 +208,55 @@ fn rapid_audio_navigation_defers_second_cold_heavy_preview_refresh() {
 }
 
 #[test]
+fn rapid_key_navigation_defers_preview_for_non_heavy_files() {
+    let root = temp_path("rapid-key-nav-preview-defer");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    for name in ["a.txt", "b.txt", "c.txt"] {
+        fs::write(root.join(name), name).expect("failed to write temp file");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.view_mode = ViewMode::List;
+    app.select_index(0);
+
+    // First move: last_key_nav_at is in the past → Immediate preview.
+    let token_before = app.preview_state.token;
+    app.move_vertical_keyboard(1);
+    assert_eq!(app.selected, 1);
+    assert!(
+        app.preview_state.token > token_before,
+        "first move should trigger an immediate preview refresh"
+    );
+    assert!(
+        app.preview_state.deferred_refresh_at.is_none(),
+        "first move should not leave a deferred timer"
+    );
+
+    // Second move within KEY_NAV_RAPID_THRESHOLD → Deferred preview.
+    let token_before = app.preview_state.token;
+    app.move_vertical_keyboard(1);
+    assert_eq!(app.selected, 2);
+    assert_eq!(
+        app.preview_state.token, token_before,
+        "second rapid move should not immediately refresh preview"
+    );
+    assert!(
+        app.preview_state.deferred_refresh_at.is_some(),
+        "second rapid move should schedule a deferred refresh"
+    );
+
+    // After the deferred delay the preview fires.
+    thread::sleep(HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY + Duration::from_millis(20));
+    assert!(app.process_preview_refresh_timers());
+    assert!(
+        app.preview_state.token > token_before,
+        "deferred preview should fire after pause"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn high_frequency_alt_right_does_not_trigger_history_navigation() {
     let root = temp_path("high-frequency-alt-right-no-history");
     let child = root.join("child");

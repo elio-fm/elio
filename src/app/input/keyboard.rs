@@ -182,18 +182,18 @@ impl App {
             }
             KeyCode::Tab => self.step_pinned_place(1)?,
             KeyCode::BackTab => self.step_pinned_place(-1)?,
-            KeyCode::Up | KeyCode::Char('k') => self.move_vertical(-1),
-            KeyCode::Down | KeyCode::Char('j') => self.move_vertical(1),
+            KeyCode::Up | KeyCode::Char('k') => self.move_vertical_keyboard(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_vertical_keyboard(1),
             KeyCode::Left | KeyCode::Char('h') => {
                 if self.view_mode == ViewMode::Grid {
-                    self.move_by(-1);
+                    self.move_by_keyboard(-1);
                 } else {
                     self.go_parent()?;
                 }
             }
             KeyCode::Right | KeyCode::Char('l') => {
                 if self.view_mode == ViewMode::Grid {
-                    self.move_by(1);
+                    self.move_by_keyboard(1);
                 } else if self.selected_entry().is_some_and(Entry::is_dir) {
                     self.open_selected()?;
                 } else {

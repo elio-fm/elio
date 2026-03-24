@@ -3,7 +3,7 @@ use std::{
     env,
     path::PathBuf,
     sync::Arc,
-    time::{Instant, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 
 use anyhow::{Context, Result};
@@ -425,6 +425,11 @@ pub struct App {
     pub(super) browser_wheel_post_burst_pending: bool,
     pub(super) last_navigation_key: Option<(NavigationRepeatKey, Instant)>,
     pub(super) last_selection_change_at: Instant,
+    /// Tracks when keyboard navigation last moved the selection.
+    /// Only updated by `move_vertical_keyboard`, `move_by_keyboard`, and `page`
+    /// (all keyboard-only paths), not by direct selection or wheel input, so it
+    /// does not interfere with wheel auto-focus routing.
+    pub(super) last_key_nav_at: Instant,
 }
 
 impl App {
@@ -525,6 +530,8 @@ impl App {
             browser_wheel_post_burst_pending: false,
             last_navigation_key: None,
             last_selection_change_at: Instant::now(),
+            // Initialize to far past so the first keypress is always Immediate.
+            last_key_nav_at: Instant::now() - Duration::from_secs(1),
         };
         app.in_trash = App::path_is_trash(&app.cwd);
         let snapshot = crate::fs::load_directory_snapshot(

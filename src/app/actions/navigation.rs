@@ -124,6 +124,20 @@ impl App {
         }
     }
 
+    /// Upgrade `Immediate → Deferred` when the selection changed recently,
+    /// indicating rapid keyboard/grid navigation.  The first move in any
+    /// sequence stays Immediate so single keypresses feel instant; only
+    /// sustained movement defers the preview until motion pauses.
+    fn rapid_nav_preview_mode(&self, mode: PreviewRefreshMode) -> PreviewRefreshMode {
+        if mode == PreviewRefreshMode::Immediate
+            && self.last_key_nav_at.elapsed() < KEY_NAV_RAPID_THRESHOLD
+        {
+            PreviewRefreshMode::Deferred
+        } else {
+            mode
+        }
+    }
+
     pub(in crate::app) fn set_selected_last(&mut self) {
         if !self.entries.is_empty() {
             let last = self.entries.len() - 1;
@@ -154,10 +168,35 @@ impl App {
 
     pub(in crate::app) fn page(&mut self, direction: isize) {
         let rows = self.frame_state.metrics.rows_visible.max(1) as isize;
+        let mode = self.rapid_nav_preview_mode(PreviewRefreshMode::Immediate);
+        let prev = self.selected;
         if self.view_mode == ViewMode::Grid {
-            self.move_grid_vertical(direction * rows);
+            self.move_grid_vertical_with_preview_mode(direction * rows, mode);
         } else {
-            self.set_selected_delta(direction * rows);
+            self.set_selected_delta_with_preview_mode(direction * rows, mode);
+        }
+        if self.selected != prev {
+            self.last_key_nav_at = Instant::now();
+        }
+    }
+
+    /// Keyboard-only: applies rapid-nav deferred preview for Up/Down/j/k, then moves.
+    pub(in crate::app) fn move_vertical_keyboard(&mut self, rows: isize) {
+        let mode = self.rapid_nav_preview_mode(PreviewRefreshMode::Immediate);
+        let prev = self.selected;
+        self.move_vertical_with_preview_mode(rows, mode);
+        if self.selected != prev {
+            self.last_key_nav_at = Instant::now();
+        }
+    }
+
+    /// Keyboard-only: applies rapid-nav deferred preview for grid h/l navigation, then moves.
+    pub(in crate::app) fn move_by_keyboard(&mut self, delta: isize) {
+        let mode = self.rapid_nav_preview_mode(PreviewRefreshMode::Immediate);
+        let prev = self.selected;
+        self.set_selected_delta_with_preview_mode(delta, mode);
+        if self.selected != prev {
+            self.last_key_nav_at = Instant::now();
         }
     }
 
@@ -179,10 +218,6 @@ impl App {
 
     pub(in crate::app) fn move_by(&mut self, delta: isize) {
         self.set_selected_delta(delta);
-    }
-
-    pub(in crate::app) fn move_grid_vertical(&mut self, rows: isize) {
-        self.move_grid_vertical_with_preview_mode(rows, PreviewRefreshMode::Immediate);
     }
 
     fn move_grid_vertical_with_preview_mode(

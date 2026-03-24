@@ -2,6 +2,11 @@ use std::time::Duration;
 
 pub(super) const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(450);
 pub(super) const KEY_REPEAT_NAV_INTERVAL: Duration = Duration::from_millis(28);
+/// If the selection changed within this window, treat keyboard navigation as
+/// "rapid" and defer the preview refresh until movement pauses.  Chosen to
+/// be longer than a typical deliberate keypress interval so a single
+/// intentional keypress still shows a preview immediately.
+pub(super) const KEY_NAV_RAPID_THRESHOLD: Duration = Duration::from_millis(250);
 pub(super) const WHEEL_SCROLL_INTERVAL_HORIZONTAL: Duration = Duration::from_millis(64);
 pub(super) const WHEEL_SCROLL_INTERVAL_VERTICAL: Duration = Duration::from_millis(16);
 pub(super) const WHEEL_SCROLL_INTERVAL_VERTICAL_HIGH_FREQUENCY: Duration =
