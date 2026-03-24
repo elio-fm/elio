@@ -128,6 +128,11 @@ class = "archive"
 icon = "󱗖"
 color = "#c9a07f"
 
+[extensions.cbr]
+class = "archive"
+icon = "󱗖"
+color = "#c9a07f"
+
 [extensions.lock]
 class = "data"
 icon = "󰈡"

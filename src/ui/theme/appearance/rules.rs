@@ -639,6 +639,14 @@ impl Theme {
                     color: Some(rgb(211, 170, 124)),
                 },
             ),
+            (
+                "cbr".to_string(),
+                RuleOverride {
+                    class: Some(FileClass::Archive),
+                    icon: Some("󱗖".to_string()),
+                    color: Some(rgb(211, 170, 124)),
+                },
+            ),
             ("doc".to_string(), rule_document_file()),
             ("docx".to_string(), rule_document_file()),
             ("docm".to_string(), rule_document_file()),

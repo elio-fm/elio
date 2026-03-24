@@ -361,6 +361,11 @@ class = "archive"
 icon = "󱗖"
 color = "#e0af68"
 
+[extensions.cbr]
+class = "archive"
+icon = "󱗖"
+color = "#e0af68"
+
 [extensions.ico]
 class = "image"
 icon = "󰋩"
