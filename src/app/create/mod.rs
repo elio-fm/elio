@@ -602,7 +602,7 @@ mod tests {
         // taken and a directory reload is queued.
         for _ in 0..200 {
             let _ = app.process_background_jobs();
-            if app.directory_runtime.pending_load.is_none() {
+            if app.restore_source_cwd.is_none() && app.directory_runtime.pending_load.is_none() {
                 break;
             }
             std::thread::sleep(Duration::from_millis(10));
