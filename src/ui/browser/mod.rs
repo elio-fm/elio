@@ -688,8 +688,11 @@ mod tests {
         let root = temp_path("preview-header-clamp");
         fs::create_dir_all(&root).expect("failed to create temp root");
         let total_lines = default_code_preview_line_limit() + 40;
+        // Short lines so all total_lines fit within 64 KiB (source_line_count is
+        // immediately known), but total_lines exceeds the 800-line cap so
+        // line truncation fires and the header shows the semantic coverage.
         let contents = (1..=total_lines)
-            .map(|index| format!("line {index} {}", "word ".repeat(30)))
+            .map(|index| format!("line {index} {}", "word ".repeat(3)))
             .collect::<Vec<_>>()
             .join("\n");
         fs::write(root.join("report.txt"), contents).expect("failed to write temp file");

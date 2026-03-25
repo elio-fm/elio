@@ -23,6 +23,7 @@ fn preview_request(entry: Entry, token: u64, priority: PreviewPriority) -> Previ
         entry,
         variant: PreviewRequestOptions::Default,
         code_line_limit: default_code_preview_line_limit(),
+        code_render_limit: default_code_preview_line_limit(),
         priority,
         work_class: PreviewWorkClass::Light,
         ffprobe_available: false,
@@ -37,6 +38,7 @@ fn preview_job_key(path: &str, size: u64) -> PreviewJobKey {
         modified: None,
         variant: PreviewRequestOptions::Default,
         code_line_limit: default_code_preview_line_limit(),
+        code_render_limit: default_code_preview_line_limit(),
     }
 }
 
@@ -237,6 +239,7 @@ fn low_priority_heavy_preview_does_not_start_a_second_heavy_job() {
         entry: first.clone(),
         variant: PreviewRequestOptions::Default,
         code_line_limit: default_code_preview_line_limit(),
+        code_render_limit: default_code_preview_line_limit(),
         priority: PreviewPriority::Low,
         work_class: PreviewWorkClass::Heavy,
         ffprobe_available: false,
@@ -247,6 +250,7 @@ fn low_priority_heavy_preview_does_not_start_a_second_heavy_job() {
         entry: second.clone(),
         variant: PreviewRequestOptions::Default,
         code_line_limit: default_code_preview_line_limit(),
+        code_render_limit: default_code_preview_line_limit(),
         priority: PreviewPriority::Low,
         work_class: PreviewWorkClass::Heavy,
         ffprobe_available: false,
@@ -267,6 +271,7 @@ fn low_priority_heavy_preview_does_not_start_a_second_heavy_job() {
             modified: None,
             variant: PreviewRequestOptions::Default,
             code_line_limit: default_code_preview_line_limit(),
+            code_render_limit: default_code_preview_line_limit(),
         }]
     );
 }
@@ -298,6 +303,7 @@ fn low_priority_light_preview_can_start_while_heavy_preview_is_active() {
         entry: heavy.clone(),
         variant: PreviewRequestOptions::Default,
         code_line_limit: default_code_preview_line_limit(),
+        code_render_limit: default_code_preview_line_limit(),
         priority: PreviewPriority::Low,
         work_class: PreviewWorkClass::Heavy,
         ffprobe_available: false,
@@ -308,6 +314,7 @@ fn low_priority_light_preview_can_start_while_heavy_preview_is_active() {
         entry: light.clone(),
         variant: PreviewRequestOptions::Default,
         code_line_limit: default_code_preview_line_limit(),
+        code_render_limit: default_code_preview_line_limit(),
         priority: PreviewPriority::Low,
         work_class: PreviewWorkClass::Light,
         ffprobe_available: false,

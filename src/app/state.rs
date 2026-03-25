@@ -199,6 +199,10 @@ pub(super) struct PreviewCacheKey {
     pub(super) path: PathBuf,
     pub(super) variant: preview::PreviewRequestOptions,
     pub(super) code_line_limit: usize,
+    /// The render limit used for this cache entry. Partial (incremental)
+    /// renders have `code_render_limit < code_line_limit`; complete renders
+    /// have `code_render_limit == code_line_limit`.
+    pub(super) code_render_limit: usize,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -318,6 +322,12 @@ pub(super) struct PreviewState {
     pub(super) line_count_cache: HashMap<PreviewLineCountKey, usize>,
     pub(super) line_count_order: VecDeque<PreviewLineCountKey>,
     pub(super) pending_line_counts: HashSet<PreviewLineCountKey>,
+    /// True while an incremental extension job is outstanding for the current
+    /// selection. Prevents duplicate extension submissions.
+    pub(super) incremental_render_in_flight: bool,
+    /// The path of the entry that triggered the in-flight extension job.
+    /// Used to clear `incremental_render_in_flight` when a stale result drops.
+    pub(super) incremental_render_path: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -470,6 +480,8 @@ impl App {
                 line_count_cache: HashMap::new(),
                 line_count_order: VecDeque::new(),
                 pending_line_counts: HashSet::new(),
+                incremental_render_in_flight: false,
+                incremental_render_path: None,
             },
             comic_preview: comic::ComicPreviewState::default(),
             epub_preview: epub::EpubPreviewState::default(),

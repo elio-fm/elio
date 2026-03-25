@@ -272,6 +272,9 @@ pub(super) struct PreviewBuild {
     pub entry: Entry,
     pub variant: preview::PreviewRequestOptions,
     pub code_line_limit: usize,
+    /// The actual line limit used for this render pass. May be less than
+    /// `code_line_limit` for initial incremental renders.
+    pub code_render_limit: usize,
     pub result: preview::PreviewContent,
 }
 
@@ -281,6 +284,10 @@ pub(super) struct PreviewRequest {
     pub entry: Entry,
     pub variant: preview::PreviewRequestOptions,
     pub code_line_limit: usize,
+    /// The actual render line limit for this pass. For the initial incremental
+    /// render this is smaller than `code_line_limit`; for extension/prefetch
+    /// renders it equals `code_line_limit`.
+    pub code_render_limit: usize,
     pub priority: PreviewPriority,
     pub work_class: PreviewWorkClass,
     pub ffprobe_available: bool,

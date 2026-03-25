@@ -126,6 +126,7 @@ fn audio_preview_shows_metadata_with_ffprobe_only() {
         &file_entry(path),
         &PreviewRequestOptions::Default,
         default_code_preview_line_limit(),
+        default_code_preview_line_limit(),
         true,
         false,
         &|| false,
@@ -191,6 +192,7 @@ fn audio_preview_skips_artwork_without_overlay_support_even_when_embedded_art_ex
         &file_entry(path),
         &PreviewRequestOptions::Default,
         default_code_preview_line_limit(),
+        default_code_preview_line_limit(),
         true,
         false,
         &|| false,
@@ -231,6 +233,7 @@ fn audio_preview_attaches_inline_cover_when_tools_and_artwork_are_available() {
     let preview = build_preview_with_options_and_code_line_limit(
         &file_entry(path),
         &PreviewRequestOptions::Default,
+        default_code_preview_line_limit(),
         default_code_preview_line_limit(),
         true,
         true,

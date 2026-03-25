@@ -250,7 +250,7 @@ mod tests {
         assert_eq!(preview, expected);
         assert_eq!(
             line_texts(&preview),
-            vec![" 1 first()".to_string(), " 2 second()".to_string()]
+            vec!["  1 first()".to_string(), "  2 second()".to_string()]
         );
     }
 
@@ -288,9 +288,9 @@ mod tests {
         assert_eq!(
             line_texts(&syntect_preview),
             vec![
-                " 1 fn main() {".to_string(),
-                " 2     println!(\"hi\");".to_string(),
-                " 3 }".to_string(),
+                "  1 fn main() {".to_string(),
+                "  2     println!(\"hi\");".to_string(),
+                "  3 }".to_string(),
             ]
         );
 
@@ -304,10 +304,10 @@ mod tests {
         assert_eq!(
             line_texts(&custom_preview),
             vec![
-                " 1 {".to_string(),
-                " 2   // keep me".to_string(),
-                " 3   \"name\": \"elio\"".to_string(),
-                " 4 }".to_string(),
+                "  1 {".to_string(),
+                "  2   // keep me".to_string(),
+                "  3   \"name\": \"elio\"".to_string(),
+                "  4 }".to_string(),
             ]
         );
     }
@@ -323,7 +323,7 @@ mod tests {
         );
         assert_eq!(
             line_texts(&syntect_preview),
-            vec![" 1 fn one() {}".to_string(), " 2 fn two() {}".to_string()]
+            vec!["  1 fn one() {}".to_string(), "  2 fn two() {}".to_string()]
         );
 
         let custom_preview = render_code_preview(
@@ -335,7 +335,7 @@ mod tests {
         );
         assert_eq!(
             line_texts(&custom_preview),
-            vec![" 1 {".to_string(), " 2   // first".to_string()]
+            vec!["  1 {".to_string(), "  2   // first".to_string()]
         );
     }
 
@@ -354,7 +354,7 @@ mod tests {
             },
         );
 
-        assert_eq!(line_texts(&preview), vec![" 1 fn first() {}".to_string()]);
+        assert_eq!(line_texts(&preview), vec!["  1 fn first() {}".to_string()]);
 
         let canceled_immediately = render_code_preview(
             PreviewSpec::code("rust", CodeBackend::Syntect, None),

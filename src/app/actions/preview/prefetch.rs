@@ -61,7 +61,7 @@ impl App {
                 continue;
             }
 
-            let request = self.build_preview_request(
+            let request = self.build_full_preview_request(
                 entry,
                 variant,
                 PreviewPriority::Low,
@@ -94,7 +94,7 @@ impl App {
                 continue;
             }
 
-            let request = self.build_preview_request(
+            let request = self.build_full_preview_request(
                 entry.clone(),
                 variant.clone(),
                 PreviewPriority::Low,

@@ -137,6 +137,7 @@ pub(crate) fn build_preview_with_options(
         entry,
         options,
         default_code_preview_line_limit(),
+        default_code_preview_line_limit(),
         false,
         false,
         &|| false,
@@ -147,6 +148,7 @@ pub(crate) fn build_preview_with_options_and_code_line_limit<F>(
     entry: &Entry,
     options: &PreviewRequestOptions,
     code_line_limit: usize,
+    code_render_limit: usize,
     ffprobe_available: bool,
     ffmpeg_available: bool,
     canceled: &F,
@@ -274,11 +276,13 @@ where
             }
         }
 
-        let code_line_truncated = source_line_count > effective_code_line_limit;
+        // Apply code_render_limit: clamp to min(code_render_limit, effective_code_line_limit).
+        let actual_render_limit = code_render_limit.min(effective_code_line_limit);
+        let code_line_truncated = source_line_count > actual_render_limit;
         let code_truncation_note = truncation_note_with_line_limit(
             text_preview.bytes_truncated,
             code_line_truncated,
-            effective_code_line_limit,
+            actual_render_limit,
         );
         preview_truncation_note =
             combine_preview_notes(preview_truncation_note, code_truncation_note.as_deref());
@@ -288,12 +292,16 @@ where
                 preview_spec,
                 &text_preview.text,
                 true,
-                effective_code_line_limit,
+                actual_render_limit,
                 canceled,
             ),
         );
         if let Some(detail) = source_preview_detail(type_detail, preview_spec) {
             preview = preview.with_detail(detail);
+        }
+        // Set incremental_render_limit when more source lines exist than were rendered.
+        if source_line_count > actual_render_limit {
+            preview.incremental_render_limit = Some(actual_render_limit);
         }
         return finalize_text_preview_with_line_limit(
             preview,
@@ -301,7 +309,7 @@ where
             text_preview.bytes_truncated,
             code_line_truncated,
             preview_truncation_note,
-            effective_code_line_limit,
+            actual_render_limit,
         );
     }
 

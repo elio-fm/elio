@@ -5,6 +5,9 @@ impl App {
     pub(in crate::app) fn refresh_preview(&mut self) {
         self.preview_state.deferred_refresh_at = None;
         self.preview_state.prefetch_ready_at = None;
+        // Reset incremental state on every selection refresh.
+        self.preview_state.incremental_render_in_flight = false;
+        self.preview_state.incremental_render_path = None;
         self.sync_comic_preview_selection();
         self.sync_epub_preview_selection();
         self.sync_pdf_preview_selection();
@@ -32,6 +35,20 @@ impl App {
                 if let Some(preview) = self.cached_preview_for(&entry, &preview_options) {
                     self.preview_state.metrics.cache_hits += 1;
                     self.preview_state.load_state = None;
+                    // If the cached preview is partial, fire an extension job.
+                    if preview.is_incrementally_partial()
+                        && let Some(request) = self.build_code_preview_extension_request(
+                            entry.clone(),
+                            preview_options.clone(),
+                            PreviewPriority::High,
+                        )
+                    {
+                        let entry_path = entry.path.clone();
+                        if self.scheduler.submit_preview(request) {
+                            self.preview_state.incremental_render_in_flight = true;
+                            self.preview_state.incremental_render_path = Some(entry_path);
+                        }
+                    }
                     preview
                 } else if let Some(stale_preview) =
                     self.stale_cached_preview_for(&entry, &preview_options)

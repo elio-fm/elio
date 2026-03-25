@@ -30,3 +30,4 @@ pub(super) const PREVIEW_LINE_COUNT_CACHE_LIMIT: usize = 64;
 pub(super) const PREVIEW_PREFETCH_LIMIT: usize = 2;
 pub(super) const DIRECTORY_ITEM_COUNT_CACHE_LIMIT: usize = 128;
 pub(super) const AUTO_RELOAD_INTERVAL: Duration = Duration::from_millis(250);
+pub(super) const INCREMENTAL_RENDER_LOOKAHEAD: usize = 80;

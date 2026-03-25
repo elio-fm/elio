@@ -208,7 +208,9 @@ fn selection_summary_marks_directories_with_trailing_slash() {
 }
 
 #[test]
-fn set_frame_state_refreshes_code_preview_when_visible_rows_change() {
+fn set_frame_state_does_not_refresh_code_preview_when_visible_rows_change() {
+    // Code line limit is fixed (no longer row-dependent), so resizing should
+    // not trigger a fresh preview render for source files.
     let root = temp_path("code-preview-resize");
     fs::create_dir_all(&root).expect("failed to create temp root");
     fs::write(root.join("main.rs"), "fn main() {}\n").expect("failed to write code file");
@@ -222,7 +224,7 @@ fn set_frame_state_refreshes_code_preview_when_visible_rows_change() {
         ..FrameState::default()
     });
 
-    assert!(app.preview_state.token > initial_preview_token);
+    assert_eq!(app.preview_state.token, initial_preview_token);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

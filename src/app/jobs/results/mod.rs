@@ -302,10 +302,11 @@ impl App {
                     dirty = true;
                 }
                 JobResult::Preview(build) => {
-                    self.cache_preview_result_with_code_line_limit(
+                    self.cache_preview_result_with_limits(
                         &build.entry,
                         &build.variant,
                         build.code_line_limit,
+                        build.code_render_limit,
                         &build.result,
                     );
                     let build_is_comic = build.result.kind == preview::PreviewKind::Comic;
@@ -360,19 +361,46 @@ impl App {
                                 build_visual_kind,
                                 is_current_entry,
                             );
+                            // Clear the in-flight flag if this stale drop belongs to our
+                            // outstanding extension job (prevents stuck state when the
+                            // user navigates away mid-extension).
+                            if self.preview_state.incremental_render_path.as_deref()
+                                == Some(build.entry.path.as_path())
+                            {
+                                self.preview_state.incremental_render_in_flight = false;
+                                self.preview_state.incremental_render_path = None;
+                            }
                             self.preview_state.metrics.stale_results_dropped += 1;
                             continue;
                         }
                     }
+
+                    // Detect whether this is a complete extension result arriving for a
+                    // currently-displayed partial preview.  If so, replace the content
+                    // WITHOUT resetting scroll so there are no visual artifacts.
+                    let is_extension_result = build.result.incremental_render_limit.is_none()
+                        && self.preview_state.content.is_incrementally_partial()
+                        && is_current_entry
+                        && is_current_variant;
 
                     self.preview_state.content = build.result;
                     self.preview_state.load_state = None;
                     self.apply_current_comic_preview_metadata();
                     self.apply_current_epub_preview_metadata();
                     self.sync_current_preview_line_count();
-                    self.preview_state.scroll = 0;
-                    self.preview_state.horizontal_scroll = 0;
-                    self.sync_preview_scroll();
+
+                    if is_extension_result {
+                        // Extension result: preserve scroll, just clamp if needed.
+                        self.preview_state.incremental_render_in_flight = false;
+                        self.preview_state.incremental_render_path = None;
+                        self.sync_preview_scroll();
+                    } else {
+                        // Normal first-time render: reset scroll.
+                        self.preview_state.scroll = 0;
+                        self.preview_state.horizontal_scroll = 0;
+                        self.sync_preview_scroll();
+                    }
+
                     if build_visual_kind.is_some() {
                         self.refresh_static_image_preloads();
                     }

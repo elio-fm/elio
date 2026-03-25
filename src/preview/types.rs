@@ -14,7 +14,7 @@ use std::{
 use unicode_width::UnicodeWidthStr;
 
 pub(super) const PREVIEW_LIMIT_BYTES: usize = 64 * 1024;
-pub(super) const PREVIEW_RENDER_LINE_LIMIT: usize = 360;
+pub(super) const PREVIEW_RENDER_LINE_LIMIT: usize = 800;
 pub(crate) const MARKDOWN_CONTENT_WIDTH: usize = 100;
 pub(crate) const MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT: usize = 80;
 pub(super) const PREVIEW_WRAPPED_LINE_LIMIT: usize = PREVIEW_RENDER_LINE_LIMIT;
@@ -171,6 +171,11 @@ pub(crate) struct PreviewContent {
     pub folder_count: Option<usize>,
     pub file_count: Option<usize>,
     pub lines: Arc<[Line<'static>]>,
+    /// When `Some(n)`, only the first `n` source lines were rendered.
+    /// The full file has more lines available and an extension job should be
+    /// submitted to replace this partial render with a complete one.
+    /// `None` means the render covers all available lines.
+    pub(crate) incremental_render_limit: Option<usize>,
     max_line_width: usize,
     wrapped_layout_cache: Arc<Mutex<WrappedLayoutCache>>,
 }
@@ -209,9 +214,16 @@ impl PreviewContent {
             folder_count: None,
             file_count: None,
             lines,
+            incremental_render_limit: None,
             max_line_width,
             wrapped_layout_cache: Arc::new(Mutex::new(WrappedLayoutCache::default())),
         }
+    }
+
+    /// Returns `true` when this preview only covers a partial set of source
+    /// lines and a full-file extension render is expected to follow.
+    pub(crate) fn is_incrementally_partial(&self) -> bool {
+        self.incremental_render_limit.is_some()
     }
 
     pub(crate) fn placeholder(label: &str) -> Self {
@@ -545,7 +557,7 @@ pub(super) fn line_number_span(number: usize, width: usize) -> Span<'static> {
 }
 
 pub(super) fn line_number_width(lines: usize) -> usize {
-    lines.max(1).to_string().len().max(2)
+    lines.max(1).to_string().len().max(3)
 }
 
 pub(super) fn expand_tabs(text: &str) -> String {

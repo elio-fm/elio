@@ -75,6 +75,7 @@ fn video_preview_attaches_inline_cover_when_tools_are_available() {
         &file_entry(path),
         &PreviewRequestOptions::Default,
         default_code_preview_line_limit(),
+        default_code_preview_line_limit(),
         true,
         true,
         &|| false,
@@ -112,6 +113,7 @@ fn video_preview_skips_thumbnail_without_ffprobe_even_if_ffmpeg_is_available() {
     let preview = build_preview_with_options_and_code_line_limit(
         &file_entry(path),
         &PreviewRequestOptions::Default,
+        default_code_preview_line_limit(),
         default_code_preview_line_limit(),
         false,
         true,

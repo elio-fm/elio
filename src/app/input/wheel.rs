@@ -407,8 +407,47 @@ impl App {
         let max_horizontal = self.preview_max_horizontal_scroll(visible_cols);
         self.preview_state.horizontal_scroll =
             self.preview_state.horizontal_scroll.min(max_horizontal);
+        // When scroll is clamped at the rendered boundary, fire an extension.
+        self.maybe_request_code_preview_extension();
         previous != self.preview_state.scroll
             || previous_horizontal != self.preview_state.horizontal_scroll
+    }
+
+    /// Fire an incremental extension job when the user has scrolled close
+    /// enough to the bottom of the currently-rendered partial preview.
+    fn maybe_request_code_preview_extension(&mut self) {
+        if !self.preview_state.content.is_incrementally_partial() {
+            return;
+        }
+        if self.preview_state.incremental_render_in_flight {
+            return;
+        }
+        let Some(render_limit) = self.preview_state.content.incremental_render_limit else {
+            return;
+        };
+        let scroll = self.preview_state.scroll;
+        let visible_rows = self.frame_state.preview_rows_visible;
+        let bottom_edge = scroll.saturating_add(visible_rows);
+        if bottom_edge + INCREMENTAL_RENDER_LOOKAHEAD < render_limit {
+            return;
+        }
+        // Build and submit the extension request.
+        let Some(entry) = self.selected_entry().cloned() else {
+            return;
+        };
+        let variant = self.current_preview_request_options();
+        let Some(request) = self.build_code_preview_extension_request(
+            entry.clone(),
+            variant,
+            PreviewPriority::High,
+        ) else {
+            return;
+        };
+        let entry_path = entry.path.clone();
+        if self.scheduler.submit_preview(request) {
+            self.preview_state.incremental_render_in_flight = true;
+            self.preview_state.incremental_render_path = Some(entry_path);
+        }
     }
 
     pub(in crate::app) fn clear_wheel_scroll(&mut self) {
@@ -582,6 +621,7 @@ impl App {
                 .scroll
                 .saturating_add(step.saturating_mul(delta as usize));
         }
+        // sync_preview_scroll already calls maybe_request_code_preview_extension.
         self.sync_preview_scroll();
         previous != self.preview_state.scroll
     }

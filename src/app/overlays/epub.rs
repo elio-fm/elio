@@ -244,6 +244,7 @@ impl App {
                 path: path.to_path_buf(),
                 variant: preview::PreviewRequestOptions::EpubSection(section),
                 code_line_limit: preview::default_code_preview_line_limit(),
+                code_render_limit: preview::default_code_preview_line_limit(),
             })
     }
 }
