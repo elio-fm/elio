@@ -100,7 +100,9 @@ where
 
     let Some(comic) = load_comic_archive(path, canceled) else {
         if matches!(format, ArchiveFormat::ComicRar) {
-            let detail = type_detail.unwrap_or(archive_default_label(format)).to_string();
+            let detail = type_detail
+                .unwrap_or(archive_default_label(format))
+                .to_string();
             let note = if has_rar_capable_extractor() {
                 "Unable to read RAR archive (file may be corrupted or unsupported)"
             } else {
@@ -184,12 +186,37 @@ where
     Some(parsed)
 }
 
+fn is_rar_format(path: &Path) -> bool {
+    use std::io::Read as _;
+    let Ok(mut file) = File::open(path) else {
+        return false;
+    };
+    let mut buf = [0u8; 7];
+    let Ok(n) = file.read(&mut buf) else {
+        return false;
+    };
+    // RAR 1.5–4.x and RAR 5.0 both start with "Rar!\x1a\x07".
+    n >= 7 && buf[..4] == *b"Rar!" && buf[4] == 0x1A && buf[5] == 0x07
+}
+
 fn parse_comic_archive<F>(path: &Path, canceled: &F) -> Option<CachedComicArchive>
 where
     F: Fn() -> bool,
 {
+    // When the file is actually in RAR format and 7z has no RAR support, skip
+    // the 7z spawn — it will always fail and wastes ~0.4 s before the unrar
+    // fallback.  Files that happen to have a .cbr extension but use ZIP or 7z
+    // format are unaffected (is_rar_format checks the magic bytes, not the ext).
+    let skip_7z = !seven_zip_has_rar_support() && is_rar_format(path);
+
     parse_zip_comic_archive(path, canceled)
-        .or_else(|| parse_comic_archive_with_7z(path, canceled))
+        .or_else(|| {
+            if !skip_7z {
+                parse_comic_archive_with_7z(path, canceled)
+            } else {
+                None
+            }
+        })
         .or_else(|| parse_comic_archive_with_unrar(path, canceled))
 }
 
@@ -198,19 +225,20 @@ where
     F: Fn() -> bool,
 {
     let file = File::open(path).ok()?;
-    let mut archive = ZipArchive::new(file).ok()?;
+    let archive = ZipArchive::new(file).ok()?;
     let mut page_entries = Vec::new();
 
-    for index in 0..archive.len() {
+    // Use file_names() to iterate the central directory without seeking to each
+    // entry — much faster for archives with many pages.
+    let names: Vec<String> = archive.file_names().map(|n| n.to_string()).collect();
+    for name in names {
         if canceled() {
             return None;
         }
-        let entry = archive.by_index(index).ok()?;
-        if entry.is_dir() {
+        // Directory entries end with '/'; skip them without an extra seek.
+        if name.ends_with('/') {
             continue;
         }
-
-        let name = entry.name().to_string();
         let Some(extension) = archive_image_extension(&name) else {
             continue;
         };
