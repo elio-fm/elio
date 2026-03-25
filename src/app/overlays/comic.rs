@@ -11,6 +11,10 @@ const COMIC_ENTRY_PREFETCH_OFFSETS: [isize; 2] = [1, -1];
 #[derive(Clone, Debug, Default)]
 pub(in crate::app) struct ComicPreviewState {
     session: Option<ComicSession>,
+    /// Path of the comic file whose page image is currently displayed in the
+    /// inline overlay.  Set when a page image is rendered so we can decide
+    /// whether to keep or clear the stale overlay when the selection changes.
+    displayed_page_source: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -69,6 +73,46 @@ impl App {
 
     pub(in crate::app) fn comic_preview_wheel_capture_active(&self) -> bool {
         self.comic_preview.session.is_some()
+    }
+
+    /// Called just after a page image (comic or fixed-layout EPUB) is rendered
+    /// to the inline overlay.  Records the source file path so
+    /// `displayed_page_image_belongs_to_current_session` can later decide
+    /// whether to keep or clear the stale overlay on navigation.
+    pub(in crate::app) fn record_comic_page_image_displayed(&mut self) {
+        let is_page_image = self
+            .preview_state
+            .content
+            .preview_visual
+            .as_ref()
+            .is_some_and(|v| v.kind == crate::preview::PreviewVisualKind::PageImage);
+        if is_page_image {
+            // Use whichever page-session is currently active.  Comics have a
+            // comic_preview session; fixed-layout EPUBs have an epub_preview
+            // session.  Both are updated in sync_*_preview_selection() which
+            // runs inside refresh_preview(), so during a deferred navigation
+            // they still point to the file whose page is actually on screen.
+            self.comic_preview.displayed_page_source = self
+                .comic_preview
+                .session
+                .as_ref()
+                .map(|s| s.path.clone())
+                .or_else(|| self.epub_preview_session_path().map(|p| p.to_path_buf()));
+        }
+    }
+
+    /// Returns `true` if the page image currently displayed in the inline
+    /// overlay was rendered for the same source file as the active session.
+    /// Covers both comic sessions and fixed-layout EPUB sessions.
+    /// Both being `None` is treated as matching (no session info available).
+    pub(in crate::app) fn displayed_comic_page_belongs_to_current_session(&self) -> bool {
+        let current_source = self
+            .comic_preview
+            .session
+            .as_ref()
+            .map(|s| s.path.as_path())
+            .or_else(|| self.epub_preview_session_path());
+        self.comic_preview.displayed_page_source.as_deref() == current_source
     }
 
     pub(in crate::app) fn apply_current_comic_preview_metadata(&mut self) {

@@ -180,6 +180,7 @@ impl App {
         }
 
         self.image_preview.displayed = Some(displayed);
+        self.record_comic_page_image_displayed();
         self.image_preview.displayed_excluded = excluded.to_vec();
         Ok(OverlayPresentState::Displayed)
     }

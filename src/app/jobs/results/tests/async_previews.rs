@@ -126,6 +126,79 @@ fn epub_preview_keeps_section_navigation_while_next_section_loads() {
 }
 
 #[test]
+fn comic_preview_loads_when_token_is_stale_but_placeholder_is_current() {
+    // Regression test for the stale-token race: if refresh_preview() is called
+    // again (e.g. due to rapid navigation) after a preview job was submitted but
+    // before it completes, the token is bumped and the in-flight result arrives
+    // "stale".  The fix rescues such results when load_state is still Placeholder
+    // for the same path and the entry + variant still match, because the comic
+    // page list is deterministic and a token skew does not mean wrong content.
+    let root = temp_path("comic-stale-token");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let archive = root.join("issue.cbz");
+    write_binary_zip_entries(&archive, &[("1.jpg", b"page-one"), ("2.jpg", b"page-two")]);
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+    assert_eq!(app.preview_section_label(), "Comic");
+    assert!(app.preview_lines().is_empty());
+
+    // Simulate the race: bump the token without calling refresh_preview() so
+    // load_state stays Placeholder and no replacement job is submitted.  The
+    // original job will arrive with the now-stale token.
+    app.preview_state.token = app.preview_state.token.wrapping_add(1);
+
+    // Without the rescue the result would be dropped and this would time out.
+    wait_for_background_preview(&mut app);
+
+    assert_eq!(app.preview_section_label(), "Comic");
+    assert_eq!(
+        app.preview_header_detail(10).as_deref(),
+        Some("Comic ZIP archive  •  Page 1/2")
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_preview_loads_when_token_is_stale_and_load_state_is_refreshing() {
+    // Regression test for the Refreshing variant of the stale-token race.
+    // When a comic already has a stale cached result (e.g. from a prefetch run
+    // on a nearby entry), refresh_preview sets load_state = Refreshing instead
+    // of Placeholder.  The in-flight job can arrive with a stale token while
+    // load_state = Refreshing, which the original rescue did not cover.  The
+    // result is already in the cache (line 304 caches before the stale check),
+    // so without the rescue the UI stays blank until the user interacts.
+    let root = temp_path("comic-stale-token-refreshing");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let archive = root.join("issue.cbz");
+    write_binary_zip_entries(&archive, &[("1.jpg", b"page-one"), ("2.jpg", b"page-two")]);
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+    assert_eq!(app.preview_section_label(), "Comic");
+    assert!(app.preview_lines().is_empty());
+
+    // Simulate the Refreshing race: switch load_state to Refreshing (as it
+    // would be after refresh_preview found a stale cache hit) and bump the
+    // token so the in-flight job will arrive stale against a Refreshing state.
+    app.preview_state.load_state = Some(PreviewLoadState::Refreshing(archive.clone()));
+    app.preview_state.token = app.preview_state.token.wrapping_add(1);
+
+    // Without the extended rescue (Placeholder OR Refreshing), the result
+    // would be dropped and this would time out.
+    wait_for_background_preview(&mut app);
+
+    assert_eq!(app.preview_section_label(), "Comic");
+    assert_eq!(
+        app.preview_header_detail(10).as_deref(),
+        Some("Comic ZIP archive  •  Page 1/2")
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn cbr_file_with_zip_content_loads_in_background_and_steps_pages() {
     let root = temp_path("comic-rar-background");
     fs::create_dir_all(&root).expect("failed to create temp root");

@@ -169,44 +169,90 @@ impl ImagePreparePool {
         current: Option<&ImagePrepareRequest>,
         nearby: &[ImagePrepareRequest],
     ) {
-        let mut state = lock_unpoison(&self.shared.state);
-        let keep_current = current.map(ImagePrepareJobKey::from_request);
-        let keep_nearby = nearby
-            .iter()
-            .map(ImagePrepareJobKey::from_request)
-            .collect::<HashSet<_>>();
+        let promoted;
+        {
+            let mut state = lock_unpoison(&self.shared.state);
+            let keep_current = current.map(ImagePrepareJobKey::from_request);
+            let keep_nearby = nearby
+                .iter()
+                .map(ImagePrepareJobKey::from_request)
+                .collect::<HashSet<_>>();
 
-        let pending_current = std::mem::take(&mut state.pending_current);
-        let pending_nearby = std::mem::take(&mut state.pending_nearby);
-        state.queued_current_keys.clear();
-        state.queued_nearby_keys.clear();
-        state.pending_current = pending_current
-            .into_iter()
-            .filter(|request| {
-                keep_current
-                    .as_ref()
-                    .is_some_and(|key| key == &ImagePrepareJobKey::from_request(request))
-            })
-            .inspect(|request| {
-                state
-                    .queued_current_keys
-                    .insert(ImagePrepareJobKey::from_request(request));
-            })
-            .collect();
-        state.pending_nearby = pending_nearby
-            .into_iter()
-            .filter(|request| keep_nearby.contains(&ImagePrepareJobKey::from_request(request)))
-            .inspect(|request| {
-                state
-                    .queued_nearby_keys
-                    .insert(ImagePrepareJobKey::from_request(request));
-            })
-            .collect();
-        for (key, canceled) in &state.active {
-            let keep = keep_current.as_ref() == Some(key) || keep_nearby.contains(key);
-            if !keep {
-                canceled.store(true, Ordering::Relaxed);
+            let pending_current = std::mem::take(&mut state.pending_current);
+            let pending_nearby = std::mem::take(&mut state.pending_nearby);
+            state.queued_current_keys.clear();
+            state.queued_nearby_keys.clear();
+
+            // Identify a nearby-queued job that needs to be promoted to current
+            // priority.  This happens when a job was previously prefetched at Nearby
+            // priority for an adjacent entry and the user has since navigated to that
+            // entry.  Without promotion the job would be silently dropped from
+            // pending_nearby without appearing in pending_current, while the app's
+            // pending_prepares set would still hold the key — causing ensure_static_
+            // image_preload to skip re-submission and leaving the preview blank.
+            let promote_candidate = keep_current.as_ref().and_then(|key| {
+                if image_prepare_active_contains(&state, key) {
+                    return None;
+                }
+                pending_nearby
+                    .iter()
+                    .find(|r| &ImagePrepareJobKey::from_request(r) == key)
+                    .cloned()
+            });
+
+            state.pending_current = pending_current
+                .into_iter()
+                .filter(|request| {
+                    keep_current
+                        .as_ref()
+                        .is_some_and(|key| key == &ImagePrepareJobKey::from_request(request))
+                })
+                .inspect(|request| {
+                    state
+                        .queued_current_keys
+                        .insert(ImagePrepareJobKey::from_request(request));
+                })
+                .collect();
+
+            promoted = if let Some(ref request) = promote_candidate {
+                let key = ImagePrepareJobKey::from_request(request);
+                if !state.queued_current_keys.contains(&key) {
+                    state.queued_current_keys.insert(key);
+                    state.pending_current.push_back(request.clone());
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            state.pending_nearby = pending_nearby
+                .into_iter()
+                .filter(|request| {
+                    let key = ImagePrepareJobKey::from_request(request);
+                    // Jobs matching keep_current were either already in pending_current
+                    // or just promoted above; remove them from the nearby queue either way.
+                    if keep_current.as_ref() == Some(&key) {
+                        return false;
+                    }
+                    keep_nearby.contains(&key)
+                })
+                .inspect(|request| {
+                    state
+                        .queued_nearby_keys
+                        .insert(ImagePrepareJobKey::from_request(request));
+                })
+                .collect();
+            for (key, canceled) in &state.active {
+                let keep = keep_current.as_ref() == Some(key) || keep_nearby.contains(key);
+                if !keep {
+                    canceled.store(true, Ordering::Relaxed);
+                }
             }
+        }
+        if promoted {
+            self.shared.available.notify_one();
         }
     }
 

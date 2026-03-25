@@ -6,7 +6,16 @@ use std::collections::HashSet;
 impl App {
     pub(in crate::app) fn refresh_static_image_preloads(&mut self) {
         let current_static = self.active_static_image_overlay_request();
-        let current_preview_visual = self.active_preview_visual_overlay_request();
+        // When a deferred preview refresh is pending, preview_state.content still reflects the
+        // previous selection.  Using its visual as "current" would cancel image-prepare jobs for
+        // the actual current entry and retain or re-queue jobs for the wrong one.  Skip the
+        // preview visual entirely; the correct job will be submitted once refresh_preview() fires
+        // and preview_state.content is updated.
+        let current_preview_visual = if self.preview_state.deferred_refresh_at.is_none() {
+            self.active_preview_visual_overlay_request()
+        } else {
+            None
+        };
         let current = current_static
             .as_ref()
             .cloned()
@@ -27,18 +36,28 @@ impl App {
             .map(StaticImageKey::from_request)
             .chain(nearby.iter().map(StaticImageKey::from_request))
             .collect::<HashSet<_>>();
-        self.image_preview
-            .pending_prepares
-            .retain(|key| desired.contains(key));
-        let current_job = current
-            .as_ref()
-            .map(|request| self.image_prepare_request_for_overlay(request));
-        let nearby_jobs = nearby
-            .iter()
-            .map(|request| self.image_prepare_request_for_overlay(request))
-            .collect::<Vec<_>>();
-        self.scheduler
-            .retain_image_prepares(current_job.as_ref(), &nearby_jobs);
+        // When a deferred preview refresh is pending, `desired` is computed without a
+        // preview-visual current entry (see above), so it may be empty even though a
+        // valid image-prepare job is already in-flight for the current entry.  Cancelling
+        // that job here would starve it: every rapid-navigation keystroke would cancel and
+        // re-queue the job, and it would never complete — leaving the preview blank until
+        // the user takes a non-rapid action (folder navigation, preview scroll, etc.).
+        // Skip the cancellation step while deferred; the correct jobs will be pruned on
+        // the next non-deferred refresh_static_image_preloads() call.
+        if self.preview_state.deferred_refresh_at.is_none() {
+            self.image_preview
+                .pending_prepares
+                .retain(|key| desired.contains(key));
+            let current_job = current
+                .as_ref()
+                .map(|request| self.image_prepare_request_for_overlay(request));
+            let nearby_jobs = nearby
+                .iter()
+                .map(|request| self.image_prepare_request_for_overlay(request))
+                .collect::<Vec<_>>();
+            self.scheduler
+                .retain_image_prepares(current_job.as_ref(), &nearby_jobs);
+        }
 
         if let Some(request) = current.as_ref()
             && self.static_image_requires_prepare(request)

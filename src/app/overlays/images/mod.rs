@@ -75,6 +75,11 @@ impl App {
         if self.image_preview.failed_images.contains(&key) {
             StaticImageOverlayPreparation::Failed
         } else {
+            // No prepare job is running and the key has not failed.  This can happen when a job
+            // was cancelled by a stale refresh_static_image_preloads() call without a replacement
+            // being queued (e.g. because preview_state.content had no preview_visual at the time).
+            // Re-submit via a fresh preload cycle so the overlay can be presented next cycle.
+            self.refresh_static_image_preloads();
             StaticImageOverlayPreparation::Pending
         }
     }

@@ -474,6 +474,42 @@ fn retain_image_prepares_discards_stale_nearby_requests() {
 }
 
 #[test]
+fn retain_image_prepares_promotes_nearby_job_to_current_when_it_becomes_current() {
+    // Regression test: if a job was submitted at Nearby priority (e.g. as a
+    // prefetch for an adjacent comic entry) and the user then navigates to that
+    // entry, retain_image_prepares is called with the job as `current` and an
+    // empty nearby list.  The old code discarded the job from pending_nearby
+    // without adding it to pending_current, leaving app.pending_prepares stuck
+    // with the key and prevent re-submission — so the image never appeared.
+    let scheduler = JobScheduler::new_for_tests(0, 0, 2);
+    let now_current = image_prepare_request("page.jpg");
+    let other_nearby = image_prepare_request("other.png");
+
+    // Simulate prefetch: page.jpg was submitted as a nearby job
+    assert!(scheduler.submit_nearby_image_prepare(now_current.clone()));
+    assert!(scheduler.submit_nearby_image_prepare(other_nearby));
+
+    // User navigates to the entry whose image was prefetched
+    scheduler.retain_image_prepares(Some(&now_current), &[]);
+
+    let pending = scheduler.snapshot().image_prepare_pending;
+    assert_eq!(pending.len(), 1, "promoted job should be the only pending job");
+    assert_eq!(
+        pending[0],
+        ImagePrepareJobKey {
+            path: PathBuf::from("page.jpg"),
+            size: 1,
+            modified: None,
+            target_width_px: 640,
+            target_height_px: 480,
+            force_render_to_cache: false,
+            prepare_inline_payload: false,
+        },
+        "nearby job should have been promoted to current"
+    );
+}
+
+#[test]
 fn retain_pdf_probe_pages_discards_stale_pending_requests() {
     let scheduler = JobScheduler::new_for_tests(0, 0, 2);
     let path = PathBuf::from("manual.pdf");

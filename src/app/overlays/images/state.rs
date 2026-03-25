@@ -239,12 +239,22 @@ impl App {
                 }
 
                 if loading_current_page_preview {
-                    return true;
+                    // Keep the stale overlay only when the displayed page
+                    // belongs to the same comic (i.e. page-stepping within one
+                    // file).  For cross-file navigation, clear the old image
+                    // immediately so the new entry's loading state is shown.
+                    return self.displayed_comic_page_belongs_to_current_session();
                 }
 
                 let Some(request) = self.active_preview_visual_overlay_request_unchecked() else {
                     return false;
                 };
+                // Same guard for the image-prepare stage: once stage-1 has
+                // completed but the page image is still being prepared, do not
+                // keep a stale page from a different comic.
+                if !self.displayed_comic_page_belongs_to_current_session() {
+                    return false;
+                }
                 self.keep_displayed_static_image_request_while_pending(&request)
             }
             StaticImageOverlayMode::FullPane => self

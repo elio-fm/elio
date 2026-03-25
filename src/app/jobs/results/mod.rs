@@ -334,14 +334,35 @@ impl App {
                         || build.code_line_limit
                             != self.preview_code_line_limit_for_entry(&build.entry)
                     {
-                        self.refresh_static_image_preloads_for_cached_preview_visual(
-                            &build.entry,
-                            &build.variant,
-                            build_visual_kind,
-                            is_current_entry,
-                        );
-                        self.preview_state.metrics.stale_results_dropped += 1;
-                        continue;
+                        // For comic results that match the current entry and variant but
+                        // arrived with a stale token, apply them immediately if we are
+                        // still showing a placeholder (no preview at all).  The rendered
+                        // page list is deterministic for a given path + page index, so a
+                        // token skew does not indicate wrong content.  This rescues the
+                        // common race where a rapid-nav `refresh_preview()` bumps the
+                        // token after the job was already submitted, and the result
+                        // arrives before the replacement job finishes — leaving the
+                        // placeholder on-screen even though a valid result is available.
+                        let can_rescue_stale_comic = build_is_comic
+                            && is_current_entry
+                            && is_current_variant
+                            && build.code_line_limit
+                                == self.preview_code_line_limit_for_entry(&build.entry)
+                            && matches!(
+                                &self.preview_state.load_state,
+                                Some(PreviewLoadState::Placeholder(p) | PreviewLoadState::Refreshing(p))
+                                    if p == &build.entry.path
+                            );
+                        if !can_rescue_stale_comic {
+                            self.refresh_static_image_preloads_for_cached_preview_visual(
+                                &build.entry,
+                                &build.variant,
+                                build_visual_kind,
+                                is_current_entry,
+                            );
+                            self.preview_state.metrics.stale_results_dropped += 1;
+                            continue;
+                        }
                     }
 
                     self.preview_state.content = build.result;

@@ -71,6 +71,10 @@ impl App {
         self.epub_preview.session.is_some()
     }
 
+    pub(in crate::app) fn epub_preview_session_path(&self) -> Option<&std::path::Path> {
+        self.epub_preview.session.as_ref().map(|s| s.path.as_path())
+    }
+
     pub(in crate::app) fn apply_current_epub_preview_metadata(&mut self) {
         let Some((path, size, modified)) = self
             .selected_entry()
