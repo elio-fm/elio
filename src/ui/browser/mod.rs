@@ -389,6 +389,50 @@ mod tests {
     }
 
     #[test]
+    fn copy_overlay_renders_expected_labels_and_hit_rects() {
+        let root = temp_path("copy-overlay-render");
+        fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
+        fs::write(root.join("docs/report.final.md"), "hello\n").expect("failed to write temp file");
+
+        let mut app = App::new_at(root.join("docs")).expect("app should load temp directory");
+        let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('c'))))
+            .expect("copy overlay should open");
+
+        let state = draw_ui(&mut terminal, &mut app);
+        let rendered = buffer_text(terminal.backend().buffer());
+
+        assert!(
+            state.copy_panel.is_some(),
+            "copy overlay should render a popup panel"
+        );
+        assert_eq!(
+            state.copy_hits.len(),
+            4,
+            "copy overlay should expose one hit rect per visible row"
+        );
+        assert!(
+            rendered.contains("Copy to clipboard"),
+            "expected copy overlay title to be rendered, got: {rendered:?}"
+        );
+        assert!(
+            rendered.contains("c -> file name"),
+            "expected copy overlay to render the file-name shortcut row, got: {rendered:?}"
+        );
+        assert!(
+            rendered.contains("d -> directory path"),
+            "expected copy overlay to render the directory-path shortcut row, got: {rendered:?}"
+        );
+        assert!(
+            rendered.contains("p -> file path"),
+            "expected copy overlay to render the file-path shortcut row, got: {rendered:?}"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn trash_overlay_tabs_focus_between_confirm_and_cancel_buttons() {
         let root = temp_path("trash-overlay-focus");
         fs::create_dir_all(&root).expect("failed to create temp root");

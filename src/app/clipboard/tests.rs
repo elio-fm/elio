@@ -1,10 +1,14 @@
 use super::super::App;
 use crate::app::ClipOp;
 use std::{
-    fs,
+    env, fs,
     path::PathBuf,
+    sync::{Mutex, OnceLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,6 +32,51 @@ fn wait_for_paste(app: &mut App) {
         std::thread::sleep(Duration::from_millis(10));
     }
     panic!("timed out waiting for paste to complete");
+}
+
+fn clipboard_env_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(unix)]
+fn install_fake_clipboard_tool(root: &std::path::Path, capture_path: &std::path::Path) -> PathBuf {
+    let tool = root.join("fake-clipboard");
+    fs::write(
+        &tool,
+        format!("#!/bin/sh\ncat > '{}'\n", capture_path.display()),
+    )
+    .expect("failed to write fake clipboard tool");
+    let mut permissions = fs::metadata(&tool)
+        .expect("fake clipboard tool metadata should exist")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&tool, permissions).expect("failed to chmod fake clipboard tool");
+    tool
+}
+
+#[cfg(unix)]
+fn install_backgrounding_clipboard_tool(
+    root: &std::path::Path,
+    capture_path: &std::path::Path,
+) -> PathBuf {
+    let tool = root.join("fake-clipboard-background");
+    fs::write(
+        &tool,
+        format!(
+            "#!/bin/sh\ncat > '{capture}'\n(sleep 1) >/dev/null 2>&1 &\nexit 0\n",
+            capture = capture_path.display()
+        ),
+    )
+    .expect("failed to write backgrounding clipboard tool");
+    let mut permissions = fs::metadata(&tool)
+        .expect("backgrounding clipboard tool metadata should exist")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&tool, permissions).expect("failed to chmod backgrounding clipboard tool");
+    tool
 }
 
 // ── yank / copy path ─────────────────────────────────────────────────────────
@@ -352,4 +401,122 @@ fn paste_with_empty_clipboard_sets_status_and_leaves_no_progress() {
     assert!(app.paste_progress().is_none());
 
     fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn copy_overlay_populates_expected_rows_for_selected_file() {
+    let root = temp_path("copy-overlay-rows");
+    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
+    let file = root.join("docs/report.final.md");
+    fs::write(&file, "notes").expect("failed to write test file");
+
+    let mut app = App::new_at(root.join("docs")).expect("failed to create app");
+    app.open_copy_overlay();
+
+    assert!(app.copy_is_open(), "copy overlay should open");
+    assert_eq!(app.copy_title(), "Copy to clipboard");
+    assert_eq!(app.copy_row_count(), 4);
+    assert_eq!(app.copy_row_label(0), "Copy file name");
+    assert_eq!(app.copy_row_label(1), "Name without extension");
+    assert_eq!(app.copy_row_label(2), "File path");
+    assert_eq!(app.copy_row_label(3), "Directory path");
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {
+    let _lock = clipboard_env_lock();
+    let root = temp_path("copy-overlay-copy");
+    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
+    let file = root.join("docs/report final.md");
+    let capture = root.join("clipboard.txt");
+    fs::write(&file, "notes").expect("failed to write test file");
+    let tool = install_fake_clipboard_tool(&root, &capture);
+
+    let original_tool = env::var_os("ELIO_TEST_CLIPBOARD_TOOL");
+    unsafe {
+        env::set_var("ELIO_TEST_CLIPBOARD_TOOL", &tool);
+    }
+
+    let mut app = App::new_at(root.join("docs")).expect("failed to create app");
+    app.open_copy_overlay();
+    app.handle_copy_key(crossterm::event::KeyEvent::from(
+        crossterm::event::KeyCode::Char('p'),
+    ))
+    .expect("copy shortcut should succeed");
+
+    let copied = fs::read_to_string(&capture).expect("fake clipboard tool should capture text");
+    assert_eq!(
+        copied,
+        file.display().to_string(),
+        "fake clipboard tool should capture the copied file path"
+    );
+    assert_eq!(app.status, "Copied file path");
+    assert!(
+        !app.copy_is_open(),
+        "successful copy should close the overlay"
+    );
+
+    if let Some(value) = original_tool {
+        unsafe {
+            env::set_var("ELIO_TEST_CLIPBOARD_TOOL", value);
+        }
+    } else {
+        unsafe {
+            env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
+        }
+    }
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_overlay_does_not_block_on_backgrounding_clipboard_helpers() {
+    let _lock = clipboard_env_lock();
+    let root = temp_path("copy-overlay-background");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let report = root.join("aaa-report.txt");
+    fs::write(&report, "hello").expect("failed to write test file");
+    let capture = root.join("clipboard.txt");
+    let tool = install_backgrounding_clipboard_tool(&root, &capture);
+
+    let original_tool = env::var_os("ELIO_TEST_CLIPBOARD_TOOL");
+    unsafe {
+        env::set_var("ELIO_TEST_CLIPBOARD_TOOL", &tool);
+    }
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.open_copy_overlay();
+    let start = std::time::Instant::now();
+    app.handle_copy_key(crossterm::event::KeyEvent::from(
+        crossterm::event::KeyCode::Char('c'),
+    ))
+    .expect("copy confirmation should succeed");
+
+    assert!(
+        start.elapsed() < Duration::from_millis(500),
+        "copy confirmation should not block on helpers that hand work off to background processes"
+    );
+    assert_eq!(
+        fs::read_to_string(&capture).expect("backgrounding clipboard tool should capture stdin"),
+        report
+            .file_name()
+            .expect("test file should have a file name")
+            .to_string_lossy()
+    );
+
+    if let Some(value) = original_tool {
+        unsafe {
+            env::set_var("ELIO_TEST_CLIPBOARD_TOOL", value);
+        }
+    } else {
+        unsafe {
+            env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
+        }
+    }
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
 }

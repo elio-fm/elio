@@ -1,3 +1,5 @@
+mod copy;
+
 use super::{
     App,
     jobs::PasteRequest,
@@ -106,7 +108,7 @@ impl App {
 
     /// Collect the paths that y/x should act on: all space-selected paths if
     /// any exist (sorted for stable ordering), otherwise the focused entry.
-    fn clipboard_target_paths(&self) -> Vec<PathBuf> {
+    pub(super) fn clipboard_target_paths(&self) -> Vec<PathBuf> {
         if !self.selected_paths.is_empty() {
             let mut paths: Vec<PathBuf> = self.selected_paths.iter().cloned().collect();
             paths.sort();

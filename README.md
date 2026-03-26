@@ -124,6 +124,15 @@ elio
 |---|---|---|
 | Desktop opener | `gio open` or `xdg-open` | Open files externally with `o` |
 
+### Clipboard
+
+| Package / Tool | Commands | What it enables |
+|---|---|---|
+| Wayland clipboard | `wl-copy` | Copy file metadata to the system clipboard with `c` |
+| X11 clipboard | `xclip` or `xsel` | Copy file metadata to the system clipboard with `c` |
+| macOS clipboard | `pbcopy` | Copy file metadata to the system clipboard with `c` |
+| Windows clipboard | `clip` | Copy file metadata to the system clipboard with `c` |
+
 ---
 
 ## Configuration
@@ -232,6 +241,7 @@ Alternate ready-to-use sample themes remain in [examples/themes/](examples/theme
 | `Space` | Toggle selection |
 | `Ctrl+A` | Select all visible items |
 | `a` | Create file or folder |
+| `c` | Copy file name / path details to the system clipboard |
 | `d` | Move selected item(s) to trash; permanently delete when already in trash |
 | `r` | Restore in trash, or rename / bulk rename outside trash depending on selection |
 | `F2` | Rename current item or bulk rename selected items |

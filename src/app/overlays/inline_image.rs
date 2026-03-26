@@ -187,6 +187,7 @@ impl App {
             || self.create.is_some()
             || self.rename.is_some()
             || self.bulk_rename.is_some()
+            || self.copy_overlay.is_some()
             || self.search.is_some()
             || self.help_open;
 
@@ -263,6 +264,9 @@ impl App {
             rects.push(r);
         }
         if let Some(r) = self.frame_state.rename_panel {
+            rects.push(r);
+        }
+        if let Some(r) = self.frame_state.copy_panel {
             rects.push(r);
         }
         if let Some(r) = self.frame_state.search_panel {

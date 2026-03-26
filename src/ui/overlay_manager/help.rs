@@ -89,6 +89,10 @@ pub(super) fn render_help(
             action: "yank (copy)",
         },
         HelpEntry {
+            key: "c",
+            action: "copy path details",
+        },
+        HelpEntry {
             key: "x",
             action: "cut",
         },

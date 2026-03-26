@@ -36,6 +36,10 @@ impl App {
             return self.handle_bulk_rename_key(key);
         }
 
+        if self.copy_overlay.is_some() {
+            return self.handle_copy_key(key);
+        }
+
         if self.search.is_some() {
             return self.handle_search_key(key);
         }
@@ -215,6 +219,7 @@ impl App {
             KeyCode::Char('.') => self.toggle_hidden_files()?,
             KeyCode::Char(' ') => self.toggle_selection(),
             KeyCode::Char('a') => self.open_create_prompt(),
+            KeyCode::Char('c') => self.open_copy_overlay(),
             KeyCode::Char('d') => self.open_trash_prompt(),
             KeyCode::Char('r') => {
                 if self.in_trash {

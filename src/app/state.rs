@@ -180,6 +180,20 @@ pub(super) struct SearchOverlay {
 }
 
 #[derive(Clone, Debug)]
+pub(super) struct CopyOverlayRow {
+    pub(super) shortcut: char,
+    pub(super) label: String,
+    pub(super) status_label: String,
+    pub(super) value: String,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct CopyOverlay {
+    pub(super) title: String,
+    pub(super) rows: Vec<CopyOverlayRow>,
+}
+
+#[derive(Clone, Debug)]
 pub(super) struct SearchCache {
     pub(super) cwd: PathBuf,
     pub(super) scope: SearchScope,
@@ -411,6 +425,7 @@ pub struct App {
     pub(super) create: Option<CreateOverlay>,
     pub(super) rename: Option<RenameOverlay>,
     pub(super) bulk_rename: Option<BulkRenameOverlay>,
+    pub(super) copy_overlay: Option<CopyOverlay>,
     pub(super) search: Option<SearchOverlay>,
     pub(super) search_cache: Option<SearchCache>,
     pub(super) search_loading: bool,
@@ -506,6 +521,7 @@ impl App {
             create: None,
             rename: None,
             bulk_rename: None,
+            copy_overlay: None,
             search: None,
             search_cache: None,
             search_loading: false,

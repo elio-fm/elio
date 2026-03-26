@@ -3,6 +3,7 @@ use crate::ui::theme::Palette;
 use ratatui::{Frame, layout::Rect};
 
 mod bulk_rename;
+mod copy;
 mod create;
 mod help;
 mod rename;
@@ -58,6 +59,16 @@ pub(super) fn render_bulk_rename_overlay(
     palette: Palette,
 ) {
     bulk_rename::render_bulk_rename_overlay(frame, area, app, state, palette);
+}
+
+pub(super) fn render_copy_overlay(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    state: &mut FrameState,
+    palette: Palette,
+) {
+    copy::render_copy_overlay(frame, area, app, state, palette);
 }
 
 pub(super) fn render_search_overlay(
