@@ -56,6 +56,14 @@ enum ComicArchiveBackend {
     Unrar,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ComicArchiveSignature {
+    Zip,
+    Rar,
+    SevenZip,
+    Unknown,
+}
+
 #[derive(Clone, Debug)]
 struct ComicArchivePage {
     entry_name: String,
@@ -186,38 +194,56 @@ where
     Some(parsed)
 }
 
-fn is_rar_format(path: &Path) -> bool {
-    use std::io::Read as _;
+fn sniff_comic_archive_signature(path: &Path) -> ComicArchiveSignature {
     let Ok(mut file) = File::open(path) else {
-        return false;
+        return ComicArchiveSignature::Unknown;
     };
-    let mut buf = [0u8; 7];
+    let mut buf = [0u8; 8];
     let Ok(n) = file.read(&mut buf) else {
-        return false;
+        return ComicArchiveSignature::Unknown;
     };
+    if n >= 4 && matches!(&buf[..4], b"PK\x03\x04" | b"PK\x05\x06" | b"PK\x07\x08") {
+        return ComicArchiveSignature::Zip;
+    }
+    if n >= 6 && buf[..6] == [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C] {
+        return ComicArchiveSignature::SevenZip;
+    }
     // RAR 1.5–4.x and RAR 5.0 both start with "Rar!\x1a\x07".
-    n >= 7 && buf[..4] == *b"Rar!" && buf[4] == 0x1A && buf[5] == 0x07
+    if n >= 7 && buf[..4] == *b"Rar!" && buf[4] == 0x1A && buf[5] == 0x07 {
+        return ComicArchiveSignature::Rar;
+    }
+    ComicArchiveSignature::Unknown
 }
 
 fn parse_comic_archive<F>(path: &Path, canceled: &F) -> Option<CachedComicArchive>
 where
     F: Fn() -> bool,
 {
-    // When the file is actually in RAR format and 7z has no RAR support, skip
-    // the 7z spawn — it will always fail and wastes ~0.4 s before the unrar
-    // fallback.  Files that happen to have a .cbr extension but use ZIP or 7z
-    // format are unaffected (is_rar_format checks the magic bytes, not the ext).
-    let skip_7z = !seven_zip_has_rar_support() && is_rar_format(path);
-
-    parse_zip_comic_archive(path, canceled)
-        .or_else(|| {
-            if !skip_7z {
+    // Comic extensions are often mislabeled in the wild (e.g. `.cbz` files that
+    // actually contain RAR or 7z data). Sniff the container signature first so
+    // the cold path hits the right backend immediately instead of paying for a
+    // guaranteed parser miss before the real extractor runs.
+    match sniff_comic_archive_signature(path) {
+        ComicArchiveSignature::Zip => parse_zip_comic_archive(path, canceled)
+            .or_else(|| parse_comic_archive_with_7z(path, canceled))
+            .or_else(|| parse_comic_archive_with_unrar(path, canceled)),
+        ComicArchiveSignature::SevenZip => parse_comic_archive_with_7z(path, canceled)
+            .or_else(|| parse_zip_comic_archive(path, canceled))
+            .or_else(|| parse_comic_archive_with_unrar(path, canceled)),
+        ComicArchiveSignature::Rar => {
+            if seven_zip_has_rar_support() {
                 parse_comic_archive_with_7z(path, canceled)
+                    .or_else(|| parse_comic_archive_with_unrar(path, canceled))
+                    .or_else(|| parse_zip_comic_archive(path, canceled))
             } else {
-                None
+                parse_comic_archive_with_unrar(path, canceled)
+                    .or_else(|| parse_zip_comic_archive(path, canceled))
             }
-        })
-        .or_else(|| parse_comic_archive_with_unrar(path, canceled))
+        }
+        ComicArchiveSignature::Unknown => parse_zip_comic_archive(path, canceled)
+            .or_else(|| parse_comic_archive_with_7z(path, canceled))
+            .or_else(|| parse_comic_archive_with_unrar(path, canceled)),
+    }
 }
 
 fn parse_zip_comic_archive<F>(path: &Path, canceled: &F) -> Option<CachedComicArchive>
@@ -617,8 +643,9 @@ mod tests {
     use super::super::ArchiveFormat;
     use super::super::build_archive_preview;
     use super::{
-        ComicArchiveBackend, build_comic_archive_preview, parse_comic_archive_from_7z_output,
-        parse_zip_comic_archive, run_command_capture_stdout_cancellable,
+        ComicArchiveBackend, ComicArchiveSignature, build_comic_archive_preview,
+        parse_comic_archive_from_7z_output, parse_zip_comic_archive,
+        run_command_capture_stdout_cancellable, sniff_comic_archive_signature,
     };
     use crate::preview::PreviewKind;
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
@@ -642,6 +669,43 @@ mod tests {
             .expect("system time should be after unix epoch")
             .as_nanos();
         env::temp_dir().join(format!("elio-comic-archive-{label}-{unique}"))
+    }
+
+    #[test]
+    fn sniff_comic_archive_signature_detects_common_formats() {
+        let root = temp_path("signature-sniff");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+
+        let zip = root.join("issue.cbz");
+        fs::write(&zip, b"PK\x03\x04demo").expect("failed to write zip signature");
+        assert_eq!(
+            sniff_comic_archive_signature(&zip),
+            ComicArchiveSignature::Zip
+        );
+
+        let rar = root.join("issue.cbr");
+        fs::write(&rar, b"Rar!\x1a\x07\x01\x00demo").expect("failed to write rar signature");
+        assert_eq!(
+            sniff_comic_archive_signature(&rar),
+            ComicArchiveSignature::Rar
+        );
+
+        let seven_zip = root.join("issue.7z");
+        fs::write(&seven_zip, [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C, 0, 0])
+            .expect("failed to write 7z signature");
+        assert_eq!(
+            sniff_comic_archive_signature(&seven_zip),
+            ComicArchiveSignature::SevenZip
+        );
+
+        let unknown = root.join("issue.bin");
+        fs::write(&unknown, b"not-an-archive").expect("failed to write unknown file");
+        assert_eq!(
+            sniff_comic_archive_signature(&unknown),
+            ComicArchiveSignature::Unknown
+        );
+
+        fs::remove_dir_all(&root).expect("failed to remove temp root");
     }
 
     #[test]
