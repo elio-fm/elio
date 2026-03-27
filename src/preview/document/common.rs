@@ -684,6 +684,20 @@ fn format_count(value: u64) -> String {
 mod tests {
     use super::*;
 
+    fn contains_iso_datetime_separator(value: &str) -> bool {
+        value.as_bytes().windows(16).any(|window| {
+            window[0..4].iter().all(u8::is_ascii_digit)
+                && window[4] == b'-'
+                && window[5..7].iter().all(u8::is_ascii_digit)
+                && window[7] == b'-'
+                && window[8..10].iter().all(u8::is_ascii_digit)
+                && window[10] == b'T'
+                && window[11..13].iter().all(u8::is_ascii_digit)
+                && window[13] == b':'
+                && window[14..16].iter().all(u8::is_ascii_digit)
+        })
+    }
+
     // --- parse_offset_minutes ---
 
     #[test]
@@ -779,7 +793,10 @@ mod tests {
         for input in &cases {
             let result = humanize_document_datetime(input);
             assert_ne!(result, *input, "raw ISO not transformed: {input}");
-            assert!(!result.contains('T'), "ISO T still present in: {result}");
+            assert!(
+                !contains_iso_datetime_separator(&result),
+                "raw ISO datetime still present in: {result}"
+            );
             assert!(
                 result.contains("Mar"),
                 "month abbreviation missing: {result}"
