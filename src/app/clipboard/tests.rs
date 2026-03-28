@@ -474,6 +474,89 @@ fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {
 
 #[cfg(unix)]
 #[test]
+fn copy_overlay_shortcut_uses_osc52_when_no_clipboard_tool_is_installed() {
+    let _lock = clipboard_env_lock();
+    let root = temp_path("copy-overlay-osc52");
+    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
+    let file = root.join("docs/report final.md");
+    let capture = root.join("osc52.txt");
+    fs::write(&file, "notes").expect("failed to write test file");
+
+    let original_osc52 = env::var_os("ELIO_TEST_OSC52_CAPTURE");
+    let original_tool = env::var_os("ELIO_TEST_CLIPBOARD_TOOL");
+    let original_term = env::var_os("TERM");
+    let original_kitty_window_id = env::var_os("KITTY_WINDOW_ID");
+    unsafe {
+        env::set_var("ELIO_TEST_OSC52_CAPTURE", &capture);
+        env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
+        env::set_var("TERM", "xterm-kitty");
+        env::set_var("KITTY_WINDOW_ID", "1");
+    }
+
+    let mut app = App::new_at(root.join("docs")).expect("failed to create app");
+    app.open_copy_overlay();
+    app.handle_copy_key(crossterm::event::KeyEvent::from(
+        crossterm::event::KeyCode::Char('p'),
+    ))
+    .expect("copy shortcut should succeed");
+
+    let osc52 = fs::read_to_string(&capture).expect("osc52 capture should exist");
+    assert!(
+        osc52.starts_with("\u{1b}]52;c;"),
+        "expected osc52 clipboard escape, got: {osc52:?}"
+    );
+    assert!(
+        osc52.ends_with("\u{1b}\\"),
+        "expected osc52 clipboard escape terminator, got: {osc52:?}"
+    );
+    assert_eq!(app.status, "Copied file path");
+    assert!(
+        !app.copy_is_open(),
+        "successful copy should close the overlay"
+    );
+
+    if let Some(value) = original_osc52 {
+        unsafe {
+            env::set_var("ELIO_TEST_OSC52_CAPTURE", value);
+        }
+    } else {
+        unsafe {
+            env::remove_var("ELIO_TEST_OSC52_CAPTURE");
+        }
+    }
+    if let Some(value) = original_tool {
+        unsafe {
+            env::set_var("ELIO_TEST_CLIPBOARD_TOOL", value);
+        }
+    } else {
+        unsafe {
+            env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
+        }
+    }
+    if let Some(value) = original_term {
+        unsafe {
+            env::set_var("TERM", value);
+        }
+    } else {
+        unsafe {
+            env::remove_var("TERM");
+        }
+    }
+    if let Some(value) = original_kitty_window_id {
+        unsafe {
+            env::set_var("KITTY_WINDOW_ID", value);
+        }
+    } else {
+        unsafe {
+            env::remove_var("KITTY_WINDOW_ID");
+        }
+    }
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
 fn copy_overlay_does_not_block_on_backgrounding_clipboard_helpers() {
     let _lock = clipboard_env_lock();
     let root = temp_path("copy-overlay-background");

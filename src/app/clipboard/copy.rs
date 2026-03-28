@@ -4,10 +4,11 @@ use super::super::{
 };
 use crate::fs::rect_contains;
 use anyhow::{Result, anyhow};
+use base64::Engine as _;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::{
     env,
-    io::Write,
+    io::{self, IsTerminal, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -280,6 +281,14 @@ fn directory_path_for(path: &Path) -> PathBuf {
 
 fn write_text_to_system_clipboard(text: &str) -> Result<()> {
     let mut errors = Vec::new();
+
+    if terminal_supports_osc52_clipboard() {
+        match write_text_to_terminal_clipboard(text) {
+            Ok(()) => return Ok(()),
+            Err(error) => errors.push(format!("osc52: {error}")),
+        }
+    }
+
     for (program, args) in clipboard_command_candidates() {
         match run_clipboard_command(&program, &args, text) {
             Ok(()) => return Ok(()),
@@ -291,6 +300,57 @@ fn write_text_to_system_clipboard(text: &str) -> Result<()> {
         "no clipboard tool succeeded ({})",
         errors.join("; ")
     ))
+}
+
+fn write_text_to_terminal_clipboard(text: &str) -> Result<()> {
+    #[cfg(test)]
+    if let Some(path) = env::var_os("ELIO_TEST_OSC52_CAPTURE") {
+        std::fs::write(path, build_osc52_set_clipboard_sequence(text))
+            .map_err(|error| anyhow!("failed to capture osc52 clipboard output: {error}"))?;
+        return Ok(());
+    }
+
+    let mut stdout = io::stdout();
+    if !stdout.is_terminal() {
+        return Err(anyhow!("stdout is not a terminal"));
+    }
+
+    stdout
+        .write_all(build_osc52_set_clipboard_sequence(text).as_bytes())
+        .map_err(|error| anyhow!("failed to write osc52 clipboard escape: {error}"))?;
+    stdout
+        .flush()
+        .map_err(|error| anyhow!("failed to flush osc52 clipboard escape: {error}"))?;
+    Ok(())
+}
+
+fn build_osc52_set_clipboard_sequence(text: &str) -> String {
+    let payload = base64::engine::general_purpose::STANDARD.encode(text.as_bytes());
+    format!("\x1b]52;c;{payload}\x1b\\")
+}
+
+fn terminal_supports_osc52_clipboard() -> bool {
+    #[cfg(test)]
+    if env::var_os("ELIO_TEST_OSC52_CAPTURE").is_some() {
+        return true;
+    }
+
+    let term = env::var("TERM").unwrap_or_default().to_ascii_lowercase();
+    let term_program = env::var("TERM_PROGRAM")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    env::var_os("KITTY_WINDOW_ID").is_some()
+        || term.contains("xterm-kitty")
+        || term_program == "kitty"
+        || term.contains("ghostty")
+        || term_program == "ghostty"
+        || term.contains("wezterm")
+        || term_program == "wezterm"
+        || term_program == "iterm.app"
+        || term_program.contains("warp")
+        || env::var_os("WARP_SESSION_ID").is_some()
+        || env::var_os("VTE_VERSION").is_some()
 }
 
 fn run_clipboard_command(program: &str, args: &[String], text: &str) -> Result<()> {
