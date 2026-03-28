@@ -2,3 +2,20 @@
 
 [ui]
 show_top_bar = false
+
+# Optional pane widths for the browser body. Values are relative weights across
+# the horizontal space. Set a pane to 0 to hide it.
+#
+# If this table is omitted, Elio keeps the built-in responsive layout:
+# - wide terminals: Places = 24 cols, Files = 54% of the remaining width,
+#   Preview = 46% of the remaining width
+# - narrow terminals: Places = 22 cols, Preview stacks below Files with 11 rows
+#
+# Custom layouts keep visible panes side by side whenever they can still meet
+# minimum usable widths. If Preview can no longer fit horizontally but there is
+# enough height, it stacks below Files instead.
+#
+# [layout.panes]
+# places = 10
+# files = 45
+# preview = 45

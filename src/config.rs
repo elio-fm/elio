@@ -8,19 +8,45 @@ pub(crate) struct UiConfig {
     pub show_top_bar: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LayoutConfig {
+    pub panes: Option<PaneWeights>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct PaneWeights {
+    pub places: u16,
+    pub files: u16,
+    pub preview: u16,
+}
+
 #[derive(Clone, Copy)]
 struct Config {
     ui: UiConfig,
+    layout: LayoutConfig,
 }
 
 #[derive(Deserialize, Default)]
 struct ConfigFile {
     ui: Option<UiConfigOverride>,
+    layout: Option<LayoutConfigOverride>,
 }
 
 #[derive(Deserialize, Default)]
 struct UiConfigOverride {
     show_top_bar: Option<bool>,
+}
+
+#[derive(Deserialize, Default)]
+struct LayoutConfigOverride {
+    panes: Option<PaneWeightsOverride>,
+}
+
+#[derive(Deserialize, Default)]
+struct PaneWeightsOverride {
+    places: Option<u16>,
+    files: Option<u16>,
+    preview: Option<u16>,
 }
 
 pub(crate) fn initialize() {
@@ -29,6 +55,10 @@ pub(crate) fn initialize() {
 
 pub(crate) fn ui() -> UiConfig {
     active_config().ui
+}
+
+pub(crate) fn layout() -> LayoutConfig {
+    active_config().layout
 }
 
 pub(crate) fn config_dir() -> Option<PathBuf> {
@@ -81,6 +111,7 @@ impl Config {
             ui: UiConfig {
                 show_top_bar: false,
             },
+            layout: LayoutConfig { panes: None },
         }
     }
 
@@ -92,7 +123,47 @@ impl Config {
         {
             resolved.ui.show_top_bar = show_top_bar;
         }
+        if let Some(layout) = parsed.layout {
+            match LayoutConfig::from_override(layout) {
+                Ok(layout) => resolved.layout = layout,
+                Err(error) => eprintln!("elio: invalid [layout.panes] config: {error}"),
+            }
+        }
         Ok(resolved)
+    }
+}
+
+impl LayoutConfig {
+    fn from_override(overrides: LayoutConfigOverride) -> anyhow::Result<Self> {
+        let panes = overrides
+            .panes
+            .map(PaneWeights::from_override)
+            .transpose()?;
+        Ok(Self { panes })
+    }
+}
+
+impl PaneWeights {
+    fn from_override(overrides: PaneWeightsOverride) -> anyhow::Result<Self> {
+        let places = overrides
+            .places
+            .ok_or_else(|| anyhow::anyhow!("layout.panes.places must be set"))?;
+        let files = overrides
+            .files
+            .ok_or_else(|| anyhow::anyhow!("layout.panes.files must be set"))?;
+        let preview = overrides
+            .preview
+            .ok_or_else(|| anyhow::anyhow!("layout.panes.preview must be set"))?;
+
+        if files == 0 {
+            anyhow::bail!("layout.panes.files must be greater than 0");
+        }
+
+        Ok(Self {
+            places,
+            files,
+            preview,
+        })
     }
 }
 
@@ -104,6 +175,7 @@ mod tests {
     fn config_defaults_hide_top_bar() {
         let config = Config::default_config();
         assert!(!config.ui.show_top_bar);
+        assert_eq!(config.layout.panes, None);
     }
 
     #[test]
@@ -117,5 +189,60 @@ show_top_bar = true
         .expect("config should parse");
 
         assert!(config.ui.show_top_bar);
+    }
+
+    #[test]
+    fn config_can_parse_layout_panes() {
+        let config = Config::from_str(
+            r#"
+[layout.panes]
+places = 10
+files = 45
+preview = 45
+"#,
+        )
+        .expect("config should parse");
+
+        assert_eq!(
+            config.layout.panes,
+            Some(PaneWeights {
+                places: 10,
+                files: 45,
+                preview: 45,
+            })
+        );
+    }
+
+    #[test]
+    fn partial_layout_panes_leave_default_layout_active() {
+        let config = Config::from_str(
+            r#"
+[layout.panes]
+places = 10
+files = 45
+"#,
+        )
+        .expect("config should parse");
+
+        assert_eq!(config.layout.panes, None);
+    }
+
+    #[test]
+    fn invalid_layout_panes_preserve_other_valid_config_values() {
+        let config = Config::from_str(
+            r#"
+[ui]
+show_top_bar = true
+
+[layout.panes]
+places = 10
+files = 0
+preview = 90
+"#,
+        )
+        .expect("config should parse");
+
+        assert!(config.ui.show_top_bar);
+        assert_eq!(config.layout.panes, None);
     }
 }

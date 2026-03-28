@@ -11,8 +11,11 @@ pub(super) use self::layout::render_body;
 #[cfg(test)]
 mod tests {
     use super::super::theme;
+    use super::layout::resolve_body_layout;
     use super::scrollbar::split_scrollbar_area;
-    use crate::app::{App, FrameState};
+    use super::sidebar::render_sidebar;
+    use crate::app::{App, FrameState, SidebarItem};
+    use crate::config::PaneWeights;
     use crate::preview::default_code_preview_line_limit;
     use crate::ui;
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
@@ -174,6 +177,201 @@ mod tests {
         assert!(
             entries_panel.y.saturating_add(entries_panel.height) <= preview_panel.y,
             "narrow layout should stack the preview panel below the entries panel"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn weighted_layout_splits_three_panes_across_the_available_width() {
+        let layout = resolve_body_layout(
+            Rect {
+                x: 0,
+                y: 0,
+                width: 140,
+                height: 20,
+            },
+            Some(PaneWeights {
+                places: 10,
+                files: 45,
+                preview: 45,
+            }),
+        );
+
+        let sidebar = layout.sidebar.expect("sidebar should be visible");
+        let entries = layout.entries.expect("entries should be visible");
+        let preview = layout.preview.expect("preview should be visible");
+
+        assert!(sidebar.width >= 16);
+        assert!(entries.width >= 28);
+        assert!(preview.width >= 24);
+        assert_eq!(sidebar.width + entries.width + preview.width, 140);
+        assert_eq!(sidebar.x.saturating_add(sidebar.width), entries.x);
+        assert_eq!(entries.x.saturating_add(entries.width), preview.x);
+    }
+
+    #[test]
+    fn weighted_layout_can_hide_the_sidebar() {
+        let layout = resolve_body_layout(
+            Rect {
+                x: 0,
+                y: 0,
+                width: 110,
+                height: 20,
+            },
+            Some(PaneWeights {
+                places: 0,
+                files: 60,
+                preview: 50,
+            }),
+        );
+
+        let entries = layout.entries.expect("entries should be visible");
+        let preview = layout.preview.expect("preview should be visible");
+
+        assert_eq!(layout.sidebar, None);
+        assert!(entries.width >= 28);
+        assert!(preview.width >= 24);
+        assert_eq!(entries.width, 60);
+        assert_eq!(preview.width, 50);
+        assert_eq!(entries.x.saturating_add(entries.width), preview.x);
+    }
+
+    #[test]
+    fn weighted_layout_hides_the_preview_when_requested() {
+        let layout = resolve_body_layout(
+            Rect {
+                x: 0,
+                y: 0,
+                width: 100,
+                height: 20,
+            },
+            Some(PaneWeights {
+                places: 15,
+                files: 85,
+                preview: 0,
+            }),
+        );
+
+        let sidebar = layout.sidebar.expect("sidebar should be visible");
+        let entries = layout.entries.expect("entries should be visible");
+
+        assert_eq!(layout.preview, None);
+        assert!(sidebar.width >= 16);
+        assert!(entries.width >= 28);
+        assert_eq!(sidebar.width + entries.width, 100);
+    }
+
+    #[test]
+    fn weighted_layout_uses_horizontal_layout_when_visible_panes_fit_minimums() {
+        let layout = resolve_body_layout(
+            Rect {
+                x: 0,
+                y: 0,
+                width: 120,
+                height: 20,
+            },
+            Some(PaneWeights {
+                places: 10,
+                files: 45,
+                preview: 45,
+            }),
+        );
+
+        let sidebar = layout.sidebar.expect("sidebar should be visible");
+        let entries = layout.entries.expect("entries should be visible");
+        let preview = layout.preview.expect("preview should be visible");
+
+        assert!(sidebar.width >= 16);
+        assert!(entries.width >= 28);
+        assert!(preview.width >= 24);
+        assert_eq!(entries.y, preview.y);
+        assert_eq!(entries.height, preview.height);
+        assert_eq!(sidebar.width + entries.width + preview.width, 120);
+    }
+
+    #[test]
+    fn weighted_layout_stacks_preview_when_width_is_tight_and_height_is_sufficient() {
+        let layout = resolve_body_layout(
+            Rect {
+                x: 0,
+                y: 0,
+                width: 60,
+                height: 20,
+            },
+            Some(PaneWeights {
+                places: 10,
+                files: 45,
+                preview: 45,
+            }),
+        );
+
+        let sidebar = layout.sidebar.expect("sidebar should be visible");
+        let entries = layout.entries.expect("entries should be visible");
+        let preview = layout.preview.expect("preview should be visible");
+
+        assert!(sidebar.width >= 16);
+        assert_eq!(entries.x, preview.x);
+        assert_eq!(entries.width, preview.width);
+        assert_eq!(entries.height, 10);
+        assert_eq!(preview.height, 10);
+    }
+
+    #[test]
+    fn weighted_layout_avoids_stacking_when_height_is_too_limited() {
+        let layout = resolve_body_layout(
+            Rect {
+                x: 0,
+                y: 0,
+                width: 60,
+                height: 14,
+            },
+            Some(PaneWeights {
+                places: 10,
+                files: 45,
+                preview: 45,
+            }),
+        );
+
+        let sidebar = layout.sidebar.expect("sidebar should be visible");
+        let entries = layout.entries.expect("entries should be visible");
+
+        assert!(sidebar.width >= 16);
+        assert_eq!(layout.preview, None);
+        assert_eq!(entries.y, 0);
+        assert_eq!(entries.height, 14);
+    }
+
+    #[test]
+    fn sidebar_clamps_long_labels_when_width_is_tight() {
+        let root = temp_path("sidebar-clamp");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        app.sidebar = vec![SidebarItem {
+            title: "Downloads Directory".to_string(),
+            icon: "D",
+            path: root.clone(),
+        }];
+
+        let mut terminal = Terminal::new(TestBackend::new(14, 5)).expect("terminal should init");
+        let mut frame_state = FrameState::default();
+        terminal
+            .draw(|frame| {
+                render_sidebar(
+                    frame,
+                    frame.area(),
+                    &app,
+                    &mut frame_state,
+                    theme::palette(),
+                );
+            })
+            .expect("sidebar should render");
+
+        let rendered = buffer_text(terminal.backend().buffer());
+        assert!(
+            rendered.contains("Downloa…"),
+            "expected the narrow sidebar to clamp long labels, got: {rendered:?}"
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");

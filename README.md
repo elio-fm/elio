@@ -144,13 +144,30 @@ elio
 ```toml
 [ui]
 show_top_bar = false
+
+# Optional wide-layout pane weights. Set a pane to 0 to hide it.
+#
+# [layout.panes]
+# places = 10
+# files = 45
+# preview = 45
 ```
 
 | Key | Default | Description |
 |---|---|---|
 | `ui.show_top_bar` | `false` | Show or hide the toolbar at the top of the screen |
+| `layout.panes.places` | unset | Relative width weight for the Places pane in custom layouts; `0` hides it |
+| `layout.panes.files` | unset | Relative width weight for the Files pane in custom layouts; must be greater than `0` |
+| `layout.panes.preview` | unset | Relative width weight for the Preview pane in custom layouts; `0` hides it |
 
-If the file does not exist, `elio` uses built-in defaults. See [examples/config.toml](examples/config.toml) for an annotated reference.
+If the file does not exist, `elio` uses built-in defaults. If `[layout.panes]` is omitted, Elio keeps the current built-in responsive layout:
+
+- Wide terminals: Places = `24` columns, then Files / Preview = `54 / 46` of the remaining width
+- Narrow terminals: Places = `22` columns, with Preview stacked below Files using `11` rows
+
+`layout.panes` values are relative weights across the browser body's horizontal space rather than strict percentages, so `10/45/45` and `20/90/90` produce the same split. Custom layouts keep panes side by side whenever the visible panes can still meet minimum usable widths. When Preview cannot fit horizontally but there is enough height, it stacks below Files; when space is extremely constrained, Preview may temporarily drop out to keep the browser usable.
+
+See [examples/config.toml](examples/config.toml) for an annotated reference.
 
 ---
 

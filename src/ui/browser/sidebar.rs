@@ -37,12 +37,15 @@ pub(super) fn render_sidebar(
         } else {
             palette.panel
         };
+        let title_width = row.width.saturating_sub(
+            1u16.saturating_add(helpers::display_width(item.icon) as u16)
+                .saturating_add(2),
+        ) as usize;
         let top_line = Line::from(vec![
             Span::styled(
                 if active { "▌" } else { " " },
                 Style::default().fg(if active { palette.accent } else { bg }),
             ),
-            Span::raw(" "),
             Span::styled(
                 item.icon,
                 Style::default()
@@ -51,7 +54,7 @@ pub(super) fn render_sidebar(
             ),
             Span::raw("  "),
             Span::styled(
-                item.title.clone(),
+                helpers::clamp_label(&item.title, title_width),
                 Style::default()
                     .fg(palette.text)
                     .add_modifier(Modifier::BOLD),
