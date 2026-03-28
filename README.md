@@ -162,8 +162,9 @@ show_top_bar = false
 
 If the file does not exist, `elio` uses built-in defaults. If `[layout.panes]` is omitted, Elio keeps the current built-in responsive layout:
 
-- Wide terminals: Places = `24` columns, then Files / Preview = `54 / 46` of the remaining width
-- Narrow terminals: Places = `22` columns, with Preview stacked below Files using `11` rows
+- Horizontal layout: Places prefers `24` columns, then Files / Preview use a `54 / 46` split of the remaining width
+- Tighter windows: Places can shrink to `18` columns before Preview stacks below Files
+- Height-constrained windows: Preview drops out instead of stacking too early when there is not enough vertical space
 
 `layout.panes` values are relative weights across the browser body's horizontal space rather than strict percentages, so `10/45/45` and `20/90/90` produce the same split. Custom layouts keep panes side by side whenever the visible panes can still meet minimum usable widths. When Preview cannot fit horizontally but there is enough height, it stacks below Files; when space is extremely constrained, Preview may temporarily drop out to keep the browser usable.
 
