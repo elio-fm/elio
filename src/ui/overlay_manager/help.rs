@@ -38,7 +38,7 @@ pub(super) fn render_help(
         },
         HelpEntry {
             key: "Tab / Shift+Tab",
-            action: "cycle pinned places",
+            action: "cycle sidebar locations",
         },
         HelpEntry {
             key: "Alt+← / →",

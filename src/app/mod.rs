@@ -37,7 +37,7 @@ pub(crate) use self::types::ClipOp;
 pub(crate) use self::types::FileClass;
 pub use self::types::{
     CopyHit, Entry, EntryHit, EntryKind, FrameState, GoToHit, PathHit, SearchHit, SearchRow,
-    SearchScope, SidebarItem, SortMode, ViewMetrics, ViewMode,
+    SearchScope, SidebarItem, SidebarItemKind, SidebarRow, SortMode, ViewMetrics, ViewMode,
 };
 
 impl App {

@@ -1,8 +1,25 @@
 use super::*;
 
+const SIDEBAR_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
+
 impl App {
     pub fn reload(&mut self) -> Result<()> {
         self.queue_directory_reload(false)
+    }
+
+    pub(crate) fn process_sidebar_refresh(&mut self) -> bool {
+        if self.last_sidebar_refresh_at.elapsed() < SIDEBAR_REFRESH_INTERVAL {
+            return false;
+        }
+        self.last_sidebar_refresh_at = Instant::now();
+
+        let sidebar = crate::fs::build_sidebar_rows();
+        if sidebar == self.sidebar {
+            return false;
+        }
+
+        self.sidebar = sidebar;
+        true
     }
 
     pub fn process_auto_reload(&mut self) -> Result<bool> {
@@ -88,7 +105,8 @@ impl App {
         self.cwd = load.target_cwd.clone();
         self.in_trash = Self::path_is_trash(&self.cwd);
         self.entries = snapshot.entries;
-        self.sidebar = crate::fs::build_sidebar_items();
+        self.sidebar = crate::fs::build_sidebar_rows();
+        self.last_sidebar_refresh_at = Instant::now();
         self.directory_runtime.fingerprint = snapshot.fingerprint;
         self.directory_runtime.last_auto_reload_at = Instant::now();
 

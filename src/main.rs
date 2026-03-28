@@ -145,6 +145,10 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             dirty = true;
         }
 
+        if app.process_sidebar_refresh() {
+            dirty = true;
+        }
+
         match app.process_auto_reload() {
             Ok(changed) => {
                 dirty |= changed;

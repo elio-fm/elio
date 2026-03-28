@@ -188,8 +188,8 @@ impl App {
                 self.clear_wheel_scroll();
                 self.help_open = true;
             }
-            KeyCode::Tab => self.step_pinned_place(1)?,
-            KeyCode::BackTab => self.step_pinned_place(-1)?,
+            KeyCode::Tab => self.step_sidebar_place(1)?,
+            KeyCode::BackTab => self.step_sidebar_place(-1)?,
             KeyCode::Up | KeyCode::Char('k') => self.move_vertical_keyboard(-1),
             KeyCode::Down | KeyCode::Char('j') => self.move_vertical_keyboard(1),
             KeyCode::Left | KeyCode::Char('h') => {

@@ -1,5 +1,5 @@
 use super::super::{
-    App,
+    App, SidebarItemKind,
     state::{GoToDestination, GoToOverlay, GoToOverlayRow},
 };
 use crate::fs::{rect_contains, trash_dir};
@@ -190,7 +190,8 @@ fn home_directory() -> Option<PathBuf> {
 fn downloads_destination(app: &App) -> Option<PathBuf> {
     app.sidebar
         .iter()
-        .find(|item| item.title == "Downloads")
+        .filter_map(|row| row.item())
+        .find(|item| item.kind == SidebarItemKind::Downloads)
         .map(|item| item.path.clone())
         .or_else(|| home_directory().map(|home| home.join("Downloads")))
         .filter(|path| path.exists())
@@ -207,7 +208,8 @@ fn config_directory() -> Option<PathBuf> {
 fn trash_destination(app: &App) -> Option<PathBuf> {
     app.sidebar
         .iter()
-        .find(|item| item.title == "Trash")
+        .filter_map(|row| row.item())
+        .find(|item| item.kind == SidebarItemKind::Trash)
         .map(|item| item.path.clone())
         .or_else(|| home_directory().and_then(|home| trash_dir(&home)))
 }

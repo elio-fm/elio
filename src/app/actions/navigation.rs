@@ -316,29 +316,32 @@ impl App {
         total_rows.saturating_sub(rows_visible)
     }
 
-    pub(in crate::app) fn step_pinned_place(&mut self, delta: isize) -> Result<()> {
-        if self.sidebar.is_empty() {
+    pub(in crate::app) fn step_sidebar_place(&mut self, delta: isize) -> Result<()> {
+        let places = self
+            .sidebar
+            .iter()
+            .filter_map(|row| row.item())
+            .collect::<Vec<_>>();
+        if places.is_empty() {
             return Ok(());
         }
 
-        let current = self.sidebar.iter().position(|item| item.path == self.cwd);
+        let current = places.iter().position(|item| item.path == self.cwd);
         let next = if delta >= 0 {
-            current
-                .map(|index| (index + 1) % self.sidebar.len())
-                .unwrap_or(0)
+            current.map(|index| (index + 1) % places.len()).unwrap_or(0)
         } else {
             current
                 .map(|index| {
                     if index == 0 {
-                        self.sidebar.len() - 1
+                        places.len() - 1
                     } else {
                         index - 1
                     }
                 })
-                .unwrap_or(self.sidebar.len() - 1)
+                .unwrap_or(places.len() - 1)
         };
 
-        self.set_dir(self.sidebar[next].path.clone())
+        self.set_dir(places[next].path.clone())
     }
 
     pub(in crate::app) fn go_back(&mut self) -> Result<()> {

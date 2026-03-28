@@ -1,9 +1,9 @@
-use crate::app::{Entry, EntryKind, SidebarItem, SortMode};
+use crate::app::{Entry, EntryKind, SortMode};
 use anyhow::{Context, Result};
 use std::{
     cmp::Ordering,
-    collections::{HashMap, hash_map::DefaultHasher},
-    env, fs,
+    collections::hash_map::DefaultHasher,
+    fs,
     hash::{Hash, Hasher},
     io,
     path::{Path, PathBuf},
@@ -38,120 +38,6 @@ struct EntryDetails {
     size: u64,
     modified: Option<SystemTime>,
     readonly: bool,
-}
-
-pub(crate) fn build_sidebar_items() -> Vec<SidebarItem> {
-    let mut items = Vec::new();
-    let home = env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/"));
-
-    items.push(SidebarItem {
-        title: "Home".to_string(),
-        icon: "󰋜",
-        path: home.clone(),
-    });
-
-    let xdg_dirs = read_xdg_user_dirs(&home);
-
-    for (title, xdg_key, fallback, icon) in [
-        ("Desktop", "XDG_DESKTOP_DIR", "Desktop", "󰍹"),
-        ("Documents", "XDG_DOCUMENTS_DIR", "Documents", "󰲃"),
-        ("Downloads", "XDG_DOWNLOAD_DIR", "Downloads", "󰉍"),
-        ("Pictures", "XDG_PICTURES_DIR", "Pictures", "󰉏"),
-        ("Music", "XDG_MUSIC_DIR", "Music", "󱍙"),
-        ("Videos", "XDG_VIDEOS_DIR", "Videos", "󰕧"),
-    ] {
-        let path = xdg_dirs
-            .get(xdg_key)
-            .cloned()
-            .unwrap_or_else(|| home.join(fallback));
-        if path.exists() {
-            items.push(SidebarItem {
-                title: title.to_string(),
-                icon,
-                path,
-            });
-        }
-    }
-
-    items.push(SidebarItem {
-        title: "Root".to_string(),
-        icon: "󰋊",
-        path: PathBuf::from("/"),
-    });
-
-    if let Some(trash) = trash_dir(&home) {
-        items.push(SidebarItem {
-            title: "Trash".to_string(),
-            icon: "󰩺",
-            path: trash,
-        });
-    }
-
-    items
-}
-
-/// Reads `$XDG_CONFIG_HOME/user-dirs.dirs` (default: `~/.config/user-dirs.dirs`) and returns a
-/// map of XDG variable names (e.g. `"XDG_DOWNLOAD_DIR"`) to their resolved paths. On systems
-/// without this file (e.g. macOS) or when the file cannot be read, returns an empty map and the
-/// caller falls back to English directory names.
-fn read_xdg_user_dirs(home: &Path) -> HashMap<String, PathBuf> {
-    let config_home = env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".config"));
-
-    let content = match fs::read_to_string(config_home.join("user-dirs.dirs")) {
-        Ok(content) => content,
-        Err(_) => return HashMap::new(),
-    };
-
-    let mut dirs = HashMap::new();
-    for line in content.lines() {
-        let line = line.trim();
-        if line.starts_with('#') || line.is_empty() {
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        let value = value.trim().trim_matches('"');
-        let path = if value == "$HOME" {
-            home.to_path_buf()
-        } else if let Some(relative) = value.strip_prefix("$HOME/") {
-            home.join(relative)
-        } else if value.starts_with('/') {
-            PathBuf::from(value)
-        } else {
-            continue;
-        };
-        dirs.insert(key.trim().to_string(), path);
-    }
-    dirs
-}
-
-/// Returns the path to the user's trash directory, or `None` if it cannot be determined.
-///
-/// On freedesktop systems (Linux) the trash lives at `$XDG_DATA_HOME/Trash/files`.
-/// On macOS it is `~/.Trash`. The `files` subdirectory is used on Linux because that is
-/// where the actual deleted items are stored (the sibling `info/` directory holds metadata).
-pub(crate) fn trash_dir(home: &Path) -> Option<PathBuf> {
-    // Freedesktop / Linux: $XDG_DATA_HOME/Trash/files (default: ~/.local/share/Trash/files)
-    let data_home = env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".local/share"));
-    let xdg_trash = data_home.join("Trash/files");
-    if xdg_trash.exists() {
-        return Some(xdg_trash);
-    }
-
-    // macOS: ~/.Trash
-    let mac_trash = home.join(".Trash");
-    if mac_trash.exists() {
-        return Some(mac_trash);
-    }
-
-    None
 }
 
 /// Reads the `DeletionDate` from a `.trashinfo` file inside `info_dir` for the given file name.

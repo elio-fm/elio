@@ -15,7 +15,7 @@ mod tests {
     use super::layout::resolve_body_layout;
     use super::scrollbar::split_scrollbar_area;
     use super::sidebar::render_sidebar;
-    use crate::app::{App, FrameState, SidebarItem};
+    use crate::app::{App, FrameState, SidebarItem, SidebarItemKind, SidebarRow};
     use crate::config::PaneWeights;
     use crate::preview::default_code_preview_line_limit;
     use crate::ui;
@@ -437,11 +437,12 @@ mod tests {
         fs::create_dir_all(&root).expect("failed to create temp root");
 
         let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-        app.sidebar = vec![SidebarItem {
-            title: "Downloads Directory".to_string(),
-            icon: "D",
-            path: root.clone(),
-        }];
+        app.sidebar = vec![SidebarRow::Item(SidebarItem::new(
+            SidebarItemKind::Downloads,
+            "Downloads Directory",
+            "D",
+            root.clone(),
+        ))];
 
         let mut terminal = Terminal::new(TestBackend::new(14, 5)).expect("terminal should init");
         let mut frame_state = FrameState::default();
@@ -462,6 +463,49 @@ mod tests {
             rendered.contains("Downloa…"),
             "expected the narrow sidebar to clamp long labels, got: {rendered:?}"
         );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn sidebar_sections_render_without_creating_click_targets() {
+        let root = temp_path("sidebar-sections");
+        let drive = root.join("usb");
+        fs::create_dir_all(&drive).expect("failed to create temp dirs");
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        app.sidebar = vec![
+            SidebarRow::Section { title: "Devices" },
+            SidebarRow::Item(SidebarItem::new(
+                SidebarItemKind::Device { removable: true },
+                "Vacation",
+                "U",
+                drive.clone(),
+            )),
+        ];
+
+        let mut terminal = Terminal::new(TestBackend::new(18, 6)).expect("terminal should init");
+        let mut frame_state = FrameState::default();
+        terminal
+            .draw(|frame| {
+                render_sidebar(
+                    frame,
+                    frame.area(),
+                    &app,
+                    &mut frame_state,
+                    theme::palette(),
+                );
+            })
+            .expect("sidebar should render");
+
+        let rendered = buffer_text(terminal.backend().buffer());
+        assert!(rendered.contains("Devices"));
+        assert!(
+            row_text(terminal.backend().buffer(), 1).contains("│ Devices"),
+            "section labels should align with the panel title, got: {rendered:?}"
+        );
+        assert_eq!(frame_state.sidebar_hits.len(), 1);
+        assert_eq!(frame_state.sidebar_hits[0].path, drive);
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

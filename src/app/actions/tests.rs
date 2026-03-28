@@ -154,6 +154,34 @@ fn watcher_reload_ignores_hidden_entries_when_hidden_files_are_off() {
 }
 
 #[test]
+fn sidebar_refresh_rebuilds_places_once_per_interval() {
+    let root = temp_path("sidebar-refresh");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.sidebar.clear();
+    app.last_sidebar_refresh_at = Instant::now() - Duration::from_secs(3);
+
+    assert!(
+        app.process_sidebar_refresh(),
+        "stale refresh windows should rebuild places"
+    );
+    assert!(
+        !app.sidebar.is_empty(),
+        "refresh should restore the builtin places list"
+    );
+
+    let sidebar_after_refresh = app.sidebar.clone();
+    assert!(
+        !app.process_sidebar_refresh(),
+        "freshly refreshed sidebars should not rebuild again immediately"
+    );
+    assert_eq!(app.sidebar, sidebar_after_refresh);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn polling_fallback_respects_its_throttle_window() {
     let root = temp_path("auto-reload-throttle");
     fs::create_dir_all(&root).expect("failed to create temp root");

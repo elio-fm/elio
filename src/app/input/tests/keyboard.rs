@@ -90,6 +90,71 @@ fn g_opens_goto_overlay_and_goto_shortcuts_keep_g_for_top() {
 }
 
 #[test]
+fn tab_and_shift_tab_cycle_sidebar_locations_and_skip_section_rows() {
+    let root = temp_path("tab-cycles-pinned-places");
+    let downloads = root.join("downloads");
+    let usb = root.join("usb");
+    fs::create_dir_all(&downloads).expect("failed to create downloads dir");
+    fs::create_dir_all(&usb).expect("failed to create usb dir");
+
+    let sidebar_rows = || {
+        vec![
+            SidebarRow::Item(SidebarItem::new(
+                SidebarItemKind::Home,
+                "Home",
+                "H",
+                root.clone(),
+            )),
+            SidebarRow::Item(SidebarItem::new(
+                SidebarItemKind::Downloads,
+                "Downloads",
+                "D",
+                downloads.clone(),
+            )),
+            SidebarRow::Section { title: "Devices" },
+            SidebarRow::Item(SidebarItem::new(
+                SidebarItemKind::Device { removable: true },
+                "USB",
+                "U",
+                usb.clone(),
+            )),
+        ]
+    };
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.sidebar = sidebar_rows();
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
+        .expect("tab should cycle sidebar locations");
+    wait_for_directory_load(&mut app);
+    assert_eq!(app.cwd, downloads);
+
+    app.sidebar = sidebar_rows();
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
+        .expect("tab should continue into device rows");
+    wait_for_directory_load(&mut app);
+    assert_eq!(app.cwd, usb);
+
+    app.sidebar = sidebar_rows();
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
+        .expect("tab should wrap back to the first sidebar location");
+    wait_for_directory_load(&mut app);
+    assert_eq!(app.cwd, root);
+
+    app.sidebar = sidebar_rows();
+    app.set_dir(usb.clone()).expect("device path should open");
+    wait_for_directory_load(&mut app);
+
+    app.sidebar = sidebar_rows();
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::BackTab)))
+        .expect("shift-tab should walk sidebar locations in reverse");
+    wait_for_directory_load(&mut app);
+    assert_eq!(app.cwd, downloads);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn repeated_down_arrow_is_throttled_without_starving_hold_repeat() {
     let root = temp_path("down-arrow-debounce");
     fs::create_dir_all(&root).expect("failed to create temp root");

@@ -94,11 +94,57 @@ impl Entry {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SidebarItem {
+    pub kind: SidebarItemKind,
     pub title: String,
     pub icon: &'static str,
     pub path: PathBuf,
+}
+
+impl SidebarItem {
+    pub fn new(
+        kind: SidebarItemKind,
+        title: impl Into<String>,
+        icon: &'static str,
+        path: PathBuf,
+    ) -> Self {
+        Self {
+            kind,
+            title: title.into(),
+            icon,
+            path,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SidebarItemKind {
+    Home,
+    Desktop,
+    Documents,
+    Downloads,
+    Pictures,
+    Music,
+    Videos,
+    Root,
+    Trash,
+    Device { removable: bool },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SidebarRow {
+    Section { title: &'static str },
+    Item(SidebarItem),
+}
+
+impl SidebarRow {
+    pub fn item(&self) -> Option<&SidebarItem> {
+        match self {
+            Self::Item(item) => Some(item),
+            Self::Section { .. } => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]

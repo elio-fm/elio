@@ -399,7 +399,7 @@ pub(super) struct DirectoryRuntime {
 pub struct App {
     pub cwd: PathBuf,
     pub entries: Vec<Entry>,
-    pub sidebar: Vec<SidebarItem>,
+    pub sidebar: Vec<SidebarRow>,
     pub selected: usize,
     pub scroll_row: usize,
     pub view_mode: ViewMode,
@@ -459,6 +459,7 @@ pub struct App {
     pub(super) directory_count_viewport: Option<DirectoryCountViewport>,
     pub(super) directory_view_memory: HashMap<PathBuf, DirectoryViewMemory>,
     pub(super) directory_runtime: DirectoryRuntime,
+    pub(super) last_sidebar_refresh_at: Instant,
     pub(super) last_click: Option<ClickState>,
     pub(super) wheel_scroll: ScrollState,
     pub(super) wheel_profile: WheelProfile,
@@ -566,6 +567,7 @@ impl App {
                 use_polling_reload: true,
                 last_auto_reload_at: Instant::now(),
             },
+            last_sidebar_refresh_at: Instant::now(),
             last_click: None,
             wheel_scroll: ScrollState {
                 horizontal: ScrollLane::new(),
@@ -589,7 +591,8 @@ impl App {
             app.effective_show_hidden(),
             app.sort_mode,
         )?;
-        app.sidebar = crate::fs::build_sidebar_items();
+        app.sidebar = crate::fs::build_sidebar_rows();
+        app.last_sidebar_refresh_at = Instant::now();
         app.entries = snapshot.entries;
         app.directory_runtime.fingerprint = snapshot.fingerprint;
         app.clamp_selection();
