@@ -265,7 +265,7 @@ pub(super) fn write_fixed_layout_epub_fixture(path: &Path, section_titles: &[&st
 }
 
 pub(super) fn wait_for_background_preview(app: &mut App) {
-    for _ in 0..200 {
+    for _ in 0..500 {
         if app.process_background_jobs() {
             return;
         }

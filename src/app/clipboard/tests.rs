@@ -1,7 +1,9 @@
 use super::super::App;
 use crate::app::ClipOp;
 use std::{
-    env, fs,
+    env,
+    ffi::OsString,
+    fs,
     path::PathBuf,
     sync::{Mutex, OnceLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -39,6 +41,58 @@ fn clipboard_env_lock() -> std::sync::MutexGuard<'static, ()> {
     LOCK.get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(unix)]
+struct ClipboardEnvGuard {
+    saved: Vec<(&'static str, Option<OsString>)>,
+}
+
+#[cfg(unix)]
+impl ClipboardEnvGuard {
+    fn isolate() -> Self {
+        const VARS: &[&str] = &[
+            "ELIO_TEST_CLIPBOARD_TOOL",
+            "ELIO_TEST_OSC52_CAPTURE",
+            "ELIO_CLIPBOARD_OSC52",
+            "TERM",
+            "TERM_PROGRAM",
+            "KITTY_WINDOW_ID",
+            "WARP_SESSION_ID",
+            "ALACRITTY_SOCKET",
+            "VTE_VERSION",
+            "PATH",
+        ];
+
+        let saved = VARS
+            .iter()
+            .map(|name| (*name, env::var_os(name)))
+            .collect::<Vec<_>>();
+        for name in VARS {
+            unsafe {
+                env::remove_var(name);
+            }
+        }
+
+        Self { saved }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for ClipboardEnvGuard {
+    fn drop(&mut self) {
+        for (name, value) in &self.saved {
+            if let Some(value) = value {
+                unsafe {
+                    env::set_var(name, value);
+                }
+            } else {
+                unsafe {
+                    env::remove_var(name);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -428,6 +482,7 @@ fn copy_overlay_populates_expected_rows_for_selected_file() {
 #[test]
 fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {
     let _lock = clipboard_env_lock();
+    let _env = ClipboardEnvGuard::isolate();
     let root = temp_path("copy-overlay-copy");
     fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
     let file = root.join("docs/report final.md");
@@ -435,7 +490,6 @@ fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {
     fs::write(&file, "notes").expect("failed to write test file");
     let tool = install_fake_clipboard_tool(&root, &capture);
 
-    let original_tool = env::var_os("ELIO_TEST_CLIPBOARD_TOOL");
     unsafe {
         env::set_var("ELIO_TEST_CLIPBOARD_TOOL", &tool);
     }
@@ -459,16 +513,6 @@ fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {
         "successful copy should close the overlay"
     );
 
-    if let Some(value) = original_tool {
-        unsafe {
-            env::set_var("ELIO_TEST_CLIPBOARD_TOOL", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
-        }
-    }
-
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -476,19 +520,15 @@ fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {
 #[test]
 fn copy_overlay_shortcut_uses_osc52_when_no_clipboard_tool_is_installed() {
     let _lock = clipboard_env_lock();
+    let _env = ClipboardEnvGuard::isolate();
     let root = temp_path("copy-overlay-osc52");
     fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
     let file = root.join("docs/report final.md");
     let capture = root.join("osc52.txt");
     fs::write(&file, "notes").expect("failed to write test file");
 
-    let original_osc52 = env::var_os("ELIO_TEST_OSC52_CAPTURE");
-    let original_tool = env::var_os("ELIO_TEST_CLIPBOARD_TOOL");
-    let original_term = env::var_os("TERM");
-    let original_kitty_window_id = env::var_os("KITTY_WINDOW_ID");
     unsafe {
         env::set_var("ELIO_TEST_OSC52_CAPTURE", &capture);
-        env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
         env::set_var("TERM", "xterm-kitty");
         env::set_var("KITTY_WINDOW_ID", "1");
     }
@@ -515,43 +555,6 @@ fn copy_overlay_shortcut_uses_osc52_when_no_clipboard_tool_is_installed() {
         "successful copy should close the overlay"
     );
 
-    if let Some(value) = original_osc52 {
-        unsafe {
-            env::set_var("ELIO_TEST_OSC52_CAPTURE", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_TEST_OSC52_CAPTURE");
-        }
-    }
-    if let Some(value) = original_tool {
-        unsafe {
-            env::set_var("ELIO_TEST_CLIPBOARD_TOOL", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
-        }
-    }
-    if let Some(value) = original_term {
-        unsafe {
-            env::set_var("TERM", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("TERM");
-        }
-    }
-    if let Some(value) = original_kitty_window_id {
-        unsafe {
-            env::set_var("KITTY_WINDOW_ID", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("KITTY_WINDOW_ID");
-        }
-    }
-
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -559,19 +562,15 @@ fn copy_overlay_shortcut_uses_osc52_when_no_clipboard_tool_is_installed() {
 #[test]
 fn copy_overlay_shortcut_uses_osc52_in_alacritty_without_clipboard_tool() {
     let _lock = clipboard_env_lock();
+    let _env = ClipboardEnvGuard::isolate();
     let root = temp_path("copy-overlay-osc52-alacritty");
     fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
     let file = root.join("docs/report final.md");
     let capture = root.join("osc52.txt");
     fs::write(&file, "notes").expect("failed to write test file");
 
-    let original_osc52 = env::var_os("ELIO_TEST_OSC52_CAPTURE");
-    let original_tool = env::var_os("ELIO_TEST_CLIPBOARD_TOOL");
-    let original_term = env::var_os("TERM");
-    let original_alacritty_socket = env::var_os("ALACRITTY_SOCKET");
     unsafe {
         env::set_var("ELIO_TEST_OSC52_CAPTURE", &capture);
-        env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
         env::set_var("TERM", "alacritty");
         env::set_var("ALACRITTY_SOCKET", "/tmp/elio-alacritty.sock");
     }
@@ -598,43 +597,6 @@ fn copy_overlay_shortcut_uses_osc52_in_alacritty_without_clipboard_tool() {
         "successful copy should close the overlay"
     );
 
-    if let Some(value) = original_osc52 {
-        unsafe {
-            env::set_var("ELIO_TEST_OSC52_CAPTURE", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_TEST_OSC52_CAPTURE");
-        }
-    }
-    if let Some(value) = original_tool {
-        unsafe {
-            env::set_var("ELIO_TEST_CLIPBOARD_TOOL", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
-        }
-    }
-    if let Some(value) = original_term {
-        unsafe {
-            env::set_var("TERM", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("TERM");
-        }
-    }
-    if let Some(value) = original_alacritty_socket {
-        unsafe {
-            env::set_var("ALACRITTY_SOCKET", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ALACRITTY_SOCKET");
-        }
-    }
-
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -642,19 +604,15 @@ fn copy_overlay_shortcut_uses_osc52_in_alacritty_without_clipboard_tool() {
 #[test]
 fn copy_overlay_shortcut_uses_osc52_override_for_unknown_terminals() {
     let _lock = clipboard_env_lock();
+    let _env = ClipboardEnvGuard::isolate();
     let root = temp_path("copy-overlay-osc52-override");
     fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
     let file = root.join("docs/report final.md");
     let capture = root.join("osc52.txt");
     fs::write(&file, "notes").expect("failed to write test file");
 
-    let original_osc52 = env::var_os("ELIO_TEST_OSC52_CAPTURE");
-    let original_tool = env::var_os("ELIO_TEST_CLIPBOARD_TOOL");
-    let original_term = env::var_os("TERM");
-    let original_override = env::var_os("ELIO_CLIPBOARD_OSC52");
     unsafe {
         env::set_var("ELIO_TEST_OSC52_CAPTURE", &capture);
-        env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
         env::set_var("TERM", "vt100-unknown");
         env::set_var("ELIO_CLIPBOARD_OSC52", "1");
     }
@@ -681,43 +639,6 @@ fn copy_overlay_shortcut_uses_osc52_override_for_unknown_terminals() {
         "successful copy should close the overlay"
     );
 
-    if let Some(value) = original_osc52 {
-        unsafe {
-            env::set_var("ELIO_TEST_OSC52_CAPTURE", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_TEST_OSC52_CAPTURE");
-        }
-    }
-    if let Some(value) = original_tool {
-        unsafe {
-            env::set_var("ELIO_TEST_CLIPBOARD_TOOL", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
-        }
-    }
-    if let Some(value) = original_term {
-        unsafe {
-            env::set_var("TERM", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("TERM");
-        }
-    }
-    if let Some(value) = original_override {
-        unsafe {
-            env::set_var("ELIO_CLIPBOARD_OSC52", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_CLIPBOARD_OSC52");
-        }
-    }
-
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -725,20 +646,13 @@ fn copy_overlay_shortcut_uses_osc52_override_for_unknown_terminals() {
 #[test]
 fn copy_overlay_reports_short_error_when_no_clipboard_backend_is_available() {
     let _lock = clipboard_env_lock();
+    let _env = ClipboardEnvGuard::isolate();
     let root = temp_path("copy-overlay-no-backend");
     fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
     let file = root.join("docs/report final.md");
     fs::write(&file, "notes").expect("failed to write test file");
 
-    let original_tool = env::var_os("ELIO_TEST_CLIPBOARD_TOOL");
-    let original_osc52 = env::var_os("ELIO_TEST_OSC52_CAPTURE");
-    let original_override = env::var_os("ELIO_CLIPBOARD_OSC52");
-    let original_term = env::var_os("TERM");
-    let original_path = env::var_os("PATH");
     unsafe {
-        env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
-        env::remove_var("ELIO_TEST_OSC52_CAPTURE");
-        env::remove_var("ELIO_CLIPBOARD_OSC52");
         env::set_var("TERM", "vt100-unknown");
         env::set_var("PATH", "");
     }
@@ -756,52 +670,6 @@ fn copy_overlay_reports_short_error_when_no_clipboard_backend_is_available() {
         "copy overlay should remain open when clipboard copy fails"
     );
 
-    if let Some(value) = original_tool {
-        unsafe {
-            env::set_var("ELIO_TEST_CLIPBOARD_TOOL", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
-        }
-    }
-    if let Some(value) = original_osc52 {
-        unsafe {
-            env::set_var("ELIO_TEST_OSC52_CAPTURE", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_TEST_OSC52_CAPTURE");
-        }
-    }
-    if let Some(value) = original_override {
-        unsafe {
-            env::set_var("ELIO_CLIPBOARD_OSC52", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_CLIPBOARD_OSC52");
-        }
-    }
-    if let Some(value) = original_term {
-        unsafe {
-            env::set_var("TERM", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("TERM");
-        }
-    }
-    if let Some(value) = original_path {
-        unsafe {
-            env::set_var("PATH", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("PATH");
-        }
-    }
-
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -809,6 +677,7 @@ fn copy_overlay_reports_short_error_when_no_clipboard_backend_is_available() {
 #[test]
 fn copy_overlay_does_not_block_on_backgrounding_clipboard_helpers() {
     let _lock = clipboard_env_lock();
+    let _env = ClipboardEnvGuard::isolate();
     let root = temp_path("copy-overlay-background");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let report = root.join("aaa-report.txt");
@@ -816,7 +685,6 @@ fn copy_overlay_does_not_block_on_backgrounding_clipboard_helpers() {
     let capture = root.join("clipboard.txt");
     let tool = install_backgrounding_clipboard_tool(&root, &capture);
 
-    let original_tool = env::var_os("ELIO_TEST_CLIPBOARD_TOOL");
     unsafe {
         env::set_var("ELIO_TEST_CLIPBOARD_TOOL", &tool);
     }
@@ -840,16 +708,6 @@ fn copy_overlay_does_not_block_on_backgrounding_clipboard_helpers() {
             .expect("test file should have a file name")
             .to_string_lossy()
     );
-
-    if let Some(value) = original_tool {
-        unsafe {
-            env::set_var("ELIO_TEST_CLIPBOARD_TOOL", value);
-        }
-    } else {
-        unsafe {
-            env::remove_var("ELIO_TEST_CLIPBOARD_TOOL");
-        }
-    }
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
