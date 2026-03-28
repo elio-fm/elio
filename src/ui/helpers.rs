@@ -176,12 +176,8 @@ pub(super) fn grid_zoom_spec(zoom: u8) -> GridZoomSpec {
     }
 }
 
-pub(super) fn list_row_height(zoom: u8) -> u16 {
-    match zoom {
-        0 | 1 => 1,
-        2 | 3 => 2,
-        _ => 3,
-    }
+pub(super) fn list_row_height() -> u16 {
+    1
 }
 
 pub(super) fn stable_path_label(path: &Path, max_chars: usize) -> String {

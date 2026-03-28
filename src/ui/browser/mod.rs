@@ -11,6 +11,7 @@ pub(super) use self::layout::render_body;
 #[cfg(test)]
 mod tests {
     use super::super::theme;
+    use super::entries::render_compact_list_row;
     use super::layout::resolve_body_layout;
     use super::scrollbar::split_scrollbar_area;
     use super::sidebar::render_sidebar;
@@ -100,6 +101,13 @@ mod tests {
             .join("\n")
     }
 
+    fn line_text(line: &ratatui::text::Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>()
+    }
+
     fn rect_inside(outer: Rect, inner: Rect) -> bool {
         inner.x >= outer.x
             && inner.y >= outer.y
@@ -150,13 +158,13 @@ mod tests {
     }
 
     #[test]
-    fn narrow_browser_layout_stacks_preview_below_entries() {
-        let root = temp_path("narrow-browser-layout");
+    fn compact_browser_layout_keeps_entries_and_preview_side_by_side() {
+        let root = temp_path("compact-browser-layout");
         fs::create_dir_all(&root).expect("failed to create temp root");
         fs::write(root.join("report.txt"), "hello\nworld\n").expect("failed to write temp file");
 
         let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-        let mut terminal = Terminal::new(TestBackend::new(110, 30)).expect("terminal should init");
+        let mut terminal = Terminal::new(TestBackend::new(66, 30)).expect("terminal should init");
 
         let state = draw_ui(&mut terminal, &mut app);
         let entries_panel = state
@@ -166,20 +174,101 @@ mod tests {
             .preview_panel
             .expect("preview panel should be rendered");
 
-        assert_eq!(
-            entries_panel.x, preview_panel.x,
-            "narrow layout should keep entries and preview aligned on the same right column"
-        );
-        assert_eq!(
-            entries_panel.width, preview_panel.width,
-            "narrow layout should keep entries and preview at the same width"
-        );
         assert!(
-            entries_panel.y.saturating_add(entries_panel.height) <= preview_panel.y,
-            "narrow layout should stack the preview panel below the entries panel"
+            entries_panel.x.saturating_add(entries_panel.width) <= preview_panel.x,
+            "compact layout should keep the preview panel to the right of the entries panel"
+        );
+        assert_eq!(
+            entries_panel.y, preview_panel.y,
+            "compact layout should keep entries and preview aligned on the same row"
+        );
+        assert_eq!(
+            entries_panel.height, preview_panel.height,
+            "compact layout should keep entries and preview at the same height"
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn list_view_ignores_grid_zoom_levels() {
+        let root = temp_path("list-view-ignores-grid-zoom");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        for name in ["a.txt", "b.txt", "c.txt"] {
+            fs::write(root.join(name), name).expect("failed to write temp file");
+        }
+
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        app.view_mode = crate::app::ViewMode::List;
+        let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+
+        app.zoom_level = 0;
+        let compact = draw_ui(&mut terminal, &mut app);
+
+        app.zoom_level = 2;
+        let zoomed = draw_ui(&mut terminal, &mut app);
+
+        assert_eq!(compact.metrics.rows_visible, zoomed.metrics.rows_visible);
+        assert_eq!(
+            compact
+                .entry_hits
+                .first()
+                .expect("row should exist")
+                .rect
+                .height,
+            zoomed
+                .entry_hits
+                .first()
+                .expect("row should exist")
+                .rect
+                .height,
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn narrow_browser_layout_stacks_preview_below_entries() {
+        let layout = resolve_body_layout(
+            Rect {
+                x: 0,
+                y: 0,
+                width: 65,
+                height: 20,
+            },
+            None,
+        );
+
+        let sidebar = layout.sidebar.expect("sidebar should be visible");
+        let entries = layout.entries.expect("entries should be visible");
+        let preview = layout.preview.expect("preview should be visible");
+
+        assert_eq!(sidebar.width, 22);
+        assert_eq!(entries.x, preview.x);
+        assert_eq!(entries.width, preview.width);
+        assert_eq!(entries.height, 10);
+        assert_eq!(preview.height, 10);
+    }
+
+    #[test]
+    fn narrow_browser_layout_drops_preview_when_height_is_too_limited() {
+        let layout = resolve_body_layout(
+            Rect {
+                x: 0,
+                y: 0,
+                width: 65,
+                height: 14,
+            },
+            None,
+        );
+
+        let sidebar = layout.sidebar.expect("sidebar should be visible");
+        let entries = layout.entries.expect("entries should be visible");
+
+        assert!(sidebar.width >= 16);
+        assert_eq!(layout.preview, None);
+        assert_eq!(entries.y, 0);
+        assert_eq!(entries.height, 14);
     }
 
     #[test]
@@ -827,18 +916,23 @@ mod tests {
         let preview_panel = initial_state
             .preview_panel
             .expect("preview panel should be rendered");
-        let initial_title = row_text(terminal.backend().buffer(), preview_panel.y);
+        let initial_title =
+            rect_row_text(terminal.backend().buffer(), preview_panel, preview_panel.y);
         assert!(
-            initial_title.contains("preview-marker-name"),
+            initial_title.contains("a-this-is-a-very"),
             "expected initial preview title row to show the long file name, got: {initial_title:?}"
         );
 
         app.handle_event(Event::Key(KeyEvent::from(KeyCode::Down)))
             .expect("selection change should succeed");
         let second_state = draw_ui(&mut terminal, &mut app);
-        let second_title = row_text(
+        let second_preview_panel = second_state
+            .preview_panel
+            .expect("preview panel should still be rendered");
+        let second_title = rect_row_text(
             terminal.backend().buffer(),
-            second_state.preview_panel.unwrap().y,
+            second_preview_panel,
+            second_preview_panel.y,
         );
 
         assert!(
@@ -846,7 +940,7 @@ mod tests {
             "expected second preview title row to show the shorter file name, got: {second_title:?}"
         );
         assert!(
-            !second_title.contains("preview-marker-name"),
+            !second_title.contains("a-this-is-a-very"),
             "stale preview title text remained after rerender: {second_title:?}"
         );
 
@@ -1076,16 +1170,50 @@ mod tests {
             .expect("epub row should keep its size visible");
 
         assert!(
-            folder_row.contains("ago"),
-            "expected wide directory rows to keep modified timestamps visible, got: {folder_row:?}"
-        );
-        assert!(
-            epub_row.contains("ago"),
-            "expected wide epub rows to keep modified timestamps visible, got: {epub_row:?}"
-        );
-        assert!(
             rendered.contains("10 items") && rendered.contains("13 MB"),
             "expected wide-name rows to keep full metadata visible, got: {rendered:?}"
+        );
+        assert!(
+            folder_row.contains("10 items"),
+            "expected wide directory rows to keep the item count visible, got: {folder_row:?}"
+        );
+        assert!(
+            epub_row.contains("13 MB"),
+            "expected wide epub rows to keep the file size visible, got: {epub_row:?}"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn compact_list_rows_hide_metadata_early_on_tight_widths() {
+        let root = temp_path("compact-list-priority");
+        let file_path = root.join("north-star-chronicles-deluxe-edition.cbz");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let file = fs::File::create(&file_path).expect("failed to create test file");
+        file.set_len(13_000_000).expect("failed to size test file");
+
+        let app = App::new_at(root.clone()).expect("app should load temp directory");
+        let entry = app.entries.first().expect("entry should be present");
+        let rendered = line_text(&render_compact_list_row(
+            &app,
+            entry,
+            true,
+            24,
+            theme::palette(),
+        ));
+
+        assert!(
+            rendered.contains("north"),
+            "expected the compact row to preserve the file name, got: {rendered:?}"
+        );
+        assert!(
+            !rendered.contains("13 MB"),
+            "expected the compact row to hide size metadata first, got: {rendered:?}"
+        );
+        assert!(
+            !rendered.contains("ago"),
+            "expected the compact row to hide modified metadata first, got: {rendered:?}"
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");

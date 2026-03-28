@@ -83,8 +83,11 @@ pub(super) fn render_compact_list_row(
     row_width: u16,
     palette: Palette,
 ) -> Line<'static> {
-    let detail_width = 12usize;
-    let modified_width = 10usize;
+    const COMPACT_PREFIX_WIDTH: u16 = 4;
+    const COMPACT_NAME_MIN_WIDTH: usize = 18;
+    const COMPACT_DETAIL_MAX_WIDTH: usize = 12;
+    const COMPACT_MODIFIED_MAX_WIDTH: usize = 10;
+
     let multi_selected = app.is_selected(&entry.path);
     let clip_op = app.clipboard_op_for(&entry.path);
     // All mark states take priority over the cursor colour for the bar — the
@@ -114,17 +117,39 @@ pub(super) fn render_compact_list_row(
         Style::default().fg(palette.text)
     };
     let muted_style = Style::default().fg(palette.muted);
-    let name_width = row_width
-        .saturating_sub(1 + 3 + detail_width as u16 + modified_width as u16)
-        .max(1) as usize;
-    let name = helpers::clamp_label(&entry.name, name_width);
-    let detail = pad_left(
-        browser_entry_detail(app, entry).unwrap_or_default(),
-        detail_width,
-    );
-    let modified = pad_left(browser_entry_modified(entry), modified_width);
+    let available_width = row_width.saturating_sub(COMPACT_PREFIX_WIDTH).max(1) as usize;
+    let min_name_width = available_width.min(COMPACT_NAME_MIN_WIDTH);
+    let detail_text = browser_entry_detail(app, entry).unwrap_or_default();
+    let detail_width = if detail_text.is_empty() {
+        0
+    } else {
+        helpers::display_width(&detail_text).min(COMPACT_DETAIL_MAX_WIDTH)
+    };
+    let modified_text = browser_entry_modified(entry);
+    let modified_width = helpers::display_width(&modified_text).min(COMPACT_MODIFIED_MAX_WIDTH);
 
-    Line::from(vec![
+    let mut reserved_metadata_width = 0usize;
+    let mut show_detail = false;
+    let mut show_modified = false;
+
+    if detail_width > 0 && available_width >= min_name_width.saturating_add(detail_width) {
+        show_detail = true;
+        reserved_metadata_width = reserved_metadata_width.saturating_add(detail_width);
+    }
+    if available_width
+        >= min_name_width
+            .saturating_add(reserved_metadata_width)
+            .saturating_add(modified_width)
+    {
+        show_modified = true;
+        reserved_metadata_width = reserved_metadata_width.saturating_add(modified_width);
+    }
+
+    let name_width = available_width
+        .saturating_sub(reserved_metadata_width)
+        .max(1);
+    let name = helpers::clamp_label(&entry.name, name_width);
+    let mut spans = vec![
         Span::styled(
             if selected || multi_selected || clip_op.is_some() {
                 "▌"
@@ -137,9 +162,21 @@ pub(super) fn render_compact_list_row(
         Span::styled(icon.to_string(), icon_style),
         Span::raw(" "),
         Span::styled(pad_right(name, name_width), name_style),
-        Span::styled(detail, muted_style),
-        Span::styled(modified, muted_style),
-    ])
+    ];
+    if show_detail {
+        spans.push(Span::styled(
+            pad_left(detail_text, detail_width),
+            muted_style,
+        ));
+    }
+    if show_modified {
+        spans.push(Span::styled(
+            pad_left(modified_text, modified_width),
+            muted_style,
+        ));
+    }
+
+    Line::from(spans)
 }
 
 fn pad_left(mut text: String, width: usize) -> String {

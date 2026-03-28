@@ -251,17 +251,17 @@ impl App {
     pub(in crate::app) fn adjust_zoom(&mut self, delta: i8) {
         let next = (self.zoom_level as i8 + delta).clamp(0, 2) as u8;
         if next == self.zoom_level {
-            self.status = format!("Directory zoom limit: {}", self.zoom_level);
+            self.status = format!("Grid zoom limit: {}", self.zoom_level);
             return;
         }
         self.zoom_level = next;
-        self.status = format!("Directory zoom set to {}", self.zoom_level);
+        self.status = format!("Grid zoom set to {}", self.zoom_level);
         self.sync_scroll();
     }
 
     pub(in crate::app) fn reset_zoom(&mut self) {
         self.zoom_level = 1;
-        self.status = format!("Directory zoom reset to {}", self.zoom_level);
+        self.status = format!("Grid zoom reset to {}", self.zoom_level);
         self.sync_scroll();
     }
 

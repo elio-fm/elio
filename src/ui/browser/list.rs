@@ -28,7 +28,7 @@ pub(super) fn render_list(
         helpers::fill_area(frame, sb, palette.panel_alt, palette.border);
     }
 
-    let row_height = helpers::list_row_height(app.zoom_level);
+    let row_height = helpers::list_row_height();
     state.metrics = ViewMetrics {
         cols: 1,
         rows_visible: (content_area.height / row_height.max(1)).max(1) as usize,
