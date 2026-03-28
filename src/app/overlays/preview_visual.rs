@@ -1,7 +1,7 @@
 use super::super::*;
 use super::images;
 use super::inline_image::ImageProtocol;
-use ratatui::layout::Rect;
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
 const PREVIEW_INLINE_COVER_MIN_HEIGHT: u16 = 6;
 const PREVIEW_INLINE_COVER_MAX_HEIGHT: u16 = 12;
@@ -95,7 +95,7 @@ impl App {
             return None;
         }
 
-        let area = self.frame_state.preview_media_area?;
+        let area = self.current_preview_visual_area()?;
         if area.width == 0 || area.height == 0 {
             return None;
         }
@@ -163,6 +163,34 @@ impl App {
             force_render_to_cache: self.preview_visual_force_render_to_cache(visual),
             prepare_inline_payload: self.terminal_images.protocol == ImageProtocol::ItermInline,
         }
+    }
+
+    fn current_preview_visual_area(&self) -> Option<Rect> {
+        if let Some(body_area) = self.current_preview_body_render_area() {
+            let media_rows = self.preview_visual_rows(body_area)?;
+            return Some(
+                Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Length(media_rows), Constraint::Min(0)])
+                    .split(body_area)[0],
+            );
+        }
+        self.frame_state.preview_media_area
+    }
+
+    fn current_preview_body_render_area(&self) -> Option<Rect> {
+        let body_area = self.frame_state.preview_body_area?;
+        Some(if body_area.width >= 6 {
+            Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Min(0), Constraint::Length(1)])
+                .split(body_area)[0]
+        } else {
+            Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Min(0)])
+                .split(body_area)[0]
+        })
     }
 }
 

@@ -1,4 +1,5 @@
 use super::*;
+use ratatui::text::Line;
 
 fn configure_iterm_image_support(app: &mut App) {
     let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
@@ -417,6 +418,89 @@ fn iterm_popup_clear_defers_page_image_erase_until_next_draw() {
     assert!(erase.contains("\x1b[23;3H"));
     assert!(!erase.contains("\x1b[2;2H"));
     assert!(app.iterm_pre_draw_erase().is_empty());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn iterm_pre_draw_erase_detects_cover_layout_change_before_frame_update() {
+    let root = temp_root("iterm-cover-layout-change");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let cover = root.join("cover.png");
+    write_test_raster_image(&cover, ImageFormat::Png, 600, 900);
+    let cover_size = fs::metadata(&cover)
+        .expect("cover metadata should exist")
+        .len();
+
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_iterm_image_support(&mut app);
+    app.entries.clear();
+    app.selected = 0;
+    app.image_preview.selection_activation_delay = Duration::ZERO;
+    app.frame_state.preview_media_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+    app.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 23,
+        width: 48,
+        height: 0,
+    });
+    app.preview_state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
+        .with_preview_visual(PreviewVisual {
+            kind: PreviewVisualKind::PageImage,
+            layout: PreviewVisualLayout::FullHeight,
+            path: cover.clone(),
+            size: cover_size,
+            modified: None,
+        });
+    assert!(
+        app.active_preview_visual_overlay_request_unchecked()
+            .is_some()
+    );
+    app.sync_image_preview_selection_activation();
+    app.refresh_static_image_preloads();
+    wait_for_displayed_preview_overlay(&mut app);
+    assert!(app.static_image_overlay_displayed());
+
+    app.frame_state.preview_panel = Some(Rect {
+        x: 1,
+        y: 1,
+        width: 50,
+        height: 24,
+    });
+    app.frame_state.preview_body_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+
+    // Simulate the next EPUB section switching to an inline cover + text
+    // layout before the frame state has been recomputed by ratatui.
+    app.preview_state.content = PreviewContent::new(
+        PreviewKind::Document,
+        vec![Line::from("Chapter text starts here.")],
+    )
+    .with_preview_visual(PreviewVisual {
+        kind: PreviewVisualKind::Cover,
+        layout: PreviewVisualLayout::Inline,
+        path: cover,
+        size: cover_size,
+        modified: None,
+    });
+
+    assert!(
+        !app.displayed_static_image_matches_active(),
+        "current preview layout should no longer match the stale full-height cover"
+    );
+    assert!(
+        !app.iterm_pre_draw_erase().is_empty(),
+        "iTerm should erase the previous full-height cover before drawing text"
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
