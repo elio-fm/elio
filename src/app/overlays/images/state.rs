@@ -194,6 +194,7 @@ impl App {
 
     pub(in crate::app) fn clear_displayed_static_image(&mut self) {
         self.image_preview.displayed = None;
+        self.image_preview.displayed_excluded.clear();
     }
 
     pub(in crate::app) fn preview_visual_force_render_to_cache(

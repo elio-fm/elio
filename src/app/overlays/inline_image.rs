@@ -29,6 +29,7 @@ pub(in crate::app) struct TerminalImageState {
     pub(super) protocol: ImageProtocol,
     pub(super) window: Option<TerminalWindowSize>,
     pending_iterm_erase: Vec<Rect>,
+    pending_kitty_resize_clear: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -97,7 +98,28 @@ impl App {
 
     pub(crate) fn handle_terminal_image_resize(&mut self) {
         self.refresh_terminal_image_window_size();
+        if self.terminal_images.protocol == ImageProtocol::KittyGraphics
+            && (self.static_image_overlay_displayed() || self.pdf_overlay_displayed())
+        {
+            // Kitty/Ghostty unicode placeholders are normal terminal cells. During
+            // a live resize the terminal can reflow those cells before we redraw,
+            // so erasing only the old image rect is not enough — some placeholder
+            // text may survive outside the previous bounds. Force a full-screen
+            // clear on the next draw so ratatui repaints the entire alt screen.
+            self.terminal_images.pending_kitty_resize_clear = true;
+        }
         self.handle_pdf_overlay_resize();
+    }
+
+    pub(crate) fn take_pending_kitty_resize_clear(&mut self) -> bool {
+        if !self.terminal_images.pending_kitty_resize_clear {
+            return false;
+        }
+
+        self.terminal_images.pending_kitty_resize_clear = false;
+        self.clear_displayed_static_image();
+        self.clear_displayed_pdf_overlay();
+        true
     }
 
     pub(in crate::app) fn terminal_image_overlay_available(&self) -> bool {

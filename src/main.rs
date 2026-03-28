@@ -10,8 +10,8 @@ use anyhow::Result;
 use crossterm::{
     cursor::SetCursorStyle,
     event::{
-        self, Event, KeyboardEnhancementFlags, MouseEvent, MouseEventKind,
-        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+        self, DisableFocusChange, EnableFocusChange, Event, KeyboardEnhancementFlags, MouseEvent,
+        MouseEventKind, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
     execute,
     terminal::{
@@ -41,7 +41,12 @@ fn main() -> Result<()> {
 fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, event::EnableMouseCapture)?;
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        event::EnableMouseCapture,
+        EnableFocusChange
+    )?;
 
     // Force mouse tracking modes explicitly after EnableMouseCapture. Crossterm should
     // already send these, but some terminals require an explicit flush or are sensitive
@@ -89,6 +94,7 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
     execute!(
         terminal.backend_mut(),
         event::DisableMouseCapture,
+        DisableFocusChange,
         SetCursorStyle::DefaultUserShape,
         PopKeyboardEnhancementFlags,
         LeaveAlternateScreen,
@@ -109,57 +115,69 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
 
     let mut dirty = true;
     let mut search_cursor_active = false;
+    let mut terminal_focused = true;
     let mut last_relative_time_refresh_at = Instant::now();
 
     loop {
-        if last_relative_time_refresh_at.elapsed() >= RELATIVE_TIME_REFRESH_INTERVAL {
+        if app.should_quit {
+            break;
+        }
+
+        if terminal_focused
+            && last_relative_time_refresh_at.elapsed() >= RELATIVE_TIME_REFRESH_INTERVAL
+        {
             dirty = true;
             last_relative_time_refresh_at = Instant::now();
         }
 
-        if app.process_background_jobs() {
+        if terminal_focused && app.process_background_jobs() {
             dirty = true;
         }
 
-        if app.process_pdf_preview_timers() {
+        if terminal_focused && app.process_pdf_preview_timers() {
             dirty = true;
         }
 
-        if app.process_pending_scroll() {
+        if terminal_focused && app.process_pending_scroll() {
             dirty = true;
         }
 
-        if app.process_preview_refresh_timers() {
+        if terminal_focused && app.process_preview_refresh_timers() {
             dirty = true;
         }
 
-        if app.process_preview_prefetch_timers() {
+        if terminal_focused && app.process_preview_prefetch_timers() {
             dirty = true;
         }
 
-        if app.process_browser_wheel_timers() {
+        if terminal_focused && app.process_browser_wheel_timers() {
             dirty = true;
         }
 
-        if app.process_image_preview_timers() {
+        if terminal_focused && app.process_image_preview_timers() {
             dirty = true;
         }
 
-        if app.process_sidebar_refresh() {
+        if terminal_focused && app.process_sidebar_refresh() {
             dirty = true;
         }
 
-        match app.process_auto_reload() {
-            Ok(changed) => {
-                dirty |= changed;
+        if terminal_focused {
+            match app.process_auto_reload() {
+                Ok(changed) => {
+                    dirty |= changed;
+                }
+                Err(error) => {
+                    app.report_runtime_error("Auto-reload failed", &error);
+                    dirty = true;
+                }
             }
-            Err(error) => {
-                app.report_runtime_error("Auto-reload failed", &error);
-                dirty = true;
-            }
         }
 
-        if dirty {
+        if dirty && terminal_focused {
+            if app.take_pending_kitty_resize_clear() {
+                terminal.clear()?;
+            }
             // Erase stale image cells before terminal.draw() so ratatui can
             // overpaint them with the correct panel background in the same pass.
             // - iTerm2: images are drawn at pixel level; erasing prevents ghost pixels.
@@ -205,11 +223,9 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             search_cursor_active = wants_search_cursor;
         }
 
-        if app.should_quit {
-            break;
-        }
-
-        let base_poll_interval = if app.has_pending_scroll()
+        let base_poll_interval = if !terminal_focused {
+            IDLE_POLL_INTERVAL
+        } else if app.has_pending_scroll()
             || app.has_pending_auto_reload()
             || app.has_pending_background_work()
         {
@@ -217,16 +233,17 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         } else {
             IDLE_POLL_INTERVAL
         };
-        let poll_interval = app
-            .pending_pdf_preview_timer()
-            .into_iter()
-            .chain(app.pending_image_preview_timer())
-            .chain(app.pending_preview_refresh_timer())
-            .chain(app.pending_preview_prefetch_timer())
-            .chain(app.pending_browser_wheel_timer())
-            .min()
-            .map(|delay| delay.min(base_poll_interval))
-            .unwrap_or(base_poll_interval);
+        let poll_interval = event_poll_interval(
+            base_poll_interval,
+            terminal_focused,
+            [
+                app.pending_pdf_preview_timer(),
+                app.pending_image_preview_timer(),
+                app.pending_preview_refresh_timer(),
+                app.pending_preview_prefetch_timer(),
+                app.pending_browser_wheel_timer(),
+            ],
+        );
 
         if event::poll(poll_interval)? {
             // Batch all immediately-available events into one render cycle.
@@ -246,9 +263,15 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
                             writeln!(f, "{:?} col={} row={}", m.kind, m.column, m.row)
                         });
                 }
-                if matches!(event, Event::Resize(_, _)) {
+                if matches!(event, Event::FocusLost) {
+                    terminal_focused = false;
+                } else if matches!(event, Event::FocusGained) {
+                    terminal_focused = true;
                     app.handle_terminal_image_resize();
                     dirty = true;
+                } else if matches!(event, Event::Resize(_, _)) {
+                    app.handle_terminal_image_resize();
+                    dirty |= terminal_focused;
                 } else {
                     // Mouse move events only update the hover/target state — nothing
                     // visual changes, so they don't need a re-render. Skipping dirty here
@@ -262,7 +285,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
                         })
                     );
                     let _ = app.handle_event(event);
-                    if needs_render {
+                    if needs_render && terminal_focused {
                         dirty = true;
                     }
                 }
@@ -270,6 +293,10 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
                 if !event::poll(Duration::ZERO)? {
                     break;
                 }
+            }
+
+            if app.should_quit {
+                break;
             }
         }
     }
@@ -284,9 +311,31 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     Ok(())
 }
 
+fn event_poll_interval<I>(
+    base_poll_interval: Duration,
+    terminal_focused: bool,
+    timers: I,
+) -> Duration
+where
+    I: IntoIterator<Item = Option<Duration>>,
+{
+    if !terminal_focused {
+        return base_poll_interval;
+    }
+
+    timers
+        .into_iter()
+        .flatten()
+        .min()
+        .map(|delay| delay.min(base_poll_interval))
+        .unwrap_or(base_poll_interval)
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::{ACTIVE_SCROLL_POLL_INTERVAL, IDLE_POLL_INTERVAL, event_poll_interval};
     use ratatui::{buffer::Buffer, layout::Rect, style::Style};
+    use std::time::Duration;
 
     #[test]
     fn ratatui_diff_preserves_positions_beyond_u16_max_cells() {
@@ -305,5 +354,31 @@ mod tests {
                 .map(|(x, y, cell)| (*x, *y, cell.symbol().to_string()))
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn event_poll_interval_stays_idle_while_terminal_is_unfocused() {
+        let interval = event_poll_interval(
+            IDLE_POLL_INTERVAL,
+            false,
+            [
+                Some(Duration::from_millis(25)),
+                Some(Duration::from_millis(10)),
+            ],
+        );
+
+        assert_eq!(interval, IDLE_POLL_INTERVAL);
+    }
+
+    #[test]
+    fn event_poll_interval_uses_pending_timer_when_terminal_is_focused() {
+        let delay = Duration::from_millis(25);
+        let interval = event_poll_interval(
+            ACTIVE_SCROLL_POLL_INTERVAL,
+            true,
+            [None, Some(delay), Some(Duration::from_millis(50))],
+        );
+
+        assert!(interval <= delay);
     }
 }

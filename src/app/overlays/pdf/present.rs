@@ -153,6 +153,7 @@ impl App {
 
     pub(in crate::app) fn clear_displayed_pdf_overlay(&mut self) {
         self.pdf_preview.displayed = None;
+        self.pdf_preview.displayed_excluded.clear();
     }
 
     pub(in crate::app) fn displayed_pdf_overlay_matches_active(&self) -> bool {

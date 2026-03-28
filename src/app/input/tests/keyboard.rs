@@ -30,6 +30,22 @@ fn shift_slash_opens_and_closes_help_overlay() {
 }
 
 #[test]
+fn q_sets_should_quit() {
+    let root = temp_path("quit-shortcut");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    assert!(!app.should_quit);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('q'))))
+        .expect("q should request quit");
+
+    assert!(app.should_quit);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn c_opens_and_esc_closes_copy_overlay() {
     let root = temp_path("copy-overlay-shortcut");
     fs::create_dir_all(&root).expect("failed to create temp root");
