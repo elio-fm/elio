@@ -101,7 +101,11 @@ fn command_exists_checks_direct_executable_paths_without_shelling_out() {
 
 #[test]
 fn build_kitty_upload_sequence_uses_unicode_placeholder_mode() {
-    let path = Path::new("/tmp/demo.pdf-preview.png");
+    let root = temp_root("kitty-upload-sequence");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("demo.pdf-preview.png");
+    write_test_raster_image(&path, ImageFormat::Png, 24, 16);
+    let payload = fs::read(&path).expect("png payload should exist");
     let id = 42_u32;
     let area = Rect {
         x: 10,
@@ -110,20 +114,26 @@ fn build_kitty_upload_sequence_uses_unicode_placeholder_mode() {
         height: 20,
     };
 
-    let sequence = build_kitty_upload_sequence(path, id, area);
+    let sequence = String::from_utf8(
+        build_kitty_upload_sequence(&path, id, area).expect("kitty upload sequence should build"),
+    )
+    .expect("kitty upload sequence should be utf8");
 
     assert!(sequence.starts_with("\u{1b}_G"));
     assert!(sequence.contains("a=T"));
     assert!(sequence.contains("q=2"));
-    assert!(sequence.contains("t=f"));
     assert!(sequence.contains("U=1"));
     assert!(sequence.contains(&format!("i={id}")));
     assert!(sequence.contains("p=1"));
     assert!(sequence.contains("c=30"));
     assert!(sequence.contains("r=20"));
     assert!(sequence.contains("C=1"));
-    assert!(sequence.contains(&BASE64_STANDARD.encode(path.as_os_str().as_encoded_bytes())));
+    assert!(sequence.contains("m=0"));
+    assert!(!sequence.contains("t=f"));
+    assert!(sequence.contains(&BASE64_STANDARD.encode(payload)));
     assert!(sequence.ends_with("\u{1b}\\"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
 #[test]

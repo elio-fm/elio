@@ -539,14 +539,56 @@ pub(in crate::app) fn clear_terminal_images(protocol: ImageProtocol) -> Result<V
     }
 }
 
-pub(in crate::app) fn build_kitty_upload_sequence(path: &Path, id: u32, area: Rect) -> String {
-    let payload =
-        base64::engine::general_purpose::STANDARD.encode(path.as_os_str().as_encoded_bytes());
-    format!(
-        "\u{1b}_Ga=T,q=2,f=100,t=f,U=1,i={id},p=1,c={},r={},C=1;{payload}\u{1b}\\",
-        area.width.max(1),
-        area.height.max(1),
-    )
+pub(in crate::app) fn build_kitty_upload_sequence(
+    path: &Path,
+    id: u32,
+    area: Rect,
+) -> Result<Vec<u8>> {
+    // Send PNG bytes inline instead of handing Kitty/Ghostty a filesystem path.
+    // JPEG/WebP/GIF/SVG previews are first rendered into a cache PNG and then
+    // displayed via Kitty. With the old `t=f` upload, the terminal had to
+    // reopen that freshly-written cache file on its own, and because we also
+    // suppress Kitty failure replies (`q=2`) the app could not tell when that
+    // read failed or raced. Inlining the PNG data removes that extra file-open
+    // step entirely.
+    let mut file = File::open(path)
+        .with_context(|| format!("failed to open kitty preview image {}", path.display()))?;
+    let total = file
+        .metadata()
+        .with_context(|| format!("failed to stat kitty preview image {}", path.display()))?
+        .len() as usize;
+    if total == 0 {
+        anyhow::bail!("kitty preview image {} is empty", path.display());
+    }
+
+    let mut sent = 0usize;
+    let mut chunk = vec![0u8; 3 * 4096 / 4];
+    let mut out = Vec::new();
+    while sent < total {
+        let remaining = total.saturating_sub(sent);
+        let chunk_len = remaining.min(chunk.len());
+        file.read_exact(&mut chunk[..chunk_len])
+            .with_context(|| format!("failed to read kitty preview image {}", path.display()))?;
+        sent += chunk_len;
+        let more = sent < total;
+        let payload = base64::engine::general_purpose::STANDARD.encode(&chunk[..chunk_len]);
+        if sent == chunk_len {
+            write!(
+                out,
+                "\u{1b}_Ga=T,q=2,f=100,U=1,i={id},p=1,c={},r={},C=1,m={};{payload}\u{1b}\\",
+                area.width.max(1),
+                area.height.max(1),
+                if more { 1 } else { 0 },
+            )?;
+        } else {
+            write!(
+                out,
+                "\u{1b}_Gm={};{payload}\u{1b}\\",
+                if more { 1 } else { 0 },
+            )?;
+        }
+    }
+    Ok(out)
 }
 
 pub(in crate::app) fn build_kitty_placeholder_sequence(
@@ -700,7 +742,7 @@ fn place_terminal_image_with_kitty_protocol(
     excluded: &[Rect],
 ) -> Result<Vec<u8>> {
     let id = kitty_image_id();
-    let mut out = build_kitty_upload_sequence(path, id, area).into_bytes();
+    let mut out = build_kitty_upload_sequence(path, id, area)?;
     out.extend(build_kitty_placeholder_sequence(id, area, excluded));
     Ok(out)
 }
