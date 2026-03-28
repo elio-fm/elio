@@ -102,17 +102,26 @@ pub(super) fn render_toolbar(
     helpers::render_button(frame, meta[2], app.view_mode.label(), "󰕮", true, palette);
 }
 
+const STATUS_MIN_LEFT_WIDTH: u16 = 24;
+const STATUS_IDLE_RIGHT_WIDTH: u16 = 34;
+const STATUS_RIGHT_PADDING: usize = 2;
+
 pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palette: Palette) {
     helpers::fill_area(frame, area, palette.chrome, palette.text);
+    let status_message = app.status_message();
+    let status_width = status_section_width(area.width, status_message);
     let sections = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Min(24), Constraint::Length(34)])
+        .constraints([
+            Constraint::Min(STATUS_MIN_LEFT_WIDTH),
+            Constraint::Length(status_width),
+        ])
         .split(area);
 
-    let right_text = if app.status_message().is_empty() {
-        "f folders  ^F files  ? help".to_string()
+    let right_text = if status_message.is_empty() {
+        status_idle_hint().to_string()
     } else {
-        helpers::truncate_middle(app.status_message(), sections[1].width as usize)
+        helpers::clamp_label(status_message, sections[1].width as usize)
     };
     let clip = app.clipboard_info();
     let sel_count = app.selection_count();
@@ -225,4 +234,48 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
             .style(Style::default().bg(palette.chrome).fg(palette.muted)),
         sections[1],
     );
+}
+
+fn status_section_width(total_width: u16, status_message: &str) -> u16 {
+    let max_right_width = total_width.saturating_sub(STATUS_MIN_LEFT_WIDTH).max(1);
+    if status_message.is_empty() {
+        return STATUS_IDLE_RIGHT_WIDTH.min(max_right_width).max(1);
+    }
+
+    let desired = helpers::display_width(status_message).saturating_add(STATUS_RIGHT_PADDING);
+    desired
+        .max(STATUS_IDLE_RIGHT_WIDTH as usize)
+        .min(max_right_width as usize)
+        .max(1) as u16
+}
+
+fn status_idle_hint() -> &'static str {
+    "f folders  ^F files  ? help"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{status_idle_hint, status_section_width};
+    use crate::ui::helpers;
+
+    #[test]
+    fn idle_status_keeps_the_compact_help_width() {
+        assert_eq!(status_section_width(100, ""), 34);
+    }
+
+    #[test]
+    fn real_status_messages_expand_beyond_the_idle_width() {
+        assert!(status_section_width(100, "Clipboard helper not found while copying") > 34);
+    }
+
+    #[test]
+    fn narrow_status_messages_truncate_at_the_end() {
+        let rendered = helpers::clamp_label("Clipboard helper not found", 18);
+        assert_eq!(rendered, "Clipboard helper …");
+    }
+
+    #[test]
+    fn idle_hint_stays_unchanged() {
+        assert_eq!(status_idle_hint(), "f folders  ^F files  ? help");
+    }
 }

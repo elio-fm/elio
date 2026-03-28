@@ -137,11 +137,22 @@ impl App {
                 self.status = format!("Copied {status_label}");
             }
             Err(error) => {
-                self.status = format!("Clipboard unavailable: {error}");
+                self.status = clipboard_status_message(&error);
             }
         }
 
         Ok(())
+    }
+}
+
+fn clipboard_status_message(error: &anyhow::Error) -> String {
+    let detail = error.to_string();
+    if detail.contains("no clipboard tool succeeded") || detail.contains("os error 2") {
+        "Clipboard helper not found".to_string()
+    } else if detail.contains("osc52") {
+        "Clipboard unavailable".to_string()
+    } else {
+        "Clipboard write failed".to_string()
     }
 }
 
