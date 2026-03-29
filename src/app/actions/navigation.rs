@@ -259,12 +259,6 @@ impl App {
         self.sync_scroll();
     }
 
-    pub(in crate::app) fn reset_zoom(&mut self) {
-        self.zoom_level = 1;
-        self.status = format!("Grid zoom reset to {}", self.zoom_level);
-        self.sync_scroll();
-    }
-
     pub(in crate::app) fn select_index(&mut self, index: usize) {
         self.set_selected(index);
     }

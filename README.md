@@ -144,6 +144,7 @@ elio
 ```toml
 [ui]
 show_top_bar = false
+grid_zoom = 1
 
 # Optional wide-layout pane weights. Set a pane to 0 to hide it.
 #
@@ -156,6 +157,7 @@ show_top_bar = false
 | Key | Default | Description |
 |---|---|---|
 | `ui.show_top_bar` | `false` | Show or hide the toolbar at the top of the screen |
+| `ui.grid_zoom` | `1` | Starting zoom level for grid view (`0`, `1`, or `2`; values outside range are clamped) |
 | `layout.panes.places` | unset | Relative width weight for the Places pane in custom layouts; `0` hides it |
 | `layout.panes.files` | unset | Relative width weight for the Files pane in custom layouts; must be greater than `0` |
 | `layout.panes.preview` | unset | Relative width weight for the Preview pane in custom layouts; `0` hides it |

@@ -6,6 +6,7 @@ static ACTIVE_CONFIG: OnceLock<Config> = OnceLock::new();
 #[derive(Clone, Copy)]
 pub(crate) struct UiConfig {
     pub show_top_bar: bool,
+    pub grid_zoom: u8,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -35,6 +36,7 @@ struct ConfigFile {
 #[derive(Deserialize, Default)]
 struct UiConfigOverride {
     show_top_bar: Option<bool>,
+    grid_zoom: Option<i64>,
 }
 
 #[derive(Deserialize, Default)]
@@ -110,6 +112,7 @@ impl Config {
         Self {
             ui: UiConfig {
                 show_top_bar: false,
+                grid_zoom: 1,
             },
             layout: LayoutConfig { panes: None },
         }
@@ -118,10 +121,13 @@ impl Config {
     fn from_str(config: &str) -> anyhow::Result<Self> {
         let parsed: ConfigFile = toml::from_str(config)?;
         let mut resolved = Self::default_config();
-        if let Some(ui) = parsed.ui
-            && let Some(show_top_bar) = ui.show_top_bar
-        {
-            resolved.ui.show_top_bar = show_top_bar;
+        if let Some(ui) = parsed.ui {
+            if let Some(show_top_bar) = ui.show_top_bar {
+                resolved.ui.show_top_bar = show_top_bar;
+            }
+            if let Some(zoom) = ui.grid_zoom {
+                resolved.ui.grid_zoom = zoom.clamp(0, 2) as u8;
+            }
         }
         if let Some(layout) = parsed.layout {
             match LayoutConfig::from_override(layout) {
@@ -176,6 +182,30 @@ mod tests {
         let config = Config::default_config();
         assert!(!config.ui.show_top_bar);
         assert_eq!(config.layout.panes, None);
+    }
+
+    #[test]
+    fn config_default_grid_zoom_is_1() {
+        let config = Config::default_config();
+        assert_eq!(config.ui.grid_zoom, 1);
+    }
+
+    #[test]
+    fn config_can_set_grid_zoom() {
+        let config = Config::from_str("[ui]\ngrid_zoom = 0").expect("config should parse");
+        assert_eq!(config.ui.grid_zoom, 0);
+
+        let config = Config::from_str("[ui]\ngrid_zoom = 2").expect("config should parse");
+        assert_eq!(config.ui.grid_zoom, 2);
+    }
+
+    #[test]
+    fn config_grid_zoom_clamps_out_of_range() {
+        let config = Config::from_str("[ui]\ngrid_zoom = -3").expect("config should parse");
+        assert_eq!(config.ui.grid_zoom, 0);
+
+        let config = Config::from_str("[ui]\ngrid_zoom = 4").expect("config should parse");
+        assert_eq!(config.ui.grid_zoom, 2);
     }
 
     #[test]

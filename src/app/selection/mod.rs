@@ -17,7 +17,9 @@ impl App {
         if !self.selected_paths.remove(&path) {
             self.selected_paths.insert(path);
         }
-        self.move_vertical(1);
+        if self.view_mode == ViewMode::List {
+            self.move_vertical(1);
+        }
     }
 
     pub(in crate::app) fn select_all(&mut self) {

@@ -495,7 +495,7 @@ impl App {
             selected: 0,
             scroll_row: 0,
             view_mode: ViewMode::List,
-            zoom_level: 1,
+            zoom_level: crate::config::ui().grid_zoom,
             sort_mode: SortMode::Name,
             show_hidden: false,
             in_trash: false,

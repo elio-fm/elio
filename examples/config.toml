@@ -2,6 +2,7 @@
 
 [ui]
 show_top_bar = false
+# grid_zoom = 1  # starting zoom level for grid view: 0, 1, or 2 (clamped)
 
 # Optional pane widths for the browser body. Values are relative weights across
 # the horizontal space. Set a pane to 0 to hide it.

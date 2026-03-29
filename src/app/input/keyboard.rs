@@ -107,10 +107,6 @@ impl App {
                     self.adjust_zoom(-1);
                     return Ok(());
                 }
-                KeyCode::Char('0') => {
-                    self.reset_zoom();
-                    return Ok(());
-                }
                 _ => {}
             }
         }
@@ -222,6 +218,12 @@ impl App {
             KeyCode::Char('s') => self.cycle_sort_mode()?,
             KeyCode::Char('.') => self.toggle_hidden_files()?,
             KeyCode::Char(' ') => self.toggle_selection(),
+            KeyCode::Char('+') | KeyCode::Char('=') if self.view_mode == ViewMode::Grid => {
+                self.adjust_zoom(1);
+            }
+            KeyCode::Char('-') | KeyCode::Char('_') if self.view_mode == ViewMode::Grid => {
+                self.adjust_zoom(-1);
+            }
             KeyCode::Char('a') => self.open_create_prompt(),
             KeyCode::Char('c') => self.open_copy_overlay(),
             KeyCode::Char('d') => self.open_trash_prompt(),

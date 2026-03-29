@@ -2,7 +2,7 @@ use super::super::theme::Palette;
 use super::super::{helpers, theme};
 use super::entries::{browser_entry_detail, browser_entry_modified};
 use super::scrollbar::{render_browser_scrollbar, split_scrollbar_area};
-use crate::app::{App, Entry, EntryHit, FrameState, ViewMetrics};
+use crate::app::{App, ClipOp, Entry, EntryHit, FrameState, ViewMetrics};
 use ratatui::{
     Frame,
     layout::{Margin, Rect},
@@ -46,22 +46,28 @@ pub(super) fn render_grid(
     for (visible_index, entry_index) in (start..app.entries.len()).take(limit).enumerate() {
         let row = visible_index / cols;
         let col = visible_index % cols;
+        let tile_x = content_area.x + col as u16 * (tile_width + gap_x);
+        let tile_y = content_area.y + row as u16 * (spec.tile_height + gap_y);
+        // Last column in each row absorbs the integer-division remainder so there
+        // is no dead pixel strip along the right edge of the content area.
+        let actual_tile_width = if col == cols - 1 {
+            (content_area.x + content_area.width).saturating_sub(tile_x)
+        } else {
+            tile_width
+        };
         let rect = Rect {
-            x: content_area.x + col as u16 * (tile_width + gap_x),
-            y: content_area.y + row as u16 * (spec.tile_height + gap_y),
-            width: tile_width,
+            x: tile_x,
+            y: tile_y,
+            width: actual_tile_width,
             height: spec.tile_height,
         };
         let entry = &app.entries[entry_index];
-        render_tile(
-            frame,
-            rect,
-            app,
-            entry,
-            entry_index == app.selected,
-            palette,
-            spec,
-        );
+        let tile_state = TileState {
+            selected: entry_index == app.selected,
+            multi_selected: app.is_selected(&entry.path),
+            clip_op: app.clipboard_op_for(&entry.path),
+        };
+        render_tile(frame, rect, app, entry, tile_state, palette, spec);
         state.entry_hits.push(EntryHit {
             rect,
             index: entry_index,
@@ -74,15 +80,26 @@ pub(super) fn render_grid(
     }
 }
 
+struct TileState {
+    selected: bool,
+    multi_selected: bool,
+    clip_op: Option<ClipOp>,
+}
+
 fn render_tile(
     frame: &mut Frame<'_>,
     rect: Rect,
     app: &App,
     entry: &Entry,
-    selected: bool,
+    tile_state: TileState,
     palette: Palette,
     spec: helpers::GridZoomSpec,
 ) {
+    let TileState {
+        selected,
+        multi_selected,
+        clip_op,
+    } = tile_state;
     let icon_color = theme::entry_color(entry, palette);
     let background = palette.surface;
     let content_bg = if selected {
@@ -90,15 +107,28 @@ fn render_tile(
     } else {
         palette.surface
     };
-    let band_bg = palette.elevated;
+    // Band background carries the clipboard/selection state.  The cursor position
+    // (selected) is already communicated by the content background tint and does
+    // not change the band so tiles stay visually consistent while navigating.
+    let band_bg = if clip_op == Some(ClipOp::Yank) {
+        palette.grid_yank_band
+    } else if clip_op == Some(ClipOp::Cut) {
+        palette.grid_cut_band
+    } else if multi_selected {
+        palette.grid_selection_band
+    } else {
+        palette.elevated
+    };
     let band_fg = palette.text;
     let band_icon = icon_color;
+    let band_name_fg = band_fg;
 
     frame.render_widget(
         Block::default().style(Style::default().bg(background).fg(palette.text)),
         rect,
     );
 
+    // ── Band (top row: icon + filename) ──────────────────────────────────────
     let band = Rect {
         x: rect.x,
         y: rect.y,
@@ -125,7 +155,9 @@ fn render_tile(
             Span::raw(" "),
             Span::styled(
                 helpers::clamp_label(&entry.name, band.width.saturating_sub(5) as usize),
-                Style::default().fg(band_fg).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(band_name_fg)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]))
         .style(Style::default().bg(band_bg).fg(band_fg)),
@@ -135,6 +167,7 @@ fn render_tile(
         }),
     );
 
+    // ── Content body (below band) ─────────────────────────────────────────────
     let content = Rect {
         x: rect.x,
         y: rect.y.saturating_add(1),
@@ -145,12 +178,6 @@ fn render_tile(
         horizontal: spec.padding_x,
         vertical: 0,
     });
-    let content_text = Rect {
-        x: content_inner.x,
-        y: content_inner.y,
-        width: content_inner.width,
-        height: content_inner.height,
-    };
     let detail = browser_entry_detail(app, entry);
     let modified = browser_entry_modified(entry);
     let mut lines = Vec::new();
@@ -181,7 +208,7 @@ fn render_tile(
         );
         frame.render_widget(
             Paragraph::new(lines).style(Style::default().bg(content_bg).fg(palette.text)),
-            content_text,
+            content_inner,
         );
     }
 }
