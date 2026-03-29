@@ -1,14 +1,26 @@
 use crate::app::{SidebarItem, SidebarItemKind, SidebarRow};
 use std::{
     collections::{HashMap, HashSet},
-    env, fs,
+    fs,
     path::{Path, PathBuf},
 };
 
+/// Returns the current user's home directory.
+///
+/// Delegates to the [`dirs`] crate, which reads `$HOME` on Unix and
+/// `%USERPROFILE%` / `{FOLDERID_Profile}` on Windows. Returns `None` only in
+/// the unlikely event that none of the relevant system APIs succeed.
+pub(crate) fn home_dir() -> Option<PathBuf> {
+    dirs::home_dir()
+}
+
 pub(crate) fn build_sidebar_rows() -> Vec<SidebarRow> {
-    let home = env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/"));
+    let home = home_dir().unwrap_or_else(|| {
+        #[cfg(windows)]
+        return PathBuf::from("C:\\");
+        #[cfg(not(windows))]
+        return PathBuf::from("/");
+    });
     let pinned_items = build_pinned_sidebar_items(&home);
     let pinned_paths = pinned_items
         .iter()
@@ -36,61 +48,52 @@ fn build_pinned_sidebar_items(home: &Path) -> Vec<SidebarItem> {
         home.to_path_buf(),
     ));
 
-    let xdg_dirs = read_xdg_user_dirs(home);
-
-    for (kind, title, xdg_key, fallback, icon) in [
+    // dirs::*_dir() reads XDG_*_DIR on Linux, system folders on macOS/Windows.
+    for (kind, title, path, icon) in [
         (
             SidebarItemKind::Desktop,
             "Desktop",
-            "XDG_DESKTOP_DIR",
-            "Desktop",
+            dirs::desktop_dir(),
             "󰍹",
         ),
         (
             SidebarItemKind::Documents,
             "Documents",
-            "XDG_DOCUMENTS_DIR",
-            "Documents",
+            dirs::document_dir(),
             "󰲃",
         ),
         (
             SidebarItemKind::Downloads,
             "Downloads",
-            "XDG_DOWNLOAD_DIR",
-            "Downloads",
+            dirs::download_dir(),
             "󰉍",
         ),
         (
             SidebarItemKind::Pictures,
             "Pictures",
-            "XDG_PICTURES_DIR",
-            "Pictures",
+            dirs::picture_dir(),
             "󰉏",
         ),
-        (
-            SidebarItemKind::Music,
-            "Music",
-            "XDG_MUSIC_DIR",
-            "Music",
-            "󱍙",
-        ),
+        (SidebarItemKind::Music, "Music", dirs::audio_dir(), "󱍙"),
         (
             SidebarItemKind::Videos,
-            "Videos",
-            "XDG_VIDEOS_DIR",
-            "Videos",
+            if cfg!(target_os = "macos") {
+                "Movies"
+            } else {
+                "Videos"
+            },
+            dirs::video_dir(),
             "󰕧",
         ),
     ] {
-        let path = xdg_dirs
-            .get(xdg_key)
-            .cloned()
-            .unwrap_or_else(|| home.join(fallback));
-        if path.exists() {
+        if let Some(path) = path
+            && path.exists()
+        {
             items.push(SidebarItem::new(kind, title, icon, path));
         }
     }
 
+    #[cfg(unix)]
     items.push(SidebarItem::new(
         SidebarItemKind::Root,
         "Root",
@@ -110,58 +113,25 @@ fn build_pinned_sidebar_items(home: &Path) -> Vec<SidebarItem> {
     items
 }
 
-/// Reads `$XDG_CONFIG_HOME/user-dirs.dirs` (default: `~/.config/user-dirs.dirs`) and returns a
-/// map of XDG variable names (e.g. `"XDG_DOWNLOAD_DIR"`) to their resolved paths. On systems
-/// without this file (e.g. macOS) or when the file cannot be read, returns an empty map and the
-/// caller falls back to English directory names.
-fn read_xdg_user_dirs(home: &Path) -> HashMap<String, PathBuf> {
-    let config_home = env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".config"));
-
-    let content = match fs::read_to_string(config_home.join("user-dirs.dirs")) {
-        Ok(content) => content,
-        Err(_) => return HashMap::new(),
-    };
-
-    let mut dirs = HashMap::new();
-    for line in content.lines() {
-        let line = line.trim();
-        if line.starts_with('#') || line.is_empty() {
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        let value = value.trim().trim_matches('"');
-        let path = if value == "$HOME" {
-            home.to_path_buf()
-        } else if let Some(relative) = value.strip_prefix("$HOME/") {
-            home.join(relative)
-        } else if value.starts_with('/') {
-            PathBuf::from(value)
-        } else {
-            continue;
-        };
-        dirs.insert(key.trim().to_string(), path);
-    }
-    dirs
-}
-
 /// Returns the path to the user's trash directory, or `None` if it cannot be determined.
 ///
-/// On freedesktop systems (Linux) the trash lives at `$XDG_DATA_HOME/Trash/files`.
-/// On macOS it is `~/.Trash`. The `files` subdirectory is used on Linux because that is
-/// where the actual deleted items are stored (the sibling `info/` directory holds metadata).
+/// - **Linux / BSD (freedesktop):** `$XDG_DATA_HOME/Trash/files`, falling back to
+///   `~/.local/share/Trash/files`. The `files/` subdirectory holds the actual items;
+///   the sibling `info/` directory holds `.trashinfo` metadata used for restore.
+/// - **macOS:** `~/.Trash`
+/// - **Windows:** always returns `None`. The Recycle Bin is a virtual shell folder
+///   that is not practically accessible as a regular filesystem path.
 pub(crate) fn trash_dir(home: &Path) -> Option<PathBuf> {
-    let data_home = env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".local/share"));
-    let xdg_trash = data_home.join("Trash/files");
-    if xdg_trash.exists() {
-        return Some(xdg_trash);
+    // dirs::data_dir() honours $XDG_DATA_HOME on Linux/BSD, returns
+    // ~/Library/Application Support on macOS, and %APPDATA% on Windows.
+    if let Some(data_dir) = dirs::data_dir() {
+        let xdg_trash = data_dir.join("Trash/files");
+        if xdg_trash.exists() {
+            return Some(xdg_trash);
+        }
     }
 
+    // macOS: ~/.Trash (freedesktop path above won't exist there)
     let mac_trash = home.join(".Trash");
     if mac_trash.exists() {
         return Some(mac_trash);
@@ -170,7 +140,178 @@ pub(crate) fn trash_dir(home: &Path) -> Option<PathBuf> {
     None
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
+fn mounted_device_items(_home: &Path, pinned_paths: &HashSet<PathBuf>) -> Vec<SidebarItem> {
+    use super::sort::natural_cmp;
+    use std::os::unix::fs::MetadataExt;
+
+    // Device ID of the root filesystem — used to skip the boot volume whether it
+    // appears as a symlink (older macOS) or a firmlink/bind-mount (Big Sur+).
+    let root_dev = fs::metadata("/").map(|m| m.dev()).ok();
+
+    let Ok(entries) = fs::read_dir("/Volumes") else {
+        return Vec::new();
+    };
+
+    let mut items = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        if pinned_paths.contains(&path) {
+            continue;
+        }
+        if entry.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
+        if let Some(root_dev) = root_dev {
+            if fs::metadata(&path).is_ok_and(|m| m.dev() == root_dev) {
+                continue;
+            }
+        }
+        if !path.is_dir() {
+            continue;
+        }
+
+        let Some(title) = entry.file_name().to_str().map(ToOwned::to_owned) else {
+            continue;
+        };
+
+        items.push(SidebarItem::new(
+            SidebarItemKind::Device { removable: false },
+            title,
+            "󰋊",
+            path,
+        ));
+    }
+
+    items.sort_by(|left, right| {
+        natural_cmp(
+            &left.title.to_ascii_lowercase(),
+            &right.title.to_ascii_lowercase(),
+        )
+        .then_with(|| left.path.cmp(&right.path))
+    });
+
+    items
+}
+
+#[cfg(windows)]
+fn mounted_device_items(_home: &Path, pinned_paths: &HashSet<PathBuf>) -> Vec<SidebarItem> {
+    let mut items = Vec::new();
+    for letter in b'A'..=b'Z' {
+        let path = PathBuf::from(format!("{}:\\", letter as char));
+        if path.exists() && !pinned_paths.contains(&path) {
+            items.push(SidebarItem::new(
+                SidebarItemKind::Device { removable: false },
+                format!("{}:", letter as char),
+                "󰋊",
+                path,
+            ));
+        }
+    }
+    items
+}
+
+// FreeBSD and OpenBSD share the same getmntinfo(3) interface and statfs field
+// names, so one implementation covers both.
+#[cfg(any(target_os = "freebsd", target_os = "openbsd"))]
+fn mounted_device_items(home: &Path, pinned_paths: &HashSet<PathBuf>) -> Vec<SidebarItem> {
+    use super::sort::natural_cmp;
+
+    let mut mntbuf: *mut libc::statfs = std::ptr::null_mut();
+    let count = unsafe { libc::getmntinfo(&mut mntbuf, libc::MNT_NOWAIT) };
+    if count <= 0 || mntbuf.is_null() {
+        return Vec::new();
+    }
+
+    let mounts = unsafe { std::slice::from_raw_parts(mntbuf, count as usize) };
+    let mut items = Vec::new();
+
+    for mount in mounts {
+        let mount_point =
+            unsafe { std::ffi::CStr::from_ptr(mount.f_mntonname.as_ptr()) }.to_string_lossy();
+        let fstype =
+            unsafe { std::ffi::CStr::from_ptr(mount.f_fstypename.as_ptr()) }.to_string_lossy();
+        let source =
+            unsafe { std::ffi::CStr::from_ptr(mount.f_mntfromname.as_ptr()) }.to_string_lossy();
+
+        let path = PathBuf::from(mount_point.as_ref());
+
+        if path == Path::new("/") || pinned_paths.contains(&path) {
+            continue;
+        }
+        if bsd_system_fstype(&fstype) || bsd_hidden_path(&path) {
+            continue;
+        }
+        if !bsd_user_visible_path(&path, home) {
+            continue;
+        }
+
+        let title = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .filter(|n| !n.is_empty())
+            .map(ToOwned::to_owned)
+            .or_else(|| {
+                Path::new(source.as_ref())
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(ToOwned::to_owned)
+            })
+            .unwrap_or_else(|| path.display().to_string());
+
+        items.push(SidebarItem::new(
+            SidebarItemKind::Device { removable: false },
+            title,
+            "󰋊",
+            path,
+        ));
+    }
+
+    items.sort_by(|a, b| {
+        natural_cmp(&a.title.to_ascii_lowercase(), &b.title.to_ascii_lowercase())
+            .then_with(|| a.path.cmp(&b.path))
+    });
+
+    items
+}
+
+// Virtual/system filesystem types to suppress on FreeBSD and OpenBSD.
+// The union of both sets is used so the filter is correct on either OS.
+#[cfg(any(target_os = "freebsd", target_os = "openbsd"))]
+fn bsd_system_fstype(fstype: &str) -> bool {
+    matches!(
+        fstype,
+        // FreeBSD
+        "devfs" | "fdescfs" | "linprocfs" | "linsysfs" | "nullfs" | "procfs" | "tmpfs"
+            | "unionfs"
+            // OpenBSD
+            | "kernfs" | "mfs"
+    )
+}
+
+#[cfg(any(target_os = "freebsd", target_os = "openbsd"))]
+fn bsd_hidden_path(path: &Path) -> bool {
+    path.starts_with("/dev")
+        || path.starts_with("/proc")
+        || path.starts_with("/kern")
+        || path.starts_with("/compat")
+}
+
+#[cfg(any(target_os = "freebsd", target_os = "openbsd"))]
+fn bsd_user_visible_path(path: &Path, home: &Path) -> bool {
+    path.starts_with(home) || path.starts_with("/media") || path.starts_with("/mnt")
+}
+
+// NetBSD uses statvfs / getmntinfo with a different struct layout; other
+// exotic Unices are similarly untested. Leave those as an empty list for now.
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    windows
+)))]
 fn mounted_device_items(_home: &Path, _pinned_paths: &HashSet<PathBuf>) -> Vec<SidebarItem> {
     Vec::new()
 }

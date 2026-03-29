@@ -11,7 +11,7 @@ use std::{
     sync::Arc,
 };
 
-/// Write a line to `/tmp/elio-preview.log` when `ELIO_DEBUG_PREVIEW` is set.
+/// Write a line to `<temp>/elio-preview.log` when `ELIO_DEBUG_PREVIEW` is set.
 /// Does nothing (and compiles to nothing meaningful) when the env var is absent.
 pub(in crate::app) fn preview_log(msg: impl std::fmt::Display) {
     if env::var_os("ELIO_DEBUG_PREVIEW").is_none() {
@@ -20,7 +20,7 @@ pub(in crate::app) fn preview_log(msg: impl std::fmt::Display) {
     let _ = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open("/tmp/elio-preview.log")
+        .open(std::env::temp_dir().join("elio-preview.log"))
         .and_then(|mut f| writeln!(f, "{msg}"));
 }
 

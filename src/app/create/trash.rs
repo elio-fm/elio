@@ -6,7 +6,7 @@ use super::super::{
 use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use std::{env, path::Path};
+use std::path::Path;
 
 impl App {
     pub(in crate::app) fn cwd_is_trash(&self) -> bool {
@@ -14,10 +14,9 @@ impl App {
     }
 
     pub(in crate::app) fn path_is_trash(path: &Path) -> bool {
-        let home = env::var_os("HOME")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("/"));
-        crate::fs::trash_dir(&home).is_some_and(|trash| path == trash)
+        crate::fs::home_dir()
+            .and_then(|home| crate::fs::trash_dir(&home))
+            .is_some_and(|trash| path == trash)
     }
 
     pub(in crate::app) fn effective_show_hidden(&self) -> bool {

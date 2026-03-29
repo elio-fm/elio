@@ -64,11 +64,17 @@ pub(crate) fn layout() -> LayoutConfig {
 }
 
 pub(crate) fn config_dir() -> Option<PathBuf> {
+    // XDG_CONFIG_HOME is honoured on all platforms so developers can redirect
+    // the config location regardless of OS.
     if let Some(config_home) = env::var_os("XDG_CONFIG_HOME") {
         return Some(PathBuf::from(config_home).join("elio"));
     }
 
-    env::var_os("HOME").map(|home| PathBuf::from(home).join(".config/elio"))
+    // dirs::config_dir() returns:
+    //   Linux/BSD : $HOME/.config
+    //   macOS     : $HOME/Library/Application Support
+    //   Windows   : %APPDATA% (Roaming)
+    dirs::config_dir().map(|d| d.join("elio"))
 }
 
 fn active_config() -> &'static Config {

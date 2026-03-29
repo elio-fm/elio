@@ -64,3 +64,60 @@ jobs:
 
       - name: cargo doc --no-deps
         run: cargo doc --no-deps
+
+  cross-platform-build:
+    name: build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install preview test tooling (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euxo pipefail
+          brew install ffmpeg imagemagick poppler sevenzip cdrtools
+
+          if ! command -v 7z >/dev/null 2>&1 && command -v 7zz >/dev/null 2>&1; then
+            ln -sf "$(command -v 7zz)" /usr/local/bin/7z
+          fi
+
+          # genisoimage is Linux-specific; mkisofs from cdrtools is a compatible drop-in
+          if ! command -v genisoimage >/dev/null 2>&1 && command -v mkisofs >/dev/null 2>&1; then
+            ln -sf "$(command -v mkisofs)" /usr/local/bin/genisoimage
+          fi
+
+      - name: Install Rust 1.93.0
+        uses: dtolnay/rust-toolchain@1.93.0
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo build
+        run: cargo build
+
+      - name: cargo test
+        run: cargo test
+
+  freebsd-build:
+    name: build and test (freebsd)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build and test on FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          prepare: |
+            pkg install -y rust
+          run: |
+            cargo build
+            cargo test

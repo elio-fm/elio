@@ -65,7 +65,7 @@ fn collect_candidates_with_limits(
                 continue;
             };
             let file_name = entry.file_name();
-            if !show_hidden && super::is_hidden(file_name.as_os_str()) {
+            if !show_hidden && super::is_hidden_entry(&entry) {
                 continue;
             }
 

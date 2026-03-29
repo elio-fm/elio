@@ -7,7 +7,7 @@ pub(crate) fn count_directory_items(dir: &Path, show_hidden: bool) -> io::Result
             Ok(item) => item,
             Err(_) => continue,
         };
-        if !show_hidden && super::is_hidden(item.file_name().as_os_str()) {
+        if !show_hidden && super::is_hidden_entry(&item) {
             continue;
         }
         count += 1;

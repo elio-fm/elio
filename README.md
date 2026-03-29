@@ -1,4 +1,4 @@
-<h1 align="left"><img src="assets/logo.png" width="85" alt="elio logo" align="absmiddle" />&nbsp;elio</h1>
+<h1 align="left"><img src="assets/logo.png" width="75" alt="elio logo" align="absmiddle" />&nbsp;elio</h1>
 
 A terminal-native, mouse-capable file manager with rich previews and inline images.
 
@@ -55,8 +55,8 @@ Inline image and PDF previews work automatically on supported terminals — no c
 | Variable | Effect |
 |---|---|
 | `ELIO_IMAGE_PREVIEWS=1` | Force-enable on unrecognized terminals that support the Kitty Graphics Protocol |
-| `ELIO_DEBUG_PREVIEW` | Log image preview activity to `/tmp/elio-preview.log` |
-| `ELIO_LOG_MOUSE` | Log raw mouse events to `/tmp/elio-mouse.log` |
+| `ELIO_DEBUG_PREVIEW` | Log image preview activity to `elio-preview.log` in the system temp directory |
+| `ELIO_LOG_MOUSE` | Log raw mouse events to `elio-mouse.log` in the system temp directory |
 
 ---
 
@@ -84,7 +84,11 @@ Opening files externally (`o` / `Enter`) uses the system launcher: `open` on mac
 
 ## Configuration
 
-`~/.config/elio/config.toml`
+| Platform | Config file |
+|---|---|
+| Linux / BSD | `~/.config/elio/config.toml` (or `$XDG_CONFIG_HOME/elio/config.toml`) |
+| macOS | `~/Library/Application Support/elio/config.toml` |
+| Windows | `%APPDATA%\elio\config.toml` |
 
 ```toml
 [ui]
@@ -111,7 +115,11 @@ Pane weights are relative — `10/45/45` and `20/90/90` produce the same split. 
 
 ## Theming
 
-`~/.config/elio/theme.toml`
+| Platform | Theme file |
+|---|---|
+| Linux / BSD | `~/.config/elio/theme.toml` (or `$XDG_CONFIG_HOME/elio/theme.toml`) |
+| macOS | `~/Library/Application Support/elio/theme.toml` |
+| Windows | `%APPDATA%\elio\theme.toml` |
 
 Theme files layer on top of the built-in defaults — only the keys you provide are overridden. If the file is missing or cannot be parsed, elio falls back silently (parse errors are reported to stderr).
 
@@ -145,7 +153,7 @@ icon  = "󰌾"
 color = "#59de94"
 ```
 
-The full default theme is at [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml). Ready-to-use themes are in [`examples/themes/`](examples/themes/) — copy any `theme.toml` to `~/.config/elio/theme.toml` to apply it.
+The full default theme is at [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml). Ready-to-use themes are in [`examples/themes/`](examples/themes/) — copy any `theme.toml` to the theme file path for your platform (see table above) to apply it.
 
 ---
 

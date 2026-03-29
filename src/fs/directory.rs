@@ -109,7 +109,7 @@ fn read_entries(dir: &Path, show_hidden: bool) -> Result<Vec<Entry>> {
         let file_name = item.file_name();
         let name = file_name.to_string_lossy().to_string();
         let name_key = name.to_lowercase();
-        let hidden = super::is_hidden(file_name.as_os_str());
+        let hidden = super::is_hidden_entry(&item);
         if hidden && !show_hidden {
             continue;
         }
@@ -186,7 +186,7 @@ pub(crate) fn scan_directory_fingerprint(
             Err(_) => continue,
         };
         let file_name = item.file_name();
-        if super::is_hidden(file_name.as_os_str()) && !show_hidden {
+        if super::is_hidden_entry(&item) && !show_hidden {
             continue;
         }
 
@@ -342,9 +342,13 @@ fn fingerprint_time(time: Option<SystemTime>) -> Option<(u64, u32)> {
 
 /// Restores a trashed item to its original location.
 ///
-/// `entry_path` must be a file inside a FreeDesktop `Trash/files/` directory.
-/// The corresponding `.trashinfo` is used to find the original path. Returns
-/// the restored destination path on success.
+/// Only supported on **freedesktop trash** layouts (Linux, BSD). `entry_path` must
+/// be a file inside a `Trash/files/` directory; the sibling `Trash/info/<name>.trashinfo`
+/// file is used to recover the original path.
+///
+/// On macOS (`~/.Trash`) and Windows (Recycle Bin) there is no `.trashinfo` metadata,
+/// so this function returns an error with a clear message rather than a confusing
+/// "file not found".
 pub(crate) fn restore_trash_item(entry_path: &Path) -> anyhow::Result<PathBuf> {
     let name = entry_path
         .file_name()
@@ -357,6 +361,13 @@ pub(crate) fn restore_trash_item(entry_path: &Path) -> anyhow::Result<PathBuf> {
         .and_then(|p| p.parent())
         .map(|trash_root| trash_root.join("info"))
         .ok_or_else(|| anyhow::anyhow!("cannot determine trash info dir for {:?}", entry_path))?;
+
+    // The info/ sibling directory only exists in a FreeDesktop trash layout.
+    // macOS ~/.Trash and Windows Recycle Bin do not have it, so we give a
+    // clear error rather than a confusing "file not found" message.
+    if !info_dir.is_dir() {
+        anyhow::bail!("restore is not supported for this trash location");
+    }
 
     let info_path = info_dir.join(format!("{name}.trashinfo"));
     let content =

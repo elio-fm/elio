@@ -258,7 +258,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
                     let _ = std::fs::OpenOptions::new()
                         .create(true)
                         .append(true)
-                        .open("/tmp/elio-mouse.log")
+                        .open(std::env::temp_dir().join("elio-mouse.log"))
                         .and_then(|mut f| {
                             writeln!(f, "{:?} col={} row={}", m.kind, m.column, m.row)
                         });

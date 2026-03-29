@@ -6,6 +6,7 @@ license = "MIT"
 
 [dependencies]
 anyhow = "1.0"
+dirs = "5"
 libc = "0.2"
 base64 = "0.22"
 cfb = "0.10"
