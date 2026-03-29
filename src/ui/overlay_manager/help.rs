@@ -29,8 +29,12 @@ pub(super) fn render_help(
             action: "enter folder / open",
         },
         HelpEntry {
-            key: "g / G",
-            action: "go-to menu / last item",
+            key: "g",
+            action: "go-to menu",
+        },
+        HelpEntry {
+            key: "G",
+            action: "last item",
         },
         HelpEntry {
             key: "PageUp / PageDown",
@@ -38,7 +42,7 @@ pub(super) fn render_help(
         },
         HelpEntry {
             key: "Tab / Shift+Tab",
-            action: "cycle sidebar locations",
+            action: "cycle places",
         },
         HelpEntry {
             key: "Alt+← / →",
@@ -93,10 +97,6 @@ pub(super) fn render_help(
             action: "copy path details",
         },
         HelpEntry {
-            key: "g",
-            action: "go to top, home, downloads, .config, or trash",
-        },
-        HelpEntry {
             key: "x",
             action: "cut",
         },
@@ -135,6 +135,10 @@ pub(super) fn render_help(
         HelpEntry {
             key: "v",
             action: "toggle grid / list",
+        },
+        HelpEntry {
+            key: "+ / -",
+            action: "grid zoom in / out",
         },
         HelpEntry {
             key: ".",
