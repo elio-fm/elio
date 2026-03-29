@@ -757,9 +757,13 @@ mod tests {
 
         assert!(result.is_ok(), "expected Ok, got {result:?}");
 
-        for _ in 0..100 {
-            if capture.exists() {
-                break;
+        // Wait for the script to finish writing. The shell redirect `>` creates
+        // the file (empty) before printf writes to it, so wait for non-empty
+        // content to avoid a TOCTOU race on slow CI.
+        for _ in 0..300 {
+            match fs::read_to_string(&capture) {
+                Ok(s) if !s.is_empty() => break,
+                _ => {}
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
@@ -796,9 +800,13 @@ mod tests {
 
         assert!(result.is_ok(), "expected Ok after fallback, got {result:?}");
 
-        for _ in 0..100 {
-            if capture.exists() {
-                break;
+        // Wait for the script to finish writing. The shell redirect `>` creates
+        // the file (empty) before printf writes to it, so wait for non-empty
+        // content to avoid a TOCTOU race on slow CI.
+        for _ in 0..300 {
+            match fs::read_to_string(&capture) {
+                Ok(s) if !s.is_empty() => break,
+                _ => {}
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }

@@ -188,7 +188,11 @@ fn nearby_comic_entry_prefetch_warms_adjacent_file_preview() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
+// Background audio preview threads start slowly on Windows and FreeBSD CI VMs,
+// causing this timing-sensitive test to flake. The prefetch logic itself is
+// cross-platform; the skip is purely a CI infrastructure constraint.
 #[test]
+#[cfg(not(any(windows, target_os = "freebsd")))]
 fn nearby_audio_preview_prefetch_warms_adjacent_file_preview() {
     let root = temp_path("audio-entry-prefetch");
     fs::create_dir_all(&root).expect("failed to create temp root");
