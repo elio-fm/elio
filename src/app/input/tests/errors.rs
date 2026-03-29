@@ -27,6 +27,11 @@ fn opening_a_removed_directory_does_not_bubble_an_error() {
 #[test]
 #[cfg(unix)]
 fn opening_a_protected_directory_reports_permission_denied() {
+    // Skip when running as root (e.g. FreeBSD CI) — root bypasses chmod 000.
+    if unsafe { libc::getuid() } == 0 {
+        return;
+    }
+
     let root = temp_path("protected-directory-open");
     let child = root.join("child");
     fs::create_dir_all(&child).expect("failed to create temp dirs");

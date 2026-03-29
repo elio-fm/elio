@@ -223,6 +223,11 @@ fn line_truncated_preview_reports_visible_limit() {
 #[test]
 #[cfg(unix)]
 fn protected_directory_preview_reports_permission_denied() {
+    // Skip when running as root (e.g. FreeBSD CI) — root bypasses chmod 000.
+    if unsafe { libc::getuid() } == 0 {
+        return;
+    }
+
     let root = temp_path("protected-dir-preview");
     let locked = root.join("locked");
     fs::create_dir_all(&locked).expect("failed to create locked dir");
@@ -246,6 +251,11 @@ fn protected_directory_preview_reports_permission_denied() {
 #[test]
 #[cfg(unix)]
 fn protected_file_preview_reports_permission_denied() {
+    // Skip when running as root (e.g. FreeBSD CI) — root bypasses chmod 000.
+    if unsafe { libc::getuid() } == 0 {
+        return;
+    }
+
     let root = temp_path("protected-file-preview");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("secret.txt");

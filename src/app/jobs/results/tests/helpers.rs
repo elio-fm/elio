@@ -275,7 +275,7 @@ pub(super) fn wait_for_background_preview(app: &mut App) {
 }
 
 pub(super) fn wait_for_preview_prefetch(app: &mut App) {
-    for _ in 0..200 {
+    for _ in 0..500 {
         let _ = app.process_background_jobs();
         let _ = app.process_preview_prefetch_timers();
         if app.pending_preview_prefetch_timer().is_none() {

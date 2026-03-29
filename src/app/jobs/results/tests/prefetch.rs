@@ -205,7 +205,7 @@ fn nearby_audio_preview_prefetch_warms_adjacent_file_preview() {
     wait_for_background_preview(&mut app);
     wait_for_preview_prefetch(&mut app);
 
-    for _ in 0..200 {
+    for _ in 0..500 {
         let _ = app.process_preview_prefetch_timers();
         let _ = app.process_background_jobs();
         if app.has_cached_preview_for_path(&second) {

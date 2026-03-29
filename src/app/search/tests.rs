@@ -13,7 +13,15 @@ fn temp_path(label: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system time should be after unix epoch")
         .as_nanos();
-    std::env::temp_dir().join(format!("elio-searching-{label}-{unique}"))
+    let path = std::env::temp_dir().join(format!("elio-searching-{label}-{unique}"));
+    #[cfg(windows)]
+    {
+        std::fs::create_dir_all(&path).ok();
+        if let Ok(canonical) = path.canonicalize() {
+            return canonical;
+        }
+    }
+    path
 }
 
 #[test]

@@ -14,7 +14,18 @@ pub(super) fn temp_path(label: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system time should be after unix epoch")
         .as_nanos();
-    env::temp_dir().join(format!("elio-events-{label}-{unique}"))
+    let path = env::temp_dir().join(format!("elio-events-{label}-{unique}"));
+    // On Windows, env::temp_dir() may return a short 8.3 path (e.g. RUNNER~1)
+    // while navigate_to() canonicalizes to the full \\?\ form. Pre-canonicalize
+    // so that both sides of assert_eq!(app.cwd, root) use the same form.
+    #[cfg(windows)]
+    {
+        std::fs::create_dir_all(&path).ok();
+        if let Ok(canonical) = path.canonicalize() {
+            return canonical;
+        }
+    }
+    path
 }
 
 pub(super) fn wait_for_directory_load(app: &mut App) {

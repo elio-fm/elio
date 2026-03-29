@@ -796,9 +796,11 @@ mod tests {
             rendered.contains("g -> top"),
             "expected goto overlay to render the top shortcut row, got: {rendered:?}"
         );
+        // The label is ".config" on Linux/BSD, "Application Support" on macOS,
+        // and "AppData" on Windows — check for "c ->" which is present on all.
         assert!(
-            rendered.contains("c -> .config"),
-            "expected goto overlay to render the .config shortcut row, got: {rendered:?}"
+            rendered.contains("c ->"),
+            "expected goto overlay to render the config shortcut row, got: {rendered:?}"
         );
         assert!(
             rendered.contains("t -> trash"),
@@ -993,6 +995,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(windows))] // Windows rejects filenames containing \r
     fn filenames_with_control_characters_are_rendered_safely() {
         let root = temp_path("control-char-name");
         fs::create_dir_all(&root).expect("failed to create temp root");

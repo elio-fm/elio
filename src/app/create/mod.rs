@@ -332,6 +332,8 @@ mod tests {
 
         // Purge the items we just trashed from the OS trash so the test
         // leaves no permanent side-effects.
+        // trash::os_limited is only available on non-macOS Unix (freedesktop).
+        #[cfg(all(unix, not(target_os = "macos")))]
         {
             use trash::os_limited::{list, purge_all};
             if let Ok(items) = list() {
@@ -371,6 +373,7 @@ mod tests {
         assert_eq!(app.status_message(), "Trashed \"notes.txt\"");
 
         // Purge from OS trash to avoid side-effects.
+        #[cfg(all(unix, not(target_os = "macos")))]
         {
             use trash::os_limited::{list, purge_all};
             if let Ok(items) = list() {
@@ -434,6 +437,7 @@ mod tests {
         assert!(valid, "unexpected status: {status:?}");
 
         // Purge from OS trash if the file actually got trashed.
+        #[cfg(all(unix, not(target_os = "macos")))]
         if !root.join("canary.txt").exists() {
             use trash::os_limited::{list, purge_all};
             if let Ok(items) = list() {

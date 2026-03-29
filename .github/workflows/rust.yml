@@ -117,7 +117,9 @@ jobs:
         with:
           usesh: true
           prepare: |
-            pkg install -y rust
+            pkg install -y rust 7-zip
+            # 7-zip provides 7zz; create a 7z alias so elio's archive preview finds it
+            ln -sf /usr/local/bin/7zz /usr/local/bin/7z
           run: |
             cargo build
             cargo test
