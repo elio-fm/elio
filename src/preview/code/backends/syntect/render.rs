@@ -44,10 +44,17 @@ where
             ));
         }
 
-        let ops = parse_state.parse_line(line, syntax_set).map_err(|_| ())?;
-        for (range, op) in ScopeRangeIterator::new(&ops, line) {
+        // Append \n so that "newlines" mode syntaxes (loaded with
+        // load_defaults_newlines) properly terminate line comments and other
+        // line-scoped constructs. Without it, a trailing -- or # comment on
+        // one line bleeds its scope into every subsequent line.
+        let line_with_nl = format!("{line}\n");
+        let ops = parse_state
+            .parse_line(&line_with_nl, syntax_set)
+            .map_err(|_| ())?;
+        for (range, op) in ScopeRangeIterator::new(&ops, &line_with_nl) {
             scope_stack.apply(op).map_err(|_| ())?;
-            let text = &line[range];
+            let text = line_with_nl[range].trim_end_matches('\n');
             if text.is_empty() {
                 continue;
             }

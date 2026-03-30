@@ -104,12 +104,15 @@ mod tests {
         let mut tokens = Vec::new();
 
         for line in text.lines() {
+            // Mirror the render path: append \n so newlines-mode grammars
+            // properly terminate line comments (same fix as in render.rs).
+            let line_with_nl = format!("{line}\n");
             let ops = parse_state
-                .parse_line(line, syntax_set)
+                .parse_line(&line_with_nl, syntax_set)
                 .expect("line should parse");
-            for (range, op) in ScopeRangeIterator::new(&ops, line) {
+            for (range, op) in ScopeRangeIterator::new(&ops, &line_with_nl) {
                 scope_stack.apply(op).expect("scope op should apply");
-                let token = &line[range];
+                let token = line_with_nl[range].trim_end_matches('\n');
                 if !token.is_empty() {
                     tokens.push((token.to_string(), scope_stack.to_string()));
                 }
@@ -639,6 +642,61 @@ mod tests {
         assert_eq!(
             semantic_role_for_token("--flag", stack.as_slice()),
             SemanticRole::Parameter
+        );
+    }
+
+    #[test]
+    fn sql_tokens_map_to_semantic_roles() {
+        let palette = theme::code_preview_palette();
+        let sample = concat!(
+            "SELECT id, name FROM users WHERE id = 42; -- pick one\n",
+            "CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT NOT NULL);\n",
+            "INSERT INTO items VALUES (99, 'hello');\n",
+        );
+        let rendered = render_syntect_code_preview("sql", sample, true, 20, &|| false)
+            .expect("sql syntax should render through syntect");
+        let scopes = token_scopes("sql", sample);
+
+        // DML keywords must be colored — not bleeding comment scope from line 1.
+        assert_eq!(
+            span_color(&rendered[0], "SELECT"),
+            Some(palette.keyword),
+            "SELECT should be keyword; scopes: {scopes:#?}"
+        );
+        assert_eq!(
+            span_color(&rendered[0], "--"),
+            Some(palette.comment),
+            "-- should be comment color; scopes: {scopes:#?}"
+        );
+        // Line 2 must NOT be in comment scope despite the -- on line 1.
+        assert_eq!(
+            span_color(&rendered[1], "CREATE"),
+            Some(palette.keyword),
+            "CREATE on line 2 should be keyword, not comment; scopes: {scopes:#?}"
+        );
+        assert_eq!(
+            span_color(&rendered[2], "INSERT INTO"),
+            Some(palette.keyword),
+            "INSERT INTO on line 3 should be keyword; scopes: {scopes:#?}"
+        );
+        // String literals must be string-colored.
+        assert_eq!(
+            span_color(&rendered[2], "hello"),
+            Some(palette.string),
+            "string literal should be string color; scopes: {scopes:#?}"
+        );
+        // Numeric constant (42 avoids collision with line numbers 1–3).
+        assert_eq!(
+            span_color(&rendered[0], "42"),
+            Some(palette.constant),
+            "numeric constant should be constant color; scopes: {scopes:#?}"
+        );
+        // Comparison operator must be operator color, not keyword (keyword.operator.*
+        // prefix must not be swallowed by the broader keyword selector).
+        assert_eq!(
+            span_color(&rendered[0], "="),
+            Some(palette.operator),
+            "= should be operator color, not keyword; scopes: {scopes:#?}"
         );
     }
 

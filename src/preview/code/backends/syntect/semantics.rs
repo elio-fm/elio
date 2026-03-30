@@ -61,10 +61,10 @@ pub(super) fn semantic_role_for_token(text: &str, scope_stack: &[Scope]) -> Sema
             && text.chars().next().is_some_and(char::is_uppercase))
     {
         SemanticRole::Type
-    } else if scope_stack_matches(scope_stack, &selectors.keyword) {
-        SemanticRole::Keyword
     } else if scope_stack_matches(scope_stack, &selectors.operator) {
         SemanticRole::Operator
+    } else if scope_stack_matches(scope_stack, &selectors.keyword) {
+        SemanticRole::Keyword
     } else if scope_stack_matches(scope_stack, &selectors.constant) {
         SemanticRole::Constant
     } else if let Some(role) = shell_semantic_role_from_heuristics(text, scope_stack, selectors) {
