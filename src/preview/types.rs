@@ -58,6 +58,7 @@ pub(crate) enum PreviewKind {
     Audio,
     Archive,
     Comic,
+    Data,
     Directory,
     Document,
     Image,
@@ -75,6 +76,7 @@ impl PreviewKind {
             Self::Audio => "Audio",
             Self::Archive => "Archive",
             Self::Comic => "Comic",
+            Self::Data => "Data",
             Self::Directory => "Contents",
             Self::Document => "Document",
             Self::Image => "Image",
@@ -103,7 +105,7 @@ impl PreviewKind {
     pub(crate) fn allows_horizontal_scroll(self) -> bool {
         matches!(
             self,
-            Self::Code | Self::Markdown | Self::Archive | Self::Directory
+            Self::Code | Self::Data | Self::Markdown | Self::Archive | Self::Directory
         )
     }
 }

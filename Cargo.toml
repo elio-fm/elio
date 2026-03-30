@@ -29,6 +29,7 @@ toml_edit = "0.22"
 unicode-width = "0.2"
 zip = { version = "2.2", default-features = false, features = ["deflate"] }
 trash = "5.2.5"
+rusqlite = { version = "0.39", features = ["bundled"] }
 
 [build-dependencies]
 syntect = { version = "5.2", default-features = false, features = ["default-syntaxes", "yaml-load", "regex-onig"] }

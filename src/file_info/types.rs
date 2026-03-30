@@ -7,6 +7,11 @@ pub(crate) enum PreviewKind {
     PlainText,
     Iso,
     Torrent,
+    /// Extension is unambiguously SQLite (.sqlite, .sqlite3, .db3). Heavy work class.
+    Sqlite,
+    /// Extension could be SQLite (.db) but requires header sniffing to confirm. Light work class.
+    SqliteCandidate,
+    Csv,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -237,6 +242,39 @@ impl PreviewSpec {
     pub(super) const fn torrent() -> Self {
         Self {
             kind: PreviewKind::Torrent,
+            language_hint: None,
+            code_syntax: None,
+            code_backend: CodeBackend::Plain,
+            structured_format: None,
+            document_format: None,
+        }
+    }
+
+    pub(super) const fn sqlite() -> Self {
+        Self {
+            kind: PreviewKind::Sqlite,
+            language_hint: None,
+            code_syntax: None,
+            code_backend: CodeBackend::Plain,
+            structured_format: None,
+            document_format: None,
+        }
+    }
+
+    pub(super) const fn sqlite_candidate() -> Self {
+        Self {
+            kind: PreviewKind::SqliteCandidate,
+            language_hint: None,
+            code_syntax: None,
+            code_backend: CodeBackend::Plain,
+            structured_format: None,
+            document_format: None,
+        }
+    }
+
+    pub(super) const fn csv() -> Self {
+        Self {
+            kind: PreviewKind::Csv,
             language_hint: None,
             code_syntax: None,
             code_backend: CodeBackend::Plain,

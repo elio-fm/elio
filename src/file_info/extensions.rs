@@ -27,7 +27,7 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         },
         "json" => FileFacts {
             builtin_class: FileClass::Config,
-            specific_type_label: None,
+            specific_type_label: Some("JSON file"),
             preview: preview_for_extension(ext),
         },
         "jsonc" => FileFacts {
@@ -42,12 +42,12 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         },
         "toml" => FileFacts {
             builtin_class: FileClass::Config,
-            specific_type_label: None,
+            specific_type_label: Some("TOML file"),
             preview: preview_for_extension(ext),
         },
         "yaml" | "yml" => FileFacts {
             builtin_class: FileClass::Config,
-            specific_type_label: None,
+            specific_type_label: Some("YAML file"),
             preview: preview_for_extension(ext),
         },
         "html" | "htm" | "xhtml" => FileFacts {
@@ -82,7 +82,13 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         },
         "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => FileFacts {
             builtin_class: FileClass::Code,
-            specific_type_label: None,
+            specific_type_label: Some(match ext {
+                "ts" | "mts" | "cts" => "TypeScript source file",
+                "tsx" => "TSX source file",
+                "jsx" => "JSX source file",
+                "mjs" | "cjs" => "JavaScript module",
+                _ => "JavaScript source file",
+            }),
             preview: preview_for_extension(ext),
         },
         "sql" => FileFacts {
@@ -131,13 +137,13 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: match ext {
                 "keys" => Some("Keys file"),
-                _ => None,
+                _ => Some("INI config file"),
             },
             preview: preview_for_extension(ext),
         },
         "conf" | "cfg" => FileFacts {
             builtin_class: FileClass::Config,
-            specific_type_label: None,
+            specific_type_label: Some("Config file"),
             preview: preview_for_extension(ext),
         },
         "env" => FileFacts {
@@ -263,7 +269,12 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         },
         "py" | "pyi" | "pyw" | "pyx" => FileFacts {
             builtin_class: FileClass::Code,
-            specific_type_label: None,
+            specific_type_label: Some(match ext {
+                "pyi" => "Python stub file",
+                "pyw" => "Python script (no console)",
+                "pyx" => "Cython source file",
+                _ => "Python source file",
+            }),
             preview: preview_for_extension(ext),
         },
         "rs" => FileFacts {
@@ -414,7 +425,30 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             preview: preview_for_extension(ext),
         },
         "ron" => source_only(FileClass::Config, None, None),
-        "csv" | "tsv" | "sqlite" | "db" | "parquet" => source_only(FileClass::Data, None, None),
+        "csv" => FileFacts {
+            builtin_class: FileClass::Data,
+            specific_type_label: Some("CSV file"),
+            preview: PreviewSpec::csv(),
+        },
+        "tsv" => FileFacts {
+            builtin_class: FileClass::Data,
+            specific_type_label: Some("TSV file"),
+            preview: PreviewSpec::csv(),
+        },
+        "sqlite" | "sqlite3" | "db3" => FileFacts {
+            builtin_class: FileClass::Data,
+            specific_type_label: Some("SQLite database"),
+            preview: PreviewSpec::sqlite(),
+        },
+        "db" => FileFacts {
+            builtin_class: FileClass::Data,
+            specific_type_label: Some("Database file"),
+            preview: PreviewSpec::sqlite_candidate(),
+        },
+        "sqlite-wal" | "db-wal" => plain(FileClass::Data, Some("SQLite WAL")),
+        "sqlite-shm" | "db-shm" => plain(FileClass::Data, Some("SQLite shared memory")),
+        "sqlite-journal" | "db-journal" => plain(FileClass::Data, Some("SQLite rollback journal")),
+        "parquet" => source_only(FileClass::Data, Some("Parquet file"), None),
         "doc" => FileFacts {
             builtin_class: FileClass::Document,
             specific_type_label: Some("DOC document"),

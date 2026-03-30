@@ -2,6 +2,7 @@ mod audio;
 mod binary;
 pub(crate) mod code;
 mod container;
+mod data;
 mod directory;
 mod dispatch;
 mod document;

@@ -495,3 +495,60 @@ fn executable_and_library_extensions_keep_specific_labels() {
     assert_eq!(dylib.specific_type_label, Some("Dynamic library"));
     assert_eq!(object.specific_type_label, Some("Object file"));
 }
+
+#[test]
+fn sqlite_extensions_use_sqlite_preview_kind() {
+    for filename in &["app.sqlite", "app.sqlite3", "app.db3"] {
+        let facts = inspect_path(Path::new(filename), EntryKind::File);
+        assert_eq!(facts.builtin_class, FileClass::Data, "{filename}");
+        assert_eq!(facts.preview.kind, PreviewKind::Sqlite, "{filename}");
+        assert_eq!(
+            facts.specific_type_label,
+            Some("SQLite database"),
+            "{filename}"
+        );
+    }
+}
+
+#[test]
+fn db_extension_uses_sqlite_candidate_kind_so_it_stays_light_before_sniff() {
+    let facts = inspect_path(Path::new("data.db"), EntryKind::File);
+    assert_eq!(facts.builtin_class, FileClass::Data);
+    // SqliteCandidate — not Heavy until header sniffing confirms SQLite magic.
+    assert_eq!(facts.preview.kind, PreviewKind::SqliteCandidate);
+    assert_eq!(facts.specific_type_label, Some("Database file"));
+}
+
+#[test]
+fn csv_and_tsv_use_csv_preview_kind() {
+    let csv = inspect_path(Path::new("data.csv"), EntryKind::File);
+    assert_eq!(csv.builtin_class, FileClass::Data);
+    assert_eq!(csv.preview.kind, PreviewKind::Csv);
+    assert_eq!(csv.specific_type_label, Some("CSV file"));
+
+    let tsv = inspect_path(Path::new("data.tsv"), EntryKind::File);
+    assert_eq!(tsv.builtin_class, FileClass::Data);
+    assert_eq!(tsv.preview.kind, PreviewKind::Csv);
+    assert_eq!(tsv.specific_type_label, Some("TSV file"));
+}
+
+#[test]
+fn sqlite_sidecar_extensions_get_descriptive_labels() {
+    let cases = [
+        ("app.sqlite-wal", "SQLite WAL"),
+        ("app.sqlite-shm", "SQLite shared memory"),
+        ("app.sqlite-journal", "SQLite rollback journal"),
+        ("app.db-wal", "SQLite WAL"),
+        ("app.db-shm", "SQLite shared memory"),
+        ("app.db-journal", "SQLite rollback journal"),
+    ];
+    for (filename, label) in cases {
+        let facts = inspect_path(Path::new(filename), EntryKind::File);
+        assert_eq!(facts.builtin_class, FileClass::Data, "{filename}");
+        assert_eq!(
+            facts.specific_type_label,
+            Some(label),
+            "{filename}"
+        );
+    }
+}

@@ -27,6 +27,7 @@ pub(crate) fn preview_work_class(
         || facts.builtin_class == FileClass::Video
         || facts.preview.kind == file_info::PreviewKind::Iso
         || facts.preview.kind == file_info::PreviewKind::Torrent
+        || facts.preview.kind == file_info::PreviewKind::Sqlite  // SqliteCandidate stays Light
         || facts.preview.document_format.is_some()
     {
         PreviewWorkClass::Heavy
@@ -120,6 +121,9 @@ fn loading_preview_kind(facts: &file_info::FileFacts) -> PreviewKind {
         file_info::PreviewKind::Source => PreviewKind::Code,
         file_info::PreviewKind::PlainText | file_info::PreviewKind::Torrent => PreviewKind::Text,
         file_info::PreviewKind::Iso => PreviewKind::Archive,
+        file_info::PreviewKind::Sqlite
+        | file_info::PreviewKind::SqliteCandidate
+        | file_info::PreviewKind::Csv => PreviewKind::Data,
     }
 }
 
@@ -219,6 +223,16 @@ where
         );
     }
 
+    if matches!(
+        preview_spec.kind,
+        file_info::PreviewKind::Sqlite | file_info::PreviewKind::SqliteCandidate
+    ) {
+        if let Some(preview) = data::build_sqlite_preview(&entry.path) {
+            return apply_type_detail(preview, type_detail);
+        }
+        // Not a SQLite file (e.g. a .db with different content) — fall through.
+    }
+
     let text_preview = match read_text_preview(&entry.path) {
         Ok(Some(text)) => text,
         Ok(None) => {
@@ -235,6 +249,20 @@ where
     let effective_code_line_limit = clamp_code_preview_line_limit(code_line_limit);
     let line_truncated = source_line_count > PREVIEW_RENDER_LINE_LIMIT;
     let mut preview_truncation_note = truncation_note(text_preview.bytes_truncated, line_truncated);
+
+    if preview_spec.kind == file_info::PreviewKind::Csv {
+        let is_tsv = entry
+            .path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| e.eq_ignore_ascii_case("tsv"));
+        return data::build_csv_preview(
+            &text_preview.text,
+            is_tsv,
+            type_detail,
+            text_preview.bytes_truncated,
+        );
+    }
 
     if preview_spec.kind == file_info::PreviewKind::Markdown {
         let preview = PreviewContent::new(

@@ -18,6 +18,7 @@ mod archives;
 mod audio;
 mod binaries;
 mod code;
+mod data;
 mod documents;
 mod helpers;
 mod images;
