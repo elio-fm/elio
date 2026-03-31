@@ -180,20 +180,6 @@ fn render_preview_body(
         return;
     }
 
-    if let Some(media_area) = media_area
-        && let Some(message) = app.preview_visual_placeholder_message()
-    {
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                message,
-                Style::default().fg(palette.muted),
-            )))
-            .style(Style::default().bg(palette.panel).fg(palette.text))
-            .alignment(Alignment::Center),
-            media_area,
-        );
-    }
-
     if app.preview_wraps() {
         let wrapped_lines = app.preview_wrapped_lines(text_area.width as usize);
         frame.render_widget(

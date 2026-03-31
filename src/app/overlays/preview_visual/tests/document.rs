@@ -172,33 +172,6 @@ fn non_video_inline_cover_keeps_default_compact_height() {
 }
 
 #[test]
-fn page_image_placeholder_message_stays_silent() {
-    let root = temp_root("page-placeholder");
-    fs::create_dir_all(&root).expect("failed to create temp root");
-
-    let mut app = App::new_at(root.clone()).expect("app should initialize");
-    configure_terminal_image_support(&mut app);
-    app.frame_state.preview_media_area = Some(Rect {
-        x: 0,
-        y: 0,
-        width: 48,
-        height: 20,
-    });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
-        .with_preview_visual(PreviewVisual {
-            kind: PreviewVisualKind::PageImage,
-            layout: PreviewVisualLayout::FullHeight,
-            path: root.join("page.jpg"),
-            size: 11 * 1024,
-            modified: None,
-        });
-
-    assert_eq!(app.preview_visual_placeholder_message(), None);
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[test]
 fn document_page_image_prepares_in_background_before_display() {
     let root = temp_root("document-jpeg-background");
     fs::create_dir_all(&root).expect("failed to create temp root");

@@ -60,24 +60,6 @@ impl App {
         (!self.preview_visual_failed_for_rows(area, rows)).then_some(rows)
     }
 
-    pub(crate) fn preview_visual_placeholder_message(&self) -> Option<String> {
-        let request = self.active_preview_visual_overlay_request()?;
-        let key = images::StaticImageKey::from_request(&request);
-        if self.image_preview.failed_images.contains(&key) {
-            return None;
-        }
-        if self.image_preview.dimensions.contains_key(&key) {
-            return None;
-        }
-        if self.current_preview_visual_kind() == Some(preview::PreviewVisualKind::PageImage) {
-            return None;
-        }
-        if self.image_preview.pending_prepares.contains(&key) {
-            return Some("Preparing cover preview".to_string());
-        }
-        Some("Preparing cover preview".to_string())
-    }
-
     pub(in crate::app) fn active_preview_visual_overlay_request(
         &self,
     ) -> Option<images::StaticImageOverlayRequest> {

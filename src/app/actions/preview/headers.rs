@@ -451,7 +451,6 @@ fn compact_status_note(note: &str) -> Option<String> {
         "Refreshing in background" => "Refreshing".to_string(),
         "Refresh unavailable" => "Refresh unavailable".to_string(),
         "Preview worker unavailable" => "Worker unavailable".to_string(),
-        "Preparing cover preview" => "Preparing cover".to_string(),
         "Extracting comic page in background" => "Extracting page".to_string(),
         "Extracting ebook section in background" => "Extracting section".to_string(),
         _ => return None,
