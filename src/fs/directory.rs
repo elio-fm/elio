@@ -445,6 +445,17 @@ mod tests {
         std::env::temp_dir().join(format!("elio-{label}-{unique}"))
     }
 
+    /// Wraps `s` in single quotes, escaping any embedded single quotes so the
+    /// result is safe to embed in a POSIX shell command string even when `s`
+    /// contains apostrophes (e.g. a TMPDIR like `/tmp/user's tmp`).
+    ///
+    /// Strategy: end the current single-quoted span, emit `'\''`, then re-open.
+    /// `foo'bar` → `'foo'\''bar'`
+    #[cfg(unix)]
+    fn shell_quote(s: &str) -> String {
+        format!("'{}'", s.replace('\'', r"'\''"))
+    }
+
     #[test]
     fn sort_keeps_directories_before_files() {
         let mut entries = vec![
@@ -615,20 +626,21 @@ mod tests {
         fs::create_dir_all(&root).expect("failed to create temp root");
 
         let capture = root.join("capture.txt");
-        // Use /bin/sh -c inline so we never execve a freshly-written script file
-        // (avoids ETXTBSY on FreeBSD's stricter VTEXT tracking).
-        // argv layout: /bin/sh -c <cmd> -- <capture_path>
-        //   $0 = "--", $1 = capture_path
-        detached_open(
-            "/bin/sh",
-            &[
-                "-c",
-                "pgid=$(ps -o pgid= -p $$ | tr -d ' '); printf '%s %s\\n' \"$$\" \"$pgid\" > \"$1\"",
-                "--",
-            ],
-            &capture,
-        )
-        .expect("failed to spawn fake opener");
+        // Use /bin/sh -c with the capture path interpolated directly into the
+        // command string.  Passing it via $1 relies on how the target shell
+        // (e.g. FreeBSD sh) handles the positional-parameter slot after "-c cmd",
+        // which varies across implementations.  The path comes from temp_path()
+        // and contains only alphanumerics, hyphens, and slashes — safe to
+        // single-quote.  The target arg that detached_open appends becomes $0
+        // (the script name) and is harmlessly ignored.
+        let capture_str = capture
+            .to_str()
+            .expect("capture path should be valid utf-8");
+        let cmd = format!(
+            "pgid=$(ps -o pgid= -p $$ | tr -d ' '); printf '%s %s\\n' \"$$\" \"$pgid\" > {}",
+            shell_quote(capture_str)
+        );
+        detached_open("/bin/sh", &["-c", &cmd], &root).expect("failed to spawn fake opener");
 
         // Wait for non-empty content — the shell's `>` redirect creates the
         // file before printf writes to it, so existence alone is not enough.
@@ -781,15 +793,21 @@ mod tests {
 
         let capture = root.join("capture.txt");
 
-        // Use /bin/sh -c inline to avoid execve-ing a freshly-written script,
-        // which triggers ETXTBSY on FreeBSD's stricter VTEXT tracking.
-        // argv layout: /bin/sh -c <cmd> -- <capture_path>
-        //   $0 = "--", $1 = capture_path
+        // Use /bin/sh -c with the capture path baked into the command string.
+        // Passing it via $1 relies on how each sh implementation populates
+        // positional parameters after "-c cmd" — behaviour that differs between
+        // Linux dash/bash and FreeBSD sh.  The path comes from temp_path() and
+        // contains only alphanumerics, hyphens, and slashes — safe to
+        // single-quote.
+        let capture_str = capture
+            .to_str()
+            .expect("capture path should be valid utf-8");
+        let cmd = format!("printf 'gio' > {}", shell_quote(capture_str));
         let result = open_with_unix_backends(
             &capture,
             &[
                 ("this-program-does-not-exist-elio", &[][..]),
-                ("/bin/sh", &["-c", "printf 'gio' > \"$1\"", "--"][..]),
+                ("/bin/sh", &["-c", &cmd][..]),
             ],
         );
 
