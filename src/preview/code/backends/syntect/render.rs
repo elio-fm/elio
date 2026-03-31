@@ -5,7 +5,7 @@ use ratatui::{
 };
 use syntect::{
     easy::ScopeRangeIterator,
-    parsing::{ParseState, Scope, ScopeStack, SyntaxReference, SyntaxSet},
+    parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet},
 };
 
 pub(super) fn render_syntect_code_preview<F>(
@@ -52,14 +52,46 @@ where
         let ops = parse_state
             .parse_line(&line_with_nl, syntax_set)
             .map_err(|_| ())?;
+
+        // Accumulate consecutive tokens of the same style into a single span.
+        // Syntect emits one range per grammar token (punctuation, keyword, etc.),
+        // but adjacent tokens that map to the same semantic role produce identical
+        // styles. Merging them reduces the span count per line, which directly
+        // lowers the number of terminal escape sequences written on each repaint.
+        let mut pending_text = String::new();
+        let mut pending_style: Option<Style> = None;
+
         for (range, op) in ScopeRangeIterator::new(&ops, &line_with_nl) {
             scope_stack.apply(op).map_err(|_| ())?;
-            let text = line_with_nl[range].trim_end_matches('\n');
-            if text.is_empty() {
+            let token = line_with_nl[range].trim_end_matches('\n');
+            if token.is_empty() {
                 continue;
             }
-            spans.push(syntect_span(text, scope_stack.as_slice(), code_palette));
+            let role = semantic_role_for_token(token, scope_stack.as_slice());
+            let mut style = Style::default().fg(role_color(role, code_palette));
+            if role == SemanticRole::Invalid {
+                style = style.add_modifier(Modifier::UNDERLINED);
+            }
+            let expanded = crate::preview::expand_tabs(token);
+            match pending_style {
+                Some(s) if s == style => {
+                    pending_text.push_str(&expanded);
+                }
+                Some(s) => {
+                    spans.push(Span::styled(std::mem::take(&mut pending_text), s));
+                    pending_text = expanded;
+                    pending_style = Some(style);
+                }
+                None => {
+                    pending_text = expanded;
+                    pending_style = Some(style);
+                }
+            }
         }
+        if let Some(s) = pending_style {
+            spans.push(Span::styled(pending_text, s));
+        }
+
         rendered.push(Line::from(spans));
     }
 
@@ -68,18 +100,4 @@ where
     }
 
     Ok(rendered)
-}
-
-fn syntect_span(
-    text: &str,
-    scope_stack: &[Scope],
-    palette: crate::ui::theme::CodePreviewPalette,
-) -> Span<'static> {
-    let role = semantic_role_for_token(text, scope_stack);
-    let mut rendered_style = Style::default().fg(role_color(role, palette));
-    if role == SemanticRole::Invalid {
-        rendered_style = rendered_style.add_modifier(Modifier::UNDERLINED);
-    }
-
-    Span::styled(crate::preview::expand_tabs(text), rendered_style)
 }

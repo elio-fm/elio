@@ -82,13 +82,13 @@ pub(in crate::preview) fn build_sqlite_preview(path: &Path) -> Option<PreviewCon
                 ));
             }
 
-            if i == 0 && !visible_cols.is_empty() {
-                if let Some(sample) =
+            if i == 0
+                && !visible_cols.is_empty()
+                && let Some(sample) =
                     render_sample_rows(&conn, &table.name, &visible_cols, SAMPLE_ROWS, palette)
-                {
-                    lines.push(Line::from(""));
-                    lines.extend(sample);
-                }
+            {
+                lines.push(Line::from(""));
+                lines.extend(sample);
             }
         }
 
@@ -255,7 +255,10 @@ fn render_sample_rows(
                     Ok(ValueRef::Text(b)) => {
                         let s = String::from_utf8_lossy(b);
                         if s.chars().count() > MAX_CELL_WIDTH {
-                            format!("{}…", s.chars().take(MAX_CELL_WIDTH - 1).collect::<String>())
+                            format!(
+                                "{}…",
+                                s.chars().take(MAX_CELL_WIDTH - 1).collect::<String>()
+                            )
                         } else {
                             s.into_owned()
                         }

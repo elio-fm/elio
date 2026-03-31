@@ -18,7 +18,12 @@ fn section_line(title: &str, palette: theme::Palette) -> Line<'static> {
     ))
 }
 
-fn field_line(label: &str, value: &str, label_width: usize, palette: theme::Palette) -> Line<'static> {
+fn field_line(
+    label: &str,
+    value: &str,
+    label_width: usize,
+    palette: theme::Palette,
+) -> Line<'static> {
     Line::from(vec![
         Span::styled(
             format!("{label:<width$} ", width = label_width + 1),

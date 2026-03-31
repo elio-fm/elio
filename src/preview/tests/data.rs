@@ -218,8 +218,7 @@ fn tsv_preview_uses_tab_delimiter() {
     let root = temp_path("tsv-basic");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("data.tsv");
-    fs::write(&path, "product\tprice\nApple\t1.20\nBanana\t0.50\n")
-        .expect("failed to write tsv");
+    fs::write(&path, "product\tprice\nApple\t1.20\nBanana\t0.50\n").expect("failed to write tsv");
 
     let entry = file_entry(path.clone());
     let preview = build_preview(&entry);
@@ -250,7 +249,8 @@ fn csv_preview_handles_quoted_fields_with_embedded_commas() {
 
     assert_eq!(preview.kind, PreviewKind::Data);
     assert!(
-        text.iter().any(|l| l.contains("New York, NY") || l.contains("New York")),
+        text.iter()
+            .any(|l| l.contains("New York, NY") || l.contains("New York")),
         "expected quoted field content; got: {text:?}"
     );
 

@@ -226,12 +226,11 @@ where
     if matches!(
         preview_spec.kind,
         file_info::PreviewKind::Sqlite | file_info::PreviewKind::SqliteCandidate
-    ) {
-        if let Some(preview) = data::build_sqlite_preview(&entry.path) {
-            return apply_type_detail(preview, type_detail);
-        }
-        // Not a SQLite file (e.g. a .db with different content) — fall through.
+    ) && let Some(preview) = data::build_sqlite_preview(&entry.path)
+    {
+        return apply_type_detail(preview, type_detail);
     }
+    // Not a SQLite file (e.g. a .db with different content) — fall through.
 
     let text_preview = match read_text_preview(&entry.path) {
         Ok(Some(text)) => text,

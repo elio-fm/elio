@@ -545,10 +545,6 @@ fn sqlite_sidecar_extensions_get_descriptive_labels() {
     for (filename, label) in cases {
         let facts = inspect_path(Path::new(filename), EntryKind::File);
         assert_eq!(facts.builtin_class, FileClass::Data, "{filename}");
-        assert_eq!(
-            facts.specific_type_label,
-            Some(label),
-            "{filename}"
-        );
+        assert_eq!(facts.specific_type_label, Some(label), "{filename}");
     }
 }

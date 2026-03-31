@@ -52,16 +52,15 @@ pub(in crate::preview) fn build_csv_preview(
         .collect();
 
     // Detect whether the first row is a header.
-    let (headers, data_rows) = if records.len() >= 2
-        && looks_like_header(&records[0], &records[1..])
-    {
-        let mut it = records.into_iter();
-        let h = it.next().unwrap();
-        (h, it.collect::<Vec<_>>())
-    } else {
-        let synthetic = (1..=col_count).map(|i| format!("col{i}")).collect();
-        (synthetic, records)
-    };
+    let (headers, data_rows) =
+        if records.len() >= 2 && looks_like_header(&records[0], &records[1..]) {
+            let mut it = records.into_iter();
+            let h = it.next().unwrap();
+            (h, it.collect::<Vec<_>>())
+        } else {
+            let synthetic = (1..=col_count).map(|i| format!("col{i}")).collect();
+            (synthetic, records)
+        };
 
     let row_count = data_rows.len();
 
@@ -119,7 +118,9 @@ pub(in crate::preview) fn build_csv_preview(
         // File was cut at the 64 KiB read limit — there may be more rows after the cut.
         (true, _) => format!("first {row_count} rows · {col_count} columns  (truncated at 64 KiB)"),
         // All bytes were read, but we capped display at MAX_PREVIEW_ROWS.
-        (false, true) => format!("first {row_count} rows · {col_count} columns  (more rows in file)"),
+        (false, true) => {
+            format!("first {row_count} rows · {col_count} columns  (more rows in file)")
+        }
         (false, false) => format!("{row_count} rows · {col_count} columns"),
     };
     lines.push(Line::from(Span::styled(
@@ -163,10 +164,7 @@ fn parse_record(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, sep: char)
     fields
 }
 
-fn parse_field(
-    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
-    sep: char,
-) -> (String, bool) {
+fn parse_field(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, sep: char) -> (String, bool) {
     match chars.peek().copied() {
         None => (String::new(), true),
         Some('"') => {
@@ -220,10 +218,7 @@ fn parse_field(
 
 /// After closing a quoted field, skip past any garbage to the next separator
 /// or record boundary. Returns true if a record boundary was reached.
-fn advance_past_separator(
-    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
-    sep: char,
-) -> bool {
+fn advance_past_separator(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, sep: char) -> bool {
     loop {
         match chars.peek().copied() {
             None => return true,
@@ -275,9 +270,10 @@ fn looks_like_header(first: &[String], data_rows: &[Vec<String>]) -> bool {
     }
     // At least one data row must contain a numeric value; otherwise the file
     // is ambiguously all-text and we prefer synthetic headers.
-    data_rows
-        .iter()
-        .any(|row| row.iter().any(|v| !v.is_empty() && v.trim().parse::<f64>().is_ok()))
+    data_rows.iter().any(|row| {
+        row.iter()
+            .any(|v| !v.is_empty() && v.trim().parse::<f64>().is_ok())
+    })
 }
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
@@ -306,7 +302,10 @@ fn render_row(
         };
         spans.push(Span::styled(aligned, Style::default().fg(color)));
         if i < last {
-            spans.push(Span::styled("  ".to_string(), Style::default().fg(palette.muted)));
+            spans.push(Span::styled(
+                "  ".to_string(),
+                Style::default().fg(palette.muted),
+            ));
         }
     }
 
