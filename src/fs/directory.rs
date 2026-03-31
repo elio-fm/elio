@@ -611,41 +611,40 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn detached_open_moves_child_into_its_own_process_group() {
-        use std::os::unix::fs::PermissionsExt;
-
         let root = temp_path("detached-open");
         fs::create_dir_all(&root).expect("failed to create temp root");
 
-        let tool = root.join("fake-open");
-        fs::write(
-            &tool,
-            "#!/bin/sh\npgid=$(ps -o pgid= -p $$ | tr -d ' ')\nprintf '%s %s\\n' \"$$\" \"$pgid\" > \"$1\"\n",
-        )
-        .expect("failed to write fake opener");
-        let mut permissions = fs::metadata(&tool)
-            .expect("fake opener metadata should exist")
-            .permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&tool, permissions).expect("failed to chmod fake opener");
-
         let capture = root.join("capture.txt");
+        // Use /bin/sh -c inline so we never execve a freshly-written script file
+        // (avoids ETXTBSY on FreeBSD's stricter VTEXT tracking).
+        // argv layout: /bin/sh -c <cmd> -- <capture_path>
+        //   $0 = "--", $1 = capture_path
         detached_open(
-            tool.to_str()
-                .expect("fake opener path should be valid utf-8"),
-            &[],
+            "/bin/sh",
+            &[
+                "-c",
+                "pgid=$(ps -o pgid= -p $$ | tr -d ' '); printf '%s %s\\n' \"$$\" \"$pgid\" > \"$1\"",
+                "--",
+            ],
             &capture,
         )
         .expect("failed to spawn fake opener");
 
-        for _ in 0..100 {
-            if capture.exists() {
-                break;
+        // Wait for non-empty content — the shell's `>` redirect creates the
+        // file before printf writes to it, so existence alone is not enough.
+        let mut capture_text = String::new();
+        for _ in 0..300 {
+            match fs::read_to_string(&capture) {
+                Ok(s) if !s.is_empty() => {
+                    capture_text = s;
+                    break;
+                }
+                _ => {}
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
 
-        let capture = fs::read_to_string(&capture).expect("fake opener should record pid and pgid");
-        let mut parts = capture.split_whitespace();
+        let mut parts = capture_text.split_whitespace();
         let pid = parts
             .next()
             .expect("capture should contain pid")
@@ -777,41 +776,39 @@ mod tests {
     #[test]
     #[cfg(all(unix, not(target_os = "macos")))]
     fn open_with_unix_backends_skips_missing_backend_and_tries_next() {
-        use std::os::unix::fs::PermissionsExt;
-
         let root = temp_path("open-backends-fallback");
         fs::create_dir_all(&root).expect("failed to create temp root");
 
         let capture = root.join("capture.txt");
 
-        let script = root.join("fake-gio");
-        fs::write(&script, "#!/bin/sh\nprintf 'gio' > \"$1\"\n").expect("failed to write script");
-        let mut perms = fs::metadata(&script).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&script, perms).unwrap();
-
+        // Use /bin/sh -c inline to avoid execve-ing a freshly-written script,
+        // which triggers ETXTBSY on FreeBSD's stricter VTEXT tracking.
+        // argv layout: /bin/sh -c <cmd> -- <capture_path>
+        //   $0 = "--", $1 = capture_path
         let result = open_with_unix_backends(
             &capture,
             &[
                 ("this-program-does-not-exist-elio", &[][..]),
-                (script.to_str().unwrap(), &[][..]),
+                ("/bin/sh", &["-c", "printf 'gio' > \"$1\"", "--"][..]),
             ],
         );
 
         assert!(result.is_ok(), "expected Ok after fallback, got {result:?}");
 
-        // Wait for the script to finish writing. The shell redirect `>` creates
-        // the file (empty) before printf writes to it, so wait for non-empty
-        // content to avoid a TOCTOU race on slow CI.
+        // Wait for non-empty content — the shell's `>` redirect creates the
+        // file before printf writes to it, so existence alone is not enough.
+        let mut recorded = String::new();
         for _ in 0..300 {
             match fs::read_to_string(&capture) {
-                Ok(s) if !s.is_empty() => break,
+                Ok(s) if !s.is_empty() => {
+                    recorded = s;
+                    break;
+                }
                 _ => {}
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
 
-        let recorded = fs::read_to_string(&capture).expect("capture should exist");
         assert_eq!(recorded.trim(), "gio");
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
