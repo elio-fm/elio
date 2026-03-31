@@ -60,14 +60,28 @@ fn sqlite_preview_shows_header_and_tables() {
         text.iter().any(|l| l.contains("posts")),
         "expected 'posts' table; got: {text:?}"
     );
-    // Column names for accounts table
+    // Column names and constraint badges for accounts table.
+    // INTEGER PRIMARY KEY is a rowid alias — must show PK but no null badge.
     assert!(
-        text.iter().any(|l| l.contains("name")),
-        "expected 'name' column; got: {text:?}"
+        text.iter()
+            .any(|l| l.trim_start().starts_with("id ") && l.contains("PK")),
+        "expected 'id' column with PK badge; got: {text:?}"
     );
     assert!(
-        text.iter().any(|l| l.contains("email")),
-        "expected 'email' column; got: {text:?}"
+        !text
+            .iter()
+            .any(|l| l.trim_start().starts_with("id ") && l.contains("NULL")),
+        "INTEGER PRIMARY KEY 'id' must not carry a NULL or NOT NULL badge; got: {text:?}"
+    );
+    assert!(
+        text.iter()
+            .any(|l| l.contains("name") && l.contains("NOT NULL")),
+        "expected 'name' column with NOT NULL badge; got: {text:?}"
+    );
+    assert!(
+        text.iter()
+            .any(|l| l.contains("email") && l.contains("NULL")),
+        "expected 'email' column with NULL badge; got: {text:?}"
     );
     // Sample row value
     assert!(
@@ -153,6 +167,105 @@ fn sqlite_preview_shows_generated_columns() {
     assert!(
         text.iter().any(|l| l.contains("price_inc")),
         "generated column 'price_inc' should be visible; got: {text:?}"
+    );
+    assert!(
+        text.iter()
+            .any(|l| l.contains("price_inc") && l.contains("GENERATED")),
+        "generated column 'price_inc' should carry the GENERATED badge; got: {text:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn sqlite_preview_shows_nullability_for_text_primary_key() {
+    // TEXT PRIMARY KEY is nullable in SQLite — the column is NOT a rowid alias,
+    // so notnull=0 in table_xinfo and NULL values are genuinely accepted.
+    // The preview must show both the PK badge and the NULL badge for such columns,
+    // rather than silently omitting nullability because the column is a PK.
+    let root = temp_path("sqlite-nullable-pk");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("catalog.sqlite");
+
+    let conn = Connection::open(&path).expect("failed to open sqlite db");
+    conn.execute_batch(
+        "CREATE TABLE entries (
+             code     TEXT PRIMARY KEY,
+             value    INTEGER NOT NULL,
+             note     TEXT
+         );",
+    )
+    .expect("failed to create table");
+    drop(conn);
+
+    let entry = file_entry(path.clone());
+    let preview = build_preview(&entry);
+    let text: Vec<String> = preview.lines().iter().map(line_text).collect();
+
+    assert_eq!(preview.kind, PreviewKind::Data);
+
+    // TEXT PRIMARY KEY: is_pk=true, notnull=0 → must show both PK and NULL.
+    assert!(
+        text.iter().any(|l| l.contains("code") && l.contains("PK")),
+        "expected 'code' to show PK badge; got: {text:?}"
+    );
+    assert!(
+        text.iter()
+            .any(|l| l.contains("code") && l.contains("NULL") && !l.contains("NOT NULL")),
+        "expected 'code' TEXT PRIMARY KEY to show NULL (not NOT NULL); got: {text:?}"
+    );
+
+    // Sanity-check the other columns.
+    assert!(
+        text.iter()
+            .any(|l| l.contains("value") && l.contains("NOT NULL")),
+        "expected 'value' to show NOT NULL; got: {text:?}"
+    );
+    assert!(
+        text.iter()
+            .any(|l| l.contains("note") && l.contains("NULL") && !l.contains("NOT NULL")),
+        "expected 'note' to show NULL; got: {text:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn sqlite_preview_shows_null_for_integer_pk_desc() {
+    // INTEGER PRIMARY KEY DESC is not a rowid alias in SQLite — it creates an
+    // explicit primary-key index and the column genuinely accepts NULL values.
+    // The preview must show both PK and NULL, not just PK.
+    let root = temp_path("sqlite-int-pk-desc");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("app.sqlite");
+
+    let conn = Connection::open(&path).expect("failed to open sqlite db");
+    conn.execute_batch(
+        "CREATE TABLE items (
+             id    INTEGER PRIMARY KEY DESC,
+             label TEXT NOT NULL
+         );",
+    )
+    .expect("failed to create table");
+    drop(conn);
+
+    let entry = file_entry(path.clone());
+    let preview = build_preview(&entry);
+    let text: Vec<String> = preview.lines().iter().map(line_text).collect();
+
+    assert_eq!(preview.kind, PreviewKind::Data);
+    assert!(
+        text.iter()
+            .any(|l| l.trim_start().starts_with("id ") && l.contains("PK")),
+        "expected PK badge for 'id'; got: {text:?}"
+    );
+    // DESC prevents the rowid alias — the column can hold NULL, so the preview
+    // must show the NULL badge rather than silently hiding nullability.
+    assert!(
+        text.iter().any(|l| l.trim_start().starts_with("id ")
+            && l.contains("NULL")
+            && !l.contains("NOT NULL")),
+        "INTEGER PRIMARY KEY DESC must show NULL badge; got: {text:?}"
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

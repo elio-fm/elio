@@ -26,6 +26,7 @@ struct ColumnInfo {
     not_null: bool,
     is_pk: bool,
     is_hidden: bool,
+    is_generated: bool,
 }
 
 pub(in crate::preview) fn build_sqlite_preview(path: &Path) -> Option<PreviewContent> {
@@ -72,8 +73,24 @@ pub(in crate::preview) fn build_sqlite_preview(path: &Path) -> Option<PreviewCon
 
             let columns = query_table_columns(&conn, &table.name);
             let visible_cols: Vec<_> = columns.iter().filter(|c| !c.is_hidden).collect();
+
+            // Width of the widest type name among the columns we'll display,
+            // so that PK / NOT NULL / NULL / GENERATED tags align vertically.
+            let type_width = visible_cols
+                .iter()
+                .take(MAX_COLUMNS)
+                .map(|c| c.type_name.chars().count())
+                .max()
+                .unwrap_or(0);
+
+            // A true INTEGER PRIMARY KEY rowid alias has no explicit primary-key
+            // index entry in index_list. INTEGER PRIMARY KEY DESC (and composite
+            // or other non-alias forms) do produce one, so we use this flag to
+            // decide whether to suppress the null badge for the PK column.
+            let has_explicit_pk_index = table_has_explicit_pk_index(&conn, &table.name);
+
             for col in visible_cols.iter().take(MAX_COLUMNS) {
-                lines.push(column_line(col, palette));
+                lines.push(column_line(col, type_width, has_explicit_pk_index, palette));
             }
             if visible_cols.len() > MAX_COLUMNS {
                 lines.push(muted_line(
@@ -202,6 +219,21 @@ fn query_schema_objects(conn: &Connection) -> Option<Vec<SchemaObject>> {
     Some(objects)
 }
 
+fn table_has_explicit_pk_index(conn: &Connection, table_name: &str) -> bool {
+    // PRAGMA index_list returns one row per index. The `origin` column (index 3)
+    // is 'pk' for indexes created by a PRIMARY KEY constraint. A true INTEGER
+    // PRIMARY KEY rowid alias never generates such an entry; INTEGER PRIMARY KEY
+    // DESC, composite PKs, and other non-alias forms do.
+    let escaped = table_name.replace('"', "\"\"");
+    let query = format!("PRAGMA index_list(\"{escaped}\")");
+    let Ok(mut stmt) = conn.prepare(&query) else {
+        return false;
+    };
+    stmt.query_map([], |row| row.get::<_, String>(3))
+        .map(|rows| rows.filter_map(|r| r.ok()).any(|origin| origin == "pk"))
+        .unwrap_or(false)
+}
+
 fn query_table_columns(conn: &Connection, table_name: &str) -> Vec<ColumnInfo> {
     let escaped = table_name.replace('"', "\"\"");
     let query = format!("PRAGMA table_xinfo(\"{escaped}\")");
@@ -212,14 +244,16 @@ fn query_table_columns(conn: &Connection, table_name: &str) -> Vec<ColumnInfo> {
 
     stmt.query_map([], |row| {
         // cid, name, type, notnull, dflt_value, pk, hidden
+        // hidden=0: normal; 1: virtual-table internal (suppress);
+        // 2: GENERATED ALWAYS VIRTUAL; 3: GENERATED ALWAYS STORED.
+        let hidden = row.get::<_, i64>(6).unwrap_or(0);
         Ok(ColumnInfo {
             name: row.get::<_, String>(1)?,
             type_name: row.get::<_, String>(2).unwrap_or_default(),
             not_null: row.get::<_, i64>(3).unwrap_or(0) != 0,
             is_pk: row.get::<_, i64>(5).unwrap_or(0) > 0,
-            // hidden=1: virtual-table internal column — suppress.
-            // hidden=2: GENERATED ALWAYS VIRTUAL, hidden=3: GENERATED ALWAYS STORED — show.
-            is_hidden: row.get::<_, i64>(6).unwrap_or(0) == 1,
+            is_hidden: hidden == 1,
+            is_generated: matches!(hidden, 2 | 3),
         })
     })
     .map(|rows| rows.filter_map(|r| r.ok()).collect())
@@ -327,29 +361,77 @@ fn object_name_line(name: &str, palette: theme::Palette) -> Line<'static> {
     ))
 }
 
-fn column_line(col: &ColumnInfo, palette: theme::Palette) -> Line<'static> {
+fn column_line(
+    col: &ColumnInfo,
+    type_width: usize,
+    table_has_explicit_pk_index: bool,
+    palette: theme::Palette,
+) -> Line<'static> {
     let mut spans = Vec::new();
+
     spans.push(Span::styled(
         format!("    {:<24}", col.name),
         Style::default().fg(palette.text),
     ));
-    if !col.type_name.is_empty() {
+
+    // Type field: padded to the widest type in this table so the constraint
+    // badges that follow are vertically aligned across all column rows.
+    if type_width > 0 {
         spans.push(Span::styled(
-            format!("{:<12}", col.type_name.to_uppercase()),
+            format!(
+                "{:<width$}",
+                col.type_name.to_uppercase(),
+                width = type_width
+            ),
             Style::default().fg(palette.muted),
         ));
     }
+
     if col.is_pk {
         spans.push(Span::styled(
             " PK".to_string(),
             Style::default().fg(palette.accent),
         ));
-    } else if col.not_null {
+    }
+
+    // Show a nullability badge for every column, with one exception:
+    // a true INTEGER PRIMARY KEY rowid alias — inserting NULL auto-assigns a
+    // fresh rowid, so the column never actually stores NULL even though
+    // table_xinfo reports notnull=0. Showing NULL for it would be misleading.
+    //
+    // A rowid alias requires ALL of:
+    //   • declared type exactly "INTEGER" (case-insensitive; INT/BIGINT etc. do not qualify)
+    //   • no explicit pk index in index_list — that rules out INTEGER PRIMARY KEY DESC
+    //     and composite PKs, which are not rowid aliases
+    //   • notnull=0 — if the user wrote NOT NULL we surface it either way
+    let is_rowid_alias = col.is_pk
+        && col.type_name.eq_ignore_ascii_case("INTEGER")
+        && !col.not_null
+        && !table_has_explicit_pk_index;
+
+    if !is_rowid_alias {
+        if col.not_null {
+            spans.push(Span::styled(
+                " NOT NULL".to_string(),
+                Style::default().fg(palette.muted),
+            ));
+        } else {
+            spans.push(Span::styled(
+                " NULL".to_string(),
+                Style::default().fg(palette.muted),
+            ));
+        }
+    }
+
+    // Generated columns carry an extra tag so they are visually distinct from
+    // plain stored columns with the same type and constraint.
+    if col.is_generated {
         spans.push(Span::styled(
-            " NOT NULL".to_string(),
+            "  GENERATED".to_string(),
             Style::default().fg(palette.muted),
         ));
     }
+
     Line::from(spans)
 }
 
