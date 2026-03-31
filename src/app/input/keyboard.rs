@@ -162,7 +162,6 @@ impl App {
         }
 
         match key.code {
-            KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Esc => {
                 if let Some(prog) = &self.trash_progress {
                     self.scheduler.cancel_trash(self.trash_token);
@@ -212,29 +211,12 @@ impl App {
             KeyCode::Char('G') => self.select_last(),
             KeyCode::Enter => self.open_selected()?,
             KeyCode::Backspace => self.go_parent()?,
-            KeyCode::Char('v') => {
-                self.toggle_view_mode();
-            }
-            KeyCode::Char('s') => self.cycle_sort_mode()?,
-            KeyCode::Char('.') => self.toggle_hidden_files()?,
             KeyCode::Char(' ') => self.toggle_selection(),
             KeyCode::Char('+') | KeyCode::Char('=') if self.view_mode == ViewMode::Grid => {
                 self.adjust_zoom(1);
             }
             KeyCode::Char('-') | KeyCode::Char('_') if self.view_mode == ViewMode::Grid => {
                 self.adjust_zoom(-1);
-            }
-            KeyCode::Char('a') => self.open_create_prompt(),
-            KeyCode::Char('c') => self.open_copy_overlay(),
-            KeyCode::Char('d') => self.open_trash_prompt(),
-            KeyCode::Char('r') => {
-                if self.in_trash {
-                    self.open_restore_prompt();
-                } else if !self.selected_paths.is_empty() {
-                    self.open_bulk_rename_prompt();
-                } else {
-                    self.open_rename_prompt();
-                }
             }
             KeyCode::F(2) => {
                 if !self.in_trash {
@@ -245,18 +227,46 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('<') => {
+            KeyCode::Char(c) => {
+                if let Some(action) = crate::config::keys().action_for(c) {
+                    self.dispatch_action(action)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    pub(in crate::app) fn dispatch_action(&mut self, action: crate::config::Action) -> Result<()> {
+        use crate::config::Action;
+        match action {
+            Action::Quit => self.should_quit = true,
+            Action::Yank => self.yank(),
+            Action::Cut => self.cut(),
+            Action::Paste => self.paste()?,
+            Action::Trash => self.open_trash_prompt(),
+            Action::Create => self.open_create_prompt(),
+            Action::Rename => {
+                if self.in_trash {
+                    self.open_restore_prompt();
+                } else if !self.selected_paths.is_empty() {
+                    self.open_bulk_rename_prompt();
+                } else {
+                    self.open_rename_prompt();
+                }
+            }
+            Action::CopyPath => self.open_copy_overlay(),
+            Action::SearchFolders => self.open_search_with_status(SearchScope::Folders),
+            Action::Open => self.open_in_system()?,
+            Action::Sort => self.cycle_sort_mode()?,
+            Action::ToggleView => self.toggle_view_mode(),
+            Action::ToggleHidden => self.toggle_hidden_files()?,
+            Action::ScrollPreviewLeft => {
                 let _ = self.scroll_preview_columns(-1);
             }
-            KeyCode::Char('>') => {
+            Action::ScrollPreviewRight => {
                 let _ = self.scroll_preview_columns(1);
             }
-            KeyCode::Char('f') => self.open_search_with_status(SearchScope::Folders),
-            KeyCode::Char('o') => self.open_in_system()?,
-            KeyCode::Char('y') => self.yank(),
-            KeyCode::Char('x') => self.cut(),
-            KeyCode::Char('p') => self.paste()?,
-            _ => {}
         }
         Ok(())
     }

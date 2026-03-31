@@ -22,3 +22,24 @@ show_top_bar = false
 # places = 10
 # files = 45
 # preview = 45
+
+# Rebind browser action keys. Each value must be a single character.
+# Reserved (never rebindable): h j k l g G ? [ ] + = - _ Space
+# Omit any key to keep the built-in default shown in the comment.
+#
+# [keys]
+# quit              = "q"
+# yank              = "y"
+# cut               = "x"
+# paste             = "p"
+# trash             = "d"
+# create            = "a"
+# rename            = "r"
+# copy_path         = "c"
+# search_folders    = "f"
+# open              = "o"
+# sort              = "s"
+# toggle_view       = "v"
+# toggle_hidden     = "."
+# scroll_preview_left  = "<"
+# scroll_preview_right = ">"

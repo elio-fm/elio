@@ -1,5 +1,6 @@
 use super::super::*;
 use super::helpers::{temp_path, wait_for_directory_load};
+use crate::config::Action;
 use std::{
     fs, thread,
     time::{Duration, Instant},
@@ -421,6 +422,75 @@ fn high_frequency_alt_right_does_not_trigger_history_navigation() {
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(child.as_path())
     );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+// --- keybindings integration tests ---
+
+/// Parses a [keys] override, derives an action via KeyBindings::action_for,
+/// dispatches it through App::dispatch_action, and checks the resulting state.
+/// This covers the full config-to-runtime pipeline:
+///   TOML string → KeyBindings → action_for → dispatch_action → app state
+///
+/// Note: App::handle_event reads from the process-wide config singleton, so we
+/// cannot inject per-test overrides there.  The dispatch_action path (which
+/// handle_event delegates to for every configurable key) is tested here
+/// directly with a parsed KeyBindings, giving equivalent coverage.
+#[test]
+fn rebound_yank_key_dispatches_yank_action() {
+    use crate::config::KeyBindings;
+
+    // Parse a config that rebinds yank from "y" to "Y".
+    let kb = KeyBindings::from_toml_str("[keys]\nyank = \"Y\"");
+    assert_eq!(
+        kb.action_for('Y'),
+        Some(Action::Yank),
+        "new key should map to Yank"
+    );
+    assert_eq!(
+        kb.action_for('y'),
+        None,
+        "old key should no longer map to Yank"
+    );
+
+    // Create an app with a file so yank has something to act on.
+    let root = temp_path("rebind-yank-e2e");
+    fs::write(root.join("file.txt"), "hello").expect("failed to write file");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.select_index(0);
+
+    assert!(app.clipboard.is_none(), "clipboard should start empty");
+
+    // Dispatch the action the rebound key would trigger.
+    let action = kb.action_for('Y').expect("Y should be bound");
+    app.dispatch_action(action)
+        .expect("dispatch should succeed");
+
+    assert!(
+        app.clipboard.is_some(),
+        "yank should have populated the clipboard"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn rebound_quit_key_sets_should_quit() {
+    use crate::config::KeyBindings;
+
+    let kb = KeyBindings::from_toml_str("[keys]\nquit = \"Q\"");
+    assert_eq!(kb.action_for('Q'), Some(Action::Quit));
+    assert_eq!(kb.action_for('q'), None);
+
+    let root = temp_path("rebind-quit-e2e");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    assert!(!app.should_quit);
+
+    app.dispatch_action(kb.action_for('Q').unwrap())
+        .expect("dispatch should succeed");
+    assert!(app.should_quit);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

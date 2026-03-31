@@ -22,16 +22,251 @@ pub(crate) struct PaneWeights {
     pub preview: u16,
 }
 
-#[derive(Clone, Copy)]
+/// A browser action that can be triggered by a configurable key binding.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Action {
+    Quit,
+    Yank,
+    Cut,
+    Paste,
+    Trash,
+    Create,
+    Rename,
+    CopyPath,
+    SearchFolders,
+    Open,
+    Sort,
+    ToggleView,
+    ToggleHidden,
+    ScrollPreviewLeft,
+    ScrollPreviewRight,
+}
+
+/// Single-character key bindings for browser actions.
+/// All fields default to the built-in keys; set any field in `[keys]` in
+/// `config.toml` to override that binding.
+pub(crate) struct KeyBindings {
+    pub quit: char,
+    pub yank: char,
+    pub cut: char,
+    pub paste: char,
+    pub trash: char,
+    pub create: char,
+    pub rename: char,
+    pub copy_path: char,
+    pub search_folders: char,
+    pub open: char,
+    pub sort: char,
+    pub toggle_view: char,
+    pub toggle_hidden: char,
+    pub scroll_preview_left: char,
+    pub scroll_preview_right: char,
+}
+
+/// Characters that are hard-wired to non-configurable actions and may not be
+/// used as key binding values.
+const RESERVED_CHARS: &[char] = &[
+    'h', 'j', 'k', 'l', // navigation (vim keys)
+    'g', 'G', // go-to overlay / jump to last
+    '?', // help
+    '[', ']', // page stepping (epub / comic / pdf)
+    '+', '=', '-', '_', // grid zoom
+    ' ', // toggle selection
+];
+
+impl KeyBindings {
+    fn default_bindings() -> Self {
+        Self {
+            quit: 'q',
+            yank: 'y',
+            cut: 'x',
+            paste: 'p',
+            trash: 'd',
+            create: 'a',
+            rename: 'r',
+            copy_path: 'c',
+            search_folders: 'f',
+            open: 'o',
+            sort: 's',
+            toggle_view: 'v',
+            toggle_hidden: '.',
+            scroll_preview_left: '<',
+            scroll_preview_right: '>',
+        }
+    }
+
+    /// Returns the action bound to `c`, if any.
+    pub(crate) fn action_for(&self, c: char) -> Option<Action> {
+        match c {
+            _ if c == self.quit => Some(Action::Quit),
+            _ if c == self.yank => Some(Action::Yank),
+            _ if c == self.cut => Some(Action::Cut),
+            _ if c == self.paste => Some(Action::Paste),
+            _ if c == self.trash => Some(Action::Trash),
+            _ if c == self.create => Some(Action::Create),
+            _ if c == self.rename => Some(Action::Rename),
+            _ if c == self.copy_path => Some(Action::CopyPath),
+            _ if c == self.search_folders => Some(Action::SearchFolders),
+            _ if c == self.open => Some(Action::Open),
+            _ if c == self.sort => Some(Action::Sort),
+            _ if c == self.toggle_view => Some(Action::ToggleView),
+            _ if c == self.toggle_hidden => Some(Action::ToggleHidden),
+            _ if c == self.scroll_preview_left => Some(Action::ScrollPreviewLeft),
+            _ if c == self.scroll_preview_right => Some(Action::ScrollPreviewRight),
+            _ => None,
+        }
+    }
+
+    /// Parse a full config TOML string and return only the resolved key
+    /// bindings.  Falls back to defaults on parse error.
+    /// Used by integration tests that need a `KeyBindings` from an override
+    /// string without going through the process-wide `OnceLock`.
+    #[cfg(test)]
+    pub(crate) fn from_toml_str(s: &str) -> Self {
+        Config::from_str(s)
+            .map(|c| c.keys)
+            .unwrap_or_else(|_| Self::default_bindings())
+    }
+
+    fn from_override(overrides: KeysConfigOverride, defaults: &Self) -> Self {
+        // Each entry: (field_name, user_override_string, default_char)
+        let raw: [(&str, Option<String>, char); 15] = [
+            ("quit", overrides.quit, defaults.quit),
+            ("yank", overrides.yank, defaults.yank),
+            ("cut", overrides.cut, defaults.cut),
+            ("paste", overrides.paste, defaults.paste),
+            ("trash", overrides.trash, defaults.trash),
+            ("create", overrides.create, defaults.create),
+            ("rename", overrides.rename, defaults.rename),
+            ("copy_path", overrides.copy_path, defaults.copy_path),
+            (
+                "search_folders",
+                overrides.search_folders,
+                defaults.search_folders,
+            ),
+            ("open", overrides.open, defaults.open),
+            ("sort", overrides.sort, defaults.sort),
+            ("toggle_view", overrides.toggle_view, defaults.toggle_view),
+            (
+                "toggle_hidden",
+                overrides.toggle_hidden,
+                defaults.toggle_hidden,
+            ),
+            (
+                "scroll_preview_left",
+                overrides.scroll_preview_left,
+                defaults.scroll_preview_left,
+            ),
+            (
+                "scroll_preview_right",
+                overrides.scroll_preview_right,
+                defaults.scroll_preview_right,
+            ),
+        ];
+
+        // Step 1: parse each override string independently, falling back to
+        //         default on any format or reserved-char error.
+        // (resolved_char, is_user_set)
+        let mut candidates: [(char, bool); 15] = [(' ', false); 15];
+        for (i, (name, override_str, default)) in raw.iter().enumerate() {
+            candidates[i] = match override_str {
+                None => (*default, false),
+                Some(s) => {
+                    let mut chars = s.chars();
+                    match (chars.next(), chars.next()) {
+                        (Some(c), None) if RESERVED_CHARS.contains(&c) => {
+                            eprintln!(
+                                "elio: keys.{name}: '{c}' is reserved and cannot be rebound; \
+                                 using default '{default}'"
+                            );
+                            (*default, false)
+                        }
+                        (Some(c), None) if c.is_control() => {
+                            eprintln!(
+                                "elio: keys.{name}: control characters cannot be used as key \
+                                 bindings; using default '{default}'"
+                            );
+                            (*default, false)
+                        }
+                        (Some(c), None) => (c, true),
+                        _ => {
+                            eprintln!(
+                                "elio: keys.{name}: {s:?} is not a single character; \
+                                 using default '{default}'"
+                            );
+                            (*default, false)
+                        }
+                    }
+                }
+            };
+        }
+
+        // Step 2: reject user-set bindings that collide with any other binding
+        //         (user-set or default).  Loop until stable so that reverting one
+        //         binding does not silently leave a conflict with another.
+        loop {
+            let mut changed = false;
+            for i in 0..15 {
+                if !candidates[i].1 {
+                    continue;
+                }
+                let c = candidates[i].0;
+                let collision = (0..15).filter(|&j| j != i).any(|j| candidates[j].0 == c);
+                if collision {
+                    let (name, _, default) = &raw[i];
+                    let other = raw
+                        .iter()
+                        .enumerate()
+                        .filter(|&(j, _)| j != i && candidates[j].0 == c)
+                        .map(|(_, (n, _, _))| *n)
+                        .next()
+                        .unwrap_or("another key");
+                    eprintln!(
+                        "elio: keys.{name}: '{c}' is already bound to {other}; \
+                         using default '{default}'"
+                    );
+                    candidates[i] = (*default, false);
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+
+        // Step 3: build from the resolved candidates (order matches `raw`).
+        let c = |i: usize| candidates[i].0;
+        Self {
+            quit: c(0),
+            yank: c(1),
+            cut: c(2),
+            paste: c(3),
+            trash: c(4),
+            create: c(5),
+            rename: c(6),
+            copy_path: c(7),
+            search_folders: c(8),
+            open: c(9),
+            sort: c(10),
+            toggle_view: c(11),
+            toggle_hidden: c(12),
+            scroll_preview_left: c(13),
+            scroll_preview_right: c(14),
+        }
+    }
+}
+
 struct Config {
     ui: UiConfig,
     layout: LayoutConfig,
+    keys: KeyBindings,
 }
 
 #[derive(Deserialize, Default)]
 struct ConfigFile {
     ui: Option<UiConfigOverride>,
     layout: Option<LayoutConfigOverride>,
+    keys: Option<KeysConfigOverride>,
 }
 
 #[derive(Deserialize, Default)]
@@ -39,6 +274,25 @@ struct UiConfigOverride {
     show_top_bar: Option<bool>,
     grid_zoom: Option<i64>,
     show_hidden: Option<bool>,
+}
+
+#[derive(Deserialize, Default)]
+struct KeysConfigOverride {
+    quit: Option<String>,
+    yank: Option<String>,
+    cut: Option<String>,
+    paste: Option<String>,
+    trash: Option<String>,
+    create: Option<String>,
+    rename: Option<String>,
+    copy_path: Option<String>,
+    search_folders: Option<String>,
+    open: Option<String>,
+    sort: Option<String>,
+    toggle_view: Option<String>,
+    toggle_hidden: Option<String>,
+    scroll_preview_left: Option<String>,
+    scroll_preview_right: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -63,6 +317,10 @@ pub(crate) fn ui() -> UiConfig {
 
 pub(crate) fn layout() -> LayoutConfig {
     active_config().layout
+}
+
+pub(crate) fn keys() -> &'static KeyBindings {
+    &active_config().keys
 }
 
 pub(crate) fn config_dir() -> Option<PathBuf> {
@@ -124,6 +382,7 @@ impl Config {
                 show_hidden: false,
             },
             layout: LayoutConfig { panes: None },
+            keys: KeyBindings::default_bindings(),
         }
     }
 
@@ -146,6 +405,9 @@ impl Config {
                 Ok(layout) => resolved.layout = layout,
                 Err(error) => eprintln!("elio: invalid [layout.panes] config: {error}"),
             }
+        }
+        if let Some(keys) = parsed.keys {
+            resolved.keys = KeyBindings::from_override(keys, &KeyBindings::default_bindings());
         }
         Ok(resolved)
     }
@@ -298,5 +560,148 @@ preview = 90
 
         assert!(config.ui.show_top_bar);
         assert_eq!(config.layout.panes, None);
+    }
+
+    // --- [keys] tests ---
+
+    #[test]
+    fn keys_default_bindings_are_sane() {
+        let config = Config::default_config();
+        assert_eq!(config.keys.yank, 'y');
+        assert_eq!(config.keys.cut, 'x');
+        assert_eq!(config.keys.paste, 'p');
+        assert_eq!(config.keys.quit, 'q');
+    }
+
+    #[test]
+    fn keys_can_be_overridden() {
+        let config = Config::from_str(
+            r#"
+[keys]
+yank = "Y"
+cut = "X"
+"#,
+        )
+        .expect("config should parse");
+        assert_eq!(config.keys.yank, 'Y');
+        assert_eq!(config.keys.cut, 'X');
+        // unset keys stay at default
+        assert_eq!(config.keys.paste, 'p');
+    }
+
+    #[test]
+    fn keys_rejects_multi_char_string_and_uses_default() {
+        let config = Config::from_str(
+            r#"
+[keys]
+yank = "yy"
+"#,
+        )
+        .expect("config should parse");
+        assert_eq!(config.keys.yank, 'y'); // falls back to default
+    }
+
+    #[test]
+    fn keys_rejects_empty_string_and_uses_default() {
+        let config = Config::from_str(
+            r#"
+[keys]
+yank = ""
+"#,
+        )
+        .expect("config should parse");
+        assert_eq!(config.keys.yank, 'y');
+    }
+
+    #[test]
+    fn keys_rejects_reserved_char_and_uses_default() {
+        // 'j' is a reserved navigation key
+        let config = Config::from_str(
+            r#"
+[keys]
+yank = "j"
+"#,
+        )
+        .expect("config should parse");
+        assert_eq!(config.keys.yank, 'y');
+    }
+
+    #[test]
+    fn keys_rejects_control_characters_and_uses_default() {
+        // \t and \n are dispatched as dedicated KeyCode variants (Tab, Enter),
+        // not as KeyCode::Char, so they can never fire the action dispatch path.
+        let config = Config::from_str("[keys]\nquit = \"\\t\"").expect("config should parse");
+        assert_eq!(config.keys.quit, 'q');
+
+        let config = Config::from_str("[keys]\nquit = \"\\n\"").expect("config should parse");
+        assert_eq!(config.keys.quit, 'q');
+    }
+
+    #[test]
+    fn keys_rejects_user_user_duplicate_and_uses_defaults() {
+        // Both yank and paste set to "p" — conflict, both revert to defaults
+        let config = Config::from_str(
+            r#"
+[keys]
+yank = "p"
+paste = "p"
+"#,
+        )
+        .expect("config should parse");
+        assert_eq!(config.keys.yank, 'y');
+        assert_eq!(config.keys.paste, 'p');
+    }
+
+    #[test]
+    fn keys_rejects_user_default_collision_and_uses_default() {
+        // yank set to "d" which is trash's default — conflict, yank reverts
+        let config = Config::from_str(
+            r#"
+[keys]
+yank = "d"
+"#,
+        )
+        .expect("config should parse");
+        assert_eq!(config.keys.yank, 'y');
+        assert_eq!(config.keys.trash, 'd');
+    }
+
+    #[test]
+    fn keys_allows_swapping_two_defaults() {
+        // yank = "x", cut = "y" — each takes the other's default, no conflict
+        let config = Config::from_str(
+            r#"
+[keys]
+yank = "x"
+cut = "y"
+"#,
+        )
+        .expect("config should parse");
+        assert_eq!(config.keys.yank, 'x');
+        assert_eq!(config.keys.cut, 'y');
+    }
+
+    #[test]
+    fn action_for_returns_correct_action_for_default_bindings() {
+        let kb = KeyBindings::default_bindings();
+        assert_eq!(kb.action_for('y'), Some(Action::Yank));
+        assert_eq!(kb.action_for('x'), Some(Action::Cut));
+        assert_eq!(kb.action_for('p'), Some(Action::Paste));
+        assert_eq!(kb.action_for('q'), Some(Action::Quit));
+        assert_eq!(kb.action_for('j'), None); // reserved, never bindable
+        assert_eq!(kb.action_for('z'), None); // unbound
+    }
+
+    #[test]
+    fn action_for_reflects_overridden_binding() {
+        let config = Config::from_str(
+            r#"
+[keys]
+yank = "Y"
+"#,
+        )
+        .expect("config should parse");
+        assert_eq!(config.keys.action_for('Y'), Some(Action::Yank));
+        assert_eq!(config.keys.action_for('y'), None);
     }
 }

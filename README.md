@@ -100,6 +100,9 @@ show_top_bar = false
 # places  = 10
 # files   = 45
 # preview = 45
+
+# [keys]
+# yank = "y"   # and so on for any action you want to rebind
 ```
 
 | Key | Default | Description |
@@ -111,7 +114,33 @@ show_top_bar = false
 | `layout.panes.files` | unset | Relative width weight for the Files pane |
 | `layout.panes.preview` | unset | Relative width weight for the Preview pane; `0` hides it |
 
-Pane weights are relative — `10/45/45` and `20/90/90` produce the same split. If `[layout.panes]` is omitted, elio uses a built-in responsive layout. See [examples/config.toml](examples/config.toml) for an annotated reference.
+Pane weights are relative — `10/45/45` and `20/90/90` produce the same split. If `[layout.panes]` is omitted, elio uses a built-in responsive layout.
+
+### Key bindings
+
+Any browser action key can be rebound in the `[keys]` section. Each value must be a **single character**. Duplicate bindings and reserved characters are rejected at startup with an error to stderr; the affected key falls back to its default.
+
+| Key | Default | Action |
+|---|---|---|
+| `keys.quit` | `q` | Quit |
+| `keys.yank` | `y` | Yank (copy) |
+| `keys.cut` | `x` | Cut |
+| `keys.paste` | `p` | Paste |
+| `keys.trash` | `d` | Trash / permanent delete in trash |
+| `keys.create` | `a` | Create file or folder |
+| `keys.rename` | `r` | Rename / bulk rename / restore from trash |
+| `keys.copy_path` | `c` | Copy path details to clipboard |
+| `keys.search_folders` | `f` | Fuzzy-find folders |
+| `keys.open` | `o` | Open externally |
+| `keys.sort` | `s` | Cycle sort mode |
+| `keys.toggle_view` | `v` | Toggle grid / list view |
+| `keys.toggle_hidden` | `.` | Toggle dotfiles visibility |
+| `keys.scroll_preview_left` | `<` | Scroll preview left |
+| `keys.scroll_preview_right` | `>` | Scroll preview right |
+
+**Reserved** (cannot be rebound): `h` `j` `k` `l` `g` `G` `?` `[` `]` `+` `=` `-` `_` `Space`
+
+See [examples/config.toml](examples/config.toml) for an annotated reference.
 
 ---
 
@@ -162,6 +191,8 @@ The full default theme is at [`assets/themes/default/theme.toml`](assets/themes/
 <details>
 <summary><strong>Controls</strong></summary>
 
+Keys marked with `*` are rebindable via `[keys]` in `config.toml` — the defaults are shown. See the [Key bindings](#key-bindings) section for the full list of configurable actions.
+
 ### Navigation
 
 | Key | Action |
@@ -179,11 +210,11 @@ The full default theme is at [`assets/themes/default/theme.toml`](assets/themes/
 
 | Key | Action |
 |---|---|
-| `v` | Toggle grid / list view |
+| `v` `*` | Toggle grid / list view |
 | `+` / `-` | Grid zoom in / out |
-| `.` | Show / hide dotfiles |
-| `s` | Cycle sort (Name → Modified → Size) |
-| `<` / `>` | Scroll preview left / right |
+| `.` `*` | Show / hide dotfiles |
+| `s` `*` | Cycle sort (Name → Modified → Size) |
+| `<` / `>` `*` | Scroll preview left / right |
 
 ### Files and Clipboard
 
@@ -191,21 +222,21 @@ The full default theme is at [`assets/themes/default/theme.toml`](assets/themes/
 |---|---|
 | `Space` | Toggle selection |
 | `Ctrl+A` | Select all |
-| `y` | Yank (copy) |
-| `x` | Cut |
-| `p` | Paste |
-| `a` | Create file or folder |
-| `d` | Trash; permanently delete if already in trash |
-| `r` | Rename / bulk rename / restore from trash |
+| `y` `*` | Yank (copy) |
+| `x` `*` | Cut |
+| `p` `*` | Paste |
+| `a` `*` | Create file or folder |
+| `d` `*` | Trash; permanently delete if already in trash |
+| `r` `*` | Rename / bulk rename / restore from trash |
 | `F2` | Rename / bulk rename |
-| `o` | Open externally |
-| `c` | Copy path details to clipboard |
+| `o` `*` | Open externally |
+| `c` `*` | Copy path details to clipboard |
 
 ### Search
 
 | Key | Action |
 |---|---|
-| `f` | Fuzzy-find folders in the current tree |
+| `f` `*` | Fuzzy-find folders in the current tree |
 | `Ctrl+F` | Fuzzy-find files in the current tree |
 
 ### Mouse
@@ -223,7 +254,7 @@ The full default theme is at [`assets/themes/default/theme.toml`](assets/themes/
 |---|---|
 | `?` | Open help overlay |
 | `Esc` | Cancel / clear selection / close overlay |
-| `q` | Quit |
+| `q` `*` | Quit |
 
 </details>
 
