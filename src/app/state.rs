@@ -545,7 +545,7 @@ impl App {
             sidebar: Vec::new(),
             selected: 0,
             scroll_row: 0,
-            view_mode: ViewMode::List,
+            view_mode: startup_view_mode(crate::config::ui().start_in_grid),
             zoom_level: crate::config::ui().grid_zoom,
             sort_mode: SortMode::Name,
             show_hidden: crate::config::ui().show_hidden,
@@ -680,6 +680,14 @@ impl App {
     }
 }
 
+fn startup_view_mode(start_in_grid: bool) -> ViewMode {
+    if start_in_grid {
+        ViewMode::Grid
+    } else {
+        ViewMode::List
+    }
+}
+
 pub(super) fn detect_wheel_profile() -> WheelProfile {
     let term = env::var("TERM").unwrap_or_default().to_ascii_lowercase();
     let term_program = env::var("TERM_PROGRAM")
@@ -697,5 +705,20 @@ pub(super) fn detect_wheel_profile() -> WheelProfile {
         WheelProfile::HighFrequency
     } else {
         WheelProfile::Default
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn startup_view_mode_defaults_to_list() {
+        assert_eq!(startup_view_mode(false), ViewMode::List);
+    }
+
+    #[test]
+    fn startup_view_mode_can_start_in_grid() {
+        assert_eq!(startup_view_mode(true), ViewMode::Grid);
     }
 }

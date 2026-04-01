@@ -8,6 +8,7 @@ pub(crate) struct UiConfig {
     pub show_top_bar: bool,
     pub grid_zoom: u8,
     pub show_hidden: bool,
+    pub start_in_grid: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -274,6 +275,7 @@ struct UiConfigOverride {
     show_top_bar: Option<bool>,
     grid_zoom: Option<i64>,
     show_hidden: Option<bool>,
+    start_in_grid: Option<bool>,
 }
 
 #[derive(Deserialize, Default)]
@@ -380,6 +382,7 @@ impl Config {
                 show_top_bar: false,
                 grid_zoom: 1,
                 show_hidden: false,
+                start_in_grid: false,
             },
             layout: LayoutConfig { panes: None },
             keys: KeyBindings::default_bindings(),
@@ -398,6 +401,9 @@ impl Config {
             }
             if let Some(show_hidden) = ui.show_hidden {
                 resolved.ui.show_hidden = show_hidden;
+            }
+            if let Some(start_in_grid) = ui.start_in_grid {
+                resolved.ui.start_in_grid = start_in_grid;
             }
         }
         if let Some(layout) = parsed.layout {
@@ -465,9 +471,21 @@ mod tests {
     }
 
     #[test]
+    fn config_default_starts_in_list_view() {
+        let config = Config::default_config();
+        assert!(!config.ui.start_in_grid);
+    }
+
+    #[test]
     fn config_can_enable_show_hidden() {
         let config = Config::from_str("[ui]\nshow_hidden = true").expect("config should parse");
         assert!(config.ui.show_hidden);
+    }
+
+    #[test]
+    fn config_can_enable_start_in_grid() {
+        let config = Config::from_str("[ui]\nstart_in_grid = true").expect("config should parse");
+        assert!(config.ui.start_in_grid);
     }
 
     #[test]
