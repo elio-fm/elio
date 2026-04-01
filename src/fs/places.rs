@@ -1,9 +1,13 @@
 use crate::app::{SidebarItem, SidebarItemKind, SidebarRow};
 use std::{
-    collections::{HashMap, HashSet},
-    fs,
+    collections::HashSet,
     path::{Path, PathBuf},
 };
+
+#[cfg(target_os = "linux")]
+use std::collections::HashMap;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::fs;
 
 /// Returns the current user's home directory.
 ///

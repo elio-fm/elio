@@ -35,9 +35,14 @@ fn directory_header_marks_incomplete_totals_without_claiming_exactness() {
         .selected_entry()
         .cloned()
         .expect("directory entry should be selected");
-    let token = app.preview_state.token;
-    let _ = app.process_background_jobs();
+    let token = app.preview_state.token.wrapping_add(1);
     app.scheduler.cancel_directory_stats();
+    // Seed a settled directory preview state so this assertion does not depend
+    // on how quickly the background preview worker finishes on slower CI VMs.
+    app.preview_state.token = token;
+    app.preview_state.content =
+        PreviewContent::new(PreviewKind::Directory, Vec::new()).with_detail("1 item");
+    app.preview_state.load_state = None;
     app.preview_state.directory_stats = Some(PreviewDirectoryStatsState::Loading {
         token,
         path: entry.path.clone(),
