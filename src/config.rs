@@ -525,9 +525,7 @@ impl PlaceEntrySpec {
                         );
                         return None;
                     };
-                    let Some(place) = BuiltinPlace::parse(name) else {
-                        return None;
-                    };
+                    let place = BuiltinPlace::parse(name)?;
                     if table.contains_key("title") || table.contains_key("path") {
                         eprintln!(
                             "elio: {field_name}: builtin places only support {{ builtin, icon }}; \
@@ -587,9 +585,7 @@ impl PlaceEntrySpec {
 }
 
 fn parse_place_icon(value: Option<&toml::Value>, field_name: &str) -> Option<String> {
-    let Some(value) = value else {
-        return None;
-    };
+    let value = value?;
     match value {
         toml::Value::String(icon) => {
             let icon = icon.trim();
@@ -703,6 +699,10 @@ fn normalize_absolute_path(path: &std::path::Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    fn toml_string(value: &str) -> String {
+        toml::Value::String(value.to_string()).to_string()
+    }
+
     #[test]
     fn config_defaults_hide_top_bar() {
         let config = Config::default_config();
@@ -757,17 +757,18 @@ mod tests {
     #[test]
     fn config_can_customize_places_entries_and_hide_devices() {
         let projects = std::env::temp_dir().join("elio-places-projects");
+        let projects_toml = toml_string(&projects.display().to_string());
         let config = Config::from_str(&format!(
             r#"
 [places]
 show_devices = false
 entries = [
   "downloads",
-  {{ title = "Projects", path = "{}" }},
+  {{ title = "Projects", path = {} }},
   "trash",
 ]
 "#,
-            projects.display()
+            projects_toml
         ))
         .expect("config should parse");
 
@@ -827,15 +828,16 @@ entries = ["downloads", "workspace", "trash"]
     #[test]
     fn config_places_can_customize_icons_for_builtin_and_custom_entries() {
         let projects = std::env::temp_dir().join("elio-places-projects-icons");
+        let projects_toml = toml_string(&projects.display().to_string());
         let config = Config::from_str(&format!(
             r#"
 [places]
 entries = [
   {{ builtin = "downloads", icon = "D" }},
-  {{ title = "Projects", path = "{}", icon = "P" }},
+  {{ title = "Projects", path = {}, icon = "P" }},
 ]
 "#,
-            projects.display()
+            projects_toml
         ))
         .expect("config should parse");
 
@@ -880,15 +882,16 @@ entries = [
     #[test]
     fn config_places_ignores_invalid_icons_without_skipping_entries() {
         let projects = std::env::temp_dir().join("elio-places-invalid-icons");
+        let projects_toml = toml_string(&projects.display().to_string());
         let config = Config::from_str(&format!(
             r#"
 [places]
 entries = [
   {{ builtin = "downloads", icon = "" }},
-  {{ title = "Projects", path = "{}", icon = "   " }},
+  {{ title = "Projects", path = {}, icon = "   " }},
 ]
 "#,
-            projects.display()
+            projects_toml
         ))
         .expect("config should parse");
 
