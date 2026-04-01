@@ -11,9 +11,9 @@ use self::{
     pool::{preview::PreviewPool, search::SearchPool},
     tasks::{
         directory::DirectoryPool, directory_fingerprint::DirectoryFingerprintPool,
-        image::ImagePreparePool, item_count::DirectoryItemCountPool,
-        line_count::PreviewLineCountPool, paste::PastePool, pdf_probe::PdfProbePool,
-        pdf_render::PdfRenderPool, restore::RestorePool, trash::TrashPool,
+        directory_stats::DirectoryStatsPool, image::ImagePreparePool,
+        item_count::DirectoryItemCountPool, line_count::PreviewLineCountPool, paste::PastePool,
+        pdf_probe::PdfProbePool, pdf_render::PdfRenderPool, restore::RestorePool, trash::TrashPool,
     },
 };
 use super::overlays::images::PreparedStaticImageAsset;
@@ -31,6 +31,7 @@ use std::{
 const PREVIEW_WORKER_COUNT: usize = 2;
 const SEARCH_WORKER_COUNT: usize = 1;
 const DIRECTORY_ITEM_COUNT_WORKER_COUNT: usize = 1;
+const DIRECTORY_STATS_WORKER_COUNT: usize = 1;
 const DIRECTORY_FINGERPRINT_WORKER_COUNT: usize = 1;
 const PREVIEW_LINE_COUNT_WORKER_COUNT: usize = 1;
 const IMAGE_PREPARE_WORKER_COUNT: usize = 2;
@@ -165,6 +166,13 @@ pub(super) struct DirectoryItemCountBuild {
 }
 
 #[derive(Debug)]
+pub(super) struct DirectoryStatsBuild {
+    pub token: u64,
+    pub path: PathBuf,
+    pub result: crate::fs::DirectoryStatsScanResult,
+}
+
+#[derive(Debug)]
 pub(super) struct DirectoryFingerprintBuild {
     pub token: u64,
     pub cwd: PathBuf,
@@ -184,6 +192,12 @@ pub(super) struct DirectoryItemCountRequest {
     pub path: PathBuf,
     pub modified: Option<SystemTime>,
     pub show_hidden: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct DirectoryStatsRequest {
+    pub token: u64,
+    pub path: PathBuf,
 }
 
 #[derive(Debug)]
@@ -350,6 +364,7 @@ pub(super) enum JobResult {
     Directory(DirectoryBuild),
     DirectoryFingerprint(DirectoryFingerprintBuild),
     DirectoryItemCount(DirectoryItemCountBuild),
+    DirectoryStats(DirectoryStatsBuild),
     PreviewLineCount(PreviewLineCountBuild),
     ImagePrepare(ImagePrepareBuild),
     PdfProbe(PdfProbeBuild),
@@ -387,6 +402,7 @@ pub(super) struct JobScheduler {
     trash: TrashPool,
     restore: RestorePool,
     directory_item_count: DirectoryItemCountPool,
+    directory_stats: DirectoryStatsPool,
     preview_line_count: PreviewLineCountPool,
     image_prepare: ImagePreparePool,
     pdf_probe: PdfProbePool,
@@ -423,6 +439,10 @@ impl JobScheduler {
             directory_item_count: DirectoryItemCountPool::new(
                 config.directory_item_count_worker_count,
                 config.directory_item_count_queue_limit,
+                result_tx.clone(),
+            ),
+            directory_stats: DirectoryStatsPool::new(
+                DIRECTORY_STATS_WORKER_COUNT,
                 result_tx.clone(),
             ),
             preview_line_count: PreviewLineCountPool::new(
@@ -476,6 +496,14 @@ impl JobScheduler {
 
     pub(super) fn submit_directory_item_count(&self, request: DirectoryItemCountRequest) -> bool {
         self.directory_item_count.submit(request)
+    }
+
+    pub(super) fn submit_directory_stats(&self, request: DirectoryStatsRequest) -> bool {
+        self.directory_stats.submit(request)
+    }
+
+    pub(super) fn cancel_directory_stats(&self) {
+        self.directory_stats.cancel_all();
     }
 
     pub(super) fn submit_preview_line_count(&self, request: PreviewLineCountRequest) -> bool {
@@ -593,6 +621,7 @@ impl JobScheduler {
             || self.trash.has_pending_work()
             || self.restore.has_pending_work()
             || self.directory_item_count.has_pending_work()
+            || self.directory_stats.has_pending_work()
             || self.preview_line_count.has_pending_work()
             || self.image_prepare.has_pending_work()
             || self.pdf_probe.has_pending_work()

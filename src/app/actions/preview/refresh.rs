@@ -1,7 +1,90 @@
 use super::*;
+use crate::app::jobs::DirectoryStatsRequest;
 use crate::preview::{PreviewContent, PreviewKind, loading_preview_for, preview_work_class};
 
 impl App {
+    fn clear_preview_directory_stats(&mut self) {
+        self.preview_state.directory_stats = None;
+        self.scheduler.cancel_directory_stats();
+    }
+
+    fn refresh_current_directory_stats(&mut self) {
+        if self.preview_state.content.kind != PreviewKind::Directory {
+            self.clear_preview_directory_stats();
+            return;
+        }
+        let Some(entry) = self
+            .selected_entry()
+            .cloned()
+            .filter(|entry| entry.is_dir())
+        else {
+            self.clear_preview_directory_stats();
+            return;
+        };
+
+        let token = self.preview_state.token;
+        self.preview_state.directory_stats = Some(PreviewDirectoryStatsState::Loading {
+            token,
+            path: entry.path.clone(),
+        });
+        if !self
+            .scheduler
+            .submit_directory_stats(DirectoryStatsRequest {
+                token,
+                path: entry.path,
+            })
+        {
+            self.preview_state.directory_stats = None;
+        }
+    }
+
+    pub(in crate::app) fn apply_preview_directory_stats_result(
+        &mut self,
+        token: u64,
+        path: &std::path::Path,
+        result: crate::fs::DirectoryStatsScanResult,
+    ) -> bool {
+        let Some(current_entry) = self.selected_entry() else {
+            return false;
+        };
+        if self.preview_state.content.kind != PreviewKind::Directory
+            || !current_entry.is_dir()
+            || current_entry.path != path
+            || token != self.preview_state.token
+        {
+            return false;
+        }
+        if self
+            .preview_state
+            .directory_stats
+            .as_ref()
+            .is_some_and(|stats| stats.token() != token || stats.path() != path)
+        {
+            return false;
+        }
+
+        match result {
+            crate::fs::DirectoryStatsScanResult::Complete(stats) => {
+                self.preview_state.directory_stats = Some(PreviewDirectoryStatsState::Complete {
+                    token,
+                    path: path.to_path_buf(),
+                    stats,
+                });
+                true
+            }
+            crate::fs::DirectoryStatsScanResult::Incomplete { partial, error } => {
+                self.preview_state.directory_stats = Some(PreviewDirectoryStatsState::Incomplete {
+                    token,
+                    path: path.to_path_buf(),
+                    partial,
+                    error,
+                });
+                true
+            }
+            crate::fs::DirectoryStatsScanResult::Canceled => false,
+        }
+    }
+
     pub(in crate::app) fn refresh_preview(&mut self) {
         self.preview_state.deferred_refresh_at = None;
         self.preview_state.prefetch_ready_at = None;
@@ -103,6 +186,7 @@ impl App {
         };
         self.apply_current_comic_preview_metadata();
         self.apply_current_epub_preview_metadata();
+        self.refresh_current_directory_stats();
         self.sync_current_preview_line_count();
         self.preview_state.scroll = 0;
         self.preview_state.horizontal_scroll = 0;

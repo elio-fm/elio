@@ -5,6 +5,7 @@ pub(crate) mod search;
 pub(crate) mod watch;
 
 mod directory;
+mod directory_stats;
 mod sort;
 
 fn is_hidden(file_name: &std::ffi::OsStr) -> bool {
@@ -34,6 +35,7 @@ pub(crate) use directory::{
     DirectoryFingerprint, DirectorySnapshot, load_directory_snapshot, open_in_system,
     restore_trash_item, scan_directory_fingerprint,
 };
+pub(crate) use directory_stats::{DirectoryStats, DirectoryStatsScanResult, scan_directory_stats};
 pub(crate) use format::{
     describe_io_error, format_item_count, format_size, format_time_ago, rect_contains,
     sanitize_terminal_text,

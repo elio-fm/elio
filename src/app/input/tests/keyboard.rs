@@ -1,5 +1,5 @@
 use super::super::*;
-use super::helpers::{temp_path, wait_for_directory_load};
+use super::helpers::{temp_path, wait_for_background_preview, wait_for_directory_load};
 use crate::config::Action;
 use std::{
     fs, thread,
@@ -393,6 +393,62 @@ fn rapid_key_navigation_defers_preview_for_non_heavy_files() {
     assert!(
         app.preview_state.token > token_before,
         "deferred preview should fire after pause"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn rapid_key_navigation_clears_directory_totals_until_deferred_refresh_runs() {
+    let root = temp_path("rapid-key-nav-directory-stats");
+    for dir in ["a-dir", "b-dir"] {
+        let path = root.join(dir);
+        fs::create_dir_all(&path).expect("failed to create temp dir");
+        fs::write(path.join("file.txt"), vec![b'x'; 100]).expect("failed to write temp file");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.view_mode = ViewMode::List;
+    app.select_index(0);
+    wait_for_background_preview(&mut app);
+    for _ in 0..100 {
+        let _ = app.process_background_jobs();
+        if matches!(
+            app.preview_state.directory_stats,
+            Some(PreviewDirectoryStatsState::Complete { .. })
+        ) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(matches!(
+        app.preview_state.directory_stats,
+        Some(PreviewDirectoryStatsState::Complete { .. })
+    ));
+
+    app.last_key_nav_at = Instant::now();
+    let token_before = app.preview_state.token;
+    app.move_vertical_keyboard(1);
+
+    assert_eq!(app.selected, 1);
+    assert_eq!(app.preview_state.token, token_before);
+    assert!(app.preview_state.deferred_refresh_at.is_some());
+    assert!(app.preview_state.directory_stats.is_none());
+
+    thread::sleep(HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY + Duration::from_millis(20));
+    assert!(app.process_preview_refresh_timers());
+    for _ in 0..100 {
+        let _ = app.process_background_jobs();
+        if app.preview_header_detail_for_width(8, 80).as_deref()
+            == Some(&format!("1 total item • {}", crate::app::format_size(100)))
+        {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(
+        app.preview_header_detail_for_width(8, 80).as_deref(),
+        Some(format!("1 total item • {}", crate::app::format_size(100)).as_str())
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

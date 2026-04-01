@@ -348,6 +348,43 @@ pub(super) enum PreviewLoadState {
     Refreshing(PathBuf),
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum PreviewDirectoryStatsState {
+    Loading {
+        token: u64,
+        path: PathBuf,
+    },
+    Complete {
+        token: u64,
+        path: PathBuf,
+        stats: crate::fs::DirectoryStats,
+    },
+    Incomplete {
+        token: u64,
+        path: PathBuf,
+        partial: crate::fs::DirectoryStats,
+        error: String,
+    },
+}
+
+impl PreviewDirectoryStatsState {
+    pub(super) fn token(&self) -> u64 {
+        match self {
+            Self::Loading { token, .. }
+            | Self::Complete { token, .. }
+            | Self::Incomplete { token, .. } => *token,
+        }
+    }
+
+    pub(super) fn path(&self) -> &PathBuf {
+        match self {
+            Self::Loading { path, .. }
+            | Self::Complete { path, .. }
+            | Self::Incomplete { path, .. } => path,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum PreviewRefreshMode {
     Immediate,
@@ -361,6 +398,7 @@ pub(super) struct PreviewState {
     pub(super) token: u64,
     pub(super) metrics: PreviewMetrics,
     pub(super) load_state: Option<PreviewLoadState>,
+    pub(super) directory_stats: Option<PreviewDirectoryStatsState>,
     pub(super) deferred_refresh_at: Option<Instant>,
     pub(super) prefetch_ready_at: Option<Instant>,
     pub(super) result_cache: HashMap<PreviewCacheKey, CachedPreview>,
@@ -523,6 +561,7 @@ impl App {
                 token: 0,
                 metrics: PreviewMetrics::default(),
                 load_state: None,
+                directory_stats: None,
                 deferred_refresh_at: None,
                 prefetch_ready_at: None,
                 result_cache: HashMap::new(),

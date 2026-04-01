@@ -49,6 +49,8 @@ impl App {
     pub(super) fn preview_header_segments(&self, visible_rows: usize) -> Vec<PreviewHeaderSegment> {
         let mut segments = Vec::new();
         let content = &self.preview_state.content;
+        let directory_stats_detail = self.preview_directory_stats_header_detail();
+        let directory_stats_note = self.preview_directory_stats_status_note();
 
         if let Some(position) = content.navigation_position.as_ref() {
             let full = format!(
@@ -69,7 +71,13 @@ impl App {
             segments.push(segment);
         }
 
-        if let Some(detail) = content.detail.as_deref()
+        if let Some((full, compact)) = directory_stats_detail.clone() {
+            segments.push(PreviewHeaderSegment::new(
+                HEADER_SCORE_DETAIL,
+                full,
+                compact,
+            ));
+        } else if let Some(detail) = content.detail.as_deref()
             && !detail.is_empty()
         {
             let detail = sanitize_terminal_text(detail);
@@ -80,6 +88,14 @@ impl App {
                 header_detail,
                 compact_freeform_header_text(&detail, FREEFORM_COMPACT_WIDTH)
                     .and_then(|compact| (compact != detail).then_some(compact)),
+            ));
+        }
+
+        if let Some((full, compact)) = directory_stats_note.clone() {
+            segments.push(PreviewHeaderSegment::new(
+                HEADER_SCORE_STATUS,
+                full,
+                compact,
             ));
         }
 
@@ -118,10 +134,12 @@ impl App {
             .detail
             .as_deref()
             .is_some_and(|detail| !detail.is_empty())
+            || directory_stats_detail.is_some()
             || content
                 .status_note
                 .as_deref()
                 .is_some_and(|note| !note.is_empty())
+            || directory_stats_note.is_some()
             || content.line_coverage.is_some()
             || content.source_lines.is_some()
             || content.truncation_note.is_some();
@@ -203,6 +221,64 @@ impl App {
             full,
             compact,
         ))
+    }
+
+    fn preview_directory_stats_header_detail(&self) -> Option<(String, Option<String>)> {
+        if self.preview_state.content.kind != PreviewKind::Directory
+            || self.preview_state.load_state.is_some()
+        {
+            return None;
+        }
+        match self.preview_state.directory_stats.as_ref()? {
+            PreviewDirectoryStatsState::Loading { .. } => None,
+            PreviewDirectoryStatsState::Complete { stats, .. } => {
+                let size = format_size(stats.total_size_bytes);
+                let full = format!("{} • {size}", format_total_item_label(stats.item_count));
+                let compact = Some(format!("{} • {size}", format_item_count(stats.item_count)))
+                    .filter(|compact| compact != &full);
+                Some((full, compact))
+            }
+            PreviewDirectoryStatsState::Incomplete { partial, .. } => {
+                if partial.item_count == 0 && partial.total_size_bytes == 0 {
+                    return None;
+                }
+                let size = format_size(partial.total_size_bytes);
+                Some((
+                    format!(
+                        "At least {} • at least {size}",
+                        format_item_count(partial.item_count)
+                    ),
+                    Some(format!(
+                        "{}+ • {size}+",
+                        format_item_count(partial.item_count)
+                    )),
+                ))
+            }
+        }
+    }
+
+    fn preview_directory_stats_status_note(&self) -> Option<(String, Option<String>)> {
+        if self.preview_state.content.kind != PreviewKind::Directory
+            || self.preview_state.load_state.is_some()
+        {
+            return None;
+        }
+        match self.preview_state.directory_stats.as_ref()? {
+            PreviewDirectoryStatsState::Loading { .. } => None,
+            PreviewDirectoryStatsState::Complete { .. } => None,
+            PreviewDirectoryStatsState::Incomplete { error, .. } => {
+                Some((error.clone(), compact_status_note(error)))
+            }
+        }
+    }
+}
+
+fn format_total_item_label(count: usize) -> String {
+    let count = format_header_count(count);
+    if count == "1" {
+        "1 total item".to_string()
+    } else {
+        format!("{count} total items")
     }
 }
 
@@ -453,6 +529,9 @@ fn compact_status_note(note: &str) -> Option<String> {
         "Preview worker unavailable" => "Worker unavailable".to_string(),
         "Extracting comic page in background" => "Extracting page".to_string(),
         "Extracting ebook section in background" => "Extracting section".to_string(),
+        "Some entries unreadable" => "Incomplete".to_string(),
+        "Folder changed while scanning" => "Incomplete".to_string(),
+        "Folder totals incomplete" => "Incomplete".to_string(),
         _ => return None,
     };
     (compact != note).then_some(compact)

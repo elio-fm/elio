@@ -4,6 +4,155 @@ use crate::preview::{PreviewContent, PreviewKind, default_code_preview_line_limi
 use ratatui::text::Line;
 
 #[test]
+fn directory_header_upgrades_to_exact_recursive_totals_after_background_stats() {
+    let root = temp_path("directory-total-header");
+    let folder = root.join("folder");
+    let nested = folder.join("nested");
+    fs::create_dir_all(&nested).expect("failed to create nested directory");
+    fs::write(folder.join("visible.txt"), vec![b'a'; 500]).expect("failed to write file");
+    fs::write(folder.join(".hidden"), vec![b'b'; 200]).expect("failed to write hidden file");
+    fs::write(nested.join("deep.bin"), vec![b'c'; 1_000]).expect("failed to write nested file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_preview_header(
+        &mut app,
+        8,
+        80,
+        &format!("4 total items • {}", crate::app::format_size(1_700)),
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn directory_header_marks_incomplete_totals_without_claiming_exactness() {
+    let root = temp_path("directory-partial-header");
+    let folder = root.join("folder");
+    fs::create_dir_all(&folder).expect("failed to create folder");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    let entry = app
+        .selected_entry()
+        .cloned()
+        .expect("directory entry should be selected");
+    let token = app.preview_state.token;
+    let _ = app.process_background_jobs();
+    app.scheduler.cancel_directory_stats();
+    app.preview_state.directory_stats = Some(PreviewDirectoryStatsState::Loading {
+        token,
+        path: entry.path.clone(),
+    });
+    app.scheduler
+        .defer_result(JobResult::DirectoryStats(DirectoryStatsBuild {
+            token,
+            path: entry.path.clone(),
+            result: crate::fs::DirectoryStatsScanResult::Incomplete {
+                partial: crate::fs::DirectoryStats {
+                    item_count: 4,
+                    folder_count: 1,
+                    file_count: 3,
+                    total_size_bytes: 1_700,
+                },
+                error: "Some entries unreadable".to_string(),
+            },
+        }));
+
+    let _ = app.process_background_jobs();
+
+    assert_eq!(
+        app.preview_header_detail_for_width(8, 120).as_deref(),
+        Some("At least 4 items • at least 1.7 kB • Some entries unreadable"),
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn stale_directory_totals_result_is_ignored_after_selection_changes() {
+    let root = temp_path("directory-totals-stale-result");
+    let a_dir = root.join("a-dir");
+    let b_dir = root.join("b-dir");
+    fs::create_dir_all(&a_dir).expect("failed to create a-dir");
+    fs::create_dir_all(&b_dir).expect("failed to create b-dir");
+    fs::write(a_dir.join("a.txt"), vec![b'a'; 100]).expect("failed to write a.txt");
+    fs::write(b_dir.join("b.txt"), vec![b'b'; 200]).expect("failed to write b.txt");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    let stale_token = app.preview_state.token;
+    let stale_entry = app
+        .selected_entry()
+        .cloned()
+        .expect("a-dir should be selected first");
+
+    app.set_selected(1);
+    let current_entry = app
+        .selected_entry()
+        .cloned()
+        .expect("b-dir should be selected second");
+
+    app.scheduler
+        .defer_result(JobResult::DirectoryStats(DirectoryStatsBuild {
+            token: stale_token,
+            path: stale_entry.path.clone(),
+            result: crate::fs::DirectoryStatsScanResult::Complete(crate::fs::DirectoryStats {
+                item_count: 999,
+                folder_count: 0,
+                file_count: 999,
+                total_size_bytes: 9_990_000_000,
+            }),
+        }));
+
+    let _ = app.process_background_jobs();
+    assert_eq!(
+        app.preview_state
+            .directory_stats
+            .as_ref()
+            .map(PreviewDirectoryStatsState::path),
+        Some(&current_entry.path),
+    );
+
+    wait_for_preview_header(
+        &mut app,
+        8,
+        80,
+        &format!("1 total item • {}", crate::app::format_size(200)),
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+#[cfg(unix)]
+fn unreadable_directory_keeps_permission_denied_header_without_fake_partial_totals() {
+    if unsafe { libc::getuid() } == 0 {
+        return;
+    }
+
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = temp_path("directory-header-permission-denied");
+    let locked = root.join("locked");
+    fs::create_dir_all(&locked).expect("failed to create locked dir");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).expect("failed to lock dir");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_preview_header(&mut app, 8, 80, "Permission denied");
+
+    assert_eq!(
+        app.preview_header_detail_for_width(8, 80).as_deref(),
+        Some("Permission denied"),
+    );
+    assert!(
+        !app.preview_header_detail_for_width(8, 80)
+            .unwrap_or_default()
+            .contains("0 total items")
+    );
+
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("failed to unlock dir");
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn wrapped_text_header_reports_visual_cap_compactly() {
     let root = temp_path("wrapped-text-header");
     fs::create_dir_all(&root).expect("failed to create temp root");

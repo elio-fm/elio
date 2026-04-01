@@ -114,6 +114,13 @@ impl App {
                         build.show_hidden,
                     );
                 }
+                JobResult::DirectoryStats(build) => {
+                    dirty |= self.apply_preview_directory_stats_result(
+                        build.token,
+                        &build.path,
+                        build.result,
+                    );
+                }
                 JobResult::PreviewLineCount(build) => {
                     dirty |= self.apply_preview_line_count_result(
                         &build.path,
@@ -407,6 +414,9 @@ impl App {
                         && is_current_variant;
 
                     self.preview_state.content = build.result;
+                    if self.preview_state.content.kind != preview::PreviewKind::Directory {
+                        self.preview_state.directory_stats = None;
+                    }
                     self.preview_state.load_state = None;
                     self.apply_current_comic_preview_metadata();
                     self.apply_current_epub_preview_metadata();
