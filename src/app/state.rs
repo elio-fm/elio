@@ -92,6 +92,13 @@ pub(super) struct PasteProgress {
 }
 
 #[derive(Clone, Debug)]
+pub(super) struct QueuedPaste {
+    pub(super) dest_dir: PathBuf,
+    pub(super) paths: Vec<PathBuf>,
+    pub(super) op: ClipOp,
+}
+
+#[derive(Clone, Debug)]
 pub(super) struct TrashProgress {
     pub(super) completed: usize,
     pub(super) total: usize,
@@ -430,6 +437,7 @@ pub struct App {
     pub(super) clipboard: Option<Clipboard>,
     pub(super) paste_token: u64,
     pub(super) paste_progress: Option<PasteProgress>,
+    pub(super) queued_pastes: VecDeque<QueuedPaste>,
     /// Destination directory of the in-flight paste.  Kept separately from
     /// `paste_progress` so that cancelling the chip does not lose the context
     /// needed by the completion handler to reload the right directory.
@@ -536,6 +544,7 @@ impl App {
             clipboard: None,
             paste_token: 0,
             paste_progress: None,
+            queued_pastes: VecDeque::new(),
             paste_dest_dir: None,
             trash_token: 0,
             trash_progress: None,

@@ -126,6 +126,7 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
     let clip = app.clipboard_info();
     let sel_count = app.selection_count();
     let paste_prog = app.paste_progress();
+    let queued_pastes = app.queued_paste_count();
     let trash_prog = app.trash_progress();
     let restore_prog = app.restore_progress();
 
@@ -175,7 +176,11 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
                 ClipOp::Yank => palette.yank_bar,
                 ClipOp::Cut => palette.cut_bar,
             };
-            let label = format!(" {verb} {completed}/{total} ");
+            let label = if queued_pastes == 0 {
+                format!(" {verb} {completed}/{total} ")
+            } else {
+                format!(" {verb} {completed}/{total} (+{queued_pastes} queued) ")
+            };
             chips_width += label.len() as u16 + 2;
             spans.push(Span::styled(
                 label,
@@ -255,8 +260,32 @@ fn status_idle_hint() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{status_idle_hint, status_section_width};
-    use crate::ui::helpers;
+    use super::{render_status, status_idle_hint, status_section_width};
+    use crate::{
+        app::{App, FrameState},
+        ui::{helpers, theme},
+    };
+    use crossterm::event::{Event, KeyCode, KeyEvent};
+    use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn temp_path(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("elio-chrome-{label}-{unique}"))
+    }
+
+    fn row_text(buffer: &Buffer, y: u16) -> String {
+        (0..buffer.area.width)
+            .map(|x| buffer[(x, y)].symbol())
+            .collect::<String>()
+    }
 
     #[test]
     fn idle_status_keeps_the_compact_help_width() {
@@ -277,5 +306,45 @@ mod tests {
     #[test]
     fn idle_hint_stays_unchanged() {
         assert_eq!(status_idle_hint(), "f folders  ^F files  ? help");
+    }
+
+    #[test]
+    fn paste_status_chip_shows_queued_count() {
+        let src_dir = temp_path("paste-chip-src");
+        let dst_dir = temp_path("paste-chip-dst");
+        fs::create_dir_all(&src_dir).expect("failed to create source dir");
+        fs::create_dir_all(&dst_dir).expect("failed to create destination dir");
+        fs::write(src_dir.join("a.txt"), "a").expect("failed to write first file");
+        fs::write(src_dir.join("b.txt"), "b").expect("failed to write second file");
+
+        let mut app = App::new_at(src_dir.clone()).expect("failed to create app");
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('y'))))
+            .expect("yank shortcut should succeed");
+        app.cwd = dst_dir.clone();
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('p'))))
+            .expect("paste shortcut should succeed");
+        app.cwd = src_dir.clone();
+        app.selected = 1;
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('y'))))
+            .expect("second yank shortcut should succeed");
+        app.cwd = dst_dir.clone();
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('p'))))
+            .expect("second paste should be queued");
+
+        let mut terminal = Terminal::new(TestBackend::new(120, 1)).expect("terminal should init");
+        terminal
+            .draw(|frame| render_status(frame, frame.area(), &app, theme::palette()))
+            .expect("status should render");
+
+        let rendered = row_text(terminal.backend().buffer(), 0);
+        assert!(
+            rendered.contains("(+1 queued)"),
+            "status row should show queued paste count, got: {rendered:?}"
+        );
+
+        app.set_frame_state(FrameState::default());
+        drop(app);
+        fs::remove_dir_all(src_dir).expect("failed to remove source dir");
+        fs::remove_dir_all(dst_dir).expect("failed to remove destination dir");
     }
 }

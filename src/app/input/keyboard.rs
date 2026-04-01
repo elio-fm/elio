@@ -83,6 +83,7 @@ impl App {
             } else if self.paste_progress.is_some() {
                 self.scheduler.cancel_paste(self.paste_token);
                 self.paste_progress = None;
+                self.clear_queued_pastes();
             } else {
                 self.clear_selection();
                 self.clipboard = None;
@@ -174,6 +175,7 @@ impl App {
                 } else if self.paste_progress.is_some() {
                     self.scheduler.cancel_paste(self.paste_token);
                     self.paste_progress = None;
+                    self.clear_queued_pastes();
                 } else {
                     self.clear_selection();
                     self.clipboard = None;
