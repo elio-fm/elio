@@ -57,7 +57,7 @@ pub(super) fn render_sidebar(
                     palette.panel
                 };
                 let title_width = row.width.saturating_sub(
-                    1u16.saturating_add(helpers::display_width(item.icon) as u16)
+                    1u16.saturating_add(helpers::display_width(item.icon.as_str()) as u16)
                         .saturating_add(2),
                 ) as usize;
                 let top_line = Line::from(vec![
@@ -66,7 +66,7 @@ pub(super) fn render_sidebar(
                         Style::default().fg(if active { palette.accent } else { bg }),
                     ),
                     Span::styled(
-                        item.icon,
+                        item.icon.as_str(),
                         Style::default()
                             .fg(palette.accent)
                             .add_modifier(Modifier::BOLD),

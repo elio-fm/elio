@@ -98,7 +98,7 @@ impl Entry {
 pub struct SidebarItem {
     pub kind: SidebarItemKind,
     pub title: String,
-    pub icon: &'static str,
+    pub icon: String,
     pub path: PathBuf,
 }
 
@@ -106,13 +106,13 @@ impl SidebarItem {
     pub fn new(
         kind: SidebarItemKind,
         title: impl Into<String>,
-        icon: &'static str,
+        icon: impl Into<String>,
         path: PathBuf,
     ) -> Self {
         Self {
             kind,
             title: title.into(),
-            icon,
+            icon: icon.into(),
             path,
         }
     }
@@ -129,6 +129,7 @@ pub enum SidebarItemKind {
     Videos,
     Root,
     Trash,
+    Custom,
     Device { removable: bool },
 }
 

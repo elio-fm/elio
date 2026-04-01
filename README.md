@@ -97,6 +97,21 @@ show_top_bar = false
 # show_hidden = false # show dotfiles on startup (toggle at runtime with .)
 # start_in_grid = false # open in grid view on startup (toggle at runtime with v)
 
+# [places]
+# show_devices = true
+# entries = [
+#   "home",
+#   "desktop",
+#   "documents",
+#   { builtin = "downloads", icon = "" },
+#   "pictures",
+#   "music",
+#   "videos",
+#   "root",
+#   { title = "Projects", path = "~/workspace", icon = "󰚝" },
+#   "trash",
+# ]
+
 # [layout.panes]
 # places  = 10
 # files   = 45
@@ -112,11 +127,23 @@ show_top_bar = false
 | `ui.grid_zoom` | `1` | Starting grid zoom level (`0`, `1`, or `2`; values outside range are clamped) |
 | `ui.show_hidden` | `false` | Show dotfiles and hidden files on startup; can still be toggled at runtime with `.` |
 | `ui.start_in_grid` | `false` | Start the file browser in grid view; can still be toggled at runtime with `v` |
+| `places.show_devices` | `true` | Show the auto-detected `Devices` section at the bottom of Places |
+| `places.entries` | built-in pinned list | Ordered list of pinned Places entries; accepts built-in names, `{ builtin, icon? }`, or custom `{ title, path, icon? }` objects |
 | `layout.panes.places` | unset | Relative width weight for the Places pane; `0` hides it |
 | `layout.panes.files` | unset | Relative width weight for the Files pane |
 | `layout.panes.preview` | unset | Relative width weight for the Preview pane; `0` hides it |
 
 Pane weights are relative — `10/45/45` and `20/90/90` produce the same split. If `[layout.panes]` is omitted, elio uses a built-in responsive layout.
+
+Omit `[places]` entirely to keep the exact default sidebar.
+
+`places.entries` supports three forms:
+
+- `"downloads"`: use the built-in entry with its default icon
+- `{ builtin = "downloads", icon = "" }`: use a built-in entry with a custom icon
+- `{ title = "Projects", path = "~/workspace", icon = "󰚝" }`: add a custom entry
+
+Built-in names are: `home`, `desktop`, `documents`, `downloads`, `pictures`, `music`, `videos`, `root`, and `trash`. These are stable config ids, not localized display names: for example, use `"downloads"` even if your actual folder is named `Descargas`. In the UI, built-in user folders are shown using the resolved folder name when available. Missing built-ins are skipped automatically; custom entries stay visible even if the target path does not exist yet. Entries are deduped by resolved path, so the first matching path wins. `icon` accepts any non-empty string, but a single Nerd Font glyph usually looks best.
 
 ### Key bindings
 

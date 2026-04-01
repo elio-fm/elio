@@ -6,6 +6,35 @@ show_top_bar = false
 # show_hidden = false  # show dotfiles and hidden files on startup (toggle with .)
 # start_in_grid = false  # open in grid view on startup (toggle with v)
 
+# Customize the Places pane. `entries` controls the pinned items in order;
+# `show_devices` keeps or hides the auto-detected Devices section.
+# Omit [places] entirely to keep the exact default sidebar.
+#
+# Built-in names: home, desktop, documents, downloads, pictures, music,
+# videos, root, trash
+# Use built-in ids like "downloads", not localized folder names like "Descargas".
+# Entries are deduped by resolved path: the first matching path wins.
+# Entry forms:
+# - "downloads"
+# - { builtin = "downloads", icon = "..." }
+# - { title = "Projects", path = "~/code", icon = "..." }
+# Any non-empty string works, but a single Nerd Font glyph usually looks best.
+#
+# [places]
+# show_devices = true
+# entries = [
+#   "home",
+#   "desktop",
+#   "documents",
+#   { builtin = "downloads", icon = "" },
+#   "pictures",
+#   "music",
+#   "videos",
+#   "root",
+#   { title = "Projects", path = "~/workspace", icon = "󰚝" },
+#   "trash",
+# ]
+#
 # Optional pane widths for the browser body. Values are relative weights across
 # the horizontal space. Set a pane to 0 to hide it.
 #

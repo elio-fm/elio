@@ -1,4 +1,7 @@
-use crate::app::{SidebarItem, SidebarItemKind, SidebarRow};
+use crate::{
+    app::{SidebarItem, SidebarItemKind, SidebarRow},
+    config::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},
+};
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -8,6 +11,21 @@ use std::{
 use std::collections::HashMap;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::fs;
+
+const CUSTOM_PLACE_ICON: &str = "󰉋";
+
+#[derive(Clone, Debug)]
+struct PlaceResolutionContext {
+    home: PathBuf,
+    desktop: Option<PathBuf>,
+    documents: Option<PathBuf>,
+    downloads: Option<PathBuf>,
+    pictures: Option<PathBuf>,
+    music: Option<PathBuf>,
+    videos: Option<PathBuf>,
+    root: Option<PathBuf>,
+    trash: Option<PathBuf>,
+}
 
 /// Returns the current user's home directory.
 ///
@@ -25,16 +43,28 @@ pub(crate) fn build_sidebar_rows() -> Vec<SidebarRow> {
         #[cfg(not(windows))]
         return PathBuf::from("/");
     });
-    let pinned_items = build_pinned_sidebar_items(&home);
+    let context = system_place_resolution_context(home);
+    build_sidebar_rows_with_context(crate::config::places(), &context)
+}
+
+fn build_sidebar_rows_with_context(
+    places: &PlacesConfig,
+    context: &PlaceResolutionContext,
+) -> Vec<SidebarRow> {
+    let pinned_items = build_pinned_sidebar_items(places, context);
     let pinned_paths = pinned_items
         .iter()
-        .map(|item| item.path.clone())
+        .map(|item| path_identity_key(&item.path))
         .collect::<HashSet<_>>();
     let mut rows = pinned_items
         .into_iter()
         .map(SidebarRow::Item)
         .collect::<Vec<_>>();
-    let device_items = mounted_device_items(&home, &pinned_paths);
+    let device_items = if places.show_devices {
+        mounted_device_items(&context.home, &pinned_paths)
+    } else {
+        Vec::new()
+    };
     if !device_items.is_empty() {
         rows.push(SidebarRow::Section { title: "Devices" });
         rows.extend(device_items.into_iter().map(SidebarRow::Item));
@@ -42,79 +72,173 @@ pub(crate) fn build_sidebar_rows() -> Vec<SidebarRow> {
     rows
 }
 
-fn build_pinned_sidebar_items(home: &Path) -> Vec<SidebarItem> {
+fn system_place_resolution_context(home: PathBuf) -> PlaceResolutionContext {
+    PlaceResolutionContext {
+        desktop: dirs::desktop_dir().filter(|path| path.exists()),
+        documents: dirs::document_dir().filter(|path| path.exists()),
+        downloads: dirs::download_dir().filter(|path| path.exists()),
+        pictures: dirs::picture_dir().filter(|path| path.exists()),
+        music: dirs::audio_dir().filter(|path| path.exists()),
+        videos: dirs::video_dir().filter(|path| path.exists()),
+        root: if cfg!(unix) {
+            Some(PathBuf::from("/"))
+        } else {
+            None
+        },
+        trash: trash_dir(&home),
+        home,
+    }
+}
+
+fn build_pinned_sidebar_items(
+    places: &PlacesConfig,
+    context: &PlaceResolutionContext,
+) -> Vec<SidebarItem> {
     let mut items = Vec::new();
+    let mut seen_paths = HashSet::new();
 
-    items.push(SidebarItem::new(
-        SidebarItemKind::Home,
-        "Home",
-        "󰋜",
-        home.to_path_buf(),
-    ));
-
-    // dirs::*_dir() reads XDG_*_DIR on Linux, system folders on macOS/Windows.
-    for (kind, title, path, icon) in [
-        (
-            SidebarItemKind::Desktop,
-            "Desktop",
-            dirs::desktop_dir(),
-            "󰍹",
-        ),
-        (
-            SidebarItemKind::Documents,
-            "Documents",
-            dirs::document_dir(),
-            "󰲃",
-        ),
-        (
-            SidebarItemKind::Downloads,
-            "Downloads",
-            dirs::download_dir(),
-            "󰉍",
-        ),
-        (
-            SidebarItemKind::Pictures,
-            "Pictures",
-            dirs::picture_dir(),
-            "󰉏",
-        ),
-        (SidebarItemKind::Music, "Music", dirs::audio_dir(), "󱍙"),
-        (
-            SidebarItemKind::Videos,
-            if cfg!(target_os = "macos") {
-                "Movies"
-            } else {
-                "Videos"
-            },
-            dirs::video_dir(),
-            "󰕧",
-        ),
-    ] {
-        if let Some(path) = path
-            && path.exists()
-        {
-            items.push(SidebarItem::new(kind, title, icon, path));
+    for entry in &places.entries {
+        let Some(item) = resolve_place_entry(entry, context) else {
+            continue;
+        };
+        if seen_paths.insert(path_identity_key(&item.path)) {
+            items.push(item);
         }
     }
 
-    #[cfg(unix)]
-    items.push(SidebarItem::new(
-        SidebarItemKind::Root,
-        "Root",
-        "󰋊",
-        PathBuf::from("/"),
-    ));
-
-    if let Some(trash) = trash_dir(home) {
-        items.push(SidebarItem::new(
-            SidebarItemKind::Trash,
-            "Trash",
-            "󰩺",
-            trash,
-        ));
-    }
-
     items
+}
+
+fn resolve_place_entry(
+    entry: &PlaceEntrySpec,
+    context: &PlaceResolutionContext,
+) -> Option<SidebarItem> {
+    match entry {
+        PlaceEntrySpec::Builtin { place, icon } => {
+            resolve_builtin_place(*place, icon.as_deref(), context)
+        }
+        PlaceEntrySpec::Custom { title, path, icon } => Some(SidebarItem::new(
+            SidebarItemKind::Custom,
+            title.clone(),
+            icon.as_deref().unwrap_or(CUSTOM_PLACE_ICON),
+            path.clone(),
+        )),
+    }
+}
+
+fn resolve_builtin_place(
+    place: BuiltinPlace,
+    icon_override: Option<&str>,
+    context: &PlaceResolutionContext,
+) -> Option<SidebarItem> {
+    match place {
+        BuiltinPlace::Home => Some(SidebarItem::new(
+            SidebarItemKind::Home,
+            "Home",
+            icon_override.unwrap_or("󰋜"),
+            context.home.clone(),
+        )),
+        BuiltinPlace::Desktop => context.desktop.clone().map(|path| {
+            SidebarItem::new(
+                SidebarItemKind::Desktop,
+                localized_place_title(&path, "Desktop"),
+                icon_override.unwrap_or("󰍹"),
+                path,
+            )
+        }),
+        BuiltinPlace::Documents => context.documents.clone().map(|path| {
+            SidebarItem::new(
+                SidebarItemKind::Documents,
+                localized_place_title(&path, "Documents"),
+                icon_override.unwrap_or("󰲃"),
+                path,
+            )
+        }),
+        BuiltinPlace::Downloads => context.downloads.clone().map(|path| {
+            SidebarItem::new(
+                SidebarItemKind::Downloads,
+                localized_place_title(&path, "Downloads"),
+                icon_override.unwrap_or("󰉍"),
+                path,
+            )
+        }),
+        BuiltinPlace::Pictures => context.pictures.clone().map(|path| {
+            SidebarItem::new(
+                SidebarItemKind::Pictures,
+                localized_place_title(&path, "Pictures"),
+                icon_override.unwrap_or("󰉏"),
+                path,
+            )
+        }),
+        BuiltinPlace::Music => context.music.clone().map(|path| {
+            SidebarItem::new(
+                SidebarItemKind::Music,
+                localized_place_title(&path, "Music"),
+                icon_override.unwrap_or("󱍙"),
+                path,
+            )
+        }),
+        BuiltinPlace::Videos => context.videos.clone().map(|path| {
+            SidebarItem::new(
+                SidebarItemKind::Videos,
+                localized_place_title(&path, videos_label()),
+                icon_override.unwrap_or("󰕧"),
+                path,
+            )
+        }),
+        BuiltinPlace::Root => context.root.clone().map(|path| {
+            SidebarItem::new(
+                SidebarItemKind::Root,
+                "Root",
+                icon_override.unwrap_or("󰋊"),
+                path,
+            )
+        }),
+        BuiltinPlace::Trash => context.trash.clone().map(|path| {
+            SidebarItem::new(
+                SidebarItemKind::Trash,
+                "Trash",
+                icon_override.unwrap_or("󰩺"),
+                path,
+            )
+        }),
+    }
+}
+
+fn localized_place_title(path: &Path, fallback: &'static str) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| fallback.to_string())
+}
+
+fn videos_label() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Movies"
+    } else {
+        "Videos"
+    }
+}
+
+fn path_identity_key(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| normalize_absolute_path(path))
+}
+
+fn normalize_absolute_path(path: &Path) -> PathBuf {
+    use std::path::Component;
+
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                let _ = normalized.pop();
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
 }
 
 /// Returns the path to the user's trash directory, or `None` if it cannot be determined.
@@ -161,7 +285,7 @@ fn mounted_device_items(_home: &Path, pinned_paths: &HashSet<PathBuf>) -> Vec<Si
     for entry in entries.flatten() {
         let path = entry.path();
 
-        if pinned_paths.contains(&path) {
+        if pinned_paths.contains(&path_identity_key(&path)) {
             continue;
         }
         if entry.file_name().to_string_lossy().starts_with('.') {
@@ -204,7 +328,7 @@ fn mounted_device_items(_home: &Path, pinned_paths: &HashSet<PathBuf>) -> Vec<Si
     let mut items = Vec::new();
     for letter in b'A'..=b'Z' {
         let path = PathBuf::from(format!("{}:\\", letter as char));
-        if path.exists() && !pinned_paths.contains(&path) {
+        if path.exists() && !pinned_paths.contains(&path_identity_key(&path)) {
             items.push(SidebarItem::new(
                 SidebarItemKind::Device { removable: false },
                 format!("{}:", letter as char),
@@ -241,7 +365,7 @@ fn mounted_device_items(home: &Path, pinned_paths: &HashSet<PathBuf>) -> Vec<Sid
 
         let path = PathBuf::from(mount_point.as_ref());
 
-        if path == Path::new("/") || pinned_paths.contains(&path) {
+        if path == Path::new("/") || pinned_paths.contains(&path_identity_key(&path)) {
             continue;
         }
         if bsd_system_fstype(&fstype) || bsd_hidden_path(&path) {
@@ -409,7 +533,9 @@ fn linux_mount_should_appear(
     pinned_paths: &HashSet<PathBuf>,
     removable: bool,
 ) -> bool {
-    if pinned_paths.contains(&mount.mount_point) || mount.mount_point == Path::new("/") {
+    if pinned_paths.contains(&path_identity_key(&mount.mount_point))
+        || mount.mount_point == Path::new("/")
+    {
         return false;
     }
     if linux_system_mount_type(&mount.fstype) || linux_hidden_mount_path(&mount.mount_point) {
@@ -758,5 +884,199 @@ mod tests {
     fn decode_linux_label_name_unescapes_hex_sequences() {
         let decoded = decode_linux_label_name(OsStr::new("New\\x20vol\\x23A"));
         assert_eq!(decoded, "New vol#A");
+    }
+}
+
+#[cfg(test)]
+mod sidebar_config_tests {
+    use super::*;
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn temp_path(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("elio-places-{label}-{unique}"))
+    }
+
+    fn context_for(root: &Path) -> PlaceResolutionContext {
+        let home = root.join("home");
+        let downloads = home.join("Downloads");
+        let trash = root.join("trash");
+        fs::create_dir_all(&downloads).expect("failed to create downloads");
+        fs::create_dir_all(&trash).expect("failed to create trash");
+        PlaceResolutionContext {
+            home,
+            desktop: None,
+            documents: None,
+            downloads: Some(downloads),
+            pictures: None,
+            music: None,
+            videos: None,
+            root: None,
+            trash: Some(trash),
+        }
+    }
+
+    #[test]
+    fn configured_places_order_and_semantic_kinds_are_preserved() {
+        let root = temp_path("ordered-sidebar");
+        let context = context_for(&root);
+        let projects = root.join("projects");
+        let places = PlacesConfig {
+            show_devices: false,
+            entries: vec![
+                PlaceEntrySpec::Builtin {
+                    place: BuiltinPlace::Downloads,
+                    icon: Some("D".to_string()),
+                },
+                PlaceEntrySpec::Custom {
+                    title: "Projects".to_string(),
+                    path: projects.clone(),
+                    icon: Some("P".to_string()),
+                },
+                PlaceEntrySpec::Builtin {
+                    place: BuiltinPlace::Home,
+                    icon: None,
+                },
+                PlaceEntrySpec::Builtin {
+                    place: BuiltinPlace::Trash,
+                    icon: None,
+                },
+            ],
+        };
+
+        let rows = build_sidebar_rows_with_context(&places, &context);
+        let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+
+        assert_eq!(items.len(), 4);
+        assert_eq!(items[0].title, "Downloads");
+        assert_eq!(items[0].kind, SidebarItemKind::Downloads);
+        assert_eq!(items[0].icon, "D");
+        assert_eq!(items[1].title, "Projects");
+        assert_eq!(items[1].kind, SidebarItemKind::Custom);
+        assert_eq!(items[1].icon, "P");
+        assert_eq!(items[1].path, projects);
+        assert_eq!(items[2].title, "Home");
+        assert_eq!(items[2].kind, SidebarItemKind::Home);
+        assert_eq!(items[3].title, "Trash");
+        assert_eq!(items[3].kind, SidebarItemKind::Trash);
+        assert!(rows.iter().all(|row| matches!(row, SidebarRow::Item(_))));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn missing_builtin_places_are_skipped_but_nonexistent_custom_places_stay_visible() {
+        let root = temp_path("missing-builtins");
+        let context = context_for(&root);
+        let future_mount = root.join("mnt").join("camera");
+        let places = PlacesConfig {
+            show_devices: false,
+            entries: vec![
+                PlaceEntrySpec::Builtin {
+                    place: BuiltinPlace::Desktop,
+                    icon: None,
+                },
+                PlaceEntrySpec::Custom {
+                    title: "Camera".to_string(),
+                    path: future_mount.clone(),
+                    icon: None,
+                },
+                PlaceEntrySpec::Builtin {
+                    place: BuiltinPlace::Downloads,
+                    icon: None,
+                },
+            ],
+        };
+
+        let rows = build_sidebar_rows_with_context(&places, &context);
+        let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].title, "Camera");
+        assert_eq!(items[0].kind, SidebarItemKind::Custom);
+        assert_eq!(items[0].path, future_mount);
+        assert_eq!(items[1].title, "Downloads");
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn localized_builtin_places_show_resolved_folder_name() {
+        let root = temp_path("localized-builtins");
+        let home = root.join("home");
+        let downloads = home.join("Descargas");
+        fs::create_dir_all(&downloads).expect("failed to create downloads");
+        let context = PlaceResolutionContext {
+            home,
+            desktop: None,
+            documents: None,
+            downloads: Some(downloads.clone()),
+            pictures: None,
+            music: None,
+            videos: None,
+            root: None,
+            trash: None,
+        };
+        let places = PlacesConfig {
+            show_devices: false,
+            entries: vec![PlaceEntrySpec::Builtin {
+                place: BuiltinPlace::Downloads,
+                icon: None,
+            }],
+        };
+
+        let rows = build_sidebar_rows_with_context(&places, &context);
+        let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Descargas");
+        assert_eq!(items[0].kind, SidebarItemKind::Downloads);
+        assert_eq!(items[0].path, downloads);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn places_deduplicate_entries_by_resolved_path() {
+        let root = temp_path("dedupe-sidebar");
+        let context = context_for(&root);
+        let places = PlacesConfig {
+            show_devices: false,
+            entries: vec![
+                PlaceEntrySpec::Builtin {
+                    place: BuiltinPlace::Home,
+                    icon: None,
+                },
+                PlaceEntrySpec::Custom {
+                    title: "Home 2".to_string(),
+                    path: context.home.clone(),
+                    icon: Some("H".to_string()),
+                },
+                PlaceEntrySpec::Builtin {
+                    place: BuiltinPlace::Downloads,
+                    icon: None,
+                },
+                PlaceEntrySpec::Custom {
+                    title: "Downloads Alias".to_string(),
+                    path: context.home.join("Downloads").join("..").join("Downloads"),
+                    icon: Some("A".to_string()),
+                },
+            ],
+        };
+
+        let rows = build_sidebar_rows_with_context(&places, &context);
+        let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].title, "Home");
+        assert_eq!(items[1].title, "Downloads");
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
     }
 }
