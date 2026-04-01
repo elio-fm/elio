@@ -191,6 +191,12 @@ impl App {
                             .take()
                             .unwrap_or_else(|| self.cwd.clone());
                         let status = build.status.unwrap_or_default();
+                        let next_queued_dest = self
+                            .queued_pastes
+                            .front()
+                            .map(|queued| queued.dest_dir.as_path());
+                        let defer_reload_for_same_dest =
+                            next_queued_dest == Some(dest_dir.as_path());
                         // Only reload in-place when the user is still in the
                         // destination directory and not mid-navigation to
                         // somewhere else (which would cancel their navigation).
@@ -200,7 +206,10 @@ impl App {
                             .as_ref()
                             .map(|l| l.target_cwd.as_path());
                         let nav_to_dest = nav_target == Some(dest_dir.as_path());
-                        if dest_dir == self.cwd && (nav_target.is_none() || nav_to_dest) {
+                        if dest_dir == self.cwd
+                            && (nav_target.is_none() || nav_to_dest)
+                            && !defer_reload_for_same_dest
+                        {
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,
                                 target_cwd: dest_dir,
@@ -215,8 +224,13 @@ impl App {
                         } else {
                             // User navigated away — just surface the status.
                             // Navigation will load dest_dir fresh if they return.
+                            // If another queued paste targets this same
+                            // directory, defer the reload until that queued
+                            // paste finishes to avoid showing a mid-queue
+                            // snapshot.
                             self.status = status;
                         }
+                        self.start_next_queued_paste();
                     } else if let Some(prog) = &mut self.paste_progress {
                         prog.completed = build.completed;
                     }

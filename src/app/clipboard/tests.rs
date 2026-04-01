@@ -22,18 +22,31 @@ fn temp_path(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!("elio-clipboard-{label}-{unique}"))
 }
 
-/// Poll `process_background_jobs` until `paste_progress` is `None` (meaning
-/// the worker sent its final `done=true` result and the directory reload was
-/// queued) or the timeout expires.
+/// Poll `process_background_jobs` until there is no active paste and no queued
+/// follow-up paste left to start, or the timeout expires.
 fn wait_for_paste(app: &mut App) {
     for _ in 0..500 {
         let _ = app.process_background_jobs();
-        if app.paste_progress().is_none() {
+        if app.paste_progress().is_none() && app.queued_pastes.is_empty() {
             return;
         }
         std::thread::sleep(Duration::from_millis(10));
     }
     panic!("timed out waiting for paste to complete");
+}
+
+fn wait_for_paste_and_reload(app: &mut App) {
+    for _ in 0..500 {
+        let _ = app.process_background_jobs();
+        if app.paste_progress().is_none()
+            && app.queued_pastes.is_empty()
+            && app.directory_runtime.pending_load.is_none()
+        {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for paste and directory reload to complete");
 }
 
 fn clipboard_env_lock() -> std::sync::MutexGuard<'static, ()> {
@@ -398,12 +411,113 @@ fn new_paste_after_cancel_is_not_affected_by_old_cancel_token() {
     fs::remove_dir_all(&dst2).unwrap();
 }
 
-// ── second paste blocked while one is running ────────────────────────────────
+// ── queued pastes ────────────────────────────────────────────────────────────
 
 #[test]
-fn second_paste_is_blocked_while_one_is_in_progress() {
-    let src_dir = temp_path("block-src");
-    let dst_dir = temp_path("block-dst");
+fn yank_paste_then_yank_paste_queues_the_second_snapshot() {
+    let src_dir = temp_path("queue-src");
+    let dst1 = temp_path("queue-dst-1");
+    let dst2 = temp_path("queue-dst-2");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst1).unwrap();
+    fs::create_dir_all(&dst2).unwrap();
+    fs::write(src_dir.join("a.txt"), "a").unwrap();
+    fs::write(src_dir.join("b.txt"), "b").unwrap();
+
+    let mut app = App::new_at(src_dir.clone()).unwrap();
+
+    app.yank();
+    app.cwd = dst1.clone();
+    app.paste().unwrap();
+
+    let token_after_first = app.paste_token;
+    assert!(app.paste_progress().is_some());
+
+    // Queue a second paste after changing both the source selection and the
+    // destination directory.  The queued snapshot must preserve both.
+    app.cwd = src_dir.clone();
+    app.select_index(1);
+    app.yank();
+    app.cwd = dst2.clone();
+    app.paste().unwrap();
+
+    assert_eq!(
+        app.paste_token, token_after_first,
+        "paste_token must not change until the queued paste actually starts"
+    );
+    assert_eq!(app.queued_pastes.len(), 1, "second paste should be queued");
+    assert!(
+        app.status.contains("Queued paste"),
+        "status should indicate that the second paste was queued"
+    );
+    assert_eq!(app.queued_pastes[0].dest_dir, dst2);
+    assert_eq!(app.queued_pastes[0].paths, vec![src_dir.join("b.txt")]);
+
+    wait_for_paste(&mut app);
+
+    assert!(dst1.join("a.txt").exists());
+    assert!(dst2.join("b.txt").exists());
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst1).unwrap();
+    fs::remove_dir_all(&dst2).unwrap();
+}
+
+#[test]
+fn queued_paste_with_missing_destination_fails_and_later_queue_continues() {
+    let src_dir = temp_path("queue-missing-src");
+    let dst1 = temp_path("queue-missing-dst-1");
+    let missing_dst = temp_path("queue-missing-dst-2");
+    let dst3 = temp_path("queue-missing-dst-3");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst1).unwrap();
+    fs::create_dir_all(&dst3).unwrap();
+    fs::write(src_dir.join("a.txt"), "a").unwrap();
+    fs::write(src_dir.join("b.txt"), "b").unwrap();
+    fs::write(src_dir.join("c.txt"), "c").unwrap();
+
+    let mut app = App::new_at(src_dir.clone()).unwrap();
+    app.yank();
+    app.cwd = dst1.clone();
+    app.paste().unwrap();
+
+    app.clipboard = Some(super::super::state::Clipboard {
+        paths: vec![src_dir.join("b.txt")],
+        op: ClipOp::Yank,
+    });
+    app.cwd = missing_dst.clone();
+    app.paste().unwrap();
+
+    app.clipboard = Some(super::super::state::Clipboard {
+        paths: vec![src_dir.join("c.txt")],
+        op: ClipOp::Yank,
+    });
+    app.cwd = dst3.clone();
+    app.paste().unwrap();
+
+    assert_eq!(app.queued_pastes.len(), 2);
+
+    wait_for_paste(&mut app);
+
+    assert!(dst1.join("a.txt").exists());
+    assert!(
+        !missing_dst.join("b.txt").exists(),
+        "paste into a missing destination should fail"
+    );
+    assert!(
+        dst3.join("c.txt").exists(),
+        "a later queued paste should still run after an earlier queued failure"
+    );
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst1).unwrap();
+    fs::remove_dir_all(&dst3).unwrap();
+}
+
+#[test]
+fn queued_same_destination_pastes_defer_reload_until_queue_drains() {
+    let src_dir = temp_path("queue-same-dst-src");
+    let dst_dir = temp_path("queue-same-dst-dst");
     fs::create_dir_all(&src_dir).unwrap();
     fs::create_dir_all(&dst_dir).unwrap();
     fs::write(src_dir.join("a.txt"), "a").unwrap();
@@ -413,32 +527,96 @@ fn second_paste_is_blocked_while_one_is_in_progress() {
     app.yank();
     app.cwd = dst_dir.clone();
     app.paste().unwrap();
+    let first_token = app.paste_token;
 
-    let token_after_first = app.paste_token;
-    assert!(app.paste_progress().is_some());
-
-    // Attempt a second paste while the first is still in flight.
-    // clipboard is None (consumed), so set it directly.
     app.clipboard = Some(super::super::state::Clipboard {
         paths: vec![src_dir.join("b.txt")],
         op: ClipOp::Yank,
     });
+    app.cwd = dst_dir.clone();
     app.paste().unwrap();
 
-    // Token must not have changed — the second paste was rejected.
-    assert_eq!(
-        app.paste_token, token_after_first,
-        "paste_token must not change when second paste is blocked"
-    );
+    let mut queued_started = false;
+    for _ in 0..500 {
+        let _ = app.process_background_jobs();
+        if app.paste_token != first_token {
+            queued_started = true;
+            assert!(
+                app.directory_runtime.pending_load.is_none(),
+                "reload should stay deferred while a queued paste to the same destination starts"
+            );
+            assert!(
+                app.paste_progress().is_some(),
+                "second paste should be active once its token becomes current"
+            );
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
     assert!(
-        app.status.contains("in progress"),
-        "status should indicate a paste is already running"
+        queued_started,
+        "queued paste should start after the first one finishes"
     );
 
-    wait_for_paste(&mut app);
+    wait_for_paste_and_reload(&mut app);
+
+    assert!(dst_dir.join("a.txt").exists());
+    assert!(dst_dir.join("b.txt").exists());
+    assert_eq!(app.status_message(), "Copied 1 item");
 
     fs::remove_dir_all(&src_dir).unwrap();
     fs::remove_dir_all(&dst_dir).unwrap();
+}
+
+#[test]
+fn esc_cancels_active_paste_and_clears_queued_pastes() {
+    let src_dir = temp_path("queue-cancel-src");
+    let dst1 = temp_path("queue-cancel-dst-1");
+    let dst2 = temp_path("queue-cancel-dst-2");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst1).unwrap();
+    fs::create_dir_all(&dst2).unwrap();
+    fs::write(src_dir.join("a.txt"), "a").unwrap();
+    fs::write(src_dir.join("b.txt"), "b").unwrap();
+
+    let mut app = App::new_at(src_dir.clone()).unwrap();
+    app.yank();
+    app.cwd = dst1.clone();
+    app.paste().unwrap();
+
+    app.clipboard = Some(super::super::state::Clipboard {
+        paths: vec![src_dir.join("b.txt")],
+        op: ClipOp::Yank,
+    });
+    app.cwd = dst2.clone();
+    app.paste().unwrap();
+    assert_eq!(app.queued_pastes.len(), 1);
+
+    app.handle_event(crossterm::event::Event::Key(
+        crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Esc),
+    ))
+    .unwrap();
+
+    assert!(app.paste_progress().is_none());
+    assert!(
+        app.queued_pastes.is_empty(),
+        "Esc should clear queued pastes as well as the active paste"
+    );
+
+    for _ in 0..300 {
+        let _ = app.process_background_jobs();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    assert!(
+        !dst2.join("b.txt").exists(),
+        "queued paste should not run after Esc cancels the queue"
+    );
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst1).unwrap();
+    fs::remove_dir_all(&dst2).unwrap();
 }
 
 // ── nothing-to-paste ─────────────────────────────────────────────────────────
@@ -455,6 +633,34 @@ fn paste_with_empty_clipboard_sets_status_and_leaves_no_progress() {
     assert!(app.paste_progress().is_none());
 
     fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn paste_during_active_paste_without_clipboard_explains_how_to_queue() {
+    let src_dir = temp_path("queue-hint-src");
+    let dst_dir = temp_path("queue-hint-dst");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst_dir).unwrap();
+    fs::write(src_dir.join("a.txt"), "a").unwrap();
+
+    let mut app = App::new_at(src_dir.clone()).unwrap();
+    app.yank();
+    app.cwd = dst_dir.clone();
+    app.paste().unwrap();
+
+    let token = app.paste_token;
+    app.paste().unwrap();
+
+    assert_eq!(app.paste_token, token);
+    assert_eq!(
+        app.status,
+        "Paste in progress — yank or cut another item to queue it"
+    );
+
+    wait_for_paste(&mut app);
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst_dir).unwrap();
 }
 
 #[test]
