@@ -4,14 +4,6 @@ A terminal-native, mouse-capable file manager with rich previews and inline imag
 
 ![elio — default theme](examples/themes/default/screenshot.webp)
 
-| Catppuccin Mocha | Tokyo Night |
-|---|---|
-| ![Catppuccin Mocha](examples/themes/catppuccin-mocha/screenshot.png) | ![Tokyo Night](examples/themes/tokyo-night/screenshot.png) |
-
-| Amber Dusk | Blush Light |
-|---|---|
-| ![Amber Dusk](examples/themes/amber-dusk/screenshot.png) | ![Blush Light](examples/themes/blush-light/screenshot.png) |
-
 ---
 
 ## Features
@@ -36,6 +28,20 @@ cargo run --release
 ```
 
 `elio` starts in your current working directory.
+
+---
+
+## Example Themes
+
+A few bundled themes are shown below. More are available in [`examples/themes/`](examples/themes/) — copy any `theme.toml` to your platform's theme path in the [Theming](#theming) section to apply it.
+
+| Catppuccin Mocha | Tokyo Night |
+|---|---|
+| ![Catppuccin Mocha](examples/themes/catppuccin-mocha/screenshot.png) | ![Tokyo Night](examples/themes/tokyo-night/screenshot.png) |
+
+| Amber Dusk | Blush Light |
+|---|---|
+| ![Amber Dusk](examples/themes/amber-dusk/screenshot.png) | ![Blush Light](examples/themes/blush-light/screenshot.png) |
 
 ---
 
@@ -213,7 +219,7 @@ icon  = "󰌾"
 color = "#59de94"
 ```
 
-The full default theme is at [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml). Ready-to-use themes are in [`examples/themes/`](examples/themes/) — copy any `theme.toml` to the theme file path for your platform (see table above) to apply it.
+The full default theme is at [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml).
 
 ---
 
