@@ -1,5 +1,5 @@
+use super::appearance;
 use crate::fs as browser_support;
-use crate::ui::theme;
 use ratatui::{
     layout::Alignment,
     style::Style,
@@ -551,7 +551,7 @@ fn unavailable_preview(detail: &str, message: &str) -> PreviewContent {
 }
 
 pub(super) fn line_number_span(number: usize, width: usize) -> Span<'static> {
-    let preview = theme::code_preview_palette();
+    let preview = appearance::code_palette();
     Span::styled(
         format!("{number:>width$} ", width = width),
         Style::default().fg(preview.line_number),

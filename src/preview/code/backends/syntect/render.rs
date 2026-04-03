@@ -1,4 +1,5 @@
 use super::semantics::{SemanticRole, role_color, semantic_role_for_token};
+use crate::preview::appearance;
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
@@ -24,7 +25,7 @@ where
         crate::preview::clamp_code_preview_line_limit(line_limit),
     );
     let number_width = crate::preview::line_number_width(source_lines.len());
-    let code_palette = crate::ui::theme::code_preview_palette();
+    let code_palette = appearance::code_palette();
     let mut parse_state = ParseState::new(syntax);
     let mut scope_stack = ScopeStack::new();
     let mut rendered = Vec::new();

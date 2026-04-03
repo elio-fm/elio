@@ -1,3 +1,4 @@
+use crate::preview::appearance::CodePalette;
 use ratatui::style::Color;
 use std::sync::OnceLock;
 use syntect::parsing::Scope;
@@ -85,10 +86,7 @@ pub(super) fn looks_like_shell_command_name(token: &str) -> bool {
     chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
 }
 
-pub(super) fn role_color(
-    role: SemanticRole,
-    palette: crate::ui::theme::CodePreviewPalette,
-) -> Color {
+pub(super) fn role_color(role: SemanticRole, palette: CodePalette) -> Color {
     match role {
         SemanticRole::Fg => palette.fg,
         SemanticRole::Comment => palette.comment,
