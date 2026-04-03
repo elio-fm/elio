@@ -6,8 +6,7 @@ use ratatui::style::Color;
 use std::path::Path;
 
 pub(crate) use self::appearance::{
-    CodePreviewPalette, Palette, code_preview_palette, initialize, palette, resolve_entry,
-    resolve_path,
+    Palette, code_preview_palette, initialize, palette, resolve_entry, resolve_path,
 };
 
 pub(super) fn mix_color(base: Color, tint: Color, tint_weight: u8) -> Color {

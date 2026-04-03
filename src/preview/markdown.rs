@@ -1,5 +1,4 @@
-use super::*;
-use crate::ui::theme;
+use super::{appearance as theme, *};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use ratatui::{
     style::{Modifier, Style},

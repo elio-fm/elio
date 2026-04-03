@@ -55,6 +55,8 @@ pub(crate) struct CodePalette {
     pub invalid: Color,
 }
 
+pub(crate) type CodePreviewPalette = CodePalette;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct PathAppearance<'a> {
     pub icon: &'a str,
@@ -116,6 +118,10 @@ pub(crate) fn code_palette() -> CodePalette {
         r#macro: palette.r#macro,
         invalid: palette.invalid,
     }
+}
+
+pub(crate) fn code_preview_palette() -> CodePreviewPalette {
+    code_palette()
 }
 
 pub(crate) fn resolve_path(path: &Path, kind: EntryKind) -> PathAppearance<'static> {

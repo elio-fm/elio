@@ -2,7 +2,7 @@ use super::{
     looks_numeric, scan_quoted_segment, split_comment, split_jsonc_segments, split_unquoted_once,
     styled_text,
 };
-use crate::ui::theme;
+use crate::preview::appearance as theme;
 use ratatui::{style::Modifier, text::Span};
 
 pub(super) fn highlight_toml_line(

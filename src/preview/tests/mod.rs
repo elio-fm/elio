@@ -1,5 +1,4 @@
-use super::*;
-use crate::ui::theme;
+use super::{appearance as theme, *};
 use image::ImageFormat;
 use ratatui::{style::Modifier, text::Line};
 #[cfg(unix)]

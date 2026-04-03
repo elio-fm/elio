@@ -1,6 +1,8 @@
-use super::{PreviewContent, PreviewKind, PreviewVisual, PreviewVisualKind, PreviewVisualLayout};
+use super::{
+    PreviewContent, PreviewKind, PreviewVisual, PreviewVisualKind, PreviewVisualLayout,
+    appearance as theme,
+};
 use crate::core::Entry;
-use crate::ui::theme;
 use ratatui::{
     style::Style,
     text::{Line, Span},

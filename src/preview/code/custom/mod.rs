@@ -3,7 +3,7 @@ mod directive;
 mod ini;
 mod logs;
 
-use crate::{file_info::CustomCodeKind, ui::theme};
+use crate::{file_info::CustomCodeKind, preview::appearance as theme};
 use ratatui::{
     style::Style,
     text::{Line, Span},
