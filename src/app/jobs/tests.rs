@@ -258,11 +258,10 @@ fn low_priority_heavy_preview_does_not_start_a_second_heavy_job() {
     }));
 
     let started = scheduler
-        .preview
-        .pop_next_pending_for_tests()
+        .pop_next_pending_preview_for_tests()
         .expect("first heavy preview should start");
     assert_eq!(started.entry.path, first.path);
-    assert!(scheduler.preview.pop_next_pending_for_tests().is_none());
+    assert!(scheduler.pop_next_pending_preview_for_tests().is_none());
     assert_eq!(
         scheduler.snapshot().preview_pending_low,
         vec![PreviewJobKey {
@@ -322,13 +321,11 @@ fn low_priority_light_preview_can_start_while_heavy_preview_is_active() {
     }));
 
     let started_heavy = scheduler
-        .preview
-        .pop_next_pending_for_tests()
+        .pop_next_pending_preview_for_tests()
         .expect("heavy preview should start");
     assert_eq!(started_heavy.entry.path, heavy.path);
     let started_light = scheduler
-        .preview
-        .pop_next_pending_for_tests()
+        .pop_next_pending_preview_for_tests()
         .expect("light preview should still start");
     assert_eq!(started_light.entry.path, light.path);
 }
@@ -357,15 +354,14 @@ fn high_priority_preview_cancels_active_stale_preview_work() {
 
     assert!(scheduler.submit_preview(preview_request(active.clone(), 1, PreviewPriority::Low,)));
     let started = scheduler
-        .preview
-        .pop_next_pending_for_tests()
+        .pop_next_pending_preview_for_tests()
         .expect("stale preview should start");
     assert_eq!(started.entry.path, active.path);
 
     assert!(scheduler.submit_preview(preview_request(current.clone(), 2, PreviewPriority::High,)));
 
     assert_eq!(
-        scheduler.preview.canceled_active_keys(),
+        scheduler.canceled_active_preview_keys_for_tests(),
         vec![preview_job_key("active.rs", 1)]
     );
     assert_eq!(

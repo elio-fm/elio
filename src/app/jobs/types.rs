@@ -1,0 +1,276 @@
+use crate::app::overlays::images::PreparedStaticImageAsset;
+use crate::app::overlays::pdf::PdfProbeResult;
+use crate::app::{ClipOp, SearchScope};
+use crate::core::{Entry, SortMode};
+use crate::fs::search::SearchCandidate;
+use crate::{preview, preview::PreviewWorkClass};
+use std::{path::PathBuf, sync::Arc, time::SystemTime};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum PreviewPriority {
+    High,
+    Low,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum PdfJobPriority {
+    Current,
+    Prefetch,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum ImageJobPriority {
+    Current,
+    Nearby,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct SearchBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) scope: SearchScope,
+    pub(in crate::app) show_hidden: bool,
+    pub(in crate::app) result: Result<Arc<Vec<SearchCandidate>>, String>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct SearchRequest {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) scope: SearchScope,
+    pub(in crate::app) show_hidden: bool,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct DirectoryBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) result: Result<crate::fs::DirectorySnapshot, String>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DirectoryRequest {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) show_hidden: bool,
+    pub(in crate::app) sort_mode: SortMode,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct DirectoryItemCountBuild {
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) modified: Option<SystemTime>,
+    pub(in crate::app) show_hidden: bool,
+    pub(in crate::app) item_count: Option<usize>,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct DirectoryStatsBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) result: crate::fs::DirectoryStatsScanResult,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct DirectoryFingerprintBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) show_hidden: bool,
+    pub(in crate::app) result: Result<crate::fs::DirectoryFingerprint, String>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DirectoryFingerprintRequest {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) show_hidden: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DirectoryItemCountRequest {
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) modified: Option<SystemTime>,
+    pub(in crate::app) show_hidden: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DirectoryStatsRequest {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) path: PathBuf,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct PreviewLineCountBuild {
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) size: u64,
+    pub(in crate::app) modified: Option<SystemTime>,
+    pub(in crate::app) total_lines: Option<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct PreviewLineCountRequest {
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) size: u64,
+    pub(in crate::app) modified: Option<SystemTime>,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct ImagePrepareBuild {
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) size: u64,
+    pub(in crate::app) modified: Option<SystemTime>,
+    pub(in crate::app) target_width_px: u32,
+    pub(in crate::app) target_height_px: u32,
+    pub(in crate::app) force_render_to_cache: bool,
+    pub(in crate::app) prepare_inline_payload: bool,
+    pub(in crate::app) canceled: bool,
+    pub(in crate::app) result: Option<PreparedStaticImageAsset>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct ImagePrepareRequest {
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) size: u64,
+    pub(in crate::app) modified: Option<SystemTime>,
+    pub(in crate::app) target_width_px: u32,
+    pub(in crate::app) target_height_px: u32,
+    pub(in crate::app) ffmpeg_available: bool,
+    pub(in crate::app) resvg_available: bool,
+    pub(in crate::app) magick_available: bool,
+    pub(in crate::app) force_render_to_cache: bool,
+    pub(in crate::app) prepare_inline_payload: bool,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct PdfProbeBuild {
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) size: u64,
+    pub(in crate::app) modified: Option<SystemTime>,
+    pub(in crate::app) page: usize,
+    pub(in crate::app) result: Result<PdfProbeResult, String>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct PdfProbeRequest {
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) size: u64,
+    pub(in crate::app) modified: Option<SystemTime>,
+    pub(in crate::app) page: usize,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct PdfRenderBuild {
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) size: u64,
+    pub(in crate::app) modified: Option<SystemTime>,
+    pub(in crate::app) page: usize,
+    pub(in crate::app) width_px: u32,
+    pub(in crate::app) height_px: u32,
+    pub(in crate::app) result: Result<Option<PathBuf>, String>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct PdfRenderRequest {
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) size: u64,
+    pub(in crate::app) modified: Option<SystemTime>,
+    pub(in crate::app) page: usize,
+    pub(in crate::app) width_px: u32,
+    pub(in crate::app) height_px: u32,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct PreviewBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) entry: Entry,
+    pub(in crate::app) variant: preview::PreviewRequestOptions,
+    pub(in crate::app) code_line_limit: usize,
+    /// The actual line limit used for this render pass. May be less than
+    /// `code_line_limit` for initial incremental renders.
+    pub(in crate::app) code_render_limit: usize,
+    pub(in crate::app) result: preview::PreviewContent,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct PreviewRequest {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) entry: Entry,
+    pub(in crate::app) variant: preview::PreviewRequestOptions,
+    pub(in crate::app) code_line_limit: usize,
+    /// The actual render line limit for this pass. For the initial incremental
+    /// render this is smaller than `code_line_limit`; for extension/prefetch
+    /// renders it equals `code_line_limit`.
+    pub(in crate::app) code_render_limit: usize,
+    pub(in crate::app) priority: PreviewPriority,
+    pub(in crate::app) work_class: PreviewWorkClass,
+    pub(in crate::app) ffprobe_available: bool,
+    pub(in crate::app) ffmpeg_available: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct PasteRequest {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) dest_dir: PathBuf,
+    pub(in crate::app) paths: Vec<PathBuf>,
+    pub(in crate::app) op: ClipOp,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct PasteBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) completed: usize,
+    /// `true` on the final result; `false` on intermediate progress updates.
+    pub(in crate::app) done: bool,
+    /// Populated only when `done = true`.
+    pub(in crate::app) status: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct TrashRequest {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) targets: Vec<crate::app::state::TrashTarget>,
+    pub(in crate::app) permanent: bool,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct TrashBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) completed: usize,
+    /// `true` on the final result; `false` on intermediate progress updates.
+    pub(in crate::app) done: bool,
+    /// Populated only when `done = true`.
+    pub(in crate::app) status: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct RestoreRequest {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) targets: Vec<crate::app::state::TrashTarget>,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct RestoreBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) completed: usize,
+    /// `true` on the final result; `false` on intermediate progress updates.
+    pub(in crate::app) done: bool,
+    /// Populated only when `done = true`.
+    pub(in crate::app) status: Option<String>,
+}
+
+#[derive(Debug)]
+pub(in crate::app) enum JobResult {
+    Directory(DirectoryBuild),
+    DirectoryFingerprint(DirectoryFingerprintBuild),
+    DirectoryItemCount(DirectoryItemCountBuild),
+    DirectoryStats(DirectoryStatsBuild),
+    PreviewLineCount(PreviewLineCountBuild),
+    ImagePrepare(ImagePrepareBuild),
+    PdfProbe(PdfProbeBuild),
+    PdfRender(PdfRenderBuild),
+    Search(SearchBuild),
+    Preview(Box<PreviewBuild>),
+    Paste(PasteBuild),
+    Trash(TrashBuild),
+    Restore(RestoreBuild),
+}
