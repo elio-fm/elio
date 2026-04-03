@@ -1,3 +1,4 @@
+mod appearance;
 mod audio;
 mod binary;
 pub(crate) mod code;

@@ -1,4 +1,4 @@
-use crate::ui::theme;
+use crate::preview::appearance;
 use ratatui::{
     style::Style,
     text::{Line, Span},
@@ -13,7 +13,7 @@ pub(in crate::preview::code) fn render_plain_code_preview<F>(
 where
     F: Fn() -> bool,
 {
-    let code_palette = theme::code_preview_palette();
+    let code_palette = appearance::code_palette();
     let source_lines = crate::preview::collect_preview_lines_with_limit(
         text,
         crate::preview::clamp_code_preview_line_limit(line_limit),

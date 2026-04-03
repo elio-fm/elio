@@ -1,6 +1,5 @@
-use super::*;
+use super::{appearance, *};
 use crate::core::{Entry, EntryKind};
-use crate::ui::theme;
 use ratatui::{
     style::Style,
     text::{Line, Span},
@@ -43,13 +42,13 @@ pub(super) fn build_directory_preview(entry: &Entry) -> PreviewContent {
                 );
             }
 
-            let palette = theme::palette();
+            let palette = appearance::palette();
             let total_items = items.len();
             let folder_count = items.iter().filter(|item| item.2).count();
             let file_count = total_items.saturating_sub(folder_count);
             let mut lines = Vec::new();
             for (name, path, is_dir) in items.into_iter() {
-                let appearance = theme::resolve_path(
+                let path_appearance = appearance::resolve_path(
                     &path,
                     if is_dir {
                         EntryKind::Directory
@@ -59,9 +58,9 @@ pub(super) fn build_directory_preview(entry: &Entry) -> PreviewContent {
                 );
                 lines.push(Line::from(vec![
                     Span::styled(
-                        format!("{} ", appearance.icon),
+                        format!("{} ", path_appearance.icon),
                         Style::default()
-                            .fg(appearance.color)
+                            .fg(path_appearance.color)
                             .add_modifier(ratatui::style::Modifier::BOLD),
                     ),
                     Span::styled(name, Style::default().fg(palette.text)),

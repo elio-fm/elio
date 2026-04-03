@@ -1,4 +1,5 @@
 use super::semantics::{SemanticRole, looks_like_shell_command_name, role_color};
+use crate::preview::appearance::{self, CodePalette};
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
@@ -25,7 +26,7 @@ where
         crate::preview::clamp_code_preview_line_limit(line_limit),
     );
     let number_width = crate::preview::line_number_width(source_lines.len());
-    let code_palette = crate::ui::theme::code_preview_palette();
+    let code_palette = appearance::code_palette();
     let mut rendered = Vec::new();
 
     for (index, line) in source_lines.iter().enumerate() {
@@ -58,10 +59,7 @@ pub(super) fn is_shell_like_syntax(code_syntax: &str) -> bool {
     matches!(code_syntax, "sh" | "bash" | "zsh" | "ksh")
 }
 
-fn render_shell_line(
-    line: &str,
-    palette: crate::ui::theme::CodePreviewPalette,
-) -> Vec<Span<'static>> {
+fn render_shell_line(line: &str, palette: CodePalette) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     let mut state = ShellLineState {
         command_position: true,
@@ -152,11 +150,7 @@ fn render_shell_line(
     spans
 }
 
-fn shell_span(
-    text: &str,
-    role: SemanticRole,
-    palette: crate::ui::theme::CodePreviewPalette,
-) -> Span<'static> {
+fn shell_span(text: &str, role: SemanticRole, palette: CodePalette) -> Span<'static> {
     let mut rendered_style = Style::default().fg(role_color(role, palette));
     if role == SemanticRole::Invalid {
         rendered_style = rendered_style.add_modifier(Modifier::UNDERLINED);
@@ -179,7 +173,7 @@ fn consume_while(text: &str, predicate: impl Fn(char) -> bool) -> Option<usize> 
 fn consume_shell_single_quoted_string(
     text: &str,
     spans: &mut Vec<Span<'static>>,
-    palette: crate::ui::theme::CodePreviewPalette,
+    palette: CodePalette,
 ) -> Option<usize> {
     if !text.starts_with('\'') {
         return None;
@@ -201,7 +195,7 @@ fn consume_shell_single_quoted_string(
 fn consume_shell_double_quoted_string(
     text: &str,
     spans: &mut Vec<Span<'static>>,
-    palette: crate::ui::theme::CodePreviewPalette,
+    palette: CodePalette,
 ) -> Option<usize> {
     if !text.starts_with('"') {
         return None;
@@ -241,7 +235,7 @@ fn consume_shell_double_quoted_string(
 fn consume_shell_variable(
     text: &str,
     spans: &mut Vec<Span<'static>>,
-    palette: crate::ui::theme::CodePreviewPalette,
+    palette: CodePalette,
 ) -> Option<usize> {
     if !text.starts_with('$') {
         return None;
