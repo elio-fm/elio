@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::{Entry, EntryKind};
+use crate::core::{Entry, EntryKind};
 use crate::ui::theme;
 use ratatui::{
     style::Style,

@@ -2,7 +2,7 @@ use super::{
     rules::{default_class_style, normalize_key, rgb, rule_class},
     types::{CodePreviewPalette, Palette, PreviewTheme, RuleOverride, Theme},
 };
-use crate::app::FileClass;
+use crate::core::FileClass;
 use ratatui::style::Color;
 use serde::Deserialize;
 use std::collections::HashMap;

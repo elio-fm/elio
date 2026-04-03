@@ -1,5 +1,5 @@
 use super::{PreviewContent, PreviewKind, PreviewVisual, PreviewVisualKind, PreviewVisualLayout};
-use crate::app::Entry;
+use crate::core::Entry;
 use crate::ui::theme;
 use ratatui::{
     style::Style,

@@ -29,16 +29,17 @@ use std::{
 pub use self::state::App;
 #[cfg(test)]
 pub use self::state::PreviewMetricsSnapshot;
+pub(crate) use crate::core::FileClass;
 pub(crate) use crate::fs::{
     format_item_count, format_size, format_time_ago, rect_contains, sanitize_terminal_text,
 };
 
 pub(crate) use self::types::ClipOp;
-pub(crate) use self::types::FileClass;
 pub use self::types::{
-    CopyHit, Entry, EntryHit, EntryKind, FrameState, GoToHit, PathHit, SearchHit, SearchRow,
-    SearchScope, SidebarItem, SidebarItemKind, SidebarRow, SortMode, ViewMetrics, ViewMode,
+    CopyHit, EntryHit, FrameState, GoToHit, PathHit, SearchHit, SearchRow, SearchScope,
+    SidebarItem, SidebarItemKind, SidebarRow, ViewMetrics, ViewMode,
 };
+pub use crate::core::{Entry, EntryKind, SortMode};
 
 impl App {
     pub fn set_frame_state(&mut self, frame_state: FrameState) -> bool {

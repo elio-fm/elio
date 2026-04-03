@@ -13,7 +13,7 @@ use self::{
     types::{EntryClassCacheKey, ResolvedAppearance, Theme},
 };
 use super::builtin_themes::DEFAULT_THEME_TOML;
-use crate::app::{Entry, EntryKind, FileClass};
+use crate::core::{Entry, EntryKind, FileClass};
 use std::{
     collections::HashMap,
     path::Path,

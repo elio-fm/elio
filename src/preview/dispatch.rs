@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::{Entry, FileClass};
+use crate::core::{Entry, FileClass};
 use crate::fs as browser_support;
 use crate::{file_info, ui::theme};
 use image::ImageReader;

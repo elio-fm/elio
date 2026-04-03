@@ -1,5 +1,5 @@
 use super::{FileFacts, PreviewKind};
-use crate::app::FileClass;
+use crate::core::FileClass;
 use std::{fs::File, io::Read, path::Path};
 
 const LICENSE_SNIFF_BYTE_LIMIT: usize = 64 * 1024;
@@ -634,7 +634,7 @@ fn normalize_high_signal_text(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{EntryKind, FileClass};
+    use crate::core::{EntryKind, FileClass};
     use std::{
         fs,
         path::PathBuf,

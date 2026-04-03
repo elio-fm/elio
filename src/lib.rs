@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod core;
 mod file_info;
 mod fs;
 mod preview;

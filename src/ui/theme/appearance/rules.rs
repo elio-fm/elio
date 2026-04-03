@@ -1,5 +1,5 @@
 use super::types::{ClassStyle, CodePreviewPalette, Palette, PreviewTheme, RuleOverride, Theme};
-use crate::app::FileClass;
+use crate::core::FileClass;
 use ratatui::style::Color;
 use std::collections::HashMap;
 

@@ -1,4 +1,4 @@
-use crate::app::{Entry, EntryKind, SortMode};
+use crate::core::{Entry, EntryKind, SortMode};
 use anyhow::{Context, Result};
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;

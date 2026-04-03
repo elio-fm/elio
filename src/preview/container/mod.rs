@@ -3,7 +3,7 @@ mod iso;
 mod torrent;
 
 use super::*;
-use crate::app::EntryKind;
+use crate::core::EntryKind;
 use crate::ui::theme;
 use ratatui::{
     style::Style,

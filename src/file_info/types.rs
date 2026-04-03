@@ -1,4 +1,4 @@
-use crate::app::FileClass;
+use crate::core::FileClass;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PreviewKind {

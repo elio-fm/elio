@@ -1,6 +1,6 @@
 use super::types::{disk_image_file_facts, plain, source_only};
 use super::{DiskImageKind, DocumentFormat, FileFacts, PreviewSpec};
-use crate::{app::FileClass, preview::code::registry};
+use crate::{core::FileClass, preview::code::registry};
 
 fn preview_for_extension(ext: &str) -> PreviewSpec {
     registry::language_for_extension(ext)

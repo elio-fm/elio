@@ -13,6 +13,7 @@ use super::{
     overlays::{comic, epub, images, inline_image, pdf},
     types::*,
 };
+use crate::core::{Entry, SortMode};
 use crate::fs::search::SearchCandidate;
 use crate::preview;
 
