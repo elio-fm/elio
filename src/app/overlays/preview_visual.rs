@@ -13,7 +13,7 @@ const PREVIEW_INLINE_PAGE_MIN_TEXT_HEIGHT: u16 = 6;
 impl App {
     pub(crate) fn preview_visual_rows(&self, area: Rect) -> Option<u16> {
         if !self.terminal_image_overlay_available()
-            || self.preview_state.content.preview_visual.is_none()
+            || self.preview.state.content.preview_visual.is_none()
         {
             return None;
         }
@@ -42,7 +42,7 @@ impl App {
             return None;
         }
 
-        let rows = if self.preview_state.content.kind == preview::PreviewKind::Video {
+        let rows = if self.preview.state.content.kind == preview::PreviewKind::Video {
             (area.height / 2)
                 .clamp(
                     PREVIEW_INLINE_COVER_MIN_HEIGHT,
@@ -86,7 +86,8 @@ impl App {
     }
 
     fn current_preview_visual_kind(&self) -> Option<preview::PreviewVisualKind> {
-        self.preview_state
+        self.preview
+            .state
             .content
             .preview_visual
             .as_ref()
@@ -94,7 +95,8 @@ impl App {
     }
 
     fn current_preview_visual_layout(&self) -> Option<preview::PreviewVisualLayout> {
-        self.preview_state
+        self.preview
+            .state
             .content
             .preview_visual
             .as_ref()
@@ -111,7 +113,8 @@ impl App {
             Some(request) => request,
             None => return false,
         };
-        self.image_preview
+        self.preview
+            .image
             .failed_images
             .contains(&images::StaticImageKey::from_request(&request))
     }
@@ -120,9 +123,9 @@ impl App {
         &self,
         area: Rect,
     ) -> Option<images::StaticImageOverlayRequest> {
-        let visual = self.preview_state.content.preview_visual.as_ref()?;
+        let visual = self.preview.state.content.preview_visual.as_ref()?;
         Some(self.preview_visual_overlay_request_for_visual(
-            self.preview_state.content.kind,
+            self.preview.state.content.kind,
             visual,
             area,
         ))
@@ -143,7 +146,8 @@ impl App {
             target_height_px: images::image_target_height_px(area, self.cached_terminal_window()),
             mode: images::StaticImageOverlayMode::Inline,
             force_render_to_cache: self.preview_visual_force_render_to_cache(visual),
-            prepare_inline_payload: self.terminal_images.protocol == ImageProtocol::ItermInline,
+            prepare_inline_payload: self.preview.terminal_images.protocol
+                == ImageProtocol::ItermInline,
         }
     }
 
@@ -157,11 +161,11 @@ impl App {
                     .split(body_area)[0],
             );
         }
-        self.frame_state.preview_media_area
+        self.input.frame_state.preview_media_area
     }
 
     fn current_preview_body_render_area(&self) -> Option<Rect> {
-        let body_area = self.frame_state.preview_body_area?;
+        let body_area = self.input.frame_state.preview_body_area?;
         Some(if body_area.width >= 6 {
             Layout::default()
                 .direction(Direction::Horizontal)

@@ -9,7 +9,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 
 impl App {
     pub(in crate::app) fn open_restore_prompt(&mut self) {
-        if !self.in_trash {
+        if !self.navigation.in_trash {
             return;
         }
         let targets = self.selected_trash_targets();
@@ -18,11 +18,11 @@ impl App {
             return;
         }
 
-        self.help_open = false;
-        self.search = None;
-        self.create = None;
-        self.trash = None;
-        self.restore = Some(RestoreOverlay {
+        self.overlays.help = false;
+        self.overlays.search = None;
+        self.overlays.create = None;
+        self.overlays.trash = None;
+        self.overlays.restore = Some(RestoreOverlay {
             targets,
             scroll: 0,
             confirmed: true,
@@ -30,18 +30,19 @@ impl App {
     }
 
     pub fn restore_is_open(&self) -> bool {
-        self.restore.is_some()
+        self.overlays.restore.is_some()
     }
 
     /// Returns `(completed, total)` for an in-progress restore, or `None` when idle.
     pub fn restore_progress(&self) -> Option<(usize, usize)> {
-        self.restore_progress
+        self.jobs
+            .restore_progress
             .as_ref()
             .map(|p| (p.completed, p.total))
     }
 
     pub fn restore_title(&self) -> String {
-        let Some(r) = &self.restore else {
+        let Some(r) = &self.overlays.restore else {
             return String::new();
         };
         match r.targets.len() {
@@ -72,11 +73,14 @@ impl App {
     }
 
     pub fn restore_scroll(&self) -> usize {
-        self.restore.as_ref().map_or(0, |r| r.scroll)
+        self.overlays.restore.as_ref().map_or(0, |r| r.scroll)
     }
 
     pub fn restore_target_count(&self) -> usize {
-        self.restore.as_ref().map_or(0, |r| r.targets.len())
+        self.overlays
+            .restore
+            .as_ref()
+            .map_or(0, |r| r.targets.len())
     }
 
     pub fn restore_visible_rows(&self) -> usize {
@@ -84,71 +88,74 @@ impl App {
     }
 
     pub fn restore_target_name_at(&self, index: usize) -> Option<&str> {
-        self.restore
+        self.overlays
+            .restore
             .as_ref()
             .and_then(|r| r.targets.get(index))
             .map(|target| target.name.as_str())
     }
 
     pub fn restore_target_path_at(&self, index: usize) -> Option<&std::path::Path> {
-        self.restore
+        self.overlays
+            .restore
             .as_ref()
             .and_then(|r| r.targets.get(index))
             .map(|target| target.path.as_path())
     }
 
     pub fn restore_target_is_dir_at(&self, index: usize) -> bool {
-        self.restore
+        self.overlays
+            .restore
             .as_ref()
             .and_then(|r| r.targets.get(index))
             .is_some_and(|target| target.is_dir)
     }
 
     pub fn restore_confirmed(&self) -> bool {
-        self.restore.as_ref().is_some_and(|r| r.confirmed)
+        self.overlays.restore.as_ref().is_some_and(|r| r.confirmed)
     }
 
     pub(in crate::app) fn handle_restore_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.restore = None;
+            self.overlays.restore = None;
             return Ok(());
         }
         match key.code {
             KeyCode::Esc => {
-                self.restore = None;
+                self.overlays.restore = None;
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if let Some(r) = &mut self.restore {
+                if let Some(r) = &mut self.overlays.restore {
                     r.scroll = r.scroll.saturating_sub(1);
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if let Some(r) = &mut self.restore {
+                if let Some(r) = &mut self.overlays.restore {
                     let visible = r.targets.len().min(8);
                     let max_scroll = r.targets.len().saturating_sub(visible);
                     r.scroll = (r.scroll + 1).min(max_scroll);
                 }
             }
             KeyCode::Left | KeyCode::Char('h') => {
-                if let Some(r) = &mut self.restore {
+                if let Some(r) = &mut self.overlays.restore {
                     r.confirmed = true;
                 }
             }
             KeyCode::Right | KeyCode::Char('l') => {
-                if let Some(r) = &mut self.restore {
+                if let Some(r) = &mut self.overlays.restore {
                     r.confirmed = false;
                 }
             }
             KeyCode::Tab => {
-                if let Some(r) = &mut self.restore {
+                if let Some(r) = &mut self.overlays.restore {
                     r.confirmed = !r.confirmed;
                 }
             }
             KeyCode::Enter => {
-                if self.restore.as_ref().is_some_and(|r| r.confirmed) {
+                if self.overlays.restore.as_ref().is_some_and(|r| r.confirmed) {
                     self.confirm_restore()?;
                 } else {
-                    self.restore = None;
+                    self.overlays.restore = None;
                 }
             }
             _ => {}
@@ -160,34 +167,37 @@ impl App {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
+                    .input
                     .frame_state
                     .restore_panel
                     .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
                 if !inside {
-                    self.restore = None;
+                    self.overlays.restore = None;
                     return Ok(());
                 }
                 if self
+                    .input
                     .frame_state
                     .restore_confirm_btn
                     .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
                 {
                     self.confirm_restore()?;
                 } else if self
+                    .input
                     .frame_state
                     .restore_cancel_btn
                     .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
                 {
-                    self.restore = None;
+                    self.overlays.restore = None;
                 }
             }
             MouseEventKind::ScrollUp => {
-                if let Some(r) = &mut self.restore {
+                if let Some(r) = &mut self.overlays.restore {
                     r.scroll = r.scroll.saturating_sub(1);
                 }
             }
             MouseEventKind::ScrollDown => {
-                if let Some(r) = &mut self.restore {
+                if let Some(r) = &mut self.overlays.restore {
                     let visible = r.targets.len().min(8);
                     let max_scroll = r.targets.len().saturating_sub(visible);
                     r.scroll = (r.scroll + 1).min(max_scroll);
@@ -199,28 +209,28 @@ impl App {
     }
 
     pub(in crate::app::create) fn confirm_restore(&mut self) -> Result<()> {
-        if self.restore_progress.is_some() {
+        if self.jobs.restore_progress.is_some() {
             self.status = "Restore in progress — press Esc to cancel".to_string();
-            self.restore = None;
+            self.overlays.restore = None;
             return Ok(());
         }
-        let Some(r) = self.restore.take() else {
+        let Some(r) = self.overlays.restore.take() else {
             return Ok(());
         };
         if r.targets.is_empty() {
             return Ok(());
         }
-        self.selected_paths.clear();
+        self.navigation.selected_paths.clear();
 
-        let token = self.restore_token.wrapping_add(1);
-        self.restore_token = token;
-        self.restore_progress = Some(RestoreProgress {
+        let token = self.jobs.restore_token.wrapping_add(1);
+        self.jobs.restore_token = token;
+        self.jobs.restore_progress = Some(RestoreProgress {
             completed: 0,
             total: r.targets.len(),
         });
-        self.restore_source_cwd = Some(self.cwd.clone());
+        self.jobs.restore_source_cwd = Some(self.navigation.cwd.clone());
 
-        self.scheduler.submit_restore(RestoreRequest {
+        self.jobs.scheduler.submit_restore(RestoreRequest {
             token,
             targets: r.targets,
         });

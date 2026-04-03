@@ -78,7 +78,7 @@ pub(super) fn render_toolbar(
     helpers::render_button(frame, nav_buttons[2], "Up", "󰁝", true, palette);
     frame.render_widget(
         Paragraph::new(Line::from(vec![helpers::chip_span(
-            &format!("Sort: {}", app.sort_mode.label()),
+            &format!("Sort: {}", app.navigation.sort_mode.label()),
             palette.button_bg,
             palette.text,
             true,
@@ -90,7 +90,7 @@ pub(super) fn render_toolbar(
     helpers::render_button(
         frame,
         meta[1],
-        if app.show_hidden {
+        if app.navigation.show_hidden {
             "Hidden On"
         } else {
             "Hidden Off"
@@ -99,7 +99,14 @@ pub(super) fn render_toolbar(
         true,
         palette,
     );
-    helpers::render_button(frame, meta[2], app.view_mode.label(), "󰕮", true, palette);
+    helpers::render_button(
+        frame,
+        meta[2],
+        app.navigation.view_mode.label(),
+        "󰕮",
+        true,
+        palette,
+    );
 }
 
 const STATUS_MIN_LEFT_WIDTH: u16 = 24;
@@ -320,14 +327,14 @@ mod tests {
         let mut app = App::new_at(src_dir.clone()).expect("failed to create app");
         app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('y'))))
             .expect("yank shortcut should succeed");
-        app.cwd = dst_dir.clone();
+        app.navigation.cwd = dst_dir.clone();
         app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('p'))))
             .expect("paste shortcut should succeed");
-        app.cwd = src_dir.clone();
-        app.selected = 1;
+        app.navigation.cwd = src_dir.clone();
+        app.navigation.selected = 1;
         app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('y'))))
             .expect("second yank shortcut should succeed");
-        app.cwd = dst_dir.clone();
+        app.navigation.cwd = dst_dir.clone();
         app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('p'))))
             .expect("second paste should be queued");
 

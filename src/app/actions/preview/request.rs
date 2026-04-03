@@ -17,9 +17,10 @@ impl App {
         // but we want them full — they pass code_line_limit as the render limit,
         // which happens to equal code_line_limit and therefore produces a complete render.
         let code_render_limit =
-            initial_code_render_limit(self.frame_state.preview_rows_visible).min(code_line_limit);
+            initial_code_render_limit(self.input.frame_state.preview_rows_visible)
+                .min(code_line_limit);
         PreviewRequest {
-            token: self.preview_state.token,
+            token: self.preview.state.token,
             entry,
             variant,
             code_line_limit,
@@ -43,7 +44,7 @@ impl App {
     ) -> PreviewRequest {
         let code_line_limit = self.preview_code_line_limit_for_entry(&entry);
         PreviewRequest {
-            token: self.preview_state.token,
+            token: self.preview.state.token,
             entry,
             variant,
             code_line_limit,
@@ -68,16 +69,16 @@ impl App {
         variant: PreviewRequestOptions,
         priority: PreviewPriority,
     ) -> Option<PreviewRequest> {
-        if !self.preview_state.content.is_incrementally_partial() {
+        if !self.preview.state.content.is_incrementally_partial() {
             return None;
         }
-        if self.preview_state.incremental_render_in_flight {
+        if self.preview.state.incremental_render_in_flight {
             return None;
         }
         let code_line_limit = self.preview_code_line_limit_for_entry(&entry);
         let work_class = crate::preview::preview_work_class(&entry, &variant);
         Some(PreviewRequest {
-            token: self.preview_state.token,
+            token: self.preview.state.token,
             entry,
             variant,
             code_line_limit,
@@ -100,7 +101,7 @@ impl App {
     pub(in crate::app) fn preview_code_line_limit_for_entry(&self, entry: &Entry) -> usize {
         self.preview_code_line_limit_for_entry_with_rows(
             entry,
-            self.frame_state.preview_rows_visible,
+            self.input.frame_state.preview_rows_visible,
         )
     }
 

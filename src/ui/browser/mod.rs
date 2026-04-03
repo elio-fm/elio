@@ -49,6 +49,7 @@ mod tests {
         for _ in 0..100 {
             let _ = app.process_background_jobs();
             let all_visible_directory_counts_loaded = app
+                .navigation
                 .entries
                 .iter()
                 .filter(|entry| entry.is_dir())
@@ -200,13 +201,13 @@ mod tests {
         }
 
         let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-        app.view_mode = crate::app::ViewMode::List;
+        app.navigation.view_mode = crate::app::ViewMode::List;
         let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
 
-        app.zoom_level = 0;
+        app.navigation.zoom_level = 0;
         let compact = draw_ui(&mut terminal, &mut app);
 
-        app.zoom_level = 2;
+        app.navigation.zoom_level = 2;
         let zoomed = draw_ui(&mut terminal, &mut app);
 
         assert_eq!(compact.metrics.rows_visible, zoomed.metrics.rows_visible);
@@ -438,7 +439,7 @@ mod tests {
         fs::create_dir_all(&root).expect("failed to create temp root");
 
         let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-        app.sidebar = vec![SidebarRow::Item(SidebarItem::new(
+        app.navigation.sidebar = vec![SidebarRow::Item(SidebarItem::new(
             SidebarItemKind::Downloads,
             "Downloads Directory",
             "D",
@@ -475,7 +476,7 @@ mod tests {
         fs::create_dir_all(&drive).expect("failed to create temp dirs");
 
         let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-        app.sidebar = vec![
+        app.navigation.sidebar = vec![
             SidebarRow::Section { title: "Devices" },
             SidebarRow::Item(SidebarItem::new(
                 SidebarItemKind::Device { removable: true },
@@ -548,7 +549,7 @@ mod tests {
         }
 
         let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-        app.view_mode = crate::app::ViewMode::Grid;
+        app.navigation.view_mode = crate::app::ViewMode::Grid;
         let mut terminal = Terminal::new(TestBackend::new(140, 30)).expect("terminal should init");
 
         let state = draw_ui(&mut terminal, &mut app);
@@ -673,7 +674,7 @@ mod tests {
         }
 
         let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-        app.view_mode = crate::app::ViewMode::List;
+        app.navigation.view_mode = crate::app::ViewMode::List;
         let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
 
         for _ in 0..10 {
@@ -1049,7 +1050,7 @@ mod tests {
         fs::create_dir_all(&root).expect("failed to create temp root");
 
         let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-        app.help_open = true;
+        app.overlays.help = true;
         let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("terminal should init");
 
         draw_ui(&mut terminal, &mut app);
@@ -1242,7 +1243,11 @@ mod tests {
         file.set_len(13_000_000).expect("failed to size test file");
 
         let app = App::new_at(root.clone()).expect("app should load temp directory");
-        let entry = app.entries.first().expect("entry should be present");
+        let entry = app
+            .navigation
+            .entries
+            .first()
+            .expect("entry should be present");
         let rendered = line_text(&render_compact_list_row(
             &app,
             entry,
@@ -1277,7 +1282,11 @@ mod tests {
         file.set_len(13_000_000).expect("failed to size test file");
 
         let app = App::new_at(root.clone()).expect("app should load temp directory");
-        let entry = app.entries.first().expect("entry should be present");
+        let entry = app
+            .navigation
+            .entries
+            .first()
+            .expect("entry should be present");
         let rendered = line_text(&render_compact_list_row(
             &app,
             entry,
@@ -1319,11 +1328,13 @@ mod tests {
 
         let app = App::new_at(root.clone()).expect("app should load temp directory");
         let small_entry = app
+            .navigation
             .entries
             .iter()
             .find(|entry| entry.path == small)
             .expect("small entry should be present");
         let large_entry = app
+            .navigation
             .entries
             .iter()
             .find(|entry| entry.path == large)
@@ -1375,11 +1386,13 @@ mod tests {
         wait_for_directory_counts(&mut app);
 
         let short_entry = app
+            .navigation
             .entries
             .iter()
             .find(|entry| entry.path == short)
             .expect("short-count entry should be present");
         let long_entry = app
+            .navigation
             .entries
             .iter()
             .find(|entry| entry.path == long)
@@ -1428,11 +1441,13 @@ mod tests {
         wait_for_directory_counts(&mut app);
 
         let folder_entry = app
+            .navigation
             .entries
             .iter()
             .find(|entry| entry.path == folder)
             .expect("folder entry should be present");
         let file_entry = app
+            .navigation
             .entries
             .iter()
             .find(|entry| entry.path == file_path)

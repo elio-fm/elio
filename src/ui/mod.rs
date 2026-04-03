@@ -98,7 +98,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
         overlay_manager::render_copy_overlay(frame, area, app, state, palette);
     } else if app.search_is_open() {
         overlay_manager::render_search_overlay(frame, area, app, state, palette);
-    } else if app.help_open {
+    } else if app.overlays.help {
         overlay_manager::render_help(frame, area, state, palette);
     }
 }

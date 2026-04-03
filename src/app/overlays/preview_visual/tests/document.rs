@@ -3,8 +3,8 @@ use ratatui::text::Line;
 
 fn configure_iterm_image_support(app: &mut App) {
     let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
-    app.terminal_images.protocol = ImageProtocol::ItermInline;
-    app.terminal_images.window = Some(TerminalWindowSize {
+    app.preview.terminal_images.protocol = ImageProtocol::ItermInline;
+    app.preview.terminal_images.window = Some(TerminalWindowSize {
         cells_width,
         cells_height,
         pixels_width: 1920,
@@ -19,7 +19,7 @@ fn page_image_visual_uses_full_preview_height() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.preview_state.content = PreviewContent::new(PreviewKind::Archive, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Archive, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -48,7 +48,7 @@ fn failed_full_height_page_image_falls_back_to_text_layout() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -73,7 +73,8 @@ fn failed_full_height_page_image_falls_back_to_text_layout() {
         force_render_to_cache: false,
         prepare_inline_payload: false,
     };
-    app.image_preview
+    app.preview
+        .image
         .failed_images
         .insert(StaticImageKey::from_request(&request));
 
@@ -90,7 +91,7 @@ fn inline_page_image_leaves_room_for_summary_text() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::Inline,
@@ -120,7 +121,7 @@ fn inline_cover_uses_more_of_the_preview_panel_height() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.preview_state.content = PreviewContent::new(PreviewKind::Video, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Video, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::Cover,
             layout: PreviewVisualLayout::Inline,
@@ -149,7 +150,7 @@ fn non_video_inline_cover_keeps_default_compact_height() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.preview_state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::Cover,
             layout: PreviewVisualLayout::Inline,
@@ -184,15 +185,15 @@ fn document_page_image_prepares_in_background_before_display() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.entries.clear();
-    app.selected = 0;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.entries.clear();
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -206,14 +207,14 @@ fn document_page_image_prepares_in_background_before_display() {
     let key = StaticImageKey::from_request(&request);
 
     app.refresh_static_image_preloads();
-    assert!(app.image_preview.pending_prepares.contains(&key));
+    assert!(app.preview.image.pending_prepares.contains(&key));
     app.present_preview_overlay()
         .expect("presenting a document page overlay should not fail");
     assert!(!app.static_image_overlay_displayed());
     wait_for_displayed_preview_overlay(&mut app);
 
     assert!(app.static_image_overlay_displayed());
-    assert!(app.image_preview.dimensions.contains_key(&key));
+    assert!(app.preview.image.dimensions.contains_key(&key));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -230,27 +231,27 @@ fn iterm_inline_page_image_clear_area_covers_preview_body_without_header() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_iterm_image_support(&mut app);
-    app.entries.clear();
-    app.selected = 0;
-    app.frame_state.preview_panel = Some(Rect {
+    app.navigation.entries.clear();
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_panel = Some(Rect {
         x: 1,
         y: 1,
         width: 50,
         height: 24,
     });
-    app.frame_state.preview_media_area = Some(Rect {
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 12,
     });
-    app.frame_state.preview_content_area = Some(Rect {
+    app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 15,
         width: 48,
         height: 8,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::Inline,
@@ -290,15 +291,15 @@ fn document_overlay_keeps_previous_page_visible_while_next_page_waits() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.entries.clear();
-    app.selected = 0;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.entries.clear();
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -311,7 +312,7 @@ fn document_overlay_keeps_previous_page_visible_while_next_page_waits() {
     wait_for_displayed_preview_overlay(&mut app);
     assert!(app.static_image_overlay_displayed());
 
-    app.preview_state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -324,13 +325,13 @@ fn document_overlay_keeps_previous_page_visible_while_next_page_waits() {
         .expect("next document preview request should be available");
     let next_key = StaticImageKey::from_request(&next_request);
     app.refresh_static_image_preloads();
-    app.last_selection_change_at = Instant::now() - std::time::Duration::from_secs(1);
+    app.input.last_selection_change_at = Instant::now() - std::time::Duration::from_secs(1);
     app.sync_image_preview_selection_activation();
 
     app.present_preview_overlay()
         .expect("pending document page transition should not fail");
     assert!(app.static_image_overlay_displayed());
-    assert!(app.image_preview.pending_prepares.contains(&next_key));
+    assert!(app.preview.image.pending_prepares.contains(&next_key));
     assert!(!app.displayed_static_image_matches_active());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -348,27 +349,27 @@ fn iterm_popup_keeps_the_displayed_image_visible() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_iterm_image_support(&mut app);
-    app.entries.clear();
-    app.selected = 0;
-    app.frame_state.preview_panel = Some(Rect {
+    app.navigation.entries.clear();
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_panel = Some(Rect {
         x: 1,
         y: 1,
         width: 50,
         height: 24,
     });
-    app.frame_state.preview_media_area = Some(Rect {
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 12,
     });
-    app.frame_state.preview_content_area = Some(Rect {
+    app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 15,
         width: 48,
         height: 8,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::Inline,
@@ -381,7 +382,7 @@ fn iterm_popup_keeps_the_displayed_image_visible() {
     wait_for_displayed_preview_overlay(&mut app);
     assert!(app.static_image_overlay_displayed());
 
-    app.help_open = true;
+    app.overlays.help = true;
     assert!(app.iterm_pre_draw_erase().is_empty());
     let out = app
         .present_preview_overlay()
@@ -391,7 +392,7 @@ fn iterm_popup_keeps_the_displayed_image_visible() {
     assert!(app.static_image_overlay_displayed());
     assert!(app.iterm_pre_draw_erase().is_empty());
 
-    app.help_open = false;
+    app.overlays.help = false;
     let restore = String::from_utf8(
         app.present_preview_overlay()
             .expect("closing the popup should redraw the image"),
@@ -421,22 +422,22 @@ fn iterm_pre_draw_erase_detects_cover_layout_change_before_frame_update() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_iterm_image_support(&mut app);
-    app.entries.clear();
-    app.selected = 0;
-    app.image_preview.selection_activation_delay = Duration::ZERO;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.entries.clear();
+    app.navigation.selected = 0;
+    app.preview.image.selection_activation_delay = Duration::ZERO;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.frame_state.preview_content_area = Some(Rect {
+    app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 23,
         width: 48,
         height: 0,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -453,13 +454,13 @@ fn iterm_pre_draw_erase_detects_cover_layout_change_before_frame_update() {
     wait_for_displayed_preview_overlay(&mut app);
     assert!(app.static_image_overlay_displayed());
 
-    app.frame_state.preview_panel = Some(Rect {
+    app.input.frame_state.preview_panel = Some(Rect {
         x: 1,
         y: 1,
         width: 50,
         height: 24,
     });
-    app.frame_state.preview_body_area = Some(Rect {
+    app.input.frame_state.preview_body_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -468,7 +469,7 @@ fn iterm_pre_draw_erase_detects_cover_layout_change_before_frame_update() {
 
     // Simulate the next EPUB section switching to an inline cover + text
     // layout before the frame state has been recomputed by ratatui.
-    app.preview_state.content = PreviewContent::new(
+    app.preview.state.content = PreviewContent::new(
         PreviewKind::Document,
         vec![Line::from("Chapter text starts here.")],
     )

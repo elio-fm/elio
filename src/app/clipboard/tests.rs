@@ -27,7 +27,7 @@ fn temp_path(label: &str) -> PathBuf {
 fn wait_for_paste(app: &mut App) {
     for _ in 0..500 {
         let _ = app.process_background_jobs();
-        if app.paste_progress().is_none() && app.queued_pastes.is_empty() {
+        if app.paste_progress().is_none() && app.jobs.queued_pastes.is_empty() {
             return;
         }
         std::thread::sleep(Duration::from_millis(10));
@@ -39,8 +39,8 @@ fn wait_for_paste_and_reload(app: &mut App) {
     for _ in 0..500 {
         let _ = app.process_background_jobs();
         if app.paste_progress().is_none()
-            && app.queued_pastes.is_empty()
-            && app.directory_runtime.pending_load.is_none()
+            && app.jobs.queued_pastes.is_empty()
+            && app.navigation.directory_runtime.pending_load.is_none()
         {
             return;
         }
@@ -158,7 +158,7 @@ fn yank_and_paste_copies_file_to_destination() {
 
     // Navigate into src_dir so the entry appears in the list.
     let mut app = App::new_at(src_dir.clone()).unwrap();
-    assert_eq!(app.entries.len(), 1);
+    assert_eq!(app.navigation.entries.len(), 1);
 
     // Yank the selected entry.
     app.yank();
@@ -170,7 +170,7 @@ fn yank_and_paste_copies_file_to_destination() {
 
     // Point cwd at the destination (direct assignment avoids the async
     // directory-load path; we only care about the paste behaviour here).
-    app.cwd = dst_dir.clone();
+    app.navigation.cwd = dst_dir.clone();
     app.paste().unwrap();
 
     // paste() should immediately set up paste_progress.
@@ -216,12 +216,12 @@ fn cut_and_paste_moves_file_to_destination() {
     fs::write(src_dir.join("move_me.txt"), "payload").unwrap();
 
     let mut app = App::new_at(src_dir.clone()).unwrap();
-    assert_eq!(app.entries.len(), 1);
+    assert_eq!(app.navigation.entries.len(), 1);
 
     app.cut();
     assert_eq!(app.clipboard_info(), Some((1, ClipOp::Cut)));
 
-    app.cwd = dst_dir.clone();
+    app.navigation.cwd = dst_dir.clone();
     app.paste().unwrap();
     wait_for_paste(&mut app);
 
@@ -252,11 +252,11 @@ fn paste_progress_reflects_total_and_is_cleared_after_completion() {
     let mut app = App::new_at(src_dir.clone()).unwrap();
     // Insert both paths into the multi-selection directly (selected_paths is
     // pub(super) within crate::app, which includes this test module).
-    app.selected_paths.insert(src_dir.join("a.txt"));
-    app.selected_paths.insert(src_dir.join("b.txt"));
+    app.navigation.selected_paths.insert(src_dir.join("a.txt"));
+    app.navigation.selected_paths.insert(src_dir.join("b.txt"));
     app.yank();
 
-    app.cwd = dst_dir.clone();
+    app.navigation.cwd = dst_dir.clone();
     app.paste().unwrap();
 
     // Immediately after paste() the progress should be live with total = 2.
@@ -291,13 +291,13 @@ fn stale_token_paste_results_are_ignored() {
 
     let mut app = App::new_at(src_dir.clone()).unwrap();
     app.yank();
-    app.cwd = dst_dir.clone();
+    app.navigation.cwd = dst_dir.clone();
     app.paste().unwrap();
 
     // Simulate a newer paste superseding the old one: bump paste_token and
     // clear paste_progress manually so we can verify nothing revives it.
-    app.paste_token = app.paste_token.wrapping_add(1);
-    app.paste_progress = None;
+    app.jobs.paste_token = app.jobs.paste_token.wrapping_add(1);
+    app.jobs.paste_progress = None;
 
     // Drain all incoming results.  Because none carry the current token they
     // must all be silently discarded.
@@ -327,7 +327,7 @@ fn cancelling_paste_clears_progress_and_stops_worker() {
 
     let mut app = App::new_at(src_dir.clone()).unwrap();
     app.yank();
-    app.cwd = dst_dir.clone();
+    app.navigation.cwd = dst_dir.clone();
     app.paste().unwrap();
 
     assert!(
@@ -336,8 +336,8 @@ fn cancelling_paste_clears_progress_and_stops_worker() {
     );
 
     // Simulate Esc: cancel the current paste token and clear progress immediately.
-    app.scheduler.cancel_paste(app.paste_token);
-    app.paste_progress = None;
+    app.jobs.scheduler.cancel_paste(app.jobs.paste_token);
+    app.jobs.paste_progress = None;
 
     assert!(
         app.paste_progress().is_none(),
@@ -378,24 +378,24 @@ fn new_paste_after_cancel_is_not_affected_by_old_cancel_token() {
 
     // First paste → cancel immediately (token 1 is cancelled).
     app.yank();
-    app.cwd = dst1.clone();
+    app.navigation.cwd = dst1.clone();
     app.paste().unwrap();
-    let cancelled_token = app.paste_token; // == 1
-    app.scheduler.cancel_paste(cancelled_token);
-    app.paste_progress = None;
+    let cancelled_token = app.jobs.paste_token; // == 1
+    app.jobs.scheduler.cancel_paste(cancelled_token);
+    app.jobs.paste_progress = None;
 
     // Re-yank and start a second paste to a different destination.  Its token
     // is 2; cancel_token stored in PasteShared is still 1, so the second
     // paste must NOT be stopped.
-    app.clipboard = Some(super::super::state::Clipboard {
+    app.jobs.clipboard = Some(super::super::state::Clipboard {
         paths: vec![src_dir.join("file.txt")],
         op: ClipOp::Yank,
     });
-    app.cwd = dst2.clone();
+    app.navigation.cwd = dst2.clone();
     app.paste().unwrap();
 
     assert_ne!(
-        app.paste_token, cancelled_token,
+        app.jobs.paste_token, cancelled_token,
         "new paste should have a different token"
     );
 
@@ -427,31 +427,35 @@ fn yank_paste_then_yank_paste_queues_the_second_snapshot() {
     let mut app = App::new_at(src_dir.clone()).unwrap();
 
     app.yank();
-    app.cwd = dst1.clone();
+    app.navigation.cwd = dst1.clone();
     app.paste().unwrap();
 
-    let token_after_first = app.paste_token;
+    let token_after_first = app.jobs.paste_token;
     assert!(app.paste_progress().is_some());
 
     // Queue a second paste after changing both the source selection and the
     // destination directory.  The queued snapshot must preserve both.
-    app.cwd = src_dir.clone();
+    app.navigation.cwd = src_dir.clone();
     app.select_index(1);
     app.yank();
-    app.cwd = dst2.clone();
+    app.navigation.cwd = dst2.clone();
     app.paste().unwrap();
 
     assert_eq!(
-        app.paste_token, token_after_first,
+        app.jobs.paste_token, token_after_first,
         "paste_token must not change until the queued paste actually starts"
     );
-    assert_eq!(app.queued_pastes.len(), 1, "second paste should be queued");
+    assert_eq!(
+        app.jobs.queued_pastes.len(),
+        1,
+        "second paste should be queued"
+    );
     assert!(
         app.status.contains("Queued paste"),
         "status should indicate that the second paste was queued"
     );
-    assert_eq!(app.queued_pastes[0].dest_dir, dst2);
-    assert_eq!(app.queued_pastes[0].paths, vec![src_dir.join("b.txt")]);
+    assert_eq!(app.jobs.queued_pastes[0].dest_dir, dst2);
+    assert_eq!(app.jobs.queued_pastes[0].paths, vec![src_dir.join("b.txt")]);
 
     wait_for_paste(&mut app);
 
@@ -478,24 +482,24 @@ fn queued_paste_with_missing_destination_fails_and_later_queue_continues() {
 
     let mut app = App::new_at(src_dir.clone()).unwrap();
     app.yank();
-    app.cwd = dst1.clone();
+    app.navigation.cwd = dst1.clone();
     app.paste().unwrap();
 
-    app.clipboard = Some(super::super::state::Clipboard {
+    app.jobs.clipboard = Some(super::super::state::Clipboard {
         paths: vec![src_dir.join("b.txt")],
         op: ClipOp::Yank,
     });
-    app.cwd = missing_dst.clone();
+    app.navigation.cwd = missing_dst.clone();
     app.paste().unwrap();
 
-    app.clipboard = Some(super::super::state::Clipboard {
+    app.jobs.clipboard = Some(super::super::state::Clipboard {
         paths: vec![src_dir.join("c.txt")],
         op: ClipOp::Yank,
     });
-    app.cwd = dst3.clone();
+    app.navigation.cwd = dst3.clone();
     app.paste().unwrap();
 
-    assert_eq!(app.queued_pastes.len(), 2);
+    assert_eq!(app.jobs.queued_pastes.len(), 2);
 
     wait_for_paste(&mut app);
 
@@ -525,24 +529,24 @@ fn queued_same_destination_pastes_defer_reload_until_queue_drains() {
 
     let mut app = App::new_at(src_dir.clone()).unwrap();
     app.yank();
-    app.cwd = dst_dir.clone();
+    app.navigation.cwd = dst_dir.clone();
     app.paste().unwrap();
-    let first_token = app.paste_token;
+    let first_token = app.jobs.paste_token;
 
-    app.clipboard = Some(super::super::state::Clipboard {
+    app.jobs.clipboard = Some(super::super::state::Clipboard {
         paths: vec![src_dir.join("b.txt")],
         op: ClipOp::Yank,
     });
-    app.cwd = dst_dir.clone();
+    app.navigation.cwd = dst_dir.clone();
     app.paste().unwrap();
 
     let mut queued_started = false;
     for _ in 0..500 {
         let _ = app.process_background_jobs();
-        if app.paste_token != first_token {
+        if app.jobs.paste_token != first_token {
             queued_started = true;
             assert!(
-                app.directory_runtime.pending_load.is_none(),
+                app.navigation.directory_runtime.pending_load.is_none(),
                 "reload should stay deferred while a queued paste to the same destination starts"
             );
             assert!(
@@ -582,16 +586,16 @@ fn esc_cancels_active_paste_and_clears_queued_pastes() {
 
     let mut app = App::new_at(src_dir.clone()).unwrap();
     app.yank();
-    app.cwd = dst1.clone();
+    app.navigation.cwd = dst1.clone();
     app.paste().unwrap();
 
-    app.clipboard = Some(super::super::state::Clipboard {
+    app.jobs.clipboard = Some(super::super::state::Clipboard {
         paths: vec![src_dir.join("b.txt")],
         op: ClipOp::Yank,
     });
-    app.cwd = dst2.clone();
+    app.navigation.cwd = dst2.clone();
     app.paste().unwrap();
-    assert_eq!(app.queued_pastes.len(), 1);
+    assert_eq!(app.jobs.queued_pastes.len(), 1);
 
     app.handle_event(crossterm::event::Event::Key(
         crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Esc),
@@ -600,7 +604,7 @@ fn esc_cancels_active_paste_and_clears_queued_pastes() {
 
     assert!(app.paste_progress().is_none());
     assert!(
-        app.queued_pastes.is_empty(),
+        app.jobs.queued_pastes.is_empty(),
         "Esc should clear queued pastes as well as the active paste"
     );
 
@@ -645,13 +649,13 @@ fn paste_during_active_paste_without_clipboard_explains_how_to_queue() {
 
     let mut app = App::new_at(src_dir.clone()).unwrap();
     app.yank();
-    app.cwd = dst_dir.clone();
+    app.navigation.cwd = dst_dir.clone();
     app.paste().unwrap();
 
-    let token = app.paste_token;
+    let token = app.jobs.paste_token;
     app.paste().unwrap();
 
-    assert_eq!(app.paste_token, token);
+    assert_eq!(app.jobs.paste_token, token);
     assert_eq!(
         app.status,
         "Paste in progress — yank or cut another item to queue it"

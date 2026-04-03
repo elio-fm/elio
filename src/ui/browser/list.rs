@@ -34,23 +34,23 @@ pub(super) fn render_list(
         rows_visible: (content_area.height / row_height.max(1)).max(1) as usize,
     };
 
-    if app.entries.is_empty() {
+    if app.navigation.entries.is_empty() {
         helpers::render_empty_state(frame, content_area, "This folder is empty", palette);
         return;
     }
 
-    for (visible_index, entry_index) in (app.scroll_row..app.entries.len())
+    for (visible_index, entry_index) in (app.navigation.scroll_row..app.navigation.entries.len())
         .take(state.metrics.rows_visible)
         .enumerate()
     {
-        let entry = &app.entries[entry_index];
+        let entry = &app.navigation.entries[entry_index];
         let row = Rect {
             x: content_area.x,
             y: content_area.y + visible_index as u16 * row_height,
             width: content_area.width,
             height: row_height,
         };
-        let selected = entry_index == app.selected;
+        let selected = entry_index == app.navigation.selected;
         let multi_selected = app.is_selected(&entry.path);
         let clip_op = app.clipboard_op_for(&entry.path);
         let icon_color = theme::entry_color(entry, palette);
@@ -140,9 +140,9 @@ pub(super) fn render_list(
         render_browser_scrollbar(
             frame,
             sb,
-            app.entries.len(),
+            app.navigation.entries.len(),
             state.metrics.rows_visible,
-            app.scroll_row,
+            app.navigation.scroll_row,
             palette,
         );
     }

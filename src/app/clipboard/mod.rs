@@ -12,24 +12,26 @@ use std::path::{Path, PathBuf};
 impl App {
     /// Returns `(count, op)` for the current clipboard, or `None` if empty.
     pub fn clipboard_info(&self) -> Option<(usize, ClipOp)> {
-        self.clipboard.as_ref().map(|c| (c.paths.len(), c.op))
+        self.jobs.clipboard.as_ref().map(|c| (c.paths.len(), c.op))
     }
 
     /// Returns `(completed, total, op)` for an in-progress paste, or `None`.
     pub fn paste_progress(&self) -> Option<(usize, usize, ClipOp)> {
-        self.paste_progress
+        self.jobs
+            .paste_progress
             .as_ref()
             .map(|p| (p.completed, p.total, p.op))
     }
 
     pub fn queued_paste_count(&self) -> usize {
-        self.queued_pastes.len()
+        self.jobs.queued_pastes.len()
     }
 
     /// Returns the clipboard operation for a specific path, if it is in the
     /// clipboard.
     pub fn clipboard_op_for(&self, path: &Path) -> Option<ClipOp> {
-        self.clipboard
+        self.jobs
+            .clipboard
             .as_ref()
             .filter(|c| c.paths.iter().any(|p| p == path))
             .map(|c| c.op)
@@ -42,11 +44,11 @@ impl App {
             return;
         }
         let count = paths.len();
-        self.clipboard = Some(Clipboard {
+        self.jobs.clipboard = Some(Clipboard {
             paths,
             op: ClipOp::Yank,
         });
-        self.selected_paths.clear();
+        self.navigation.selected_paths.clear();
         self.status = if count == 1 {
             "Yanked 1 item".to_string()
         } else {
@@ -61,11 +63,11 @@ impl App {
             return;
         }
         let count = paths.len();
-        self.clipboard = Some(Clipboard {
+        self.jobs.clipboard = Some(Clipboard {
             paths,
             op: ClipOp::Cut,
         });
-        self.selected_paths.clear();
+        self.navigation.selected_paths.clear();
         self.status = if count == 1 {
             "Cut 1 item".to_string()
         } else {
@@ -76,7 +78,7 @@ impl App {
     /// Paste the clipboard contents into the current directory (async with
     /// progress reporting).
     pub(in crate::app) fn paste(&mut self) -> Result<()> {
-        if self.paste_progress.is_some() && self.clipboard.is_none() {
+        if self.jobs.paste_progress.is_some() && self.jobs.clipboard.is_none() {
             self.status = "Paste in progress — yank or cut another item to queue it".to_string();
             return Ok(());
         }
@@ -86,9 +88,9 @@ impl App {
             return Ok(());
         };
 
-        if self.paste_progress.is_some() {
-            self.queued_pastes.push_back(request);
-            let pending = self.queued_pastes.len();
+        if self.jobs.paste_progress.is_some() {
+            self.jobs.queued_pastes.push_back(request);
+            let pending = self.jobs.queued_pastes.len();
             self.status = if pending == 1 {
                 "Queued paste (1 pending)".to_string()
             } else {
@@ -103,13 +105,13 @@ impl App {
     }
 
     pub(super) fn clear_queued_pastes(&mut self) -> usize {
-        let queued = self.queued_pastes.len();
-        self.queued_pastes.clear();
+        let queued = self.jobs.queued_pastes.len();
+        self.jobs.queued_pastes.clear();
         queued
     }
 
     pub(super) fn start_next_queued_paste(&mut self) -> bool {
-        let Some(request) = self.queued_pastes.pop_front() else {
+        let Some(request) = self.jobs.queued_pastes.pop_front() else {
             return false;
         };
         self.start_paste_request(request);
@@ -117,28 +119,28 @@ impl App {
     }
 
     fn take_clipboard_paste(&mut self) -> Option<QueuedPaste> {
-        let clipboard = self.clipboard.take()?;
+        let clipboard = self.jobs.clipboard.take()?;
         if clipboard.paths.is_empty() {
             return None;
         }
         Some(QueuedPaste {
-            dest_dir: self.cwd.clone(),
+            dest_dir: self.navigation.cwd.clone(),
             paths: clipboard.paths,
             op: clipboard.op,
         })
     }
 
     fn start_paste_request(&mut self, request: QueuedPaste) {
-        let token = self.paste_token.wrapping_add(1);
-        self.paste_token = token;
-        self.paste_progress = Some(PasteProgress {
+        let token = self.jobs.paste_token.wrapping_add(1);
+        self.jobs.paste_token = token;
+        self.jobs.paste_progress = Some(PasteProgress {
             completed: 0,
             total: request.paths.len(),
             op: request.op,
         });
-        self.paste_dest_dir = Some(request.dest_dir.clone());
+        self.jobs.paste_dest_dir = Some(request.dest_dir.clone());
 
-        self.scheduler.submit_paste(PasteRequest {
+        self.jobs.scheduler.submit_paste(PasteRequest {
             token,
             dest_dir: request.dest_dir,
             paths: request.paths,
@@ -149,8 +151,8 @@ impl App {
     /// Collect the paths that y/x should act on: all space-selected paths if
     /// any exist (sorted for stable ordering), otherwise the focused entry.
     pub(super) fn clipboard_target_paths(&self) -> Vec<PathBuf> {
-        if !self.selected_paths.is_empty() {
-            let mut paths: Vec<PathBuf> = self.selected_paths.iter().cloned().collect();
+        if !self.navigation.selected_paths.is_empty() {
+            let mut paths: Vec<PathBuf> = self.navigation.selected_paths.iter().cloned().collect();
             paths.sort();
             paths
         } else {

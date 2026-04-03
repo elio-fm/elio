@@ -18,7 +18,8 @@ pub(super) fn render_entries(
     palette: Palette,
 ) {
     state.entries_panel = Some(area);
-    let path_text = helpers::stable_path_label(&app.cwd, area.width.saturating_sub(10) as usize);
+    let path_text =
+        helpers::stable_path_label(&app.navigation.cwd, area.width.saturating_sub(10) as usize);
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -47,7 +48,7 @@ pub(super) fn render_entries(
     let inner = block.inner(area);
     helpers::fill_area(frame, inner, palette.panel_alt, palette.text);
 
-    if app.view_mode == crate::app::ViewMode::Grid {
+    if app.navigation.view_mode == crate::app::ViewMode::Grid {
         render_grid(frame, inner, app, state, palette);
     } else {
         render_list(frame, inner, app, state, palette);

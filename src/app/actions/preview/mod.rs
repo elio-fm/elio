@@ -43,12 +43,12 @@ mod tests {
         let preview = PreviewContent::new(PreviewKind::Code, vec![Line::from("stale preview")])
             .with_detail("Rust source file");
         app.cache_preview_result(&entry, &variant, &preview);
-        app.entries[app.selected].size += 1;
+        app.navigation.entries[app.navigation.selected].size += 1;
 
         app.refresh_preview();
 
         assert_eq!(
-            app.preview_state.load_state,
+            app.preview.state.load_state,
             Some(PreviewLoadState::Refreshing(entry.path.clone()))
         );
         assert_eq!(
@@ -92,7 +92,7 @@ mod tests {
             app.cache_preview_result_with_code_line_limit(&entry, &variant, 0, &preview);
         }
 
-        assert_eq!(app.preview_state.result_cache.len(), PREVIEW_CACHE_LIMIT);
+        assert_eq!(app.preview.state.result_cache.len(), PREVIEW_CACHE_LIMIT);
         assert!(!app.has_cached_preview_for_path(&oldest_path));
         assert!(app.has_cached_preview_for_path(&newest_path));
 
@@ -116,11 +116,11 @@ mod tests {
             size: entry.size,
             modified: entry.modified,
         };
-        app.preview_state.content =
+        app.preview.state.content =
             PreviewContent::new(PreviewKind::Code, vec![Line::from("fn main() {}")])
                 .with_line_coverage(default_code_preview_line_limit(), None, true);
-        app.preview_state.content.set_total_line_count_pending(true);
-        app.preview_state.pending_line_counts.insert(key.clone());
+        app.preview.state.content.set_total_line_count_pending(true);
+        app.preview.state.pending_line_counts.insert(key.clone());
 
         assert!(app.apply_preview_line_count_result(
             &entry.path,
@@ -128,7 +128,7 @@ mod tests {
             entry.modified,
             Some(1_500)
         ));
-        assert!(!app.preview_state.pending_line_counts.contains(&key));
+        assert!(!app.preview.state.pending_line_counts.contains(&key));
         let expected = format!("{} / 1,500 lines shown", default_code_preview_line_limit());
         assert_eq!(
             app.preview_header_detail_for_width(8, 40).as_deref(),
@@ -155,14 +155,14 @@ mod tests {
             size: entry.size,
             modified: entry.modified,
         };
-        app.preview_state.content =
+        app.preview.state.content =
             PreviewContent::new(PreviewKind::Code, vec![Line::from("fn main() {}")])
                 .with_line_coverage(default_code_preview_line_limit(), None, true);
-        app.preview_state.content.set_total_line_count_pending(true);
-        app.preview_state.pending_line_counts.insert(key.clone());
+        app.preview.state.content.set_total_line_count_pending(true);
+        app.preview.state.pending_line_counts.insert(key.clone());
 
         assert!(app.apply_preview_line_count_result(&entry.path, entry.size, entry.modified, None));
-        assert!(!app.preview_state.pending_line_counts.contains(&key));
+        assert!(!app.preview.state.pending_line_counts.contains(&key));
         let expected = format!("{} lines shown", default_code_preview_line_limit());
         assert_eq!(
             app.preview_header_detail_for_width(8, 40).as_deref(),
@@ -199,11 +199,11 @@ mod tests {
         }
 
         assert_eq!(
-            app.preview_state.line_count_cache.len(),
+            app.preview.state.line_count_cache.len(),
             PREVIEW_LINE_COUNT_CACHE_LIMIT
         );
-        assert!(!app.preview_state.line_count_cache.contains_key(&oldest_key));
-        assert!(app.preview_state.line_count_cache.contains_key(&newest_key));
+        assert!(!app.preview.state.line_count_cache.contains_key(&oldest_key));
+        assert!(app.preview.state.line_count_cache.contains_key(&newest_key));
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

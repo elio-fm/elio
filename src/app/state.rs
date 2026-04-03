@@ -447,88 +447,109 @@ pub(super) struct DirectoryRuntime {
     pub(super) last_auto_reload_at: Instant,
 }
 
-pub struct App {
-    pub cwd: PathBuf,
-    pub entries: Vec<Entry>,
-    pub sidebar: Vec<SidebarRow>,
-    pub selected: usize,
-    pub scroll_row: usize,
-    pub view_mode: ViewMode,
-    pub zoom_level: u8,
-    pub sort_mode: SortMode,
-    pub show_hidden: bool,
+pub(crate) struct NavigationState {
+    pub(crate) cwd: PathBuf,
+    pub(crate) entries: Vec<Entry>,
+    pub(crate) sidebar: Vec<SidebarRow>,
+    pub(crate) selected: usize,
+    pub(crate) scroll_row: usize,
+    pub(crate) view_mode: ViewMode,
+    pub(crate) zoom_level: u8,
+    pub(crate) sort_mode: SortMode,
+    pub(crate) show_hidden: bool,
     /// True when the loaded directory is the trash folder.
     /// Set in apply_directory_snapshot so it's only true once the load completes.
-    pub(super) in_trash: bool,
-    pub status: String,
-    pub help_open: bool,
-    pub should_quit: bool,
-    pub(super) navigation_history: NavigationHistory,
-    pub(super) preview_state: PreviewState,
-    pub(super) comic_preview: comic::ComicPreviewState,
-    pub(super) epub_preview: epub::EpubPreviewState,
-    pub(super) image_preview: images::ImagePreviewState,
-    pub(super) media_preview: MediaPreviewState,
-    pub(super) pdf_preview: pdf::PdfPreviewState,
-    pub(super) terminal_images: inline_image::TerminalImageState,
-    pub(super) frame_state: FrameState,
-    pub(super) selected_paths: HashSet<PathBuf>,
-    pub(super) clipboard: Option<Clipboard>,
-    pub(super) paste_token: u64,
-    pub(super) paste_progress: Option<PasteProgress>,
-    pub(super) queued_pastes: VecDeque<QueuedPaste>,
-    /// Destination directory of the in-flight paste.  Kept separately from
+    pub(in crate::app) in_trash: bool,
+    pub(in crate::app) navigation_history: NavigationHistory,
+    pub(in crate::app) selected_paths: HashSet<PathBuf>,
+    pub(in crate::app) directory_item_count_cache: HashMap<DirectoryItemCountKey, Option<usize>>,
+    pub(in crate::app) directory_item_count_order: VecDeque<DirectoryItemCountKey>,
+    pub(in crate::app) directory_count_viewport: Option<DirectoryCountViewport>,
+    pub(in crate::app) directory_view_memory: HashMap<PathBuf, DirectoryViewMemory>,
+    pub(in crate::app) directory_runtime: DirectoryRuntime,
+    pub(in crate::app) last_sidebar_refresh_at: Instant,
+}
+
+pub(in crate::app) struct PreviewRuntime {
+    pub(in crate::app) state: PreviewState,
+    pub(in crate::app) comic: comic::ComicPreviewState,
+    pub(in crate::app) epub: epub::EpubPreviewState,
+    pub(in crate::app) image: images::ImagePreviewState,
+    pub(in crate::app) media: MediaPreviewState,
+    pub(in crate::app) pdf: pdf::PdfPreviewState,
+    pub(in crate::app) terminal_images: inline_image::TerminalImageState,
+}
+
+#[derive(Default)]
+pub(crate) struct OverlayState {
+    pub(in crate::app) trash: Option<TrashOverlay>,
+    pub(in crate::app) restore: Option<RestoreOverlay>,
+    pub(in crate::app) create: Option<CreateOverlay>,
+    pub(in crate::app) rename: Option<RenameOverlay>,
+    pub(in crate::app) bulk_rename: Option<BulkRenameOverlay>,
+    pub(in crate::app) goto: Option<GoToOverlay>,
+    pub(in crate::app) copy: Option<CopyOverlay>,
+    pub(in crate::app) search: Option<SearchOverlay>,
+    pub(crate) help: bool,
+}
+
+pub(in crate::app) struct JobRuntime {
+    pub(in crate::app) directory_token: u64,
+    pub(in crate::app) directory_fingerprint_token: u64,
+    pub(in crate::app) search_token: u64,
+    pub(in crate::app) search_loading: bool,
+    pub(in crate::app) search_cache: Option<SearchCache>,
+    pub(in crate::app) scheduler: JobScheduler,
+    pub(in crate::app) clipboard: Option<Clipboard>,
+    pub(in crate::app) paste_token: u64,
+    pub(in crate::app) paste_progress: Option<PasteProgress>,
+    pub(in crate::app) queued_pastes: VecDeque<QueuedPaste>,
+    /// Destination directory of the in-flight paste. Kept separately from
     /// `paste_progress` so that cancelling the chip does not lose the context
     /// needed by the completion handler to reload the right directory.
-    pub(super) paste_dest_dir: Option<PathBuf>,
-    pub(super) trash_token: u64,
-    pub(super) trash_progress: Option<TrashProgress>,
-    /// Source directory of the in-flight trash.  Kept separately from
+    pub(in crate::app) paste_dest_dir: Option<PathBuf>,
+    pub(in crate::app) trash_token: u64,
+    pub(in crate::app) trash_progress: Option<TrashProgress>,
+    /// Source directory of the in-flight trash. Kept separately from
     /// `trash_progress` for the same reason as `paste_dest_dir`.
-    pub(super) trash_source_cwd: Option<PathBuf>,
-    pub(super) trash: Option<TrashOverlay>,
-    pub(super) restore_token: u64,
-    pub(super) restore_progress: Option<RestoreProgress>,
-    /// Source directory of the in-flight restore.  Kept separately from
+    pub(in crate::app) trash_source_cwd: Option<PathBuf>,
+    pub(in crate::app) restore_token: u64,
+    pub(in crate::app) restore_progress: Option<RestoreProgress>,
+    /// Source directory of the in-flight restore. Kept separately from
     /// `restore_progress` so that cancelling the chip does not lose the
     /// context needed by the completion handler.
-    pub(super) restore_source_cwd: Option<PathBuf>,
-    pub(super) restore: Option<RestoreOverlay>,
-    pub(super) create: Option<CreateOverlay>,
-    pub(super) rename: Option<RenameOverlay>,
-    pub(super) bulk_rename: Option<BulkRenameOverlay>,
-    pub(super) goto_overlay: Option<GoToOverlay>,
-    pub(super) copy_overlay: Option<CopyOverlay>,
-    pub(super) search: Option<SearchOverlay>,
-    pub(super) search_cache: Option<SearchCache>,
-    pub(super) search_loading: bool,
-    pub(super) search_token: u64,
-    pub(super) directory_token: u64,
-    pub(super) directory_fingerprint_token: u64,
-    pub(super) scheduler: JobScheduler,
-    pub(super) directory_item_count_cache: HashMap<DirectoryItemCountKey, Option<usize>>,
-    pub(super) directory_item_count_order: VecDeque<DirectoryItemCountKey>,
-    pub(super) directory_count_viewport: Option<DirectoryCountViewport>,
-    pub(super) directory_view_memory: HashMap<PathBuf, DirectoryViewMemory>,
-    pub(super) directory_runtime: DirectoryRuntime,
-    pub(super) last_sidebar_refresh_at: Instant,
-    pub(super) last_click: Option<ClickState>,
-    pub(super) wheel_scroll: ScrollState,
-    pub(super) wheel_profile: WheelProfile,
-    pub(super) last_wheel_target: Option<WheelTarget>,
+    pub(in crate::app) restore_source_cwd: Option<PathBuf>,
+}
+
+pub(in crate::app) struct InputRuntime {
+    pub(in crate::app) frame_state: FrameState,
+    pub(in crate::app) last_click: Option<ClickState>,
+    pub(in crate::app) wheel_scroll: ScrollState,
+    pub(in crate::app) wheel_profile: WheelProfile,
+    pub(in crate::app) last_wheel_target: Option<WheelTarget>,
     // Cursor panel tracked exclusively from MouseEventKind::Moved events.
     // These events come from ?1003h (any-event tracking) and always carry the true
     // cursor position, so this is a reliable fallback when scroll event coordinates
     // are wrong or absent (observed in some Alacritty/Ghostty configurations).
-    pub(super) hover_panel: Option<WheelTarget>,
-    pub(super) browser_wheel_post_burst_pending: bool,
-    pub(super) last_navigation_key: Option<(NavigationRepeatKey, Instant)>,
-    pub(super) last_selection_change_at: Instant,
+    pub(in crate::app) hover_panel: Option<WheelTarget>,
+    pub(in crate::app) browser_wheel_post_burst_pending: bool,
+    pub(in crate::app) last_navigation_key: Option<(NavigationRepeatKey, Instant)>,
+    pub(in crate::app) last_selection_change_at: Instant,
     /// Tracks when keyboard navigation last moved the selection.
     /// Only updated by `move_vertical_keyboard`, `move_by_keyboard`, and `page`
     /// (all keyboard-only paths), not by direct selection or wheel input, so it
     /// does not interfere with wheel auto-focus routing.
-    pub(super) last_key_nav_at: Instant,
+    pub(in crate::app) last_key_nav_at: Instant,
+}
+
+pub struct App {
+    pub(crate) navigation: NavigationState,
+    pub(in crate::app) preview: PreviewRuntime,
+    pub(crate) overlays: OverlayState,
+    pub(in crate::app) jobs: JobRuntime,
+    pub(in crate::app) input: InputRuntime,
+    pub(in crate::app) status: String,
+    pub(crate) should_quit: bool,
 }
 
 impl App {
@@ -541,114 +562,114 @@ impl App {
         let scheduler = JobScheduler::new();
         let (directory_watch_tx, directory_watch_rx) = std::sync::mpsc::channel();
         let mut app = Self {
-            cwd,
-            entries: Vec::new(),
-            sidebar: Vec::new(),
-            selected: 0,
-            scroll_row: 0,
-            view_mode: startup_view_mode(crate::config::ui().start_in_grid),
-            zoom_level: crate::config::ui().grid_zoom,
-            sort_mode: SortMode::Name,
-            show_hidden: crate::config::ui().show_hidden,
-            in_trash: false,
+            navigation: NavigationState {
+                cwd,
+                entries: Vec::new(),
+                sidebar: Vec::new(),
+                selected: 0,
+                scroll_row: 0,
+                view_mode: startup_view_mode(crate::config::ui().start_in_grid),
+                zoom_level: crate::config::ui().grid_zoom,
+                sort_mode: SortMode::Name,
+                show_hidden: crate::config::ui().show_hidden,
+                in_trash: false,
+                navigation_history: NavigationHistory::default(),
+                selected_paths: HashSet::new(),
+                directory_item_count_cache: HashMap::new(),
+                directory_item_count_order: VecDeque::new(),
+                directory_count_viewport: None,
+                directory_view_memory: HashMap::new(),
+                directory_runtime: DirectoryRuntime {
+                    fingerprint: crate::fs::DirectoryFingerprint::default(),
+                    watch_tx: directory_watch_tx,
+                    watch_rx: directory_watch_rx,
+                    watch: None,
+                    pending_reload_at: None,
+                    pending_fingerprint_scan: None,
+                    pending_load: None,
+                    use_polling_reload: true,
+                    last_auto_reload_at: Instant::now(),
+                },
+                last_sidebar_refresh_at: Instant::now(),
+            },
+            preview: PreviewRuntime {
+                state: PreviewState {
+                    scroll: 0,
+                    horizontal_scroll: 0,
+                    content: preview::PreviewContent::placeholder("No selection"),
+                    token: 0,
+                    metrics: PreviewMetrics::default(),
+                    load_state: None,
+                    directory_stats: None,
+                    deferred_refresh_at: None,
+                    prefetch_ready_at: None,
+                    result_cache: HashMap::new(),
+                    result_order: VecDeque::new(),
+                    line_count_cache: HashMap::new(),
+                    line_count_order: VecDeque::new(),
+                    pending_line_counts: HashSet::new(),
+                    incremental_render_in_flight: false,
+                    incremental_render_path: None,
+                },
+                comic: comic::ComicPreviewState::default(),
+                epub: epub::EpubPreviewState::default(),
+                image: images::ImagePreviewState::default(),
+                media: MediaPreviewState::default(),
+                pdf: pdf::PdfPreviewState::default(),
+                terminal_images: inline_image::TerminalImageState::default(),
+            },
+            overlays: OverlayState::default(),
+            jobs: JobRuntime {
+                directory_token: 0,
+                directory_fingerprint_token: 0,
+                search_token: 0,
+                search_loading: false,
+                search_cache: None,
+                scheduler,
+                clipboard: None,
+                paste_token: 0,
+                paste_progress: None,
+                queued_pastes: VecDeque::new(),
+                paste_dest_dir: None,
+                trash_token: 0,
+                trash_progress: None,
+                trash_source_cwd: None,
+                restore_token: 0,
+                restore_progress: None,
+                restore_source_cwd: None,
+            },
+            input: InputRuntime {
+                frame_state: FrameState::default(),
+                last_click: None,
+                wheel_scroll: ScrollState {
+                    horizontal: ScrollLane::new(),
+                    vertical: ScrollLane::new(),
+                    preview: ScrollLane::new(),
+                    preview_horizontal: ScrollLane::new(),
+                    search: ScrollLane::new(),
+                },
+                wheel_profile: detect_wheel_profile(),
+                last_wheel_target: Some(WheelTarget::Entries),
+                hover_panel: None,
+                browser_wheel_post_burst_pending: false,
+                last_navigation_key: None,
+                last_selection_change_at: Instant::now(),
+                // Initialize to far past so the first keypress is always Immediate.
+                last_key_nav_at: Instant::now() - Duration::from_secs(1),
+            },
             status: String::new(),
-            help_open: false,
             should_quit: false,
-            navigation_history: NavigationHistory::default(),
-            preview_state: PreviewState {
-                scroll: 0,
-                horizontal_scroll: 0,
-                content: preview::PreviewContent::placeholder("No selection"),
-                token: 0,
-                metrics: PreviewMetrics::default(),
-                load_state: None,
-                directory_stats: None,
-                deferred_refresh_at: None,
-                prefetch_ready_at: None,
-                result_cache: HashMap::new(),
-                result_order: VecDeque::new(),
-                line_count_cache: HashMap::new(),
-                line_count_order: VecDeque::new(),
-                pending_line_counts: HashSet::new(),
-                incremental_render_in_flight: false,
-                incremental_render_path: None,
-            },
-            comic_preview: comic::ComicPreviewState::default(),
-            epub_preview: epub::EpubPreviewState::default(),
-            image_preview: images::ImagePreviewState::default(),
-            media_preview: MediaPreviewState::default(),
-            pdf_preview: pdf::PdfPreviewState::default(),
-            terminal_images: inline_image::TerminalImageState::default(),
-            frame_state: FrameState::default(),
-            selected_paths: HashSet::new(),
-            clipboard: None,
-            paste_token: 0,
-            paste_progress: None,
-            queued_pastes: VecDeque::new(),
-            paste_dest_dir: None,
-            trash_token: 0,
-            trash_progress: None,
-            trash_source_cwd: None,
-            trash: None,
-            restore_token: 0,
-            restore_progress: None,
-            restore_source_cwd: None,
-            restore: None,
-            create: None,
-            rename: None,
-            bulk_rename: None,
-            goto_overlay: None,
-            copy_overlay: None,
-            search: None,
-            search_cache: None,
-            search_loading: false,
-            search_token: 0,
-            directory_token: 0,
-            directory_fingerprint_token: 0,
-            scheduler,
-            directory_item_count_cache: HashMap::new(),
-            directory_item_count_order: VecDeque::new(),
-            directory_count_viewport: None,
-            directory_view_memory: HashMap::new(),
-            directory_runtime: DirectoryRuntime {
-                fingerprint: crate::fs::DirectoryFingerprint::default(),
-                watch_tx: directory_watch_tx,
-                watch_rx: directory_watch_rx,
-                watch: None,
-                pending_reload_at: None,
-                pending_fingerprint_scan: None,
-                pending_load: None,
-                use_polling_reload: true,
-                last_auto_reload_at: Instant::now(),
-            },
-            last_sidebar_refresh_at: Instant::now(),
-            last_click: None,
-            wheel_scroll: ScrollState {
-                horizontal: ScrollLane::new(),
-                vertical: ScrollLane::new(),
-                preview: ScrollLane::new(),
-                preview_horizontal: ScrollLane::new(),
-                search: ScrollLane::new(),
-            },
-            wheel_profile: detect_wheel_profile(),
-            last_wheel_target: Some(WheelTarget::Entries),
-            hover_panel: None,
-            browser_wheel_post_burst_pending: false,
-            last_navigation_key: None,
-            last_selection_change_at: Instant::now(),
-            // Initialize to far past so the first keypress is always Immediate.
-            last_key_nav_at: Instant::now() - Duration::from_secs(1),
         };
-        app.in_trash = App::path_is_trash(&app.cwd);
+        app.navigation.in_trash = App::path_is_trash(&app.navigation.cwd);
         let snapshot = crate::fs::load_directory_snapshot(
-            &app.cwd,
+            &app.navigation.cwd,
             app.effective_show_hidden(),
-            app.sort_mode,
+            app.navigation.sort_mode,
         )?;
-        app.sidebar = crate::fs::build_sidebar_rows();
-        app.last_sidebar_refresh_at = Instant::now();
-        app.entries = snapshot.entries;
-        app.directory_runtime.fingerprint = snapshot.fingerprint;
+        app.navigation.sidebar = crate::fs::build_sidebar_rows();
+        app.navigation.last_sidebar_refresh_at = Instant::now();
+        app.navigation.entries = snapshot.entries;
+        app.navigation.directory_runtime.fingerprint = snapshot.fingerprint;
         app.clamp_selection();
         app.remember_current_directory_view();
         app.refresh_preview();
@@ -658,26 +679,28 @@ impl App {
 
     pub(in crate::app) fn ffprobe_available(&mut self) -> bool {
         *self
-            .media_preview
+            .preview
+            .media
             .ffprobe_available
             .get_or_insert_with(|| inline_image::command_exists("ffprobe"))
     }
 
     pub(in crate::app) fn media_ffmpeg_available(&mut self) -> bool {
         *self
-            .media_preview
+            .preview
+            .media
             .ffmpeg_available
             .get_or_insert_with(|| inline_image::command_exists("ffmpeg"))
     }
 
     #[cfg(test)]
     pub(in crate::app) fn set_media_ffprobe_available_for_tests(&mut self, available: bool) {
-        self.media_preview.ffprobe_available = Some(available);
+        self.preview.media.ffprobe_available = Some(available);
     }
 
     #[cfg(test)]
     pub(in crate::app) fn set_media_ffmpeg_available_for_tests(&mut self, available: bool) {
-        self.media_preview.ffmpeg_available = Some(available);
+        self.preview.media.ffmpeg_available = Some(available);
     }
 }
 

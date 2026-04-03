@@ -22,8 +22,8 @@ pub(super) fn temp_root(label: &str) -> PathBuf {
 
 pub(super) fn configure_terminal_image_support(app: &mut App) {
     let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
-    app.terminal_images.protocol = ImageProtocol::KittyGraphics;
-    app.terminal_images.window = Some(TerminalWindowSize {
+    app.preview.terminal_images.protocol = ImageProtocol::KittyGraphics;
+    app.preview.terminal_images.window = Some(TerminalWindowSize {
         cells_width,
         cells_height,
         pixels_width: 1920,
@@ -33,8 +33,8 @@ pub(super) fn configure_terminal_image_support(app: &mut App) {
 
 pub(super) fn configure_iterm_image_support(app: &mut App) {
     let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
-    app.terminal_images.protocol = ImageProtocol::ItermInline;
-    app.terminal_images.window = Some(TerminalWindowSize {
+    app.preview.terminal_images.protocol = ImageProtocol::ItermInline;
+    app.preview.terminal_images.window = Some(TerminalWindowSize {
         cells_width,
         cells_height,
         pixels_width: 1920,
@@ -48,21 +48,21 @@ pub(super) fn build_pdf_overlay_test_app(label: &str) -> (App, PathBuf) {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.pdf_preview.pdf_tools_available = true;
-    app.pdf_preview.session = Some(PdfSession {
+    app.preview.pdf.pdf_tools_available = true;
+    app.preview.pdf.session = Some(PdfSession {
         path: root.join("demo.pdf"),
         size: 128,
         modified: None,
         current_page: 1,
         total_pages: None,
     });
-    app.frame_state.preview_content_area = Some(Rect {
+    app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.pdf_preview.activation_ready_at = Some(Instant::now());
+    app.preview.pdf.activation_ready_at = Some(Instant::now());
     (app, root)
 }
 
@@ -74,8 +74,8 @@ pub(super) fn build_selected_pdf_app(label: &str) -> (App, PathBuf) {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.pdf_preview.pdf_tools_available = true;
-    app.frame_state.preview_content_area = Some(Rect {
+    app.preview.pdf.pdf_tools_available = true;
+    app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -177,7 +177,7 @@ pub(super) fn set_single_test_entry(app: &mut App, path: &Path) {
         .file_name()
         .and_then(|name| name.to_str())
         .expect("file name should be valid utf-8");
-    app.entries = vec![Entry {
+    app.navigation.entries = vec![Entry {
         path: path.to_path_buf(),
         name: name.to_string(),
         name_key: name.to_ascii_lowercase(),
@@ -186,15 +186,15 @@ pub(super) fn set_single_test_entry(app: &mut App, path: &Path) {
         modified: None,
         readonly: false,
     }];
-    app.selected = 0;
-    app.frame_state.preview_content_area = Some(Rect {
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.frame_state.metrics.cols = 1;
-    app.frame_state.metrics.rows_visible = 6;
+    app.input.frame_state.metrics.cols = 1;
+    app.input.frame_state.metrics.rows_visible = 6;
 }
 
 pub(super) fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBuf) {
@@ -220,15 +220,15 @@ pub(super) fn build_selected_static_image_app(label: &str, file_name: &str) -> (
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.pdf_preview.pdf_tools_available = true;
-    app.frame_state.preview_content_area = Some(Rect {
+    app.preview.pdf.pdf_tools_available = true;
+    app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.frame_state.metrics.cols = 1;
-    app.frame_state.metrics.rows_visible = 6;
+    app.input.frame_state.metrics.cols = 1;
+    app.input.frame_state.metrics.rows_visible = 6;
     app.refresh_preview();
     (app, root)
 }
@@ -255,15 +255,15 @@ pub(super) fn build_selected_extensionless_png_app(label: &str, file_name: &str)
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.pdf_preview.pdf_tools_available = true;
-    app.frame_state.preview_content_area = Some(Rect {
+    app.preview.pdf.pdf_tools_available = true;
+    app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.frame_state.metrics.cols = 1;
-    app.frame_state.metrics.rows_visible = 6;
+    app.input.frame_state.metrics.cols = 1;
+    app.input.frame_state.metrics.rows_visible = 6;
     app.refresh_preview();
     (app, root)
 }
@@ -296,15 +296,15 @@ pub(super) fn build_multi_static_image_app(label: &str, file_names: &[&str]) -> 
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.pdf_preview.pdf_tools_available = true;
-    app.frame_state.preview_content_area = Some(Rect {
+    app.preview.pdf.pdf_tools_available = true;
+    app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.frame_state.metrics.cols = 1;
-    app.frame_state.metrics.rows_visible = 6;
+    app.input.frame_state.metrics.cols = 1;
+    app.input.frame_state.metrics.rows_visible = 6;
     app.refresh_preview();
     (app, root)
 }

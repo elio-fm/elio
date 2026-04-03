@@ -18,14 +18,14 @@ fn shift_slash_opens_and_closes_help_overlay() {
         KeyModifiers::SHIFT,
     )))
     .expect("shift-slash should open help");
-    assert!(app.help_open);
+    assert!(app.overlays.help);
 
     app.handle_event(Event::Key(KeyEvent::new(
         KeyCode::Char('/'),
         KeyModifiers::SHIFT,
     )))
     .expect("shift-slash should close help");
-    assert!(!app.help_open);
+    assert!(!app.overlays.help);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -76,7 +76,7 @@ fn g_opens_goto_overlay_and_goto_shortcuts_keep_g_for_top() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.select_last();
     assert_eq!(
-        app.selected, 2,
+        app.navigation.selected, 2,
         "G behavior should still reach the last item"
     );
 
@@ -84,7 +84,7 @@ fn g_opens_goto_overlay_and_goto_shortcuts_keep_g_for_top() {
         .expect("g should open go-to overlay");
     assert!(app.goto_is_open());
     assert_eq!(
-        app.selected, 2,
+        app.navigation.selected, 2,
         "opening the go-to overlay should not move selection"
     );
 
@@ -92,14 +92,14 @@ fn g_opens_goto_overlay_and_goto_shortcuts_keep_g_for_top() {
         .expect("g inside go-to overlay should jump to top");
     assert!(!app.goto_is_open());
     assert_eq!(
-        app.selected, 0,
+        app.navigation.selected, 0,
         "go-to g shortcut should move to the top item"
     );
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('G'))))
         .expect("capital G should still move to the last item");
     assert_eq!(
-        app.selected, 2,
+        app.navigation.selected, 2,
         "capital G should keep the old bottom-jump behavior"
     );
 
@@ -139,34 +139,34 @@ fn tab_and_shift_tab_cycle_sidebar_locations_and_skip_section_rows() {
     };
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.sidebar = sidebar_rows();
+    app.navigation.sidebar = sidebar_rows();
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
         .expect("tab should cycle sidebar locations");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.cwd, downloads);
+    assert_eq!(app.navigation.cwd, downloads);
 
-    app.sidebar = sidebar_rows();
+    app.navigation.sidebar = sidebar_rows();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
         .expect("tab should continue into device rows");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.cwd, usb);
+    assert_eq!(app.navigation.cwd, usb);
 
-    app.sidebar = sidebar_rows();
+    app.navigation.sidebar = sidebar_rows();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
         .expect("tab should wrap back to the first sidebar location");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.cwd, root);
+    assert_eq!(app.navigation.cwd, root);
 
-    app.sidebar = sidebar_rows();
+    app.navigation.sidebar = sidebar_rows();
     app.set_dir(usb.clone()).expect("device path should open");
     wait_for_directory_load(&mut app);
 
-    app.sidebar = sidebar_rows();
+    app.navigation.sidebar = sidebar_rows();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::BackTab)))
         .expect("shift-tab should walk sidebar locations in reverse");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.cwd, downloads);
+    assert_eq!(app.navigation.cwd, downloads);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -180,35 +180,37 @@ fn repeated_down_arrow_is_throttled_without_starving_hold_repeat() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
 
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
         .expect("first down arrow should be handled");
 
     let throttled_at = app
+        .input
         .last_navigation_key
         .expect("accepted navigation key should be tracked")
         .1;
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
         .expect("second down arrow should be handled");
 
-    assert_eq!(app.selected, 1);
+    assert_eq!(app.navigation.selected, 1);
     assert_eq!(
-        app.last_navigation_key
+        app.input
+            .last_navigation_key
             .expect("throttled navigation key should keep prior timestamp")
             .1,
         throttled_at
     );
 
-    app.last_navigation_key = Some((
+    app.input.last_navigation_key = Some((
         NavigationRepeatKey::Down,
         Instant::now() - KEY_REPEAT_NAV_INTERVAL - Duration::from_millis(1),
     ));
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
         .expect("third down arrow should be handled");
 
-    assert_eq!(app.selected, 2);
+    assert_eq!(app.navigation.selected, 2);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -225,11 +227,11 @@ fn high_frequency_alt_right_scrolls_preview_instead_of_history() {
     .expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::HighFrequency;
-    app.last_wheel_target = Some(WheelTarget::Entries);
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
+    app.input.last_wheel_target = Some(WheelTarget::Entries);
     app.select_index(0);
-    app.last_selection_change_at =
+    app.input.last_selection_change_at =
         Instant::now() - PREVIEW_AUTO_FOCUS_DELAY - Duration::from_millis(1);
     app.set_frame_state(FrameState {
         preview_panel: Some(Rect {
@@ -246,9 +248,9 @@ fn high_frequency_alt_right_scrolls_preview_instead_of_history() {
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT)))
         .expect("alt-right should be handled");
 
-    assert!(app.preview_state.horizontal_scroll > 0);
-    assert_eq!(app.selected, 0);
-    assert_eq!(app.last_wheel_target, Some(WheelTarget::Preview));
+    assert!(app.preview.state.horizontal_scroll > 0);
+    assert_eq!(app.navigation.selected, 0);
+    assert_eq!(app.input.last_wheel_target, Some(WheelTarget::Preview));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -262,11 +264,11 @@ fn high_frequency_down_arrow_keeps_browser_navigation() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::HighFrequency;
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
-    app.last_wheel_target = Some(WheelTarget::Preview);
-    app.last_selection_change_at =
+    app.input.last_wheel_target = Some(WheelTarget::Preview);
+    app.input.last_selection_change_at =
         Instant::now() - PREVIEW_AUTO_FOCUS_DELAY - Duration::from_millis(1);
     app.set_frame_state(FrameState {
         preview_panel: Some(Rect {
@@ -283,8 +285,8 @@ fn high_frequency_down_arrow_keeps_browser_navigation() {
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
         .expect("down arrow should be handled");
 
-    assert_eq!(app.selected, 1);
-    assert_eq!(app.preview_state.scroll, 0);
+    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.preview.state.scroll, 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -296,10 +298,10 @@ fn high_frequency_right_arrow_in_list_view_still_enters_directory() {
     fs::create_dir_all(&child).expect("failed to create child dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::HighFrequency;
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
-    app.last_wheel_target = Some(WheelTarget::Preview);
+    app.input.last_wheel_target = Some(WheelTarget::Preview);
 
     app.handle_event(Event::Key(KeyEvent::new(
         KeyCode::Right,
@@ -308,7 +310,7 @@ fn high_frequency_right_arrow_in_list_view_still_enters_directory() {
     .expect("right arrow should be handled");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.cwd, child);
+    assert_eq!(app.navigation.cwd, child);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -322,29 +324,29 @@ fn rapid_audio_navigation_defers_second_cold_heavy_preview_refresh() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.set_media_ffprobe_available_for_tests(false);
     app.set_media_ffmpeg_available_for_tests(false);
-    app.last_selection_change_at =
+    app.input.last_selection_change_at =
         Instant::now() - WHEEL_SCROLL_BURST_WINDOW - Duration::from_millis(1);
 
-    let initial_token = app.preview_state.token;
+    let initial_token = app.preview.state.token;
     app.move_vertical(1);
 
     // Cold heavy audio is always deferred regardless of burst window state.
-    assert_eq!(app.selected, 1);
-    assert_eq!(app.preview_state.token, initial_token);
-    assert!(app.preview_state.deferred_refresh_at.is_some());
+    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.preview.state.token, initial_token);
+    assert!(app.preview.state.deferred_refresh_at.is_some());
 
     app.move_vertical(1);
 
-    assert_eq!(app.selected, 2);
-    assert_eq!(app.preview_state.token, initial_token);
-    assert!(app.preview_state.deferred_refresh_at.is_some());
+    assert_eq!(app.navigation.selected, 2);
+    assert_eq!(app.preview.state.token, initial_token);
+    assert!(app.preview.state.deferred_refresh_at.is_some());
 
     thread::sleep(HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY + Duration::from_millis(20));
     assert!(app.process_preview_refresh_timers());
-    assert!(app.preview_state.token > initial_token);
+    assert!(app.preview.state.token > initial_token);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -358,32 +360,32 @@ fn rapid_key_navigation_defers_preview_for_non_heavy_files() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
 
     // First move: last_key_nav_at is in the past → Immediate preview.
-    let token_before = app.preview_state.token;
+    let token_before = app.preview.state.token;
     app.move_vertical_keyboard(1);
-    assert_eq!(app.selected, 1);
+    assert_eq!(app.navigation.selected, 1);
     assert!(
-        app.preview_state.token > token_before,
+        app.preview.state.token > token_before,
         "first move should trigger an immediate preview refresh"
     );
     assert!(
-        app.preview_state.deferred_refresh_at.is_none(),
+        app.preview.state.deferred_refresh_at.is_none(),
         "first move should not leave a deferred timer"
     );
 
     // Second move within KEY_NAV_RAPID_THRESHOLD → Deferred preview.
-    let token_before = app.preview_state.token;
+    let token_before = app.preview.state.token;
     app.move_vertical_keyboard(1);
-    assert_eq!(app.selected, 2);
+    assert_eq!(app.navigation.selected, 2);
     assert_eq!(
-        app.preview_state.token, token_before,
+        app.preview.state.token, token_before,
         "second rapid move should not immediately refresh preview"
     );
     assert!(
-        app.preview_state.deferred_refresh_at.is_some(),
+        app.preview.state.deferred_refresh_at.is_some(),
         "second rapid move should schedule a deferred refresh"
     );
 
@@ -391,7 +393,7 @@ fn rapid_key_navigation_defers_preview_for_non_heavy_files() {
     thread::sleep(HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY + Duration::from_millis(20));
     assert!(app.process_preview_refresh_timers());
     assert!(
-        app.preview_state.token > token_before,
+        app.preview.state.token > token_before,
         "deferred preview should fire after pause"
     );
 
@@ -408,13 +410,13 @@ fn rapid_key_navigation_clears_directory_totals_until_deferred_refresh_runs() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     wait_for_background_preview(&mut app);
     for _ in 0..100 {
         let _ = app.process_background_jobs();
         if matches!(
-            app.preview_state.directory_stats,
+            app.preview.state.directory_stats,
             Some(PreviewDirectoryStatsState::Complete { .. })
         ) {
             break;
@@ -422,18 +424,18 @@ fn rapid_key_navigation_clears_directory_totals_until_deferred_refresh_runs() {
         thread::sleep(Duration::from_millis(10));
     }
     assert!(matches!(
-        app.preview_state.directory_stats,
+        app.preview.state.directory_stats,
         Some(PreviewDirectoryStatsState::Complete { .. })
     ));
 
-    app.last_key_nav_at = Instant::now();
-    let token_before = app.preview_state.token;
+    app.input.last_key_nav_at = Instant::now();
+    let token_before = app.preview.state.token;
     app.move_vertical_keyboard(1);
 
-    assert_eq!(app.selected, 1);
-    assert_eq!(app.preview_state.token, token_before);
-    assert!(app.preview_state.deferred_refresh_at.is_some());
-    assert!(app.preview_state.directory_stats.is_none());
+    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.preview.state.token, token_before);
+    assert!(app.preview.state.deferred_refresh_at.is_some());
+    assert!(app.preview.state.directory_stats.is_none());
 
     thread::sleep(HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY + Duration::from_millis(20));
     assert!(app.process_preview_refresh_timers());
@@ -461,8 +463,8 @@ fn high_frequency_alt_right_does_not_trigger_history_navigation() {
     fs::create_dir_all(&child).expect("failed to create child dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::HighFrequency;
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
     app.open_selected()
         .expect("opening selected directory should succeed");
@@ -473,7 +475,7 @@ fn high_frequency_alt_right_does_not_trigger_history_navigation() {
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT)))
         .expect("alt-right should be handled");
 
-    assert_eq!(app.cwd, root);
+    assert_eq!(app.navigation.cwd, root);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(child.as_path())
@@ -517,7 +519,7 @@ fn rebound_yank_key_dispatches_yank_action() {
     wait_for_directory_load(&mut app);
     app.select_index(0);
 
-    assert!(app.clipboard.is_none(), "clipboard should start empty");
+    assert!(app.jobs.clipboard.is_none(), "clipboard should start empty");
 
     // Dispatch the action the rebound key would trigger.
     let action = kb.action_for('Y').expect("Y should be bound");
@@ -525,7 +527,7 @@ fn rebound_yank_key_dispatches_yank_action() {
         .expect("dispatch should succeed");
 
     assert!(
-        app.clipboard.is_some(),
+        app.jobs.clipboard.is_some(),
         "yank should have populated the clipboard"
     );
 

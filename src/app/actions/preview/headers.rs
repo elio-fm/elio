@@ -48,7 +48,7 @@ impl PreviewHeaderSegment {
 impl App {
     pub(super) fn preview_header_segments(&self, visible_rows: usize) -> Vec<PreviewHeaderSegment> {
         let mut segments = Vec::new();
-        let content = &self.preview_state.content;
+        let content = &self.preview.state.content;
         let directory_stats_detail = self.preview_directory_stats_header_detail();
         let directory_stats_note = self.preview_directory_stats_status_note();
 
@@ -154,8 +154,8 @@ impl App {
             } else if !has_primary_parts && content.kind != PreviewKind::Directory {
                 let rendered_total = content.total_lines();
                 if rendered_total > 0 {
-                    let start = self.preview_state.scroll.saturating_add(1);
-                    let end = (self.preview_state.scroll + visible_rows.max(1)).min(rendered_total);
+                    let start = self.preview.state.scroll.saturating_add(1);
+                    let end = (self.preview.state.scroll + visible_rows.max(1)).min(rendered_total);
                     let range = if rendered_total > visible_rows.max(1) {
                         format!("{start}-{end} / {rendered_total}")
                     } else {
@@ -181,12 +181,13 @@ impl App {
         }
 
         if content.line_coverage.is_none() {
-            let wrapped_note =
-                if content.truncation_note.is_none() && self.frame_state.preview_cols_visible > 0 {
-                    content.wrapped_truncation_note(self.frame_state.preview_cols_visible)
-                } else {
-                    None
-                };
+            let wrapped_note = if content.truncation_note.is_none()
+                && self.input.frame_state.preview_cols_visible > 0
+            {
+                content.wrapped_truncation_note(self.input.frame_state.preview_cols_visible)
+            } else {
+                None
+            };
 
             if let Some(note) = content
                 .truncation_note
@@ -224,12 +225,12 @@ impl App {
     }
 
     fn preview_directory_stats_header_detail(&self) -> Option<(String, Option<String>)> {
-        if self.preview_state.content.kind != PreviewKind::Directory
-            || self.preview_state.load_state.is_some()
+        if self.preview.state.content.kind != PreviewKind::Directory
+            || self.preview.state.load_state.is_some()
         {
             return None;
         }
-        match self.preview_state.directory_stats.as_ref()? {
+        match self.preview.state.directory_stats.as_ref()? {
             PreviewDirectoryStatsState::Loading { .. } => None,
             PreviewDirectoryStatsState::Complete { stats, .. } => {
                 let size = format_size(stats.total_size_bytes);
@@ -258,12 +259,12 @@ impl App {
     }
 
     fn preview_directory_stats_status_note(&self) -> Option<(String, Option<String>)> {
-        if self.preview_state.content.kind != PreviewKind::Directory
-            || self.preview_state.load_state.is_some()
+        if self.preview.state.content.kind != PreviewKind::Directory
+            || self.preview.state.load_state.is_some()
         {
             return None;
         }
-        match self.preview_state.directory_stats.as_ref()? {
+        match self.preview.state.directory_stats.as_ref()? {
             PreviewDirectoryStatsState::Loading { .. } => None,
             PreviewDirectoryStatsState::Complete { .. } => None,
             PreviewDirectoryStatsState::Incomplete { error, .. } => {

@@ -98,12 +98,12 @@ fn epub_preview_keeps_section_navigation_while_next_section_loads() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_background_preview(&mut app);
 
-    assert_eq!(app.preview_state.content.ebook_section_index, Some(0));
-    assert_eq!(app.preview_state.content.ebook_section_count, Some(2));
+    assert_eq!(app.preview.state.content.ebook_section_index, Some(0));
+    assert_eq!(app.preview.state.content.ebook_section_count, Some(2));
     assert!(app.step_epub_section(1));
     assert!(app.preview_lines().is_empty());
-    assert_eq!(app.preview_state.content.ebook_section_index, Some(1));
-    assert_eq!(app.preview_state.content.ebook_section_count, Some(2));
+    assert_eq!(app.preview.state.content.ebook_section_index, Some(1));
+    assert_eq!(app.preview.state.content.ebook_section_count, Some(2));
     assert_eq!(
         app.preview_header_detail(10).as_deref(),
         Some("EPUB ebook  •  Section 2/2")
@@ -111,9 +111,9 @@ fn epub_preview_keeps_section_navigation_while_next_section_loads() {
 
     wait_for_background_preview(&mut app);
 
-    assert_eq!(app.preview_state.content.ebook_section_index, Some(1));
+    assert_eq!(app.preview.state.content.ebook_section_index, Some(1));
     assert_eq!(
-        app.preview_state.content.ebook_section_title.as_deref(),
+        app.preview.state.content.ebook_section_title.as_deref(),
         Some("Second Step")
     );
     assert!(
@@ -146,7 +146,7 @@ fn comic_preview_loads_when_token_is_stale_but_placeholder_is_current() {
     // Simulate the race: bump the token without calling refresh_preview() so
     // load_state stays Placeholder and no replacement job is submitted.  The
     // original job will arrive with the now-stale token.
-    app.preview_state.token = app.preview_state.token.wrapping_add(1);
+    app.preview.state.token = app.preview.state.token.wrapping_add(1);
 
     // Without the rescue the result would be dropped and this would time out.
     wait_for_background_preview(&mut app);
@@ -182,8 +182,8 @@ fn comic_preview_loads_when_token_is_stale_and_load_state_is_refreshing() {
     // Simulate the Refreshing race: switch load_state to Refreshing (as it
     // would be after refresh_preview found a stale cache hit) and bump the
     // token so the in-flight job will arrive stale against a Refreshing state.
-    app.preview_state.load_state = Some(PreviewLoadState::Refreshing(archive.clone()));
-    app.preview_state.token = app.preview_state.token.wrapping_add(1);
+    app.preview.state.load_state = Some(PreviewLoadState::Refreshing(archive.clone()));
+    app.preview.state.token = app.preview.state.token.wrapping_add(1);
 
     // Without the extended rescue (Placeholder OR Refreshing), the result
     // would be dropped and this would time out.

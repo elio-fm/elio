@@ -25,15 +25,15 @@ struct EpubSession {
 impl App {
     pub(in crate::app) fn sync_epub_preview_selection(&mut self) {
         let Some(entry) = self.selected_entry() else {
-            self.epub_preview.session = None;
+            self.preview.epub.session = None;
             return;
         };
         if !is_epub_entry(entry) {
-            self.epub_preview.session = None;
+            self.preview.epub.session = None;
             return;
         }
 
-        let keep_session = self.epub_preview.session.as_ref().is_some_and(|session| {
+        let keep_session = self.preview.epub.session.as_ref().is_some_and(|session| {
             session.path == entry.path
                 && session.size == entry.size
                 && session.modified == entry.modified
@@ -42,7 +42,7 @@ impl App {
             return;
         }
 
-        self.epub_preview.session = Some(EpubSession {
+        self.preview.epub.session = Some(EpubSession {
             path: entry.path.clone(),
             size: entry.size,
             modified: entry.modified,
@@ -54,7 +54,8 @@ impl App {
     pub(in crate::app) fn epub_preview_request_options(
         &self,
     ) -> Option<preview::PreviewRequestOptions> {
-        self.epub_preview
+        self.preview
+            .epub
             .session
             .as_ref()
             .map(|session| preview::PreviewRequestOptions::EpubSection(session.current_section))
@@ -68,11 +69,11 @@ impl App {
     }
 
     pub(in crate::app) fn epub_preview_wheel_capture_active(&self) -> bool {
-        self.epub_preview.session.is_some()
+        self.preview.epub.session.is_some()
     }
 
     pub(in crate::app) fn epub_preview_session_path(&self) -> Option<&std::path::Path> {
-        self.epub_preview.session.as_ref().map(|s| s.path.as_path())
+        self.preview.epub.session.as_ref().map(|s| s.path.as_path())
     }
 
     pub(in crate::app) fn apply_current_epub_preview_metadata(&mut self) {
@@ -82,17 +83,17 @@ impl App {
         else {
             return;
         };
-        let Some(session) = self.epub_preview.session.as_mut() else {
+        let Some(session) = self.preview.epub.session.as_mut() else {
             return;
         };
         if session.path != path || session.size != size || session.modified != modified {
             return;
         }
 
-        if let Some(total_sections) = self.preview_state.content.ebook_section_count {
+        if let Some(total_sections) = self.preview.state.content.ebook_section_count {
             session.total_sections = Some(total_sections);
         }
-        if let Some(section_index) = self.preview_state.content.ebook_section_index {
+        if let Some(section_index) = self.preview.state.content.ebook_section_index {
             session.current_section = section_index;
         }
     }
@@ -101,7 +102,7 @@ impl App {
         &self,
         preview: preview::PreviewContent,
     ) -> preview::PreviewContent {
-        let Some(session) = self.epub_preview.session.as_ref() else {
+        let Some(session) = self.preview.epub.session.as_ref() else {
             return preview;
         };
         let Some(total_sections) = session.total_sections else {
@@ -115,12 +116,12 @@ impl App {
     }
 
     pub(in crate::app) fn step_epub_section(&mut self, delta: isize) -> bool {
-        let Some(session) = self.epub_preview.session.as_mut() else {
+        let Some(session) = self.preview.epub.session.as_mut() else {
             return false;
         };
         let total_sections = session
             .total_sections
-            .or(self.preview_state.content.ebook_section_count)
+            .or(self.preview.state.content.ebook_section_count)
             .unwrap_or(0);
         if total_sections == 0 {
             return false;
@@ -137,18 +138,18 @@ impl App {
             return false;
         }
 
-        self.preview_state.deferred_refresh_at = Some(Instant::now());
+        self.preview.state.deferred_refresh_at = Some(Instant::now());
         self.refresh_preview();
         true
     }
 
     pub(in crate::app) fn epub_prefetch_section_indices(&self) -> Vec<usize> {
-        let Some(session) = self.epub_preview.session.as_ref() else {
+        let Some(session) = self.preview.epub.session.as_ref() else {
             return Vec::new();
         };
         let total_sections = session
             .total_sections
-            .or(self.preview_state.content.ebook_section_count)
+            .or(self.preview.state.content.ebook_section_count)
             .unwrap_or(0);
         if total_sections == 0 {
             return Vec::new();
@@ -187,7 +188,7 @@ impl App {
                 PreviewPriority::Low,
                 preview_work_class(&entry, &variant),
             );
-            let _ = self.scheduler.submit_preview(request);
+            let _ = self.jobs.scheduler.submit_preview(request);
         }
     }
 
@@ -200,7 +201,7 @@ impl App {
         if !is_epub_entry(entry) {
             return Vec::new();
         }
-        let Some(area) = self.frame_state.preview_media_area else {
+        let Some(area) = self.input.frame_state.preview_media_area else {
             return Vec::new();
         };
 
@@ -220,7 +221,8 @@ impl App {
     }
 
     fn cached_epub_section_count(&self, entry: &Entry) -> Option<usize> {
-        self.preview_state
+        self.preview
+            .state
             .result_cache
             .iter()
             .find_map(|(key, cached)| {
@@ -238,7 +240,8 @@ impl App {
         path: &std::path::Path,
         section: usize,
     ) -> bool {
-        self.preview_state
+        self.preview
+            .state
             .result_cache
             .contains_key(&PreviewCacheKey {
                 path: path.to_path_buf(),

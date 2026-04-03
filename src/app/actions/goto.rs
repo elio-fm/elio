@@ -9,25 +9,28 @@ use std::path::PathBuf;
 
 impl App {
     pub fn goto_is_open(&self) -> bool {
-        self.goto_overlay.is_some()
+        self.overlays.goto.is_some()
     }
 
     pub fn goto_title(&self) -> &str {
-        self.goto_overlay
+        self.overlays
+            .goto
             .as_ref()
             .map(|overlay| overlay.title.as_str())
             .unwrap_or("")
     }
 
     pub fn goto_row_count(&self) -> usize {
-        self.goto_overlay
+        self.overlays
+            .goto
             .as_ref()
             .map(|overlay| overlay.rows.len())
             .unwrap_or(0)
     }
 
     pub fn goto_row_label(&self, index: usize) -> &str {
-        self.goto_overlay
+        self.overlays
+            .goto
             .as_ref()
             .and_then(|overlay| overlay.rows.get(index))
             .map(|row| row.label.as_str())
@@ -35,7 +38,8 @@ impl App {
     }
 
     pub fn goto_row_shortcut(&self, index: usize) -> Option<char> {
-        self.goto_overlay
+        self.overlays
+            .goto
             .as_ref()
             .and_then(|overlay| overlay.rows.get(index))
             .map(|row| row.shortcut)
@@ -44,20 +48,20 @@ impl App {
 
 impl App {
     pub(in crate::app) fn open_goto_overlay(&mut self) {
-        self.help_open = false;
-        self.goto_overlay = Some(build_goto_overlay(self));
+        self.overlays.help = false;
+        self.overlays.goto = Some(build_goto_overlay(self));
         self.status.clear();
     }
 
     pub(in crate::app) fn handle_goto_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.goto_overlay = None;
+            self.overlays.goto = None;
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.goto_overlay = None;
+                self.overlays.goto = None;
             }
             KeyCode::Char(ch)
                 if !key
@@ -77,15 +81,17 @@ impl App {
     pub(in crate::app) fn handle_goto_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
             let inside = self
+                .input
                 .frame_state
                 .goto_panel
                 .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
             if !inside {
-                self.goto_overlay = None;
+                self.overlays.goto = None;
                 return Ok(());
             }
 
             if let Some(hit) = self
+                .input
                 .frame_state
                 .goto_hits
                 .iter()
@@ -101,7 +107,7 @@ impl App {
 
     fn goto_row_index_for_shortcut(&self, ch: char) -> Option<usize> {
         let needle = ch.to_ascii_lowercase();
-        self.goto_overlay.as_ref().and_then(|overlay| {
+        self.overlays.goto.as_ref().and_then(|overlay| {
             overlay
                 .rows
                 .iter()
@@ -111,7 +117,8 @@ impl App {
 
     fn confirm_goto_index(&mut self, index: usize) -> Result<()> {
         let Some(destination) = self
-            .goto_overlay
+            .overlays
+            .goto
             .as_ref()
             .and_then(|overlay| overlay.rows.get(index).map(|row| row.destination.clone()))
         else {
@@ -120,11 +127,11 @@ impl App {
 
         match destination {
             GoToDestination::Top => {
-                self.goto_overlay = None;
+                self.overlays.goto = None;
                 self.select_index(0);
             }
             GoToDestination::Path(path) => {
-                self.goto_overlay = None;
+                self.overlays.goto = None;
                 self.set_dir(path)?;
             }
             GoToDestination::Missing(status) => {
@@ -196,7 +203,8 @@ fn config_label() -> &'static str {
 }
 
 fn downloads_destination(app: &App) -> Option<PathBuf> {
-    app.sidebar
+    app.navigation
+        .sidebar
         .iter()
         .filter_map(|row| row.item())
         .find(|item| item.kind == SidebarItemKind::Downloads)
@@ -216,7 +224,8 @@ fn config_directory() -> Option<PathBuf> {
 }
 
 fn trash_destination(app: &App) -> Option<PathBuf> {
-    app.sidebar
+    app.navigation
+        .sidebar
         .iter()
         .filter_map(|row| row.item())
         .find(|item| item.kind == SidebarItemKind::Trash)

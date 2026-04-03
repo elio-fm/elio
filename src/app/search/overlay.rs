@@ -5,46 +5,53 @@ use std::{collections::HashMap, ffi::OsStr, path::PathBuf, sync::Arc};
 
 impl App {
     pub fn search_is_open(&self) -> bool {
-        self.search.is_some()
+        self.overlays.search.is_some()
     }
 
     pub fn search_query(&self) -> &str {
-        self.search
+        self.overlays
+            .search
             .as_ref()
             .map(|search| search.query.as_str())
             .unwrap_or("")
     }
 
     pub fn search_match_count(&self) -> usize {
-        self.search
+        self.overlays
+            .search
             .as_ref()
             .map(|search| search.matches.len())
             .unwrap_or(0)
     }
 
     pub fn search_candidate_count(&self) -> usize {
-        self.search
+        self.overlays
+            .search
             .as_ref()
             .and_then(|search| search.cached_matches.get("").map(Vec::len))
             .unwrap_or(0)
     }
 
     pub fn search_scope(&self) -> Option<SearchScope> {
-        self.search.as_ref().map(|search| search.scope)
+        self.overlays.search.as_ref().map(|search| search.scope)
     }
 
     pub fn search_is_loading(&self) -> bool {
-        self.search.as_ref().is_some_and(|search| search.loading)
+        self.overlays
+            .search
+            .as_ref()
+            .is_some_and(|search| search.loading)
     }
 
     pub fn search_error(&self) -> Option<&str> {
-        self.search
+        self.overlays
+            .search
             .as_ref()
             .and_then(|search| search.error.as_deref())
     }
 
     pub fn search_rows(&self, max_rows: usize) -> Vec<SearchRow> {
-        let Some(search) = &self.search else {
+        let Some(search) = &self.overlays.search else {
             return Vec::new();
         };
 
@@ -66,14 +73,15 @@ impl App {
 
     pub(in crate::app) fn open_fuzzy_finder(&mut self, scope: SearchScope) -> Result<()> {
         self.clear_wheel_scroll();
-        self.help_open = false;
+        self.overlays.help = false;
         let cached = self
+            .jobs
             .search_cache
             .as_ref()
             .filter(|cache| {
-                cache.cwd == self.cwd
+                cache.cwd == self.navigation.cwd
                     && cache.scope == scope
-                    && cache.show_hidden == self.show_hidden
+                    && cache.show_hidden == self.navigation.show_hidden
             })
             .map(|cache| cache.candidates.clone());
         let candidates = cached.clone().unwrap_or_else(|| Arc::new(Vec::new()));
@@ -87,7 +95,7 @@ impl App {
         if cached.is_none() {
             self.prewarm_search_index(scope);
         }
-        self.search = Some(SearchOverlay {
+        self.overlays.search = Some(SearchOverlay {
             scope,
             query: String::new(),
             query_cursor: 0,
@@ -105,7 +113,7 @@ impl App {
 
     pub(in crate::app) fn handle_search_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.search = None;
+            self.overlays.search = None;
             self.clear_wheel_scroll();
             self.status.clear();
             return Ok(());
@@ -113,7 +121,7 @@ impl App {
 
         match key.code {
             KeyCode::Esc => {
-                self.search = None;
+                self.overlays.search = None;
                 self.clear_wheel_scroll();
                 self.status.clear();
             }
@@ -134,44 +142,48 @@ impl App {
             KeyCode::End => self.move_search_cursor_to_end(),
             _ if search_key_deletes_previous_word(key) => {
                 let previous_query = self
+                    .overlays
                     .search
                     .as_ref()
                     .map(|search| search.query.clone())
                     .unwrap_or_default();
-                if let Some(search) = &mut self.search {
+                if let Some(search) = &mut self.overlays.search {
                     remove_word_before_cursor(&mut search.query, &mut search.query_cursor);
                 }
                 self.refresh_search_matches(&previous_query);
             }
             KeyCode::Backspace => {
                 let previous_query = self
+                    .overlays
                     .search
                     .as_ref()
                     .map(|search| search.query.clone())
                     .unwrap_or_default();
-                if let Some(search) = &mut self.search {
+                if let Some(search) = &mut self.overlays.search {
                     remove_char_before_cursor(&mut search.query, &mut search.query_cursor);
                 }
                 self.refresh_search_matches(&previous_query);
             }
             _ if search_key_deletes_next_word(key) => {
                 let previous_query = self
+                    .overlays
                     .search
                     .as_ref()
                     .map(|search| search.query.clone())
                     .unwrap_or_default();
-                if let Some(search) = &mut self.search {
+                if let Some(search) = &mut self.overlays.search {
                     remove_word_at_cursor(&mut search.query, search.query_cursor);
                 }
                 self.refresh_search_matches(&previous_query);
             }
             KeyCode::Delete => {
                 let previous_query = self
+                    .overlays
                     .search
                     .as_ref()
                     .map(|search| search.query.clone())
                     .unwrap_or_default();
-                if let Some(search) = &mut self.search {
+                if let Some(search) = &mut self.overlays.search {
                     remove_char_at_cursor(&mut search.query, search.query_cursor);
                 }
                 self.refresh_search_matches(&previous_query);
@@ -182,11 +194,12 @@ impl App {
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 let previous_query = self
+                    .overlays
                     .search
                     .as_ref()
                     .map(|search| search.query.clone())
                     .unwrap_or_default();
-                if let Some(search) = &mut self.search {
+                if let Some(search) = &mut self.overlays.search {
                     insert_char_at_cursor(&mut search.query, &mut search.query_cursor, ch);
                 }
                 self.refresh_search_matches(&previous_query);
@@ -200,6 +213,7 @@ impl App {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 if let Some(hit) = self
+                    .input
                     .frame_state
                     .search_hits
                     .iter()
@@ -209,11 +223,12 @@ impl App {
                     self.select_search_index(hit.index);
                     self.confirm_search_selection()?;
                 } else if self
+                    .input
                     .frame_state
                     .search_panel
                     .is_none_or(|rect| !rect_contains(rect, mouse.column, mouse.row))
                 {
-                    self.search = None;
+                    self.overlays.search = None;
                     self.clear_wheel_scroll();
                     self.status.clear();
                 }
@@ -226,7 +241,7 @@ impl App {
     }
 
     pub(in crate::app) fn move_search_selection(&mut self, delta: isize) {
-        let Some(search) = &mut self.search else {
+        let Some(search) = &mut self.overlays.search else {
             return;
         };
         if search.matches.is_empty() {
@@ -241,14 +256,15 @@ impl App {
     }
 
     pub fn search_query_cursor(&self) -> usize {
-        self.search
+        self.overlays
+            .search
             .as_ref()
             .map(|search| search.query_cursor.min(search.query.chars().count()))
             .unwrap_or(0)
     }
 
     fn move_search_cursor(&mut self, delta: isize) {
-        let Some(search) = &mut self.search else {
+        let Some(search) = &mut self.overlays.search else {
             return;
         };
         let max = search.query.chars().count() as isize;
@@ -256,40 +272,40 @@ impl App {
     }
 
     fn move_search_cursor_to_previous_word(&mut self) {
-        let Some(search) = &mut self.search else {
+        let Some(search) = &mut self.overlays.search else {
             return;
         };
         search.query_cursor = previous_word_start(&search.query, search.query_cursor);
     }
 
     fn move_search_cursor_to_next_word(&mut self) {
-        let Some(search) = &mut self.search else {
+        let Some(search) = &mut self.overlays.search else {
             return;
         };
         search.query_cursor = next_word_start(&search.query, search.query_cursor);
     }
 
     fn move_search_cursor_to(&mut self, index: usize) {
-        let Some(search) = &mut self.search else {
+        let Some(search) = &mut self.overlays.search else {
             return;
         };
         search.query_cursor = index.min(search.query.chars().count());
     }
 
     fn move_search_cursor_to_end(&mut self) {
-        let Some(search) = &mut self.search else {
+        let Some(search) = &mut self.overlays.search else {
             return;
         };
         search.query_cursor = search.query.chars().count();
     }
 
     fn page_search(&mut self, direction: isize) {
-        let visible = self.frame_state.search_rows_visible.max(1) as isize;
+        let visible = self.input.frame_state.search_rows_visible.max(1) as isize;
         self.move_search_selection(direction * visible);
     }
 
     fn select_search_index(&mut self, index: usize) {
-        let Some(search) = &mut self.search else {
+        let Some(search) = &mut self.overlays.search else {
             return;
         };
         if search.matches.is_empty() {
@@ -302,7 +318,7 @@ impl App {
     }
 
     pub(in crate::app::search) fn confirm_search_selection(&mut self) -> Result<()> {
-        let Some(path) = self.search.as_ref().and_then(|search| {
+        let Some(path) = self.overlays.search.as_ref().and_then(|search| {
             search
                 .matches
                 .get(search.selected)
@@ -314,12 +330,12 @@ impl App {
         };
 
         self.reveal_path(path)?;
-        self.search = None;
+        self.overlays.search = None;
         Ok(())
     }
 
     pub(in crate::app) fn sync_search_scroll(&mut self) -> bool {
-        let Some(search) = &mut self.search else {
+        let Some(search) = &mut self.overlays.search else {
             return false;
         };
         if search.matches.is_empty() {
@@ -329,7 +345,7 @@ impl App {
         }
 
         let previous = search.scroll;
-        let rows_visible = self.frame_state.search_rows_visible.max(1);
+        let rows_visible = self.input.frame_state.search_rows_visible.max(1);
         if search.selected < search.scroll {
             search.scroll = search.selected;
         } else if search.selected >= search.scroll + rows_visible {

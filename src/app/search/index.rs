@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 impl App {
     pub(in crate::app) fn refresh_search_matches(&mut self, _previous_query: &str) {
-        let Some(search) = &mut self.search else {
+        let Some(search) = &mut self.overlays.search else {
             return;
         };
         search.query_cursor = search.query_cursor.min(search.query.chars().count());
@@ -41,18 +41,18 @@ impl App {
     }
 
     pub(crate) fn prewarm_search_index(&mut self, scope: SearchScope) {
-        self.search_token = self.search_token.wrapping_add(1);
-        self.search_loading = true;
-        self.search_cache = None;
+        self.jobs.search_token = self.jobs.search_token.wrapping_add(1);
+        self.jobs.search_loading = true;
+        self.jobs.search_cache = None;
         let request = SearchRequest {
-            token: self.search_token,
-            cwd: self.cwd.clone(),
+            token: self.jobs.search_token,
+            cwd: self.navigation.cwd.clone(),
             scope,
             show_hidden: self.effective_show_hidden(),
         };
-        if !self.scheduler.submit_search(request) {
-            self.search_loading = false;
-            if let Some(search) = &mut self.search
+        if !self.jobs.scheduler.submit_search(request) {
+            self.jobs.search_loading = false;
+            if let Some(search) = &mut self.overlays.search
                 && search.scope == scope
             {
                 search.loading = false;

@@ -60,7 +60,7 @@ pub(super) fn render_rename_overlay(
     }
 
     let is_dir = app.rename_item_is_dir();
-    let live_path = app.cwd.join(app.rename_input());
+    let live_path = app.navigation.cwd.join(app.rename_input());
     let (icon, icon_color) = (
         theme::path_symbol(&live_path, is_dir),
         theme::path_color(&live_path, is_dir, palette),

@@ -19,9 +19,10 @@ fn high_frequency_preview_wheel_scrolls_preview_after_entries_scroll() {
     fs::write(&long_file, &contents).expect("failed to write long file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::HighFrequency;
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
     let long_index = app
+        .navigation
         .entries
         .iter()
         .position(|e| e.path == long_file)
@@ -58,7 +59,7 @@ fn high_frequency_preview_wheel_scrolls_preview_after_entries_scroll() {
         modifiers: KeyModifiers::NONE,
     }))
     .expect("entry scroll should be handled");
-    assert_eq!(app.last_wheel_target, Some(WheelTarget::Entries));
+    assert_eq!(app.input.last_wheel_target, Some(WheelTarget::Entries));
 
     app.handle_event(Event::Mouse(MouseEvent {
         kind: MouseEventKind::Moved,
@@ -67,10 +68,10 @@ fn high_frequency_preview_wheel_scrolls_preview_after_entries_scroll() {
         modifiers: KeyModifiers::NONE,
     }))
     .expect("hover on preview should be handled");
-    assert_eq!(app.last_wheel_target, Some(WheelTarget::Preview));
+    assert_eq!(app.input.last_wheel_target, Some(WheelTarget::Preview));
 
-    let before_scroll = app.preview_state.scroll;
-    let before_selected = app.selected;
+    let before_scroll = app.preview.state.scroll;
+    let before_selected = app.navigation.selected;
     app.handle_event(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
         column: 45,
@@ -80,11 +81,11 @@ fn high_frequency_preview_wheel_scrolls_preview_after_entries_scroll() {
     .expect("preview scroll should be handled");
 
     assert_eq!(
-        app.selected, before_selected,
+        app.navigation.selected, before_selected,
         "entry selection must not change when scrolling preview"
     );
     assert!(
-        app.preview_state.scroll > before_scroll,
+        app.preview.state.scroll > before_scroll,
         "preview must have scrolled"
     );
 
@@ -103,11 +104,12 @@ fn high_frequency_preview_wheel_scrolls_preview_without_prior_moved_event() {
     fs::write(&long_file, &contents).expect("failed to write long file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::HighFrequency;
-    app.last_wheel_target = Some(WheelTarget::Entries);
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
+    app.input.last_wheel_target = Some(WheelTarget::Entries);
 
     let long_index = app
+        .navigation
         .entries
         .iter()
         .position(|e| e.path == long_file)
@@ -137,8 +139,8 @@ fn high_frequency_preview_wheel_scrolls_preview_without_prior_moved_event() {
     });
     wait_for_background_preview(&mut app);
 
-    let before_scroll = app.preview_state.scroll;
-    let before_selected = app.selected;
+    let before_scroll = app.preview.state.scroll;
+    let before_selected = app.navigation.selected;
 
     app.handle_event(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
@@ -149,11 +151,11 @@ fn high_frequency_preview_wheel_scrolls_preview_without_prior_moved_event() {
     .expect("preview scroll should be handled");
 
     assert_eq!(
-        app.selected, before_selected,
+        app.navigation.selected, before_selected,
         "entry selection must not change when scrolling preview"
     );
     assert!(
-        app.preview_state.scroll > before_scroll,
+        app.preview.state.scroll > before_scroll,
         "preview must have scrolled without a prior Moved event"
     );
 
@@ -172,12 +174,13 @@ fn hover_panel_routes_scroll_when_event_coords_are_outside_panels() {
     fs::write(&long_file, &contents).expect("failed to write long file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::HighFrequency;
-    app.last_wheel_target = Some(WheelTarget::Entries);
-    app.hover_panel = None;
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
+    app.input.last_wheel_target = Some(WheelTarget::Entries);
+    app.input.hover_panel = None;
 
     let long_index = app
+        .navigation
         .entries
         .iter()
         .position(|e| e.path == long_file)
@@ -214,10 +217,10 @@ fn hover_panel_routes_scroll_when_event_coords_are_outside_panels() {
         modifiers: KeyModifiers::NONE,
     }))
     .expect("moved event should be handled");
-    assert_eq!(app.hover_panel, Some(WheelTarget::Preview));
+    assert_eq!(app.input.hover_panel, Some(WheelTarget::Preview));
 
-    let before_scroll = app.preview_state.scroll;
-    let before_selected = app.selected;
+    let before_scroll = app.preview.state.scroll;
+    let before_selected = app.navigation.selected;
     app.handle_event(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
         column: 0,
@@ -227,11 +230,11 @@ fn hover_panel_routes_scroll_when_event_coords_are_outside_panels() {
     .expect("scroll should be handled");
 
     assert_eq!(
-        app.selected, before_selected,
+        app.navigation.selected, before_selected,
         "entry selection must not change"
     );
     assert!(
-        app.preview_state.scroll > before_scroll,
+        app.preview.state.scroll > before_scroll,
         "hover_panel should have routed scroll to preview despite wrong coords"
     );
 
@@ -250,7 +253,7 @@ fn preview_wheel_uses_last_focused_panel_when_coordinates_miss() {
     fs::write(&file_path, contents).expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
@@ -287,7 +290,7 @@ fn preview_wheel_uses_last_focused_panel_when_coordinates_miss() {
     .expect("wheel should fall back to last focused preview panel");
 
     assert!(app.process_pending_scroll());
-    assert!(app.preview_state.scroll > 0);
+    assert!(app.preview.state.scroll > 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -304,7 +307,7 @@ fn preview_wheel_follows_hovered_panel_without_click() {
     fs::write(&file_path, contents).expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
@@ -341,7 +344,7 @@ fn preview_wheel_follows_hovered_panel_without_click() {
     .expect("wheel should fall back to hovered preview panel");
 
     assert!(app.process_pending_scroll());
-    assert!(app.preview_state.scroll > 0);
+    assert!(app.preview.state.scroll > 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -358,7 +361,7 @@ fn preview_wheel_uses_preview_column_when_row_is_unreliable() {
     fs::write(&file_path, contents).expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
@@ -388,7 +391,7 @@ fn preview_wheel_uses_preview_column_when_row_is_unreliable() {
     .expect("wheel should use preview column fallback");
 
     assert!(app.process_pending_scroll());
-    assert!(app.preview_state.scroll > 0);
+    assert!(app.preview.state.scroll > 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -408,7 +411,7 @@ fn preview_wheel_steps_comic_pages_instead_of_scrolling_summary_text() {
     );
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     wait_for_background_preview(&mut app);
     app.set_frame_state(FrameState {
@@ -438,7 +441,8 @@ fn preview_wheel_steps_comic_pages_instead_of_scrolling_summary_text() {
     .expect("preview wheel should be handled");
 
     assert_eq!(
-        app.preview_state
+        app.preview
+            .state
             .content
             .navigation_position
             .as_ref()
@@ -446,21 +450,22 @@ fn preview_wheel_steps_comic_pages_instead_of_scrolling_summary_text() {
         Some(1)
     );
     assert!(app.pending_preview_refresh_timer().is_some());
-    assert_eq!(app.preview_state.scroll, 0);
+    assert_eq!(app.preview.state.scroll, 0);
 
     thread::sleep(HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY + Duration::from_millis(20));
     assert!(app.process_preview_refresh_timers());
     wait_for_background_preview(&mut app);
 
     assert_eq!(
-        app.preview_state
+        app.preview
+            .state
             .content
             .navigation_position
             .as_ref()
             .map(|position| position.index),
         Some(1)
     );
-    assert_eq!(app.preview_state.scroll, 0);
+    assert_eq!(app.preview.state.scroll, 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -477,7 +482,7 @@ fn comic_preview_wheel_clears_pending_entry_scroll_before_page_turns() {
     fs::write(root.join("c.txt"), "another entry").expect("failed to write temp text");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     wait_for_background_preview(&mut app);
     app.set_frame_state(FrameState {
@@ -497,7 +502,7 @@ fn comic_preview_wheel_clears_pending_entry_scroll_before_page_turns() {
         preview_cols_visible: 20,
         ..FrameState::default()
     });
-    app.wheel_scroll.vertical.pending = 3;
+    app.input.wheel_scroll.vertical.pending = 3;
 
     app.handle_event(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
@@ -507,15 +512,15 @@ fn comic_preview_wheel_clears_pending_entry_scroll_before_page_turns() {
     }))
     .expect("preview wheel should be handled");
 
-    assert_eq!(app.selected, 0);
-    assert_eq!(app.wheel_scroll.vertical.pending, 0);
+    assert_eq!(app.navigation.selected, 0);
+    assert_eq!(app.input.wheel_scroll.vertical.pending, 0);
     assert_eq!(
         app.current_preview_request_options().comic_page_index(),
         Some(1)
     );
 
     let _ = app.process_pending_scroll();
-    assert_eq!(app.selected, 0);
+    assert_eq!(app.navigation.selected, 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -535,7 +540,7 @@ fn preview_wheel_steps_cbr_pages_instead_of_scrolling_summary_text() {
     );
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     wait_for_background_preview(&mut app);
     app.set_frame_state(FrameState {
@@ -565,7 +570,8 @@ fn preview_wheel_steps_cbr_pages_instead_of_scrolling_summary_text() {
     .expect("preview wheel should be handled");
 
     assert_eq!(
-        app.preview_state
+        app.preview
+            .state
             .content
             .navigation_position
             .as_ref()
@@ -573,21 +579,22 @@ fn preview_wheel_steps_cbr_pages_instead_of_scrolling_summary_text() {
         Some(1)
     );
     assert!(app.pending_preview_refresh_timer().is_some());
-    assert_eq!(app.preview_state.scroll, 0);
+    assert_eq!(app.preview.state.scroll, 0);
 
     thread::sleep(HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY + Duration::from_millis(20));
     assert!(app.process_preview_refresh_timers());
     wait_for_background_preview(&mut app);
 
     assert_eq!(
-        app.preview_state
+        app.preview
+            .state
             .content
             .navigation_position
             .as_ref()
             .map(|position| position.index),
         Some(1)
     );
-    assert_eq!(app.preview_state.scroll, 0);
+    assert_eq!(app.preview.state.scroll, 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -610,7 +617,7 @@ fn preview_wheel_scrolls_epub_section_before_advancing_to_next_section() {
     );
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     wait_for_background_preview(&mut app);
     app.set_frame_state(FrameState {
@@ -640,13 +647,13 @@ fn preview_wheel_scrolls_epub_section_before_advancing_to_next_section() {
     .expect("preview wheel should be handled");
 
     assert!(app.process_pending_scroll());
-    assert!(app.preview_state.scroll > 0);
-    assert_eq!(app.preview_state.content.ebook_section_index, Some(0));
+    assert!(app.preview.state.scroll > 0);
+    assert_eq!(app.preview.state.content.ebook_section_index, Some(0));
 
     let max_scroll = app
-        .preview_total_lines(app.frame_state.preview_cols_visible.max(1))
-        .saturating_sub(app.frame_state.preview_rows_visible.max(1));
-    app.preview_state.scroll = max_scroll;
+        .preview_total_lines(app.input.frame_state.preview_cols_visible.max(1))
+        .saturating_sub(app.input.frame_state.preview_rows_visible.max(1));
+    app.preview.state.scroll = max_scroll;
     app.sync_preview_scroll();
 
     app.handle_event(Event::Mouse(MouseEvent {
@@ -657,9 +664,9 @@ fn preview_wheel_scrolls_epub_section_before_advancing_to_next_section() {
     }))
     .expect("preview wheel should advance the section at the bottom boundary");
 
-    assert_eq!(app.preview_state.scroll, 0);
-    assert_eq!(app.preview_state.content.ebook_section_index, Some(1));
-    assert_eq!(app.preview_state.content.ebook_section_count, Some(2));
+    assert_eq!(app.preview.state.scroll, 0);
+    assert_eq!(app.preview.state.content.ebook_section_index, Some(1));
+    assert_eq!(app.preview.state.content.ebook_section_count, Some(2));
     assert!(
         app.preview_header_detail(10)
             .as_deref()
@@ -668,13 +675,13 @@ fn preview_wheel_scrolls_epub_section_before_advancing_to_next_section() {
 
     wait_for_background_preview(&mut app);
 
-    assert_eq!(app.preview_state.content.ebook_section_index, Some(1));
+    assert_eq!(app.preview.state.content.ebook_section_index, Some(1));
     assert!(
         app.preview_lines()
             .iter()
             .any(|line| line.to_string().contains("Second chapter text."))
     );
-    assert_eq!(app.preview_state.scroll, 0);
+    assert_eq!(app.preview.state.scroll, 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

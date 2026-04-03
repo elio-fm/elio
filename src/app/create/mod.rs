@@ -27,7 +27,9 @@ mod tests {
     fn wait_for_trash_and_reload(app: &mut App) {
         for _ in 0..500 {
             let _ = app.process_background_jobs();
-            if app.trash_progress().is_none() && app.directory_runtime.pending_load.is_none() {
+            if app.trash_progress().is_none()
+                && app.navigation.directory_runtime.pending_load.is_none()
+            {
                 return;
             }
             std::thread::sleep(Duration::from_millis(10));
@@ -38,7 +40,9 @@ mod tests {
     fn wait_for_restore_and_reload(app: &mut App) {
         for _ in 0..500 {
             let _ = app.process_background_jobs();
-            if app.restore_progress().is_none() && app.directory_runtime.pending_load.is_none() {
+            if app.restore_progress().is_none()
+                && app.navigation.directory_runtime.pending_load.is_none()
+            {
                 return;
             }
             std::thread::sleep(Duration::from_millis(10));
@@ -56,6 +60,7 @@ mod tests {
 
     fn take_pending_status(app: &mut App) -> (String, Option<PathBuf>) {
         let load = app
+            .navigation
             .directory_runtime
             .pending_load
             .take()
@@ -111,13 +116,17 @@ mod tests {
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
         app.open_create_prompt();
-        let overlay = app.create.as_mut().expect("create overlay should be open");
+        let overlay = app
+            .overlays
+            .create
+            .as_mut()
+            .expect("create overlay should be open");
         overlay.lines = vec!["notes.txt".to_string(), "/docs/".to_string()];
         overlay.line_errors = vec![None; overlay.lines.len()];
 
         app.confirm_create().expect("create should succeed");
 
-        assert!(app.create.is_none());
+        assert!(app.overlays.create.is_none());
         assert!(root.join("notes.txt").is_file());
         assert!(root.join("docs").is_dir());
 
@@ -125,7 +134,7 @@ mod tests {
         assert_eq!(status, "Created 1 file and 1 folder");
         assert_eq!(reselect_path, Some(root.join("docs")));
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -137,7 +146,11 @@ mod tests {
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
         app.open_create_prompt();
-        let overlay = app.create.as_mut().expect("create overlay should be open");
+        let overlay = app
+            .overlays
+            .create
+            .as_mut()
+            .expect("create overlay should be open");
         overlay.lines = vec!["logs/".to_string(), "/logs".to_string()];
         overlay.line_errors = vec![None; overlay.lines.len()];
 
@@ -145,6 +158,7 @@ mod tests {
             .expect("create validation should succeed");
 
         let overlay = app
+            .overlays
             .create
             .as_ref()
             .expect("create overlay should stay open");
@@ -154,9 +168,9 @@ mod tests {
             Some("\"logs\" appears more than once")
         );
         assert!(!root.join("logs").exists());
-        assert!(app.directory_runtime.pending_load.is_none());
+        assert!(app.navigation.directory_runtime.pending_load.is_none());
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -169,14 +183,18 @@ mod tests {
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
         app.open_rename_prompt();
-        let overlay = app.rename.as_mut().expect("rename overlay should be open");
+        let overlay = app
+            .overlays
+            .rename
+            .as_mut()
+            .expect("rename overlay should be open");
         assert_eq!(overlay.original_name, "report.txt");
         assert_eq!(overlay.cursor_col, 6);
         overlay.input = "summary.txt".to_string();
 
         app.confirm_rename().expect("rename should succeed");
 
-        assert!(app.rename.is_none());
+        assert!(app.overlays.rename.is_none());
         assert!(!root.join("report.txt").exists());
         assert!(root.join("summary.txt").is_file());
 
@@ -184,7 +202,7 @@ mod tests {
         assert_eq!(status, "Renamed \"report.txt\" → \"summary.txt\"");
         assert_eq!(reselect_path, Some(root.join("summary.txt")));
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -204,11 +222,12 @@ mod tests {
         fs::write(root.join("beta.txt"), "beta").expect("failed to write beta");
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
-        app.selected_paths.insert(root.join("alpha.txt"));
-        app.selected_paths.insert(root.join("beta.txt"));
+        app.navigation.selected_paths.insert(root.join("alpha.txt"));
+        app.navigation.selected_paths.insert(root.join("beta.txt"));
         app.open_bulk_rename_prompt();
 
         let overlay = app
+            .overlays
             .bulk_rename
             .as_mut()
             .expect("bulk rename overlay should be open");
@@ -218,17 +237,17 @@ mod tests {
         app.confirm_bulk_rename()
             .expect("bulk rename should succeed");
 
-        assert!(app.bulk_rename.is_none());
+        assert!(app.overlays.bulk_rename.is_none());
         assert!(root.join("gamma.txt").is_file());
         assert!(root.join("beta.txt").is_file());
         assert!(!root.join("alpha.txt").exists());
-        assert!(app.selected_paths.is_empty());
+        assert!(app.navigation.selected_paths.is_empty());
 
         let (status, reselect_path) = take_pending_status(&mut app);
         assert_eq!(status, "Renamed \"alpha.txt\" → \"gamma.txt\"");
         assert_eq!(reselect_path, Some(root.join("gamma.txt")));
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -241,11 +260,12 @@ mod tests {
         fs::write(root.join("beta.txt"), "beta").expect("failed to write beta");
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
-        app.selected_paths.insert(root.join("alpha.txt"));
-        app.selected_paths.insert(root.join("beta.txt"));
+        app.navigation.selected_paths.insert(root.join("alpha.txt"));
+        app.navigation.selected_paths.insert(root.join("beta.txt"));
         app.open_bulk_rename_prompt();
 
         let overlay = app
+            .overlays
             .bulk_rename
             .as_mut()
             .expect("bulk rename overlay should be open");
@@ -255,6 +275,7 @@ mod tests {
             .expect("bulk rename validation should succeed");
 
         let overlay = app
+            .overlays
             .bulk_rename
             .as_ref()
             .expect("bulk rename overlay should stay open");
@@ -265,9 +286,9 @@ mod tests {
         );
         assert!(root.join("alpha.txt").is_file());
         assert!(root.join("beta.txt").is_file());
-        assert!(app.directory_runtime.pending_load.is_none());
+        assert!(app.navigation.directory_runtime.pending_load.is_none());
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -279,15 +300,15 @@ mod tests {
         fs::write(root.join("gone.txt"), "bye").expect("failed to write file");
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
-        app.in_trash = true;
-        app.selected_paths.insert(root.join("gone.txt"));
+        app.navigation.in_trash = true;
+        app.navigation.selected_paths.insert(root.join("gone.txt"));
         app.open_trash_prompt();
 
         assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
         app.confirm_trash().expect("trash should succeed");
 
-        assert!(app.trash.is_none());
-        assert!(app.selected_paths.is_empty());
+        assert!(app.overlays.trash.is_none());
+        assert!(app.navigation.selected_paths.is_empty());
 
         // Deletion is async — wait for the background worker *and* the
         // subsequent directory reload to both finish.
@@ -297,7 +318,7 @@ mod tests {
         // Status is set by apply_directory_snapshot once the reload completes.
         assert_eq!(app.status_message(), "Permanently deleted \"gone.txt\"");
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -314,8 +335,8 @@ mod tests {
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
         // entries are sorted by name: alpha=0, beta=1, gamma=2
-        app.in_trash = true;
-        app.selected = 1; // cursor on beta.txt
+        app.navigation.in_trash = true;
+        app.navigation.selected = 1; // cursor on beta.txt
         app.remember_current_directory_view(); // simulate a rendered frame committing the position
         app.open_trash_prompt();
         app.confirm_trash().expect("trash should succeed");
@@ -329,7 +350,7 @@ mod tests {
             "cursor should land on gamma.txt (next surviving entry)"
         );
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -345,8 +366,8 @@ mod tests {
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
         // entries are sorted by name: alpha=0, beta=1, gamma=2
-        app.in_trash = true;
-        app.selected = 2; // cursor on gamma.txt
+        app.navigation.in_trash = true;
+        app.navigation.selected = 2; // cursor on gamma.txt
         app.remember_current_directory_view(); // simulate a rendered frame committing the position
         app.open_trash_prompt();
         app.confirm_trash().expect("trash should succeed");
@@ -360,7 +381,7 @@ mod tests {
             "cursor should fall back to beta.txt (last surviving entry before cursor)"
         );
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -376,14 +397,14 @@ mod tests {
         fs::write(root.join("gamma.txt"), "c").expect("failed to write gamma");
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
-        app.in_trash = true;
-        app.selected = 1; // cursor on beta.txt
+        app.navigation.in_trash = true;
+        app.navigation.selected = 1; // cursor on beta.txt
         app.remember_current_directory_view(); // simulate a rendered frame committing the position
         app.open_trash_prompt();
         app.confirm_trash().expect("trash should succeed");
 
         // Cancel before the worker starts processing.
-        app.scheduler.cancel_trash(app.trash_token);
+        app.jobs.scheduler.cancel_trash(app.jobs.trash_token);
 
         wait_for_trash_and_reload(&mut app);
 
@@ -409,7 +430,7 @@ mod tests {
             "cursor must point to a surviving entry"
         );
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -424,16 +445,16 @@ mod tests {
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
         // in_trash = false → non-permanent batch trash
-        app.selected_paths.insert(root.join("alpha.txt"));
-        app.selected_paths.insert(root.join("beta.txt"));
-        app.selected_paths.insert(root.join("gamma.txt"));
+        app.navigation.selected_paths.insert(root.join("alpha.txt"));
+        app.navigation.selected_paths.insert(root.join("beta.txt"));
+        app.navigation.selected_paths.insert(root.join("gamma.txt"));
         app.open_trash_prompt();
 
         assert_eq!(app.trash_title(), "Trash 3 files?");
         app.confirm_trash().expect("trash should succeed");
 
-        assert!(app.trash.is_none());
-        assert!(app.selected_paths.is_empty());
+        assert!(app.overlays.trash.is_none());
+        assert!(app.navigation.selected_paths.is_empty());
 
         wait_for_trash_and_reload(&mut app);
 
@@ -457,7 +478,7 @@ mod tests {
             }
         }
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -470,14 +491,14 @@ mod tests {
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
         // in_trash = false → non-permanent batch trash
-        app.selected_paths.insert(root.join("notes.txt"));
+        app.navigation.selected_paths.insert(root.join("notes.txt"));
         app.open_trash_prompt();
 
         assert_eq!(app.trash_title(), "Trash 1 selected file?");
         app.confirm_trash().expect("trash should succeed");
 
-        assert!(app.trash.is_none());
-        assert!(app.selected_paths.is_empty());
+        assert!(app.overlays.trash.is_none());
+        assert!(app.navigation.selected_paths.is_empty());
 
         wait_for_trash_and_reload(&mut app);
 
@@ -497,7 +518,7 @@ mod tests {
             }
         }
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -513,7 +534,9 @@ mod tests {
         fs::write(root.join("canary.txt"), "x").expect("failed to write file");
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
-        app.selected_paths.insert(root.join("canary.txt"));
+        app.navigation
+            .selected_paths
+            .insert(root.join("canary.txt"));
         app.open_trash_prompt();
         app.confirm_trash().expect("trash should succeed");
 
@@ -524,7 +547,7 @@ mod tests {
         );
 
         // Simulate Esc: cancel_trash is called but chip must NOT be cleared.
-        app.scheduler.cancel_trash(app.trash_token);
+        app.jobs.scheduler.cancel_trash(app.jobs.trash_token);
         // trash_progress is still Some — chip stays visible.
         assert!(
             app.trash_progress().is_some(),
@@ -561,7 +584,7 @@ mod tests {
             }
         }
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -575,8 +598,8 @@ mod tests {
         fs::write(root.join("gone.txt"), "x").expect("failed to write file");
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
-        app.in_trash = true;
-        app.selected_paths.insert(root.join("gone.txt"));
+        app.navigation.in_trash = true;
+        app.navigation.selected_paths.insert(root.join("gone.txt"));
         app.open_trash_prompt();
         app.confirm_trash().expect("trash should succeed");
 
@@ -586,9 +609,9 @@ mod tests {
         );
 
         // Simulate Esc for permanent delete: chip clears immediately.
-        let token = app.trash_token;
-        app.scheduler.cancel_trash(token);
-        app.trash_progress = None;
+        let token = app.jobs.trash_token;
+        app.jobs.scheduler.cancel_trash(token);
+        app.jobs.trash_progress = None;
 
         assert!(
             app.trash_progress().is_none(),
@@ -601,7 +624,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         // root may or may not still contain gone.txt depending on the race.
         let _ = fs::remove_dir_all(root);
@@ -612,14 +635,14 @@ mod tests {
         let (root, trash_files, original_path, trashed_path) = create_fake_trash_file("restore");
 
         let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
-        app.in_trash = true;
+        app.navigation.in_trash = true;
         app.open_restore_prompt();
 
         assert_eq!(app.restore_title(), "Restore 1 selected file?");
         app.confirm_restore().expect("restore should succeed");
 
-        assert!(app.restore.is_none());
-        assert!(app.selected_paths.is_empty());
+        assert!(app.overlays.restore.is_none());
+        assert!(app.navigation.selected_paths.is_empty());
 
         // Restore is now async — wait for the background worker and
         // subsequent directory reload to both complete.
@@ -629,7 +652,7 @@ mod tests {
         assert!(!trashed_path.exists());
         assert_eq!(app.status_message(), "Restored \"restore-target.txt\"");
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -661,16 +684,20 @@ mod tests {
         }
 
         let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
-        app.in_trash = true;
-        app.selected_paths.insert(trash_files.join("alpha.txt"));
-        app.selected_paths.insert(trash_files.join("beta.txt"));
+        app.navigation.in_trash = true;
+        app.navigation
+            .selected_paths
+            .insert(trash_files.join("alpha.txt"));
+        app.navigation
+            .selected_paths
+            .insert(trash_files.join("beta.txt"));
         app.open_restore_prompt();
 
         assert_eq!(app.restore_title(), "Restore 2 files?");
         app.confirm_restore().expect("restore should succeed");
 
-        assert!(app.restore.is_none());
-        assert!(app.selected_paths.is_empty());
+        assert!(app.overlays.restore.is_none());
+        assert!(app.navigation.selected_paths.is_empty());
 
         wait_for_restore_and_reload(&mut app);
 
@@ -680,7 +707,7 @@ mod tests {
         assert!(!trash_files.join("beta.txt").exists());
         assert_eq!(app.status_message(), "Restored 2 items");
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -693,7 +720,7 @@ mod tests {
             create_fake_trash_file("restore-cancel");
 
         let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
-        app.in_trash = true;
+        app.navigation.in_trash = true;
         app.open_restore_prompt();
         app.confirm_restore().expect("restore should succeed");
 
@@ -703,9 +730,9 @@ mod tests {
         );
 
         // Simulate Esc: chip clears immediately for per-item operations.
-        let token = app.restore_token;
-        app.scheduler.cancel_restore(token);
-        app.restore_progress = None;
+        let token = app.jobs.restore_token;
+        app.jobs.scheduler.cancel_restore(token);
+        app.jobs.restore_progress = None;
 
         assert!(
             app.restore_progress().is_none(),
@@ -718,7 +745,9 @@ mod tests {
         // taken and a directory reload is queued.
         for _ in 0..200 {
             let _ = app.process_background_jobs();
-            if app.restore_source_cwd.is_none() && app.directory_runtime.pending_load.is_none() {
+            if app.jobs.restore_source_cwd.is_none()
+                && app.navigation.directory_runtime.pending_load.is_none()
+            {
                 break;
             }
             std::thread::sleep(Duration::from_millis(10));
@@ -732,7 +761,7 @@ mod tests {
             || status.starts_with("Nothing was restored");
         assert!(valid, "unexpected status: {status:?}");
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         // root may or may not still contain the original file depending on
         // the race; ignore removal errors.
@@ -748,18 +777,18 @@ mod tests {
             create_fake_trash_file("restore-in-progress");
 
         let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
-        app.in_trash = true;
+        app.navigation.in_trash = true;
         app.open_restore_prompt();
         app.confirm_restore().expect("first restore should succeed");
 
         // A second restore is attempted while the first is still in flight.
         app.open_restore_prompt();
-        assert!(app.restore.is_some(), "overlay should open");
+        assert!(app.overlays.restore.is_some(), "overlay should open");
         app.confirm_restore()
             .expect("second confirm should not error");
 
         assert!(
-            app.restore.is_none(),
+            app.overlays.restore.is_none(),
             "overlay should be dismissed by the in-progress guard"
         );
         assert_eq!(
@@ -770,13 +799,15 @@ mod tests {
         // Clean up the background worker.
         for _ in 0..200 {
             let _ = app.process_background_jobs();
-            if app.restore_progress().is_none() && app.directory_runtime.pending_load.is_none() {
+            if app.restore_progress().is_none()
+                && app.navigation.directory_runtime.pending_load.is_none()
+            {
                 break;
             }
             std::thread::sleep(Duration::from_millis(10));
         }
 
-        app.directory_runtime.watch = None;
+        app.navigation.directory_runtime.watch = None;
         drop(app);
         let _ = fs::remove_dir_all(root);
     }

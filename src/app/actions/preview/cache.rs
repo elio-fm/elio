@@ -18,7 +18,7 @@ impl App {
             code_line_limit,
             code_render_limit: code_line_limit,
         };
-        if let Some(cached) = self.preview_state.result_cache.get(&complete_key)
+        if let Some(cached) = self.preview.state.result_cache.get(&complete_key)
             && cached.size == entry.size
             && cached.modified == entry.modified
         {
@@ -33,7 +33,8 @@ impl App {
             code_render_limit: 0, // placeholder — will search by prefix below
         };
         let _ = partial_key; // not used directly; iterate instead
-        self.preview_state
+        self.preview
+            .state
             .result_cache
             .iter()
             .find(|(key, cached)| {
@@ -60,12 +61,13 @@ impl App {
             code_line_limit,
             code_render_limit: code_line_limit,
         };
-        if let Some(cached) = self.preview_state.result_cache.get(&complete_key) {
+        if let Some(cached) = self.preview.state.result_cache.get(&complete_key) {
             return Some(cached.preview.clone());
         }
 
         // Fall back to any matching partial.
-        self.preview_state
+        self.preview
+            .state
             .result_cache
             .iter()
             .find(|(key, _)| {
@@ -127,7 +129,7 @@ impl App {
             code_line_limit,
             code_render_limit,
         };
-        self.preview_state.result_cache.insert(
+        self.preview.state.result_cache.insert(
             key.clone(),
             CachedPreview {
                 size: entry.size,
@@ -135,14 +137,15 @@ impl App {
                 preview: preview.clone(),
             },
         );
-        self.preview_state
+        self.preview
+            .state
             .result_order
             .retain(|cached| cached != &key);
-        self.preview_state.result_order.push_back(key);
+        self.preview.state.result_order.push_back(key);
 
-        while self.preview_state.result_order.len() > PREVIEW_CACHE_LIMIT {
-            if let Some(stale_key) = self.preview_state.result_order.pop_front() {
-                self.preview_state.result_cache.remove(&stale_key);
+        while self.preview.state.result_order.len() > PREVIEW_CACHE_LIMIT {
+            if let Some(stale_key) = self.preview.state.result_order.pop_front() {
+                self.preview.state.result_cache.remove(&stale_key);
             }
         }
     }
@@ -159,24 +162,27 @@ impl App {
             size,
             modified,
         };
-        self.preview_state
+        self.preview
+            .state
             .line_count_cache
             .insert(key.clone(), total_lines.max(1));
-        self.preview_state
+        self.preview
+            .state
             .line_count_order
             .retain(|cached| cached != &key);
-        self.preview_state.line_count_order.push_back(key);
+        self.preview.state.line_count_order.push_back(key);
 
-        while self.preview_state.line_count_order.len() > PREVIEW_LINE_COUNT_CACHE_LIMIT {
-            if let Some(stale_key) = self.preview_state.line_count_order.pop_front() {
-                self.preview_state.line_count_cache.remove(&stale_key);
+        while self.preview.state.line_count_order.len() > PREVIEW_LINE_COUNT_CACHE_LIMIT {
+            if let Some(stale_key) = self.preview.state.line_count_order.pop_front() {
+                self.preview.state.line_count_cache.remove(&stale_key);
             }
         }
     }
 
     #[cfg(test)]
     pub(in crate::app) fn has_cached_preview_for_path(&self, path: &std::path::Path) -> bool {
-        self.preview_state
+        self.preview
+            .state
             .result_cache
             .keys()
             .any(|key| key.path == path)

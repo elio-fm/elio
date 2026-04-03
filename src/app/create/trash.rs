@@ -10,7 +10,7 @@ use std::path::Path;
 
 impl App {
     pub(in crate::app) fn cwd_is_trash(&self) -> bool {
-        self.in_trash
+        self.navigation.in_trash
     }
 
     pub(in crate::app) fn path_is_trash(path: &Path) -> bool {
@@ -20,20 +20,21 @@ impl App {
     }
 
     pub(in crate::app) fn effective_show_hidden(&self) -> bool {
-        self.show_hidden || self.in_trash
+        self.navigation.show_hidden || self.navigation.in_trash
     }
 
     pub(in crate::app) fn effective_show_hidden_for(&self, path: &Path) -> bool {
-        self.show_hidden || Self::path_is_trash(path)
+        self.navigation.show_hidden || Self::path_is_trash(path)
     }
 }
 
 impl App {
     pub(in crate::app::create) fn selected_trash_targets(&self) -> Vec<TrashTarget> {
-        if !self.selected_paths.is_empty() {
-            self.entries
+        if !self.navigation.selected_paths.is_empty() {
+            self.navigation
+                .entries
                 .iter()
-                .filter(|entry| self.selected_paths.contains(&entry.path))
+                .filter(|entry| self.navigation.selected_paths.contains(&entry.path))
                 .map(|entry| TrashTarget {
                     path: entry.path.clone(),
                     name: entry.name.clone(),
@@ -61,10 +62,10 @@ impl App {
         }
 
         let permanent = self.cwd_is_trash();
-        self.help_open = false;
-        self.search = None;
-        self.create = None;
-        self.trash = Some(TrashOverlay {
+        self.overlays.help = false;
+        self.overlays.search = None;
+        self.overlays.create = None;
+        self.overlays.trash = Some(TrashOverlay {
             targets,
             scroll: 0,
             confirmed: true,
@@ -73,19 +74,20 @@ impl App {
     }
 
     pub fn trash_is_open(&self) -> bool {
-        self.trash.is_some()
+        self.overlays.trash.is_some()
     }
 
     /// Returns `(completed, total, permanent)` for an in-progress
     /// trash/delete, or `None` when idle.
     pub fn trash_progress(&self) -> Option<(usize, usize, bool)> {
-        self.trash_progress
+        self.jobs
+            .trash_progress
             .as_ref()
             .map(|p| (p.completed, p.total, p.permanent))
     }
 
     pub fn trash_title(&self) -> String {
-        let Some(t) = &self.trash else {
+        let Some(t) = &self.overlays.trash else {
             return String::new();
         };
         let verb = if t.permanent {
@@ -121,11 +123,11 @@ impl App {
     }
 
     pub fn trash_scroll(&self) -> usize {
-        self.trash.as_ref().map_or(0, |t| t.scroll)
+        self.overlays.trash.as_ref().map_or(0, |t| t.scroll)
     }
 
     pub fn trash_target_count(&self) -> usize {
-        self.trash.as_ref().map_or(0, |t| t.targets.len())
+        self.overlays.trash.as_ref().map_or(0, |t| t.targets.len())
     }
 
     pub fn trash_visible_rows(&self) -> usize {
@@ -133,71 +135,74 @@ impl App {
     }
 
     pub fn trash_target_name_at(&self, index: usize) -> Option<&str> {
-        self.trash
+        self.overlays
+            .trash
             .as_ref()
             .and_then(|t| t.targets.get(index))
             .map(|target| target.name.as_str())
     }
 
     pub fn trash_target_path_at(&self, index: usize) -> Option<&std::path::Path> {
-        self.trash
+        self.overlays
+            .trash
             .as_ref()
             .and_then(|t| t.targets.get(index))
             .map(|target| target.path.as_path())
     }
 
     pub fn trash_target_is_dir_at(&self, index: usize) -> bool {
-        self.trash
+        self.overlays
+            .trash
             .as_ref()
             .and_then(|t| t.targets.get(index))
             .is_some_and(|target| target.is_dir)
     }
 
     pub fn trash_confirmed(&self) -> bool {
-        self.trash.as_ref().is_some_and(|t| t.confirmed)
+        self.overlays.trash.as_ref().is_some_and(|t| t.confirmed)
     }
 
     pub(in crate::app) fn handle_trash_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.trash = None;
+            self.overlays.trash = None;
             return Ok(());
         }
         match key.code {
             KeyCode::Esc => {
-                self.trash = None;
+                self.overlays.trash = None;
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if let Some(t) = &mut self.trash {
+                if let Some(t) = &mut self.overlays.trash {
                     t.scroll = t.scroll.saturating_sub(1);
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if let Some(t) = &mut self.trash {
+                if let Some(t) = &mut self.overlays.trash {
                     let visible = t.targets.len().min(8);
                     let max_scroll = t.targets.len().saturating_sub(visible);
                     t.scroll = (t.scroll + 1).min(max_scroll);
                 }
             }
             KeyCode::Left | KeyCode::Char('h') => {
-                if let Some(t) = &mut self.trash {
+                if let Some(t) = &mut self.overlays.trash {
                     t.confirmed = true;
                 }
             }
             KeyCode::Right | KeyCode::Char('l') => {
-                if let Some(t) = &mut self.trash {
+                if let Some(t) = &mut self.overlays.trash {
                     t.confirmed = false;
                 }
             }
             KeyCode::Tab => {
-                if let Some(t) = &mut self.trash {
+                if let Some(t) = &mut self.overlays.trash {
                     t.confirmed = !t.confirmed;
                 }
             }
             KeyCode::Enter => {
-                if self.trash.as_ref().is_some_and(|t| t.confirmed) {
+                if self.overlays.trash.as_ref().is_some_and(|t| t.confirmed) {
                     self.confirm_trash()?;
                 } else {
-                    self.trash = None;
+                    self.overlays.trash = None;
                 }
             }
             _ => {}
@@ -209,34 +214,37 @@ impl App {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
+                    .input
                     .frame_state
                     .trash_panel
                     .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
                 if !inside {
-                    self.trash = None;
+                    self.overlays.trash = None;
                     return Ok(());
                 }
                 if self
+                    .input
                     .frame_state
                     .trash_confirm_btn
                     .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
                 {
                     self.confirm_trash()?;
                 } else if self
+                    .input
                     .frame_state
                     .trash_cancel_btn
                     .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
                 {
-                    self.trash = None;
+                    self.overlays.trash = None;
                 }
             }
             MouseEventKind::ScrollUp => {
-                if let Some(t) = &mut self.trash {
+                if let Some(t) = &mut self.overlays.trash {
                     t.scroll = t.scroll.saturating_sub(1);
                 }
             }
             MouseEventKind::ScrollDown => {
-                if let Some(t) = &mut self.trash {
+                if let Some(t) = &mut self.overlays.trash {
                     let visible = t.targets.len().min(8);
                     let max_scroll = t.targets.len().saturating_sub(visible);
                     t.scroll = (t.scroll + 1).min(max_scroll);
@@ -248,7 +256,7 @@ impl App {
     }
 
     pub(in crate::app::create) fn confirm_trash(&mut self) -> Result<()> {
-        if let Some(prog) = &self.trash_progress {
+        if let Some(prog) = &self.jobs.trash_progress {
             self.status = if prog.permanent {
                 "Delete in progress — press Esc to cancel".to_string()
             } else {
@@ -256,16 +264,16 @@ impl App {
                 // reliably interrupted once started.
                 "Trash in progress".to_string()
             };
-            self.trash = None;
+            self.overlays.trash = None;
             return Ok(());
         }
-        let Some(t) = self.trash.take() else {
+        let Some(t) = self.overlays.trash.take() else {
             return Ok(());
         };
         if t.targets.is_empty() {
             return Ok(());
         }
-        self.selected_paths.clear();
+        self.navigation.selected_paths.clear();
 
         // Compute which entry to land on after deletion: first surviving entry
         // at or after the current cursor, falling back to the last surviving
@@ -273,28 +281,30 @@ impl App {
         let deleted_paths: std::collections::HashSet<_> =
             t.targets.iter().map(|tgt| &tgt.path).collect();
         let next_selection = self
+            .navigation
             .entries
             .iter()
             .enumerate()
             .filter(|(_, e)| !deleted_paths.contains(&e.path))
-            .find(|(i, _)| *i >= self.selected)
+            .find(|(i, _)| *i >= self.navigation.selected)
             .or_else(|| {
-                self.entries
+                self.navigation
+                    .entries
                     .iter()
                     .enumerate()
                     .rfind(|(_, e)| !deleted_paths.contains(&e.path))
             })
             .map(|(_, e)| e.path.clone());
 
-        let token = self.trash_token.wrapping_add(1);
-        self.trash_token = token;
-        self.trash_progress = Some(TrashProgress {
+        let token = self.jobs.trash_token.wrapping_add(1);
+        self.jobs.trash_token = token;
+        self.jobs.trash_progress = Some(TrashProgress {
             completed: 0,
             total: t.targets.len(),
             permanent: t.permanent,
             next_selection,
         });
-        self.trash_source_cwd = Some(self.cwd.clone());
+        self.jobs.trash_source_cwd = Some(self.navigation.cwd.clone());
 
         // Best-effort cross-device detection: if the source appears to be on a
         // different device than the home data dir (where the trash usually lives),
@@ -306,7 +316,7 @@ impl App {
             self.status = "Copying to trash…".to_string();
         }
 
-        self.scheduler.submit_trash(TrashRequest {
+        self.jobs.scheduler.submit_trash(TrashRequest {
             token,
             targets: t.targets,
             permanent: t.permanent,

@@ -6,7 +6,9 @@ use super::super::text_edit::{
 
 impl App {
     pub(in crate::app::create) fn create_insert_newline(&mut self) {
-        let Some(c) = &mut self.create else { return };
+        let Some(c) = &mut self.overlays.create else {
+            return;
+        };
         let tail = {
             let byte = char_to_byte(&c.lines[c.cursor_line], c.cursor_col);
             c.lines[c.cursor_line].split_off(byte)
@@ -19,7 +21,9 @@ impl App {
     }
 
     pub(in crate::app::create) fn create_move_horizontal(&mut self, delta: isize) {
-        let Some(c) = &mut self.create else { return };
+        let Some(c) = &mut self.overlays.create else {
+            return;
+        };
         if delta < 0 {
             if c.cursor_col > 0 {
                 c.cursor_col -= 1;
@@ -40,7 +44,9 @@ impl App {
     }
 
     pub(in crate::app::create) fn create_move_word(&mut self, direction: isize) {
-        let Some(c) = &mut self.create else { return };
+        let Some(c) = &mut self.overlays.create else {
+            return;
+        };
         let line = &c.lines[c.cursor_line];
         let new_col = if direction < 0 {
             previous_word_start(line, c.cursor_col)
@@ -52,7 +58,9 @@ impl App {
     }
 
     pub(in crate::app::create) fn create_move_vertical(&mut self, delta: isize) {
-        let Some(c) = &mut self.create else { return };
+        let Some(c) = &mut self.overlays.create else {
+            return;
+        };
         let new_line =
             (c.cursor_line as isize + delta).clamp(0, c.lines.len() as isize - 1) as usize;
         if new_line == c.cursor_line {
@@ -64,7 +72,9 @@ impl App {
     }
 
     pub(in crate::app::create) fn create_backspace(&mut self) {
-        let Some(c) = &mut self.create else { return };
+        let Some(c) = &mut self.overlays.create else {
+            return;
+        };
         if c.cursor_col > 0 {
             let start = char_to_byte(&c.lines[c.cursor_line], c.cursor_col - 1);
             let end = char_to_byte(&c.lines[c.cursor_line], c.cursor_col);
@@ -84,7 +94,9 @@ impl App {
     }
 
     pub(in crate::app::create) fn create_delete(&mut self) {
-        let Some(c) = &mut self.create else { return };
+        let Some(c) = &mut self.overlays.create else {
+            return;
+        };
         let len = c.lines[c.cursor_line].chars().count();
         if c.cursor_col < len {
             let start = char_to_byte(&c.lines[c.cursor_line], c.cursor_col);
@@ -100,7 +112,9 @@ impl App {
     }
 
     pub(in crate::app::create) fn create_delete_word_back(&mut self) {
-        let Some(c) = &mut self.create else { return };
+        let Some(c) = &mut self.overlays.create else {
+            return;
+        };
         if c.cursor_col == 0 {
             return;
         }
@@ -113,7 +127,9 @@ impl App {
     }
 
     pub(in crate::app::create) fn create_delete_word_forward(&mut self) {
-        let Some(c) = &mut self.create else { return };
+        let Some(c) = &mut self.overlays.create else {
+            return;
+        };
         let line = &mut c.lines[c.cursor_line];
         let end = next_delete_end(line, c.cursor_col);
         remove_char_range(line, c.cursor_col, end);

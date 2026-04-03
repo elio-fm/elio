@@ -14,14 +14,14 @@ fn temp_path(label: &str) -> PathBuf {
 }
 
 fn make_auto_reload_ready(app: &mut App) {
-    app.directory_runtime.last_auto_reload_at =
+    app.navigation.directory_runtime.last_auto_reload_at =
         Instant::now() - AUTO_RELOAD_INTERVAL - Duration::from_millis(1);
 }
 
 fn wait_for_directory_load(app: &mut App) {
     for _ in 0..300 {
         let _ = app.process_background_jobs();
-        if app.directory_runtime.pending_load.is_none() {
+        if app.navigation.directory_runtime.pending_load.is_none() {
             return;
         }
         std::thread::sleep(Duration::from_millis(10));
@@ -33,10 +33,14 @@ fn wait_for_directory_reload(app: &mut App, expected_entries: usize) {
     for _ in 0..500 {
         let _ = app.process_auto_reload();
         let _ = app.process_background_jobs();
-        if app.entries.len() == expected_entries
-            && app.directory_runtime.pending_reload_at.is_none()
-            && app.directory_runtime.pending_fingerprint_scan.is_none()
-            && app.directory_runtime.pending_load.is_none()
+        if app.navigation.entries.len() == expected_entries
+            && app.navigation.directory_runtime.pending_reload_at.is_none()
+            && app
+                .navigation
+                .directory_runtime
+                .pending_fingerprint_scan
+                .is_none()
+            && app.navigation.directory_runtime.pending_load.is_none()
         {
             return;
         }
@@ -44,10 +48,13 @@ fn wait_for_directory_reload(app: &mut App, expected_entries: usize) {
     }
     panic!(
         "timed out waiting for directory reload: entries={}, pending_reload={}, pending_fingerprint_scan={}, pending_load={}, pending_background_work={}",
-        app.entries.len(),
-        app.directory_runtime.pending_reload_at.is_some(),
-        app.directory_runtime.pending_fingerprint_scan.is_some(),
-        app.directory_runtime.pending_load.is_some(),
+        app.navigation.entries.len(),
+        app.navigation.directory_runtime.pending_reload_at.is_some(),
+        app.navigation
+            .directory_runtime
+            .pending_fingerprint_scan
+            .is_some(),
+        app.navigation.directory_runtime.pending_load.is_some(),
         app.has_pending_background_work(),
     );
 }
@@ -59,12 +66,13 @@ fn watcher_reload_detects_new_visible_entries() {
     fs::write(root.join("one.txt"), "hello").expect("failed to write first file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.directory_runtime.watch = None;
-    assert_eq!(app.entries.len(), 1);
+    app.navigation.directory_runtime.watch = None;
+    assert_eq!(app.navigation.entries.len(), 1);
 
     let second = root.join("two.txt");
     fs::write(&second, "world").expect("failed to write second file");
-    app.directory_runtime
+    app.navigation
+        .directory_runtime
         .watch_tx
         .send(crate::fs::DirectoryWatchEvent::Changed(vec![second]))
         .expect("failed to queue watch event");
@@ -74,7 +82,8 @@ fn watcher_reload_detects_new_visible_entries() {
             .expect("watch processing should succeed"),
         "watch processing should debounce before reloading",
     );
-    app.directory_runtime.pending_reload_at = Some(Instant::now() - Duration::from_millis(1));
+    app.navigation.directory_runtime.pending_reload_at =
+        Some(Instant::now() - Duration::from_millis(1));
 
     assert!(
         !app.process_auto_reload()
@@ -82,8 +91,13 @@ fn watcher_reload_detects_new_visible_entries() {
         "watch-driven reload should schedule an async fingerprint scan first",
     );
     wait_for_directory_reload(&mut app, 2);
-    assert_eq!(app.entries.len(), 2);
-    assert!(app.entries.iter().any(|entry| entry.name == "two.txt"));
+    assert_eq!(app.navigation.entries.len(), 2);
+    assert!(
+        app.navigation
+            .entries
+            .iter()
+            .any(|entry| entry.name == "two.txt")
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -95,11 +109,12 @@ fn watcher_rescan_event_triggers_reload() {
     fs::write(root.join("one.txt"), "hello").expect("failed to write first file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.directory_runtime.watch = None;
-    assert_eq!(app.entries.len(), 1);
+    app.navigation.directory_runtime.watch = None;
+    assert_eq!(app.navigation.entries.len(), 1);
 
     fs::write(root.join("two.txt"), "world").expect("failed to write second file");
-    app.directory_runtime
+    app.navigation
+        .directory_runtime
         .watch_tx
         .send(crate::fs::DirectoryWatchEvent::Rescan)
         .expect("failed to queue rescan event");
@@ -109,7 +124,8 @@ fn watcher_rescan_event_triggers_reload() {
             .expect("watch processing should succeed"),
         "watch processing should debounce before reloading",
     );
-    app.directory_runtime.pending_reload_at = Some(Instant::now() - Duration::from_millis(1));
+    app.navigation.directory_runtime.pending_reload_at =
+        Some(Instant::now() - Duration::from_millis(1));
 
     assert!(
         !app.process_auto_reload()
@@ -117,8 +133,13 @@ fn watcher_rescan_event_triggers_reload() {
         "rescan-driven reload should schedule an async fingerprint scan first",
     );
     wait_for_directory_reload(&mut app, 2);
-    assert_eq!(app.entries.len(), 2);
-    assert!(app.entries.iter().any(|entry| entry.name == "two.txt"));
+    assert_eq!(app.navigation.entries.len(), 2);
+    assert!(
+        app.navigation
+            .entries
+            .iter()
+            .any(|entry| entry.name == "two.txt")
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -130,13 +151,14 @@ fn watcher_reload_ignores_hidden_entries_when_hidden_files_are_off() {
     fs::write(root.join("visible.txt"), "hello").expect("failed to write visible file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.directory_runtime.watch = None;
-    assert!(!app.show_hidden);
-    assert_eq!(app.entries.len(), 1);
+    app.navigation.directory_runtime.watch = None;
+    assert!(!app.navigation.show_hidden);
+    assert_eq!(app.navigation.entries.len(), 1);
 
     let hidden = root.join(".secret");
     fs::write(&hidden, "hidden").expect("failed to write hidden file");
-    app.directory_runtime
+    app.navigation
+        .directory_runtime
         .watch_tx
         .send(crate::fs::DirectoryWatchEvent::Changed(vec![hidden]))
         .expect("failed to queue watch event");
@@ -146,9 +168,9 @@ fn watcher_reload_ignores_hidden_entries_when_hidden_files_are_off() {
             .expect("watch processing should succeed"),
         "hidden-only changes should not trigger a reload schedule",
     );
-    assert!(app.directory_runtime.pending_reload_at.is_none());
-    assert_eq!(app.entries.len(), 1);
-    assert_eq!(app.entries[0].name, "visible.txt");
+    assert!(app.navigation.directory_runtime.pending_reload_at.is_none());
+    assert_eq!(app.navigation.entries.len(), 1);
+    assert_eq!(app.navigation.entries[0].name, "visible.txt");
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -159,24 +181,24 @@ fn sidebar_refresh_rebuilds_places_once_per_interval() {
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.sidebar.clear();
-    app.last_sidebar_refresh_at = Instant::now() - Duration::from_secs(3);
+    app.navigation.sidebar.clear();
+    app.navigation.last_sidebar_refresh_at = Instant::now() - Duration::from_secs(3);
 
     assert!(
         app.process_sidebar_refresh(),
         "stale refresh windows should rebuild places"
     );
     assert!(
-        !app.sidebar.is_empty(),
+        !app.navigation.sidebar.is_empty(),
         "refresh should restore the builtin places list"
     );
 
-    let sidebar_after_refresh = app.sidebar.clone();
+    let sidebar_after_refresh = app.navigation.sidebar.clone();
     assert!(
         !app.process_sidebar_refresh(),
         "freshly refreshed sidebars should not rebuild again immediately"
     );
-    assert_eq!(app.sidebar, sidebar_after_refresh);
+    assert_eq!(app.navigation.sidebar, sidebar_after_refresh);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -188,8 +210,8 @@ fn polling_fallback_respects_its_throttle_window() {
     fs::write(root.join("one.txt"), "hello").expect("failed to write first file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.directory_runtime.watch = None;
-    app.directory_runtime.use_polling_reload = true;
+    app.navigation.directory_runtime.watch = None;
+    app.navigation.directory_runtime.use_polling_reload = true;
     fs::write(root.join("two.txt"), "world").expect("failed to write second file");
 
     assert!(
@@ -197,7 +219,7 @@ fn polling_fallback_respects_its_throttle_window() {
             .expect("auto reload should succeed"),
         "reload should stay idle inside the throttle window",
     );
-    assert_eq!(app.entries.len(), 1);
+    assert_eq!(app.navigation.entries.len(), 1);
 
     make_auto_reload_ready(&mut app);
     assert!(
@@ -206,7 +228,7 @@ fn polling_fallback_respects_its_throttle_window() {
         "reload should schedule an async fingerprint scan once the throttle window has elapsed",
     );
     wait_for_directory_reload(&mut app, 2);
-    assert_eq!(app.entries.len(), 2);
+    assert_eq!(app.navigation.entries.len(), 2);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -244,7 +266,7 @@ fn set_frame_state_does_not_refresh_code_preview_when_visible_rows_change() {
     fs::write(root.join("main.rs"), "fn main() {}\n").expect("failed to write code file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    let initial_preview_token = app.preview_state.token;
+    let initial_preview_token = app.preview.state.token;
 
     app.set_frame_state(FrameState {
         preview_rows_visible: 12,
@@ -252,7 +274,7 @@ fn set_frame_state_does_not_refresh_code_preview_when_visible_rows_change() {
         ..FrameState::default()
     });
 
-    assert_eq!(app.preview_state.token, initial_preview_token);
+    assert_eq!(app.preview.state.token, initial_preview_token);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -264,7 +286,7 @@ fn set_frame_state_does_not_refresh_plain_text_preview_when_visible_rows_change(
     fs::write(root.join("notes.txt"), "plain text\n").expect("failed to write text file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    let initial_preview_token = app.preview_state.token;
+    let initial_preview_token = app.preview.state.token;
 
     app.set_frame_state(FrameState {
         preview_rows_visible: 12,
@@ -272,7 +294,7 @@ fn set_frame_state_does_not_refresh_plain_text_preview_when_visible_rows_change(
         ..FrameState::default()
     });
 
-    assert_eq!(app.preview_state.token, initial_preview_token);
+    assert_eq!(app.preview.state.token, initial_preview_token);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -287,10 +309,10 @@ fn set_dir_failure_keeps_previous_directory_state() {
     let missing = root.join("missing");
 
     assert!(app.set_dir(missing).is_err());
-    assert_eq!(app.cwd, root);
-    assert_eq!(app.entries.len(), 1);
-    assert!(app.navigation_history.back.is_empty());
-    assert!(app.navigation_history.forward.is_empty());
+    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.navigation.entries.len(), 1);
+    assert!(app.navigation.navigation_history.back.is_empty());
+    assert!(app.navigation.navigation_history.forward.is_empty());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -302,21 +324,21 @@ fn go_back_failure_preserves_history() {
     let missing = root.join("missing");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation_history.back.push(HistoryEntry {
+    app.navigation.navigation_history.back.push(HistoryEntry {
         cwd: missing.clone(),
         selected_path: None,
     });
 
     assert!(app.go_back().is_err());
-    assert_eq!(app.cwd, root);
+    assert_eq!(app.navigation.cwd, root);
     assert_eq!(
-        app.navigation_history.back,
+        app.navigation.navigation_history.back,
         vec![HistoryEntry {
             cwd: missing,
             selected_path: None,
         }]
     );
-    assert!(app.navigation_history.forward.is_empty());
+    assert!(app.navigation.navigation_history.forward.is_empty());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -331,7 +353,7 @@ fn reload_restores_latest_remembered_view_state() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.set_frame_state(FrameState {
         metrics: ViewMetrics {
             cols: 1,
@@ -344,8 +366,8 @@ fn reload_restores_latest_remembered_view_state() {
     app.select_index(6);
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.selected, 6);
-    assert_eq!(app.scroll_row, 4);
+    assert_eq!(app.navigation.selected, 6);
+    assert_eq!(app.navigation.scroll_row, 4);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -358,10 +380,10 @@ fn same_directory_reselect_updates_pending_load_instead_of_dropping_it() {
     fs::write(&beta, "beta").expect("failed to write beta");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.directory_runtime.pending_load = Some(PendingDirectoryLoad {
+    app.navigation.directory_runtime.pending_load = Some(PendingDirectoryLoad {
         token: 99,
-        target_cwd: app.cwd.clone(),
-        previous_cwd: app.cwd.clone(),
+        target_cwd: app.navigation.cwd.clone(),
+        previous_cwd: app.navigation.cwd.clone(),
         previous_selected_path: app.selected_entry().map(|entry| entry.path.clone()),
         previous_selection_name: None,
         reselect_path: None,
@@ -379,6 +401,7 @@ fn same_directory_reselect_updates_pending_load_instead_of_dropping_it() {
     .expect("same-directory reselect should update the pending load");
 
     let load = app
+        .navigation
         .directory_runtime
         .pending_load
         .as_ref()

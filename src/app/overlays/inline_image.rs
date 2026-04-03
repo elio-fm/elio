@@ -90,16 +90,19 @@ impl App {
             env::var_os("KITTY_WINDOW_ID").is_some(),
             env::var_os("WARP_SESSION_ID").is_some(),
         ));
-        self.terminal_images.protocol = protocol;
-        self.pdf_preview.pdf_tools_available = pdf_preview_tools_available();
+        self.preview.terminal_images.protocol = protocol;
+        self.preview.pdf.pdf_tools_available = pdf_preview_tools_available();
         self.refresh_terminal_image_window_size();
-        preview_log(format_args!("  window={:?}", self.terminal_images.window));
+        preview_log(format_args!(
+            "  window={:?}",
+            self.preview.terminal_images.window
+        ));
         self.sync_pdf_preview_selection();
     }
 
     pub(crate) fn handle_terminal_image_resize(&mut self) {
         self.refresh_terminal_image_window_size();
-        if self.terminal_images.protocol == ImageProtocol::KittyGraphics
+        if self.preview.terminal_images.protocol == ImageProtocol::KittyGraphics
             && (self.static_image_overlay_displayed() || self.pdf_overlay_displayed())
         {
             // Kitty/Ghostty unicode placeholders are normal terminal cells. During
@@ -107,28 +110,28 @@ impl App {
             // so erasing only the old image rect is not enough — some placeholder
             // text may survive outside the previous bounds. Force a full-screen
             // clear on the next draw so ratatui repaints the entire alt screen.
-            self.terminal_images.pending_kitty_resize_clear = true;
+            self.preview.terminal_images.pending_kitty_resize_clear = true;
         }
         self.handle_pdf_overlay_resize();
     }
 
     pub(crate) fn take_pending_kitty_resize_clear(&mut self) -> bool {
-        if !self.terminal_images.pending_kitty_resize_clear {
+        if !self.preview.terminal_images.pending_kitty_resize_clear {
             return false;
         }
 
-        self.terminal_images.pending_kitty_resize_clear = false;
+        self.preview.terminal_images.pending_kitty_resize_clear = false;
         self.clear_displayed_static_image();
         self.clear_displayed_pdf_overlay();
         true
     }
 
     pub(in crate::app) fn terminal_image_overlay_available(&self) -> bool {
-        self.terminal_images.protocol != ImageProtocol::None
+        self.preview.terminal_images.protocol != ImageProtocol::None
     }
 
     pub(in crate::app) fn cached_terminal_window(&self) -> Option<TerminalWindowSize> {
-        self.terminal_images.window
+        self.preview.terminal_images.window
     }
 
     /// Returns iTerm2 erase bytes that must be written to the terminal **before**
@@ -148,7 +151,7 @@ impl App {
     /// draw forces the terminal to show blank content, which ratatui then
     /// overpaints correctly.
     pub(crate) fn kitty_pre_draw_erase(&self) -> Vec<u8> {
-        if self.terminal_images.protocol != ImageProtocol::KittyGraphics {
+        if self.preview.terminal_images.protocol != ImageProtocol::KittyGraphics {
             return Vec::new();
         }
         let keep_stale = self.keep_displayed_static_image_overlay_while_pending();
@@ -166,10 +169,10 @@ impl App {
     }
 
     pub(crate) fn iterm_pre_draw_erase(&mut self) -> Vec<u8> {
-        if self.terminal_images.protocol != ImageProtocol::ItermInline {
+        if self.preview.terminal_images.protocol != ImageProtocol::ItermInline {
             return Vec::new();
         }
-        let mut areas = std::mem::take(&mut self.terminal_images.pending_iterm_erase);
+        let mut areas = std::mem::take(&mut self.preview.terminal_images.pending_iterm_erase);
         let keep_stale = self.keep_displayed_static_image_overlay_while_pending();
         if self.static_image_overlay_displayed()
             && !self.displayed_static_image_matches_active()
@@ -195,11 +198,11 @@ impl App {
     }
 
     pub(crate) fn present_preview_overlay(&mut self) -> Result<Vec<u8>> {
-        if self.browser_wheel_burst_active() || self.preview_state.deferred_refresh_at.is_some() {
+        if self.browser_wheel_burst_active() || self.preview.state.deferred_refresh_at.is_some() {
             return Ok(Vec::new());
         }
 
-        let protocol = self.terminal_images.protocol;
+        let protocol = self.preview.terminal_images.protocol;
         if protocol == ImageProtocol::None {
             preview_log("present_preview_overlay: no protocol → clear");
             return self.clear_preview_overlay();
@@ -210,10 +213,10 @@ impl App {
             && popup_open
             && (self.static_image_overlay_displayed() || self.pdf_overlay_displayed())
         {
-            self.terminal_images.pending_iterm_popup_restore = true;
+            self.preview.terminal_images.pending_iterm_popup_restore = true;
         }
         let force_iterm_popup_repaint = protocol == ImageProtocol::ItermInline
-            && self.terminal_images.pending_iterm_popup_restore
+            && self.preview.terminal_images.pending_iterm_popup_restore
             && !popup_open;
 
         // For Kitty, collect rects occupied by open popups so the image can be
@@ -275,7 +278,7 @@ impl App {
             OverlayPresentState::Displayed | OverlayPresentState::Waiting => Ok(out),
             OverlayPresentState::NotRequested if keep_stale_page_preview_overlay => Ok(out),
             OverlayPresentState::NotRequested => {
-                self.terminal_images.pending_iterm_popup_restore = false;
+                self.preview.terminal_images.pending_iterm_popup_restore = false;
                 out.extend(self.clear_preview_overlay()?);
                 Ok(out)
             }
@@ -284,54 +287,54 @@ impl App {
 
     fn collect_popup_rects(&self) -> Vec<Rect> {
         let mut rects = Vec::new();
-        if let Some(r) = self.frame_state.trash_panel {
+        if let Some(r) = self.input.frame_state.trash_panel {
             rects.push(r);
         }
-        if let Some(r) = self.frame_state.restore_panel {
+        if let Some(r) = self.input.frame_state.restore_panel {
             rects.push(r);
         }
-        if let Some(r) = self.frame_state.create_panel {
+        if let Some(r) = self.input.frame_state.create_panel {
             rects.push(r);
         }
-        if let Some(r) = self.frame_state.rename_panel {
+        if let Some(r) = self.input.frame_state.rename_panel {
             rects.push(r);
         }
-        if let Some(r) = self.frame_state.goto_panel {
+        if let Some(r) = self.input.frame_state.goto_panel {
             rects.push(r);
         }
-        if let Some(r) = self.frame_state.copy_panel {
+        if let Some(r) = self.input.frame_state.copy_panel {
             rects.push(r);
         }
-        if let Some(r) = self.frame_state.search_panel {
+        if let Some(r) = self.input.frame_state.search_panel {
             rects.push(r);
         }
-        if let Some(r) = self.frame_state.help_panel {
+        if let Some(r) = self.input.frame_state.help_panel {
             rects.push(r);
         }
         rects
     }
 
     fn any_modal_overlay_open(&self) -> bool {
-        self.trash.is_some()
-            || self.restore.is_some()
-            || self.create.is_some()
-            || self.rename.is_some()
-            || self.bulk_rename.is_some()
-            || self.goto_overlay.is_some()
-            || self.copy_overlay.is_some()
-            || self.search.is_some()
-            || self.help_open
+        self.overlays.trash.is_some()
+            || self.overlays.restore.is_some()
+            || self.overlays.create.is_some()
+            || self.overlays.rename.is_some()
+            || self.overlays.bulk_rename.is_some()
+            || self.overlays.goto.is_some()
+            || self.overlays.copy.is_some()
+            || self.overlays.search.is_some()
+            || self.overlays.help
     }
 
     pub(in crate::app) fn clear_pending_iterm_popup_restore(&mut self) {
-        self.terminal_images.pending_iterm_popup_restore = false;
+        self.preview.terminal_images.pending_iterm_popup_restore = false;
     }
 
     pub(crate) fn clear_preview_overlay(&mut self) -> Result<Vec<u8>> {
         if !self.static_image_overlay_displayed() && !self.pdf_overlay_displayed() {
             return Ok(Vec::new());
         }
-        let bytes = clear_terminal_images(self.terminal_images.protocol)
+        let bytes = clear_terminal_images(self.preview.terminal_images.protocol)
             .context("failed to clear preview overlay")?;
         // iTerm2 erase is emitted by iterm_pre_draw_erase() *before* terminal.draw(),
         // so ratatui naturally overpaints with the correct panel background. Nothing
@@ -343,14 +346,14 @@ impl App {
     }
 
     pub(crate) fn queue_forced_iterm_preview_erase(&mut self) {
-        if self.terminal_images.protocol != ImageProtocol::ItermInline {
+        if self.preview.terminal_images.protocol != ImageProtocol::ItermInline {
             return;
         }
         if let Some(area) = self.displayed_static_image_clear_area() {
-            push_unique_rect(&mut self.terminal_images.pending_iterm_erase, area);
+            push_unique_rect(&mut self.preview.terminal_images.pending_iterm_erase, area);
         }
         if let Some(area) = self.displayed_pdf_overlay_area() {
-            push_unique_rect(&mut self.terminal_images.pending_iterm_erase, area);
+            push_unique_rect(&mut self.preview.terminal_images.pending_iterm_erase, area);
         }
     }
 
@@ -364,18 +367,20 @@ impl App {
     }
 
     fn refresh_terminal_image_window_size(&mut self) {
-        self.terminal_images.window = (self.terminal_images.protocol != ImageProtocol::None)
+        self.preview.terminal_images.window = (self.preview.terminal_images.protocol
+            != ImageProtocol::None)
             .then(query_terminal_window_size)
             .flatten();
     }
 
     fn expand_iterm_erase_area(&self, area: Rect) -> Rect {
         let safe_bounds = self
+            .input
             .frame_state
             .preview_body_area
-            .or(self.frame_state.preview_content_area)
+            .or(self.input.frame_state.preview_content_area)
             .unwrap_or(area);
-        let Some(bounds) = self.frame_state.preview_panel.or(Some(safe_bounds)) else {
+        let Some(bounds) = self.input.frame_state.preview_panel.or(Some(safe_bounds)) else {
             return area;
         };
         let clamped = intersect_rect(area, safe_bounds).unwrap_or(area);

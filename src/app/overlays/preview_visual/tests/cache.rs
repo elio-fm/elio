@@ -14,7 +14,7 @@ fn page_image_overlay_request_uses_asset_metadata_without_forcing_render_cache()
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.entries = vec![Entry {
+    app.navigation.entries = vec![Entry {
         path: root.join("book.cbz"),
         name: "book.cbz".to_string(),
         name_key: "book.cbz".to_string(),
@@ -23,14 +23,14 @@ fn page_image_overlay_request_uses_asset_metadata_without_forcing_render_cache()
         modified: None,
         readonly: false,
     }];
-    app.selected = 0;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Archive, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Archive, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::Inline,
@@ -61,15 +61,15 @@ fn oversized_page_overlay_request_forces_rendered_cache() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.entries.clear();
-    app.selected = 0;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.entries.clear();
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -157,15 +157,15 @@ fn current_comic_prepare_build_marks_preview_dirty() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.entries.clear();
-    app.selected = 0;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.entries.clear();
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -179,13 +179,15 @@ fn current_comic_prepare_build_marks_preview_dirty() {
         size: metadata.len(),
         modified: None,
         target_width_px: image_target_width_px(
-            app.frame_state
+            app.input
+                .frame_state
                 .preview_media_area
                 .expect("preview media area should exist"),
             app.cached_terminal_window(),
         ),
         target_height_px: image_target_height_px(
-            app.frame_state
+            app.input
+                .frame_state
                 .preview_media_area
                 .expect("preview media area should exist"),
             app.cached_terminal_window(),

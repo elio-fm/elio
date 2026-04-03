@@ -9,32 +9,33 @@ use std::time::{Duration, Instant};
 
 impl App {
     pub(in crate::app) fn handle_pdf_overlay_resize(&mut self) {
-        if self.pdf_preview.session.is_some() {
-            self.pdf_preview.activation_ready_at = None;
+        if self.preview.pdf.session.is_some() {
+            self.preview.pdf.activation_ready_at = None;
             self.refresh_pdf_prefetch_window();
         }
     }
 
     pub(crate) fn process_pdf_preview_timers(&mut self) -> bool {
-        let Some(ready_at) = self.pdf_preview.activation_ready_at else {
+        let Some(ready_at) = self.preview.pdf.activation_ready_at else {
             return false;
         };
         if Instant::now() < ready_at {
             return false;
         }
 
-        self.pdf_preview.activation_ready_at = None;
-        self.pdf_preview.session.is_some()
+        self.preview.pdf.activation_ready_at = None;
+        self.preview.pdf.session.is_some()
     }
 
     pub(crate) fn pending_pdf_preview_timer(&self) -> Option<Duration> {
-        self.pdf_preview
+        self.preview
+            .pdf
             .activation_ready_at
             .map(|ready_at| ready_at.saturating_duration_since(Instant::now()))
     }
 
     pub(in crate::app) fn pdf_preview_header_detail(&self) -> Option<String> {
-        let session = self.pdf_preview.session.as_ref()?;
+        let session = self.preview.pdf.session.as_ref()?;
         if !self.terminal_image_overlay_available() {
             return None;
         }
@@ -47,7 +48,7 @@ impl App {
     }
 
     pub(in crate::app) fn step_pdf_page(&mut self, delta: isize) -> bool {
-        let Some(session) = &mut self.pdf_preview.session else {
+        let Some(session) = &mut self.preview.pdf.session else {
             return false;
         };
 
@@ -62,8 +63,8 @@ impl App {
         session.current_page = next_page.clamp(PDF_PAGE_MIN, max_page.max(PDF_PAGE_MIN));
         let changed = session.current_page != previous_page;
         if changed {
-            self.pdf_preview.last_navigation_direction = delta.signum();
-            self.pdf_preview.activation_ready_at = None;
+            self.preview.pdf.last_navigation_direction = delta.signum();
+            self.preview.pdf.activation_ready_at = None;
             self.refresh_pdf_prefetch_window();
         }
         changed
@@ -71,30 +72,30 @@ impl App {
 
     pub(in crate::app) fn sync_pdf_preview_selection(&mut self) {
         self.clear_failed_static_image_state_if_needed();
-        if !self.terminal_image_overlay_available() || !self.pdf_preview.pdf_tools_available {
-            self.pdf_preview.session = None;
-            self.pdf_preview.activation_ready_at = None;
+        if !self.terminal_image_overlay_available() || !self.preview.pdf.pdf_tools_available {
+            self.preview.pdf.session = None;
+            self.preview.pdf.activation_ready_at = None;
             self.clear_pending_pdf_work();
             self.clear_pdf_page_status();
             return;
         }
 
         let Some(entry) = self.selected_entry() else {
-            self.pdf_preview.session = None;
-            self.pdf_preview.activation_ready_at = None;
+            self.preview.pdf.session = None;
+            self.preview.pdf.activation_ready_at = None;
             self.clear_pending_pdf_work();
             self.clear_pdf_page_status();
             return;
         };
         if !is_pdf_entry(entry) {
-            self.pdf_preview.session = None;
-            self.pdf_preview.activation_ready_at = None;
+            self.preview.pdf.session = None;
+            self.preview.pdf.activation_ready_at = None;
             self.clear_pending_pdf_work();
             self.clear_pdf_page_status();
             return;
         }
 
-        let should_keep_session = self.pdf_preview.session.as_ref().is_some_and(|session| {
+        let should_keep_session = self.preview.pdf.session.as_ref().is_some_and(|session| {
             session.path == entry.path
                 && session.size == entry.size
                 && session.modified == entry.modified
@@ -103,15 +104,15 @@ impl App {
             return;
         }
 
-        self.pdf_preview.session = Some(PdfSession {
+        self.preview.pdf.session = Some(PdfSession {
             path: entry.path.clone(),
             size: entry.size,
             modified: entry.modified,
             current_page: PDF_PAGE_MIN,
             total_pages: self.cached_pdf_total_pages(entry),
         });
-        self.pdf_preview.last_navigation_direction = 0;
-        self.pdf_preview.activation_ready_at =
+        self.preview.pdf.last_navigation_direction = 0;
+        self.preview.pdf.activation_ready_at =
             Some(Instant::now() + PDF_SELECTION_ACTIVATION_DELAY);
         self.refresh_pdf_prefetch_window();
         self.clear_pdf_page_status();
@@ -122,8 +123,8 @@ impl App {
             return None;
         }
 
-        let session = self.pdf_preview.session.as_ref()?;
-        let area = self.frame_state.preview_content_area?;
+        let session = self.preview.pdf.session.as_ref()?;
+        let area = self.input.frame_state.preview_content_area?;
         if area.width == 0 || area.height == 0 {
             return None;
         }
@@ -144,28 +145,30 @@ impl App {
             modified: build.modified,
             page: build.page,
         };
-        self.pdf_preview.pending_page_probes.remove(&key);
+        self.preview.pdf.pending_page_probes.remove(&key);
 
         let current_request = self.active_pdf_overlay_request();
         let current_key = current_request.as_ref().map(PdfPageKey::from_request);
         let is_current_key = current_key.as_ref() == Some(&key);
         let current_document = self
-            .pdf_preview
+            .preview
+            .pdf
             .session
             .as_ref()
             .map(PdfDocumentKey::from_session);
 
         match build.result {
             Ok(result) => {
-                self.pdf_preview.failed_page_probes.remove(&key);
+                self.preview.pdf.failed_page_probes.remove(&key);
                 let mut dirty = current_key.as_ref() == Some(&key);
                 if let Some(total_pages) = result.total_pages {
                     let document_key = PdfDocumentKey::from_page_key(&key);
-                    self.pdf_preview
+                    self.preview
+                        .pdf
                         .document_page_counts
                         .insert(document_key.clone(), total_pages);
                     if current_document.as_ref() == Some(&document_key)
-                        && let Some(session) = &mut self.pdf_preview.session
+                        && let Some(session) = &mut self.preview.pdf.session
                     {
                         let previous_total = session.total_pages;
                         session.total_pages = Some(total_pages);
@@ -174,7 +177,7 @@ impl App {
                             .clamp(PDF_PAGE_MIN, total_pages.max(PDF_PAGE_MIN));
                         if clamped_page != session.current_page {
                             session.current_page = clamped_page;
-                            self.pdf_preview.activation_ready_at = Some(Instant::now());
+                            self.preview.pdf.activation_ready_at = Some(Instant::now());
                             dirty = true;
                         }
                         if previous_total != session.total_pages {
@@ -183,7 +186,7 @@ impl App {
                     }
                 }
                 if let (Some(width_pts), Some(height_pts)) = (result.width_pts, result.height_pts) {
-                    self.pdf_preview.page_dimensions.insert(
+                    self.preview.pdf.page_dimensions.insert(
                         key.clone(),
                         PdfPageDimensions {
                             width_pts,
@@ -196,7 +199,7 @@ impl App {
                 dirty
             }
             Err(_) => {
-                self.pdf_preview.failed_page_probes.insert(key);
+                self.preview.pdf.failed_page_probes.insert(key);
                 if is_current_key {
                     self.refresh_preview();
                     true
@@ -216,7 +219,7 @@ impl App {
             width_px: build.width_px,
             height_px: build.height_px,
         };
-        self.pdf_preview.pending_renders.remove(&key);
+        self.preview.pdf.pending_renders.remove(&key);
         let is_current_key = self
             .active_pdf_render_key()
             .as_ref()
@@ -224,7 +227,7 @@ impl App {
 
         match build.result {
             Ok(Some(path)) => {
-                self.pdf_preview.failed_renders.remove(&key);
+                self.preview.pdf.failed_renders.remove(&key);
                 let image_dimensions = read_png_dimensions(&path);
                 self.remember_rendered_pdf(key.clone(), path, image_dimensions);
                 let dirty = is_current_key;
@@ -232,7 +235,7 @@ impl App {
                 dirty
             }
             Ok(None) | Err(_) => {
-                self.pdf_preview.failed_renders.insert(key);
+                self.preview.pdf.failed_renders.insert(key);
                 if is_current_key {
                     self.refresh_preview();
                     true
@@ -250,14 +253,16 @@ impl App {
     }
 
     fn cached_pdf_total_pages(&self, entry: &Entry) -> Option<usize> {
-        self.pdf_preview
+        self.preview
+            .pdf
             .document_page_counts
             .get(&PdfDocumentKey::from_entry(entry))
             .copied()
     }
 
     pub(super) fn pdf_selection_activation_ready(&self) -> bool {
-        self.pdf_preview
+        self.preview
+            .pdf
             .activation_ready_at
             .is_none_or(|ready_at| Instant::now() >= ready_at)
     }
@@ -267,9 +272,9 @@ impl App {
     }
 
     pub(super) fn clear_pending_pdf_work(&mut self) {
-        self.pdf_preview.pending_page_probes.clear();
-        self.pdf_preview.pending_renders.clear();
-        self.scheduler.clear_pending_pdf_jobs();
+        self.preview.pdf.pending_page_probes.clear();
+        self.preview.pdf.pending_renders.clear();
+        self.jobs.scheduler.clear_pending_pdf_jobs();
     }
 }
 

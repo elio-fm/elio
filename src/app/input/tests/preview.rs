@@ -14,7 +14,7 @@ fn preview_horizontal_scroll_works_in_list_view() {
     .expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     app.set_frame_state(FrameState {
         preview_panel: Some(Rect {
@@ -36,7 +36,7 @@ fn preview_horizontal_scroll_works_in_list_view() {
     }))
     .expect("scroll right should be handled");
     assert!(app.process_pending_scroll());
-    assert_eq!(app.preview_state.horizontal_scroll, 2);
+    assert_eq!(app.preview.state.horizontal_scroll, 2);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -55,7 +55,7 @@ fn preview_scroll_resets_when_reselecting_a_file() {
     fs::write(&other, "short\ntext").expect("failed to write other text file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     app.set_frame_state(FrameState {
         preview_panel: Some(Rect {
@@ -70,9 +70,9 @@ fn preview_scroll_resets_when_reselecting_a_file() {
     });
     wait_for_background_preview(&mut app);
 
-    app.preview_state.scroll = 5;
+    app.preview.state.scroll = 5;
     app.sync_preview_scroll();
-    assert_eq!(app.preview_state.scroll, 5);
+    assert_eq!(app.preview.state.scroll, 5);
 
     app.select_index(1);
     app.select_index(0);
@@ -81,7 +81,7 @@ fn preview_scroll_resets_when_reselecting_a_file() {
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(long.as_path())
     );
-    assert_eq!(app.preview_state.scroll, 0);
+    assert_eq!(app.preview.state.scroll, 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -100,7 +100,7 @@ fn preview_horizontal_scroll_resets_when_reselecting_code() {
     fs::write(&other, "short\ntext").expect("failed to write other text file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     app.set_frame_state(FrameState {
         preview_panel: Some(Rect {
@@ -114,9 +114,9 @@ fn preview_horizontal_scroll_resets_when_reselecting_code() {
         ..FrameState::default()
     });
 
-    app.preview_state.horizontal_scroll = 3;
+    app.preview.state.horizontal_scroll = 3;
     app.sync_preview_scroll();
-    assert_eq!(app.preview_state.horizontal_scroll, 3);
+    assert_eq!(app.preview.state.horizontal_scroll, 3);
 
     app.select_index(1);
     app.select_index(0);
@@ -125,7 +125,7 @@ fn preview_horizontal_scroll_resets_when_reselecting_code() {
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(code.as_path())
     );
-    assert_eq!(app.preview_state.horizontal_scroll, 0);
+    assert_eq!(app.preview.state.horizontal_scroll, 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

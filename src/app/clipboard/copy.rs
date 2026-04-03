@@ -15,25 +15,28 @@ use std::{
 
 impl App {
     pub fn copy_is_open(&self) -> bool {
-        self.copy_overlay.is_some()
+        self.overlays.copy.is_some()
     }
 
     pub fn copy_title(&self) -> &str {
-        self.copy_overlay
+        self.overlays
+            .copy
             .as_ref()
             .map(|overlay| overlay.title.as_str())
             .unwrap_or("")
     }
 
     pub fn copy_row_count(&self) -> usize {
-        self.copy_overlay
+        self.overlays
+            .copy
             .as_ref()
             .map(|overlay| overlay.rows.len())
             .unwrap_or(0)
     }
 
     pub fn copy_row_label(&self, index: usize) -> &str {
-        self.copy_overlay
+        self.overlays
+            .copy
             .as_ref()
             .and_then(|overlay| overlay.rows.get(index))
             .map(|row| row.label.as_str())
@@ -41,7 +44,8 @@ impl App {
     }
 
     pub fn copy_row_shortcut(&self, index: usize) -> Option<char> {
-        self.copy_overlay
+        self.overlays
+            .copy
             .as_ref()
             .and_then(|overlay| overlay.rows.get(index))
             .map(|row| row.shortcut)
@@ -56,20 +60,20 @@ impl App {
             return;
         }
 
-        self.help_open = false;
-        self.copy_overlay = Some(build_copy_overlay(&self.cwd, &paths));
+        self.overlays.help = false;
+        self.overlays.copy = Some(build_copy_overlay(&self.navigation.cwd, &paths));
         self.status.clear();
     }
 
     pub(in crate::app) fn handle_copy_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.copy_overlay = None;
+            self.overlays.copy = None;
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.copy_overlay = None;
+                self.overlays.copy = None;
             }
             KeyCode::Char(ch)
                 if !key
@@ -89,15 +93,17 @@ impl App {
     pub(in crate::app) fn handle_copy_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
             let inside = self
+                .input
                 .frame_state
                 .copy_panel
                 .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
             if !inside {
-                self.copy_overlay = None;
+                self.overlays.copy = None;
                 return Ok(());
             }
 
             if let Some(hit) = self
+                .input
                 .frame_state
                 .copy_hits
                 .iter()
@@ -113,7 +119,7 @@ impl App {
 
     fn copy_row_index_for_shortcut(&self, ch: char) -> Option<usize> {
         let needle = ch.to_ascii_lowercase();
-        self.copy_overlay.as_ref().and_then(|overlay| {
+        self.overlays.copy.as_ref().and_then(|overlay| {
             overlay
                 .rows
                 .iter()
@@ -122,7 +128,7 @@ impl App {
     }
 
     fn confirm_copy_index(&mut self, index: usize) -> Result<()> {
-        let Some((value, status_label)) = self.copy_overlay.as_ref().and_then(|overlay| {
+        let Some((value, status_label)) = self.overlays.copy.as_ref().and_then(|overlay| {
             overlay
                 .rows
                 .get(index)
@@ -133,7 +139,7 @@ impl App {
 
         match write_text_to_system_clipboard(&value) {
             Ok(()) => {
-                self.copy_overlay = None;
+                self.overlays.copy = None;
                 self.status = format!("Copied {status_label}");
             }
             Err(error) => {

@@ -84,7 +84,7 @@ pub(super) fn render_bulk_rename_overlay(
         let is_dir = app.bulk_rename_item_is_dir(line_idx);
         let is_cursor_line = line_idx == cursor_line;
 
-        let live_path = app.cwd.join(new_name);
+        let live_path = app.navigation.cwd.join(new_name);
         let (icon, icon_color) = (
             theme::path_symbol(&live_path, is_dir),
             theme::path_color(&live_path, is_dir, palette),

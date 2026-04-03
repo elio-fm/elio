@@ -13,9 +13,9 @@ fn refresh_preview_uses_blank_static_image_surface_preview_when_backend_enabled(
     ] {
         let (app, root) = build_selected_static_image_app("image-placeholder", file_name);
 
-        assert_eq!(app.preview_state.content.kind, PreviewKind::Image);
-        assert_eq!(app.preview_state.content.detail.as_deref(), Some(detail));
-        assert!(app.preview_state.content.lines.is_empty());
+        assert_eq!(app.preview.state.content.kind, PreviewKind::Image);
+        assert_eq!(app.preview.state.content.detail.as_deref(), Some(detail));
+        assert!(app.preview.state.content.lines.is_empty());
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -45,9 +45,9 @@ fn preview_prefers_image_surface_for_supported_static_images_when_backend_enable
 fn preview_prefers_image_surface_for_extensionless_png_when_backend_enabled() {
     let (app, root) = build_selected_extensionless_png_app("image-surface-noext", "background");
 
-    assert_eq!(app.preview_state.content.kind, PreviewKind::Image);
+    assert_eq!(app.preview.state.content.kind, PreviewKind::Image);
     assert_eq!(
-        app.preview_state.content.detail.as_deref(),
+        app.preview.state.content.detail.as_deref(),
         Some("PNG image")
     );
     assert!(app.preview_prefers_static_image_surface());
@@ -72,7 +72,7 @@ fn immediate_selection_changes_do_not_delay_static_image_activation() {
 #[test]
 fn static_image_surface_remains_available_without_pdf_tooling() {
     let (mut app, root) = build_selected_static_image_app("image-no-pdf-tools", "demo.png");
-    app.pdf_preview.pdf_tools_available = false;
+    app.preview.pdf.pdf_tools_available = false;
     app.refresh_preview();
 
     assert!(app.preview_prefers_static_image_surface());
@@ -99,7 +99,7 @@ fn refresh_preview_preloads_current_and_visible_nearby_static_images() {
     let expected = app
         .visible_entry_indices()
         .into_iter()
-        .filter_map(|index| app.entries.get(index))
+        .filter_map(|index| app.navigation.entries.get(index))
         .filter(|entry| crate::app::overlays::images::static_image_detail_label(entry).is_some())
         .filter(|entry| {
             crate::file_info::inspect_path_cached(
@@ -126,8 +126,8 @@ fn refresh_preview_preloads_current_and_visible_nearby_static_images() {
 
     for key in expected {
         assert!(
-            app.image_preview.pending_prepares.contains(&key)
-                || app.image_preview.dimensions.contains_key(&key),
+            app.preview.image.pending_prepares.contains(&key)
+                || app.preview.image.dimensions.contains_key(&key),
             "expected image preload for {:?}",
             key
         );

@@ -10,7 +10,8 @@ fn background_job_processing_yields_after_a_burst_of_results() {
     wait_for_directory_load(&mut app);
 
     for index in 0..20 {
-        app.scheduler
+        app.jobs
+            .scheduler
             .defer_result(JobResult::PreviewLineCount(PreviewLineCountBuild {
                 path: root.join(format!("item-{index}.txt")),
                 size: index as u64 + 1,
@@ -20,8 +21,8 @@ fn background_job_processing_yields_after_a_burst_of_results() {
     }
 
     let _ = app.process_background_jobs();
-    assert!(!app.preview_state.line_count_cache.is_empty());
-    assert!(app.preview_state.line_count_cache.len() < 20);
+    assert!(!app.preview.state.line_count_cache.is_empty());
+    assert!(app.preview.state.line_count_cache.len() < 20);
     assert!(app.has_pending_background_work());
 
     for _ in 0..10 {
@@ -31,7 +32,7 @@ fn background_job_processing_yields_after_a_burst_of_results() {
         }
     }
 
-    assert_eq!(app.preview_state.line_count_cache.len(), 20);
+    assert_eq!(app.preview.state.line_count_cache.len(), 20);
     assert!(!app.has_pending_background_work());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

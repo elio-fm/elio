@@ -59,7 +59,7 @@ fn cached_adjacent_comic_page_queues_background_image_prepare() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.entries = vec![Entry {
+    app.navigation.entries = vec![Entry {
         path: archive.clone(),
         name: "issue.cbz".to_string(),
         name_key: "issue.cbz".to_string(),
@@ -68,15 +68,15 @@ fn cached_adjacent_comic_page_queues_background_image_prepare() {
         modified: archive_metadata.modified().ok(),
         readonly: false,
     }];
-    app.selected = 0;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
     app.sync_comic_preview_selection();
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_navigation_position("Page", 0, 2, None)
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
@@ -111,7 +111,8 @@ fn cached_adjacent_comic_page_queues_background_image_prepare() {
             .preview_visual
             .as_ref()
             .expect("adjacent preview should have a visual"),
-        app.frame_state
+        app.input
+            .frame_state
             .preview_media_area
             .expect("preview media area should exist"),
     );
@@ -119,7 +120,7 @@ fn cached_adjacent_comic_page_queues_background_image_prepare() {
 
     app.refresh_static_image_preloads();
 
-    assert!(app.image_preview.pending_prepares.contains(&adjacent_key));
+    assert!(app.preview.image.pending_prepares.contains(&adjacent_key));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -139,7 +140,7 @@ fn cached_adjacent_epub_section_queues_background_image_prepare() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.entries = vec![Entry {
+    app.navigation.entries = vec![Entry {
         path: epub.clone(),
         name: "story.epub".to_string(),
         name_key: "story.epub".to_string(),
@@ -148,15 +149,15 @@ fn cached_adjacent_epub_section_queues_background_image_prepare() {
         modified: epub_metadata.modified().ok(),
         readonly: false,
     }];
-    app.selected = 0;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
     app.sync_epub_preview_selection();
-    app.preview_state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
         .with_ebook_section(0, 2, Some("Page 1".to_string()))
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
@@ -191,7 +192,8 @@ fn cached_adjacent_epub_section_queues_background_image_prepare() {
             .preview_visual
             .as_ref()
             .expect("adjacent preview should have a visual"),
-        app.frame_state
+        app.input
+            .frame_state
             .preview_media_area
             .expect("preview media area should exist"),
     );
@@ -199,7 +201,7 @@ fn cached_adjacent_epub_section_queues_background_image_prepare() {
 
     app.refresh_static_image_preloads();
 
-    assert!(app.image_preview.pending_prepares.contains(&adjacent_key));
+    assert!(app.preview.image.pending_prepares.contains(&adjacent_key));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -222,8 +224,8 @@ fn cached_adjacent_audio_cover_queues_background_image_prepare() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.terminal_images.protocol = ImageProtocol::ItermInline;
-    app.entries = vec![
+    app.preview.terminal_images.protocol = ImageProtocol::ItermInline;
+    app.navigation.entries = vec![
         Entry {
             path: first.clone(),
             name: "001.mp3".to_string(),
@@ -243,14 +245,14 @@ fn cached_adjacent_audio_cover_queues_background_image_prepare() {
             readonly: false,
         },
     ];
-    app.selected = 0;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Audio, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Audio, Vec::new())
         .with_detail("MP3 audio")
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::Cover,
@@ -269,7 +271,7 @@ fn cached_adjacent_audio_cover_queues_background_image_prepare() {
             size: next_cover_metadata.len(),
             modified: next_cover_metadata.modified().ok(),
         });
-    let adjacent_entry = app.entries[1].clone();
+    let adjacent_entry = app.navigation.entries[1].clone();
     app.cache_preview_result(
         &adjacent_entry,
         &preview::PreviewRequestOptions::Default,
@@ -281,7 +283,8 @@ fn cached_adjacent_audio_cover_queues_background_image_prepare() {
             .preview_visual
             .as_ref()
             .expect("adjacent preview should have a visual"),
-        app.frame_state
+        app.input
+            .frame_state
             .preview_media_area
             .expect("preview media area should exist"),
     );
@@ -289,7 +292,7 @@ fn cached_adjacent_audio_cover_queues_background_image_prepare() {
 
     app.refresh_static_image_preloads();
 
-    assert!(app.image_preview.pending_prepares.contains(&adjacent_key));
+    assert!(app.preview.image.pending_prepares.contains(&adjacent_key));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -305,7 +308,7 @@ fn stale_adjacent_comic_preview_result_immediately_queues_image_prepare() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.frame_state.preview_media_area = Some(Rect {
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -335,8 +338,8 @@ fn stale_adjacent_comic_preview_result_immediately_queues_image_prepare() {
 
     let adjacent_key = adjacent_key.expect("adjacent comic preview should be cached");
     assert!(
-        app.image_preview.pending_prepares.contains(&adjacent_key)
-            || app.image_preview.dimensions.contains_key(&adjacent_key)
+        app.preview.image.pending_prepares.contains(&adjacent_key)
+            || app.preview.image.dimensions.contains_key(&adjacent_key)
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -355,7 +358,7 @@ fn cached_adjacent_comic_entry_preview_immediately_queues_image_prepare() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.frame_state.preview_media_area = Some(Rect {
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -386,8 +389,8 @@ fn cached_adjacent_comic_entry_preview_immediately_queues_image_prepare() {
 
     let adjacent_key = adjacent_key.expect("adjacent comic entry preview should be cached");
     assert!(
-        app.image_preview.pending_prepares.contains(&adjacent_key)
-            || app.image_preview.dimensions.contains_key(&adjacent_key)
+        app.preview.image.pending_prepares.contains(&adjacent_key)
+            || app.preview.image.dimensions.contains_key(&adjacent_key)
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

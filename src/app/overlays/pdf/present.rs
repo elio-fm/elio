@@ -49,8 +49,8 @@ impl App {
             placement.image_area
         ));
         let displayed = DisplayedPdfPreview::from_request(&request, placement);
-        let image_changed = self.pdf_preview.displayed.as_ref() != Some(&displayed);
-        let excluded_changed = excluded != self.pdf_preview.displayed_excluded.as_slice();
+        let image_changed = self.preview.pdf.displayed.as_ref() != Some(&displayed);
+        let excluded_changed = excluded != self.preview.pdf.displayed_excluded.as_slice();
         let needs_repaint = force_repaint && protocol == ImageProtocol::ItermInline;
         if !image_changed && !excluded_changed && !needs_repaint {
             preview_log("present_pdf_overlay: already displayed → Displayed");
@@ -66,16 +66,16 @@ impl App {
             bytes.len()
         ));
         out.extend(bytes);
-        self.pdf_preview.displayed = Some(displayed);
-        self.pdf_preview.displayed_excluded = excluded.to_vec();
+        self.preview.pdf.displayed = Some(displayed);
+        self.preview.pdf.displayed_excluded = excluded.to_vec();
         self.clear_pending_iterm_popup_restore();
         Ok(OverlayPresentState::Displayed)
     }
 
     pub(crate) fn preview_prefers_pdf_surface(&self) -> bool {
         if !self.terminal_image_overlay_available()
-            || !self.pdf_preview.pdf_tools_available
-            || self.pdf_preview.session.is_none()
+            || !self.preview.pdf.pdf_tools_available
+            || self.preview.pdf.session.is_none()
         {
             return false;
         }
@@ -91,11 +91,11 @@ impl App {
         }
 
         let page_key = self.pdf_page_key_from_request(&request);
-        if self.pdf_preview.failed_page_probes.contains(&page_key) {
+        if self.preview.pdf.failed_page_probes.contains(&page_key) {
             return false;
         }
-        if self.pdf_preview.pending_page_probes.contains(&page_key)
-            || !self.pdf_preview.page_dimensions.contains_key(&page_key)
+        if self.preview.pdf.pending_page_probes.contains(&page_key)
+            || !self.preview.pdf.page_dimensions.contains_key(&page_key)
         {
             return true;
         }
@@ -104,10 +104,10 @@ impl App {
             return false;
         };
         let render_key = self.pdf_render_key_from_request(&request, placement);
-        if self.pdf_preview.failed_renders.contains(&render_key) {
+        if self.preview.pdf.failed_renders.contains(&render_key) {
             return false;
         }
-        self.pdf_preview.pending_renders.contains(&render_key)
+        self.preview.pdf.pending_renders.contains(&render_key)
             || self.cached_render_exists(&render_key)
     }
 
@@ -122,19 +122,19 @@ impl App {
 
         let request = self.active_pdf_overlay_request()?;
         let page_key = self.pdf_page_key_from_request(&request);
-        if self.pdf_preview.failed_page_probes.contains(&page_key) {
+        if self.preview.pdf.failed_page_probes.contains(&page_key) {
             return Some("PDF preview unavailable".to_string());
         }
         if !self.pdf_selection_activation_ready()
-            || !self.pdf_preview.page_dimensions.contains_key(&page_key)
-            || self.pdf_preview.pending_page_probes.contains(&page_key)
+            || !self.preview.pdf.page_dimensions.contains_key(&page_key)
+            || self.preview.pdf.pending_page_probes.contains(&page_key)
         {
             return None;
         }
 
         let placement = self.overlay_placement_for_request(&request)?;
         let render_key = self.pdf_render_key_from_request(&request, placement);
-        if self.pdf_preview.failed_renders.contains(&render_key) {
+        if self.preview.pdf.failed_renders.contains(&render_key) {
             return Some("PDF preview unavailable".to_string());
         }
         if self.cached_render_exists(&render_key) {
@@ -144,25 +144,26 @@ impl App {
     }
 
     pub(in crate::app) fn pdf_overlay_displayed(&self) -> bool {
-        self.pdf_preview.displayed.is_some()
+        self.preview.pdf.displayed.is_some()
     }
 
     pub(in crate::app) fn displayed_pdf_overlay_area(&self) -> Option<Rect> {
-        self.pdf_preview
+        self.preview
+            .pdf
             .displayed
             .as_ref()
             .map(|displayed| displayed.area)
     }
 
     pub(in crate::app) fn clear_displayed_pdf_overlay(&mut self) {
-        self.pdf_preview.displayed = None;
-        self.pdf_preview.displayed_excluded.clear();
+        self.preview.pdf.displayed = None;
+        self.preview.pdf.displayed_excluded.clear();
     }
 
     pub(in crate::app) fn displayed_pdf_overlay_matches_active(&self) -> bool {
         self.active_pdf_display_target()
             .as_ref()
-            .zip(self.pdf_preview.displayed.as_ref())
+            .zip(self.preview.pdf.displayed.as_ref())
             .is_some_and(|(active, displayed)| active == displayed)
     }
 

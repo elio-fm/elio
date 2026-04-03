@@ -309,7 +309,8 @@ pub(super) fn wait_for_preview_total_line_count(app: &mut App, expected_total: u
     let mut last_seen = None;
     for _ in 0..200 {
         let current = app
-            .preview_state
+            .preview
+            .state
             .content
             .line_coverage
             .as_ref()
@@ -329,7 +330,7 @@ pub(super) fn wait_for_preview_total_line_count(app: &mut App, expected_total: u
 pub(super) fn wait_for_directory_load(app: &mut App) {
     for _ in 0..200 {
         let _ = app.process_background_jobs();
-        if app.directory_runtime.pending_load.is_none() {
+        if app.navigation.directory_runtime.pending_load.is_none() {
             return;
         }
         thread::sleep(Duration::from_millis(10));

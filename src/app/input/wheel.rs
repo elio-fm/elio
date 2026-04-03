@@ -63,21 +63,21 @@ impl App {
     pub fn process_pending_scroll(&mut self) -> bool {
         let mut dirty = false;
 
-        if self.search.is_some() {
-            self.wheel_scroll.vertical.pending = 0;
-            self.wheel_scroll.horizontal.pending = 0;
-            self.wheel_scroll.preview.pending = 0;
-            self.wheel_scroll.preview_horizontal.pending = 0;
+        if self.overlays.search.is_some() {
+            self.input.wheel_scroll.vertical.pending = 0;
+            self.input.wheel_scroll.horizontal.pending = 0;
+            self.input.wheel_scroll.preview.pending = 0;
+            self.input.wheel_scroll.preview_horizontal.pending = 0;
             dirty |= self.flush_search_scroll();
         } else {
-            self.wheel_scroll.search.pending = 0;
+            self.input.wheel_scroll.search.pending = 0;
             dirty |= self.flush_entry_vertical_scroll();
             dirty |= self.flush_preview_scroll();
             dirty |= self.flush_preview_horizontal_scroll();
-            if self.view_mode == ViewMode::Grid {
+            if self.navigation.view_mode == ViewMode::Grid {
                 dirty |= self.flush_entry_horizontal_scroll();
             } else {
-                self.wheel_scroll.horizontal.pending = 0;
+                self.input.wheel_scroll.horizontal.pending = 0;
             }
         }
 
@@ -85,11 +85,11 @@ impl App {
     }
 
     pub fn has_pending_scroll(&self) -> bool {
-        self.wheel_scroll.vertical.pending != 0
-            || self.wheel_scroll.horizontal.pending != 0
-            || self.wheel_scroll.preview.pending != 0
-            || self.wheel_scroll.preview_horizontal.pending != 0
-            || self.wheel_scroll.search.pending != 0
+        self.input.wheel_scroll.vertical.pending != 0
+            || self.input.wheel_scroll.horizontal.pending != 0
+            || self.input.wheel_scroll.preview.pending != 0
+            || self.input.wheel_scroll.preview_horizontal.pending != 0
+            || self.input.wheel_scroll.search.pending != 0
     }
 
     pub(in crate::app) fn handle_wheel_event(&mut self, mouse: MouseEvent, delta: isize) {
@@ -97,8 +97,9 @@ impl App {
         // unreliable. hover_panel is tracked exclusively from MouseEventKind::Moved events
         // (via ?1003h any-event tracking), which always carry the true cursor position.
         // Use it as the primary routing source; fall back to scroll event coords, then auto-focus.
-        let target = if self.wheel_profile == WheelProfile::HighFrequency {
-            self.hover_panel
+        let target = if self.input.wheel_profile == WheelProfile::HighFrequency {
+            self.input
+                .hover_panel
                 .or_else(|| self.resolve_wheel_target(mouse.column, mouse.row))
                 .or_else(|| self.preview_auto_focus_target(false))
         } else {
@@ -122,32 +123,37 @@ impl App {
                 if mouse.modifiers.contains(KeyModifiers::SHIFT)
                     && self.preview_allows_horizontal_scroll()
                 {
-                    if self.wheel_profile == WheelProfile::HighFrequency {
+                    if self.input.wheel_profile == WheelProfile::HighFrequency {
                         let _ = self.scroll_preview_columns_immediately(delta);
                     } else {
                         Self::queue_scroll(
-                            &mut self.wheel_scroll.preview_horizontal,
+                            &mut self.input.wheel_scroll.preview_horizontal,
                             delta,
                             PREVIEW_HORIZONTAL_WHEEL_TUNING,
                         );
                     }
-                } else if self.wheel_profile == WheelProfile::HighFrequency {
+                } else if self.input.wheel_profile == WheelProfile::HighFrequency {
                     let _ = self.scroll_preview_immediately(delta);
                 } else {
-                    Self::queue_scroll(&mut self.wheel_scroll.preview, delta, PREVIEW_WHEEL_TUNING);
+                    Self::queue_scroll(
+                        &mut self.input.wheel_scroll.preview,
+                        delta,
+                        PREVIEW_WHEEL_TUNING,
+                    );
                 }
             }
             Some(WheelTarget::Entries) | None => {
                 self.focus_entry_scroll();
-                if self.view_mode == ViewMode::Grid && mouse.modifiers.contains(KeyModifiers::SHIFT)
+                if self.navigation.view_mode == ViewMode::Grid
+                    && mouse.modifiers.contains(KeyModifiers::SHIFT)
                 {
                     let tuning = self.entry_horizontal_wheel_tuning();
-                    Self::queue_scroll(&mut self.wheel_scroll.horizontal, delta, tuning);
-                } else if self.wheel_profile == WheelProfile::HighFrequency {
+                    Self::queue_scroll(&mut self.input.wheel_scroll.horizontal, delta, tuning);
+                } else if self.input.wheel_profile == WheelProfile::HighFrequency {
                     let _ = self.scroll_entry_immediately(delta);
                 } else {
                     let tuning = self.entry_wheel_tuning();
-                    Self::queue_scroll(&mut self.wheel_scroll.vertical, delta, tuning);
+                    Self::queue_scroll(&mut self.input.wheel_scroll.vertical, delta, tuning);
                 }
             }
         }
@@ -158,8 +164,9 @@ impl App {
         mouse: MouseEvent,
         delta: isize,
     ) {
-        let target = if self.wheel_profile == WheelProfile::HighFrequency {
-            self.hover_panel
+        let target = if self.input.wheel_profile == WheelProfile::HighFrequency {
+            self.input
+                .hover_panel
                 .or_else(|| self.resolve_wheel_target(mouse.column, mouse.row))
                 .or_else(|| self.preview_auto_focus_target(true))
         } else {
@@ -170,11 +177,11 @@ impl App {
             Some(WheelTarget::Preview) => {
                 self.focus_preview_scroll();
                 if self.preview_allows_horizontal_scroll() {
-                    if self.wheel_profile == WheelProfile::HighFrequency {
+                    if self.input.wheel_profile == WheelProfile::HighFrequency {
                         let _ = self.scroll_preview_columns_immediately(delta);
                     } else {
                         Self::queue_scroll(
-                            &mut self.wheel_scroll.preview_horizontal,
+                            &mut self.input.wheel_scroll.preview_horizontal,
                             delta,
                             PREVIEW_HORIZONTAL_WHEEL_TUNING,
                         );
@@ -182,18 +189,22 @@ impl App {
                 }
             }
             Some(WheelTarget::Entries) | None => {
-                if self.view_mode != ViewMode::Grid {
+                if self.navigation.view_mode != ViewMode::Grid {
                     return;
                 }
                 self.focus_entry_scroll();
                 let tuning = self.entry_horizontal_wheel_tuning();
-                Self::queue_scroll(&mut self.wheel_scroll.horizontal, delta, tuning);
+                Self::queue_scroll(&mut self.input.wheel_scroll.horizontal, delta, tuning);
             }
         }
     }
 
     pub(in crate::app) fn queue_search_wheel(&mut self, delta: isize) {
-        Self::queue_scroll(&mut self.wheel_scroll.search, delta, SEARCH_WHEEL_TUNING);
+        Self::queue_scroll(
+            &mut self.input.wheel_scroll.search,
+            delta,
+            SEARCH_WHEEL_TUNING,
+        );
     }
 
     pub(in crate::app) fn queue_scroll(lane: &mut ScrollLane, delta: isize, tuning: WheelTuning) {
@@ -258,15 +269,15 @@ impl App {
     }
 
     fn focus_preview_scroll(&mut self) {
-        self.last_wheel_target = Some(WheelTarget::Preview);
-        Self::reset_scroll_lane(&mut self.wheel_scroll.vertical);
-        Self::reset_scroll_lane(&mut self.wheel_scroll.horizontal);
+        self.input.last_wheel_target = Some(WheelTarget::Preview);
+        Self::reset_scroll_lane(&mut self.input.wheel_scroll.vertical);
+        Self::reset_scroll_lane(&mut self.input.wheel_scroll.horizontal);
     }
 
     fn focus_entry_scroll(&mut self) {
-        self.last_wheel_target = Some(WheelTarget::Entries);
-        Self::reset_scroll_lane(&mut self.wheel_scroll.preview);
-        Self::reset_scroll_lane(&mut self.wheel_scroll.preview_horizontal);
+        self.input.last_wheel_target = Some(WheelTarget::Entries);
+        Self::reset_scroll_lane(&mut self.input.wheel_scroll.preview);
+        Self::reset_scroll_lane(&mut self.input.wheel_scroll.preview_horizontal);
     }
 
     fn reset_scroll_lane(lane: &mut ScrollLane) {
@@ -280,72 +291,75 @@ impl App {
 
     fn flush_entry_vertical_scroll(&mut self) -> bool {
         let interval = self.entry_scroll_interval();
-        let Some(step) = Self::consume_scroll_step(&mut self.wheel_scroll.vertical, interval)
+        let Some(step) = Self::consume_scroll_step(&mut self.input.wheel_scroll.vertical, interval)
         else {
             return false;
         };
 
         let mut dirty = false;
         let total_steps =
-            self.entry_vertical_steps_per_flush(self.wheel_scroll.vertical.pending.abs() + 1);
+            self.entry_vertical_steps_per_flush(self.input.wheel_scroll.vertical.pending.abs() + 1);
         for step_index in 0..total_steps {
             if step_index > 0 {
-                if self.wheel_scroll.vertical.pending.signum() != step {
+                if self.input.wheel_scroll.vertical.pending.signum() != step {
                     break;
                 }
-                self.wheel_scroll.vertical.pending -= step;
+                self.input.wheel_scroll.vertical.pending -= step;
             }
 
-            let previous = self.selected;
+            let previous = self.navigation.selected;
             self.move_vertical(step);
-            dirty |= previous != self.selected;
+            dirty |= previous != self.navigation.selected;
         }
         dirty
     }
 
     fn flush_entry_horizontal_scroll(&mut self) -> bool {
         let Some(step) = Self::consume_scroll_step(
-            &mut self.wheel_scroll.horizontal,
+            &mut self.input.wheel_scroll.horizontal,
             WHEEL_SCROLL_INTERVAL_HORIZONTAL,
         ) else {
             return false;
         };
 
-        let previous = self.selected;
+        let previous = self.navigation.selected;
         self.move_by(step);
-        previous != self.selected
+        previous != self.navigation.selected
     }
 
     fn scroll_entry_immediately(&mut self, delta: isize) -> bool {
-        let burst_count = Self::register_scroll_input(&mut self.wheel_scroll.vertical, delta);
-        self.browser_wheel_post_burst_pending = true;
-        self.wheel_scroll.vertical.pending = 0;
-        self.wheel_scroll.vertical.remainder = 0;
+        let burst_count = Self::register_scroll_input(&mut self.input.wheel_scroll.vertical, delta);
+        self.input.browser_wheel_post_burst_pending = true;
+        self.input.wheel_scroll.vertical.pending = 0;
+        self.input.wheel_scroll.vertical.remainder = 0;
         let step = self.high_frequency_entry_step_multiplier(burst_count);
         let preview_mode = if burst_count <= 1 {
             PreviewRefreshMode::Immediate
         } else {
             PreviewRefreshMode::Deferred
         };
-        let previous = self.selected;
+        let previous = self.navigation.selected;
         self.move_vertical_with_preview_mode(delta * step, preview_mode);
-        previous != self.selected
+        previous != self.navigation.selected
     }
 
     fn flush_search_scroll(&mut self) -> bool {
-        let Some(step) =
-            Self::consume_scroll_step(&mut self.wheel_scroll.search, WHEEL_SCROLL_INTERVAL_SEARCH)
-        else {
+        let Some(step) = Self::consume_scroll_step(
+            &mut self.input.wheel_scroll.search,
+            WHEEL_SCROLL_INTERVAL_SEARCH,
+        ) else {
             return false;
         };
 
         let previous = self
+            .overlays
             .search
             .as_ref()
             .map(|search| search.selected)
             .unwrap_or(0);
         self.move_search_selection(step);
-        self.search
+        self.overlays
+            .search
             .as_ref()
             .map(|search| search.selected != previous)
             .unwrap_or(false)
@@ -353,14 +367,14 @@ impl App {
 
     fn flush_preview_scroll(&mut self) -> bool {
         let Some(step) = Self::consume_scroll_step(
-            &mut self.wheel_scroll.preview,
+            &mut self.input.wheel_scroll.preview,
             WHEEL_SCROLL_INTERVAL_PREVIEW,
         ) else {
             return false;
         };
         let mut dirty = self.scroll_preview_lines(step);
-        if self.wheel_scroll.preview.pending.signum() == step {
-            self.wheel_scroll.preview.pending -= step;
+        if self.input.wheel_scroll.preview.pending.signum() == step {
+            self.input.wheel_scroll.preview.pending -= step;
             dirty |= self.scroll_preview_lines(step);
         }
         dirty
@@ -368,65 +382,67 @@ impl App {
 
     fn flush_preview_horizontal_scroll(&mut self) -> bool {
         let Some(step) = Self::consume_scroll_step(
-            &mut self.wheel_scroll.preview_horizontal,
+            &mut self.input.wheel_scroll.preview_horizontal,
             WHEEL_SCROLL_INTERVAL_PREVIEW_HORIZONTAL,
         ) else {
             return false;
         };
         let mut dirty = self.scroll_preview_columns(step);
-        if self.wheel_scroll.preview_horizontal.pending.signum() == step {
-            self.wheel_scroll.preview_horizontal.pending -= step;
+        if self.input.wheel_scroll.preview_horizontal.pending.signum() == step {
+            self.input.wheel_scroll.preview_horizontal.pending -= step;
             dirty |= self.scroll_preview_columns(step);
         }
         dirty
     }
 
     fn preview_scroll_step(&self) -> usize {
-        self.frame_state
+        self.input
+            .frame_state
             .preview_rows_visible
             .saturating_div(6)
             .clamp(2, 4)
     }
 
     fn preview_horizontal_scroll_step(&self) -> usize {
-        self.frame_state
+        self.input
+            .frame_state
             .preview_cols_visible
             .saturating_div(8)
             .clamp(2, 6)
     }
 
     pub(in crate::app) fn sync_preview_scroll(&mut self) -> bool {
-        let previous = self.preview_state.scroll;
-        let previous_horizontal = self.preview_state.horizontal_scroll;
-        let visible_rows = self.frame_state.preview_rows_visible;
-        let visible_cols = self.frame_state.preview_cols_visible;
+        let previous = self.preview.state.scroll;
+        let previous_horizontal = self.preview.state.horizontal_scroll;
+        let visible_rows = self.input.frame_state.preview_rows_visible;
+        let visible_cols = self.input.frame_state.preview_cols_visible;
         let max_scroll = self
             .preview_total_lines(visible_cols)
             .saturating_sub(visible_rows.max(1));
-        self.preview_state.scroll = self.preview_state.scroll.min(max_scroll);
+        self.preview.state.scroll = self.preview.state.scroll.min(max_scroll);
         let max_horizontal = self.preview_max_horizontal_scroll(visible_cols);
-        self.preview_state.horizontal_scroll =
-            self.preview_state.horizontal_scroll.min(max_horizontal);
+        self.preview.state.horizontal_scroll =
+            self.preview.state.horizontal_scroll.min(max_horizontal);
         // When scroll is clamped at the rendered boundary, fire an extension.
         self.maybe_request_code_preview_extension();
-        previous != self.preview_state.scroll
-            || previous_horizontal != self.preview_state.horizontal_scroll
+        previous != self.preview.state.scroll
+            || previous_horizontal != self.preview.state.horizontal_scroll
     }
 
     /// Fire an incremental extension job when the user has scrolled close
     /// enough to the bottom of the currently-rendered partial preview.
     fn maybe_request_code_preview_extension(&mut self) {
-        if !self.preview_state.content.is_incrementally_partial() {
+        if !self.preview.state.content.is_incrementally_partial() {
             return;
         }
-        if self.preview_state.incremental_render_in_flight {
+        if self.preview.state.incremental_render_in_flight {
             return;
         }
-        let Some(render_limit) = self.preview_state.content.incremental_render_limit else {
+        let Some(render_limit) = self.preview.state.content.incremental_render_limit else {
             return;
         };
-        let scroll = self.preview_state.scroll;
-        let visible_rows = self.frame_state.preview_rows_visible;
+        let scroll = self.preview.state.scroll;
+        let visible_rows = self.input.frame_state.preview_rows_visible;
         let bottom_edge = scroll.saturating_add(visible_rows);
         if bottom_edge + INCREMENTAL_RENDER_LOOKAHEAD < render_limit {
             return;
@@ -444,44 +460,44 @@ impl App {
             return;
         };
         let entry_path = entry.path.clone();
-        if self.scheduler.submit_preview(request) {
-            self.preview_state.incremental_render_in_flight = true;
-            self.preview_state.incremental_render_path = Some(entry_path);
+        if self.jobs.scheduler.submit_preview(request) {
+            self.preview.state.incremental_render_in_flight = true;
+            self.preview.state.incremental_render_path = Some(entry_path);
         }
     }
 
     pub(in crate::app) fn clear_wheel_scroll(&mut self) {
-        Self::reset_scroll_lane(&mut self.wheel_scroll.vertical);
-        Self::reset_scroll_lane(&mut self.wheel_scroll.horizontal);
-        Self::reset_scroll_lane(&mut self.wheel_scroll.preview);
-        Self::reset_scroll_lane(&mut self.wheel_scroll.preview_horizontal);
-        Self::reset_scroll_lane(&mut self.wheel_scroll.search);
-        self.browser_wheel_post_burst_pending = false;
+        Self::reset_scroll_lane(&mut self.input.wheel_scroll.vertical);
+        Self::reset_scroll_lane(&mut self.input.wheel_scroll.horizontal);
+        Self::reset_scroll_lane(&mut self.input.wheel_scroll.preview);
+        Self::reset_scroll_lane(&mut self.input.wheel_scroll.preview_horizontal);
+        Self::reset_scroll_lane(&mut self.input.wheel_scroll.search);
+        self.input.browser_wheel_post_burst_pending = false;
     }
 
     fn entry_wheel_tuning(&self) -> WheelTuning {
-        match self.wheel_profile {
+        match self.input.wheel_profile {
             WheelProfile::Default => ENTRY_WHEEL_TUNING,
             WheelProfile::HighFrequency => HIGH_FREQUENCY_ENTRY_WHEEL_TUNING,
         }
     }
 
     fn entry_horizontal_wheel_tuning(&self) -> WheelTuning {
-        match self.wheel_profile {
+        match self.input.wheel_profile {
             WheelProfile::Default => ENTRY_HORIZONTAL_WHEEL_TUNING,
             WheelProfile::HighFrequency => HIGH_FREQUENCY_ENTRY_HORIZONTAL_WHEEL_TUNING,
         }
     }
 
     fn entry_scroll_interval(&self) -> Duration {
-        match self.wheel_profile {
+        match self.input.wheel_profile {
             WheelProfile::Default => WHEEL_SCROLL_INTERVAL_VERTICAL,
             WheelProfile::HighFrequency => WHEEL_SCROLL_INTERVAL_VERTICAL_HIGH_FREQUENCY,
         }
     }
 
     fn entry_vertical_steps_per_flush(&self, pending: isize) -> usize {
-        if self.wheel_profile != WheelProfile::HighFrequency {
+        if self.input.wheel_profile != WheelProfile::HighFrequency {
             return 1;
         }
 
@@ -499,34 +515,37 @@ impl App {
     }
 
     pub(in crate::app) fn handle_horizontal_navigation_key(&mut self, delta: isize) -> bool {
-        if self.last_wheel_target == Some(WheelTarget::Preview) {
-            if self.wheel_profile == WheelProfile::HighFrequency {
+        if self.input.last_wheel_target == Some(WheelTarget::Preview) {
+            if self.input.wheel_profile == WheelProfile::HighFrequency {
                 let _ = self.scroll_preview_columns(delta);
                 return true;
             }
             if self.preview_allows_horizontal_scroll()
-                && self.preview_max_horizontal_scroll(self.frame_state.preview_cols_visible.max(1))
-                    > 0
+                && self.preview_max_horizontal_scroll(
+                    self.input.frame_state.preview_cols_visible.max(1),
+                ) > 0
             {
                 return self.scroll_preview_columns(delta);
             }
-            self.last_wheel_target = Some(WheelTarget::Entries);
+            self.input.last_wheel_target = Some(WheelTarget::Entries);
         }
 
-        if self.wheel_profile == WheelProfile::HighFrequency
+        if self.input.wheel_profile == WheelProfile::HighFrequency
             && self.preview_auto_focus_target(true) == Some(WheelTarget::Preview)
             && self.preview_allows_horizontal_scroll()
         {
-            self.last_wheel_target = Some(WheelTarget::Preview);
+            self.input.last_wheel_target = Some(WheelTarget::Preview);
             let _ = self.scroll_preview_columns(delta);
             return true;
         }
 
-        if self.wheel_profile == WheelProfile::HighFrequency && self.view_mode == ViewMode::Grid {
-            self.last_wheel_target = Some(WheelTarget::Entries);
+        if self.input.wheel_profile == WheelProfile::HighFrequency
+            && self.navigation.view_mode == ViewMode::Grid
+        {
+            self.input.last_wheel_target = Some(WheelTarget::Entries);
             self.focus_entry_scroll();
             let tuning = self.entry_horizontal_wheel_tuning();
-            Self::queue_scroll(&mut self.wheel_scroll.horizontal, delta, tuning);
+            Self::queue_scroll(&mut self.input.wheel_scroll.horizontal, delta, tuning);
             return true;
         }
 
@@ -547,8 +566,8 @@ impl App {
             return false;
         }
 
-        Self::reset_scroll_lane(&mut self.wheel_scroll.preview);
-        Self::reset_scroll_lane(&mut self.wheel_scroll.preview_horizontal);
+        Self::reset_scroll_lane(&mut self.input.wheel_scroll.preview);
+        Self::reset_scroll_lane(&mut self.input.wheel_scroll.preview_horizontal);
         self.step_epub_section(delta)
     }
 
@@ -557,8 +576,8 @@ impl App {
             return false;
         }
 
-        let visible_cols = self.frame_state.preview_cols_visible.max(1);
-        let visible_rows = self.frame_state.preview_rows_visible.max(1);
+        let visible_cols = self.input.frame_state.preview_cols_visible.max(1);
+        let visible_rows = self.input.frame_state.preview_rows_visible.max(1);
         let total_lines = self.preview_total_lines(visible_cols);
         if total_lines <= visible_rows {
             return true;
@@ -566,27 +585,29 @@ impl App {
 
         let max_scroll = total_lines.saturating_sub(visible_rows);
         if delta.is_negative() {
-            self.preview_state.scroll == 0
+            self.preview.state.scroll == 0
         } else {
-            self.preview_state.scroll >= max_scroll
+            self.preview.state.scroll >= max_scroll
         }
     }
 
     fn preview_has_vertical_overflow(&self) -> bool {
-        let visible_cols = self.frame_state.preview_cols_visible.max(1);
-        let visible_rows = self.frame_state.preview_rows_visible.max(1);
+        let visible_cols = self.input.frame_state.preview_cols_visible.max(1);
+        let visible_rows = self.input.frame_state.preview_rows_visible.max(1);
         self.preview_total_lines(visible_cols) > visible_rows
     }
 
     fn preview_auto_focus_ready(&self) -> bool {
         self.preview_has_vertical_overflow()
-            && self.last_selection_change_at.elapsed() >= PREVIEW_AUTO_FOCUS_DELAY
+            && self.input.last_selection_change_at.elapsed() >= PREVIEW_AUTO_FOCUS_DELAY
     }
 
     fn preview_horizontal_auto_focus_ready(&self) -> bool {
         self.preview_allows_horizontal_scroll()
-            && self.preview_max_horizontal_scroll(self.frame_state.preview_cols_visible.max(1)) > 0
-            && self.last_selection_change_at.elapsed() >= PREVIEW_AUTO_FOCUS_DELAY
+            && self
+                .preview_max_horizontal_scroll(self.input.frame_state.preview_cols_visible.max(1))
+                > 0
+            && self.input.last_selection_change_at.elapsed() >= PREVIEW_AUTO_FOCUS_DELAY
     }
 
     fn preview_auto_focus_target(&self, horizontal: bool) -> Option<WheelTarget> {
@@ -594,7 +615,7 @@ impl App {
         // preview has scrollable content. Does NOT use last_wheel_target stickiness —
         // cursor position (via resolve_wheel_target) is always consulted first, so this
         // only fires when the cursor is genuinely ambiguous (e.g. in sidebar/toolbar).
-        if self.wheel_profile != WheelProfile::HighFrequency {
+        if self.input.wheel_profile != WheelProfile::HighFrequency {
             return None;
         }
 
@@ -608,40 +629,44 @@ impl App {
     }
 
     fn scroll_preview_lines(&mut self, delta: isize) -> bool {
-        let previous = self.preview_state.scroll;
+        let previous = self.preview.state.scroll;
         let step = self.preview_scroll_step();
         if delta.is_negative() {
-            self.preview_state.scroll = self
-                .preview_state
+            self.preview.state.scroll = self
+                .preview
+                .state
                 .scroll
                 .saturating_sub(step.saturating_mul(delta.unsigned_abs()));
         } else {
-            self.preview_state.scroll = self
-                .preview_state
+            self.preview.state.scroll = self
+                .preview
+                .state
                 .scroll
                 .saturating_add(step.saturating_mul(delta as usize));
         }
         // sync_preview_scroll already calls maybe_request_code_preview_extension.
         self.sync_preview_scroll();
-        previous != self.preview_state.scroll
+        previous != self.preview.state.scroll
     }
 
     pub(in crate::app) fn scroll_preview_columns(&mut self, delta: isize) -> bool {
-        let previous = self.preview_state.horizontal_scroll;
+        let previous = self.preview.state.horizontal_scroll;
         let step = self.preview_horizontal_scroll_step();
         if delta.is_negative() {
-            self.preview_state.horizontal_scroll = self
-                .preview_state
+            self.preview.state.horizontal_scroll = self
+                .preview
+                .state
                 .horizontal_scroll
                 .saturating_sub(step.saturating_mul(delta.unsigned_abs()));
         } else {
-            self.preview_state.horizontal_scroll = self
-                .preview_state
+            self.preview.state.horizontal_scroll = self
+                .preview
+                .state
                 .horizontal_scroll
                 .saturating_add(step.saturating_mul(delta as usize));
         }
         self.sync_preview_scroll();
-        previous != self.preview_state.horizontal_scroll
+        previous != self.preview.state.horizontal_scroll
     }
 
     // Scroll preview immediately without queuing, mirroring scroll_entry_immediately.
@@ -649,14 +674,14 @@ impl App {
     // terminal sends many raw wheel events. The queue system causes lag and stalls in
     // these terminals because it caps pending steps and applies burst throttle divisors.
     fn scroll_preview_immediately(&mut self, delta: isize) -> bool {
-        self.wheel_scroll.preview.pending = 0;
-        self.wheel_scroll.preview.remainder = 0;
+        self.input.wheel_scroll.preview.pending = 0;
+        self.input.wheel_scroll.preview.remainder = 0;
         self.scroll_preview_lines(delta)
     }
 
     fn scroll_preview_columns_immediately(&mut self, delta: isize) -> bool {
-        self.wheel_scroll.preview_horizontal.pending = 0;
-        self.wheel_scroll.preview_horizontal.remainder = 0;
+        self.input.wheel_scroll.preview_horizontal.pending = 0;
+        self.input.wheel_scroll.preview_horizontal.remainder = 0;
         self.scroll_preview_columns(delta)
     }
 }

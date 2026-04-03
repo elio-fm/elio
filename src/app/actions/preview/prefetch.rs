@@ -7,17 +7,17 @@ const AUDIO_ENTRY_PREFETCH_OFFSETS: [isize; 4] = [1, -1, 2, -2];
 
 impl App {
     pub(crate) fn process_preview_prefetch_timers(&mut self) -> bool {
-        let Some(deadline) = self.preview_state.prefetch_ready_at else {
+        let Some(deadline) = self.preview.state.prefetch_ready_at else {
             return false;
         };
         if Instant::now() < deadline
-            || self.preview_state.deferred_refresh_at.is_some()
+            || self.preview.state.deferred_refresh_at.is_some()
             || self.browser_wheel_burst_active()
         {
             return false;
         }
 
-        self.preview_state.prefetch_ready_at = None;
+        self.preview.state.prefetch_ready_at = None;
         self.prefetch_nearby_comic_pages();
         self.prefetch_nearby_comic_entries();
         self.prefetch_nearby_epub_sections();
@@ -27,13 +27,14 @@ impl App {
     }
 
     pub(crate) fn pending_preview_prefetch_timer(&self) -> Option<std::time::Duration> {
-        self.preview_state
+        self.preview
+            .state
             .prefetch_ready_at
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))
     }
 
     pub(in crate::app) fn schedule_preview_prefetch(&mut self) {
-        self.preview_state.prefetch_ready_at = self
+        self.preview.state.prefetch_ready_at = self
             .selected_entry()
             .map(|_| Instant::now() + PREVIEW_PREFETCH_IDLE_DELAY);
     }
@@ -45,11 +46,11 @@ impl App {
                 break;
             }
 
-            let target = self.selected as isize + offset;
+            let target = self.navigation.selected as isize + offset;
             if target < 0 {
                 continue;
             }
-            let Some(entry) = self.entries.get(target as usize).cloned() else {
+            let Some(entry) = self.navigation.entries.get(target as usize).cloned() else {
                 continue;
             };
             let variant = self.preview_request_options_for_entry(&entry);
@@ -67,7 +68,7 @@ impl App {
                 PreviewPriority::Low,
                 PreviewWorkClass::Light,
             );
-            if self.scheduler.submit_preview(request) {
+            if self.jobs.scheduler.submit_preview(request) {
                 queued += 1;
             }
         }
@@ -100,7 +101,7 @@ impl App {
                 PreviewPriority::Low,
                 preview_work_class(&entry, &variant),
             );
-            let _ = self.scheduler.submit_preview(request);
+            let _ = self.jobs.scheduler.submit_preview(request);
         }
     }
 
@@ -113,7 +114,7 @@ impl App {
         if !is_audio_entry(entry) {
             return Vec::new();
         }
-        let Some(area) = self.frame_state.preview_media_area else {
+        let Some(area) = self.input.frame_state.preview_media_area else {
             return Vec::new();
         };
 
@@ -149,11 +150,11 @@ impl App {
         AUDIO_ENTRY_PREFETCH_OFFSETS
             .into_iter()
             .filter_map(|offset| {
-                let target = self.selected as isize + offset;
+                let target = self.navigation.selected as isize + offset;
                 if target < 0 {
                     return None;
                 }
-                let entry = self.entries.get(target as usize)?.clone();
+                let entry = self.navigation.entries.get(target as usize)?.clone();
                 is_audio_entry(&entry).then_some(entry)
             })
             .collect()

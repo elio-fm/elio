@@ -5,7 +5,8 @@ use super::helpers::*;
 fn apply_pdf_probe_build_updates_current_session_and_cached_dimensions() {
     let (mut app, root) = build_pdf_overlay_test_app("probe-apply");
     let session = app
-        .pdf_preview
+        .preview
+        .pdf
         .session
         .as_mut()
         .expect("PDF session should exist");
@@ -16,7 +17,7 @@ fn apply_pdf_probe_build_updates_current_session_and_cached_dimensions() {
         modified: None,
         page: 5,
     };
-    app.pdf_preview.pending_page_probes.insert(key.clone());
+    app.preview.pdf.pending_page_probes.insert(key.clone());
 
     let dirty = app.apply_pdf_probe_build(jobs::PdfProbeBuild {
         path: root.join("demo.pdf"),
@@ -32,21 +33,23 @@ fn apply_pdf_probe_build_updates_current_session_and_cached_dimensions() {
 
     assert!(dirty);
     assert_eq!(
-        app.pdf_preview
+        app.preview
+            .pdf
             .session
             .as_ref()
             .map(|session| session.current_page),
         Some(3)
     );
     assert_eq!(
-        app.pdf_preview
+        app.preview
+            .pdf
             .session
             .as_ref()
             .and_then(|session| session.total_pages),
         Some(3)
     );
     assert_eq!(
-        app.pdf_preview.page_dimensions.get(&key),
+        app.preview.pdf.page_dimensions.get(&key),
         Some(&PdfPageDimensions {
             width_pts: 300.0,
             height_pts: 144.0,
@@ -68,22 +71,23 @@ fn cached_pdf_render_path_drops_missing_files_from_cache() {
         height_px: 960,
     };
     let missing_path = root.join("missing-render.png");
-    app.pdf_preview
+    app.preview
+        .pdf
         .rendered_pages
         .insert(key.clone(), missing_path.clone());
-    app.pdf_preview.rendered_page_dimensions.insert(
+    app.preview.pdf.rendered_page_dimensions.insert(
         key.clone(),
         RenderedImageDimensions {
             width_px: 704,
             height_px: 960,
         },
     );
-    app.pdf_preview.render_order.push_back(key.clone());
+    app.preview.pdf.render_order.push_back(key.clone());
 
     assert_eq!(app.cached_pdf_render_path(&key), None);
-    assert!(!app.pdf_preview.rendered_pages.contains_key(&key));
-    assert!(!app.pdf_preview.rendered_page_dimensions.contains_key(&key));
-    assert!(!app.pdf_preview.render_order.contains(&key));
+    assert!(!app.preview.pdf.rendered_pages.contains_key(&key));
+    assert!(!app.preview.pdf.rendered_page_dimensions.contains_key(&key));
+    assert!(!app.preview.pdf.render_order.contains(&key));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -95,7 +99,7 @@ fn apply_pdf_probe_build_queues_render_for_current_page() {
         .active_pdf_overlay_request()
         .expect("PDF overlay request should be available");
     let page_key = PdfPageKey::from_request(&request);
-    app.pdf_preview.pending_page_probes.insert(page_key);
+    app.preview.pdf.pending_page_probes.insert(page_key);
 
     let dirty = app.apply_pdf_probe_build(jobs::PdfProbeBuild {
         path: request.path.clone(),
@@ -115,8 +119,8 @@ fn apply_pdf_probe_build_queues_render_for_current_page() {
     let render_key = PdfRenderKey::from_request(&request, placement);
 
     assert!(dirty);
-    assert!(app.pdf_preview.pending_renders.contains(&render_key));
-    assert!(app.scheduler.has_pending_work());
+    assert!(app.preview.pdf.pending_renders.contains(&render_key));
+    assert!(app.jobs.scheduler.has_pending_work());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -124,12 +128,12 @@ fn apply_pdf_probe_build_queues_render_for_current_page() {
 #[test]
 fn apply_pdf_probe_build_queues_render_even_before_selection_activation_is_ready() {
     let (mut app, root) = build_pdf_overlay_test_app("probe-render-before-activation");
-    app.pdf_preview.activation_ready_at = Some(Instant::now() + Duration::from_secs(5));
+    app.preview.pdf.activation_ready_at = Some(Instant::now() + Duration::from_secs(5));
     let request = app
         .active_pdf_overlay_request()
         .expect("PDF overlay request should be available");
     let page_key = PdfPageKey::from_request(&request);
-    app.pdf_preview.pending_page_probes.insert(page_key);
+    app.preview.pdf.pending_page_probes.insert(page_key);
 
     let dirty = app.apply_pdf_probe_build(jobs::PdfProbeBuild {
         path: request.path.clone(),
@@ -149,8 +153,8 @@ fn apply_pdf_probe_build_queues_render_even_before_selection_activation_is_ready
     let render_key = PdfRenderKey::from_request(&request, placement);
 
     assert!(dirty);
-    assert!(app.pdf_preview.pending_renders.contains(&render_key));
-    assert!(app.scheduler.has_pending_work());
+    assert!(app.preview.pdf.pending_renders.contains(&render_key));
+    assert!(app.jobs.scheduler.has_pending_work());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -159,7 +163,8 @@ fn apply_pdf_probe_build_queues_render_even_before_selection_activation_is_ready
 fn apply_pdf_probe_build_prefetches_adjacent_page_probes_once_total_is_known() {
     let (mut app, root) = build_pdf_overlay_test_app("probe-prefetch-pages");
     let session = app
-        .pdf_preview
+        .preview
+        .pdf
         .session
         .as_mut()
         .expect("PDF session should exist");
@@ -169,7 +174,7 @@ fn apply_pdf_probe_build_prefetches_adjacent_page_probes_once_total_is_known() {
         .active_pdf_overlay_request()
         .expect("PDF overlay request should be available");
     let page_key = PdfPageKey::from_request(&request);
-    app.pdf_preview.pending_page_probes.insert(page_key);
+    app.preview.pdf.pending_page_probes.insert(page_key);
 
     let dirty = app.apply_pdf_probe_build(jobs::PdfProbeBuild {
         path: request.path.clone(),
@@ -184,19 +189,19 @@ fn apply_pdf_probe_build_prefetches_adjacent_page_probes_once_total_is_known() {
     });
 
     assert!(dirty);
-    assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+    assert!(app.preview.pdf.pending_page_probes.contains(&PdfPageKey {
         path: request.path.clone(),
         size: request.size,
         modified: request.modified,
         page: 1,
     }));
-    assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+    assert!(app.preview.pdf.pending_page_probes.contains(&PdfPageKey {
         path: request.path.clone(),
         size: request.size,
         modified: request.modified,
         page: 3,
     }));
-    assert!(app.pdf_preview.pending_page_probes.contains(&PdfPageKey {
+    assert!(app.preview.pdf.pending_page_probes.contains(&PdfPageKey {
         path: request.path,
         size: request.size,
         modified: request.modified,
@@ -240,11 +245,12 @@ fn remember_rendered_pdf_evicts_oldest_cached_page_when_limit_is_exceeded() {
         );
     }
 
-    assert_eq!(app.pdf_preview.rendered_pages.len(), PDF_RENDER_CACHE_LIMIT);
-    assert_eq!(app.pdf_preview.render_order.len(), PDF_RENDER_CACHE_LIMIT);
-    assert!(!app.pdf_preview.rendered_pages.contains_key(&first_key));
+    assert_eq!(app.preview.pdf.rendered_pages.len(), PDF_RENDER_CACHE_LIMIT);
+    assert_eq!(app.preview.pdf.render_order.len(), PDF_RENDER_CACHE_LIMIT);
+    assert!(!app.preview.pdf.rendered_pages.contains_key(&first_key));
     assert!(
-        !app.pdf_preview
+        !app.preview
+            .pdf
             .rendered_page_dimensions
             .contains_key(&first_key)
     );
@@ -257,7 +263,8 @@ fn remember_rendered_pdf_evicts_oldest_cached_page_when_limit_is_exceeded() {
 fn apply_pdf_render_build_prefetches_next_page_when_current_page_is_ready() {
     let (mut app, root) = build_pdf_overlay_test_app("render-prefetch-next");
     let session = app
-        .pdf_preview
+        .preview
+        .pdf
         .session
         .as_mut()
         .expect("PDF session should exist");
@@ -271,11 +278,12 @@ fn apply_pdf_render_build_prefetches_next_page_when_current_page_is_ready() {
             modified: None,
             page,
             area: app
+                .input
                 .frame_state
                 .preview_content_area
                 .expect("preview content area should be set"),
         };
-        app.pdf_preview.page_dimensions.insert(
+        app.preview.pdf.page_dimensions.insert(
             PdfPageKey::from_request(&request),
             PdfPageDimensions {
                 width_pts: 612.0,
@@ -290,7 +298,7 @@ fn apply_pdf_render_build_prefetches_next_page_when_current_page_is_ready() {
     let current_key = app
         .pdf_render_key_for_page(2)
         .expect("current PDF render key should be available");
-    app.pdf_preview.pending_renders.insert(current_key.clone());
+    app.preview.pdf.pending_renders.insert(current_key.clone());
 
     let rendered_path = root.join("current-page.png");
     fs::write(&rendered_path, b"png").expect("failed to write rendered page placeholder");
@@ -310,7 +318,7 @@ fn apply_pdf_render_build_prefetches_next_page_when_current_page_is_ready() {
         .expect("next page render key should be available");
 
     assert!(dirty);
-    assert!(app.pdf_preview.pending_renders.contains(&next_key));
+    assert!(app.preview.pdf.pending_renders.contains(&next_key));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

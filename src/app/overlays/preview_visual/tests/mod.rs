@@ -31,8 +31,8 @@ fn temp_root(label: &str) -> PathBuf {
 
 fn configure_terminal_image_support(app: &mut App) {
     let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
-    app.terminal_images.protocol = ImageProtocol::KittyGraphics;
-    app.terminal_images.window = Some(TerminalWindowSize {
+    app.preview.terminal_images.protocol = ImageProtocol::KittyGraphics;
+    app.preview.terminal_images.window = Some(TerminalWindowSize {
         cells_width,
         cells_height,
         pixels_width: 1920,

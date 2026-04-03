@@ -25,7 +25,7 @@ pub(super) fn render_grid(
         helpers::fill_area(frame, sb, palette.panel_alt, palette.border);
     }
 
-    let spec = helpers::grid_zoom_spec(app.zoom_level);
+    let spec = helpers::grid_zoom_spec(app.navigation.zoom_level);
     let gap_x = spec.gap_x;
     let gap_y = spec.gap_y;
     let cols = ((content_area.width + gap_x) / (spec.tile_width_hint + gap_x)).max(1) as usize;
@@ -35,15 +35,18 @@ pub(super) fn render_grid(
     let rows_visible = ((content_area.height + gap_y) / (spec.tile_height + gap_y)).max(1) as usize;
     state.metrics = ViewMetrics { cols, rows_visible };
 
-    if app.entries.is_empty() {
+    if app.navigation.entries.is_empty() {
         helpers::render_empty_state(frame, content_area, "This folder is empty", palette);
         return;
     }
 
-    let start = app.scroll_row * cols;
+    let start = app.navigation.scroll_row * cols;
     let limit = rows_visible * cols;
 
-    for (visible_index, entry_index) in (start..app.entries.len()).take(limit).enumerate() {
+    for (visible_index, entry_index) in (start..app.navigation.entries.len())
+        .take(limit)
+        .enumerate()
+    {
         let row = visible_index / cols;
         let col = visible_index % cols;
         let tile_x = content_area.x + col as u16 * (tile_width + gap_x);
@@ -61,9 +64,9 @@ pub(super) fn render_grid(
             width: actual_tile_width,
             height: spec.tile_height,
         };
-        let entry = &app.entries[entry_index];
+        let entry = &app.navigation.entries[entry_index];
         let tile_state = TileState {
-            selected: entry_index == app.selected,
+            selected: entry_index == app.navigation.selected,
             multi_selected: app.is_selected(&entry.path),
             clip_op: app.clipboard_op_for(&entry.path),
         };
@@ -75,8 +78,15 @@ pub(super) fn render_grid(
     }
 
     if let Some(sb) = scrollbar_area {
-        let total_rows = app.entries.len().div_ceil(cols);
-        render_browser_scrollbar(frame, sb, total_rows, rows_visible, app.scroll_row, palette);
+        let total_rows = app.navigation.entries.len().div_ceil(cols);
+        render_browser_scrollbar(
+            frame,
+            sb,
+            total_rows,
+            rows_visible,
+            app.navigation.scroll_row,
+            palette,
+        );
     }
 }
 

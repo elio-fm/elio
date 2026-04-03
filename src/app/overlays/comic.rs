@@ -29,15 +29,15 @@ struct ComicSession {
 impl App {
     pub(in crate::app) fn sync_comic_preview_selection(&mut self) {
         let Some(entry) = self.selected_entry() else {
-            self.comic_preview.session = None;
+            self.preview.comic.session = None;
             return;
         };
         if !is_comic_entry(entry) {
-            self.comic_preview.session = None;
+            self.preview.comic.session = None;
             return;
         }
 
-        let keep_session = self.comic_preview.session.as_ref().is_some_and(|session| {
+        let keep_session = self.preview.comic.session.as_ref().is_some_and(|session| {
             session.path == entry.path
                 && session.size == entry.size
                 && session.modified == entry.modified
@@ -46,7 +46,7 @@ impl App {
             return;
         }
 
-        self.comic_preview.session = Some(ComicSession {
+        self.preview.comic.session = Some(ComicSession {
             path: entry.path.clone(),
             size: entry.size,
             modified: entry.modified,
@@ -58,7 +58,8 @@ impl App {
     pub(in crate::app) fn comic_preview_request_options(
         &self,
     ) -> Option<preview::PreviewRequestOptions> {
-        self.comic_preview
+        self.preview
+            .comic
             .session
             .as_ref()
             .map(|session| preview::PreviewRequestOptions::ComicPage(session.current_page))
@@ -72,7 +73,7 @@ impl App {
     }
 
     pub(in crate::app) fn comic_preview_wheel_capture_active(&self) -> bool {
-        self.comic_preview.session.is_some()
+        self.preview.comic.session.is_some()
     }
 
     /// Called just after a page image (comic or fixed-layout EPUB) is rendered
@@ -81,7 +82,8 @@ impl App {
     /// whether to keep or clear the stale overlay on navigation.
     pub(in crate::app) fn record_comic_page_image_displayed(&mut self) {
         let is_page_image = self
-            .preview_state
+            .preview
+            .state
             .content
             .preview_visual
             .as_ref()
@@ -92,8 +94,9 @@ impl App {
             // session.  Both are updated in sync_*_preview_selection() which
             // runs inside refresh_preview(), so during a deferred navigation
             // they still point to the file whose page is actually on screen.
-            self.comic_preview.displayed_page_source = self
-                .comic_preview
+            self.preview.comic.displayed_page_source = self
+                .preview
+                .comic
                 .session
                 .as_ref()
                 .map(|s| s.path.clone())
@@ -107,12 +110,13 @@ impl App {
     /// Both being `None` is treated as matching (no session info available).
     pub(in crate::app) fn displayed_comic_page_belongs_to_current_session(&self) -> bool {
         let current_source = self
-            .comic_preview
+            .preview
+            .comic
             .session
             .as_ref()
             .map(|s| s.path.as_path())
             .or_else(|| self.epub_preview_session_path());
-        self.comic_preview.displayed_page_source.as_deref() == current_source
+        self.preview.comic.displayed_page_source.as_deref() == current_source
     }
 
     pub(in crate::app) fn apply_current_comic_preview_metadata(&mut self) {
@@ -122,14 +126,14 @@ impl App {
         else {
             return;
         };
-        let Some(session) = self.comic_preview.session.as_mut() else {
+        let Some(session) = self.preview.comic.session.as_mut() else {
             return;
         };
         if session.path != path || session.size != size || session.modified != modified {
             return;
         }
 
-        let Some(position) = self.preview_state.content.navigation_position.as_ref() else {
+        let Some(position) = self.preview.state.content.navigation_position.as_ref() else {
             return;
         };
         if position.label != "Page" {
@@ -144,7 +148,7 @@ impl App {
         &self,
         preview: preview::PreviewContent,
     ) -> preview::PreviewContent {
-        let Some(session) = self.comic_preview.session.as_ref() else {
+        let Some(session) = self.preview.comic.session.as_ref() else {
             return preview;
         };
         let Some(total_pages) = session.total_pages else {
@@ -166,13 +170,14 @@ impl App {
         delta: isize,
         preview_mode: PreviewRefreshMode,
     ) -> bool {
-        let Some(session) = self.comic_preview.session.as_mut() else {
+        let Some(session) = self.preview.comic.session.as_mut() else {
             return false;
         };
         let total_pages = session
             .total_pages
             .or(self
-                .preview_state
+                .preview
+                .state
                 .content
                 .navigation_position
                 .as_ref()
@@ -196,22 +201,22 @@ impl App {
 
         match preview_mode {
             PreviewRefreshMode::Immediate => {
-                self.image_preview.selection_activation_delay = std::time::Duration::ZERO;
-                self.preview_state.deferred_refresh_at = Some(Instant::now());
+                self.preview.image.selection_activation_delay = std::time::Duration::ZERO;
+                self.preview.state.deferred_refresh_at = Some(Instant::now());
                 self.refresh_preview();
             }
             PreviewRefreshMode::Deferred => {
-                self.last_selection_change_at = Instant::now();
-                self.image_preview.selection_activation_delay = IMAGE_SELECTION_ACTIVATION_DELAY;
-                self.preview_state.deferred_refresh_at =
+                self.input.last_selection_change_at = Instant::now();
+                self.preview.image.selection_activation_delay = IMAGE_SELECTION_ACTIVATION_DELAY;
+                self.preview.state.deferred_refresh_at =
                     Some(Instant::now() + HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY);
-                if let Some(position) = self.preview_state.content.navigation_position.as_mut()
+                if let Some(position) = self.preview.state.content.navigation_position.as_mut()
                     && position.label == "Page"
                 {
                     position.index = session.current_page;
                 }
-                self.preview_state.scroll = 0;
-                self.preview_state.horizontal_scroll = 0;
+                self.preview.state.scroll = 0;
+                self.preview.state.horizontal_scroll = 0;
                 self.sync_preview_scroll();
             }
         }
@@ -219,13 +224,14 @@ impl App {
     }
 
     pub(in crate::app) fn comic_prefetch_page_indices(&self) -> Vec<usize> {
-        let Some(session) = self.comic_preview.session.as_ref() else {
+        let Some(session) = self.preview.comic.session.as_ref() else {
             return Vec::new();
         };
         let total_pages = session
             .total_pages
             .or(self
-                .preview_state
+                .preview
+                .state
                 .content
                 .navigation_position
                 .as_ref()
@@ -269,7 +275,7 @@ impl App {
                 PreviewPriority::Low,
                 preview_work_class(&entry, &variant),
             );
-            let _ = self.scheduler.submit_preview(request);
+            let _ = self.jobs.scheduler.submit_preview(request);
         }
     }
 
@@ -300,7 +306,7 @@ impl App {
                 PreviewPriority::Low,
                 preview_work_class(&entry, &variant),
             );
-            let _ = self.scheduler.submit_preview(request);
+            let _ = self.jobs.scheduler.submit_preview(request);
         }
     }
 
@@ -313,7 +319,7 @@ impl App {
         if !is_comic_entry(entry) {
             return Vec::new();
         }
-        let Some(area) = self.frame_state.preview_media_area else {
+        let Some(area) = self.input.frame_state.preview_media_area else {
             return Vec::new();
         };
 
@@ -335,7 +341,7 @@ impl App {
     pub(in crate::app) fn nearby_comic_entry_preview_visual_overlay_requests(
         &self,
     ) -> Vec<crate::app::overlays::images::StaticImageOverlayRequest> {
-        let Some(area) = self.frame_state.preview_media_area else {
+        let Some(area) = self.input.frame_state.preview_media_area else {
             return Vec::new();
         };
 
@@ -371,7 +377,8 @@ impl App {
     }
 
     fn cached_comic_page_count(&self, entry: &Entry) -> Option<usize> {
-        self.preview_state
+        self.preview
+            .state
             .result_cache
             .iter()
             .find_map(|(key, cached)| {
@@ -391,7 +398,8 @@ impl App {
         path: &std::path::Path,
         page: usize,
     ) -> bool {
-        self.preview_state
+        self.preview
+            .state
             .result_cache
             .contains_key(&PreviewCacheKey {
                 path: path.to_path_buf(),
@@ -412,10 +420,10 @@ impl App {
         COMIC_ENTRY_PREFETCH_OFFSETS
             .into_iter()
             .filter_map(|offset| {
-                let target = self.selected as isize + offset;
+                let target = self.navigation.selected as isize + offset;
                 (target >= 0)
                     .then_some(target as usize)
-                    .and_then(|index| self.entries.get(index))
+                    .and_then(|index| self.navigation.entries.get(index))
                     .filter(|candidate| is_comic_entry(candidate))
                     .cloned()
             })

@@ -13,7 +13,7 @@ use std::fs;
 
 impl App {
     pub(in crate::app) fn open_rename_prompt(&mut self) {
-        if self.in_trash {
+        if self.navigation.in_trash {
             return;
         }
         let Some(entry) = self.selected_entry() else {
@@ -22,12 +22,12 @@ impl App {
         let name = entry.name.clone();
         let is_dir = entry.is_dir();
         let cursor_col = cursor_before_extension(&name);
-        self.help_open = false;
-        self.search = None;
-        self.create = None;
-        self.trash = None;
-        self.restore = None;
-        self.rename = Some(RenameOverlay {
+        self.overlays.help = false;
+        self.overlays.search = None;
+        self.overlays.create = None;
+        self.overlays.trash = None;
+        self.overlays.restore = None;
+        self.overlays.rename = Some(RenameOverlay {
             is_dir,
             original_name: name.clone(),
             input: name,
@@ -37,38 +37,44 @@ impl App {
     }
 
     pub fn rename_is_open(&self) -> bool {
-        self.rename.is_some()
+        self.overlays.rename.is_some()
     }
 
     pub fn rename_input(&self) -> &str {
-        self.rename.as_ref().map_or("", |r| &r.input)
+        self.overlays.rename.as_ref().map_or("", |r| &r.input)
     }
 
     pub fn rename_cursor_col(&self) -> usize {
-        self.rename.as_ref().map_or(0, |r| r.cursor_col)
+        self.overlays.rename.as_ref().map_or(0, |r| r.cursor_col)
     }
 
     pub fn rename_original_name(&self) -> &str {
-        self.rename.as_ref().map_or("", |r| &r.original_name)
+        self.overlays
+            .rename
+            .as_ref()
+            .map_or("", |r| &r.original_name)
     }
 
     pub fn rename_item_is_dir(&self) -> bool {
-        self.rename.as_ref().is_some_and(|r| r.is_dir)
+        self.overlays.rename.as_ref().is_some_and(|r| r.is_dir)
     }
 
     pub fn rename_error(&self) -> Option<&str> {
-        self.rename.as_ref().and_then(|r| r.error.as_deref())
+        self.overlays
+            .rename
+            .as_ref()
+            .and_then(|r| r.error.as_deref())
     }
 
     pub(in crate::app) fn handle_rename_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.rename = None;
+            self.overlays.rename = None;
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.rename = None;
+                self.overlays.rename = None;
             }
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 self.confirm_rename()?;
@@ -77,7 +83,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.rename {
+                if let Some(r) = &mut self.overlays.rename {
                     let new_col = previous_word_start(&r.input, r.cursor_col);
                     r.cursor_col = new_col;
                 }
@@ -86,18 +92,18 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.rename {
+                if let Some(r) = &mut self.overlays.rename {
                     let new_col = next_word_start(&r.input, r.cursor_col);
                     r.cursor_col = new_col;
                 }
             }
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.rename {
+                if let Some(r) = &mut self.overlays.rename {
                     r.cursor_col = r.cursor_col.saturating_sub(1);
                 }
             }
             KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.rename {
+                if let Some(r) = &mut self.overlays.rename {
                     let len = r.input.chars().count();
                     if r.cursor_col < len {
                         r.cursor_col += 1;
@@ -105,12 +111,12 @@ impl App {
                 }
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.rename {
+                if let Some(r) = &mut self.overlays.rename {
                     r.cursor_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.rename {
+                if let Some(r) = &mut self.overlays.rename {
                     r.cursor_col = r.input.chars().count();
                 }
             }
@@ -118,7 +124,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.rename
+                if let Some(r) = &mut self.overlays.rename
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.input, r.cursor_col);
@@ -131,7 +137,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.rename
+                if let Some(r) = &mut self.overlays.rename
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.input, r.cursor_col);
@@ -144,7 +150,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.rename {
+                if let Some(r) = &mut self.overlays.rename {
                     let end = next_delete_end(&r.input, r.cursor_col);
                     remove_char_range(&mut r.input, r.cursor_col, end);
                     r.error = None;
@@ -154,14 +160,14 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                if let Some(r) = &mut self.rename {
+                if let Some(r) = &mut self.overlays.rename {
                     let end = next_delete_end(&r.input, r.cursor_col);
                     remove_char_range(&mut r.input, r.cursor_col, end);
                     r.error = None;
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.rename
+                if let Some(r) = &mut self.overlays.rename
                     && r.cursor_col > 0
                 {
                     let start = char_to_byte(&r.input, r.cursor_col - 1);
@@ -172,7 +178,7 @@ impl App {
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.rename {
+                if let Some(r) = &mut self.overlays.rename {
                     let len = r.input.chars().count();
                     if r.cursor_col < len {
                         let start = char_to_byte(&r.input, r.cursor_col);
@@ -187,7 +193,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.rename {
+                if let Some(r) = &mut self.overlays.rename {
                     let byte = char_to_byte(&r.input, r.cursor_col);
                     r.input.insert(byte, ch);
                     r.cursor_col += 1;
@@ -202,53 +208,55 @@ impl App {
     pub(in crate::app) fn handle_rename_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
             let inside = self
+                .input
                 .frame_state
                 .rename_panel
                 .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
             if !inside {
-                self.rename = None;
+                self.overlays.rename = None;
             }
         }
         Ok(())
     }
 
     pub(in crate::app::create) fn confirm_rename(&mut self) -> Result<()> {
-        let Some(r) = &self.rename else {
+        let Some(r) = &self.overlays.rename else {
             return Ok(());
         };
         let new_name = r.input.trim().to_string();
         let original_name = r.original_name.clone();
 
         if new_name.is_empty() {
-            if let Some(r) = &mut self.rename {
+            if let Some(r) = &mut self.overlays.rename {
                 r.error = Some("Name cannot be empty".to_string());
             }
             return Ok(());
         }
         if new_name.contains('/') {
-            if let Some(r) = &mut self.rename {
+            if let Some(r) = &mut self.overlays.rename {
                 r.error = Some("Name cannot contain /".to_string());
             }
             return Ok(());
         }
         if new_name == original_name {
-            self.rename = None;
+            self.overlays.rename = None;
             return Ok(());
         }
-        let new_path = self.cwd.join(&new_name);
+        let new_path = self.navigation.cwd.join(&new_name);
         if new_path.exists() {
-            if let Some(r) = &mut self.rename {
+            if let Some(r) = &mut self.overlays.rename {
                 r.error = Some(format!("\"{}\" already exists", new_name));
             }
             return Ok(());
         }
 
         let Some(entry) = self
+            .navigation
             .entries
             .iter()
             .find(|entry| entry.name == original_name)
         else {
-            self.rename = None;
+            self.overlays.rename = None;
             return Ok(());
         };
         let old_path = entry.path.clone();
@@ -260,18 +268,18 @@ impl App {
                 }
                 _ => format!("Could not rename: {error}"),
             };
-            if let Some(r) = &mut self.rename {
+            if let Some(r) = &mut self.overlays.rename {
                 r.error = Some(msg);
             }
             return Ok(());
         }
 
-        self.rename = None;
+        self.overlays.rename = None;
         let status = format!("Renamed \"{}\" → \"{}\"", original_name, new_name);
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
-            target_cwd: self.cwd.clone(),
-            previous_cwd: self.cwd.clone(),
+            target_cwd: self.navigation.cwd.clone(),
+            previous_cwd: self.navigation.cwd.clone(),
             previous_selected_path: None,
             previous_selection_name: None,
             reselect_path: Some(new_path),

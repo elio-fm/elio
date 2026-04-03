@@ -61,8 +61,8 @@ impl App {
             placement,
             self.static_image_clear_area(&request),
         );
-        let image_changed = self.image_preview.displayed.as_ref() != Some(&displayed);
-        let excluded_changed = excluded != self.image_preview.displayed_excluded.as_slice();
+        let image_changed = self.preview.image.displayed.as_ref() != Some(&displayed);
+        let excluded_changed = excluded != self.preview.image.displayed_excluded.as_slice();
         let needs_repaint = force_repaint && protocol == ImageProtocol::ItermInline;
         if !image_changed && !excluded_changed && !needs_repaint {
             preview_log("present_static_image_overlay: already displayed → Displayed");
@@ -98,8 +98,8 @@ impl App {
             }
         }
 
-        self.image_preview.displayed = Some(displayed);
-        self.image_preview.displayed_excluded = excluded.to_vec();
+        self.preview.image.displayed = Some(displayed);
+        self.preview.image.displayed_excluded = excluded.to_vec();
         self.clear_pending_iterm_popup_restore();
         Ok(OverlayPresentState::Displayed)
     }
@@ -151,8 +151,8 @@ impl App {
             placement,
             self.static_image_clear_area(&request),
         );
-        let image_changed = self.image_preview.displayed.as_ref() != Some(&displayed);
-        let excluded_changed = excluded != self.image_preview.displayed_excluded.as_slice();
+        let image_changed = self.preview.image.displayed.as_ref() != Some(&displayed);
+        let excluded_changed = excluded != self.preview.image.displayed_excluded.as_slice();
         let needs_repaint = force_repaint && protocol == ImageProtocol::ItermInline;
         if !image_changed && !excluded_changed && !needs_repaint {
             preview_log("present_preview_visual_overlay: already displayed → Displayed");
@@ -184,9 +184,9 @@ impl App {
             }
         }
 
-        self.image_preview.displayed = Some(displayed);
+        self.preview.image.displayed = Some(displayed);
         self.record_comic_page_image_displayed();
-        self.image_preview.displayed_excluded = excluded.to_vec();
+        self.preview.image.displayed_excluded = excluded.to_vec();
         self.clear_pending_iterm_popup_restore();
         Ok(OverlayPresentState::Displayed)
     }
@@ -197,7 +197,8 @@ impl App {
             .or_else(|| self.active_preview_visual_overlay_request_unchecked())?;
         let window_size = self.cached_terminal_window()?;
         let image_dimensions = self
-            .image_preview
+            .preview
+            .image
             .dimensions
             .get(&StaticImageKey::from_request(&request))
             .copied()?;
@@ -209,15 +210,17 @@ impl App {
     }
 
     fn static_image_clear_area(&self, request: &StaticImageOverlayRequest) -> Rect {
-        if self.terminal_images.protocol == ImageProtocol::ItermInline {
+        if self.preview.terminal_images.protocol == ImageProtocol::ItermInline {
             if request.mode == StaticImageOverlayMode::Inline {
                 return self
+                    .input
                     .frame_state
                     .preview_body_area
                     .or_else(|| self.preview_body_area())
                     .unwrap_or(request.area);
             }
             return self
+                .input
                 .frame_state
                 .preview_content_area
                 .unwrap_or(request.area);
@@ -227,8 +230,8 @@ impl App {
 
     fn preview_body_area(&self) -> Option<Rect> {
         match (
-            self.frame_state.preview_media_area,
-            self.frame_state.preview_content_area,
+            self.input.frame_state.preview_media_area,
+            self.input.frame_state.preview_content_area,
         ) {
             (Some(media), Some(content)) => Some(union_rect(media, content)),
             (Some(media), None) => Some(media),
@@ -243,7 +246,7 @@ impl App {
         dimensions: RenderedImageDimensions,
         window_size: TerminalWindowSize,
     ) -> Rect {
-        if self.terminal_images.protocol == ImageProtocol::KittyGraphics {
+        if self.preview.terminal_images.protocol == ImageProtocol::KittyGraphics {
             request.area
         } else {
             fit_image_area(

@@ -17,12 +17,12 @@ impl App {
         if let Some(path) = self.cached_pdf_render_path(key) {
             return Some(path);
         }
-        if self.pdf_preview.failed_renders.contains(key)
-            || self.pdf_preview.pending_renders.contains(key)
+        if self.preview.pdf.failed_renders.contains(key)
+            || self.preview.pdf.pending_renders.contains(key)
         {
             return None;
         }
-        if !self.scheduler.submit_pdf_render(
+        if !self.jobs.scheduler.submit_pdf_render(
             jobs::PdfRenderRequest {
                 path: key.path.clone(),
                 size: key.size,
@@ -33,10 +33,10 @@ impl App {
             },
             jobs::PdfJobPriority::Current,
         ) {
-            self.pdf_preview.failed_renders.insert(key.clone());
+            self.preview.pdf.failed_renders.insert(key.clone());
             return None;
         }
-        self.pdf_preview.pending_renders.insert(key.clone());
+        self.preview.pdf.pending_renders.insert(key.clone());
         None
     }
 
@@ -45,15 +45,15 @@ impl App {
         request: &PdfOverlayRequest,
     ) -> Option<PdfPageDimensions> {
         let key = PdfPageKey::from_request(request);
-        if let Some(dimensions) = self.pdf_preview.page_dimensions.get(&key).copied() {
+        if let Some(dimensions) = self.preview.pdf.page_dimensions.get(&key).copied() {
             return Some(dimensions);
         }
-        if self.pdf_preview.failed_page_probes.contains(&key)
-            || self.pdf_preview.pending_page_probes.contains(&key)
+        if self.preview.pdf.failed_page_probes.contains(&key)
+            || self.preview.pdf.pending_page_probes.contains(&key)
         {
             return None;
         }
-        if !self.scheduler.submit_pdf_probe(
+        if !self.jobs.scheduler.submit_pdf_probe(
             jobs::PdfProbeRequest {
                 path: request.path.clone(),
                 size: request.size,
@@ -62,10 +62,10 @@ impl App {
             },
             jobs::PdfJobPriority::Current,
         ) {
-            self.pdf_preview.failed_page_probes.insert(key);
+            self.preview.pdf.failed_page_probes.insert(key);
             return None;
         }
-        self.pdf_preview.pending_page_probes.insert(key);
+        self.preview.pdf.pending_page_probes.insert(key);
         None
     }
 
@@ -79,27 +79,28 @@ impl App {
     }
 
     fn cached_pdf_page_dimensions(&self, request: &PdfOverlayRequest) -> Option<PdfPageDimensions> {
-        self.pdf_preview
+        self.preview
+            .pdf
             .page_dimensions
             .get(&PdfPageKey::from_request(request))
             .copied()
     }
 
     pub(super) fn cached_pdf_render_path(&mut self, key: &PdfRenderKey) -> Option<PathBuf> {
-        if let Some(path) = self.pdf_preview.rendered_pages.get(key)
+        if let Some(path) = self.preview.pdf.rendered_pages.get(key)
             && path.exists()
         {
             return Some(path.clone());
         }
 
-        self.pdf_preview.rendered_pages.remove(key);
-        self.pdf_preview.rendered_page_dimensions.remove(key);
-        self.pdf_preview.render_order.retain(|queued| queued != key);
+        self.preview.pdf.rendered_pages.remove(key);
+        self.preview.pdf.rendered_page_dimensions.remove(key);
+        self.preview.pdf.render_order.retain(|queued| queued != key);
         None
     }
 
     pub(super) fn cached_render_exists(&self, key: &PdfRenderKey) -> bool {
-        self.pdf_preview.rendered_pages.contains_key(key)
+        self.preview.pdf.rendered_pages.contains_key(key)
     }
 
     pub(super) fn remember_rendered_pdf(
@@ -108,21 +109,23 @@ impl App {
         path: PathBuf,
         dimensions: Option<RenderedImageDimensions>,
     ) {
-        self.pdf_preview.rendered_pages.insert(key.clone(), path);
+        self.preview.pdf.rendered_pages.insert(key.clone(), path);
         if let Some(dimensions) = dimensions {
-            self.pdf_preview
+            self.preview
+                .pdf
                 .rendered_page_dimensions
                 .insert(key.clone(), dimensions);
         }
-        self.pdf_preview
+        self.preview
+            .pdf
             .render_order
             .retain(|queued| queued != &key);
-        self.pdf_preview.render_order.push_back(key);
-        while self.pdf_preview.render_order.len() > PDF_RENDER_CACHE_LIMIT {
-            if let Some(stale_key) = self.pdf_preview.render_order.pop_front()
-                && let Some(stale_path) = self.pdf_preview.rendered_pages.remove(&stale_key)
+        self.preview.pdf.render_order.push_back(key);
+        while self.preview.pdf.render_order.len() > PDF_RENDER_CACHE_LIMIT {
+            if let Some(stale_key) = self.preview.pdf.render_order.pop_front()
+                && let Some(stale_path) = self.preview.pdf.rendered_pages.remove(&stale_key)
             {
-                self.pdf_preview.rendered_page_dimensions.remove(&stale_key);
+                self.preview.pdf.rendered_page_dimensions.remove(&stale_key);
                 let _ = fs::remove_file(stale_path);
             }
         }
@@ -164,12 +167,13 @@ impl App {
         key: &PdfRenderKey,
         rendered: &Path,
     ) -> Option<RenderedImageDimensions> {
-        if let Some(dimensions) = self.pdf_preview.rendered_page_dimensions.get(key).copied() {
+        if let Some(dimensions) = self.preview.pdf.rendered_page_dimensions.get(key).copied() {
             return Some(dimensions);
         }
 
         let dimensions = read_png_dimensions(rendered)?;
-        self.pdf_preview
+        self.preview
+            .pdf
             .rendered_page_dimensions
             .insert(key.clone(), dimensions);
         Some(dimensions)
@@ -183,7 +187,8 @@ impl App {
         let window_size = self.cached_terminal_window()?;
         let render_key = self.pdf_render_key_from_request(request, fallback);
         let image_dimensions = self
-            .pdf_preview
+            .preview
+            .pdf
             .rendered_page_dimensions
             .get(&render_key)
             .copied()?;

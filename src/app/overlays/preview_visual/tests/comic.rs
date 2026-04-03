@@ -28,15 +28,15 @@ fn comic_jpeg_page_prepares_in_background_before_display() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.entries.clear();
-    app.selected = 0;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.entries.clear();
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -50,14 +50,14 @@ fn comic_jpeg_page_prepares_in_background_before_display() {
     let key = StaticImageKey::from_request(&request);
 
     app.refresh_static_image_preloads();
-    assert!(app.image_preview.pending_prepares.contains(&key));
+    assert!(app.preview.image.pending_prepares.contains(&key));
     app.present_preview_overlay()
         .expect("presenting a comic jpeg overlay should not fail");
     assert!(!app.static_image_overlay_displayed());
     wait_for_displayed_preview_overlay(&mut app);
 
     assert!(app.static_image_overlay_displayed());
-    assert!(app.image_preview.dimensions.contains_key(&key));
+    assert!(app.preview.image.dimensions.contains_key(&key));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -77,15 +77,15 @@ fn comic_overlay_keeps_previous_page_visible_while_next_page_waits() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.entries.clear();
-    app.selected = 0;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.entries.clear();
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -98,7 +98,7 @@ fn comic_overlay_keeps_previous_page_visible_while_next_page_waits() {
     wait_for_displayed_preview_overlay(&mut app);
     assert!(app.static_image_overlay_displayed());
 
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -111,13 +111,13 @@ fn comic_overlay_keeps_previous_page_visible_while_next_page_waits() {
         .expect("next comic preview request should be available");
     let next_key = StaticImageKey::from_request(&next_request);
     app.refresh_static_image_preloads();
-    app.last_selection_change_at = Instant::now() - std::time::Duration::from_secs(1);
+    app.input.last_selection_change_at = Instant::now() - std::time::Duration::from_secs(1);
     app.sync_image_preview_selection_activation();
 
     app.present_preview_overlay()
         .expect("pending comic page transition should not fail");
     assert!(app.static_image_overlay_displayed());
-    assert!(app.image_preview.pending_prepares.contains(&next_key));
+    assert!(app.preview.image.pending_prepares.contains(&next_key));
     assert!(!app.displayed_static_image_matches_active());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -142,15 +142,15 @@ fn comic_overlay_clears_previous_file_page_while_next_comic_preview_loads() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.entries.clear();
-    app.selected = 0;
-    app.frame_state.preview_media_area = Some(Rect {
+    app.navigation.entries.clear();
+    app.navigation.selected = 0;
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_navigation_position("Page", 0, 2, None)
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
@@ -163,7 +163,7 @@ fn comic_overlay_clears_previous_file_page_while_next_comic_preview_loads() {
     wait_for_displayed_preview_overlay(&mut app);
     assert!(app.static_image_overlay_displayed());
 
-    app.entries = vec![Entry {
+    app.navigation.entries = vec![Entry {
         path: archive.clone(),
         name: "issue.cbz".to_string(),
         name_key: "issue.cbz".to_string(),
@@ -172,11 +172,11 @@ fn comic_overlay_clears_previous_file_page_while_next_comic_preview_loads() {
         modified: archive_metadata.modified().ok(),
         readonly: false,
     }];
-    app.selected = 0;
+    app.navigation.selected = 0;
     app.sync_comic_preview_selection();
-    app.preview_state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_navigation_position("Page", 1, 2, None);
-    app.preview_state.load_state = Some(PreviewLoadState::Placeholder(archive));
+    app.preview.state.load_state = Some(PreviewLoadState::Placeholder(archive));
     app.present_preview_overlay()
         .expect("presenting the overlay during cross-file loading should not fail");
 
@@ -219,10 +219,10 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
     // Advance the preview token so any preview job submitted by App::new_at
     // for the initial directory scan becomes stale and cannot overwrite the
     // manually-set preview content below.
-    app.preview_state.token = app.preview_state.token.wrapping_add(1);
+    app.preview.state.token = app.preview.state.token.wrapping_add(1);
 
     // Select epub_a and display its page image.
-    app.entries = vec![crate::app::Entry {
+    app.navigation.entries = vec![crate::app::Entry {
         path: epub_a.clone(),
         name: "book_a.epub".to_string(),
         name_key: "book_a.epub".to_string(),
@@ -231,15 +231,15 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
         modified: epub_a_meta.modified().ok(),
         readonly: false,
     }];
-    app.selected = 0;
+    app.navigation.selected = 0;
     app.sync_epub_preview_selection();
-    app.frame_state.preview_media_area = Some(Rect {
+    app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.preview_state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
+    app.preview.state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
         .with_preview_visual(PreviewVisual {
             kind: PreviewVisualKind::PageImage,
             layout: PreviewVisualLayout::FullHeight,
@@ -253,7 +253,7 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
 
     // Navigate to epub_b: update the entry, sync the EPUB session, and put the
     // preview into the loading (Placeholder) state with no visual yet.
-    app.entries = vec![crate::app::Entry {
+    app.navigation.entries = vec![crate::app::Entry {
         path: epub_b.clone(),
         name: "book_b.epub".to_string(),
         name_key: "book_b.epub".to_string(),
@@ -262,11 +262,11 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
         modified: epub_b_meta.modified().ok(),
         readonly: false,
     }];
-    app.selected = 0;
+    app.navigation.selected = 0;
     app.sync_epub_preview_selection();
-    app.preview_state.content =
+    app.preview.state.content =
         PreviewContent::new(PreviewKind::Document, Vec::new()).with_detail("EPUB ebook");
-    app.preview_state.load_state = Some(crate::app::state::PreviewLoadState::Placeholder(epub_b));
+    app.preview.state.load_state = Some(crate::app::state::PreviewLoadState::Placeholder(epub_b));
 
     app.present_preview_overlay()
         .expect("presenting overlay during cross-EPUB loading should not fail");

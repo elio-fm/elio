@@ -16,35 +16,35 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
-        if self.trash.is_some() {
+        if self.overlays.trash.is_some() {
             return self.handle_trash_key(key);
         }
 
-        if self.restore.is_some() {
+        if self.overlays.restore.is_some() {
             return self.handle_restore_key(key);
         }
 
-        if self.create.is_some() {
+        if self.overlays.create.is_some() {
             return self.handle_create_key(key);
         }
 
-        if self.rename.is_some() {
+        if self.overlays.rename.is_some() {
             return self.handle_rename_key(key);
         }
 
-        if self.bulk_rename.is_some() {
+        if self.overlays.bulk_rename.is_some() {
             return self.handle_bulk_rename_key(key);
         }
 
-        if self.goto_overlay.is_some() {
+        if self.overlays.goto.is_some() {
             return self.handle_goto_key(key);
         }
 
-        if self.copy_overlay.is_some() {
+        if self.overlays.copy.is_some() {
             return self.handle_copy_key(key);
         }
 
-        if self.search.is_some() {
+        if self.overlays.search.is_some() {
             return self.handle_search_key(key);
         }
 
@@ -52,41 +52,41 @@ impl App {
             return Ok(());
         }
 
-        if self.help_open {
+        if self.overlays.help {
             if key.modifiers.contains(KeyModifiers::CONTROL)
                 && matches!(key.code, KeyCode::Char('c'))
             {
-                self.help_open = false;
+                self.overlays.help = false;
                 return Ok(());
             }
             if key.code == KeyCode::Esc {
-                self.help_open = false;
+                self.overlays.help = false;
             }
             if is_help_shortcut(key) {
-                self.help_open = false;
+                self.overlays.help = false;
             }
             return Ok(());
         }
 
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            if let Some(prog) = &self.trash_progress {
-                self.scheduler.cancel_trash(self.trash_token);
+            if let Some(prog) = &self.jobs.trash_progress {
+                self.jobs.scheduler.cancel_trash(self.jobs.trash_token);
                 if prog.permanent {
                     // Permanent delete can be stopped between items; clear chip immediately.
-                    self.trash_progress = None;
+                    self.jobs.trash_progress = None;
                 }
                 // Non-permanent: the batch OS call is atomic and may already be
                 // in flight.  Keep the chip visible; done=true will clear it.
-            } else if self.restore_progress.is_some() {
-                self.scheduler.cancel_restore(self.restore_token);
-                self.restore_progress = None;
-            } else if self.paste_progress.is_some() {
-                self.scheduler.cancel_paste(self.paste_token);
-                self.paste_progress = None;
+            } else if self.jobs.restore_progress.is_some() {
+                self.jobs.scheduler.cancel_restore(self.jobs.restore_token);
+                self.jobs.restore_progress = None;
+            } else if self.jobs.paste_progress.is_some() {
+                self.jobs.scheduler.cancel_paste(self.jobs.paste_token);
+                self.jobs.paste_progress = None;
                 self.clear_queued_pastes();
             } else {
                 self.clear_selection();
-                self.clipboard = None;
+                self.jobs.clipboard = None;
             }
             return Ok(());
         }
@@ -112,7 +112,7 @@ impl App {
             }
         }
 
-        if self.wheel_profile == WheelProfile::HighFrequency
+        if self.input.wheel_profile == WheelProfile::HighFrequency
             && key.modifiers.contains(KeyModifiers::ALT)
             && !key.modifiers.contains(KeyModifiers::CONTROL)
         {
@@ -164,40 +164,40 @@ impl App {
 
         match key.code {
             KeyCode::Esc => {
-                if let Some(prog) = &self.trash_progress {
-                    self.scheduler.cancel_trash(self.trash_token);
+                if let Some(prog) = &self.jobs.trash_progress {
+                    self.jobs.scheduler.cancel_trash(self.jobs.trash_token);
                     if prog.permanent {
-                        self.trash_progress = None;
+                        self.jobs.trash_progress = None;
                     }
-                } else if self.restore_progress.is_some() {
-                    self.scheduler.cancel_restore(self.restore_token);
-                    self.restore_progress = None;
-                } else if self.paste_progress.is_some() {
-                    self.scheduler.cancel_paste(self.paste_token);
-                    self.paste_progress = None;
+                } else if self.jobs.restore_progress.is_some() {
+                    self.jobs.scheduler.cancel_restore(self.jobs.restore_token);
+                    self.jobs.restore_progress = None;
+                } else if self.jobs.paste_progress.is_some() {
+                    self.jobs.scheduler.cancel_paste(self.jobs.paste_token);
+                    self.jobs.paste_progress = None;
                     self.clear_queued_pastes();
                 } else {
                     self.clear_selection();
-                    self.clipboard = None;
+                    self.jobs.clipboard = None;
                 }
             }
             _ if is_help_shortcut(key) => {
                 self.clear_wheel_scroll();
-                self.help_open = true;
+                self.overlays.help = true;
             }
             KeyCode::Tab => self.step_sidebar_place(1)?,
             KeyCode::BackTab => self.step_sidebar_place(-1)?,
             KeyCode::Up | KeyCode::Char('k') => self.move_vertical_keyboard(-1),
             KeyCode::Down | KeyCode::Char('j') => self.move_vertical_keyboard(1),
             KeyCode::Left | KeyCode::Char('h') => {
-                if self.view_mode == ViewMode::Grid {
+                if self.navigation.view_mode == ViewMode::Grid {
                     self.move_by_keyboard(-1);
                 } else {
                     self.go_parent()?;
                 }
             }
             KeyCode::Right | KeyCode::Char('l') => {
-                if self.view_mode == ViewMode::Grid {
+                if self.navigation.view_mode == ViewMode::Grid {
                     self.move_by_keyboard(1);
                 } else if self.selected_entry().is_some_and(Entry::is_dir) {
                     self.open_selected()?;
@@ -214,15 +214,19 @@ impl App {
             KeyCode::Enter => self.open_selected()?,
             KeyCode::Backspace => self.go_parent()?,
             KeyCode::Char(' ') => self.toggle_selection(),
-            KeyCode::Char('+') | KeyCode::Char('=') if self.view_mode == ViewMode::Grid => {
+            KeyCode::Char('+') | KeyCode::Char('=')
+                if self.navigation.view_mode == ViewMode::Grid =>
+            {
                 self.adjust_zoom(1);
             }
-            KeyCode::Char('-') | KeyCode::Char('_') if self.view_mode == ViewMode::Grid => {
+            KeyCode::Char('-') | KeyCode::Char('_')
+                if self.navigation.view_mode == ViewMode::Grid =>
+            {
                 self.adjust_zoom(-1);
             }
             KeyCode::F(2) => {
-                if !self.in_trash {
-                    if !self.selected_paths.is_empty() {
+                if !self.navigation.in_trash {
+                    if !self.navigation.selected_paths.is_empty() {
                         self.open_bulk_rename_prompt();
                     } else {
                         self.open_rename_prompt();
@@ -249,9 +253,9 @@ impl App {
             Action::Trash => self.open_trash_prompt(),
             Action::Create => self.open_create_prompt(),
             Action::Rename => {
-                if self.in_trash {
+                if self.navigation.in_trash {
                     self.open_restore_prompt();
-                } else if !self.selected_paths.is_empty() {
+                } else if !self.navigation.selected_paths.is_empty() {
                     self.open_bulk_rename_prompt();
                 } else {
                     self.open_rename_prompt();
@@ -280,6 +284,7 @@ impl App {
 
         let now = Instant::now();
         if self
+            .input
             .last_navigation_key
             .is_some_and(|(previous_key, previous_at)| {
                 previous_key == navigation_key
@@ -289,7 +294,7 @@ impl App {
             return true;
         }
 
-        self.last_navigation_key = Some((navigation_key, now));
+        self.input.last_navigation_key = Some((navigation_key, now));
         false
     }
 

@@ -34,8 +34,8 @@ fn browser_wheel_updates_selection_and_preview_immediately() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::Default;
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::Default;
     app.select_index(0);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
@@ -50,7 +50,7 @@ fn browser_wheel_updates_selection_and_preview_immediately() {
         },
         ..FrameState::default()
     });
-    let initial_preview_token = app.preview_state.token;
+    let initial_preview_token = app.preview.state.token;
 
     app.handle_event(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
@@ -61,9 +61,9 @@ fn browser_wheel_updates_selection_and_preview_immediately() {
     .expect("scroll down should be handled");
     assert!(app.process_pending_scroll());
 
-    assert_eq!(app.selected, 1);
-    assert_eq!(app.scroll_row, 1);
-    assert!(app.preview_state.token > initial_preview_token);
+    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.navigation.scroll_row, 1);
+    assert!(app.preview.state.token > initial_preview_token);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -77,8 +77,8 @@ fn high_frequency_browser_wheel_moves_selection_immediately() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::HighFrequency;
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
@@ -93,7 +93,7 @@ fn high_frequency_browser_wheel_moves_selection_immediately() {
         },
         ..FrameState::default()
     });
-    let initial_preview_token = app.preview_state.token;
+    let initial_preview_token = app.preview.state.token;
 
     app.handle_event(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
@@ -103,9 +103,9 @@ fn high_frequency_browser_wheel_moves_selection_immediately() {
     }))
     .expect("scroll down should be handled");
 
-    assert_eq!(app.selected, 1);
-    assert_eq!(app.scroll_row, 1);
-    assert!(app.preview_state.token > initial_preview_token);
+    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.navigation.scroll_row, 1);
+    assert!(app.preview.state.token > initial_preview_token);
     assert!(!app.has_pending_scroll());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -121,8 +121,8 @@ fn high_frequency_browser_wheel_keeps_large_flick_distance() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::HighFrequency;
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
@@ -148,8 +148,8 @@ fn high_frequency_browser_wheel_keeps_large_flick_distance() {
         .expect("scroll down should be handled");
     }
 
-    assert_eq!(app.selected, 4);
-    assert_eq!(app.scroll_row, 4);
+    assert_eq!(app.navigation.selected, 4);
+    assert_eq!(app.navigation.scroll_row, 4);
     assert!(!app.has_pending_scroll());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -164,8 +164,8 @@ fn high_frequency_browser_wheel_defers_preview_refresh_during_burst() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::HighFrequency;
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
@@ -181,7 +181,7 @@ fn high_frequency_browser_wheel_defers_preview_refresh_during_burst() {
         ..FrameState::default()
     });
 
-    let initial_token = app.preview_state.token;
+    let initial_token = app.preview.state.token;
     app.handle_event(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
         column: 1,
@@ -189,7 +189,7 @@ fn high_frequency_browser_wheel_defers_preview_refresh_during_burst() {
         modifiers: KeyModifiers::NONE,
     }))
     .expect("first scroll down should be handled");
-    let after_first_token = app.preview_state.token;
+    let after_first_token = app.preview.state.token;
     assert!(after_first_token > initial_token);
 
     app.handle_event(Event::Mouse(MouseEvent {
@@ -200,12 +200,12 @@ fn high_frequency_browser_wheel_defers_preview_refresh_during_burst() {
     }))
     .expect("second scroll down should be handled");
 
-    assert_eq!(app.selected, 2);
-    assert_eq!(app.preview_state.token, after_first_token);
+    assert_eq!(app.navigation.selected, 2);
+    assert_eq!(app.preview.state.token, after_first_token);
 
     thread::sleep(HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY + Duration::from_millis(20));
     assert!(app.process_preview_refresh_timers());
-    assert!(app.preview_state.token > after_first_token);
+    assert!(app.preview.state.token > after_first_token);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -219,8 +219,8 @@ fn high_frequency_browser_wheel_requests_post_burst_redraw() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
-    app.wheel_profile = WheelProfile::HighFrequency;
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
@@ -244,12 +244,12 @@ fn high_frequency_browser_wheel_requests_post_burst_redraw() {
     }))
     .expect("scroll down should be handled");
 
-    assert!(app.browser_wheel_post_burst_pending);
+    assert!(app.input.browser_wheel_post_burst_pending);
     assert!(!app.process_browser_wheel_timers());
 
     thread::sleep(WHEEL_SCROLL_BURST_WINDOW + Duration::from_millis(20));
     assert!(app.process_browser_wheel_timers());
-    assert!(!app.browser_wheel_post_burst_pending);
+    assert!(!app.input.browser_wheel_post_burst_pending);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -263,7 +263,7 @@ fn browser_wheel_preserves_preview_when_selection_does_not_change() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
             x: 0,
@@ -278,7 +278,7 @@ fn browser_wheel_preserves_preview_when_selection_does_not_change() {
         ..FrameState::default()
     });
     app.select_index(0);
-    let initial_preview_token = app.preview_state.token;
+    let initial_preview_token = app.preview.state.token;
 
     app.handle_event(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollUp,
@@ -289,9 +289,9 @@ fn browser_wheel_preserves_preview_when_selection_does_not_change() {
     .expect("scroll up should be handled");
     assert!(!app.process_pending_scroll());
 
-    assert_eq!(app.scroll_row, 0);
-    assert_eq!(app.selected, 0);
-    assert_eq!(app.preview_state.token, initial_preview_token);
+    assert_eq!(app.navigation.scroll_row, 0);
+    assert_eq!(app.navigation.selected, 0);
+    assert_eq!(app.preview.state.token, initial_preview_token);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

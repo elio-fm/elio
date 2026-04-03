@@ -16,13 +16,14 @@ use std::{fs, path::PathBuf};
 
 impl App {
     pub(in crate::app) fn open_bulk_rename_prompt(&mut self) {
-        if self.in_trash {
+        if self.navigation.in_trash {
             return;
         }
         let items: Vec<BulkRenameItem> = self
+            .navigation
             .entries
             .iter()
-            .filter(|entry| self.selected_paths.contains(&entry.path))
+            .filter(|entry| self.navigation.selected_paths.contains(&entry.path))
             .map(|entry| BulkRenameItem {
                 path: entry.path.clone(),
                 original_name: entry.name.clone(),
@@ -37,13 +38,13 @@ impl App {
             .iter()
             .map(|item| item.original_name.clone())
             .collect();
-        self.help_open = false;
-        self.search = None;
-        self.create = None;
-        self.rename = None;
-        self.trash = None;
-        self.restore = None;
-        self.bulk_rename = Some(BulkRenameOverlay {
+        self.overlays.help = false;
+        self.overlays.search = None;
+        self.overlays.create = None;
+        self.overlays.rename = None;
+        self.overlays.trash = None;
+        self.overlays.restore = None;
+        self.overlays.bulk_rename = Some(BulkRenameOverlay {
             items,
             new_names,
             cursor_line: 0,
@@ -54,11 +55,11 @@ impl App {
     }
 
     pub fn bulk_rename_is_open(&self) -> bool {
-        self.bulk_rename.is_some()
+        self.overlays.bulk_rename.is_some()
     }
 
     pub fn bulk_rename_title(&self) -> String {
-        let Some(r) = &self.bulk_rename else {
+        let Some(r) = &self.overlays.bulk_rename else {
             return "Rename".to_string();
         };
         if r.items.len() == 1 {
@@ -80,11 +81,15 @@ impl App {
     }
 
     pub fn bulk_rename_item_count(&self) -> usize {
-        self.bulk_rename.as_ref().map_or(0, |r| r.items.len())
+        self.overlays
+            .bulk_rename
+            .as_ref()
+            .map_or(0, |r| r.items.len())
     }
 
     pub fn bulk_rename_new_name(&self, index: usize) -> &str {
-        self.bulk_rename
+        self.overlays
+            .bulk_rename
             .as_ref()
             .and_then(|r| r.new_names.get(index))
             .map(String::as_str)
@@ -92,36 +97,44 @@ impl App {
     }
 
     pub fn bulk_rename_item_is_dir(&self, index: usize) -> bool {
-        self.bulk_rename
+        self.overlays
+            .bulk_rename
             .as_ref()
             .and_then(|r| r.items.get(index))
             .is_some_and(|item| item.is_dir)
     }
 
     pub fn bulk_rename_line_error(&self, index: usize) -> Option<&str> {
-        self.bulk_rename
+        self.overlays
+            .bulk_rename
             .as_ref()
             .and_then(|r| r.line_errors.get(index))
             .and_then(Option::as_deref)
     }
 
     pub fn bulk_rename_cursor_line(&self) -> usize {
-        self.bulk_rename.as_ref().map_or(0, |r| r.cursor_line)
+        self.overlays
+            .bulk_rename
+            .as_ref()
+            .map_or(0, |r| r.cursor_line)
     }
 
     pub fn bulk_rename_cursor_col(&self) -> usize {
-        self.bulk_rename.as_ref().map_or(0, |r| r.cursor_col)
+        self.overlays
+            .bulk_rename
+            .as_ref()
+            .map_or(0, |r| r.cursor_col)
     }
 
     pub(in crate::app) fn handle_bulk_rename_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.bulk_rename = None;
+            self.overlays.bulk_rename = None;
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.bulk_rename = None;
+                self.overlays.bulk_rename = None;
             }
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 self.confirm_bulk_rename()?;
@@ -136,7 +149,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.bulk_rename {
+                if let Some(r) = &mut self.overlays.bulk_rename {
                     let new_col = previous_word_start(&r.new_names[r.cursor_line], r.cursor_col);
                     r.cursor_col = new_col;
                     r.preferred_col = new_col;
@@ -146,20 +159,20 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.bulk_rename {
+                if let Some(r) = &mut self.overlays.bulk_rename {
                     let new_col = next_word_start(&r.new_names[r.cursor_line], r.cursor_col);
                     r.cursor_col = new_col;
                     r.preferred_col = new_col;
                 }
             }
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.bulk_rename {
+                if let Some(r) = &mut self.overlays.bulk_rename {
                     r.cursor_col = r.cursor_col.saturating_sub(1);
                     r.preferred_col = r.cursor_col;
                 }
             }
             KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.bulk_rename {
+                if let Some(r) = &mut self.overlays.bulk_rename {
                     let len = r.new_names[r.cursor_line].chars().count();
                     if r.cursor_col < len {
                         r.cursor_col += 1;
@@ -168,13 +181,13 @@ impl App {
                 }
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.bulk_rename {
+                if let Some(r) = &mut self.overlays.bulk_rename {
                     r.cursor_col = 0;
                     r.preferred_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.bulk_rename {
+                if let Some(r) = &mut self.overlays.bulk_rename {
                     r.cursor_col = r.new_names[r.cursor_line].chars().count();
                     r.preferred_col = r.cursor_col;
                 }
@@ -183,7 +196,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.bulk_rename
+                if let Some(r) = &mut self.overlays.bulk_rename
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
@@ -197,7 +210,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.bulk_rename
+                if let Some(r) = &mut self.overlays.bulk_rename
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
@@ -211,7 +224,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.bulk_rename {
+                if let Some(r) = &mut self.overlays.bulk_rename {
                     let end = next_delete_end(&r.new_names[r.cursor_line], r.cursor_col);
                     remove_char_range(&mut r.new_names[r.cursor_line], r.cursor_col, end);
                     r.line_errors[r.cursor_line] = None;
@@ -221,14 +234,14 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                if let Some(r) = &mut self.bulk_rename {
+                if let Some(r) = &mut self.overlays.bulk_rename {
                     let end = next_delete_end(&r.new_names[r.cursor_line], r.cursor_col);
                     remove_char_range(&mut r.new_names[r.cursor_line], r.cursor_col, end);
                     r.line_errors[r.cursor_line] = None;
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.bulk_rename
+                if let Some(r) = &mut self.overlays.bulk_rename
                     && r.cursor_col > 0
                 {
                     let start = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col - 1);
@@ -240,7 +253,7 @@ impl App {
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.bulk_rename {
+                if let Some(r) = &mut self.overlays.bulk_rename {
                     let len = r.new_names[r.cursor_line].chars().count();
                     if r.cursor_col < len {
                         let start = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col);
@@ -255,7 +268,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.bulk_rename {
+                if let Some(r) = &mut self.overlays.bulk_rename {
                     let byte = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col);
                     r.new_names[r.cursor_line].insert(byte, ch);
                     r.cursor_col += 1;
@@ -269,7 +282,7 @@ impl App {
     }
 
     fn bulk_rename_move_vertical(&mut self, delta: isize) {
-        let Some(r) = &mut self.bulk_rename else {
+        let Some(r) = &mut self.overlays.bulk_rename else {
             return;
         };
         let new_line =
@@ -286,17 +299,18 @@ impl App {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
+                    .input
                     .frame_state
                     .rename_panel
                     .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
                 if !inside {
-                    self.bulk_rename = None;
+                    self.overlays.bulk_rename = None;
                     return Ok(());
                 }
-                if let Some(list_area) = self.frame_state.bulk_rename_list_area
+                if let Some(list_area) = self.input.frame_state.bulk_rename_list_area
                     && rect_contains(list_area, mouse.column, mouse.row)
                 {
-                    let scroll_top = self.frame_state.bulk_rename_scroll_top;
+                    let scroll_top = self.input.frame_state.bulk_rename_scroll_top;
                     let row_offset = (mouse.row - list_area.y) as usize;
                     let line_idx = scroll_top + row_offset;
                     let count = self.bulk_rename_item_count();
@@ -304,7 +318,7 @@ impl App {
                         let line_len = self.bulk_rename_new_name(line_idx).chars().count();
                         let char_col = (mouse.column.saturating_sub(list_area.x + 3)) as usize;
                         let cursor_col = char_col.min(line_len);
-                        if let Some(r) = &mut self.bulk_rename {
+                        if let Some(r) = &mut self.overlays.bulk_rename {
                             r.cursor_line = line_idx;
                             r.cursor_col = cursor_col;
                             r.preferred_col = cursor_col;
@@ -324,7 +338,7 @@ impl App {
     }
 
     pub(in crate::app::create) fn confirm_bulk_rename(&mut self) -> Result<()> {
-        let Some(r) = &self.bulk_rename else {
+        let Some(r) = &self.overlays.bulk_rename else {
             return Ok(());
         };
 
@@ -345,7 +359,7 @@ impl App {
             } else if !seen_new_names.insert(new_name.clone()) {
                 Some(format!("\"{}\" appears more than once", new_name))
             } else {
-                let new_path = self.cwd.join(&new_name);
+                let new_path = self.navigation.cwd.join(&new_name);
                 if new_path.exists() && !renaming_paths.contains(&new_path) {
                     Some(format!("\"{}\" already exists", new_name))
                 } else {
@@ -362,7 +376,7 @@ impl App {
         }
 
         if let Some(err_line) = first_error {
-            if let Some(r) = &mut self.bulk_rename {
+            if let Some(r) = &mut self.overlays.bulk_rename {
                 r.line_errors = errors;
                 r.cursor_line = err_line;
                 r.cursor_col = r.cursor_col.min(r.new_names[err_line].chars().count());
@@ -384,8 +398,8 @@ impl App {
             })
             .collect();
 
-        self.bulk_rename = None;
-        self.selected_paths.clear();
+        self.overlays.bulk_rename = None;
+        self.navigation.selected_paths.clear();
 
         let mut renamed = 0usize;
         let mut last_new_path: Option<PathBuf> = None;
@@ -394,7 +408,7 @@ impl App {
             if *new_name == *original_name {
                 continue;
             }
-            let new_path = self.cwd.join(new_name);
+            let new_path = self.navigation.cwd.join(new_name);
             if let Err(error) = fs::rename(old_path, &new_path) {
                 let msg = match error.kind() {
                     std::io::ErrorKind::PermissionDenied => {
@@ -404,8 +418,8 @@ impl App {
                 };
                 self.queue_directory_load(PendingDirectoryLoad {
                     token: 0,
-                    target_cwd: self.cwd.clone(),
-                    previous_cwd: self.cwd.clone(),
+                    target_cwd: self.navigation.cwd.clone(),
+                    previous_cwd: self.navigation.cwd.clone(),
                     previous_selected_path: None,
                     previous_selection_name: None,
                     reselect_path: last_new_path,
@@ -415,7 +429,7 @@ impl App {
                 })?;
                 return Ok(());
             }
-            last_new_path = Some(self.cwd.join(new_name));
+            last_new_path = Some(self.navigation.cwd.join(new_name));
             renamed += 1;
         }
 
@@ -432,8 +446,8 @@ impl App {
         };
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
-            target_cwd: self.cwd.clone(),
-            previous_cwd: self.cwd.clone(),
+            target_cwd: self.navigation.cwd.clone(),
+            previous_cwd: self.navigation.cwd.clone(),
             previous_selected_path: None,
             previous_selection_name: None,
             reselect_path: last_new_path,

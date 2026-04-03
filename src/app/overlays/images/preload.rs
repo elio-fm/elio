@@ -11,7 +11,7 @@ impl App {
         // the actual current entry and retain or re-queue jobs for the wrong one.  Skip the
         // preview visual entirely; the correct job will be submitted once refresh_preview() fires
         // and preview_state.content is updated.
-        let current_preview_visual = if self.preview_state.deferred_refresh_at.is_none() {
+        let current_preview_visual = if self.preview.state.deferred_refresh_at.is_none() {
             self.active_preview_visual_overlay_request()
         } else {
             None
@@ -44,8 +44,9 @@ impl App {
         // the user takes a non-rapid action (folder navigation, preview scroll, etc.).
         // Skip the cancellation step while deferred; the correct jobs will be pruned on
         // the next non-deferred refresh_static_image_preloads() call.
-        if self.preview_state.deferred_refresh_at.is_none() {
-            self.image_preview
+        if self.preview.state.deferred_refresh_at.is_none() {
+            self.preview
+                .image
                 .pending_prepares
                 .retain(|key| desired.contains(key));
             let current_job = current
@@ -55,7 +56,8 @@ impl App {
                 .iter()
                 .map(|request| self.image_prepare_request_for_overlay(request))
                 .collect::<Vec<_>>();
-            self.scheduler
+            self.jobs
+                .scheduler
                 .retain_image_prepares(current_job.as_ref(), &nearby_jobs);
         }
 
@@ -73,19 +75,19 @@ impl App {
 
     pub(in crate::app) fn refresh_static_image_preloads_if_needed(&mut self) {
         let viewport = StaticImagePreloadViewport {
-            selected: self.selected,
-            scroll_row: self.scroll_row,
-            cols: self.frame_state.metrics.cols.max(1),
-            rows_visible: self.frame_state.metrics.rows_visible.max(1),
-            preview_content_area: self.frame_state.preview_content_area,
-            preview_media_area: self.frame_state.preview_media_area,
-            protocol: self.terminal_images.protocol,
+            selected: self.navigation.selected,
+            scroll_row: self.navigation.scroll_row,
+            cols: self.input.frame_state.metrics.cols.max(1),
+            rows_visible: self.input.frame_state.metrics.rows_visible.max(1),
+            preview_content_area: self.input.frame_state.preview_content_area,
+            preview_media_area: self.input.frame_state.preview_media_area,
+            protocol: self.preview.terminal_images.protocol,
             window: self.cached_terminal_window(),
         };
-        if self.image_preview.preload_viewport == Some(viewport) {
+        if self.preview.image.preload_viewport == Some(viewport) {
             return;
         }
-        self.image_preview.preload_viewport = Some(viewport);
+        self.preview.image.preload_viewport = Some(viewport);
         self.refresh_static_image_preloads();
     }
 
@@ -102,7 +104,7 @@ impl App {
             build.force_render_to_cache,
             build.prepare_inline_payload,
         );
-        self.image_preview.pending_prepares.remove(&key);
+        self.preview.image.pending_prepares.remove(&key);
         let is_current = self
             .active_static_image_overlay_request()
             .as_ref()
@@ -118,8 +120,9 @@ impl App {
 
         match build.result {
             Some(prepared) => {
-                self.image_preview.failed_images.remove(&key);
-                self.image_preview
+                self.preview.image.failed_images.remove(&key);
+                self.preview
+                    .image
                     .dimensions
                     .insert(key.clone(), prepared.dimensions);
                 if let Some(payload) = prepared.inline_payload {
@@ -132,7 +135,7 @@ impl App {
                 is_current
             }
             None => {
-                self.image_preview.failed_images.insert(key);
+                self.preview.image.failed_images.insert(key);
                 if is_current {
                     self.refresh_preview();
                     true
@@ -151,12 +154,13 @@ impl App {
         let mut requests = self
             .visible_entry_indices()
             .into_iter()
-            .filter(|&index| index != self.selected)
+            .filter(|&index| index != self.navigation.selected)
             .filter_map(|index| {
-                self.entries
+                self.navigation
+                    .entries
                     .get(index)
                     .and_then(|entry| self.static_image_overlay_request_for_entry(entry))
-                    .map(|request| (index.abs_diff(self.selected), request))
+                    .map(|request| (index.abs_diff(self.navigation.selected), request))
             })
             .filter(|(_, request)| current_path != Some(&request.path))
             .collect::<Vec<_>>();
@@ -174,8 +178,8 @@ impl App {
         priority: jobs::ImageJobPriority,
     ) {
         let key = StaticImageKey::from_request(request);
-        if self.image_preview.failed_images.contains(&key)
-            || self.image_preview.pending_prepares.contains(&key)
+        if self.preview.image.failed_images.contains(&key)
+            || self.preview.image.pending_prepares.contains(&key)
             || self
                 .cached_prepared_static_image_for_overlay(&key, request)
                 .is_some()
@@ -185,11 +189,11 @@ impl App {
 
         let job = self.image_prepare_request_for_overlay(request);
         let submit = match priority {
-            jobs::ImageJobPriority::Current => self.scheduler.submit_image_prepare(job),
-            jobs::ImageJobPriority::Nearby => self.scheduler.submit_nearby_image_prepare(job),
+            jobs::ImageJobPriority::Current => self.jobs.scheduler.submit_image_prepare(job),
+            jobs::ImageJobPriority::Nearby => self.jobs.scheduler.submit_nearby_image_prepare(job),
         };
         if submit {
-            self.image_preview.pending_prepares.insert(key);
+            self.preview.image.pending_prepares.insert(key);
         }
     }
 

@@ -19,7 +19,7 @@ fn opening_a_removed_directory_does_not_bubble_an_error() {
     )))
     .expect("stale directory open should be handled");
 
-    assert_eq!(app.cwd, root);
+    assert_eq!(app.navigation.cwd, root);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -47,7 +47,7 @@ fn opening_a_protected_directory_reports_permission_denied() {
     .expect("protected directory open should be handled");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.cwd, root);
+    assert_eq!(app.navigation.cwd, root);
     assert!(app.status_message().contains("Permission denied"));
 
     fs::set_permissions(&child, fs::Permissions::from_mode(0o755))

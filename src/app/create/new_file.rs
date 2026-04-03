@@ -11,15 +11,16 @@ use std::fs;
 
 impl App {
     pub fn create_is_open(&self) -> bool {
-        self.create.is_some()
+        self.overlays.create.is_some()
     }
 
     pub fn create_line_count(&self) -> usize {
-        self.create.as_ref().map_or(0, |c| c.lines.len())
+        self.overlays.create.as_ref().map_or(0, |c| c.lines.len())
     }
 
     pub fn create_line(&self, index: usize) -> &str {
-        self.create
+        self.overlays
+            .create
             .as_ref()
             .and_then(|c| c.lines.get(index))
             .map(String::as_str)
@@ -27,15 +28,15 @@ impl App {
     }
 
     pub fn create_cursor_line(&self) -> usize {
-        self.create.as_ref().map_or(0, |c| c.cursor_line)
+        self.overlays.create.as_ref().map_or(0, |c| c.cursor_line)
     }
 
     pub fn create_cursor_col(&self) -> usize {
-        self.create.as_ref().map_or(0, |c| c.cursor_col)
+        self.overlays.create.as_ref().map_or(0, |c| c.cursor_col)
     }
 
     pub fn create_title(&self) -> String {
-        let Some(c) = &self.create else {
+        let Some(c) = &self.overlays.create else {
             return "Create".to_string();
         };
         let files = c
@@ -69,7 +70,8 @@ impl App {
     }
 
     pub fn create_line_error(&self, index: usize) -> Option<&str> {
-        self.create
+        self.overlays
+            .create
             .as_ref()
             .and_then(|c| c.line_errors.get(index))
             .and_then(Option::as_deref)
@@ -78,9 +80,9 @@ impl App {
 
 impl App {
     pub(in crate::app) fn open_create_prompt(&mut self) {
-        self.help_open = false;
-        self.search = None;
-        self.create = Some(CreateOverlay {
+        self.overlays.help = false;
+        self.overlays.search = None;
+        self.overlays.create = Some(CreateOverlay {
             lines: vec![String::new()],
             cursor_line: 0,
             cursor_col: 0,
@@ -93,13 +95,13 @@ impl App {
 impl App {
     pub(in crate::app) fn handle_create_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.create = None;
+            self.overlays.create = None;
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.create = None;
+                self.overlays.create = None;
             }
             KeyCode::Enter
                 if (key.modifiers.contains(KeyModifiers::ALT)
@@ -133,13 +135,13 @@ impl App {
                 self.create_move_horizontal(1);
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(c) = &mut self.create {
+                if let Some(c) = &mut self.overlays.create {
                     c.cursor_col = 0;
                     c.preferred_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(c) = &mut self.create {
+                if let Some(c) = &mut self.overlays.create {
                     let len = c.lines[c.cursor_line].chars().count();
                     c.cursor_col = len;
                     c.preferred_col = len;
@@ -186,7 +188,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(c) = &mut self.create {
+                if let Some(c) = &mut self.overlays.create {
                     let byte = char_to_byte(&c.lines[c.cursor_line], c.cursor_col);
                     c.lines[c.cursor_line].insert(byte, ch);
                     c.cursor_col += 1;
@@ -205,17 +207,18 @@ impl App {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
+                    .input
                     .frame_state
                     .create_panel
                     .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
                 if !inside {
-                    self.create = None;
+                    self.overlays.create = None;
                     return Ok(());
                 }
-                if let Some(list_area) = self.frame_state.create_list_area
+                if let Some(list_area) = self.input.frame_state.create_list_area
                     && rect_contains(list_area, mouse.column, mouse.row)
                 {
-                    let scroll_top = self.frame_state.create_scroll_top;
+                    let scroll_top = self.input.frame_state.create_scroll_top;
                     let row_offset = (mouse.row - list_area.y) as usize;
                     let line_idx = scroll_top + row_offset;
                     let line_count = self.create_line_count();
@@ -223,7 +226,7 @@ impl App {
                         let line_len = self.create_line(line_idx).chars().count();
                         let char_col = (mouse.column.saturating_sub(list_area.x + 3)) as usize;
                         let cursor_col = char_col.min(line_len);
-                        if let Some(c) = &mut self.create {
+                        if let Some(c) = &mut self.overlays.create {
                             c.cursor_line = line_idx;
                             c.cursor_col = cursor_col;
                             c.preferred_col = cursor_col;
@@ -245,7 +248,7 @@ impl App {
 
 impl App {
     pub(in crate::app::create) fn confirm_create(&mut self) -> Result<()> {
-        let Some(c) = &self.create else {
+        let Some(c) = &self.overlays.create else {
             return Ok(());
         };
 
@@ -258,11 +261,12 @@ impl App {
             .collect();
 
         if items.is_empty() {
-            self.create = None;
+            self.overlays.create = None;
             return Ok(());
         }
 
         let mut errors: Vec<Option<String>> = self
+            .overlays
             .create
             .as_ref()
             .expect("create overlay should still be present")
@@ -276,7 +280,7 @@ impl App {
             let msg = if !seen_names.insert(item.name.clone()) {
                 Some(format!("\"{}\" appears more than once", item.name))
             } else {
-                validate_parsed_item(item, &self.cwd)
+                validate_parsed_item(item, &self.navigation.cwd)
             };
             if let Some(msg) = msg {
                 errors[*line_idx] = Some(msg);
@@ -287,7 +291,7 @@ impl App {
         }
 
         if let Some(err_line) = first_error_line {
-            if let Some(c) = &mut self.create {
+            if let Some(c) = &mut self.overlays.create {
                 c.line_errors = errors;
                 c.cursor_line = err_line;
                 c.cursor_col = c.cursor_col.min(c.lines[err_line].chars().count());
@@ -298,7 +302,7 @@ impl App {
 
         let mut last_path: Option<std::path::PathBuf> = None;
         for (_, item) in &items {
-            let path = self.cwd.join(&item.name);
+            let path = self.navigation.cwd.join(&item.name);
             let result = if item.is_dir {
                 fs::create_dir(&path).map_err(anyhow::Error::from)
             } else {
@@ -324,7 +328,7 @@ impl App {
                         _ => None,
                     })
                     .unwrap_or_else(|| error.to_string());
-                if let Some(c) = &mut self.create {
+                if let Some(c) = &mut self.overlays.create {
                     c.line_errors[line_idx] = Some(msg);
                     c.cursor_line = line_idx;
                 }
@@ -333,7 +337,7 @@ impl App {
             last_path = Some(path);
         }
 
-        self.create = None;
+        self.overlays.create = None;
         let files = items.iter().filter(|(_, item)| !item.is_dir).count();
         let dirs = items.iter().filter(|(_, item)| item.is_dir).count();
         let status = match (files, dirs) {
@@ -365,8 +369,8 @@ impl App {
         };
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
-            target_cwd: self.cwd.clone(),
-            previous_cwd: self.cwd.clone(),
+            target_cwd: self.navigation.cwd.clone(),
+            previous_cwd: self.navigation.cwd.clone(),
             previous_selected_path: self.selected_entry().map(|entry| entry.path.clone()),
             previous_selection_name: self.selected_entry().map(|entry| entry.name.clone()),
             reselect_path: last_path,

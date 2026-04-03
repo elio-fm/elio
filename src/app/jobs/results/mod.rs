@@ -49,23 +49,23 @@ impl App {
         while processed < JOB_RESULT_APPLY_MAX_PER_TICK
             && started_at.elapsed() < JOB_RESULT_APPLY_TIME_BUDGET
         {
-            let Ok(job) = self.scheduler.try_recv() else {
+            let Ok(job) = self.jobs.scheduler.try_recv() else {
                 break;
             };
             processed += 1;
             match job {
                 JobResult::Directory(build) => {
-                    let Some(load) = self.directory_runtime.pending_load.clone() else {
+                    let Some(load) = self.navigation.directory_runtime.pending_load.clone() else {
                         continue;
                     };
-                    if build.token != self.directory_token
+                    if build.token != self.jobs.directory_token
                         || build.token != load.token
                         || build.cwd != load.target_cwd
                     {
                         continue;
                     }
 
-                    self.directory_runtime.pending_load = None;
+                    self.navigation.directory_runtime.pending_load = None;
                     dirty = true;
 
                     match build.result {
@@ -76,10 +76,15 @@ impl App {
                     }
                 }
                 JobResult::DirectoryFingerprint(build) => {
-                    let Some(scan) = self.directory_runtime.pending_fingerprint_scan.clone() else {
+                    let Some(scan) = self
+                        .navigation
+                        .directory_runtime
+                        .pending_fingerprint_scan
+                        .clone()
+                    else {
                         continue;
                     };
-                    if build.token != self.directory_fingerprint_token
+                    if build.token != self.jobs.directory_fingerprint_token
                         || build.token != scan.token
                         || build.cwd != scan.cwd
                         || build.show_hidden != scan.show_hidden
@@ -87,13 +92,13 @@ impl App {
                         continue;
                     }
 
-                    self.directory_runtime.pending_fingerprint_scan = None;
+                    self.navigation.directory_runtime.pending_fingerprint_scan = None;
 
                     let Ok(fingerprint) = build.result else {
                         continue;
                     };
-                    if self.directory_runtime.pending_load.is_some()
-                        || fingerprint == self.directory_runtime.fingerprint
+                    if self.navigation.directory_runtime.pending_load.is_some()
+                        || fingerprint == self.navigation.directory_runtime.fingerprint
                     {
                         continue;
                     }
@@ -139,25 +144,25 @@ impl App {
                     dirty |= self.apply_image_prepare_build(build);
                 }
                 JobResult::Search(build) => {
-                    if build.token != self.search_token
-                        || build.cwd != self.cwd
-                        || build.show_hidden != self.show_hidden
+                    if build.token != self.jobs.search_token
+                        || build.cwd != self.navigation.cwd
+                        || build.show_hidden != self.navigation.show_hidden
                     {
                         continue;
                     }
 
-                    self.search_loading = false;
+                    self.jobs.search_loading = false;
                     dirty = true;
 
                     match build.result {
                         Ok(candidates) => {
-                            self.search_cache = Some(SearchCache {
+                            self.jobs.search_cache = Some(SearchCache {
                                 cwd: build.cwd,
                                 scope: build.scope,
                                 show_hidden: build.show_hidden,
                                 candidates: candidates.clone(),
                             });
-                            if let Some(search) = &mut self.search
+                            if let Some(search) = &mut self.overlays.search
                                 && search.scope == build.scope
                             {
                                 search.candidates = candidates;
@@ -171,8 +176,8 @@ impl App {
                             self.refresh_search_matches("");
                         }
                         Err(error) => {
-                            self.search_cache = None;
-                            if let Some(search) = &mut self.search
+                            self.jobs.search_cache = None;
+                            if let Some(search) = &mut self.overlays.search
                                 && search.scope == build.scope
                             {
                                 search.candidates = Arc::new(Vec::new());
@@ -188,17 +193,19 @@ impl App {
                     }
                 }
                 JobResult::Paste(build) => {
-                    if build.token != self.paste_token {
+                    if build.token != self.jobs.paste_token {
                         continue;
                     }
                     if build.done {
-                        self.paste_progress = None;
+                        self.jobs.paste_progress = None;
                         let dest_dir = self
+                            .jobs
                             .paste_dest_dir
                             .take()
-                            .unwrap_or_else(|| self.cwd.clone());
+                            .unwrap_or_else(|| self.navigation.cwd.clone());
                         let status = build.status.unwrap_or_default();
                         let next_queued_dest = self
+                            .jobs
                             .queued_pastes
                             .front()
                             .map(|queued| queued.dest_dir.as_path());
@@ -208,19 +215,20 @@ impl App {
                         // destination directory and not mid-navigation to
                         // somewhere else (which would cancel their navigation).
                         let nav_target = self
+                            .navigation
                             .directory_runtime
                             .pending_load
                             .as_ref()
                             .map(|l| l.target_cwd.as_path());
                         let nav_to_dest = nav_target == Some(dest_dir.as_path());
-                        if dest_dir == self.cwd
+                        if dest_dir == self.navigation.cwd
                             && (nav_target.is_none() || nav_to_dest)
                             && !defer_reload_for_same_dest
                         {
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,
                                 target_cwd: dest_dir,
-                                previous_cwd: self.cwd.clone(),
+                                previous_cwd: self.navigation.cwd.clone(),
                                 previous_selected_path: None,
                                 previous_selection_name: None,
                                 reselect_path: None,
@@ -238,13 +246,13 @@ impl App {
                             self.status = status;
                         }
                         self.start_next_queued_paste();
-                    } else if let Some(prog) = &mut self.paste_progress {
+                    } else if let Some(prog) = &mut self.jobs.paste_progress {
                         prog.completed = build.completed;
                     }
                     dirty = true;
                 }
                 JobResult::Trash(build) => {
-                    if build.token != self.trash_token {
+                    if build.token != self.jobs.trash_token {
                         continue;
                     }
                     if build.done {
@@ -253,30 +261,34 @@ impl App {
                         // operations leave some entries intact, so using the
                         // pre-computed survivor path would move the cursor
                         // away from entries that are still present.
-                        let next_selection = self.trash_progress.take().and_then(|p| {
+                        let next_selection = self.jobs.trash_progress.take().and_then(|p| {
                             (build.completed == p.total)
                                 .then_some(p.next_selection)
                                 .flatten()
                         });
                         let source_cwd = self
+                            .jobs
                             .trash_source_cwd
                             .take()
-                            .unwrap_or_else(|| self.cwd.clone());
+                            .unwrap_or_else(|| self.navigation.cwd.clone());
                         let status = build.status.unwrap_or_default();
                         // Only reload in-place when the user is still in the
                         // source directory and not mid-navigation to somewhere
                         // else (which would cancel their navigation).
                         let nav_target = self
+                            .navigation
                             .directory_runtime
                             .pending_load
                             .as_ref()
                             .map(|l| l.target_cwd.as_path());
                         let nav_to_source = nav_target == Some(source_cwd.as_path());
-                        if source_cwd == self.cwd && (nav_target.is_none() || nav_to_source) {
+                        if source_cwd == self.navigation.cwd
+                            && (nav_target.is_none() || nav_to_source)
+                        {
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,
                                 target_cwd: source_cwd,
-                                previous_cwd: self.cwd.clone(),
+                                previous_cwd: self.navigation.cwd.clone(),
                                 previous_selected_path: None,
                                 previous_selection_name: None,
                                 reselect_path: next_selection,
@@ -289,33 +301,37 @@ impl App {
                             // Navigation will load source_cwd fresh if they return.
                             self.status = status;
                         }
-                    } else if let Some(prog) = &mut self.trash_progress {
+                    } else if let Some(prog) = &mut self.jobs.trash_progress {
                         prog.completed = build.completed;
                     }
                     dirty = true;
                 }
                 JobResult::Restore(build) => {
-                    if build.token != self.restore_token {
+                    if build.token != self.jobs.restore_token {
                         continue;
                     }
                     if build.done {
-                        self.restore_progress = None;
+                        self.jobs.restore_progress = None;
                         let source_cwd = self
+                            .jobs
                             .restore_source_cwd
                             .take()
-                            .unwrap_or_else(|| self.cwd.clone());
+                            .unwrap_or_else(|| self.navigation.cwd.clone());
                         let status = build.status.unwrap_or_default();
                         let nav_target = self
+                            .navigation
                             .directory_runtime
                             .pending_load
                             .as_ref()
                             .map(|l| l.target_cwd.as_path());
                         let nav_to_source = nav_target == Some(source_cwd.as_path());
-                        if source_cwd == self.cwd && (nav_target.is_none() || nav_to_source) {
+                        if source_cwd == self.navigation.cwd
+                            && (nav_target.is_none() || nav_to_source)
+                        {
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,
                                 target_cwd: source_cwd,
-                                previous_cwd: self.cwd.clone(),
+                                previous_cwd: self.navigation.cwd.clone(),
                                 previous_selected_path: None,
                                 previous_selection_name: None,
                                 reselect_path: None,
@@ -326,7 +342,7 @@ impl App {
                         } else {
                             self.status = status;
                         }
-                    } else if let Some(prog) = &mut self.restore_progress {
+                    } else if let Some(prog) = &mut self.jobs.restore_progress {
                         prog.completed = build.completed;
                     }
                     dirty = true;
@@ -359,7 +375,7 @@ impl App {
                         .unwrap_or(false);
                     let is_current_variant =
                         build.variant == self.current_preview_request_options();
-                    if build.token != self.preview_state.token
+                    if build.token != self.preview.state.token
                         || !is_current_entry
                         || !is_current_variant
                         || build.code_line_limit
@@ -380,7 +396,7 @@ impl App {
                             && build.code_line_limit
                                 == self.preview_code_line_limit_for_entry(&build.entry)
                             && matches!(
-                                &self.preview_state.load_state,
+                                &self.preview.state.load_state,
                                 Some(PreviewLoadState::Placeholder(p) | PreviewLoadState::Refreshing(p))
                                     if p == &build.entry.path
                             );
@@ -394,13 +410,13 @@ impl App {
                             // Clear the in-flight flag if this stale drop belongs to our
                             // outstanding extension job (prevents stuck state when the
                             // user navigates away mid-extension).
-                            if self.preview_state.incremental_render_path.as_deref()
+                            if self.preview.state.incremental_render_path.as_deref()
                                 == Some(build.entry.path.as_path())
                             {
-                                self.preview_state.incremental_render_in_flight = false;
-                                self.preview_state.incremental_render_path = None;
+                                self.preview.state.incremental_render_in_flight = false;
+                                self.preview.state.incremental_render_path = None;
                             }
-                            self.preview_state.metrics.stale_results_dropped += 1;
+                            self.preview.state.metrics.stale_results_dropped += 1;
                             continue;
                         }
                     }
@@ -409,28 +425,28 @@ impl App {
                     // currently-displayed partial preview.  If so, replace the content
                     // WITHOUT resetting scroll so there are no visual artifacts.
                     let is_extension_result = build.result.incremental_render_limit.is_none()
-                        && self.preview_state.content.is_incrementally_partial()
+                        && self.preview.state.content.is_incrementally_partial()
                         && is_current_entry
                         && is_current_variant;
 
-                    self.preview_state.content = build.result;
-                    if self.preview_state.content.kind != preview::PreviewKind::Directory {
-                        self.preview_state.directory_stats = None;
+                    self.preview.state.content = build.result;
+                    if self.preview.state.content.kind != preview::PreviewKind::Directory {
+                        self.preview.state.directory_stats = None;
                     }
-                    self.preview_state.load_state = None;
+                    self.preview.state.load_state = None;
                     self.apply_current_comic_preview_metadata();
                     self.apply_current_epub_preview_metadata();
                     self.sync_current_preview_line_count();
 
                     if is_extension_result {
                         // Extension result: preserve scroll, just clamp if needed.
-                        self.preview_state.incremental_render_in_flight = false;
-                        self.preview_state.incremental_render_path = None;
+                        self.preview.state.incremental_render_in_flight = false;
+                        self.preview.state.incremental_render_path = None;
                         self.sync_preview_scroll();
                     } else {
                         // Normal first-time render: reset scroll.
-                        self.preview_state.scroll = 0;
-                        self.preview_state.horizontal_scroll = 0;
+                        self.preview.state.scroll = 0;
+                        self.preview.state.horizontal_scroll = 0;
                         self.sync_preview_scroll();
                     }
 
@@ -441,7 +457,7 @@ impl App {
                         self.prefetch_nearby_audio_previews();
                         self.schedule_preview_prefetch();
                     }
-                    self.preview_state.metrics.applied_results += 1;
+                    self.preview.state.metrics.applied_results += 1;
                     dirty = true;
                 }
             }
@@ -449,9 +465,9 @@ impl App {
 
         if (processed == JOB_RESULT_APPLY_MAX_PER_TICK
             || (processed > 0 && started_at.elapsed() >= JOB_RESULT_APPLY_TIME_BUDGET))
-            && let Ok(job) = self.scheduler.try_recv()
+            && let Ok(job) = self.jobs.scheduler.try_recv()
         {
-            self.scheduler.defer_result(job);
+            self.jobs.scheduler.defer_result(job);
         }
 
         dirty

@@ -35,19 +35,20 @@ fn directory_header_marks_incomplete_totals_without_claiming_exactness() {
         .selected_entry()
         .cloned()
         .expect("directory entry should be selected");
-    let token = app.preview_state.token.wrapping_add(1);
-    app.scheduler.cancel_directory_stats();
+    let token = app.preview.state.token.wrapping_add(1);
+    app.jobs.scheduler.cancel_directory_stats();
     // Seed a settled directory preview state so this assertion does not depend
     // on how quickly the background preview worker finishes on slower CI VMs.
-    app.preview_state.token = token;
-    app.preview_state.content =
+    app.preview.state.token = token;
+    app.preview.state.content =
         PreviewContent::new(PreviewKind::Directory, Vec::new()).with_detail("1 item");
-    app.preview_state.load_state = None;
-    app.preview_state.directory_stats = Some(PreviewDirectoryStatsState::Loading {
+    app.preview.state.load_state = None;
+    app.preview.state.directory_stats = Some(PreviewDirectoryStatsState::Loading {
         token,
         path: entry.path.clone(),
     });
-    app.scheduler
+    app.jobs
+        .scheduler
         .defer_result(JobResult::DirectoryStats(DirectoryStatsBuild {
             token,
             path: entry.path.clone(),
@@ -83,7 +84,7 @@ fn stale_directory_totals_result_is_ignored_after_selection_changes() {
     fs::write(b_dir.join("b.txt"), vec![b'b'; 200]).expect("failed to write b.txt");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    let stale_token = app.preview_state.token;
+    let stale_token = app.preview.state.token;
     let stale_entry = app
         .selected_entry()
         .cloned()
@@ -95,7 +96,8 @@ fn stale_directory_totals_result_is_ignored_after_selection_changes() {
         .cloned()
         .expect("b-dir should be selected second");
 
-    app.scheduler
+    app.jobs
+        .scheduler
         .defer_result(JobResult::DirectoryStats(DirectoryStatsBuild {
             token: stale_token,
             path: stale_entry.path.clone(),
@@ -109,7 +111,8 @@ fn stale_directory_totals_result_is_ignored_after_selection_changes() {
 
     let _ = app.process_background_jobs();
     assert_eq!(
-        app.preview_state
+        app.preview
+            .state
             .directory_stats
             .as_ref()
             .map(PreviewDirectoryStatsState::path),
@@ -192,11 +195,11 @@ fn narrow_code_header_prefers_compact_subtype_and_drops_low_priority_notes() {
     let root = temp_path("narrow-code-header");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.preview_state.content =
+    app.preview.state.content =
         PreviewContent::new(PreviewKind::Code, vec![Line::from("fn main() {}")])
             .with_detail("Rust source file")
             .with_line_coverage(default_code_preview_line_limit(), None, true);
-    app.preview_state.content.set_total_line_count_pending(true);
+    app.preview.state.content.set_total_line_count_pending(true);
 
     assert_eq!(
         app.preview_header_detail_for_width(8, 20).as_deref(),

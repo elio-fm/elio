@@ -10,7 +10,7 @@ fn right_arrow_does_not_open_selected_file_in_list_view() {
     fs::write(&file_path, "hello").expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
 
     app.handle_event(Event::Key(KeyEvent::new(
@@ -19,7 +19,7 @@ fn right_arrow_does_not_open_selected_file_in_list_view() {
     )))
     .expect("right arrow should be handled");
 
-    assert_eq!(app.cwd, root);
+    assert_eq!(app.navigation.cwd, root);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(file_path.as_path())
@@ -36,7 +36,7 @@ fn right_arrow_enters_selected_directory_in_list_view() {
     fs::create_dir_all(&child).expect("failed to create temp dirs");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
 
     app.handle_event(Event::Key(KeyEvent::new(
@@ -46,7 +46,7 @@ fn right_arrow_enters_selected_directory_in_list_view() {
     .expect("right arrow should be handled");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.cwd, child);
+    assert_eq!(app.navigation.cwd, child);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -60,7 +60,7 @@ fn left_arrow_in_list_view_reselects_previous_directory_in_parent() {
     fs::create_dir_all(&child).expect("failed to create child dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(1);
     app.open_selected()
         .expect("opening selected directory should succeed");
@@ -70,7 +70,7 @@ fn left_arrow_in_list_view_reselects_previous_directory_in_parent() {
         .expect("left arrow should be handled");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.cwd, root);
+    assert_eq!(app.navigation.cwd, root);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(child.as_path())
@@ -88,7 +88,7 @@ fn go_back_reselects_previous_directory_in_parent() {
     fs::create_dir_all(&child).expect("failed to create child dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(1);
     app.open_selected()
         .expect("opening selected directory should succeed");
@@ -97,7 +97,7 @@ fn go_back_reselects_previous_directory_in_parent() {
     app.go_back().expect("go back should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.cwd, root);
+    assert_eq!(app.navigation.cwd, root);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(child.as_path())
@@ -113,7 +113,7 @@ fn go_forward_reselects_previous_directory_in_parent() {
     fs::create_dir_all(&child).expect("failed to create child dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     app.open_selected()
         .expect("opening selected directory should succeed");
@@ -124,7 +124,7 @@ fn go_forward_reselects_previous_directory_in_parent() {
     app.go_forward().expect("go forward should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.cwd, child);
+    assert_eq!(app.navigation.cwd, child);
     assert!(app.selected_entry().is_none());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -141,7 +141,7 @@ fn go_forward_restores_last_selected_entry_in_directory() {
     fs::write(&beta, "beta").expect("failed to write beta");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     app.open_selected()
         .expect("opening selected directory should succeed");
@@ -159,7 +159,7 @@ fn go_forward_restores_last_selected_entry_in_directory() {
     app.go_forward().expect("go forward should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.cwd, child);
+    assert_eq!(app.navigation.cwd, child);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(beta.as_path())
@@ -179,7 +179,7 @@ fn reopening_directory_restores_last_selected_entry() {
     fs::write(&beta, "beta").expect("failed to write beta");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     app.open_selected()
         .expect("opening selected directory should succeed");
@@ -197,7 +197,7 @@ fn reopening_directory_restores_last_selected_entry() {
         .expect("reopening selected directory should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.cwd, child);
+    assert_eq!(app.navigation.cwd, child);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(beta.as_path())
@@ -217,7 +217,7 @@ fn reopening_directory_restores_scroll_position() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.set_frame_state(FrameState {
         metrics: ViewMetrics {
             cols: 1,
@@ -231,7 +231,7 @@ fn reopening_directory_restores_scroll_position() {
     wait_for_directory_load(&mut app);
 
     app.select_index(6);
-    assert_eq!(app.scroll_row, 4);
+    assert_eq!(app.navigation.scroll_row, 4);
 
     app.go_parent().expect("go parent should succeed");
     wait_for_directory_load(&mut app);
@@ -239,9 +239,9 @@ fn reopening_directory_restores_scroll_position() {
         .expect("reopening selected directory should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.cwd, child);
-    assert_eq!(app.selected, 6);
-    assert_eq!(app.scroll_row, 4);
+    assert_eq!(app.navigation.cwd, child);
+    assert_eq!(app.navigation.selected, 6);
+    assert_eq!(app.navigation.scroll_row, 4);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -256,7 +256,7 @@ fn reopening_parent_restores_last_selected_child_directory() {
     fs::create_dir_all(&regueiro).expect("failed to create regueiro dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.select_index(0);
     app.open_selected().expect("opening home should succeed");
     wait_for_directory_load(&mut app);
@@ -278,7 +278,7 @@ fn reopening_parent_restores_last_selected_child_directory() {
     app.open_selected().expect("reopening home should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.cwd, home);
+    assert_eq!(app.navigation.cwd, home);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(regueiro.as_path())
@@ -299,7 +299,7 @@ fn reopening_parent_restores_scroll_position() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.view_mode = ViewMode::List;
+    app.navigation.view_mode = ViewMode::List;
     app.set_frame_state(FrameState {
         metrics: ViewMetrics {
             cols: 1,
@@ -312,7 +312,7 @@ fn reopening_parent_restores_scroll_position() {
     wait_for_directory_load(&mut app);
 
     app.select_index(6);
-    assert_eq!(app.scroll_row, 4);
+    assert_eq!(app.navigation.scroll_row, 4);
 
     app.open_selected()
         .expect("opening remembered child should succeed");
@@ -325,9 +325,9 @@ fn reopening_parent_restores_scroll_position() {
     app.open_selected().expect("reopening home should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.cwd, home);
-    assert_eq!(app.selected, 6);
-    assert_eq!(app.scroll_row, 4);
+    assert_eq!(app.navigation.cwd, home);
+    assert_eq!(app.navigation.selected, 6);
+    assert_eq!(app.navigation.scroll_row, 4);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

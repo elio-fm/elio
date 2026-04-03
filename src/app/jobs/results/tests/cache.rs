@@ -112,9 +112,9 @@ fn archive_preview_resets_scroll_after_async_refresh() {
     });
     wait_for_background_preview(&mut app);
 
-    app.preview_state.scroll = 2;
+    app.preview.state.scroll = 2;
     app.sync_preview_scroll();
-    assert_eq!(app.preview_state.scroll, 2);
+    assert_eq!(app.preview.state.scroll, 2);
 
     app.set_selected(1);
 
@@ -131,7 +131,7 @@ fn archive_preview_resets_scroll_after_async_refresh() {
 
     app.set_selected(0);
     assert_eq!(app.preview_section_label(), "Archive");
-    assert_eq!(app.preview_state.scroll, 0);
+    assert_eq!(app.preview.state.scroll, 0);
     assert!(app.preview_header_detail(10).is_some());
     assert!(
         app.preview_lines()
@@ -142,7 +142,7 @@ fn archive_preview_resets_scroll_after_async_refresh() {
     wait_for_background_preview(&mut app);
 
     assert_eq!(app.preview_section_label(), "Archive");
-    assert_eq!(app.preview_state.scroll, 0);
+    assert_eq!(app.preview.state.scroll, 0);
     assert!(
         app.preview_header_detail(10)
             .as_deref()
@@ -175,9 +175,10 @@ fn stale_preview_results_are_counted_in_metrics() {
 
     app.set_selected(1);
     let metrics_before = app.preview_metrics();
-    app.scheduler
+    app.jobs
+        .scheduler
         .defer_result(JobResult::Preview(Box::new(PreviewBuild {
-            token: app.preview_state.token.wrapping_add(1),
+            token: app.preview.state.token.wrapping_add(1),
             entry: stale_entry,
             variant: preview::PreviewRequestOptions::Default,
             code_line_limit: 0,

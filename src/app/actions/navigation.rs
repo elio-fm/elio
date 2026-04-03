@@ -10,13 +10,13 @@ impl App {
                 let suffix = if entry.is_dir() { "/" } else { "" };
                 format!(
                     "{}/{}  {}{}",
-                    self.selected.saturating_add(1),
-                    self.entries.len(),
+                    self.navigation.selected.saturating_add(1),
+                    self.navigation.entries.len(),
                     entry.name,
                     suffix,
                 )
             }
-            None => format!("0/0  {}", self.cwd.display()),
+            None => format!("0/0  {}", self.navigation.cwd.display()),
         }
     }
 
@@ -32,15 +32,15 @@ impl App {
 
     pub(in crate::app) fn toggle_view_mode(&mut self) {
         self.clear_wheel_scroll();
-        self.view_mode = self.view_mode.toggle();
+        self.navigation.view_mode = self.navigation.view_mode.toggle();
         self.sync_scroll();
-        self.status = format!("Switched to {} view", self.view_mode.label());
+        self.status = format!("Switched to {} view", self.navigation.view_mode.label());
     }
 
     pub(in crate::app) fn cycle_sort_mode(&mut self) -> Result<()> {
-        self.sort_mode = self.sort_mode.cycle();
+        self.navigation.sort_mode = self.navigation.sort_mode.cycle();
         self.reload()?;
-        self.status = format!("Sort: {}", self.sort_mode.label());
+        self.status = format!("Sort: {}", self.navigation.sort_mode.label());
         Ok(())
     }
 
@@ -49,9 +49,9 @@ impl App {
             self.status = "Trash shows all files".to_string();
             return Ok(());
         }
-        self.show_hidden = !self.show_hidden;
+        self.navigation.show_hidden = !self.navigation.show_hidden;
         self.reload()?;
-        self.status = if self.show_hidden {
+        self.status = if self.navigation.show_hidden {
             "Hidden files shown".to_string()
         } else {
             "Hidden files hidden".to_string()
@@ -60,11 +60,11 @@ impl App {
     }
 
     pub fn can_go_back(&self) -> bool {
-        !self.navigation_history.back.is_empty()
+        !self.navigation.navigation_history.back.is_empty()
     }
 
     pub fn can_go_forward(&self) -> bool {
-        !self.navigation_history.forward.is_empty()
+        !self.navigation.navigation_history.forward.is_empty()
     }
 
     pub(in crate::app) fn set_selected(&mut self, index: usize) {
@@ -72,27 +72,27 @@ impl App {
     }
 
     fn set_selected_with_preview_mode(&mut self, index: usize, preview_mode: PreviewRefreshMode) {
-        let next = index.min(self.entries.len().saturating_sub(1));
-        if next != self.selected {
+        let next = index.min(self.navigation.entries.len().saturating_sub(1));
+        if next != self.navigation.selected {
             let preview_mode =
                 self.effective_preview_refresh_mode_for_selection(next, preview_mode);
-            self.selected = next;
-            self.last_selection_change_at = Instant::now();
-            self.image_preview.selection_activation_delay = match preview_mode {
+            self.navigation.selected = next;
+            self.input.last_selection_change_at = Instant::now();
+            self.preview.image.selection_activation_delay = match preview_mode {
                 PreviewRefreshMode::Immediate => std::time::Duration::ZERO,
                 PreviewRefreshMode::Deferred => IMAGE_SELECTION_ACTIVATION_DELAY,
             };
             match preview_mode {
                 PreviewRefreshMode::Immediate => self.refresh_preview(),
                 PreviewRefreshMode::Deferred => {
-                    self.preview_state.directory_stats = None;
-                    self.scheduler.cancel_directory_stats();
-                    self.preview_state.deferred_refresh_at =
+                    self.preview.state.directory_stats = None;
+                    self.jobs.scheduler.cancel_directory_stats();
+                    self.preview.state.deferred_refresh_at =
                         Some(Instant::now() + HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY);
                 }
             }
         } else {
-            self.selected = next;
+            self.navigation.selected = next;
         }
         self.sync_scroll();
         if matches!(preview_mode, PreviewRefreshMode::Deferred) {
@@ -109,7 +109,7 @@ impl App {
         if preview_mode != PreviewRefreshMode::Immediate {
             return preview_mode;
         }
-        let Some(entry) = self.entries.get(index) else {
+        let Some(entry) = self.navigation.entries.get(index) else {
             return preview_mode;
         };
         let variant = self.preview_request_options_for_entry(entry);
@@ -132,7 +132,7 @@ impl App {
     /// sustained movement defers the preview until motion pauses.
     fn rapid_nav_preview_mode(&self, mode: PreviewRefreshMode) -> PreviewRefreshMode {
         if mode == PreviewRefreshMode::Immediate
-            && self.last_key_nav_at.elapsed() < KEY_NAV_RAPID_THRESHOLD
+            && self.input.last_key_nav_at.elapsed() < KEY_NAV_RAPID_THRESHOLD
         {
             PreviewRefreshMode::Deferred
         } else {
@@ -141,8 +141,8 @@ impl App {
     }
 
     pub(in crate::app) fn set_selected_last(&mut self) {
-        if !self.entries.is_empty() {
-            let last = self.entries.len() - 1;
+        if !self.navigation.entries.is_empty() {
+            let last = self.navigation.entries.len() - 1;
             self.set_selected(last);
         }
     }
@@ -156,51 +156,51 @@ impl App {
         delta: isize,
         preview_mode: PreviewRefreshMode,
     ) {
-        if self.entries.is_empty() {
-            self.selected = 0;
-            self.preview_state.content = PreviewContent::placeholder("No selection");
-            self.preview_state.directory_stats = None;
-            self.scheduler.cancel_directory_stats();
-            self.preview_state.deferred_refresh_at = None;
+        if self.navigation.entries.is_empty() {
+            self.navigation.selected = 0;
+            self.preview.state.content = PreviewContent::placeholder("No selection");
+            self.preview.state.directory_stats = None;
+            self.jobs.scheduler.cancel_directory_stats();
+            self.preview.state.deferred_refresh_at = None;
             return;
         }
 
-        let max_index = self.entries.len().saturating_sub(1) as isize;
-        let next = (self.selected as isize + delta).clamp(0, max_index) as usize;
+        let max_index = self.navigation.entries.len().saturating_sub(1) as isize;
+        let next = (self.navigation.selected as isize + delta).clamp(0, max_index) as usize;
         self.set_selected_with_preview_mode(next, preview_mode);
     }
 
     pub(in crate::app) fn page(&mut self, direction: isize) {
-        let rows = self.frame_state.metrics.rows_visible.max(1) as isize;
+        let rows = self.input.frame_state.metrics.rows_visible.max(1) as isize;
         let mode = self.rapid_nav_preview_mode(PreviewRefreshMode::Immediate);
-        let prev = self.selected;
-        if self.view_mode == ViewMode::Grid {
+        let prev = self.navigation.selected;
+        if self.navigation.view_mode == ViewMode::Grid {
             self.move_grid_vertical_with_preview_mode(direction * rows, mode);
         } else {
             self.set_selected_delta_with_preview_mode(direction * rows, mode);
         }
-        if self.selected != prev {
-            self.last_key_nav_at = Instant::now();
+        if self.navigation.selected != prev {
+            self.input.last_key_nav_at = Instant::now();
         }
     }
 
     /// Keyboard-only: applies rapid-nav deferred preview for Up/Down/j/k, then moves.
     pub(in crate::app) fn move_vertical_keyboard(&mut self, rows: isize) {
         let mode = self.rapid_nav_preview_mode(PreviewRefreshMode::Immediate);
-        let prev = self.selected;
+        let prev = self.navigation.selected;
         self.move_vertical_with_preview_mode(rows, mode);
-        if self.selected != prev {
-            self.last_key_nav_at = Instant::now();
+        if self.navigation.selected != prev {
+            self.input.last_key_nav_at = Instant::now();
         }
     }
 
     /// Keyboard-only: applies rapid-nav deferred preview for grid h/l navigation, then moves.
     pub(in crate::app) fn move_by_keyboard(&mut self, delta: isize) {
         let mode = self.rapid_nav_preview_mode(PreviewRefreshMode::Immediate);
-        let prev = self.selected;
+        let prev = self.navigation.selected;
         self.set_selected_delta_with_preview_mode(delta, mode);
-        if self.selected != prev {
-            self.last_key_nav_at = Instant::now();
+        if self.navigation.selected != prev {
+            self.input.last_key_nav_at = Instant::now();
         }
     }
 
@@ -213,7 +213,7 @@ impl App {
         rows: isize,
         preview_mode: PreviewRefreshMode,
     ) {
-        if self.view_mode == ViewMode::Grid {
+        if self.navigation.view_mode == ViewMode::Grid {
             self.move_grid_vertical_with_preview_mode(rows, preview_mode);
         } else {
             self.set_selected_delta_with_preview_mode(rows, preview_mode);
@@ -229,15 +229,15 @@ impl App {
         rows: isize,
         preview_mode: PreviewRefreshMode,
     ) {
-        if self.entries.is_empty() {
-            self.selected = 0;
+        if self.navigation.entries.is_empty() {
+            self.navigation.selected = 0;
             return;
         }
 
-        let cols = self.frame_state.metrics.cols.max(1);
-        let current_row = self.selected / cols;
-        let current_col = self.selected % cols;
-        let total_rows = self.entries.len().div_ceil(cols);
+        let cols = self.input.frame_state.metrics.cols.max(1);
+        let current_row = self.navigation.selected / cols;
+        let current_col = self.navigation.selected % cols;
+        let total_rows = self.navigation.entries.len().div_ceil(cols);
         let target_row = current_row as isize + rows;
 
         if target_row < 0 || target_row >= total_rows as isize {
@@ -245,7 +245,7 @@ impl App {
         }
 
         let target_index = target_row as usize * cols + current_col;
-        if target_index >= self.entries.len() {
+        if target_index >= self.navigation.entries.len() {
             return;
         }
 
@@ -253,13 +253,13 @@ impl App {
     }
 
     pub(in crate::app) fn adjust_zoom(&mut self, delta: i8) {
-        let next = (self.zoom_level as i8 + delta).clamp(0, 2) as u8;
-        if next == self.zoom_level {
-            self.status = format!("Grid zoom limit: {}", self.zoom_level);
+        let next = (self.navigation.zoom_level as i8 + delta).clamp(0, 2) as u8;
+        if next == self.navigation.zoom_level {
+            self.status = format!("Grid zoom limit: {}", self.navigation.zoom_level);
             return;
         }
-        self.zoom_level = next;
-        self.status = format!("Grid zoom set to {}", self.zoom_level);
+        self.navigation.zoom_level = next;
+        self.status = format!("Grid zoom set to {}", self.navigation.zoom_level);
         self.sync_scroll();
     }
 
@@ -272,52 +272,53 @@ impl App {
     }
 
     pub(in crate::app) fn clamp_selection(&mut self) {
-        if self.entries.is_empty() {
-            self.selected = 0;
-            self.scroll_row = 0;
-            self.preview_state.content = PreviewContent::placeholder("No selection");
-            self.preview_state.directory_stats = None;
-            self.scheduler.cancel_directory_stats();
-            self.preview_state.scroll = 0;
-            self.preview_state.horizontal_scroll = 0;
-        } else if self.selected >= self.entries.len() {
-            self.selected = self.entries.len() - 1;
+        if self.navigation.entries.is_empty() {
+            self.navigation.selected = 0;
+            self.navigation.scroll_row = 0;
+            self.preview.state.content = PreviewContent::placeholder("No selection");
+            self.preview.state.directory_stats = None;
+            self.jobs.scheduler.cancel_directory_stats();
+            self.preview.state.scroll = 0;
+            self.preview.state.horizontal_scroll = 0;
+        } else if self.navigation.selected >= self.navigation.entries.len() {
+            self.navigation.selected = self.navigation.entries.len() - 1;
         }
         self.sync_preview_scroll();
     }
 
     pub(in crate::app) fn sync_scroll(&mut self) -> bool {
-        let previous = self.scroll_row;
-        if self.entries.is_empty() {
-            self.scroll_row = 0;
-            return previous != self.scroll_row;
+        let previous = self.navigation.scroll_row;
+        if self.navigation.entries.is_empty() {
+            self.navigation.scroll_row = 0;
+            return previous != self.navigation.scroll_row;
         }
 
-        let cols = self.frame_state.metrics.cols.max(1);
-        let rows_visible = self.frame_state.metrics.rows_visible.max(1);
-        let selected_row = self.selected / cols;
-        if selected_row < self.scroll_row {
-            self.scroll_row = selected_row;
-        } else if selected_row >= self.scroll_row + rows_visible {
-            self.scroll_row = selected_row + 1 - rows_visible;
+        let cols = self.input.frame_state.metrics.cols.max(1);
+        let rows_visible = self.input.frame_state.metrics.rows_visible.max(1);
+        let selected_row = self.navigation.selected / cols;
+        if selected_row < self.navigation.scroll_row {
+            self.navigation.scroll_row = selected_row;
+        } else if selected_row >= self.navigation.scroll_row + rows_visible {
+            self.navigation.scroll_row = selected_row + 1 - rows_visible;
         }
-        self.scroll_row = self.scroll_row.min(self.max_scroll_row());
-        previous != self.scroll_row
+        self.navigation.scroll_row = self.navigation.scroll_row.min(self.max_scroll_row());
+        previous != self.navigation.scroll_row
     }
 
     fn max_scroll_row(&self) -> usize {
-        if self.entries.is_empty() {
+        if self.navigation.entries.is_empty() {
             return 0;
         }
 
-        let cols = self.frame_state.metrics.cols.max(1);
-        let rows_visible = self.frame_state.metrics.rows_visible.max(1);
-        let total_rows = self.entries.len().div_ceil(cols);
+        let cols = self.input.frame_state.metrics.cols.max(1);
+        let rows_visible = self.input.frame_state.metrics.rows_visible.max(1);
+        let total_rows = self.navigation.entries.len().div_ceil(cols);
         total_rows.saturating_sub(rows_visible)
     }
 
     pub(in crate::app) fn step_sidebar_place(&mut self, delta: isize) -> Result<()> {
         let places = self
+            .navigation
             .sidebar
             .iter()
             .filter_map(|row| row.item())
@@ -326,7 +327,9 @@ impl App {
             return Ok(());
         }
 
-        let current = places.iter().position(|item| item.path == self.cwd);
+        let current = places
+            .iter()
+            .position(|item| item.path == self.navigation.cwd);
         let next = if delta >= 0 {
             current.map(|index| (index + 1) % places.len()).unwrap_or(0)
         } else {
@@ -345,20 +348,22 @@ impl App {
     }
 
     pub(in crate::app) fn go_back(&mut self) -> Result<()> {
-        let Some(previous) = self.navigation_history.back.last().cloned() else {
+        let Some(previous) = self.navigation.navigation_history.back.last().cloned() else {
             self.status = "No previous folder".to_string();
             return Ok(());
         };
         self.set_dir_transition(
             previous.cwd,
             DirectoryHistoryMode::GoBack,
-            previous.selected_path.or_else(|| Some(self.cwd.clone())),
+            previous
+                .selected_path
+                .or_else(|| Some(self.navigation.cwd.clone())),
             DirectoryLoadCompletion::Clear,
         )
     }
 
     pub(in crate::app) fn go_forward(&mut self) -> Result<()> {
-        let Some(next) = self.navigation_history.forward.last().cloned() else {
+        let Some(next) = self.navigation.navigation_history.forward.last().cloned() else {
             self.status = "No next folder".to_string();
             return Ok(());
         };

@@ -69,10 +69,10 @@ impl App {
         if let Some(prepared) = self.direct_static_image_for_overlay(request) {
             return StaticImageOverlayPreparation::Ready(prepared);
         }
-        if self.image_preview.pending_prepares.contains(&key) {
+        if self.preview.image.pending_prepares.contains(&key) {
             return StaticImageOverlayPreparation::Pending;
         }
-        if self.image_preview.failed_images.contains(&key) {
+        if self.preview.image.failed_images.contains(&key) {
             StaticImageOverlayPreparation::Failed
         } else {
             // No prepare job is running and the key has not failed.  This can happen when a job
@@ -93,15 +93,16 @@ impl App {
         }
 
         let key = StaticImageKey::from_request(request);
-        self.image_preview.failed_images.remove(&key);
+        self.preview.image.failed_images.remove(&key);
         let dimensions = self
-            .image_preview
+            .preview
+            .image
             .dimensions
             .get(&key)
             .copied()
             .or_else(|| read_png_dimensions(&request.path))
             .or_else(|| read_raster_dimensions(&request.path))?;
-        self.image_preview.dimensions.insert(key, dimensions);
+        self.preview.image.dimensions.insert(key, dimensions);
 
         Some(PreparedStaticImage {
             display_path: request.path.clone(),
@@ -137,8 +138,8 @@ mod tests {
 
     fn configure_terminal_image_support(app: &mut App) {
         let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
-        app.terminal_images.protocol = ImageProtocol::KittyGraphics;
-        app.terminal_images.window = Some(TerminalWindowSize {
+        app.preview.terminal_images.protocol = ImageProtocol::KittyGraphics;
+        app.preview.terminal_images.window = Some(TerminalWindowSize {
             cells_width,
             cells_height,
             pixels_width: 1920,
@@ -163,7 +164,7 @@ mod tests {
             .file_name()
             .and_then(|name| name.to_str())
             .expect("file name should be valid utf-8");
-        app.entries = vec![Entry {
+        app.navigation.entries = vec![Entry {
             path: path.to_path_buf(),
             name: name.to_string(),
             name_key: name.to_ascii_lowercase(),
@@ -172,15 +173,15 @@ mod tests {
             modified: metadata.modified().ok(),
             readonly: false,
         }];
-        app.selected = 0;
-        app.frame_state.preview_content_area = Some(Rect {
+        app.navigation.selected = 0;
+        app.input.frame_state.preview_content_area = Some(Rect {
             x: 2,
             y: 3,
             width: 48,
             height: 20,
         });
-        app.frame_state.metrics.cols = 1;
-        app.frame_state.metrics.rows_visible = 6;
+        app.input.frame_state.metrics.cols = 1;
+        app.input.frame_state.metrics.rows_visible = 6;
     }
 
     fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBuf, PathBuf) {
@@ -191,7 +192,7 @@ mod tests {
 
         let mut app = App::new_at(root.clone()).expect("app should initialize");
         configure_terminal_image_support(&mut app);
-        app.pdf_preview.pdf_tools_available = true;
+        app.preview.pdf.pdf_tools_available = true;
         set_single_test_entry(&mut app, &image_path);
         app.refresh_preview();
 
@@ -199,7 +200,7 @@ mod tests {
     }
 
     fn ready_static_image_overlay(app: &mut App) -> StaticImageOverlayRequest {
-        app.image_preview.selection_activation_delay = Duration::ZERO;
+        app.preview.image.selection_activation_delay = Duration::ZERO;
         app.sync_image_preview_selection_activation();
         app.active_static_image_overlay_request()
             .expect("static image overlay request should exist")
@@ -232,8 +233,8 @@ mod tests {
             }
         }
 
-        assert!(app.image_preview.dimensions.contains_key(&key));
-        assert!(!app.image_preview.pending_prepares.contains(&key));
+        assert!(app.preview.image.dimensions.contains_key(&key));
+        assert!(!app.preview.image.pending_prepares.contains(&key));
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -250,7 +251,7 @@ mod tests {
         write_test_raster_image(&rendered_path, ImageFormat::Png, 320, 180);
         let payload: Arc<str> = Arc::from("YWJj");
 
-        app.image_preview.dimensions.insert(
+        app.preview.image.dimensions.insert(
             key.clone(),
             RenderedImageDimensions {
                 width_px: 320,
@@ -282,7 +283,7 @@ mod tests {
     fn repeated_present_static_image_overlay_is_a_noop_when_nothing_changed() {
         let (mut app, root, _image_path) =
             build_selected_static_image_app("no-op-render", "demo.png");
-        app.image_preview.selection_activation_delay = Duration::ZERO;
+        app.preview.image.selection_activation_delay = Duration::ZERO;
         app.sync_image_preview_selection_activation();
 
         let mut first = Vec::new();
@@ -308,12 +309,12 @@ mod tests {
         let (mut app, root, _image_path) =
             build_selected_static_image_app("kitty-resize-clear", "demo.png");
         let request = ready_static_image_overlay(&mut app);
-        app.image_preview.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
             &request,
             request.area,
             request.area,
         ));
-        app.image_preview.displayed_excluded = vec![Rect {
+        app.preview.image.displayed_excluded = vec![Rect {
             x: 4,
             y: 5,
             width: 6,
@@ -324,7 +325,7 @@ mod tests {
 
         assert!(app.take_pending_kitty_resize_clear());
         assert!(!app.static_image_overlay_displayed());
-        assert!(app.image_preview.displayed_excluded.is_empty());
+        assert!(app.preview.image.displayed_excluded.is_empty());
         assert!(!app.take_pending_kitty_resize_clear());
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -335,8 +336,8 @@ mod tests {
         let (mut app, root, _image_path) =
             build_selected_static_image_app("iterm-resize-no-clear", "demo.png");
         let request = ready_static_image_overlay(&mut app);
-        app.terminal_images.protocol = ImageProtocol::ItermInline;
-        app.image_preview.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+        app.preview.terminal_images.protocol = ImageProtocol::ItermInline;
+        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
             &request,
             request.area,
             request.area,
@@ -354,7 +355,7 @@ mod tests {
     fn exclusion_only_updates_redraw_without_clearing_the_existing_image() {
         let (mut app, root, _image_path) =
             build_selected_static_image_app("excluded-redraw", "demo.png");
-        app.image_preview.selection_activation_delay = Duration::ZERO;
+        app.preview.image.selection_activation_delay = Duration::ZERO;
         app.sync_image_preview_selection_activation();
 
         let mut initial = Vec::new();
@@ -387,7 +388,7 @@ mod tests {
             !output.contains(build_kitty_clear_sequence()),
             "exclusion-only redraw should not clear the previous image first"
         );
-        assert_eq!(app.image_preview.displayed_excluded, excluded);
+        assert_eq!(app.preview.image.displayed_excluded, excluded);
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

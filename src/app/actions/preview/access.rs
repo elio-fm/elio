@@ -3,42 +3,43 @@ use std::sync::Arc;
 
 impl App {
     pub fn preview_lines(&self) -> Vec<Line<'static>> {
-        self.preview_state.content.lines()
+        self.preview.state.content.lines()
     }
 
     pub fn preview_wrapped_lines(&self, visible_cols: usize) -> Arc<[Line<'static>]> {
-        self.preview_state.content.wrapped_lines(visible_cols)
+        self.preview.state.content.wrapped_lines(visible_cols)
     }
 
     pub fn preview_section_label(&self) -> &'static str {
-        self.preview_state.content.section_label()
+        self.preview.state.content.section_label()
     }
 
     pub fn preview_scroll_offset(&self) -> usize {
-        self.preview_state.scroll
+        self.preview.state.scroll
     }
 
     pub fn preview_horizontal_scroll_offset(&self) -> usize {
-        self.preview_state.horizontal_scroll
+        self.preview.state.horizontal_scroll
     }
 
     pub fn preview_total_lines(&self, visible_cols: usize) -> usize {
-        self.preview_state.content.visual_line_count(visible_cols)
+        self.preview.state.content.visual_line_count(visible_cols)
     }
 
     pub fn preview_wraps(&self) -> bool {
-        self.preview_state.content.kind.wraps_in_preview()
+        self.preview.state.content.kind.wraps_in_preview()
     }
 
     pub fn preview_allows_horizontal_scroll(&self) -> bool {
-        self.preview_state.content.kind.allows_horizontal_scroll()
+        self.preview.state.content.kind.allows_horizontal_scroll()
     }
 
     pub fn preview_max_horizontal_scroll(&self, visible_cols: usize) -> usize {
         if !self.preview_allows_horizontal_scroll() {
             return 0;
         }
-        self.preview_state
+        self.preview
+            .state
             .content
             .wrapped_max_line_width(visible_cols)
             .saturating_sub(visible_cols.max(1))
@@ -46,14 +47,16 @@ impl App {
 
     #[cfg(test)]
     pub fn preview_header_detail(&self, visible_rows: usize) -> Option<String> {
-        let visible_cols = self.frame_state.preview_cols_visible;
+        let visible_cols = self.input.frame_state.preview_cols_visible;
         let detail = self
-            .preview_state
+            .preview
+            .state
             .content
-            .header_detail(self.preview_state.scroll, visible_rows);
+            .header_detail(self.preview.state.scroll, visible_rows);
         let wrapped_note =
-            if self.preview_state.content.truncation_note.is_none() && visible_cols > 0 {
-                self.preview_state
+            if self.preview.state.content.truncation_note.is_none() && visible_cols > 0 {
+                self.preview
+                    .state
                     .content
                     .wrapped_truncation_note(visible_cols)
             } else {
@@ -66,7 +69,7 @@ impl App {
             (None, Some(note)) => Some(note),
             (None, None) => None,
         };
-        if let Some(navigation_detail) = self.preview_state.content.navigation_header_detail() {
+        if let Some(navigation_detail) = self.preview.state.content.navigation_header_detail() {
             detail = Some(match detail {
                 Some(detail) if !detail.is_empty() => format!("{detail}  •  {navigation_detail}"),
                 _ => navigation_detail,

@@ -6,7 +6,7 @@ fn current_extensionless_png_uses_direct_kitty_source_overlay() {
     fs::create_dir_all(&root).expect("failed to create temp root");
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.pdf_preview.pdf_tools_available = true;
+    app.preview.pdf.pdf_tools_available = true;
 
     let path = root.join("background");
     write_test_raster_image(&path, ImageFormat::Png, 600, 300);
@@ -30,7 +30,7 @@ fn current_extensionless_png_uses_direct_kitty_source_overlay() {
         }
         _ => panic!("extensionless png should render directly in kitty"),
     }
-    assert!(!app.image_preview.pending_prepares.contains(&key));
+    assert!(!app.preview.image.pending_prepares.contains(&key));
     assert!(app.pending_image_preview_timer().is_none());
     assert_eq!(app.preview_overlay_placeholder_message(), None);
 
@@ -42,14 +42,14 @@ fn prepared_full_pane_image_uses_full_pane_kitty_placement() {
     let root = temp_root("image-placement-from-rendered-png");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let mut app = App::new_at(root.clone()).expect("app should initialize");
-    app.terminal_images.protocol = ImageProtocol::KittyGraphics;
-    app.terminal_images.window = Some(TerminalWindowSize {
+    app.preview.terminal_images.protocol = ImageProtocol::KittyGraphics;
+    app.preview.terminal_images.window = Some(TerminalWindowSize {
         cells_width: 100,
         cells_height: 50,
         pixels_width: 1000,
         pixels_height: 1000,
     });
-    app.pdf_preview.pdf_tools_available = true;
+    app.preview.pdf.pdf_tools_available = true;
 
     let path = root.join("photo.jpg");
     write_test_raster_image(&path, ImageFormat::Jpeg, 1600, 900);
@@ -83,7 +83,7 @@ fn prepared_full_pane_image_uses_full_pane_kitty_placement() {
     });
 
     assert!(dirty);
-    app.image_preview.selection_activation_delay = Duration::ZERO;
+    app.preview.image.selection_activation_delay = Duration::ZERO;
     app.sync_image_preview_selection_activation();
 
     let output = String::from_utf8(

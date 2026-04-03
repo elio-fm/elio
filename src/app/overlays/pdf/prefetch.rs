@@ -7,7 +7,7 @@ use crate::app::{App, jobs};
 
 impl App {
     pub(super) fn refresh_pdf_prefetch_window(&mut self) {
-        let Some(session) = self.pdf_preview.session.as_ref() else {
+        let Some(session) = self.preview.pdf.session.as_ref() else {
             self.clear_pending_pdf_work();
             return;
         };
@@ -16,9 +16,10 @@ impl App {
         let modified = session.modified;
 
         let window_pages = self.pdf_probe_window_pages();
-        self.scheduler
+        self.jobs
+            .scheduler
             .retain_pdf_probe_pages(&path, size, modified, &window_pages);
-        self.pdf_preview.pending_page_probes.retain(|key| {
+        self.preview.pdf.pending_page_probes.retain(|key| {
             key.path == path
                 && key.size == size
                 && key.modified == modified
@@ -26,9 +27,10 @@ impl App {
         });
 
         let render_variants = self.desired_pdf_render_variants();
-        self.scheduler
+        self.jobs
+            .scheduler
             .retain_pdf_render_variants(&path, size, modified, &render_variants);
-        self.pdf_preview.pending_renders.retain(|key| {
+        self.preview.pdf.pending_renders.retain(|key| {
             key.path == path
                 && key.size == size
                 && key.modified == modified
@@ -56,7 +58,7 @@ impl App {
     }
 
     fn try_queue_pdf_probe_page(&mut self, page: usize) {
-        let Some(session) = &self.pdf_preview.session else {
+        let Some(session) = &self.preview.pdf.session else {
             return;
         };
 
@@ -79,7 +81,7 @@ impl App {
     }
 
     fn pdf_probe_window_pages(&self) -> Vec<usize> {
-        let Some(session) = self.pdf_preview.session.as_ref() else {
+        let Some(session) = self.preview.pdf.session.as_ref() else {
             return Vec::new();
         };
 
@@ -94,7 +96,7 @@ impl App {
     }
 
     pub(super) fn pdf_prefetch_probe_pages(&self) -> Vec<usize> {
-        let Some(session) = self.pdf_preview.session.as_ref() else {
+        let Some(session) = self.preview.pdf.session.as_ref() else {
             return Vec::new();
         };
         self.pdf_prefetch_pages(
@@ -106,7 +108,7 @@ impl App {
     }
 
     pub(super) fn pdf_prefetch_render_pages(&self) -> Vec<usize> {
-        let Some(session) = self.pdf_preview.session.as_ref() else {
+        let Some(session) = self.preview.pdf.session.as_ref() else {
             return Vec::new();
         };
         self.pdf_prefetch_pages(
@@ -121,7 +123,8 @@ impl App {
         self.active_pdf_overlay_request()
             .as_ref()
             .is_some_and(|request| {
-                self.pdf_preview
+                self.preview
+                    .pdf
                     .page_dimensions
                     .contains_key(&PdfPageKey::from_request(request))
             })
@@ -132,8 +135,8 @@ impl App {
             return None;
         }
 
-        let session = self.pdf_preview.session.as_ref()?;
-        let area = self.frame_state.preview_content_area?;
+        let session = self.preview.pdf.session.as_ref()?;
+        let area = self.input.frame_state.preview_content_area?;
         if area.width == 0 || area.height == 0 {
             return None;
         }
@@ -154,7 +157,7 @@ impl App {
     }
 
     fn desired_pdf_render_variants(&self) -> Vec<(usize, u32, u32)> {
-        let Some(session) = self.pdf_preview.session.as_ref() else {
+        let Some(session) = self.preview.pdf.session.as_ref() else {
             return Vec::new();
         };
 
@@ -182,7 +185,7 @@ impl App {
         let Some(total_pages) = total_pages else {
             return Vec::new();
         };
-        let prefer_backward = self.pdf_preview.last_navigation_direction < 0;
+        let prefer_backward = self.preview.pdf.last_navigation_direction < 0;
         let mut pages = Vec::new();
 
         if prefer_backward {
@@ -217,7 +220,7 @@ impl App {
     }
 
     fn queue_current_pdf_probe(&mut self) {
-        let Some(session) = &self.pdf_preview.session else {
+        let Some(session) = &self.preview.pdf.session else {
             return;
         };
 
@@ -240,14 +243,14 @@ impl App {
     }
 
     fn submit_pdf_probe_key(&mut self, key: PdfPageKey, priority: jobs::PdfJobPriority) {
-        if self.pdf_preview.page_dimensions.contains_key(&key)
-            || self.pdf_preview.pending_page_probes.contains(&key)
-            || self.pdf_preview.failed_page_probes.contains(&key)
+        if self.preview.pdf.page_dimensions.contains_key(&key)
+            || self.preview.pdf.pending_page_probes.contains(&key)
+            || self.preview.pdf.failed_page_probes.contains(&key)
         {
             return;
         }
 
-        if self.scheduler.submit_pdf_probe(
+        if self.jobs.scheduler.submit_pdf_probe(
             jobs::PdfProbeRequest {
                 path: key.path.clone(),
                 size: key.size,
@@ -256,21 +259,21 @@ impl App {
             },
             priority,
         ) {
-            self.pdf_preview.pending_page_probes.insert(key);
+            self.preview.pdf.pending_page_probes.insert(key);
         } else {
-            self.pdf_preview.failed_page_probes.insert(key);
+            self.preview.pdf.failed_page_probes.insert(key);
         }
     }
 
     fn submit_pdf_render_key(&mut self, key: PdfRenderKey, priority: jobs::PdfJobPriority) {
         if self.cached_render_exists(&key)
-            || self.pdf_preview.pending_renders.contains(&key)
-            || self.pdf_preview.failed_renders.contains(&key)
+            || self.preview.pdf.pending_renders.contains(&key)
+            || self.preview.pdf.failed_renders.contains(&key)
         {
             return;
         }
 
-        if self.scheduler.submit_pdf_render(
+        if self.jobs.scheduler.submit_pdf_render(
             jobs::PdfRenderRequest {
                 path: key.path.clone(),
                 size: key.size,
@@ -281,9 +284,9 @@ impl App {
             },
             priority,
         ) {
-            self.pdf_preview.pending_renders.insert(key);
+            self.preview.pdf.pending_renders.insert(key);
         } else {
-            self.pdf_preview.failed_renders.insert(key);
+            self.preview.pdf.failed_renders.insert(key);
         }
     }
 }
