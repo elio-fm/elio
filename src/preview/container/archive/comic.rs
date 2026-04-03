@@ -4,6 +4,7 @@ use super::common::{
 use super::format::archive_default_label;
 use super::*;
 use crate::fs::natural_cmp;
+use crate::preview::process::run_command_capture_stdout_cancellable;
 use std::{
     collections::{HashMap, VecDeque, hash_map::DefaultHasher},
     env,
@@ -11,22 +12,13 @@ use std::{
     hash::{Hash, Hasher},
     io::Read,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    sync::{
-        Arc, Mutex, OnceLock,
-        atomic::{AtomicU64, Ordering},
-    },
-    thread,
-    time::Duration,
+    process::Command,
+    sync::{Arc, Mutex, OnceLock},
 };
 use zip::ZipArchive;
 
 const COMIC_ARCHIVE_IMAGE_ENTRY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 const COMIC_ARCHIVE_CACHE_LIMIT: usize = 16;
-const CANCELLABLE_COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(5);
-
-static COMMAND_CAPTURE_ID: AtomicU64 = AtomicU64::new(0);
-
 fn has_unrar() -> bool {
     static RESULT: OnceLock<bool> = OnceLock::new();
     *RESULT.get_or_init(|| Command::new("unrar").output().is_ok())
@@ -585,67 +577,13 @@ fn archive_asset_cache_path(
     Some(cache_dir.join(format!("comic-{:016x}.{extension}", hasher.finish())))
 }
 
-fn run_command_capture_stdout_cancellable<F>(
-    mut command: Command,
-    capture_label: &str,
-    canceled: &F,
-) -> Option<Vec<u8>>
-where
-    F: Fn() -> bool,
-{
-    if canceled() {
-        return None;
-    }
-
-    let capture_path = command_capture_path(capture_label);
-    let stdout = File::create(&capture_path).ok()?;
-    let mut child = match command
-        .stdout(Stdio::from(stdout))
-        .stderr(Stdio::null())
-        .spawn()
-    {
-        Ok(child) => child,
-        Err(_) => {
-            let _ = fs::remove_file(&capture_path);
-            return None;
-        }
-    };
-
-    loop {
-        if canceled() {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = fs::remove_file(&capture_path);
-            return None;
-        }
-
-        match child.try_wait().ok()? {
-            Some(status) => {
-                let output = status
-                    .success()
-                    .then(|| fs::read(&capture_path).ok())
-                    .flatten();
-                let _ = fs::remove_file(&capture_path);
-                return output;
-            }
-            None => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
-        }
-    }
-}
-
-fn command_capture_path(label: &str) -> PathBuf {
-    let id = COMMAND_CAPTURE_ID.fetch_add(1, Ordering::Relaxed);
-    env::temp_dir().join(format!("elio-{label}-{}-{id}.tmp", std::process::id()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::super::ArchiveFormat;
     use super::super::build_archive_preview;
     use super::{
         ComicArchiveBackend, ComicArchiveSignature, build_comic_archive_preview,
-        parse_comic_archive_from_7z_output, parse_zip_comic_archive,
-        run_command_capture_stdout_cancellable, sniff_comic_archive_signature,
+        parse_comic_archive_from_7z_output, parse_zip_comic_archive, sniff_comic_archive_signature,
     };
     use crate::preview::PreviewKind;
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
@@ -655,12 +593,8 @@ mod tests {
         io::Write,
         path::PathBuf,
         process::Command,
-        sync::{
-            Arc,
-            atomic::{AtomicBool, Ordering},
-        },
-        thread,
-        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+        sync::atomic::{AtomicBool, Ordering},
+        time::{SystemTime, UNIX_EPOCH},
     };
 
     fn temp_path(label: &str) -> PathBuf {
@@ -771,36 +705,6 @@ Packed Size = 40
 
         fs::remove_dir_all(&root).expect("failed to remove temp root");
     }
-
-    #[test]
-    fn cancellable_command_helper_stops_long_running_process_promptly() {
-        let canceled = Arc::new(AtomicBool::new(false));
-        let cancel_flag = Arc::clone(&canceled);
-        let cancel_thread = thread::spawn(move || {
-            thread::sleep(Duration::from_millis(25));
-            cancel_flag.store(true, Ordering::Relaxed);
-        });
-
-        let mut command = Command::new("bash");
-        command.arg("-lc").arg("sleep 1; printf late");
-        let started_at = Instant::now();
-        let output = run_command_capture_stdout_cancellable(command, "cancel-command", &|| {
-            canceled.load(Ordering::Relaxed)
-        });
-        cancel_thread
-            .join()
-            .expect("cancel thread should finish cleanly");
-
-        assert!(
-            output.is_none(),
-            "canceled command output should be discarded"
-        );
-        assert!(
-            started_at.elapsed() < Duration::from_millis(500),
-            "canceled command should stop promptly"
-        );
-    }
-
     #[test]
     fn build_comic_archive_preview_falls_back_to_7z_for_mislabeled_cbz() {
         let root = temp_path("mislabeled-cbz");

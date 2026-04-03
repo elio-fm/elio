@@ -1,6 +1,7 @@
 use super::{
     PreviewContent, PreviewKind, PreviewVisual, PreviewVisualKind, PreviewVisualLayout,
     appearance as theme,
+    process::{run_command_capture_stdout_cancellable, run_command_status_cancellable},
 };
 use crate::core::Entry;
 use ratatui::{
@@ -13,18 +14,12 @@ use std::{
     env, fs,
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    sync::atomic::{AtomicU64, Ordering},
-    thread,
-    time::{Duration, SystemTime},
+    process::Command,
+    time::SystemTime,
 };
 
 const VIDEO_THUMBNAIL_CACHE_VERSION: usize = 1;
 const VIDEO_FALLBACK_THUMBNAIL_TIMESTAMP_MS: [u64; 2] = [1_000, 0];
-const CANCELLABLE_COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(5);
-
-static COMMAND_CAPTURE_ID: AtomicU64 = AtomicU64::new(0);
-
 #[derive(Clone, Debug, Default, PartialEq)]
 struct VideoMetadata {
     dimensions: Option<(u32, u32)>,
@@ -375,86 +370,6 @@ fn finalize_video_thumbnail(temp_path: &Path, cache_path: &Path) -> Option<()> {
     }
 }
 
-fn run_command_capture_stdout_cancellable<F>(
-    mut command: Command,
-    capture_label: &str,
-    canceled: &F,
-) -> Option<Vec<u8>>
-where
-    F: Fn() -> bool,
-{
-    if canceled() {
-        return None;
-    }
-
-    let capture_path = command_capture_path(capture_label);
-    let stdout = fs::File::create(&capture_path).ok()?;
-    let mut child = match command
-        .stdout(Stdio::from(stdout))
-        .stderr(Stdio::null())
-        .spawn()
-    {
-        Ok(child) => child,
-        Err(_) => {
-            let _ = fs::remove_file(&capture_path);
-            return None;
-        }
-    };
-
-    loop {
-        if canceled() {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = fs::remove_file(&capture_path);
-            return None;
-        }
-
-        match child.try_wait().ok()? {
-            Some(status) => {
-                let output = status
-                    .success()
-                    .then(|| fs::read(&capture_path).ok())
-                    .flatten();
-                let _ = fs::remove_file(&capture_path);
-                return output;
-            }
-            None => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
-        }
-    }
-}
-
-fn run_command_status_cancellable<F>(mut command: Command, canceled: &F) -> Option<bool>
-where
-    F: Fn() -> bool,
-{
-    if canceled() {
-        return None;
-    }
-
-    let mut child = command
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-    loop {
-        if canceled() {
-            let _ = child.kill();
-            let _ = child.wait();
-            return None;
-        }
-
-        match child.try_wait().ok()? {
-            Some(status) => return Some(status.success()),
-            None => thread::sleep(CANCELLABLE_COMMAND_POLL_INTERVAL),
-        }
-    }
-}
-
-fn command_capture_path(label: &str) -> PathBuf {
-    let id = COMMAND_CAPTURE_ID.fetch_add(1, Ordering::Relaxed);
-    env::temp_dir().join(format!("elio-{label}-{}-{id}.tmp", std::process::id()))
-}
-
 fn system_time_key(time: SystemTime) -> Option<(u64, u32)> {
     time.duration_since(SystemTime::UNIX_EPOCH)
         .ok()
@@ -507,14 +422,7 @@ fn preview_field_line(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        path::Path,
-        sync::{
-            Arc,
-            atomic::{AtomicBool, Ordering},
-        },
-        time::{Duration, Instant},
-    };
+    use std::{path::Path, time::Duration};
 
     #[test]
     fn thumbnail_timestamp_clamps_to_supported_range() {
@@ -572,36 +480,6 @@ mod tests {
         assert_eq!(
             thumbnail_candidate_timestamps_ms(Some(120.0)),
             vec![12_000, 1_000, 0]
-        );
-    }
-
-    #[test]
-    fn cancellable_command_helper_stops_long_running_process_promptly() {
-        let canceled = Arc::new(AtomicBool::new(false));
-        let cancel_flag = Arc::clone(&canceled);
-        let cancel_thread = thread::spawn(move || {
-            thread::sleep(Duration::from_millis(25));
-            cancel_flag.store(true, Ordering::Relaxed);
-        });
-
-        let mut command = Command::new("bash");
-        command.arg("-lc").arg("sleep 1; printf late");
-        let started_at = Instant::now();
-        let output =
-            run_command_capture_stdout_cancellable(command, "video-cancel-command", &|| {
-                canceled.load(Ordering::Relaxed)
-            });
-        cancel_thread
-            .join()
-            .expect("cancel thread should finish cleanly");
-
-        assert!(
-            output.is_none(),
-            "canceled command output should be discarded"
-        );
-        assert!(
-            started_at.elapsed() < Duration::from_millis(500),
-            "canceled command should stop promptly"
         );
     }
 }
