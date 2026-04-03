@@ -1,14 +1,8 @@
 use serde::Deserialize;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct LayoutConfig {
     pub panes: Option<PaneWeights>,
-}
-
-impl Default for LayoutConfig {
-    fn default() -> Self {
-        Self { panes: None }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
