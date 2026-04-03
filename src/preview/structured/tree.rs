@@ -1,5 +1,5 @@
 use super::{LINE_LIMIT, StructuredPreview, styled};
-use crate::ui::theme;
+use crate::preview::appearance as theme;
 use ratatui::{
     style::Modifier,
     text::{Line, Span},

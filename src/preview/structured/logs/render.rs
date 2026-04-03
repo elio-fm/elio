@@ -1,6 +1,6 @@
 use super::super::{LINE_LIMIT, StructuredPreview, styled};
 use super::types::{ParsedLogDocument, ParsedLogEntry};
-use crate::{file_info::StructuredFormat, ui::theme};
+use crate::{file_info::StructuredFormat, preview::appearance as theme};
 use ratatui::{
     style::Modifier,
     text::{Line, Span},

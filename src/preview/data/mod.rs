@@ -2,7 +2,7 @@ mod csv;
 mod sqlite;
 
 use super::*;
-use crate::ui::theme;
+use crate::preview::appearance as theme;
 use ratatui::{
     style::Style,
     text::{Line, Span},

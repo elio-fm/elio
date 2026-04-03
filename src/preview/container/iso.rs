@@ -1,5 +1,5 @@
 use super::*;
-use crate::ui::theme;
+use crate::preview::appearance as theme;
 use ratatui::text::Line;
 use std::{fs::File, io::Read, path::Path, process::Command};
 

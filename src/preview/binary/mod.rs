@@ -3,7 +3,7 @@ mod macho;
 mod pe;
 
 use super::{PreviewContent, PreviewKind};
-use crate::ui::theme;
+use crate::preview::appearance as theme;
 use ratatui::{
     style::Style,
     text::{Line, Span},

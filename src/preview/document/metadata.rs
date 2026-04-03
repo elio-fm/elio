@@ -1,7 +1,6 @@
 use crate::{
     file_info::DocumentFormat,
-    preview::{PreviewContent, PreviewKind},
-    ui::theme,
+    preview::{PreviewContent, PreviewKind, appearance as theme},
 };
 use ratatui::{
     style::Style,

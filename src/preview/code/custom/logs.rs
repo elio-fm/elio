@@ -1,5 +1,5 @@
 use super::{looks_numeric, split_unquoted_once, styled_text};
-use crate::ui::theme;
+use crate::preview::appearance as theme;
 use ratatui::{style::Color, style::Modifier, text::Span};
 
 pub(super) fn highlight_log_line(

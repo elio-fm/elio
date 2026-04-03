@@ -1,5 +1,4 @@
-use super::*;
-use crate::ui::theme;
+use super::{appearance as theme, *};
 use ratatui::{
     style::Style,
     text::{Line, Span},

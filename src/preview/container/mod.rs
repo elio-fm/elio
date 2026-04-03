@@ -2,9 +2,8 @@ mod archive;
 mod iso;
 mod torrent;
 
-use super::*;
+use super::{appearance as theme, *};
 use crate::core::EntryKind;
-use crate::ui::theme;
 use ratatui::{
     style::Style,
     text::{Line, Span},

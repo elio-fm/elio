@@ -1,5 +1,5 @@
 use super::{looks_numeric, scan_quoted_segment, styled_text};
-use crate::ui::theme;
+use crate::preview::appearance as theme;
 use ratatui::{style::Modifier, text::Span};
 
 pub(super) fn highlight_directive_conf_line(

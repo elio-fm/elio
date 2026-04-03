@@ -58,7 +58,7 @@ mod tests {
     use super::bundle::{find_syntax, syntax_set};
     use super::semantics::{SemanticRole, semantic_role_for_token};
     use super::*;
-    use crate::ui::theme;
+    use crate::preview::appearance as theme;
     use std::str::FromStr;
     use syntect::{
         easy::ScopeRangeIterator,
