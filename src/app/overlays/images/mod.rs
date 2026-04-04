@@ -117,7 +117,6 @@ mod tests {
     use super::*;
     use crate::app::overlays::inline_image::{
         ImageProtocol, OverlayPresentState, RenderedImageDimensions, TerminalWindowSize,
-        build_kitty_clear_sequence,
     };
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use ratatui::layout::Rect;
@@ -385,7 +384,7 @@ mod tests {
             "changed exclusions should trigger a redraw"
         );
         assert!(
-            !output.contains(build_kitty_clear_sequence()),
+            !output.contains("\u{1b}_Ga=d,d=A,q=2\u{1b}\\"),
             "exclusion-only redraw should not clear the previous image first"
         );
         assert_eq!(app.preview.image.displayed_excluded, excluded);

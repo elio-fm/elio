@@ -1,8 +1,6 @@
 use super::super::*;
 pub(super) use crate::app::overlays::images::StaticImageKey;
-pub(super) use crate::app::overlays::inline_image::{
-    ImageProtocol, TerminalWindowSize, command_exists,
-};
+pub(super) use crate::app::overlays::inline_image::{ImageProtocol, TerminalWindowSize};
 pub(super) use crate::preview::PreviewKind;
 pub(super) use image::ImageFormat;
 use image::{DynamicImage, Rgba, RgbaImage};

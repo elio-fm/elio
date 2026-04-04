@@ -20,22 +20,12 @@ use self::{
 #[cfg(test)]
 use super::super::*;
 #[cfg(test)]
-use super::inline_image::{
-    RenderedImageDimensions, TerminalIdentity, build_kitty_clear_sequence,
-    build_kitty_placeholder_sequence, build_kitty_upload_sequence, fallback_window_size_pixels,
-    fit_image_area, parse_window_size, read_png_dimensions, select_image_protocol,
-};
-#[cfg(test)]
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+use super::inline_image::{RenderedImageDimensions, fit_image_area, read_png_dimensions};
 #[cfg(test)]
 use ratatui::layout::Rect;
 use std::time::Duration;
 #[cfg(test)]
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    time::Instant,
-};
+use std::{fs, path::PathBuf, time::Instant};
 
 const PDF_RENDER_CACHE_LIMIT: usize = 12;
 const PDF_RENDER_BUCKET_PX: u32 = 64;
