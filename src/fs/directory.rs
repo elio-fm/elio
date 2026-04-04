@@ -1,5 +1,7 @@
 use crate::core::{Entry, EntryKind, SortMode};
 use anyhow::{Context, Result};
+#[cfg(test)]
+use std::cell::RefCell;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::{
@@ -12,6 +14,11 @@ use std::{
     process::{Command, Stdio},
     time::{SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(test)]
+thread_local! {
+    static TEST_OPEN_IN_SYSTEM_CAPTURE: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct DirectoryFingerprint {
@@ -230,6 +237,11 @@ fn compare_entry_names(left: &Entry, right: &Entry) -> Ordering {
 }
 
 pub(crate) fn open_in_system(target: &Path) -> Result<(), String> {
+    #[cfg(test)]
+    if let Some(capture) = TEST_OPEN_IN_SYSTEM_CAPTURE.with(|slot| slot.borrow().clone()) {
+        return fs::write(&capture, target.display().to_string()).map_err(|e| e.to_string());
+    }
+
     #[cfg(target_os = "macos")]
     {
         detached_open("open", &[], target).map_err(|e| format!("open: {e}"))
@@ -257,6 +269,11 @@ pub(crate) fn open_in_system(target: &Path) -> Result<(), String> {
     {
         open_with_unix_backends(target, &[("xdg-open", &[][..]), ("gio", &["open"][..])])
     }
+}
+
+#[cfg(test)]
+pub(crate) fn set_open_in_system_capture_for_test(path: Option<PathBuf>) {
+    TEST_OPEN_IN_SYSTEM_CAPTURE.with(|slot| *slot.borrow_mut() = path);
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]

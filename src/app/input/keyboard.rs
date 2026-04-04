@@ -215,7 +215,7 @@ impl App {
             KeyCode::End => self.select_last(),
             KeyCode::Char('g') => self.open_goto_overlay(),
             KeyCode::Char('G') => self.select_last(),
-            KeyCode::Enter => self.open_selected()?,
+            KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r') => self.open_selected()?,
             KeyCode::Backspace => self.go_parent()?,
             KeyCode::Char(' ') => self.toggle_selection(),
             KeyCode::Char('+') | KeyCode::Char('=')
@@ -331,7 +331,7 @@ impl App {
         if entry.is_dir() {
             self.set_dir(entry.path.clone())
         } else {
-            self.open_in_system()
+            self.dispatch_action(crate::config::Action::Open)
         }
     }
 }

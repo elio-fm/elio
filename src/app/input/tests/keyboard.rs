@@ -19,6 +19,24 @@ fn gio_available() -> bool {
         .is_ok_and(|s| s.success())
 }
 
+#[cfg(all(unix, not(target_os = "macos")))]
+struct OpenInSystemCaptureGuard;
+
+#[cfg(all(unix, not(target_os = "macos")))]
+impl OpenInSystemCaptureGuard {
+    fn install(path: std::path::PathBuf) -> Self {
+        crate::fs::set_open_in_system_capture_for_test(Some(path));
+        Self
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+impl Drop for OpenInSystemCaptureGuard {
+    fn drop(&mut self) {
+        crate::fs::set_open_in_system_capture_for_test(None);
+    }
+}
+
 #[test]
 fn shift_slash_opens_and_closes_help_overlay() {
     let root = temp_path("help-shift-slash");
@@ -57,6 +75,66 @@ fn q_sets_should_quit() {
     assert!(app.should_quit);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn enter_opens_selected_file_with_system_opener() {
+    let root = temp_path("enter-opens-file");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let file_path = root.join("note.txt");
+    fs::write(&file_path, "hello").expect("failed to write temp file");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .expect("enter should open selected file");
+
+    let deadline = Instant::now() + Duration::from_millis(1000);
+    while !capture.exists() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    let opened = fs::read_to_string(&capture).expect("capture should exist");
+    assert_eq!(opened, file_path.display().to_string());
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn newline_key_event_also_opens_selected_file() {
+    let root = temp_path("newline-opens-file");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let file_path = root.join("note.txt");
+    fs::write(&file_path, "hello").expect("failed to write temp file");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('\n'),
+        KeyModifiers::NONE,
+    )))
+    .expect("newline key event should open selected file");
+
+    let deadline = Instant::now() + Duration::from_millis(1000);
+    while !capture.exists() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    let opened = fs::read_to_string(&capture).expect("capture should exist");
+    assert_eq!(opened, file_path.display().to_string());
+
+    fs::remove_dir_all(root).ok();
 }
 
 #[test]

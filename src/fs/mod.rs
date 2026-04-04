@@ -31,6 +31,8 @@ fn is_hidden_entry(entry: &std::fs::DirEntry) -> bool {
     is_hidden(entry.file_name().as_os_str())
 }
 
+#[cfg(test)]
+pub(crate) use directory::set_open_in_system_capture_for_test;
 pub(crate) use directory::{
     DirectoryFingerprint, DirectorySnapshot, detached_open_command, load_directory_snapshot,
     open_in_system, restore_trash_item, scan_directory_fingerprint,
