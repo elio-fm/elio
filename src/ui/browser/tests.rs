@@ -797,6 +797,51 @@ fn goto_overlay_renders_expected_labels_and_hit_rects() {
 }
 
 #[test]
+fn open_with_overlay_renders_expected_hits() {
+    let root = temp_path("open-with-overlay-render");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("document.txt"), "hello\n").expect("failed to write temp file");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    // Wait for the directory to load so the file entry is visible.
+    for _ in 0..100 {
+        let _ = app.process_background_jobs();
+        if !app.navigation.entries.is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+
+    let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
+        .expect("O should open the open-with overlay");
+
+    let state = draw_ui(&mut terminal, &mut app);
+    let rendered = buffer_text(terminal.backend().buffer());
+
+    assert!(
+        state.open_with_panel.is_some(),
+        "open-with overlay should render a popup panel"
+    );
+    assert_eq!(
+        state.open_with_hits.len(),
+        3,
+        "open-with overlay should expose one hit rect per row"
+    );
+    assert!(
+        rendered.contains("Open With"),
+        "expected open-with title to be rendered, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("1 -> default app"),
+        "expected open-with overlay to render the first row, got: {rendered:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn trash_overlay_tabs_focus_between_confirm_and_cancel_buttons() {
     let root = temp_path("trash-overlay-focus");
     fs::create_dir_all(&root).expect("failed to create temp root");

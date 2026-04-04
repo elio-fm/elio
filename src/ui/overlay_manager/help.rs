@@ -53,6 +53,7 @@ pub(super) fn render_help(
         e(&rename_key, "rename (bulk if selection)"),
         e(&rename_trash_key, "restore from trash"),
         e(&kb.open.to_string(), "open externally"),
+        e(&kb.open_with.to_string(), "open with"),
     ];
     let scroll_key = format!("{} / {}", kb.scroll_preview_left, kb.scroll_preview_right);
     let view_entries = vec![

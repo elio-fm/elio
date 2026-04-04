@@ -1,4 +1,5 @@
 use super::*;
+use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::text::Line;
 
 fn configure_iterm_image_support(app: &mut App) {
@@ -396,6 +397,83 @@ fn iterm_popup_keeps_the_displayed_image_visible() {
     let restore = String::from_utf8(
         app.present_preview_overlay()
             .expect("closing the popup should redraw the image"),
+    )
+    .expect("restored iTerm image output should be valid utf8");
+
+    assert!(restore.contains("\x1b]1337;File=inline=1;"));
+    assert!(app.static_image_overlay_displayed());
+    assert!(
+        app.present_preview_overlay()
+            .expect("steady-state redraw should succeed")
+            .is_empty()
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn closing_open_with_popup_restores_iterm_inline_image() {
+    let root = temp_root("iterm-open-with-popup");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let page = root.join("page.png");
+    write_test_raster_image(&page, ImageFormat::Png, 640, 360);
+    let page_metadata = fs::metadata(&page).expect("page metadata should exist");
+
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_iterm_image_support(&mut app);
+    app.navigation.entries = vec![Entry {
+        path: page.clone(),
+        name: "page.png".to_string(),
+        name_key: "page.png".to_string(),
+        kind: EntryKind::File,
+        size: page_metadata.len(),
+        modified: page_metadata.modified().ok(),
+        readonly: false,
+    }];
+    app.navigation.selected = 0;
+    app.preview.image.selection_activation_delay = Duration::ZERO;
+    app.input.frame_state.preview_media_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 12,
+    });
+    app.input.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 15,
+        width: 48,
+        height: 8,
+    });
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+        .with_preview_visual(PreviewVisual {
+            kind: PreviewVisualKind::PageImage,
+            layout: PreviewVisualLayout::Inline,
+            path: page,
+            size: page_metadata.len(),
+            modified: page_metadata.modified().ok(),
+        });
+
+    app.refresh_static_image_preloads();
+    wait_for_displayed_preview_overlay(&mut app);
+    assert!(app.static_image_overlay_displayed());
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
+        .expect("O should open the open-with overlay");
+    assert!(app.overlays.open_with.is_some());
+    assert!(app.iterm_pre_draw_erase().is_empty());
+
+    let out = app
+        .present_preview_overlay()
+        .expect("iTerm open-with popup redraw should not fail");
+    assert!(out.is_empty());
+    assert!(app.static_image_overlay_displayed());
+    assert!(app.iterm_pre_draw_erase().is_empty());
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Esc)))
+        .expect("Esc should close the open-with overlay");
+    let restore = String::from_utf8(
+        app.present_preview_overlay()
+            .expect("closing the open-with popup should redraw the image"),
     )
     .expect("restored iTerm image output should be valid utf8");
 

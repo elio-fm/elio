@@ -316,6 +316,9 @@ impl App {
         if let Some(r) = self.input.frame_state.copy_panel {
             rects.push(r);
         }
+        if let Some(r) = self.input.frame_state.open_with_panel {
+            rects.push(r);
+        }
         if let Some(r) = self.input.frame_state.search_panel {
             rects.push(r);
         }
@@ -333,6 +336,7 @@ impl App {
             || self.overlays.bulk_rename.is_some()
             || self.overlays.goto.is_some()
             || self.overlays.copy.is_some()
+            || self.overlays.open_with.is_some()
             || self.overlays.search.is_some()
             || self.overlays.help
     }

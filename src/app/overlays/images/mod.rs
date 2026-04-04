@@ -118,6 +118,7 @@ mod tests {
     use crate::app::overlays::inline_image::{
         ImageProtocol, OverlayPresentState, RenderedImageDimensions, TerminalWindowSize,
     };
+    use crossterm::event::{Event, KeyCode, KeyEvent};
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use ratatui::layout::Rect;
     use std::{
@@ -388,6 +389,59 @@ mod tests {
             "exclusion-only redraw should not clear the previous image first"
         );
         assert_eq!(app.preview.image.displayed_excluded, excluded);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn open_with_overlay_updates_kitty_exclusions_and_closing_it_restores_them() {
+        let (mut app, root, _image_path) =
+            build_selected_static_image_app("open-with-exclusions", "demo.png");
+        app.preview.image.selection_activation_delay = Duration::ZERO;
+        app.sync_image_preview_selection_activation();
+
+        let mut initial = Vec::new();
+        app.present_static_image_overlay(ImageProtocol::KittyGraphics, &[], false, &mut initial)
+            .expect("initial static image presentation should succeed");
+        assert!(app.preview.image.displayed_excluded.is_empty());
+
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
+            .expect("O should open the open-with overlay");
+        let popup = Rect {
+            x: 4,
+            y: 5,
+            width: 12,
+            height: 4,
+        };
+        app.input.frame_state.open_with_panel = Some(popup);
+
+        let with_popup = String::from_utf8(
+            app.present_preview_overlay()
+                .expect("open-with popup redraw should succeed"),
+        )
+        .expect("kitty redraw should be valid utf8");
+        assert!(
+            !with_popup.is_empty(),
+            "opening the open-with popup should redraw the kitty image"
+        );
+        assert_eq!(app.preview.image.displayed_excluded, vec![popup]);
+
+        app.overlays.open_with = None;
+        app.input.frame_state.open_with_panel = None;
+
+        let restored = String::from_utf8(
+            app.present_preview_overlay()
+                .expect("closing the open-with popup should redraw the kitty image"),
+        )
+        .expect("kitty redraw should be valid utf8");
+        assert!(
+            !restored.is_empty(),
+            "closing the open-with popup should redraw the kitty image"
+        );
+        assert!(
+            app.preview.image.displayed_excluded.is_empty(),
+            "closing the popup should remove kitty exclusions"
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
