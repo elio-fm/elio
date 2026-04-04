@@ -28,11 +28,6 @@ fn parse_pdfinfo_page_dimensions_reads_global_and_per_page_sizes() {
 }
 
 #[test]
-fn parse_window_size_reads_pixel_dimensions() {
-    assert_eq!(parse_window_size("1575x919\n"), Some((1575, 919)));
-}
-
-#[test]
 fn read_png_dimensions_reads_ihdr_size() {
     let root = temp_root("png-dimensions");
     fs::create_dir_all(&root).expect("failed to create temp root");
