@@ -686,7 +686,6 @@ fn open_with_shortcut_confirms_row_and_closes_overlay() {
     let shortcut = app
         .open_with_row_shortcut(0)
         .expect("first row should have a shortcut");
-    let label = app.open_with_row_label(0).to_string();
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(shortcut))))
         .expect("shortcut should confirm the row");
@@ -695,7 +694,13 @@ fn open_with_shortcut_confirms_row_and_closes_overlay() {
         app.overlays.open_with.is_none(),
         "overlay should close after confirming"
     );
-    assert_eq!(app.status, format!("Would open with {label}"));
+    // Confirming a row launches the app — status is cleared on success or shows
+    // a failure message if the process could not be spawned.
+    assert!(
+        app.status.is_empty() || app.status.starts_with("Failed to open with"),
+        "unexpected status after confirm: {:?}",
+        app.status
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -729,4 +734,103 @@ fn ctrl_c_closes_open_with_overlay() {
     assert!(app.overlays.open_with.is_none());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+// ── open-with launch behavior ─────────────────────────────────────────────────
+
+/// Creates a shell script in `dir` that touches `sentinel` when run,
+/// makes it executable, and returns its path.
+#[cfg(unix)]
+fn write_sentinel_script(dir: &std::path::Path, sentinel: &std::path::Path) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let script = dir.join("fake-app.sh");
+    fs::write(
+        &script,
+        format!("#!/bin/sh\ntouch '{}'\n", sentinel.display()),
+    )
+    .expect("write sentinel script");
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).expect("chmod sentinel script");
+    script
+}
+
+#[cfg(unix)]
+#[test]
+fn detached_open_command_executes_program() {
+    let dir = temp_path("detached-open-cmd");
+    let sentinel = dir.join("ran");
+    let script = write_sentinel_script(&dir, &sentinel);
+
+    crate::fs::detached_open_command(script.to_str().unwrap(), &[])
+        .expect("detached_open_command should succeed");
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(1000);
+    while !sentinel.exists() && std::time::Instant::now() < deadline {
+        thread::sleep(std::time::Duration::from_millis(10));
+    }
+
+    let ran = sentinel.exists(); // capture before cleanup
+    fs::remove_dir_all(&dir).ok();
+    assert!(ran, "script must have run");
+}
+
+#[cfg(unix)]
+#[test]
+fn confirm_open_with_launches_program_and_closes_overlay() {
+    let dir = temp_path("open-with-launch");
+    let sentinel = dir.join("launched");
+    let script = write_sentinel_script(&dir, &sentinel);
+
+    let root = temp_path("open-with-launch-root");
+    fs::write(root.join("file.txt"), "hello").expect("write file");
+    let mut app = App::new_at(root.clone()).expect("create app");
+    wait_for_directory_load(&mut app);
+
+    app.inject_open_with_for_test("Fake App", script.to_str().unwrap(), vec![]);
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('1'))))
+        .expect("shortcut should fire");
+
+    assert!(
+        app.overlays.open_with.is_none(),
+        "overlay must close after launch"
+    );
+    assert!(
+        app.status.is_empty(),
+        "status should be empty after successful launch; got: {:?}",
+        app.status
+    );
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(1000);
+    while !sentinel.exists() && std::time::Instant::now() < deadline {
+        thread::sleep(std::time::Duration::from_millis(10));
+    }
+
+    let launched = sentinel.exists(); // capture before cleanup
+    fs::remove_dir_all(&dir).ok();
+    fs::remove_dir_all(&root).ok();
+    assert!(launched, "fake app must have been executed");
+}
+
+#[test]
+fn confirm_open_with_launch_failure_sets_status() {
+    let root = temp_path("open-with-fail");
+    fs::write(root.join("file.txt"), "hello").expect("write file");
+    let mut app = App::new_at(root.clone()).expect("create app");
+    wait_for_directory_load(&mut app);
+
+    // Point at a program that does not exist — spawn will fail.
+    app.inject_open_with_for_test(
+        "Ghost App",
+        "/this/program/absolutely/does/not/exist",
+        vec![],
+    );
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('1'))))
+        .expect("shortcut should fire");
+
+    assert!(
+        app.overlays.open_with.is_none(),
+        "overlay must close even on failure"
+    );
+    assert_eq!(app.status, "Failed to open with Ghost App");
+
+    fs::remove_dir_all(&root).ok();
 }

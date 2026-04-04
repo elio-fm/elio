@@ -1,10 +1,12 @@
 mod discovery;
 
+use std::path::Path;
+
 use super::{
     App,
     state::{OpenWithApp, OpenWithOverlay, OpenWithRow},
 };
-use crate::fs::rect_contains;
+use crate::fs::{detached_open_command, open_in_system, rect_contains};
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
@@ -60,14 +62,9 @@ impl App {
         let path = entry.path.clone();
 
         let apps = discovery::discover_open_with_apps(&path);
-        if apps.is_empty() {
-            self.status = "No applications found".to_string();
-            return;
-        }
-
-        self.overlays.help = false;
-        self.overlays.open_with = Some(build_open_with_overlay(apps));
-        self.status.clear();
+        self.handle_discovered_open_with_apps(&path, apps, open_in_system, |app| {
+            detached_open_command(&app.program, &app.args)
+        });
     }
 
     pub(in crate::app) fn handle_open_with_key(&mut self, key: KeyEvent) -> Result<()> {
@@ -133,19 +130,56 @@ impl App {
     }
 
     fn confirm_open_with_index(&mut self, index: usize) -> Result<()> {
-        let Some(display_name) = self
+        let Some(row) = self
             .overlays
             .open_with
             .as_ref()
             .and_then(|overlay| overlay.rows.get(index))
-            .map(|row| row.app.display_name.clone())
         else {
             return Ok(());
         };
+        let display_name = row.app.display_name.clone();
+        let program = row.app.program.clone();
+        let args = row.app.args.clone();
 
         self.overlays.open_with = None;
-        self.status = format!("Would open with {display_name}");
+
+        match detached_open_command(&program, &args) {
+            Ok(()) => self.status.clear(),
+            Err(_) => self.status = format!("Failed to open with {display_name}"),
+        }
+
         Ok(())
+    }
+
+    fn handle_discovered_open_with_apps<F, G>(
+        &mut self,
+        path: &Path,
+        mut apps: Vec<OpenWithApp>,
+        mut fallback_open: F,
+        mut launch_app: G,
+    ) where
+        F: FnMut(&Path) -> std::result::Result<(), String>,
+        G: FnMut(&OpenWithApp) -> std::io::Result<()>,
+    {
+        match apps.len() {
+            0 => match fallback_open(path) {
+                Ok(()) => self.status = "No apps found, opened with default".to_string(),
+                Err(e) => self.status = format!("Failed to open: {e}"),
+            },
+            1 => {
+                let app = apps.remove(0);
+                match launch_app(&app) {
+                    Ok(()) => self.status.clear(),
+                    Err(_) => self.status = format!("Failed to open with {}", app.display_name),
+                }
+            }
+            _ => {
+                self.overlays.help = false;
+                self.overlays.open_with = Some(build_open_with_overlay(apps));
+                self.status.clear();
+            }
+        }
     }
 }
 
@@ -155,7 +189,11 @@ fn build_open_with_overlay(apps: Vec<OpenWithApp>) -> OpenWithOverlay {
         .enumerate()
         .filter_map(|(index, app)| {
             let shortcut = assign_shortcut(index)?;
-            let label = app.display_name.clone();
+            let label = if app.is_default {
+                format!("{} (default)", app.display_name)
+            } else {
+                app.display_name.clone()
+            };
             Some(OpenWithRow {
                 shortcut,
                 label,
@@ -172,6 +210,34 @@ fn build_open_with_overlay(apps: Vec<OpenWithApp>) -> OpenWithOverlay {
 
 /// Assigns a keyboard shortcut for the row at `index`.
 /// Slots 0–8 → `'1'`–`'9'`, slots 9–34 → `'a'`–`'z'`.
+#[cfg(test)]
+impl App {
+    /// Injects a single-row open-with overlay pointing at the given command.
+    /// Used only in tests to exercise the confirm/launch path without real discovery.
+    pub(in crate::app) fn inject_open_with_for_test(
+        &mut self,
+        display_name: &str,
+        program: &str,
+        args: Vec<String>,
+    ) {
+        use super::state::{OpenWithApp, OpenWithOverlay, OpenWithRow};
+        self.overlays.open_with = Some(OpenWithOverlay {
+            title: "Open With".to_string(),
+            rows: vec![OpenWithRow {
+                shortcut: '1',
+                label: display_name.to_string(),
+                app: OpenWithApp {
+                    display_name: display_name.to_string(),
+                    desktop_id: None,
+                    program: program.to_string(),
+                    args,
+                    is_default: false,
+                },
+            }],
+        });
+    }
+}
+
 fn assign_shortcut(index: usize) -> Option<char> {
     if index < 9 {
         char::from_digit((index + 1) as u32, 10)
@@ -179,5 +245,118 @@ fn assign_shortcut(index: usize) -> Option<char> {
         Some((b'a' + (index - 9) as u8) as char)
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        cell::{Cell, RefCell},
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn temp_dir_path(label: &str) -> std::path::PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("elio-open-with-{label}-{unique}"))
+    }
+
+    fn fake_open_with_app(display_name: &str) -> OpenWithApp {
+        OpenWithApp {
+            display_name: display_name.to_string(),
+            desktop_id: None,
+            program: "fake".to_string(),
+            args: vec!["--arg".to_string()],
+            is_default: true,
+        }
+    }
+
+    #[test]
+    fn zero_discovered_apps_fall_back_to_default_open() {
+        let root = temp_dir_path("fallback-root");
+        fs::create_dir_all(&root).expect("create temp root");
+        let path = root.join("file.txt");
+        fs::write(&path, "hello").expect("write temp file");
+
+        let fallback_called = Cell::new(false);
+        let mut app = App::new_at(root.clone()).expect("create app");
+        app.handle_discovered_open_with_apps(
+            &path,
+            vec![],
+            |_| {
+                fallback_called.set(true);
+                Ok(())
+            },
+            |_| unreachable!("launch should not be called when no apps were discovered"),
+        );
+
+        assert!(fallback_called.get(), "fallback opener must be called");
+        assert!(
+            app.overlays.open_with.is_none(),
+            "overlay must remain closed"
+        );
+        assert_eq!(app.status, "No apps found, opened with default");
+
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn single_discovered_app_launches_without_opening_overlay() {
+        let root = temp_dir_path("single-launch-root");
+        fs::create_dir_all(&root).expect("create temp root");
+        let path = root.join("file.txt");
+        fs::write(&path, "hello").expect("write temp file");
+
+        let launched = RefCell::new(None::<String>);
+        let mut app = App::new_at(root.clone()).expect("create app");
+        app.handle_discovered_open_with_apps(
+            &path,
+            vec![fake_open_with_app("Fake App")],
+            |_| unreachable!("fallback should not be called when one app was discovered"),
+            |app| {
+                *launched.borrow_mut() = Some(app.display_name.clone());
+                Ok(())
+            },
+        );
+
+        assert_eq!(launched.into_inner().as_deref(), Some("Fake App"));
+        assert!(
+            app.overlays.open_with.is_none(),
+            "overlay must remain closed"
+        );
+        assert!(
+            app.status.is_empty(),
+            "successful launch should clear status"
+        );
+
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn single_discovered_app_launch_failure_sets_status_without_overlay() {
+        let root = temp_dir_path("single-launch-fail-root");
+        fs::create_dir_all(&root).expect("create temp root");
+        let path = root.join("file.txt");
+        fs::write(&path, "hello").expect("write temp file");
+
+        let mut app = App::new_at(root.clone()).expect("create app");
+        app.handle_discovered_open_with_apps(
+            &path,
+            vec![fake_open_with_app("Ghost App")],
+            |_| unreachable!("fallback should not be called when one app was discovered"),
+            |_| Err(std::io::Error::new(std::io::ErrorKind::NotFound, "missing")),
+        );
+
+        assert!(
+            app.overlays.open_with.is_none(),
+            "overlay must remain closed"
+        );
+        assert_eq!(app.status, "Failed to open with Ghost App");
+
+        fs::remove_dir_all(root).ok();
     }
 }

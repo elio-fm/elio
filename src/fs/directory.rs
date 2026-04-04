@@ -275,6 +275,19 @@ pub(crate) fn detached_open(program: &str, args: &[&str], target: &Path) -> io::
     let mut command = Command::new(program);
     command.args(args);
     command.arg(target);
+    detached_spawn(&mut command)
+}
+
+/// Spawns `program` with the given `args` detached from the terminal.
+/// Unlike [`detached_open`], the target path is not appended — it must
+/// already be present in `args` (as produced by the Exec= expansion).
+pub(crate) fn detached_open_command(program: &str, args: &[String]) -> io::Result<()> {
+    let mut command = Command::new(program);
+    command.args(args);
+    detached_spawn(&mut command)
+}
+
+fn detached_spawn(command: &mut Command) -> io::Result<()> {
     command.stdin(Stdio::null());
     command.stdout(Stdio::null());
     command.stderr(Stdio::null());
