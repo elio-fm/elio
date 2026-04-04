@@ -97,7 +97,7 @@ fn audio_preview_falls_back_to_file_metadata_without_tools() {
     assert_eq!(preview.detail.as_deref(), Some("FLAC audio"));
     assert!(preview.preview_visual.is_none());
     assert!(line_texts.iter().any(|line| line.contains("File Size")
-        && line.contains(&crate::app::format_size(contents.len() as u64))));
+        && line.contains(&crate::fs::format_size(contents.len() as u64))));
     assert!(line_texts.iter().all(|line| !line.contains("Title")));
     assert!(
         line_texts

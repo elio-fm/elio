@@ -56,6 +56,9 @@ jobs:
       - name: cargo fmt --check
         run: cargo fmt --check
 
+      - name: cargo test --test architecture_guardrails
+        run: cargo test --test architecture_guardrails
+
       - name: cargo clippy --all-targets -- -D warnings
         run: cargo clippy --all-targets -- -D warnings
 

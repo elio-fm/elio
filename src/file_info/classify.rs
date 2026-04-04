@@ -3,7 +3,7 @@ use super::{
     license::sniff_license_file_type, names::inspect_exact_name,
 };
 use crate::{
-    app::{EntryKind, FileClass},
+    core::{EntryKind, FileClass},
     preview::code::registry,
 };
 use std::collections::HashMap;

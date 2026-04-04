@@ -5,14 +5,14 @@
     target_os = "openbsd"
 ))]
 use super::resolution::path_identity_key;
-use crate::app::SidebarItem;
+use crate::core::SidebarItem;
 #[cfg(any(
     target_os = "macos",
     windows,
     target_os = "freebsd",
     target_os = "openbsd"
 ))]
-use crate::app::SidebarItemKind;
+use crate::core::SidebarItemKind;
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},

@@ -1,7 +1,7 @@
 use super::devices::mounted_device_items;
 use crate::{
-    app::{SidebarItem, SidebarItemKind, SidebarRow},
     config::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},
+    core::{SidebarItem, SidebarItemKind, SidebarRow},
 };
 use std::{
     collections::HashSet,

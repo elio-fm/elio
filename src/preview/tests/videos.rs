@@ -30,7 +30,7 @@ fn video_preview_falls_back_to_file_metadata_without_tools() {
     assert_eq!(preview.kind, PreviewKind::Video);
     assert_eq!(preview.detail.as_deref(), Some("Matroska video"));
     assert!(line_texts.iter().any(|line| line.contains("File Size")
-        && line.contains(&crate::app::format_size(contents.len() as u64))));
+        && line.contains(&crate::fs::format_size(contents.len() as u64))));
     assert!(preview.preview_visual.is_none());
     assert!(
         line_texts
@@ -125,7 +125,7 @@ fn video_preview_skips_thumbnail_without_ffprobe_even_if_ffmpeg_is_available() {
     assert_eq!(preview.detail.as_deref(), Some("AVI video"));
     assert!(preview.preview_visual.is_none());
     assert!(line_texts.iter().any(|line| line.contains("File Size")
-        && line.contains(&crate::app::format_size(contents.len() as u64))));
+        && line.contains(&crate::fs::format_size(contents.len() as u64))));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

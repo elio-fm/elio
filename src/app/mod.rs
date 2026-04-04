@@ -37,9 +37,11 @@ pub(crate) use crate::fs::{
 pub(crate) use self::types::ClipOp;
 pub use self::types::{
     CopyHit, EntryHit, FrameState, GoToHit, PathHit, SearchHit, SearchRow, SearchScope,
-    SidebarItem, SidebarItemKind, SidebarRow, ViewMetrics, ViewMode,
+    ViewMetrics, ViewMode,
 };
-pub use crate::core::{Entry, EntryKind, SortMode};
+#[cfg(test)]
+pub use crate::core::SidebarItem;
+pub use crate::core::{Entry, EntryKind, SidebarItemKind, SidebarRow, SortMode};
 
 impl App {
     pub fn set_frame_state(&mut self, frame_state: FrameState) -> bool {

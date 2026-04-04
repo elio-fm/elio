@@ -1,5 +1,5 @@
 use super::resolution::path_identity_key;
-use crate::app::{SidebarItem, SidebarItemKind};
+use crate::core::{SidebarItem, SidebarItemKind};
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsStr,

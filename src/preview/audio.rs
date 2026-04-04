@@ -520,7 +520,7 @@ fn render_audio_metadata_lines(
     if let Some(channels) = metadata.and_then(|metadata| metadata.channels) {
         fields.push(("Channels", format_channels(channels)));
     }
-    fields.push(("File Size", crate::app::format_size(byte_size)));
+    fields.push(("File Size", crate::fs::format_size(byte_size)));
 
     let label_width = fields
         .iter()

@@ -1,7 +1,7 @@
 use super::resolution::{PlaceResolutionContext, build_sidebar_rows_with_context};
 use crate::{
-    app::{SidebarItemKind, SidebarRow},
     config::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},
+    core::{SidebarItemKind, SidebarRow},
 };
 use std::{
     fs,

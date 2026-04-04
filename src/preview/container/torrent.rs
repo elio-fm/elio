@@ -69,10 +69,10 @@ pub(in crate::preview) fn build_torrent_preview(path: &Path) -> Option<PreviewCo
         ),
         ("Mode", metadata.mode.map(|mode| mode.label().to_string())),
         ("Files", Some(file_count.to_string())),
-        ("Size", metadata.total_size.map(crate::app::format_size)),
+        ("Size", metadata.total_size.map(crate::fs::format_size)),
         (
             "Piece Size",
-            metadata.piece_length.map(crate::app::format_size),
+            metadata.piece_length.map(crate::fs::format_size),
         ),
         (
             "Pieces",

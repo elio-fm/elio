@@ -420,7 +420,7 @@ fn image_metadata_preview(entry: &Entry, type_detail: Option<&'static str>) -> P
     let byte_size = std::fs::metadata(&entry.path)
         .map(|metadata| metadata.len())
         .unwrap_or(entry.size);
-    let mut fields = vec![("File Size", crate::app::format_size(byte_size))];
+    let mut fields = vec![("File Size", crate::fs::format_size(byte_size))];
     if let Ok((width_px, height_px)) = (|| {
         let reader = ImageReader::open(&entry.path)?;
         let reader = reader
