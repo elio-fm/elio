@@ -44,6 +44,10 @@ impl App {
             return self.handle_copy_key(key);
         }
 
+        if self.overlays.open_with.is_some() {
+            return self.handle_open_with_key(key);
+        }
+
         if self.overlays.search.is_some() {
             return self.handle_search_key(key);
         }
@@ -264,7 +268,7 @@ impl App {
             Action::CopyPath => self.open_copy_overlay(),
             Action::SearchFolders => self.open_search_with_status(SearchScope::Folders),
             Action::Open => self.open_in_system()?,
-            Action::OpenWith => {}
+            Action::OpenWith => self.open_open_with_overlay(),
             Action::Sort => self.cycle_sort_mode()?,
             Action::ToggleView => self.toggle_view_mode(),
             Action::ToggleHidden => self.toggle_hidden_files()?,

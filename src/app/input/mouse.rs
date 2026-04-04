@@ -30,6 +30,10 @@ impl App {
             return self.handle_copy_mouse(mouse);
         }
 
+        if self.overlays.open_with.is_some() {
+            return self.handle_open_with_mouse(mouse);
+        }
+
         if self.overlays.search.is_some() {
             return self.handle_search_mouse(mouse);
         }

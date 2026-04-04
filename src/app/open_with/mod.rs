@@ -46,7 +46,6 @@ impl App {
     }
 }
 
-#[allow(dead_code)]
 impl App {
     pub(in crate::app) fn open_open_with_overlay(&mut self) {
         let Some(entry) = self.selected_entry() else {
@@ -142,7 +141,6 @@ impl App {
     }
 }
 
-#[allow(dead_code)]
 fn build_open_with_overlay(_app: &App) -> OpenWithOverlay {
     OpenWithOverlay {
         title: "Open With".to_string(),
@@ -154,7 +152,6 @@ fn build_open_with_overlay(_app: &App) -> OpenWithOverlay {
     }
 }
 
-#[allow(dead_code)]
 fn build_open_with_row(shortcut: char, label: &str) -> OpenWithRow {
     OpenWithRow {
         shortcut,

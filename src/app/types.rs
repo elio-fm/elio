@@ -37,7 +37,6 @@ pub struct FrameState {
     pub search_hits: Vec<SearchHit>,
     pub goto_hits: Vec<GoToHit>,
     pub copy_hits: Vec<CopyHit>,
-    #[allow(dead_code)]
     pub open_with_hits: Vec<OpenWithHit>,
     pub trash_panel: Option<Rect>,
     pub trash_confirm_btn: Option<Rect>,
@@ -53,7 +52,6 @@ pub struct FrameState {
     pub bulk_rename_scroll_top: usize,
     pub goto_panel: Option<Rect>,
     pub copy_panel: Option<Rect>,
-    #[allow(dead_code)]
     pub open_with_panel: Option<Rect>,
     pub search_panel: Option<Rect>,
     pub help_panel: Option<Rect>,
@@ -103,7 +101,6 @@ pub struct CopyHit {
     pub index: usize,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct OpenWithHit {
     pub rect: Rect,

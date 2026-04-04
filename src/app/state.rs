@@ -226,13 +226,11 @@ pub(super) struct GoToOverlay {
     pub(super) rows: Vec<GoToOverlayRow>,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub(super) struct OpenWithApp {
     pub(super) display_name: String,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub(super) struct OpenWithRow {
     pub(super) shortcut: char,
@@ -240,7 +238,6 @@ pub(super) struct OpenWithRow {
     pub(super) app: OpenWithApp,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub(super) struct OpenWithOverlay {
     pub(super) title: String,
@@ -510,7 +507,6 @@ pub(crate) struct OverlayState {
     pub(in crate::app) bulk_rename: Option<BulkRenameOverlay>,
     pub(in crate::app) goto: Option<GoToOverlay>,
     pub(in crate::app) copy: Option<CopyOverlay>,
-    #[allow(dead_code)]
     pub(in crate::app) open_with: Option<OpenWithOverlay>,
     pub(in crate::app) search: Option<SearchOverlay>,
     pub(crate) help: bool,
