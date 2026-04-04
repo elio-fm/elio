@@ -264,6 +264,7 @@ impl App {
             Action::CopyPath => self.open_copy_overlay(),
             Action::SearchFolders => self.open_search_with_status(SearchScope::Folders),
             Action::Open => self.open_in_system()?,
+            Action::OpenWith => {}
             Action::Sort => self.cycle_sort_mode()?,
             Action::ToggleView => self.toggle_view_mode(),
             Action::ToggleHidden => self.toggle_hidden_files()?,

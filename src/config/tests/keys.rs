@@ -117,6 +117,8 @@ fn action_for_returns_correct_action_for_default_bindings() {
     assert_eq!(key_bindings.action_for('x'), Some(Action::Cut));
     assert_eq!(key_bindings.action_for('p'), Some(Action::Paste));
     assert_eq!(key_bindings.action_for('q'), Some(Action::Quit));
+    assert_eq!(key_bindings.action_for('o'), Some(Action::Open));
+    assert_eq!(key_bindings.action_for('O'), Some(Action::OpenWith));
     assert_eq!(key_bindings.action_for('j'), None);
     assert_eq!(key_bindings.action_for('z'), None);
 }
@@ -132,4 +134,24 @@ yank = "Y"
     .expect("config should parse");
     assert_eq!(config.keys.action_for('Y'), Some(Action::Yank));
     assert_eq!(config.keys.action_for('y'), None);
+}
+
+#[test]
+fn open_with_defaults_to_capital_o() {
+    let key_bindings = KeyBindings::default();
+    assert_eq!(key_bindings.open_with, 'O');
+    assert_eq!(key_bindings.action_for('O'), Some(Action::OpenWith));
+}
+
+#[test]
+fn open_with_can_be_overridden() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open_with = "w"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('w'), Some(Action::OpenWith));
+    assert_eq!(config.keys.action_for('O'), None);
 }
