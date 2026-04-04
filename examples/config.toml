@@ -68,6 +68,7 @@ show_top_bar = false
 # copy_path         = "c"
 # search_folders    = "f"
 # open              = "o"
+# open_with         = "O"
 # sort              = "s"
 # toggle_view       = "v"
 # toggle_hidden     = "."

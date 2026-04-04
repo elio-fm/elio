@@ -84,7 +84,7 @@ Inline image and PDF previews work automatically on supported terminals — no c
 | Clipboard | macOS | `pbcopy` | Copy file metadata to clipboard with `c` |
 | Clipboard | Windows | `clip` | Copy file metadata to clipboard with `c` |
 
-Opening files externally (`o` / `Enter`) uses the system launcher: `open` on macOS, `cmd /c start` on Windows, and `xdg-open` or `gio` on Linux and BSD desktop sessions.
+Opening files externally (`o` / `Enter`) uses the system launcher: `open` on macOS, `cmd /c start` on Windows, and `xdg-open` or `gio` on Linux and BSD desktop sessions. `O` opens the `Open With` chooser when multiple applications are available.
 
 ---
 
@@ -167,6 +167,7 @@ Any browser action key can be rebound in the `[keys]` section. Each value must b
 | `keys.copy_path` | `c` | Copy path details to clipboard |
 | `keys.search_folders` | `f` | Fuzzy-find folders |
 | `keys.open` | `o` | Open externally |
+| `keys.open_with` | `O` | Open With chooser |
 | `keys.sort` | `s` | Cycle sort mode |
 | `keys.toggle_view` | `v` | Toggle grid / list view |
 | `keys.toggle_hidden` | `.` | Toggle dotfiles visibility |
@@ -240,6 +241,13 @@ Keys marked with `*` are rebindable via `[keys]` in `config.toml` — the defaul
 | `PageUp` / `PageDown` | Page up / down |
 | `Tab` / `Shift+Tab` | Cycle places |
 | `Alt+←` / `Alt+→` | Back / forward in history |
+
+### Actions
+
+| Key | Action |
+|---|---|
+| `o` | Open with the system default application |
+| `O`* | Open With chooser |
 
 ### View
 
