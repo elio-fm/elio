@@ -5,6 +5,7 @@ mod create;
 mod directory_counts;
 mod input;
 mod jobs;
+mod open_with;
 mod overlays;
 use crate::preview;
 mod search;
