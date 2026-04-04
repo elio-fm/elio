@@ -785,7 +785,7 @@ fn confirm_open_with_launches_program_and_closes_overlay() {
     let mut app = App::new_at(root.clone()).expect("create app");
     wait_for_directory_load(&mut app);
 
-    app.inject_open_with_for_test("Fake App", script.to_str().unwrap(), vec![]);
+    app.inject_open_with_for_test("Fake App", script.to_str().unwrap(), vec![], false);
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('1'))))
         .expect("shortcut should fire");
 
@@ -822,6 +822,7 @@ fn confirm_open_with_launch_failure_sets_status() {
         "Ghost App",
         "/this/program/absolutely/does/not/exist",
         vec![],
+        false,
     );
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('1'))))
         .expect("shortcut should fire");

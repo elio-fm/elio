@@ -141,18 +141,31 @@ impl App {
         let display_name = row.app.display_name.clone();
         let program = row.app.program.clone();
         let args = row.app.args.clone();
+        let requires_terminal = row.app.requires_terminal;
 
         self.overlays.open_with = None;
 
-        match detached_open_command(&program, &args) {
-            Ok(()) => self.status.clear(),
-            Err(_) => self.status = format!("Failed to open with {display_name}"),
+        if requires_terminal {
+            self.pending_terminal_command = Some((program, args));
+            self.status.clear();
+        } else {
+            match detached_open_command(&program, &args) {
+                Ok(()) => self.status.clear(),
+                Err(_) => self.status = format!("Failed to open with {display_name}"),
+            }
         }
 
         Ok(())
     }
 
-    fn handle_discovered_open_with_apps<F, G>(
+    /// Dispatches a discovered app list: falls back to the system opener for
+    /// zero apps, launches directly for one, and opens the overlay for two or
+    /// more.
+    ///
+    /// `launch_app` is called only for GUI apps (`requires_terminal == false`).
+    /// Terminal apps set `pending_terminal_command` on `self` directly so that
+    /// the caller in `lib.rs` can suspend the TUI before running them.
+    pub(in crate::app) fn handle_discovered_open_with_apps<F, G>(
         &mut self,
         path: &Path,
         mut apps: Vec<OpenWithApp>,
@@ -169,9 +182,14 @@ impl App {
             },
             1 => {
                 let app = apps.remove(0);
-                match launch_app(&app) {
-                    Ok(()) => self.status.clear(),
-                    Err(_) => self.status = format!("Failed to open with {}", app.display_name),
+                if app.requires_terminal {
+                    self.pending_terminal_command = Some((app.program.clone(), app.args.clone()));
+                    self.status.clear();
+                } else {
+                    match launch_app(&app) {
+                        Ok(()) => self.status.clear(),
+                        Err(_) => self.status = format!("Failed to open with {}", app.display_name),
+                    }
                 }
             }
             _ => {
@@ -210,6 +228,16 @@ fn build_open_with_overlay(apps: Vec<OpenWithApp>) -> OpenWithOverlay {
 
 /// Assigns a keyboard shortcut for the row at `index`.
 /// Slots 0–8 → `'1'`–`'9'`, slots 9–34 → `'a'`–`'z'`.
+fn assign_shortcut(index: usize) -> Option<char> {
+    if index < 9 {
+        char::from_digit((index + 1) as u32, 10)
+    } else if index < 9 + 26 {
+        Some((b'a' + (index - 9) as u8) as char)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 impl App {
     /// Injects a single-row open-with overlay pointing at the given command.
@@ -219,6 +247,7 @@ impl App {
         display_name: &str,
         program: &str,
         args: Vec<String>,
+        requires_terminal: bool,
     ) {
         use super::state::{OpenWithApp, OpenWithOverlay, OpenWithRow};
         self.overlays.open_with = Some(OpenWithOverlay {
@@ -232,19 +261,10 @@ impl App {
                     program: program.to_string(),
                     args,
                     is_default: false,
+                    requires_terminal,
                 },
             }],
         });
-    }
-}
-
-fn assign_shortcut(index: usize) -> Option<char> {
-    if index < 9 {
-        char::from_digit((index + 1) as u32, 10)
-    } else if index < 9 + 26 {
-        Some((b'a' + (index - 9) as u8) as char)
-    } else {
-        None
     }
 }
 
@@ -272,6 +292,18 @@ mod tests {
             program: "fake".to_string(),
             args: vec!["--arg".to_string()],
             is_default: true,
+            requires_terminal: false,
+        }
+    }
+
+    fn fake_terminal_app(display_name: &str) -> OpenWithApp {
+        OpenWithApp {
+            display_name: display_name.to_string(),
+            desktop_id: None,
+            program: "nvim".to_string(),
+            args: vec!["/tmp/file.txt".to_string()],
+            is_default: false,
+            requires_terminal: true,
         }
     }
 
@@ -356,6 +388,64 @@ mod tests {
             "overlay must remain closed"
         );
         assert_eq!(app.status, "Failed to open with Ghost App");
+
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn single_terminal_app_queues_pending_command_without_overlay() {
+        let root = temp_dir_path("terminal-single-root");
+        fs::create_dir_all(&root).expect("create temp root");
+        let path = root.join("file.txt");
+        fs::write(&path, "hello").expect("write temp file");
+
+        let mut app = App::new_at(root.clone()).expect("create app");
+        app.handle_discovered_open_with_apps(
+            &path,
+            vec![fake_terminal_app("Neovim")],
+            |_| unreachable!("fallback should not be called"),
+            |_| unreachable!("detached launch should not be called for terminal apps"),
+        );
+
+        assert!(
+            app.overlays.open_with.is_none(),
+            "overlay must remain closed for direct terminal launch"
+        );
+        assert_eq!(
+            app.pending_terminal_command,
+            Some(("nvim".to_string(), vec!["/tmp/file.txt".to_string()]))
+        );
+        assert!(app.status.is_empty());
+
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn confirm_terminal_app_from_overlay_queues_pending_command() {
+        let root = temp_dir_path("terminal-overlay-root");
+        fs::create_dir_all(&root).expect("create temp root");
+        fs::write(root.join("file.txt"), "hello").expect("write temp file");
+
+        let mut app = App::new_at(root.clone()).expect("create app");
+        // Put two apps in the overlay (terminal + gui) so it opens.
+        app.handle_discovered_open_with_apps(
+            &root.join("file.txt"),
+            vec![fake_terminal_app("Neovim"), fake_open_with_app("Gedit")],
+            |_| unreachable!(),
+            |_| unreachable!(),
+        );
+        assert!(app.overlays.open_with.is_some(), "overlay should be open");
+
+        // The first row is the terminal app. Confirm it.
+        app.confirm_open_with_index(0)
+            .expect("confirm should not error");
+
+        assert!(app.overlays.open_with.is_none(), "overlay must close");
+        assert_eq!(
+            app.pending_terminal_command,
+            Some(("nvim".to_string(), vec!["/tmp/file.txt".to_string()]))
+        );
+        assert!(app.status.is_empty());
 
         fs::remove_dir_all(root).ok();
     }

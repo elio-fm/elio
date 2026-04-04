@@ -110,6 +110,7 @@ fn read_desktop_entry_for_id(
             program,
             args,
             is_default,
+            requires_terminal: candidate.terminal,
         });
     }
     None
@@ -196,6 +197,7 @@ fn discover_via_desktop_scan_in_dirs(
             program,
             args,
             is_default: true,
+            requires_terminal: candidate.terminal,
         });
     }
 
@@ -212,6 +214,7 @@ fn discover_via_desktop_scan_in_dirs(
             program,
             args,
             is_default: false,
+            requires_terminal: candidate.terminal,
         });
     }
 
@@ -375,6 +378,7 @@ struct DesktopEntryCandidate {
     name: String,
     exec: String,
     mime_types: Vec<String>,
+    terminal: bool,
 }
 
 /// Parses the output of `gio mime <mime-type>` into an ordered list of
@@ -471,6 +475,7 @@ fn parse_desktop_entry(contents: &str) -> Option<DesktopEntryCandidate> {
     let mut mime_types: Vec<String> = Vec::new();
     let mut hidden = false;
     let mut no_display = false;
+    let mut terminal = false;
 
     for line in contents.lines() {
         let line = line.trim();
@@ -505,6 +510,7 @@ fn parse_desktop_entry(contents: &str) -> Option<DesktopEntryCandidate> {
             }
             "Hidden" => hidden = value.eq_ignore_ascii_case("true"),
             "NoDisplay" => no_display = value.eq_ignore_ascii_case("true"),
+            "Terminal" => terminal = value.eq_ignore_ascii_case("true"),
             _ => {}
         }
     }
@@ -517,6 +523,7 @@ fn parse_desktop_entry(contents: &str) -> Option<DesktopEntryCandidate> {
         name: name?,
         exec: exec?,
         mime_types,
+        terminal,
     })
 }
 

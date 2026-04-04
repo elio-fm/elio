@@ -235,6 +235,9 @@ pub(super) struct OpenWithApp {
     pub(super) program: String,
     pub(super) args: Vec<String>,
     pub(super) is_default: bool,
+    /// True when the .desktop file has `Terminal=true` — the app must be run
+    /// inside a terminal emulator, not launched detached.
+    pub(super) requires_terminal: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -575,6 +578,10 @@ pub struct App {
     pub(in crate::app) input: InputRuntime,
     pub(in crate::app) status: String,
     pub(crate) should_quit: bool,
+    /// Set by open-with when the chosen app has `Terminal=true`.  The event
+    /// loop in `lib.rs` drains this, suspends the TUI, runs the command
+    /// blocking in the current terminal, then restores the TUI.
+    pub(crate) pending_terminal_command: Option<(String, Vec<String>)>,
 }
 
 impl App {
@@ -684,6 +691,7 @@ impl App {
             },
             status: String::new(),
             should_quit: false,
+            pending_terminal_command: None,
         };
         app.navigation.in_trash = App::path_is_trash(&app.navigation.cwd);
         let snapshot = crate::fs::load_directory_snapshot(

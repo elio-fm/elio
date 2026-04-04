@@ -23,6 +23,7 @@ use crossterm::{
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{
     io::{self, Write},
+    process::Command,
     time::{Duration, Instant},
 };
 
@@ -82,6 +83,62 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     terminal.clear()?;
     terminal.hide_cursor()?;
     Ok(terminal)
+}
+
+/// Temporarily tears down the TUI so a blocking terminal app can use stdout.
+/// Call [`resume_terminal`] afterwards to restore the TUI.
+fn suspend_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+    let backend = terminal.backend_mut();
+    write!(backend, "\x1b[>4;0m")?;
+    write!(backend, "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l")?;
+    backend.flush()?;
+    execute!(
+        terminal.backend_mut(),
+        event::DisableMouseCapture,
+        DisableFocusChange,
+        SetCursorStyle::DefaultUserShape,
+        PopKeyboardEnhancementFlags,
+        LeaveAlternateScreen,
+    )?;
+    disable_raw_mode()?;
+    terminal.show_cursor()?;
+    Ok(())
+}
+
+/// Restores the TUI after [`suspend_terminal`].  Forces a full redraw on the
+/// next render cycle so no stale content is left on screen.
+fn resume_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        event::EnableMouseCapture,
+        EnableFocusChange,
+    )?;
+    write!(stdout, "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h")?;
+    write!(stdout, "\x1b[>4;1m")?;
+    stdout.flush()?;
+    if matches!(supports_keyboard_enhancement(), Ok(true)) {
+        execute!(
+            stdout,
+            PushKeyboardEnhancementFlags(
+                KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                    | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
+                    | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
+            )
+        )?;
+    }
+    terminal.clear()?;
+    terminal.hide_cursor()?;
+    Ok(())
+}
+
+/// Runs `program args` blocking in the current terminal, inheriting
+/// stdin/stdout/stderr.  Errors are ignored — a broken command (e.g. nvim
+/// unable to open a file) should not crash the file manager.
+fn run_blocking_in_terminal(program: &str, args: &[String]) {
+    let _ = Command::new(program).args(args).status();
 }
 
 fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
@@ -298,6 +355,15 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> 
 
             if app.should_quit {
                 break;
+            }
+
+            // A terminal app (e.g. nvim) was chosen from Open With.
+            // Suspend the TUI, run the command blocking, then restore.
+            if let Some((program, args)) = app.pending_terminal_command.take() {
+                suspend_terminal(terminal)?;
+                run_blocking_in_terminal(&program, &args);
+                resume_terminal(terminal)?;
+                dirty = true;
             }
         }
     }
