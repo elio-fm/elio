@@ -8,7 +8,7 @@ mod directory;
 mod dispatch;
 mod document;
 mod markdown;
-mod process;
+pub(crate) mod process;
 mod structured;
 mod text;
 mod types;

@@ -1,3 +1,5 @@
+mod discovery;
+
 use super::{
     App,
     state::{OpenWithApp, OpenWithOverlay, OpenWithRow},
@@ -51,13 +53,20 @@ impl App {
             self.status = "Nothing selected".to_string();
             return;
         };
-        let is_dir = entry.is_dir();
-        if is_dir {
+        if entry.is_dir() {
             self.status = "Open With is for files".to_string();
             return;
         }
+        let path = entry.path.clone();
+
+        let apps = discovery::discover_open_with_apps(&path);
+        if apps.is_empty() {
+            self.status = "No applications found".to_string();
+            return;
+        }
+
         self.overlays.help = false;
-        self.overlays.open_with = Some(build_open_with_overlay(self));
+        self.overlays.open_with = Some(build_open_with_overlay(apps));
         self.status.clear();
     }
 
@@ -140,23 +149,35 @@ impl App {
     }
 }
 
-fn build_open_with_overlay(_app: &App) -> OpenWithOverlay {
+fn build_open_with_overlay(apps: Vec<OpenWithApp>) -> OpenWithOverlay {
+    let rows = apps
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, app)| {
+            let shortcut = assign_shortcut(index)?;
+            let label = app.display_name.clone();
+            Some(OpenWithRow {
+                shortcut,
+                label,
+                app,
+            })
+        })
+        .collect();
+
     OpenWithOverlay {
         title: "Open With".to_string(),
-        rows: vec![
-            build_open_with_row('1', "default app"),
-            build_open_with_row('2', "app one"),
-            build_open_with_row('3', "app two"),
-        ],
+        rows,
     }
 }
 
-fn build_open_with_row(shortcut: char, label: &str) -> OpenWithRow {
-    OpenWithRow {
-        shortcut,
-        label: label.to_string(),
-        app: OpenWithApp {
-            display_name: label.to_string(),
-        },
+/// Assigns a keyboard shortcut for the row at `index`.
+/// Slots 0–8 → `'1'`–`'9'`, slots 9–34 → `'a'`–`'z'`.
+fn assign_shortcut(index: usize) -> Option<char> {
+    if index < 9 {
+        char::from_digit((index + 1) as u32, 10)
+    } else if index < 9 + 26 {
+        Some((b'a' + (index - 9) as u8) as char)
+    } else {
+        None
     }
 }

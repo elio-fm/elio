@@ -6,6 +6,19 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Returns true if `gio mime text/plain` succeeds on this system.
+/// Used to tighten open-with tests: when gio is available the overlay
+/// must open for common file types; without gio the tests skip gracefully.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn gio_available() -> bool {
+    std::process::Command::new("gio")
+        .args(["mime", "text/plain"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
 #[test]
 fn shift_slash_opens_and_closes_help_overlay() {
     let root = temp_path("help-shift-slash");
@@ -563,13 +576,38 @@ fn capital_o_opens_open_with_overlay_for_selected_file() {
     app.select_index(0);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-        .expect("O should open the overlay");
+        .expect("O should be handled");
 
-    assert!(
-        app.overlays.open_with.is_some(),
-        "overlay should be open for a file"
-    );
-    assert_eq!(app.open_with_row_count(), 3);
+    let overlay_opened = app.overlays.open_with.is_some();
+
+    // On systems where gio is available, text/plain must have handlers — the overlay
+    // must open.  On minimal systems without gio we allow "No applications found".
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if gio_available() {
+            assert!(
+                overlay_opened,
+                "gio is available — overlay must open for text/plain; status: {:?}",
+                app.status
+            );
+        } else {
+            let no_apps = app.status == "No applications found";
+            assert!(
+                overlay_opened || no_apps,
+                "O on a file should open overlay or report no apps; got status: {:?}",
+                app.status
+            );
+        }
+    }
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    {
+        let no_apps = app.status == "No applications found";
+        assert!(
+            overlay_opened || no_apps,
+            "O on a file should open overlay or report no apps; got status: {:?}",
+            app.status
+        );
+    }
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -606,8 +644,16 @@ fn esc_closes_open_with_overlay() {
     app.select_index(0);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-        .expect("O should open the overlay");
-    assert!(app.overlays.open_with.is_some());
+        .expect("O should be handled");
+    if app.overlays.open_with.is_none() {
+        #[cfg(all(unix, not(target_os = "macos")))]
+        assert!(
+            !gio_available(),
+            "gio is available — overlay must open for text/plain"
+        );
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+        return;
+    }
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Esc)))
         .expect("Esc should close the overlay");
@@ -617,7 +663,7 @@ fn esc_closes_open_with_overlay() {
 }
 
 #[test]
-fn open_with_shortcut_confirms_stub_row_and_closes_overlay() {
+fn open_with_shortcut_confirms_row_and_closes_overlay() {
     let root = temp_path("open-with-overlay-confirm");
     fs::write(root.join("file.txt"), "hello").expect("failed to write temp file");
 
@@ -626,23 +672,30 @@ fn open_with_shortcut_confirms_stub_row_and_closes_overlay() {
     app.select_index(0);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-        .expect("O should open the overlay");
-    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('1'))))
-        .expect("1 should confirm the first row");
+        .expect("O should be handled");
+    if app.overlays.open_with.is_none() {
+        #[cfg(all(unix, not(target_os = "macos")))]
+        assert!(
+            !gio_available(),
+            "gio is available — overlay must open for text/plain"
+        );
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+        return;
+    }
+
+    let shortcut = app
+        .open_with_row_shortcut(0)
+        .expect("first row should have a shortcut");
+    let label = app.open_with_row_label(0).to_string();
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(shortcut))))
+        .expect("shortcut should confirm the row");
 
     assert!(
         app.overlays.open_with.is_none(),
         "overlay should close after confirming"
     );
-    assert_eq!(app.status, "Would open with default app");
-
-    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-        .expect("O should reopen the overlay");
-    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('2'))))
-        .expect("2 should confirm the second row");
-
-    assert!(app.overlays.open_with.is_none());
-    assert_eq!(app.status, "Would open with app one");
+    assert_eq!(app.status, format!("Would open with {label}"));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -657,8 +710,16 @@ fn ctrl_c_closes_open_with_overlay() {
     app.select_index(0);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-        .expect("O should open the overlay");
-    assert!(app.overlays.open_with.is_some());
+        .expect("O should be handled");
+    if app.overlays.open_with.is_none() {
+        #[cfg(all(unix, not(target_os = "macos")))]
+        assert!(
+            !gio_available(),
+            "gio is available — overlay must open for text/plain"
+        );
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+        return;
+    }
 
     app.handle_event(Event::Key(KeyEvent::new(
         KeyCode::Char('c'),

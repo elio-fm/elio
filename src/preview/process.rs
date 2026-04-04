@@ -11,7 +11,7 @@ const CANCELLABLE_COMMAND_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 static COMMAND_CAPTURE_ID: AtomicU64 = AtomicU64::new(0);
 
-pub(in crate::preview) fn run_command_capture_stdout_cancellable<F>(
+pub(crate) fn run_command_capture_stdout_cancellable<F>(
     mut command: Command,
     capture_label: &str,
     canceled: &F,
@@ -47,10 +47,7 @@ where
     output
 }
 
-pub(in crate::preview) fn run_command_status_cancellable<F>(
-    mut command: Command,
-    canceled: &F,
-) -> Option<bool>
+pub(crate) fn run_command_status_cancellable<F>(mut command: Command, canceled: &F) -> Option<bool>
 where
     F: Fn() -> bool,
 {

@@ -229,6 +229,15 @@ pub(super) struct GoToOverlay {
 #[derive(Clone, Debug)]
 pub(super) struct OpenWithApp {
     pub(super) display_name: String,
+    // Used by the launch commit; kept here so discovery can populate them now.
+    #[allow(dead_code)]
+    pub(super) desktop_id: Option<String>,
+    #[allow(dead_code)]
+    pub(super) program: String,
+    #[allow(dead_code)]
+    pub(super) args: Vec<String>,
+    #[allow(dead_code)]
+    pub(super) is_default: bool,
 }
 
 #[derive(Clone, Debug)]
