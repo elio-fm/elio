@@ -37,8 +37,8 @@ pub(crate) use crate::fs::{
 
 pub(crate) use self::types::ClipOp;
 pub use self::types::{
-    CopyHit, EntryHit, FrameState, GoToHit, PathHit, SearchHit, SearchRow, SearchScope,
-    ViewMetrics, ViewMode,
+    CopyHit, EntryHit, FrameState, GoToHit, OpenWithHit, PathHit, SearchHit, SearchRow,
+    SearchScope, ViewMetrics, ViewMode,
 };
 #[cfg(test)]
 pub use crate::core::SidebarItem;

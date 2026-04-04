@@ -6,7 +6,6 @@ use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-#[allow(dead_code)]
 impl App {
     pub fn open_with_is_open(&self) -> bool {
         self.overlays.open_with.is_some()

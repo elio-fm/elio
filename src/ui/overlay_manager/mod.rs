@@ -7,6 +7,7 @@ mod copy;
 mod create;
 mod goto;
 mod help;
+mod open_with;
 mod rename;
 mod restore;
 mod search;
@@ -70,6 +71,16 @@ pub(super) fn render_copy_overlay(
     palette: Palette,
 ) {
     copy::render_copy_overlay(frame, area, app, state, palette);
+}
+
+pub(super) fn render_open_with_overlay(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    state: &mut FrameState,
+    palette: Palette,
+) {
+    open_with::render_open_with_overlay(frame, area, app, state, palette);
 }
 
 pub(super) fn render_goto_overlay(
