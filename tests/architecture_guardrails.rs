@@ -20,6 +20,18 @@ fn file_info_does_not_depend_on_app() {
     assert_tree_has_no_pattern("src/file_info", "app::", &[]);
 }
 
+#[test]
+fn app_ui_access_stays_confined_to_inline_image_theme_helpers() {
+    assert_tree_has_no_pattern(
+        "src/app",
+        "crate::ui::",
+        &[
+            "src/app/overlays/inline_image/iterm.rs",
+            "src/app/overlays/inline_image/kitty.rs",
+        ],
+    );
+}
+
 fn assert_tree_has_no_pattern(root: &str, forbidden: &str, allowed_files: &[&str]) {
     let mut files = Vec::new();
     collect_rust_files(
