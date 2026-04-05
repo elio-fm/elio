@@ -4,19 +4,41 @@ mod overlay;
 #[cfg(test)]
 mod tests;
 
-#[cfg(target_os = "macos")]
 use std::path::Path;
 
-#[cfg(target_os = "macos")]
 use crate::{
-    core::EntryKind,
+    core::{EntryKind, FileClass},
     file_info::{PreviewKind, inspect_path},
 };
 
-#[cfg(target_os = "macos")]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(super) fn path_is_text_like(path: &Path) -> bool {
-    matches!(
-        inspect_path(path, EntryKind::File).preview.kind,
-        PreviewKind::Markdown | PreviewKind::Source | PreviewKind::PlainText | PreviewKind::Csv
-    )
+    let facts = inspect_path(path, EntryKind::File);
+
+    match facts.preview.kind {
+        PreviewKind::Markdown | PreviewKind::Csv => true,
+        // Source previews are usually a good editor fit, but image formats like
+        // SVG should still behave like images in "Open With".
+        PreviewKind::Source => facts.builtin_class != FileClass::Image,
+        // Plain-text previews cover both true text files and some binary
+        // document/image categories that render metadata as text. Only treat
+        // them as editor-friendly when they are not one of those richer types.
+        PreviewKind::PlainText => {
+            facts.preview.document_format.is_none()
+                && !matches!(
+                    facts.builtin_class,
+                    FileClass::Image
+                        | FileClass::Audio
+                        | FileClass::Video
+                        | FileClass::Archive
+                        | FileClass::Font
+                )
+        }
+        _ => false,
+    }
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(super) fn should_supplement_text_editors(path: &Path, has_exact_handlers: bool) -> bool {
+    !has_exact_handlers && path_is_text_like(path)
 }

@@ -27,7 +27,7 @@ use std::{
 use objc2_foundation::{NSBundle, NSFileManager, NSString, NSURL};
 
 use super::super::super::state::OpenWithApp;
-use super::super::path_is_text_like;
+use super::super::{path_is_text_like, should_supplement_text_editors};
 use super::exec::tokenize_exec;
 
 // ── CoreServices / CoreFoundation C types and functions ───────────────────────
@@ -99,7 +99,7 @@ pub(super) fn discover_via_nsworkspace(path: &Path) -> Vec<OpenWithApp> {
     };
 
     let mut apps = discover_file_url_handlers(path_str);
-    if path_is_text_like(path) {
+    if should_supplement_text_editors(path, !apps.is_empty()) {
         merge_unique_apps(&mut apps, discover_generic_editor_apps(path_str, path));
         merge_unique_apps(&mut apps, discover_terminal_editor_apps(path_str));
     }

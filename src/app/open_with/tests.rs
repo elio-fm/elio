@@ -1,6 +1,7 @@
 use super::{
     super::{App, state::OpenWithApp},
     overlay::FallbackOpenOutcome,
+    path_is_text_like, should_supplement_text_editors,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -199,6 +200,47 @@ fn zero_discovered_apps_can_report_text_editor_fallback() {
 
     assert!(app.overlays.open_with.is_none());
     assert_eq!(app.status, "No apps found, opened in text editor");
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn path_is_text_like_is_true_for_source_files() {
+    let root = temp_dir_path("text-like-source");
+    fs::create_dir_all(&root).expect("create temp root");
+    let path = root.join("main.rs");
+    fs::write(&path, "fn main() {}\n").expect("write source file");
+
+    assert!(path_is_text_like(&path));
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn path_is_text_like_is_false_for_svg_images() {
+    let root = temp_dir_path("text-like-svg");
+    fs::create_dir_all(&root).expect("create temp root");
+    let path = root.join("icon.svg");
+    fs::write(
+        &path,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"></svg>"#,
+    )
+    .expect("write svg file");
+
+    assert!(!path_is_text_like(&path));
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn text_editor_supplement_is_disabled_when_exact_handlers_exist() {
+    let root = temp_dir_path("text-supplement-existing");
+    fs::create_dir_all(&root).expect("create temp root");
+    let path = root.join("main.rs");
+    fs::write(&path, "fn main() {}\n").expect("write source file");
+
+    assert!(!should_supplement_text_editors(&path, true));
+    assert!(should_supplement_text_editors(&path, false));
 
     fs::remove_dir_all(root).ok();
 }
