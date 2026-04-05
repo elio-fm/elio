@@ -1,7 +1,7 @@
 use super::{
     super::{App, state::OpenWithApp},
     overlay::FallbackOpenOutcome,
-    path_is_text_like, should_supplement_text_editors,
+    path_is_text_like,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -228,19 +228,6 @@ fn path_is_text_like_is_false_for_svg_images() {
     .expect("write svg file");
 
     assert!(!path_is_text_like(&path));
-
-    fs::remove_dir_all(root).ok();
-}
-
-#[test]
-fn text_editor_supplement_is_disabled_when_exact_handlers_exist() {
-    let root = temp_dir_path("text-supplement-existing");
-    fs::create_dir_all(&root).expect("create temp root");
-    let path = root.join("main.rs");
-    fs::write(&path, "fn main() {}\n").expect("write source file");
-
-    assert!(!should_supplement_text_editors(&path, true));
-    assert!(should_supplement_text_editors(&path, false));
 
     fs::remove_dir_all(root).ok();
 }

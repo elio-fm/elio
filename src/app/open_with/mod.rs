@@ -37,8 +37,3 @@ pub(super) fn path_is_text_like(path: &Path) -> bool {
         _ => false,
     }
 }
-
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub(super) fn should_supplement_text_editors(path: &Path, has_exact_handlers: bool) -> bool {
-    !has_exact_handlers && path_is_text_like(path)
-}
