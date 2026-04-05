@@ -292,6 +292,12 @@ pub(crate) fn detached_open(program: &str, args: &[&str], target: &Path) -> io::
     let mut command = Command::new(program);
     command.args(args);
     command.arg(target);
+
+    #[cfg(target_os = "macos")]
+    if program == "open" {
+        return status_spawn(&mut command);
+    }
+
     detached_spawn(&mut command)
 }
 
@@ -301,6 +307,12 @@ pub(crate) fn detached_open(program: &str, args: &[&str], target: &Path) -> io::
 pub(crate) fn detached_open_command(program: &str, args: &[String]) -> io::Result<()> {
     let mut command = Command::new(program);
     command.args(args);
+
+    #[cfg(target_os = "macos")]
+    if program == "open" {
+        return status_spawn(&mut command);
+    }
+
     detached_spawn(&mut command)
 }
 
@@ -312,6 +324,19 @@ fn detached_spawn(command: &mut Command) -> io::Result<()> {
     command.process_group(0);
     command.spawn()?;
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn status_spawn(command: &mut Command) -> io::Result<()> {
+    command.stdin(Stdio::null());
+    command.stdout(Stdio::null());
+    command.stderr(Stdio::null());
+    let status = command.status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!("process exited with {status}")))
+    }
 }
 
 fn entry_details(path: &Path, metadata: &fs::Metadata) -> EntryDetails {

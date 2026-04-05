@@ -70,7 +70,7 @@ fn strip_unknown_field_codes(s: &str) -> String {
 
 /// Splits a desktop-spec Exec string into tokens, respecting double-quoted
 /// strings and backslash escapes.
-fn tokenize_exec(exec: &str) -> Vec<String> {
+pub(super) fn tokenize_exec(exec: &str) -> Vec<String> {
     let mut tokens: Vec<String> = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;

@@ -1,4 +1,7 @@
-use super::super::{App, state::OpenWithApp};
+use super::{
+    super::{App, state::OpenWithApp},
+    overlay::FallbackOpenOutcome,
+};
 use std::{
     cell::{Cell, RefCell},
     fs,
@@ -49,7 +52,7 @@ fn zero_discovered_apps_fall_back_to_default_open() {
         vec![],
         |_| {
             fallback_called.set(true);
-            Ok(())
+            Ok(FallbackOpenOutcome::DefaultApp)
         },
         |_| unreachable!("launch should not be called when no apps were discovered"),
     );
@@ -174,6 +177,28 @@ fn confirm_terminal_app_from_overlay_queues_pending_command() {
         Some(("nvim".to_string(), vec!["/tmp/file.txt".to_string()]))
     );
     assert!(app.status.is_empty());
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn zero_discovered_apps_can_report_text_editor_fallback() {
+    let root = temp_dir_path("text-editor-fallback-root");
+    fs::create_dir_all(&root).expect("create temp root");
+    let path = root.join("file.rs");
+    fs::write(&path, "fn main() {}\n").expect("write temp file");
+
+    let mut app = App::new_at(root.clone()).expect("create app");
+    app.handle_discovered_open_with_apps(
+        &path,
+        vec![],
+        |_| Ok(FallbackOpenOutcome::TextEditor),
+        |_| unreachable!("launch should not be called when no apps were discovered"),
+    );
+
+    assert!(app.overlays.open_with.is_none());
+    assert_eq!(app.status, "No apps found, opened in text editor");
 
     fs::remove_dir_all(root).ok();
 }

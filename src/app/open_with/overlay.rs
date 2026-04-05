@@ -7,6 +7,13 @@ use super::super::{
 use crate::fs::{detached_open_command, open_in_system};
 use anyhow::Result;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum FallbackOpenOutcome {
+    DefaultApp,
+    #[cfg(target_os = "macos")]
+    TextEditor,
+}
+
 // ── Read-only accessors ───────────────────────────────────────────────────────
 
 impl App {
@@ -63,7 +70,7 @@ impl App {
         let path = entry.path.clone();
 
         let apps = super::discovery::discover_open_with_apps(&path);
-        self.handle_discovered_open_with_apps(&path, apps, open_in_system, |app| {
+        self.handle_discovered_open_with_apps(&path, apps, open_with_fallback, |app| {
             detached_open_command(&app.program, &app.args)
         });
     }
@@ -111,12 +118,18 @@ impl App {
         mut fallback_open: F,
         mut launch_app: G,
     ) where
-        F: FnMut(&Path) -> std::result::Result<(), String>,
+        F: FnMut(&Path) -> std::result::Result<FallbackOpenOutcome, String>,
         G: FnMut(&OpenWithApp) -> std::io::Result<()>,
     {
         match apps.len() {
             0 => match fallback_open(path) {
-                Ok(()) => self.status = "No apps found, opened with default".to_string(),
+                Ok(FallbackOpenOutcome::DefaultApp) => {
+                    self.status = "No apps found, opened with default".to_string();
+                }
+                #[cfg(target_os = "macos")]
+                Ok(FallbackOpenOutcome::TextEditor) => {
+                    self.status = "No apps found, opened in text editor".to_string();
+                }
                 Err(e) => self.status = format!("Failed to open: {e}"),
             },
             1 => {
@@ -146,11 +159,13 @@ fn build_open_with_overlay(apps: Vec<OpenWithApp>) -> OpenWithOverlay {
         .enumerate()
         .filter_map(|(index, app)| {
             let shortcut = assign_shortcut(index)?;
-            let label = if app.is_default {
-                format!("{} (default)", app.display_name)
-            } else {
-                app.display_name.clone()
-            };
+            let mut label = app.display_name.clone();
+            if app.requires_terminal {
+                label.push_str(" (terminal)");
+            }
+            if app.is_default {
+                label.push_str(" (default)");
+            }
             Some(OpenWithRow {
                 shortcut,
                 label,
@@ -174,6 +189,36 @@ fn assign_shortcut(index: usize) -> Option<char> {
         Some((b'a' + (index - 9) as u8) as char)
     } else {
         None
+    }
+}
+
+fn open_with_fallback(path: &Path) -> std::result::Result<FallbackOpenOutcome, String> {
+    #[cfg(target_os = "macos")]
+    {
+        if super::path_is_text_like(path) {
+            return open_in_text_editor(path).map(|()| FallbackOpenOutcome::TextEditor);
+        }
+    }
+
+    open_in_system(path).map(|()| FallbackOpenOutcome::DefaultApp)
+}
+
+#[cfg(target_os = "macos")]
+fn open_in_text_editor(path: &Path) -> std::result::Result<(), String> {
+    use std::process::{Command, Stdio};
+
+    let status = Command::new("open")
+        .arg("-t")
+        .arg(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|e| format!("open: {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("open exited with {status}"))
     }
 }
 
