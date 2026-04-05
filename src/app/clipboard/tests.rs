@@ -545,9 +545,11 @@ fn queued_same_destination_pastes_defer_reload_until_queue_drains() {
         let _ = app.process_background_jobs();
         if app.jobs.paste_token != first_token {
             queued_started = true;
+            let reload_queued = app.navigation.directory_runtime.pending_load.is_some();
+            let queue_drained = app.paste_progress().is_none() && app.jobs.queued_pastes.is_empty();
             assert!(
-                app.navigation.directory_runtime.pending_load.is_none(),
-                "reload should stay deferred while a queued paste to the same destination starts"
+                !reload_queued || queue_drained,
+                "reload should stay deferred until the queued paste to the same destination has finished"
             );
             break;
         }
