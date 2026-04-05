@@ -5,6 +5,7 @@ use std::path::Path;
 /// Supported placeholders: `%f`, `%F`, `%u`, `%U` → replaced with the target
 /// file path.  `%i`, `%c`, `%k` are stripped.  Unknown `%x` sequences are
 /// dropped.
+#[cfg(all(unix, not(target_os = "macos")))]
 pub(super) fn expand_exec_template(exec: &str, target: &Path) -> Option<(String, Vec<String>)> {
     let target_str = target.to_str()?;
     let tokens = tokenize_exec(exec);
@@ -46,6 +47,7 @@ pub(super) fn expand_exec_template(exec: &str, target: &Path) -> Option<(String,
 
 /// Removes any `%x` field codes that were not already handled, so they are
 /// never forwarded to the child process.  `%%` is converted to a literal `%`.
+#[cfg(all(unix, not(target_os = "macos")))]
 fn strip_unknown_field_codes(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
@@ -101,7 +103,7 @@ pub(super) fn tokenize_exec(exec: &str) -> Vec<String> {
     tokens
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix, not(target_os = "macos")))]
 mod tests {
     use super::*;
     use std::path::Path;
