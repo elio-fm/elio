@@ -3,6 +3,8 @@ mod exec;
 
 #[cfg(all(unix, not(target_os = "macos")))]
 mod gio;
+#[cfg(target_os = "macos")]
+mod macos;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod mime;
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -15,11 +17,15 @@ use super::super::state::OpenWithApp;
 // ── public entry point ────────────────────────────────────────────────────────
 
 pub(super) fn discover_open_with_apps(path: &Path) -> Vec<OpenWithApp> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::discover_via_nsworkspace(path)
+    }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         discover_xdg(path)
     }
-    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    #[cfg(not(any(target_os = "macos", all(unix, not(target_os = "macos")))))]
     {
         let _ = path;
         vec![]

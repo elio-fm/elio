@@ -38,3 +38,10 @@ syntect = { version = "5.2", default-features = false, features = ["default-synt
 strip = true
 lto = "thin"
 codegen-units = 1
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# NSWorkspace already depends on NSArray, NSFileManager, NSString, NSURL via its
+# own feature deps.  We add NSBundle and NSProcessInfo for bundle-id lookup and
+# the macOS-12 runtime version check respectively.
+objc2-app-kit = { version = "0.3", features = ["NSWorkspace"] }
+objc2-foundation = { version = "0.3", features = ["NSBundle", "NSProcessInfo"] }
