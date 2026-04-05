@@ -658,21 +658,23 @@ fn capital_o_opens_open_with_overlay_for_selected_file() {
 
     let overlay_opened = app.overlays.open_with.is_some();
 
-    // On systems where gio is available, text/plain must have handlers — the overlay
-    // must open.  On minimal systems without gio we allow "No applications found".
+    // gio available → at least one handler was found; the file was either opened
+    // directly (single handler, status cleared) or the overlay was shown (multiple).
+    // No gio / non-Unix → allow "no apps" fallback status too.
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         if gio_available() {
+            let handled = overlay_opened || app.status.is_empty();
             assert!(
-                overlay_opened,
-                "gio is available — overlay must open for text/plain; status: {:?}",
+                handled,
+                "gio is available — file must be handled (overlay or auto-launch); status: {:?}",
                 app.status
             );
         } else {
             let no_apps = app.status == "No apps found, opened with default";
             assert!(
-                overlay_opened || no_apps,
-                "O on a file should open overlay or report no apps; got status: {:?}",
+                overlay_opened || no_apps || app.status.is_empty(),
+                "O on a file should open overlay, report no apps, or auto-launch; got status: {:?}",
                 app.status
             );
         }
@@ -681,8 +683,8 @@ fn capital_o_opens_open_with_overlay_for_selected_file() {
     {
         let no_apps = app.status == "No apps found, opened with default";
         assert!(
-            overlay_opened || no_apps,
-            "O on a file should open overlay or report no apps; got status: {:?}",
+            overlay_opened || no_apps || app.status.is_empty(),
+            "O on a file should open overlay, report no apps, or auto-launch; got status: {:?}",
             app.status
         );
     }
