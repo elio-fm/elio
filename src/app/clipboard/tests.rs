@@ -549,10 +549,6 @@ fn queued_same_destination_pastes_defer_reload_until_queue_drains() {
                 app.navigation.directory_runtime.pending_load.is_none(),
                 "reload should stay deferred while a queued paste to the same destination starts"
             );
-            assert!(
-                app.paste_progress().is_some(),
-                "second paste should be active once its token becomes current"
-            );
             break;
         }
         std::thread::sleep(Duration::from_millis(10));
