@@ -1,4 +1,6 @@
+#[cfg(all(unix, not(target_os = "macos")))]
 mod desktop_file;
+#[cfg(all(unix, not(target_os = "macos")))]
 mod exec;
 
 #[cfg(all(unix, not(target_os = "macos")))]
