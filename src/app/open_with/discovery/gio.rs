@@ -32,9 +32,12 @@ pub(super) fn discover_via_gio(
     }
 
     let dirs = desktop_entry_dirs();
+    let desktops = super::current_desktops();
     let mut apps = Vec::new();
     for (desktop_id, is_default) in entries {
-        if let Some(app) = read_desktop_entry_for_id(&desktop_id, &dirs, path, is_default) {
+        if let Some(app) =
+            read_desktop_entry_for_id(&desktop_id, &dirs, path, is_default, &desktops)
+        {
             apps.push(app);
         }
     }
@@ -45,33 +48,74 @@ pub(super) fn discover_via_gio(
 /// Reads and parses the `.desktop` file for `desktop_id` from the first
 /// directory in `dirs` that contains it.
 ///
-/// Once the file is found, the result from that directory is final — a
-/// higher-priority entry that is hidden or missing fields wins over a
-/// lower-priority entry that would be valid.
+/// Returns `None` if the file is missing, malformed, or excluded by
+/// `OnlyShowIn` / `NotShowIn` for the current desktop environment.
+///
+/// Once a file is found (at any candidate path within a directory) the search
+/// stops — a higher-priority entry that is hidden or fails the desktop filter
+/// wins over a lower-priority entry that would be valid.
 fn read_desktop_entry_for_id(
     desktop_id: &str,
     dirs: &[PathBuf],
     target: &Path,
     is_default: bool,
+    desktops: &[String],
 ) -> Option<OpenWithApp> {
     for dir in dirs {
-        let entry_path = dir.join(desktop_id);
-        let Ok(contents) = std::fs::read_to_string(&entry_path) else {
-            continue;
-        };
-        // File found in this directory — stop searching regardless of outcome.
-        let candidate: DesktopEntryCandidate = parse_desktop_entry(&contents)?;
-        let (program, args) = expand_exec_template(&candidate.exec, target)?;
-        return Some(OpenWithApp {
-            display_name: candidate.name,
-            desktop_id: Some(desktop_id.to_string()),
-            program,
-            args,
-            is_default,
-            requires_terminal: candidate.terminal,
-        });
+        // A desktop ID like "kde-konsole.desktop" may correspond to either a
+        // flat file "kde-konsole.desktop" or a nested one "kde/konsole.desktop".
+        // Try each candidate path in left-to-right order.
+        for entry_path in candidate_paths_for_desktop_id(dir, desktop_id) {
+            let Ok(contents) = std::fs::read_to_string(&entry_path) else {
+                continue; // not found at this candidate — try the next one
+            };
+            // File found — stop searching all candidates and all dirs.
+            let candidate: DesktopEntryCandidate = parse_desktop_entry(&contents)?;
+            if !candidate.is_shown_in(desktops) {
+                return None;
+            }
+            let (program, args) = expand_exec_template(&candidate.exec, target)?;
+            return Some(OpenWithApp {
+                display_name: candidate.name,
+                desktop_id: Some(desktop_id.to_string()),
+                program,
+                args,
+                is_default,
+                requires_terminal: candidate.terminal,
+            });
+        }
     }
     None
+}
+
+/// Generates candidate file paths for a desktop ID by treating each `-`
+/// character as a possible directory separator, left-to-right.
+///
+/// XDG desktop IDs are formed by replacing path separators `/` with `-`, so
+/// the mapping from ID to path is ambiguous: `kde-konsole.desktop` could be
+/// the flat file `kde-konsole.desktop` or the nested file `kde/konsole.desktop`.
+///
+/// This function generates all O(n) left-to-right interpretations for an ID
+/// with n dashes, in order of increasing depth.  The caller tries them in
+/// sequence and stops at the first path that exists.
+///
+/// Examples:
+///   `"gedit.desktop"`      → `["{base}/gedit.desktop"]`
+///   `"kde-konsole.desktop"` → `["{base}/kde-konsole.desktop",
+///                               "{base}/kde/konsole.desktop"]`
+fn candidate_paths_for_desktop_id(base: &Path, desktop_id: &str) -> Vec<PathBuf> {
+    let segments: Vec<&str> = desktop_id.split('-').collect();
+    (0..segments.len())
+        .map(|k| {
+            let file_part = segments[k..].join("-");
+            if k == 0 {
+                base.join(&file_part)
+            } else {
+                let dir_part = segments[..k].join("/");
+                base.join(&dir_part).join(&file_part)
+            }
+        })
+        .collect()
 }
 
 /// Parses the output of `gio mime <mime-type>` into an ordered list of
@@ -238,5 +282,72 @@ Registered applications:
     fn parse_gio_mime_output_handles_empty_input() {
         let result = parse_gio_mime_output("");
         assert!(result.is_empty());
+    }
+
+    // ── candidate_paths_for_desktop_id ────────────────────────────────────────
+
+    #[test]
+    fn candidate_paths_no_dash_returns_flat_path() {
+        let base = Path::new("/usr/share/applications");
+        let paths = candidate_paths_for_desktop_id(base, "gedit.desktop");
+        assert_eq!(paths, vec![base.join("gedit.desktop")]);
+    }
+
+    #[test]
+    fn candidate_paths_one_dash_returns_flat_then_nested() {
+        let base = Path::new("/usr/share/applications");
+        let paths = candidate_paths_for_desktop_id(base, "kde-konsole.desktop");
+        assert_eq!(
+            paths,
+            vec![
+                base.join("kde-konsole.desktop"),
+                base.join("kde/konsole.desktop"),
+            ]
+        );
+    }
+
+    #[test]
+    fn candidate_paths_two_dashes_returns_all_splits() {
+        let base = Path::new("/usr/share/applications");
+        let paths = candidate_paths_for_desktop_id(base, "org-kde-konsole.desktop");
+        assert_eq!(
+            paths,
+            vec![
+                base.join("org-kde-konsole.desktop"),
+                base.join("org/kde-konsole.desktop"),
+                base.join("org/kde/konsole.desktop"),
+            ]
+        );
+    }
+
+    // ── read_desktop_entry_for_id (nested path resolution) ───────────────────
+
+    #[test]
+    fn reads_nested_desktop_file_via_hyphenated_id() {
+        use std::fs;
+
+        // Build a temp applications dir with kde/konsole.desktop at the
+        // nested path — simulating how packages like kde-konsole install.
+        let base = std::env::temp_dir().join(format!("elio-gio-nest-test-{}", std::process::id()));
+        let nested_dir = base.join("kde");
+        fs::create_dir_all(&nested_dir).unwrap();
+        fs::write(
+            nested_dir.join("konsole.desktop"),
+            "[Desktop Entry]\nName=Konsole\nExec=konsole %u\nMimeType=text/plain;\n",
+        )
+        .unwrap();
+
+        let result = read_desktop_entry_for_id(
+            "kde-konsole.desktop",
+            std::slice::from_ref(&base),
+            Path::new("/tmp/test.txt"),
+            false,
+            &[],
+        );
+        let _ = fs::remove_dir_all(&base);
+
+        let app = result.expect("should find kde/konsole.desktop via kde-konsole.desktop id");
+        assert_eq!(app.display_name, "Konsole");
+        assert_eq!(app.desktop_id.as_deref(), Some("kde-konsole.desktop"));
     }
 }

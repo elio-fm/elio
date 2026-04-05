@@ -26,6 +26,50 @@ pub(super) fn discover_open_with_apps(path: &Path) -> Vec<OpenWithApp> {
     }
 }
 
+// ── Shared XDG helpers (Linux / BSD) ─────────────────────────────────────────
+
+/// Returns the ordered list of XDG base data directories:
+/// `XDG_DATA_HOME` first, then each entry in `XDG_DATA_DIRS`.
+/// Falls back to spec defaults (`~/.local/share` and `/usr/local/share:/usr/share`)
+/// when the environment variables are unset.
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(super) fn xdg_data_dirs() -> Vec<std::path::PathBuf> {
+    let mut dirs = Vec::new();
+
+    let data_home = std::env::var("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .map(|h| h.join(".local/share"))
+                .unwrap_or_default()
+        });
+    if !data_home.as_os_str().is_empty() {
+        dirs.push(data_home);
+    }
+
+    for entry in std::env::var("XDG_DATA_DIRS")
+        .unwrap_or_else(|_| "/usr/local/share:/usr/share".to_string())
+        .split(':')
+        .filter(|s| !s.is_empty())
+    {
+        dirs.push(std::path::PathBuf::from(entry));
+    }
+
+    dirs
+}
+
+/// Returns the desktop names from `$XDG_CURRENT_DESKTOP` (colon-separated,
+/// original case).  Empty when the variable is unset or empty.
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(super) fn current_desktops() -> Vec<String> {
+    std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .split(':')
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 // ── XDG discovery (Linux / BSD) ───────────────────────────────────────────────
 
 #[cfg(all(unix, not(target_os = "macos")))]

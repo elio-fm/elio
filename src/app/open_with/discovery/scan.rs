@@ -4,7 +4,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::super::super::state::OpenWithApp;
-use super::desktop_file::{DesktopEntryCandidate, parse_desktop_entry, parse_mimeapps_defaults};
+use super::desktop_file::{
+    DesktopEntryCandidate, parse_desktop_entry, parse_mimeapps_defaults, parse_mimeapps_removed,
+};
 use super::exec::expand_exec_template;
 
 /// Manual desktop-file scan: walks all desktop entry directories and returns
@@ -15,49 +17,49 @@ pub(super) fn discover_via_desktop_scan(mime: &str, path: &Path) -> Vec<OpenWith
 }
 
 /// Inner scan that accepts an explicit directory list (allows hermetic testing).
-fn discover_via_desktop_scan_in_dirs(
+pub(super) fn discover_via_desktop_scan_in_dirs(
     mime: &str,
     path: &Path,
     dirs: &[PathBuf],
 ) -> Vec<OpenWithApp> {
+    discover_via_desktop_scan_inner(mime, path, dirs, &mimeapps_paths())
+}
+
+/// Innermost scan accepting both explicit desktop dirs and explicit mimeapps
+/// paths, enabling fully hermetic tests without environment-variable mutation.
+fn discover_via_desktop_scan_inner(
+    mime: &str,
+    path: &Path,
+    dirs: &[PathBuf],
+    mime_paths: &[PathBuf],
+) -> Vec<OpenWithApp> {
+    let desktops = super::current_desktops();
+
     // Collect all desktop entries that declare this MIME type, keyed by
-    // desktop-id.  Higher-priority directories come first, so we skip any id
-    // that was already seen.
+    // desktop-id.  Higher-priority directories come first; once a desktop-id
+    // is seen it is never overwritten by a lower-priority directory.
+    // The recursive walk derives desktop-ids from relative paths per XDG spec
+    // (e.g. `kde/konsole.desktop` → desktop-id `kde-konsole.desktop`).
     let mut candidates: HashMap<String, DesktopEntryCandidate> = HashMap::new();
     for dir in dirs {
-        let Ok(read_dir) = std::fs::read_dir(dir) else {
-            continue;
-        };
-        let mut entries: Vec<_> = read_dir.flatten().collect();
-        entries.sort_by_key(|e| e.file_name());
-        for entry in entries {
-            let entry_path = entry.path();
-            if entry_path.extension().and_then(|e| e.to_str()) != Some("desktop") {
-                continue;
-            }
-            let desktop_id = match entry_path.file_name() {
-                Some(n) => n.to_string_lossy().into_owned(),
-                None => continue,
-            };
+        for (desktop_id, entry_path) in collect_desktop_entries(dir) {
             if candidates.contains_key(&desktop_id) {
-                continue;
+                continue; // already claimed by a higher-priority dir
             }
-            let contents = match std::fs::read_to_string(&entry_path) {
-                Ok(s) => s,
-                Err(_) => continue,
+            let Ok(contents) = std::fs::read_to_string(&entry_path) else {
+                continue;
             };
             let Some(candidate) = parse_desktop_entry(&contents) else {
                 continue;
             };
-            if candidate.mime_types.iter().any(|m| m == mime) {
+            if candidate.mime_types.iter().any(|m| m == mime) && candidate.is_shown_in(&desktops) {
                 candidates.insert(desktop_id, candidate);
             }
         }
     }
 
-    // Determine preferred ordering from mimeapps.list files.  Walk in
-    // priority order and stop at the first file that mentions this MIME type.
-    let ordered_defaults: Vec<String> = mimeapps_paths()
+    // Default ordering: first file in priority order that mentions this MIME type.
+    let ordered_defaults: Vec<String> = mime_paths
         .iter()
         .find_map(|p| {
             let contents = std::fs::read_to_string(p).ok()?;
@@ -70,8 +72,23 @@ fn discover_via_desktop_scan_in_dirs(
         })
         .unwrap_or_default();
 
-    // Build result: defaults first (in declared order), then the rest by name.
+    // Remove any candidate explicitly suppressed in any mimeapps.list
+    // [Removed Associations] section for this MIME type.
+    let mut removed: HashSet<String> = HashSet::new();
+    for p in mime_paths {
+        if let Ok(contents) = std::fs::read_to_string(p) {
+            removed.extend(parse_mimeapps_removed(&contents, mime));
+        }
+    }
+    candidates.retain(|id, _| !removed.contains(id));
+
+    // Build result: defaults first (in declared order), then the rest sorted by
+    // display name (case-insensitive) for stable ordering.
+    // Only the first resolved default gets is_default=true — that is the user's
+    // explicit preferred handler; subsequent entries in the defaults list are
+    // listed before non-defaults but are not flagged as the default.
     let mut apps: Vec<OpenWithApp> = Vec::new();
+    let mut first_default_emitted = false;
 
     for desktop_id in &ordered_defaults {
         let Some(candidate) = candidates.remove(desktop_id) else {
@@ -80,12 +97,14 @@ fn discover_via_desktop_scan_in_dirs(
         let Some((program, args)) = expand_exec_template(&candidate.exec, path) else {
             continue;
         };
+        let is_default = !first_default_emitted;
+        first_default_emitted = true;
         apps.push(OpenWithApp {
             display_name: candidate.name,
             desktop_id: Some(desktop_id.clone()),
             program,
             args,
-            is_default: true,
+            is_default,
             requires_terminal: candidate.terminal,
         });
     }
@@ -113,80 +132,191 @@ fn discover_via_desktop_scan_in_dirs(
 /// Returns the ordered list of directories to search for `.desktop` files,
 /// from highest to lowest priority, following the XDG Base Dir spec.
 ///
-/// Includes Flatpak export paths so apps installed via Flatpak are found.
+/// Includes Flatpak and Snap export paths so apps installed via those package
+/// managers are discovered even when they are not in `XDG_DATA_DIRS`.
 pub(super) fn desktop_entry_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
+    let data_dirs = super::xdg_data_dirs();
 
-    // XDG_DATA_HOME/applications (user apps, highest priority)
-    let data_home = std::env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            dirs::home_dir()
-                .map(|h| h.join(".local/share"))
-                .unwrap_or_default()
-        });
-    if !data_home.as_os_str().is_empty() {
+    // XDG_DATA_HOME/applications — highest-priority user directory.
+    if let Some(data_home) = data_dirs.first() {
         dirs.push(data_home.join("applications"));
     }
 
-    // User Flatpak exports (~/.local/share/flatpak/exports/share/applications)
+    // Flatpak user exports sit between user data home and system dirs.
+    // On many systems Flatpak adds this to XDG_DATA_DIRS itself, so the
+    // deduplication step below will handle the overlap.
     if let Some(home) = dirs::home_dir() {
         dirs.push(home.join(".local/share/flatpak/exports/share/applications"));
     }
 
-    // XDG_DATA_DIRS (system-level; spec default: /usr/local/share:/usr/share)
-    let xdg_data_dirs = std::env::var("XDG_DATA_DIRS")
-        .unwrap_or_else(|_| "/usr/local/share:/usr/share".to_string());
-    for data_dir in xdg_data_dirs.split(':').filter(|s| !s.is_empty()) {
-        dirs.push(PathBuf::from(data_dir).join("applications"));
+    // XDG_DATA_DIRS/applications — system-level directories.
+    for data_dir in data_dirs.iter().skip(1) {
+        dirs.push(data_dir.join("applications"));
     }
 
-    // System Flatpak exports
+    // System-level package manager exports (usually not in XDG_DATA_DIRS).
     dirs.push(PathBuf::from("/var/lib/flatpak/exports/share/applications"));
+    dirs.push(PathBuf::from("/var/lib/snapd/desktop/applications"));
 
-    // Deduplicate while preserving priority order
+    // Deduplicate while preserving priority order.
     let mut seen = HashSet::new();
     dirs.retain(|d| seen.insert(d.clone()));
 
     dirs
 }
 
-fn mimeapps_paths() -> Vec<PathBuf> {
+/// Returns the ordered list of `mimeapps.list` paths to consult, from highest
+/// to lowest priority, per the XDG MIME Applications spec.
+///
+/// The lookup order is:
+/// 1. `$XDG_CONFIG_HOME/$desktop-mimeapps.list` (per-desktop user override)
+/// 2. `$XDG_CONFIG_HOME/mimeapps.list`
+/// 3. `$XDG_CONFIG_DIRS/$desktop-mimeapps.list`
+/// 4. `$XDG_CONFIG_DIRS/mimeapps.list`
+/// 5. `$XDG_DATA_HOME/applications/$desktop-mimeapps.list`
+/// 6. `$XDG_DATA_HOME/applications/mimeapps.list`
+/// 7. `$XDG_DATA_DIRS/applications/$desktop-mimeapps.list`
+/// 8. `$XDG_DATA_DIRS/applications/mimeapps.list`
+pub(super) fn mimeapps_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
-    if let Some(config) = dirs::config_dir() {
-        paths.push(config.join("mimeapps.list"));
+
+    // Desktop names (lowercased) for per-desktop filename variants.
+    // XDG spec: "$desktop" is each component of XDG_CURRENT_DESKTOP, lowercased.
+    let desktops: Vec<String> = super::current_desktops()
+        .into_iter()
+        .map(|s| s.to_lowercase())
+        .collect();
+
+    // ── Config-dir section ────────────────────────────────────────────────────
+
+    // $XDG_CONFIG_HOME defaults to ~/.config
+    let config_home = std::env::var("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .map(|h| h.join(".config"))
+                .unwrap_or_default()
+        });
+    if !config_home.as_os_str().is_empty() {
+        for desktop in &desktops {
+            paths.push(config_home.join(format!("{desktop}-mimeapps.list")));
+        }
+        paths.push(config_home.join("mimeapps.list"));
     }
-    paths.push(PathBuf::from("/usr/local/share/applications/mimeapps.list"));
-    paths.push(PathBuf::from("/usr/share/applications/mimeapps.list"));
+
+    // $XDG_CONFIG_DIRS defaults to /etc/xdg
+    for dir in std::env::var("XDG_CONFIG_DIRS")
+        .unwrap_or_else(|_| "/etc/xdg".to_string())
+        .split(':')
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+    {
+        for desktop in &desktops {
+            paths.push(dir.join(format!("{desktop}-mimeapps.list")));
+        }
+        paths.push(dir.join("mimeapps.list"));
+    }
+
+    // ── Data-dir/applications section ─────────────────────────────────────────
+
+    for data_dir in super::xdg_data_dirs() {
+        let apps = data_dir.join("applications");
+        for desktop in &desktops {
+            paths.push(apps.join(format!("{desktop}-mimeapps.list")));
+        }
+        paths.push(apps.join("mimeapps.list"));
+    }
+
     paths
 }
+
+// ── Desktop entry collection ──────────────────────────────────────────────────
+
+/// Recursively collects `(desktop_id, file_path)` pairs from `dir`.
+///
+/// Desktop IDs are derived from the path relative to `dir` by replacing the
+/// directory separator with `-`, per the XDG Desktop Entry spec:
+///   `{dir}/applications/kde/konsole.desktop` → `kde-konsole.desktop`
+///
+/// Entries are returned in deterministic order (sorted by desktop-id).
+fn collect_desktop_entries(dir: &Path) -> Vec<(String, PathBuf)> {
+    let mut results = Vec::new();
+    collect_desktop_entries_recursive(dir, dir, &mut results);
+    // Sort by desktop-id for a stable, deterministic order.
+    results.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    results
+}
+
+fn collect_desktop_entries_recursive(
+    base: &Path,
+    current: &Path,
+    results: &mut Vec<(String, PathBuf)>,
+) {
+    let Ok(read_dir) = std::fs::read_dir(current) else {
+        return;
+    };
+
+    // Sort entries within each directory for determinism before recursing.
+    let mut entries: Vec<_> = read_dir.flatten().collect();
+    entries.sort_unstable_by_key(|e| e.file_name());
+
+    for entry in entries {
+        let path = entry.path();
+        // Use path.is_dir() rather than file_type to follow symlinks.
+        if path.is_dir() {
+            collect_desktop_entries_recursive(base, &path, results);
+        } else if path.extension().and_then(|e| e.to_str()) == Some("desktop") {
+            let Ok(rel) = path.strip_prefix(base) else {
+                continue;
+            };
+            // Derive desktop-id: join path components with '-'.
+            let components: Vec<_> = rel
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect();
+            results.push((components.join("-"), path));
+        }
+    }
+}
+
+// ── tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // ── discover_via_desktop_scan_in_dirs (hermetic) ──────────────────────────
+    fn unique_dir(label: &str) -> PathBuf {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .subsec_nanos();
+        std::env::temp_dir().join(format!(
+            "elio-scan-test-{label}-{}-{nanos}",
+            std::process::id()
+        ))
+    }
+
+    // ── discover_via_desktop_scan_in_dirs ─────────────────────────────────────
 
     #[test]
     fn desktop_scan_finds_app_by_exact_mime_type() {
         use std::fs;
-
-        let dir =
-            std::env::temp_dir().join(format!("elio-test-desktop-scan-{}", std::process::id()));
+        let dir = unique_dir("flat");
         fs::create_dir_all(&dir).expect("create temp dir");
 
-        let desktop_content = "\
-[Desktop Entry]
-Name=Test Editor
-Exec=testeditor %f
-MimeType=text/plain;
-";
-        fs::write(dir.join("testeditor.desktop"), desktop_content).expect("write desktop file");
+        fs::write(
+            dir.join("testeditor.desktop"),
+            "[Desktop Entry]\nName=Test Editor\nExec=testeditor %f\nMimeType=text/plain;\n",
+        )
+        .expect("write desktop file");
 
-        let target = Path::new("/tmp/hello.txt");
-        let apps =
-            discover_via_desktop_scan_in_dirs("text/plain", target, std::slice::from_ref(&dir));
-
+        let apps = discover_via_desktop_scan_in_dirs(
+            "text/plain",
+            Path::new("/tmp/hello.txt"),
+            std::slice::from_ref(&dir),
+        );
         let _ = fs::remove_dir_all(&dir);
 
         assert_eq!(apps.len(), 1);
@@ -198,34 +328,250 @@ MimeType=text/plain;
     #[test]
     fn desktop_scan_does_not_find_app_by_inherited_mime_type() {
         use std::fs;
-
-        // This test documents the known limitation of the fallback scan:
-        // an app that only lists text/plain will NOT be found when scanning
-        // for text/markdown (which inherits from text/plain).
-        // The gio backend handles this correctly; the desktop scan is the fallback.
-        let dir = std::env::temp_dir().join(format!(
-            "elio-test-desktop-scan-inherit-{}",
-            std::process::id()
-        ));
+        // Documents that the fallback scan does exact matching only.
+        // An app listing text/plain will NOT be found for text/markdown.
+        let dir = unique_dir("inherit");
         fs::create_dir_all(&dir).expect("create temp dir");
 
-        let desktop_content = "\
-[Desktop Entry]
-Name=Plain Editor
-Exec=plaineditor %f
-MimeType=text/plain;
-";
-        fs::write(dir.join("plaineditor.desktop"), desktop_content).expect("write desktop file");
+        fs::write(
+            dir.join("plaineditor.desktop"),
+            "[Desktop Entry]\nName=Plain Editor\nExec=plaineditor %f\nMimeType=text/plain;\n",
+        )
+        .expect("write desktop file");
 
-        let target = Path::new("/tmp/notes.md");
-        let apps =
-            discover_via_desktop_scan_in_dirs("text/markdown", target, std::slice::from_ref(&dir));
-
+        let apps = discover_via_desktop_scan_in_dirs(
+            "text/markdown",
+            Path::new("/tmp/notes.md"),
+            std::slice::from_ref(&dir),
+        );
         let _ = fs::remove_dir_all(&dir);
 
         assert!(
             apps.is_empty(),
             "fallback scan must not infer MIME inheritance — that is gio's job"
         );
+    }
+
+    // ── collect_desktop_entries / desktop-id derivation ───────────────────────
+
+    #[test]
+    fn flat_desktop_file_gets_basename_as_desktop_id() {
+        use std::fs;
+        let dir = unique_dir("flat-id");
+        fs::create_dir_all(&dir).expect("create dir");
+        fs::write(dir.join("gedit.desktop"), "").expect("write file");
+
+        let entries = collect_desktop_entries(&dir);
+        let _ = fs::remove_dir_all(&dir);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, "gedit.desktop");
+    }
+
+    #[test]
+    fn subdirectory_desktop_file_gets_path_joined_with_dash() {
+        use std::fs;
+        let dir = unique_dir("subdir-id");
+        fs::create_dir_all(dir.join("kde")).expect("create subdir");
+        fs::write(dir.join("kde/konsole.desktop"), "").expect("write file");
+
+        let entries = collect_desktop_entries(&dir);
+        let _ = fs::remove_dir_all(&dir);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, "kde-konsole.desktop");
+    }
+
+    #[test]
+    fn deeply_nested_desktop_file_gets_full_path_as_id() {
+        use std::fs;
+        let dir = unique_dir("deep-id");
+        fs::create_dir_all(dir.join("a/b")).expect("create deep dirs");
+        fs::write(dir.join("a/b/app.desktop"), "").expect("write file");
+
+        let entries = collect_desktop_entries(&dir);
+        let _ = fs::remove_dir_all(&dir);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, "a-b-app.desktop");
+    }
+
+    #[test]
+    fn desktop_scan_finds_app_in_subdirectory() {
+        use std::fs;
+        let dir = unique_dir("subdir-scan");
+        fs::create_dir_all(dir.join("kde")).expect("create subdir");
+
+        fs::write(
+            dir.join("kde/konsole.desktop"),
+            "[Desktop Entry]\nName=Konsole\nExec=konsole %f\nMimeType=text/plain;\n",
+        )
+        .expect("write desktop file");
+
+        let apps = discover_via_desktop_scan_in_dirs(
+            "text/plain",
+            Path::new("/tmp/hello.txt"),
+            std::slice::from_ref(&dir),
+        );
+        let _ = fs::remove_dir_all(&dir);
+
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].display_name, "Konsole");
+        assert_eq!(
+            apps[0].desktop_id.as_deref(),
+            Some("kde-konsole.desktop"),
+            "desktop-id must use '-' not '/'"
+        );
+    }
+
+    #[test]
+    fn higher_priority_dir_wins_for_same_desktop_id() {
+        use std::fs;
+        let dir1 = unique_dir("priority-high");
+        let dir2 = unique_dir("priority-low");
+        fs::create_dir_all(&dir1).expect("create dir1");
+        fs::create_dir_all(&dir2).expect("create dir2");
+
+        fs::write(
+            dir1.join("app.desktop"),
+            "[Desktop Entry]\nName=High Priority\nExec=app %f\nMimeType=text/plain;\n",
+        )
+        .expect("write high");
+        fs::write(
+            dir2.join("app.desktop"),
+            "[Desktop Entry]\nName=Low Priority\nExec=app %f\nMimeType=text/plain;\n",
+        )
+        .expect("write low");
+
+        let apps = discover_via_desktop_scan_in_dirs(
+            "text/plain",
+            Path::new("/tmp/file.txt"),
+            &[dir1.clone(), dir2.clone()],
+        );
+        let _ = fs::remove_dir_all(&dir1);
+        let _ = fs::remove_dir_all(&dir2);
+
+        assert_eq!(
+            apps.len(),
+            1,
+            "same desktop-id should not produce duplicates"
+        );
+        assert_eq!(apps[0].display_name, "High Priority");
+    }
+
+    #[test]
+    fn removed_associations_are_filtered_out() {
+        use std::fs;
+        let apps_dir = unique_dir("removed-assoc");
+        let mime_dir = unique_dir("removed-assoc-mime");
+        fs::create_dir_all(&apps_dir).expect("create apps dir");
+        fs::create_dir_all(&mime_dir).expect("create mime dir");
+
+        fs::write(
+            apps_dir.join("suppressed.desktop"),
+            "[Desktop Entry]\nName=Suppressed\nExec=suppressed %f\nMimeType=text/plain;\n",
+        )
+        .expect("write suppressed desktop");
+        fs::write(
+            apps_dir.join("allowed.desktop"),
+            "[Desktop Entry]\nName=Allowed\nExec=allowed %f\nMimeType=text/plain;\n",
+        )
+        .expect("write allowed desktop");
+        let mimeapps = mime_dir.join("mimeapps.list");
+        fs::write(
+            &mimeapps,
+            "[Removed Associations]\ntext/plain=suppressed.desktop;\n",
+        )
+        .expect("write mimeapps.list");
+
+        let apps = discover_via_desktop_scan_inner(
+            "text/plain",
+            Path::new("/tmp/file.txt"),
+            std::slice::from_ref(&apps_dir),
+            std::slice::from_ref(&mimeapps),
+        );
+        let _ = fs::remove_dir_all(&apps_dir);
+        let _ = fs::remove_dir_all(&mime_dir);
+
+        let names: Vec<&str> = apps.iter().map(|a| a.display_name.as_str()).collect();
+        assert!(
+            !names.contains(&"Suppressed"),
+            "suppressed.desktop must be filtered out by [Removed Associations]"
+        );
+        assert!(
+            names.contains(&"Allowed"),
+            "allowed.desktop must still appear"
+        );
+    }
+
+    #[test]
+    fn only_first_default_gets_is_default_true() {
+        use std::fs;
+        let apps_dir = unique_dir("multi-default");
+        let mime_dir = unique_dir("multi-default-mime");
+        fs::create_dir_all(&apps_dir).expect("create apps dir");
+        fs::create_dir_all(&mime_dir).expect("create mime dir");
+
+        for name in &["alpha", "beta", "gamma"] {
+            fs::write(
+                apps_dir.join(format!("{name}.desktop")),
+                format!(
+                    "[Desktop Entry]\nName={cap}\nExec={name} %f\nMimeType=text/plain;\n",
+                    cap = name[..1].to_uppercase() + &name[1..]
+                ),
+            )
+            .expect("write desktop");
+        }
+        let mimeapps = mime_dir.join("mimeapps.list");
+        fs::write(
+            &mimeapps,
+            "[Default Applications]\ntext/plain=alpha.desktop;beta.desktop;gamma.desktop;\n",
+        )
+        .expect("write mimeapps.list");
+
+        let apps = discover_via_desktop_scan_inner(
+            "text/plain",
+            Path::new("/tmp/file.txt"),
+            std::slice::from_ref(&apps_dir),
+            std::slice::from_ref(&mimeapps),
+        );
+        let _ = fs::remove_dir_all(&apps_dir);
+        let _ = fs::remove_dir_all(&mime_dir);
+
+        assert_eq!(apps.len(), 3);
+        let defaults: Vec<_> = apps.iter().filter(|a| a.is_default).collect();
+        assert_eq!(
+            defaults.len(),
+            1,
+            "exactly one app should be is_default=true"
+        );
+        assert_eq!(
+            defaults[0].display_name, "Alpha",
+            "first declared default wins"
+        );
+    }
+
+    #[test]
+    fn non_desktop_files_in_scan_dirs_are_ignored() {
+        use std::fs;
+        let dir = unique_dir("non-desktop");
+        fs::create_dir_all(&dir).expect("create dir");
+        fs::write(dir.join("README.md"), "not a desktop file").expect("write readme");
+        fs::write(dir.join("app.txt"), "also not a desktop file").expect("write txt");
+        fs::write(
+            dir.join("real.desktop"),
+            "[Desktop Entry]\nName=Real\nExec=real %f\nMimeType=text/plain;\n",
+        )
+        .expect("write desktop");
+
+        let apps = discover_via_desktop_scan_in_dirs(
+            "text/plain",
+            Path::new("/tmp/file.txt"),
+            std::slice::from_ref(&dir),
+        );
+        let _ = fs::remove_dir_all(&dir);
+
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].display_name, "Real");
     }
 }
