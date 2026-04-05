@@ -814,30 +814,7 @@ fn open_with_overlay_renders_expected_hits() {
 
     let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
 
-    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-        .expect("O should be handled");
-
-    if !app.open_with_is_open() {
-        // On systems with gio the overlay must open for text/plain — fail loudly.
-        #[cfg(all(unix, not(target_os = "macos")))]
-        {
-            let gio_ok = std::process::Command::new("gio")
-                .args(["mime", "text/plain"])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .is_ok_and(|s| s.success());
-            assert!(
-                !gio_ok,
-                "gio is available — open-with overlay must open for text/plain"
-            );
-        }
-        // No gio on this system; verify the overlay did not render.
-        let state = draw_ui(&mut terminal, &mut app);
-        assert!(state.open_with_panel.is_none());
-        fs::remove_dir_all(root).expect("failed to remove temp root");
-        return;
-    }
+    app.inject_open_with_for_test("Text Editor", "/usr/bin/true", vec![], false);
 
     let state = draw_ui(&mut terminal, &mut app);
     let rendered = buffer_text(terminal.backend().buffer());

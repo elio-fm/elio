@@ -228,7 +228,7 @@ fn open_in_text_editor(path: &Path) -> std::result::Result<(), String> {
 impl App {
     /// Injects a single-row open-with overlay pointing at the given command.
     /// Used only in tests to exercise the confirm/launch path without real discovery.
-    pub(in crate::app) fn inject_open_with_for_test(
+    pub(crate) fn inject_open_with_for_test(
         &mut self,
         display_name: &str,
         program: &str,

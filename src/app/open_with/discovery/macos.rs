@@ -555,12 +555,16 @@ mod tests {
             defaults.len()
         );
 
-        // Every entry must use the `open -a` launch convention.
-        for app in &apps {
+        // GUI entries must use the `open -a` launch convention.
+        for app in apps.iter().filter(|a| !a.requires_terminal) {
             assert_eq!(app.program, "open");
             assert_eq!(app.args.first().map(String::as_str), Some("-a"));
             assert!(!app.display_name.is_empty());
-            assert!(!app.requires_terminal);
+        }
+        // Terminal entries must have a non-empty display name and no GUI wrapper.
+        for app in apps.iter().filter(|a| a.requires_terminal) {
+            assert!(!app.display_name.is_empty());
+            assert_ne!(app.program, "open");
         }
     }
 

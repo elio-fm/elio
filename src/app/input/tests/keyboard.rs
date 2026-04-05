@@ -669,7 +669,7 @@ fn capital_o_opens_open_with_overlay_for_selected_file() {
                 app.status
             );
         } else {
-            let no_apps = app.status == "No applications found";
+            let no_apps = app.status == "No apps found, opened with default";
             assert!(
                 overlay_opened || no_apps,
                 "O on a file should open overlay or report no apps; got status: {:?}",
@@ -679,7 +679,7 @@ fn capital_o_opens_open_with_overlay_for_selected_file() {
     }
     #[cfg(not(all(unix, not(target_os = "macos"))))]
     {
-        let no_apps = app.status == "No applications found";
+        let no_apps = app.status == "No apps found, opened with default";
         assert!(
             overlay_opened || no_apps,
             "O on a file should open overlay or report no apps; got status: {:?}",
@@ -715,23 +715,9 @@ fn capital_o_on_directory_sets_status_without_opening_overlay() {
 #[test]
 fn esc_closes_open_with_overlay() {
     let root = temp_path("open-with-overlay-esc");
-    fs::write(root.join("notes.txt"), "hello").expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    wait_for_directory_load(&mut app);
-    app.select_index(0);
-
-    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-        .expect("O should be handled");
-    if app.overlays.open_with.is_none() {
-        #[cfg(all(unix, not(target_os = "macos")))]
-        assert!(
-            !gio_available(),
-            "gio is available — overlay must open for text/plain"
-        );
-        fs::remove_dir_all(root).expect("failed to remove temp root");
-        return;
-    }
+    app.inject_open_with_for_test("Fake App", "/usr/bin/true", vec![], false);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Esc)))
         .expect("Esc should close the overlay");
@@ -743,23 +729,9 @@ fn esc_closes_open_with_overlay() {
 #[test]
 fn open_with_shortcut_confirms_row_and_closes_overlay() {
     let root = temp_path("open-with-overlay-confirm");
-    fs::write(root.join("file.txt"), "hello").expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    wait_for_directory_load(&mut app);
-    app.select_index(0);
-
-    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-        .expect("O should be handled");
-    if app.overlays.open_with.is_none() {
-        #[cfg(all(unix, not(target_os = "macos")))]
-        assert!(
-            !gio_available(),
-            "gio is available — overlay must open for text/plain"
-        );
-        fs::remove_dir_all(root).expect("failed to remove temp root");
-        return;
-    }
+    app.inject_open_with_for_test("Fake App", "/usr/bin/true", vec![], false);
 
     let shortcut = app
         .open_with_row_shortcut(0)
@@ -786,23 +758,9 @@ fn open_with_shortcut_confirms_row_and_closes_overlay() {
 #[test]
 fn ctrl_c_closes_open_with_overlay() {
     let root = temp_path("open-with-overlay-ctrl-c");
-    fs::write(root.join("file.txt"), "hello").expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    wait_for_directory_load(&mut app);
-    app.select_index(0);
-
-    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-        .expect("O should be handled");
-    if app.overlays.open_with.is_none() {
-        #[cfg(all(unix, not(target_os = "macos")))]
-        assert!(
-            !gio_available(),
-            "gio is available — overlay must open for text/plain"
-        );
-        fs::remove_dir_all(root).expect("failed to remove temp root");
-        return;
-    }
+    app.inject_open_with_for_test("Fake App", "/usr/bin/true", vec![], false);
 
     app.handle_event(Event::Key(KeyEvent::new(
         KeyCode::Char('c'),

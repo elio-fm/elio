@@ -457,9 +457,7 @@ fn closing_open_with_popup_restores_iterm_inline_image() {
     wait_for_displayed_preview_overlay(&mut app);
     assert!(app.static_image_overlay_displayed());
 
-    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-        .expect("O should open the open-with overlay");
-    assert!(app.overlays.open_with.is_some());
+    app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
     assert!(app.iterm_pre_draw_erase().is_empty());
 
     let out = app
