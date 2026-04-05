@@ -6,7 +6,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-
 #[cfg(all(unix, not(target_os = "macos")))]
 struct OpenInSystemCaptureGuard;
 
