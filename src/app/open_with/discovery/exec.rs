@@ -1,3 +1,4 @@
+#[cfg(all(unix, not(target_os = "macos")))]
 use std::path::Path;
 
 /// Expands the `Exec=` field from a .desktop file into `(program, args)`.
