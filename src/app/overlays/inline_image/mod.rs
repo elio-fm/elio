@@ -51,6 +51,7 @@ pub(in crate::app) enum TerminalIdentity {
     Ghostty,
     Warp,
     WezTerm,
+    ITerm2,
     Alacritty,
     Other,
 }
@@ -63,7 +64,7 @@ pub(in crate::app) enum ImageProtocol {
     /// Kitty Graphics Protocol (APC `\x1b_G…\x1b\\`). Supported natively by
     /// Kitty, Ghostty, and Warp.
     KittyGraphics,
-    /// iTerm2 inline image protocol (OSC 1337). WezTerm's preferred path.
+    /// iTerm2 inline image protocol (OSC 1337). Used by WezTerm and iTerm2.
     ItermInline,
     #[default]
     None,

@@ -20,6 +20,8 @@ pub(in crate::app) fn detect_terminal_identity() -> TerminalIdentity {
         TerminalIdentity::WezTerm
     } else if term_program.contains("warp") || env::var_os("WARP_SESSION_ID").is_some() {
         TerminalIdentity::Warp
+    } else if term_program == "iterm.app" {
+        TerminalIdentity::ITerm2
     } else if term.contains("alacritty")
         || term_program.contains("alacritty")
         || env::var_os("ALACRITTY_SOCKET").is_some()
@@ -38,7 +40,7 @@ pub(in crate::app) fn select_image_protocol(
         TerminalIdentity::Kitty => ImageProtocol::KittyGraphics,
         TerminalIdentity::Ghostty => ImageProtocol::KittyGraphics,
         TerminalIdentity::Warp => ImageProtocol::KittyGraphics,
-        TerminalIdentity::WezTerm => ImageProtocol::ItermInline,
+        TerminalIdentity::WezTerm | TerminalIdentity::ITerm2 => ImageProtocol::ItermInline,
         // ELIO_IMAGE_PREVIEWS=1 force-enables KittyGraphics on unrecognised terminals
         // for testing. Alacritty is excluded — it does not support image protocols.
         TerminalIdentity::Other if image_previews_override => ImageProtocol::KittyGraphics,
@@ -85,8 +87,10 @@ fn executable_file_exists(path: &Path) -> bool {
 mod tests {
     use super::*;
     use std::{
+        ffi::OsString,
         fs,
         path::PathBuf,
+        sync::{Mutex, OnceLock},
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -96,6 +100,69 @@ mod tests {
             .expect("system time should be after unix epoch")
             .as_nanos();
         std::env::temp_dir().join(format!("elio-inline-image-{label}-{unique}"))
+    }
+
+    fn terminal_env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    struct TerminalEnvGuard {
+        saved: Vec<(&'static str, Option<OsString>)>,
+    }
+
+    impl TerminalEnvGuard {
+        fn isolate() -> Self {
+            const VARS: &[&str] = &[
+                "TERM",
+                "TERM_PROGRAM",
+                "KITTY_WINDOW_ID",
+                "WARP_SESSION_ID",
+                "ALACRITTY_SOCKET",
+            ];
+
+            let saved = VARS
+                .iter()
+                .map(|name| (*name, env::var_os(name)))
+                .collect::<Vec<_>>();
+            for name in VARS {
+                unsafe {
+                    env::remove_var(name);
+                }
+            }
+
+            Self { saved }
+        }
+    }
+
+    impl Drop for TerminalEnvGuard {
+        fn drop(&mut self) {
+            for (name, value) in &self.saved {
+                if let Some(value) = value {
+                    unsafe {
+                        env::set_var(name, value);
+                    }
+                } else {
+                    unsafe {
+                        env::remove_var(name);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn detect_terminal_identity_recognizes_iterm2_term_program() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+
+        unsafe {
+            env::set_var("TERM_PROGRAM", "iTerm.app");
+        }
+
+        assert_eq!(detect_terminal_identity(), TerminalIdentity::ITerm2);
     }
 
     #[test]
@@ -130,6 +197,18 @@ mod tests {
         );
         assert_eq!(
             select_image_protocol(TerminalIdentity::WezTerm, true),
+            ImageProtocol::ItermInline
+        );
+    }
+
+    #[test]
+    fn select_image_protocol_iterm2_always_enabled() {
+        assert_eq!(
+            select_image_protocol(TerminalIdentity::ITerm2, false),
+            ImageProtocol::ItermInline
+        );
+        assert_eq!(
+            select_image_protocol(TerminalIdentity::ITerm2, true),
             ImageProtocol::ItermInline
         );
     }
