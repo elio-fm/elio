@@ -483,13 +483,19 @@ fn restore_trash_item_freedesktop(
 // ---------------------------------------------------------------------------
 // macOS restore-origins store
 // ---------------------------------------------------------------------------
-// When Elio trashes a file it records the original path in a JSON store at
-// ~/Library/Application Support/elio/trash-origins.json, keyed by the
-// expected filename in ~/.Trash.  This is the primary metadata source for
-// restore: it is reliable for any file Elio itself trashed, regardless of
-// whether NSWorkspace.recycleURLs writes ptbL to .DS_Store.
+// Elio trashes files via the `trash` crate, which calls
+// NSWorkspace.recycleURLs.  That API stores the original path in a private
+// system database that Finder reads for "Put Back" — it does NOT reliably
+// write ptbL/ptbN records to ~/.Trash/.DS_Store the way Finder's own drag-
+// to-trash action does.  Parsing .DS_Store therefore fails for any file Elio
+// trashed, even though Finder's own "Put Back" works fine for those files.
 //
-// The DS_Store parser is kept as a fallback for files trashed by Finder.
+// To work around this, whenever Elio trashes a file it immediately records
+// the original path in its own JSON store at
+//   ~/Library/Application Support/elio/trash-origins.json
+// keyed by the expected filename in ~/.Trash.  Restore checks this store
+// first.  The DS_Store parser is kept as a fallback for files trashed
+// directly by Finder (which does write ptbL).
 
 /// Returns the path to the restore-origins metadata store.
 #[cfg(target_os = "macos")]

@@ -115,6 +115,10 @@ pub(super) struct TrashProgress {
 pub(super) struct RestoreProgress {
     pub(super) completed: usize,
     pub(super) total: usize,
+    /// Path of the entry to select after restore completes: the first
+    /// surviving entry at or after the cursor, falling back to the last entry
+    /// before the cursor.
+    pub(super) next_selection: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, Debug)]

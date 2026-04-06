@@ -311,7 +311,11 @@ impl App {
                         continue;
                     }
                     if build.done {
-                        self.jobs.restore_progress = None;
+                        let next_selection = self.jobs.restore_progress.take().and_then(|p| {
+                            (build.completed == p.total)
+                                .then_some(p.next_selection)
+                                .flatten()
+                        });
                         let source_cwd = self
                             .jobs
                             .restore_source_cwd
@@ -334,7 +338,7 @@ impl App {
                                 previous_cwd: self.navigation.cwd.clone(),
                                 previous_selected_path: None,
                                 previous_selection_name: None,
-                                reselect_path: None,
+                                reselect_path: next_selection,
                                 history_mode: DirectoryHistoryMode::None,
                                 refresh_search: false,
                                 completion: DirectoryLoadCompletion::Status(status),

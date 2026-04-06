@@ -222,11 +222,30 @@ impl App {
         }
         self.navigation.selected_paths.clear();
 
+        let restored_paths: std::collections::HashSet<_> =
+            r.targets.iter().map(|t| &t.path).collect();
+        let next_selection = self
+            .navigation
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| !restored_paths.contains(&e.path))
+            .find(|(i, _)| *i >= self.navigation.selected)
+            .or_else(|| {
+                self.navigation
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .rfind(|(_, e)| !restored_paths.contains(&e.path))
+            })
+            .map(|(_, e)| e.path.clone());
+
         let token = self.jobs.restore_token.wrapping_add(1);
         self.jobs.restore_token = token;
         self.jobs.restore_progress = Some(RestoreProgress {
             completed: 0,
             total: r.targets.len(),
+            next_selection,
         });
         self.jobs.restore_source_cwd = Some(self.navigation.cwd.clone());
 
