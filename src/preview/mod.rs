@@ -7,6 +7,7 @@ mod data;
 mod directory;
 mod dispatch;
 mod document;
+mod layout;
 mod markdown;
 pub(crate) mod process;
 mod structured;
@@ -22,6 +23,7 @@ pub(crate) use self::dispatch::{
     build_preview_with_options_and_code_line_limit, loading_preview_for, preview_work_class,
     should_build_preview_in_background,
 };
+pub(crate) use self::layout::{expand_tabs, line_number_span, line_number_width};
 pub(crate) use self::text::count_total_text_lines;
 use self::text::{
     collect_preview_lines_with_limit, combine_preview_notes, count_source_lines,

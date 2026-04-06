@@ -1,17 +1,14 @@
-use super::appearance;
 use crate::fs as browser_support;
-use ratatui::{
-    layout::Alignment,
-    style::Style,
-    text::{Line, Span, StyledGrapheme},
-};
+use ratatui::text::Line;
 use std::{
-    collections::{HashMap, VecDeque},
     path::PathBuf,
     sync::{Arc, Mutex},
     time::SystemTime,
 };
-use unicode_width::UnicodeWidthStr;
+
+use super::layout::{
+    WrappedLayoutCache, WrappedPreviewLines, sanitize_preview_lines, wrap_preview_lines,
+};
 
 pub(super) const PREVIEW_LIMIT_BYTES: usize = 64 * 1024;
 pub(super) const PREVIEW_RENDER_LINE_LIMIT: usize = 800;
@@ -19,8 +16,6 @@ pub(crate) const MARKDOWN_CONTENT_WIDTH: usize = 100;
 pub(crate) const MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT: usize = 80;
 pub(super) const PREVIEW_WRAPPED_LINE_LIMIT: usize = PREVIEW_RENDER_LINE_LIMIT;
 const WRAPPED_LAYOUT_CACHE_LIMIT: usize = 4;
-const NBSP: &str = "\u{00a0}";
-const ZWSP: &str = "\u{200b}";
 
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub(crate) enum PreviewRequestOptions {
@@ -180,19 +175,6 @@ pub(crate) struct PreviewContent {
     pub(crate) incremental_render_limit: Option<usize>,
     max_line_width: usize,
     wrapped_layout_cache: Arc<Mutex<WrappedLayoutCache>>,
-}
-
-#[derive(Debug, Default)]
-struct WrappedLayoutCache {
-    lines_by_width: HashMap<usize, Arc<WrappedPreviewLines>>,
-    width_order: VecDeque<usize>,
-}
-
-#[derive(Debug)]
-struct WrappedPreviewLines {
-    lines: Arc<[Line<'static>]>,
-    max_line_width: usize,
-    truncated: bool,
 }
 
 impl PreviewContent {
@@ -504,22 +486,6 @@ impl PreviewContent {
     }
 }
 
-fn sanitize_preview_lines(lines: Vec<Line<'static>>) -> Arc<[Line<'static>]> {
-    lines
-        .into_iter()
-        .map(sanitize_preview_line)
-        .collect::<Vec<_>>()
-        .into()
-}
-
-fn sanitize_preview_line(mut line: Line<'static>) -> Line<'static> {
-    for span in &mut line.spans {
-        let sanitized = browser_support::sanitize_terminal_text(span.content.as_ref());
-        span.content = sanitized.into();
-    }
-    line
-}
-
 pub(super) fn status_preview(
     kind: PreviewKind,
     detail: impl Into<String>,
@@ -548,215 +514,6 @@ fn unavailable_preview(detail: &str, message: &str) -> PreviewContent {
             Line::from(message.to_string()),
         ],
     )
-}
-
-pub(super) fn line_number_span(number: usize, width: usize) -> Span<'static> {
-    let preview = appearance::code_palette();
-    Span::styled(
-        format!("{number:>width$} ", width = width),
-        Style::default().fg(preview.line_number),
-    )
-}
-
-pub(super) fn line_number_width(lines: usize) -> usize {
-    lines.max(1).to_string().len().max(3)
-}
-
-pub(super) fn expand_tabs(text: &str) -> String {
-    browser_support::sanitize_terminal_text(text)
-}
-
-fn wrap_preview_lines(lines: &[Line<'static>], width: usize) -> WrappedPreviewLines {
-    let width = width.max(1);
-    let mut wrapped = Vec::new();
-    let mut truncated = false;
-    for (index, line) in lines.iter().enumerate() {
-        if !wrap_preview_line(line, width, &mut wrapped, PREVIEW_WRAPPED_LINE_LIMIT) {
-            truncated = true;
-            break;
-        }
-        if wrapped.len() >= PREVIEW_WRAPPED_LINE_LIMIT && index + 1 < lines.len() {
-            truncated = true;
-            break;
-        }
-    }
-    if wrapped.is_empty() {
-        wrapped.push(Line::default());
-    }
-    let max_line_width = wrapped.iter().map(Line::width).max().unwrap_or(0);
-    WrappedPreviewLines {
-        lines: Arc::from(wrapped),
-        max_line_width,
-        truncated,
-    }
-}
-
-fn wrap_preview_line<'a>(
-    line: &'a Line<'static>,
-    max_width: usize,
-    wrapped: &mut Vec<Line<'static>>,
-    line_limit: usize,
-) -> bool {
-    let mut pending_line = Vec::<StyledGrapheme<'a>>::new();
-    let mut pending_word = Vec::<StyledGrapheme<'a>>::new();
-    let mut pending_whitespace = VecDeque::<StyledGrapheme<'a>>::new();
-    let mut line_width = 0usize;
-    let mut word_width = 0usize;
-    let mut whitespace_width = 0usize;
-    let mut non_whitespace_previous = false;
-    let alignment = line.alignment;
-    let trim = false;
-
-    for grapheme in line.styled_graphemes(Style::default()) {
-        let is_whitespace = preview_grapheme_is_whitespace(grapheme.symbol);
-        let symbol_width = grapheme.symbol.width();
-        if symbol_width > max_width {
-            continue;
-        }
-
-        let word_found = non_whitespace_previous && is_whitespace;
-        let trimmed_overflow =
-            pending_line.is_empty() && trim && word_width + symbol_width > max_width;
-        let whitespace_overflow =
-            pending_line.is_empty() && trim && whitespace_width + symbol_width > max_width;
-        let untrimmed_overflow = pending_line.is_empty()
-            && !trim
-            && word_width + whitespace_width + symbol_width > max_width;
-
-        if word_found || trimmed_overflow || whitespace_overflow || untrimmed_overflow {
-            if !pending_line.is_empty() || !trim {
-                pending_line.extend(pending_whitespace.drain(..));
-                line_width += whitespace_width;
-            }
-
-            pending_line.append(&mut pending_word);
-            line_width += word_width;
-
-            whitespace_width = 0;
-            word_width = 0;
-        }
-
-        let line_full = line_width >= max_width;
-        let pending_word_overflow =
-            symbol_width > 0 && line_width + whitespace_width + word_width >= max_width;
-
-        if line_full || pending_word_overflow {
-            let mut remaining_width = max_width.saturating_sub(line_width);
-            if !push_wrapped_preview_line(wrapped, &pending_line, alignment, line_limit) {
-                return false;
-            }
-            pending_line.clear();
-            line_width = 0;
-
-            while let Some(grapheme) = pending_whitespace.front() {
-                let width = grapheme.symbol.width();
-                if width > remaining_width {
-                    break;
-                }
-
-                whitespace_width = whitespace_width.saturating_sub(width);
-                remaining_width = remaining_width.saturating_sub(width);
-                pending_whitespace.pop_front();
-            }
-
-            if is_whitespace && pending_whitespace.is_empty() {
-                continue;
-            }
-        }
-
-        if is_whitespace {
-            whitespace_width += symbol_width;
-            pending_whitespace.push_back(grapheme);
-        } else {
-            word_width += symbol_width;
-            pending_word.push(grapheme);
-        }
-
-        non_whitespace_previous = !is_whitespace;
-    }
-
-    if pending_line.is_empty()
-        && pending_word.is_empty()
-        && !pending_whitespace.is_empty()
-        && !push_wrapped_line(wrapped, empty_wrapped_preview_line(alignment), line_limit)
-    {
-        return false;
-    }
-    if !pending_line.is_empty() || !trim {
-        pending_line.extend(pending_whitespace.drain(..));
-    }
-    pending_line.append(&mut pending_word);
-    if pending_line.is_empty() {
-        push_wrapped_line(wrapped, empty_wrapped_preview_line(alignment), line_limit)
-    } else {
-        push_wrapped_preview_line(wrapped, &pending_line, alignment, line_limit)
-    }
-}
-
-fn push_wrapped_line(
-    wrapped: &mut Vec<Line<'static>>,
-    line: Line<'static>,
-    line_limit: usize,
-) -> bool {
-    if wrapped.len() >= line_limit {
-        return false;
-    }
-    wrapped.push(line);
-    true
-}
-
-fn preview_grapheme_is_whitespace(symbol: &str) -> bool {
-    symbol == ZWSP || (symbol != NBSP && symbol.chars().all(char::is_whitespace))
-}
-
-fn push_wrapped_preview_line(
-    wrapped: &mut Vec<Line<'static>>,
-    graphemes: &[StyledGrapheme<'_>],
-    alignment: Option<Alignment>,
-    line_limit: usize,
-) -> bool {
-    let line = Line {
-        alignment,
-        ..line_from_graphemes(graphemes)
-    };
-    push_wrapped_line(wrapped, line, line_limit)
-}
-
-fn empty_wrapped_preview_line(alignment: Option<Alignment>) -> Line<'static> {
-    Line {
-        alignment,
-        ..Line::default()
-    }
-}
-
-fn line_from_graphemes(graphemes: &[StyledGrapheme<'_>]) -> Line<'static> {
-    if graphemes.is_empty() {
-        return Line::default();
-    }
-
-    let mut spans = Vec::<Span<'static>>::new();
-    let mut current_style = graphemes[0].style;
-    let mut current_content = String::new();
-
-    for grapheme in graphemes {
-        if grapheme.style == current_style {
-            current_content.push_str(grapheme.symbol);
-            continue;
-        }
-
-        spans.push(Span::styled(
-            std::mem::take(&mut current_content),
-            current_style,
-        ));
-        current_style = grapheme.style;
-        current_content.push_str(grapheme.symbol);
-    }
-
-    if !current_content.is_empty() {
-        spans.push(Span::styled(current_content, current_style));
-    }
-
-    Line::from(spans)
 }
 
 #[cfg(test)]
