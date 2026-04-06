@@ -639,7 +639,16 @@ fn macos_ds_store_find_ptb(data: &[u8], file_name: &str) -> Option<(String, Stri
     // ── Traverse B-tree ─────────────────────────────────────────────────────
     let mut ptbl: Option<String> = None;
     let mut ptbn: Option<String> = None;
-    ds_store_traverse(data, &offsets, root_node, file_name, &mut ptbl, &mut ptbn)?;
+    let mut visited = std::collections::HashSet::new();
+    ds_store_traverse(
+        data,
+        &offsets,
+        root_node,
+        file_name,
+        &mut ptbl,
+        &mut ptbn,
+        &mut visited,
+    )?;
 
     match (ptbl, ptbn) {
         (Some(l), Some(n)) => Some((l, n)),
@@ -680,7 +689,13 @@ fn ds_store_traverse(
     target_name: &str,
     ptbl: &mut Option<String>,
     ptbn: &mut Option<String>,
+    visited: &mut std::collections::HashSet<u32>,
 ) -> Option<()> {
+    // Guard against cycles in corrupt DS_Store files.
+    if !visited.insert(node_id) {
+        return None;
+    }
+
     let block = ds_store_block(data, offsets, node_id)?;
     let mut cur = DsStoreCursor::new(block);
 
@@ -696,11 +711,11 @@ fn ds_store_traverse(
         // Internal node: alternating child_id and record, then one final child.
         for _ in 0..pair_count {
             let child_id = cur.read_u32()?;
-            ds_store_traverse(data, offsets, child_id, target_name, ptbl, ptbn)?;
+            ds_store_traverse(data, offsets, child_id, target_name, ptbl, ptbn, visited)?;
             ds_store_read_record(&mut cur, target_name, ptbl, ptbn)?;
         }
         let last_child = cur.read_u32()?;
-        ds_store_traverse(data, offsets, last_child, target_name, ptbl, ptbn)?;
+        ds_store_traverse(data, offsets, last_child, target_name, ptbl, ptbn, visited)?;
     }
 
     Some(())
