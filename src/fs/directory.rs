@@ -397,32 +397,62 @@ fn fingerprint_time(time: Option<SystemTime>) -> Option<(u64, u32)> {
 
 /// Restores a trashed item to its original location.
 ///
-/// Only supported on **freedesktop trash** layouts (Linux, BSD). `entry_path` must
-/// be a file inside a `Trash/files/` directory; the sibling `Trash/info/<name>.trashinfo`
-/// file is used to recover the original path.
+/// Two backends are supported:
 ///
-/// On macOS (`~/.Trash`) and Windows (Recycle Bin) there is no `.trashinfo` metadata,
-/// so this function returns an error with a clear message rather than a confusing
-/// "file not found".
-pub(crate) fn restore_trash_item(entry_path: &Path) -> anyhow::Result<PathBuf> {
+/// - **FreeDesktop trash** (Linux, BSD, and any macOS installation that uses
+///   XDG tools): `entry_path` must be inside a `Trash/files/` directory and a
+///   sibling `Trash/info/<name>.trashinfo` file must exist.  The original path
+///   is read from that file and the item is moved back.
+///
+/// - **macOS `~/.Trash`**: Finder records the original location internally
+///   when an item is trashed.  The `osascript` "put back" command asks Finder
+///   to use that metadata and move the item back — exactly what the Finder
+///   "Put Back" menu item does.
+///
+/// The FreeDesktop path is tried first (it works even on macOS if the XDG
+/// layout happens to be present), then the macOS path, then an unsupported
+/// error for any other layout (e.g. Windows Recycle Bin).
+pub(crate) fn restore_trash_item(entry_path: &Path) -> anyhow::Result<()> {
+    // FreeDesktop trash layout: the entry lives inside a `files/` directory,
+    // and a sibling `info/` directory holds the `.trashinfo` metadata.
+    //
+    // Both conditions are required.  Checking only for `info/` two levels up
+    // is insufficient: on macOS, `~/.Trash/foo` would compute `~/info`, and
+    // if the user happens to have a `~/info` directory for any reason the
+    // function would take the FreeDesktop path and fail to find a `.trashinfo`
+    // instead of correctly falling through to the Finder backend.
+    let parent = entry_path.parent();
+    let in_files_dir = parent
+        .and_then(|p| p.file_name())
+        .is_some_and(|name| name == "files");
+    let info_dir = parent
+        .and_then(|p| p.parent())
+        .map(|trash_root| trash_root.join("info"));
+
+    if in_files_dir && info_dir.as_deref().is_some_and(|d| d.is_dir()) {
+        return restore_trash_item_freedesktop(entry_path, info_dir.unwrap());
+    }
+
+    // macOS: no .trashinfo metadata, but Finder tracks the original location
+    // internally.  Ask it to "put back" the item via osascript.
+    #[cfg(target_os = "macos")]
+    return restore_trash_item_macos(entry_path);
+
+    // Any other layout (e.g. Windows Recycle Bin) is not supported.
+    #[cfg(not(target_os = "macos"))]
+    anyhow::bail!("restore is not supported for this trash location")
+}
+
+/// FreeDesktop-specific restore: reads the `.trashinfo` sidecar and moves the
+/// item back to its original path.
+fn restore_trash_item_freedesktop(
+    entry_path: &Path,
+    info_dir: PathBuf,
+) -> anyhow::Result<()> {
     let name = entry_path
         .file_name()
         .and_then(|n| n.to_str())
         .ok_or_else(|| anyhow::anyhow!("cannot determine file name for {:?}", entry_path))?;
-
-    // Derive the `info/` dir: Trash/files/../info == Trash/info
-    let info_dir = entry_path
-        .parent()
-        .and_then(|p| p.parent())
-        .map(|trash_root| trash_root.join("info"))
-        .ok_or_else(|| anyhow::anyhow!("cannot determine trash info dir for {:?}", entry_path))?;
-
-    // The info/ sibling directory only exists in a FreeDesktop trash layout.
-    // macOS ~/.Trash and Windows Recycle Bin do not have it, so we give a
-    // clear error rather than a confusing "file not found" message.
-    if !info_dir.is_dir() {
-        anyhow::bail!("restore is not supported for this trash location");
-    }
 
     let info_path = info_dir.join(format!("{name}.trashinfo"));
     let content =
@@ -447,7 +477,80 @@ pub(crate) fn restore_trash_item(entry_path: &Path) -> anyhow::Result<PathBuf> {
 
     let _ = fs::remove_file(&info_path);
 
-    Ok(original)
+    Ok(())
+}
+
+/// macOS-specific restore: delegates to Finder's "Put Back" command via
+/// `osascript`.  Finder stores the original location when an item is trashed
+/// (the same metadata the Finder "Put Back" menu item uses), so this approach
+/// handles all edge cases — including items trashed from external volumes or
+/// whose original parent directory no longer exists — exactly as the OS would.
+#[cfg(target_os = "macos")]
+fn restore_trash_item_macos(entry_path: &Path) -> anyhow::Result<()> {
+    let path_str = entry_path
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("path is not valid UTF-8: {:?}", entry_path))?;
+
+    // AppleScript string literals have no backslash escape syntax; a literal
+    // `"` inside a string must be expressed with the built-in `quote` constant
+    // and string concatenation.  See `applescript_posix_path_literal`.
+    let script = format!(
+        "tell application \"Finder\" to put back POSIX file {}",
+        applescript_posix_path_literal(path_str)
+    );
+
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .with_context(|| "failed to launch osascript")?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let msg = stderr.trim();
+        if msg.is_empty() {
+            anyhow::bail!("Finder could not restore {:?}", entry_path);
+        }
+        anyhow::bail!("{}", msg)
+    }
+}
+
+/// Formats a filesystem path as an AppleScript expression for use as a
+/// `POSIX file` argument.
+///
+/// AppleScript string literals are delimited by `"` and have **no** backslash
+/// escape syntax.  The only character that cannot appear literally inside a
+/// quoted string is `"` itself, which must be expressed via concatenation with
+/// the built-in `quote` constant.
+///
+/// # Examples
+///
+/// | Input path              | Output expression                              |
+/// |-------------------------|------------------------------------------------|
+/// | `/Users/foo/bar`        | `"/Users/foo/bar"`                             |
+/// | `/Users/foo/"bar"/baz`  | `"/Users/foo/" & quote & "bar" & quote & "/baz"` |
+#[cfg(target_os = "macos")]
+fn applescript_posix_path_literal(path: &str) -> String {
+    let parts: Vec<&str> = path.split('"').collect();
+    if parts.len() == 1 {
+        // Fast path: no quotes in the path.
+        return format!("\"{}\"", path);
+    }
+    // Interleave parts with ` & quote & ` to express embedded `"` characters.
+    parts
+        .iter()
+        .enumerate()
+        .fold(String::new(), |mut acc, (i, part)| {
+            if i > 0 {
+                acc.push_str(" & quote & ");
+            }
+            acc.push('"');
+            acc.push_str(part);
+            acc.push('"');
+            acc
+        })
 }
 
 fn parse_trashinfo_original_path(content: &str) -> Option<PathBuf> {
@@ -942,5 +1045,213 @@ mod tests {
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    // ── restore_trash_item_freedesktop ────────────────────────────────────────
+
+    /// Builds a minimal FreeDesktop trash layout under `root`:
+    ///   root/
+    ///     files/<name>  ← the trashed item (a regular file)
+    ///     info/<name>.trashinfo
+    ///
+    /// Returns `(trash_files_dir, trash_info_dir, item_path)`.
+    #[cfg(unix)]
+    fn make_freedesktop_trash(
+        root: &PathBuf,
+        name: &str,
+        original: &Path,
+    ) -> (PathBuf, PathBuf, PathBuf) {
+        let files_dir = root.join("files");
+        let info_dir = root.join("info");
+        fs::create_dir_all(&files_dir).expect("failed to create trash files dir");
+        fs::create_dir_all(&info_dir).expect("failed to create trash info dir");
+        let item_path = files_dir.join(name);
+        fs::write(&item_path, b"trashed content").expect("failed to write trashed item");
+        let trashinfo = format!(
+            "[Trash Info]\nPath={}\nDeletionDate=2024-01-01T00:00:00\n",
+            original.to_str().unwrap()
+        );
+        fs::write(info_dir.join(format!("{name}.trashinfo")), trashinfo)
+            .expect("failed to write trashinfo");
+        (files_dir, info_dir, item_path)
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn restore_freedesktop_moves_item_to_original_path_and_removes_trashinfo() {
+        let root = temp_path("restore-fd-ok");
+        let restore_target = temp_path("restore-fd-ok-dest");
+        fs::create_dir_all(&root).expect("failed to create trash root");
+        fs::create_dir_all(&restore_target).expect("failed to create restore target dir");
+
+        let original = restore_target.join("report.pdf");
+        let (_, info_dir, item_path) =
+            make_freedesktop_trash(&root, "report.pdf", &original);
+
+        let result = restore_trash_item(&item_path);
+        assert!(result.is_ok(), "restore should succeed: {:?}", result);
+        assert!(original.exists(), "file should be at original location");
+        assert!(!item_path.exists(), "trashed item should be gone");
+        assert!(
+            !info_dir.join("report.pdf.trashinfo").exists(),
+            "trashinfo should be removed"
+        );
+
+        fs::remove_dir_all(&root).ok();
+        fs::remove_dir_all(&restore_target).ok();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn restore_freedesktop_fails_when_destination_already_exists() {
+        let root = temp_path("restore-fd-conflict");
+        let restore_target = temp_path("restore-fd-conflict-dest");
+        fs::create_dir_all(&root).expect("failed to create trash root");
+        fs::create_dir_all(&restore_target).expect("failed to create restore target dir");
+
+        let original = restore_target.join("conflict.txt");
+        fs::write(&original, b"already here").expect("failed to write blocking file");
+
+        let (_, _, item_path) =
+            make_freedesktop_trash(&root, "conflict.txt", &original);
+
+        let err = restore_trash_item(&item_path).unwrap_err();
+        assert!(
+            err.to_string().contains("destination already exists"),
+            "unexpected error: {err}"
+        );
+
+        fs::remove_dir_all(&root).ok();
+        fs::remove_dir_all(&restore_target).ok();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn restore_freedesktop_fails_when_trashinfo_is_missing() {
+        let root = temp_path("restore-fd-no-info");
+        let files_dir = root.join("files");
+        let info_dir = root.join("info");
+        fs::create_dir_all(&files_dir).expect("failed to create files dir");
+        fs::create_dir_all(&info_dir).expect("failed to create info dir");
+
+        let item_path = files_dir.join("orphan.txt");
+        fs::write(&item_path, b"no metadata").expect("failed to write orphan item");
+        // Deliberately do NOT write a .trashinfo file.
+
+        let err = restore_trash_item(&item_path).unwrap_err();
+        assert!(
+            err.to_string().contains("orphan.txt.trashinfo"),
+            "error should mention the missing trashinfo, got: {err}"
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn restore_fails_for_path_outside_any_known_trash_layout() {
+        // A path with no info/ sibling on a non-macOS platform bails with the
+        // "not supported" message rather than a confusing I/O error.
+        let tmp = temp_path("restore-unsupported");
+        fs::create_dir_all(&tmp).expect("failed to create temp dir");
+        let fake_item = tmp.join("item.txt");
+        fs::write(&fake_item, b"content").expect("failed to write item");
+
+        // We're testing the non-macOS bail path, so guard accordingly.
+        #[cfg(not(target_os = "macos"))]
+        {
+            let err = restore_trash_item(&fake_item).unwrap_err();
+            assert!(
+                err.to_string().contains("not supported"),
+                "unexpected error: {err}"
+            );
+        }
+
+        fs::remove_dir_all(&tmp).ok();
+    }
+
+    /// Regression test for false-positive FreeDesktop detection.
+    ///
+    /// On macOS, `~/.Trash/foo` computes `~/info` as the candidate info dir.
+    /// If the user happens to have a `~/info` directory, the old code would
+    /// take the FreeDesktop path and then fail looking for a `.trashinfo` file
+    /// instead of falling through to the Finder backend.
+    ///
+    /// The fix requires the entry's immediate parent to be named `files` before
+    /// treating the layout as FreeDesktop, so a `~/.Trash`-style path is never
+    /// misidentified even when a coincidental `info/` exists nearby.
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn restore_does_not_misdetect_freedesktop_when_info_dir_exists_at_wrong_level() {
+        // Build: root/Trash/foo  and  root/info/  (the decoy)
+        // `foo`'s parent is `Trash` (not `files`), so the FreeDesktop path
+        // must NOT be taken even though root/info/ exists.
+        let root = temp_path("restore-false-positive");
+        let trash_dir = root.join("Trash");
+        let decoy_info = root.join("info");
+        fs::create_dir_all(&trash_dir).expect("failed to create trash dir");
+        fs::create_dir_all(&decoy_info).expect("failed to create decoy info dir");
+
+        let item_path = trash_dir.join("foo.txt");
+        fs::write(&item_path, b"content").expect("failed to write item");
+
+        let err = restore_trash_item(&item_path).unwrap_err();
+        assert!(
+            err.to_string().contains("not supported"),
+            "should bail as unsupported, not attempt FreeDesktop restore: {err}"
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    // ── applescript_posix_path_literal (macOS only) ───────────────────────────
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn applescript_path_literal_wraps_plain_path_in_quotes() {
+        assert_eq!(
+            applescript_posix_path_literal("/Users/foo/bar.txt"),
+            r#""/Users/foo/bar.txt""#
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn applescript_path_literal_uses_quote_constant_for_embedded_double_quotes() {
+        // Path: /Users/foo/"weird name"/bar
+        let result = applescript_posix_path_literal("/Users/foo/\"weird name\"/bar");
+        // Should produce: "/Users/foo/" & quote & "weird name" & quote & "/bar"
+        assert_eq!(
+            result,
+            r#""/Users/foo/" & quote & "weird name" & quote & "/bar""#
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn applescript_path_literal_handles_multiple_embedded_quotes() {
+        // Path: /a/"b"/"c"
+        let result = applescript_posix_path_literal("/a/\"b\"/\"c\"");
+        assert_eq!(
+            result,
+            r#""/a/" & quote & "b" & quote & "/" & quote & "c" & quote & """#
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn applescript_path_literal_round_trips_through_osascript() {
+        // Verify that the expression we generate is valid AppleScript that
+        // evaluates back to the original path string.
+        let path = "/Users/foo/bar.txt";
+        let expr = applescript_posix_path_literal(path);
+        let script = format!("return {expr}");
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .output()
+            .expect("osascript should be available on macOS");
+        assert!(output.status.success(), "osascript failed");
+        let returned = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(returned.trim(), path);
     }
 }
