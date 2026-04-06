@@ -848,5 +848,4 @@ mod tests {
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
-
 }

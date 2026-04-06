@@ -1,5 +1,8 @@
 use anyhow::Context;
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 // ---------------------------------------------------------------------------
 // Restore from trash
@@ -55,10 +58,7 @@ pub(crate) fn restore_trash_item(entry_path: &Path) -> anyhow::Result<()> {
 
 /// FreeDesktop-specific restore: reads the `.trashinfo` sidecar and moves the
 /// item back to its original path.
-fn restore_trash_item_freedesktop(
-    entry_path: &Path,
-    info_dir: PathBuf,
-) -> anyhow::Result<()> {
+fn restore_trash_item_freedesktop(entry_path: &Path, info_dir: PathBuf) -> anyhow::Result<()> {
     let name = entry_path
         .file_name()
         .and_then(|n| n.to_str())
@@ -155,11 +155,10 @@ pub(crate) fn remove_restore_origins(trash_names: &[&str]) {
         Ok(b) => b,
         Err(_) => return,
     };
-    let mut map: std::collections::HashMap<String, String> =
-        match serde_json::from_slice(&bytes) {
-            Ok(m) => m,
-            Err(_) => return,
-        };
+    let mut map: std::collections::HashMap<String, String> = match serde_json::from_slice(&bytes) {
+        Ok(m) => m,
+        Err(_) => return,
+    };
     if remove_from_origins_map(&mut map, trash_names) {
         if let Ok(json) = serde_json::to_vec_pretty(&map) {
             let _ = fs::write(&path, json);
@@ -284,8 +283,8 @@ fn restore_trash_item_macos(entry_path: &Path) -> anyhow::Result<()> {
         );
     }
 
-    let data = fs::read(&ds_store_path)
-        .with_context(|| format!("cannot read {:?}", ds_store_path))?;
+    let data =
+        fs::read(&ds_store_path).with_context(|| format!("cannot read {:?}", ds_store_path))?;
 
     let (parent_dir, original_name) =
         macos_ds_store_find_ptb(&data, file_name).ok_or_else(|| {
@@ -372,8 +371,7 @@ fn macos_ds_store_find_ptb(data: &[u8], file_name: &str) -> Option<(String, Stri
     if toc_start + 4 > info.len() {
         return None;
     }
-    let num_toc =
-        u32::from_be_bytes(info[toc_start..toc_start + 4].try_into().ok()?) as usize;
+    let num_toc = u32::from_be_bytes(info[toc_start..toc_start + 4].try_into().ok()?) as usize;
 
     let mut pos = toc_start + 4;
     let mut dsdb_block_id: Option<u32> = None;
@@ -388,8 +386,7 @@ fn macos_ds_store_find_ptb(data: &[u8], file_name: &str) -> Option<(String, Stri
             return None;
         }
         let toc_name = std::str::from_utf8(&info[pos..name_end]).ok()?;
-        let block_id =
-            u32::from_be_bytes(info[name_end..name_end + 4].try_into().ok()?);
+        let block_id = u32::from_be_bytes(info[name_end..name_end + 4].try_into().ok()?);
         if toc_name == "DSDB" {
             dsdb_block_id = Some(block_id);
         }
@@ -671,7 +668,7 @@ mod tests {
     /// Returns `(trash_files_dir, trash_info_dir, item_path)`.
     #[cfg(unix)]
     fn make_freedesktop_trash(
-        root: &PathBuf,
+        root: &Path,
         name: &str,
         original: &Path,
     ) -> (PathBuf, PathBuf, PathBuf) {
@@ -699,8 +696,7 @@ mod tests {
         fs::create_dir_all(&restore_target).expect("failed to create restore target dir");
 
         let original = restore_target.join("report.pdf");
-        let (_, info_dir, item_path) =
-            make_freedesktop_trash(&root, "report.pdf", &original);
+        let (_, info_dir, item_path) = make_freedesktop_trash(&root, "report.pdf", &original);
 
         let result = restore_trash_item(&item_path);
         assert!(result.is_ok(), "restore should succeed: {:?}", result);
@@ -726,8 +722,7 @@ mod tests {
         let original = restore_target.join("conflict.txt");
         fs::write(&original, b"already here").expect("failed to write blocking file");
 
-        let (_, _, item_path) =
-            make_freedesktop_trash(&root, "conflict.txt", &original);
+        let (_, _, item_path) = make_freedesktop_trash(&root, "conflict.txt", &original);
 
         let err = restore_trash_item(&item_path).unwrap_err();
         assert!(
@@ -845,13 +840,22 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn remove_from_origins_map_removes_exact_match() {
         let mut map = std::collections::HashMap::from([
-            ("report.pdf".to_string(), "/home/user/report.pdf".to_string()),
+            (
+                "report.pdf".to_string(),
+                "/home/user/report.pdf".to_string(),
+            ),
             ("notes.txt".to_string(), "/home/user/notes.txt".to_string()),
         ]);
         let changed = remove_from_origins_map(&mut map, &["report.pdf"]);
         assert!(changed);
-        assert!(!map.contains_key("report.pdf"), "target entry should be removed");
-        assert!(map.contains_key("notes.txt"), "unrelated entry should be untouched");
+        assert!(
+            !map.contains_key("report.pdf"),
+            "target entry should be removed"
+        );
+        assert!(
+            map.contains_key("notes.txt"),
+            "unrelated entry should be untouched"
+        );
     }
 
     #[test]
@@ -859,20 +863,25 @@ mod tests {
     fn remove_from_origins_map_handles_collision_suffix_with_extension() {
         // "report.pdf" was stored as the key but macOS renamed it "report 2.pdf"
         // in the trash due to a collision.
-        let mut map = std::collections::HashMap::from([
-            ("report.pdf".to_string(), "/home/user/report.pdf".to_string()),
-        ]);
+        let mut map = std::collections::HashMap::from([(
+            "report.pdf".to_string(),
+            "/home/user/report.pdf".to_string(),
+        )]);
         let changed = remove_from_origins_map(&mut map, &["report 2.pdf"]);
         assert!(changed);
-        assert!(map.is_empty(), "collision-suffixed name should strip and remove base key");
+        assert!(
+            map.is_empty(),
+            "collision-suffixed name should strip and remove base key"
+        );
     }
 
     #[test]
     #[cfg(target_os = "macos")]
     fn remove_from_origins_map_handles_collision_suffix_without_extension() {
-        let mut map = std::collections::HashMap::from([
-            ("notes".to_string(), "/home/user/notes".to_string()),
-        ]);
+        let mut map = std::collections::HashMap::from([(
+            "notes".to_string(),
+            "/home/user/notes".to_string(),
+        )]);
         let changed = remove_from_origins_map(&mut map, &["notes 2"]);
         assert!(changed);
         assert!(map.is_empty());
@@ -881,11 +890,15 @@ mod tests {
     #[test]
     #[cfg(target_os = "macos")]
     fn remove_from_origins_map_returns_false_when_key_not_found() {
-        let mut map = std::collections::HashMap::from([
-            ("other.txt".to_string(), "/home/user/other.txt".to_string()),
-        ]);
+        let mut map = std::collections::HashMap::from([(
+            "other.txt".to_string(),
+            "/home/user/other.txt".to_string(),
+        )]);
         let changed = remove_from_origins_map(&mut map, &["missing.txt"]);
-        assert!(!changed, "no match should return false and leave map untouched");
+        assert!(
+            !changed,
+            "no match should return false and leave map untouched"
+        );
         assert_eq!(map.len(), 1);
     }
 
