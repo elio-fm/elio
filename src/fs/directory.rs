@@ -487,30 +487,23 @@ fn restore_trash_item_freedesktop(
 /// whose original parent directory no longer exists — exactly as the OS would.
 #[cfg(target_os = "macos")]
 fn restore_trash_item_macos(entry_path: &Path) -> anyhow::Result<()> {
-    let path_str = entry_path
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("path is not valid UTF-8: {:?}", entry_path))?;
-
-    // AppleScript string literals have no backslash escape syntax; a literal
-    // `"` inside a string must be expressed with the built-in `quote` constant
-    // and string concatenation.  See `applescript_posix_path_literal`.
-    // `put back` is parsed by AppleScript as a verb-preposition pair.  Passing
-    // a coercion expression inline (e.g. `put back (POSIX file … as alias)`)
-    // confuses the parser, which expects a bare reference after `back`.
+    // Pass the path as a command-line argument to an `on run argv` handler
+    // rather than embedding it in the script source.  This avoids all
+    // AppleScript string-literal quoting and escaping problems: the path
+    // reaches the script as a plain string value, regardless of what
+    // characters it contains (spaces, quotes, backslashes, Unicode, etc.).
     //
-    // The reliable form is to assign the alias to a variable first and then
-    // pass the variable to `put back`.  Multiple `-e` flags act as separate
-    // lines of the same script, so this is equivalent to a multi-line block.
-    let set_line = format!(
-        "set f to (POSIX file {}) as alias",
-        applescript_posix_path_literal(path_str)
-    );
-
+    // The `on run argv` / `end run` wrapper is required for osascript to
+    // accept positional arguments passed after `--`.
     let output = Command::new("osascript")
+        .arg("-e").arg("on run argv")
         .arg("-e").arg("tell application \"Finder\"")
-        .arg("-e").arg(&set_line)
+        .arg("-e").arg("set f to POSIX file (item 1 of argv) as alias")
         .arg("-e").arg("put back f")
         .arg("-e").arg("end tell")
+        .arg("-e").arg("end run")
+        .arg("--")
+        .arg(entry_path)
         .output()
         .with_context(|| "failed to launch osascript")?;
 
@@ -1249,12 +1242,12 @@ mod tests {
     #[test]
     #[cfg(target_os = "macos")]
     fn applescript_path_literal_round_trips_through_osascript() {
-        // Verify that the expression we generate is valid AppleScript that
-        // evaluates back to the original path string when used as a string.
+        // Verify that the expression we generate is syntactically valid
+        // AppleScript that evaluates back to the original path string.
+        // The restore backend no longer embeds paths in script source
+        // (it uses argv instead), but this utility is kept for correctness.
         let path = "/Users/foo/bar.txt";
         let expr = applescript_posix_path_literal(path);
-        // Evaluate the expression as a plain string (not as a POSIX file/alias,
-        // since the path doesn't need to exist for this syntactic check).
         let script = format!("return {expr}");
         let output = Command::new("osascript")
             .arg("-e")
