@@ -691,9 +691,9 @@ fn ds_store_traverse(
     ptbn: &mut Option<String>,
     visited: &mut std::collections::HashSet<u32>,
 ) -> Option<()> {
-    // Guard against cycles in corrupt DS_Store files.
+    // Guard against cycles in corrupt DS_Store files — skip silently, don't abort.
     if !visited.insert(node_id) {
-        return None;
+        return Some(());
     }
 
     let block = ds_store_block(data, offsets, node_id)?;
@@ -705,17 +705,26 @@ fn ds_store_traverse(
         // Leaf node: record count then records.
         let record_count = cur.read_u32()?;
         for _ in 0..record_count {
-            ds_store_read_record(&mut cur, target_name, ptbl, ptbn)?;
+            // Unknown type in a record means we can't determine its size and
+            // must stop reading this node, but don't abort the whole traversal.
+            if ds_store_read_record(&mut cur, target_name, ptbl, ptbn).is_none() {
+                break;
+            }
         }
     } else {
         // Internal node: alternating child_id and record, then one final child.
         for _ in 0..pair_count {
             let child_id = cur.read_u32()?;
-            ds_store_traverse(data, offsets, child_id, target_name, ptbl, ptbn, visited)?;
-            ds_store_read_record(&mut cur, target_name, ptbl, ptbn)?;
+            // Child failures don't corrupt our cursor — skip and continue.
+            ds_store_traverse(data, offsets, child_id, target_name, ptbl, ptbn, visited);
+            // Record failure means we can't find the boundary of this record,
+            // so we can't safely continue reading this node.
+            if ds_store_read_record(&mut cur, target_name, ptbl, ptbn).is_none() {
+                return Some(());
+            }
         }
         let last_child = cur.read_u32()?;
-        ds_store_traverse(data, offsets, last_child, target_name, ptbl, ptbn, visited)?;
+        ds_store_traverse(data, offsets, last_child, target_name, ptbl, ptbn, visited);
     }
 
     Some(())
@@ -759,7 +768,10 @@ fn ds_store_read_record(
         (_, b"bool") => {
             cur.skip(1)?;
         }
-        (_, b"shor") | (_, b"long") | (_, b"type") => {
+        (_, b"shor") => {
+            cur.skip(2)?;
+        }
+        (_, b"long") | (_, b"type") => {
             cur.skip(4)?;
         }
         (_, b"comp") | (_, b"dutc") => {
