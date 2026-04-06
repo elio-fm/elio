@@ -465,7 +465,18 @@ fn run_trash_batch(
     let total = paths.len();
 
     match ::trash::delete_all(paths) {
-        Ok(()) => (total, Vec::new(), false),
+        Ok(()) => {
+            #[cfg(target_os = "macos")]
+            {
+                let origins: Vec<(String, std::path::PathBuf)> = request
+                    .targets
+                    .iter()
+                    .map(|t| (t.name.clone(), t.path.clone()))
+                    .collect();
+                crate::fs::save_restore_origins(&origins);
+            }
+            (total, Vec::new(), false)
+        }
         Err(e) => (0, vec![e.to_string()], false),
     }
 }

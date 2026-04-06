@@ -480,12 +480,105 @@ fn restore_trash_item_freedesktop(
     Ok(())
 }
 
-/// macOS-specific restore: reads the `.DS_Store` binary in `~/.Trash` to find
-/// the `ptbL` (original parent directory) and `ptbN` (original file name)
-/// records that Finder writes when an item is trashed.  Reconstructs the
-/// original path and moves the item back.
-///
-/// This is the same metadata that Finder's own "Put Back" menu item uses.
+// ---------------------------------------------------------------------------
+// macOS restore-origins store
+// ---------------------------------------------------------------------------
+// When Elio trashes a file it records the original path in a JSON store at
+// ~/Library/Application Support/elio/trash-origins.json, keyed by the
+// expected filename in ~/.Trash.  This is the primary metadata source for
+// restore: it is reliable for any file Elio itself trashed, regardless of
+// whether NSWorkspace.recycleURLs writes ptbL to .DS_Store.
+//
+// The DS_Store parser is kept as a fallback for files trashed by Finder.
+
+/// Returns the path to the restore-origins metadata store.
+#[cfg(target_os = "macos")]
+fn restore_origins_path() -> Option<PathBuf> {
+    dirs::data_dir().map(|d| d.join("elio").join("trash-origins.json"))
+}
+
+/// Records `(trash_name, original_path)` pairs in the restore-origins store.
+/// `trash_name` is the filename as it will appear in `~/.Trash` (= the
+/// original filename when there is no collision).  Best-effort: silently
+/// ignored on any I/O error.
+#[cfg(target_os = "macos")]
+pub(crate) fn save_restore_origins(items: &[(String, PathBuf)]) {
+    let Some(path) = restore_origins_path() else {
+        return;
+    };
+    let mut map: std::collections::HashMap<String, String> = fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default();
+
+    for (name, original) in items {
+        if let Some(s) = original.to_str() {
+            map.insert(name.clone(), s.to_owned());
+        }
+    }
+
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_vec_pretty(&map) {
+        let _ = fs::write(&path, json);
+    }
+}
+
+/// Looks up the original path for a file currently named `trash_name`.
+/// Also tries stripping macOS collision suffixes (` 2`, ` 3`, …) from the
+/// stem, so files renamed on collision can still be matched.
+#[cfg(target_os = "macos")]
+fn load_restore_origin(trash_name: &str) -> Option<PathBuf> {
+    let path = restore_origins_path()?;
+    let map: std::collections::HashMap<String, String> =
+        serde_json::from_slice(&fs::read(&path).ok()?).ok()?;
+
+    if let Some(orig) = map.get(trash_name) {
+        return Some(PathBuf::from(orig));
+    }
+
+    // Collision case: "foo 2.txt" → look up "foo.txt".
+    let p = Path::new(trash_name);
+    let stem = p.file_stem().and_then(|s| s.to_str())?;
+    let ext = p.extension().and_then(|e| e.to_str());
+    let base_stem = strip_macos_collision_suffix(stem)?;
+    let base_name = match ext {
+        Some(e) => format!("{base_stem}.{e}"),
+        None => base_stem.to_owned(),
+    };
+    map.get(&base_name).map(|s| PathBuf::from(s))
+}
+
+/// Strips a macOS collision suffix (` 2`, ` 3`, …) from a file stem.
+/// Returns `Some(base)` if a suffix was stripped, `None` otherwise.
+#[cfg(target_os = "macos")]
+fn strip_macos_collision_suffix(stem: &str) -> Option<&str> {
+    let (base, suffix) = stem.rsplit_once(' ')?;
+    let n: u64 = suffix.parse().ok()?;
+    (n >= 2).then_some(base)
+}
+
+/// Moves `entry_path` to `original_path`, creating parent directories as
+/// needed.  Shared by both restore paths (our store and DS_Store fallback).
+#[cfg(target_os = "macos")]
+fn perform_restore(entry_path: &Path, original_path: &Path) -> anyhow::Result<()> {
+    if original_path.exists() {
+        anyhow::bail!("destination already exists: {:?}", original_path);
+    }
+    if let Some(parent) = original_path.parent()
+        && !parent.exists()
+    {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("cannot create parent dir {:?}", parent))?;
+    }
+    fs::rename(entry_path, original_path)
+        .with_context(|| format!("cannot move {:?} to {:?}", entry_path, original_path))
+}
+
+/// macOS-specific restore.  Checks the Elio restore-origins store first
+/// (populated whenever Elio trashes a file), then falls back to parsing
+/// `.DS_Store` for files trashed directly by Finder.
 #[cfg(target_os = "macos")]
 fn restore_trash_item_macos(entry_path: &Path) -> anyhow::Result<()> {
     let file_name = entry_path
@@ -498,18 +591,20 @@ fn restore_trash_item_macos(entry_path: &Path) -> anyhow::Result<()> {
     let ds_store_path = trash_dir.join(".DS_Store");
 
     // Guard: never treat the metadata file itself as the item to restore.
-    // If entry_path IS the .DS_Store, we would rename the metadata out of
-    // the trash and break all subsequent restores.
     if entry_path == ds_store_path {
-        anyhow::bail!(
-            "cannot restore \".DS_Store\" — it is a system metadata file"
-        );
+        anyhow::bail!("cannot restore \".DS_Store\" — it is a system metadata file");
     }
 
+    // ── Primary: our own restore-origins store ──────────────────────────────
+    if let Some(original_path) = load_restore_origin(file_name) {
+        return perform_restore(entry_path, &original_path);
+    }
+
+    // ── Fallback: parse .DS_Store written by Finder ─────────────────────────
     if !ds_store_path.exists() {
         anyhow::bail!(
             "no Put Back metadata found for \"{file_name}\" \
-             (the file was not trashed via Finder)"
+             (the file was not trashed via Finder or Elio)"
         );
     }
 
@@ -520,31 +615,18 @@ fn restore_trash_item_macos(entry_path: &Path) -> anyhow::Result<()> {
         macos_ds_store_find_ptb(&data, file_name).ok_or_else(|| {
             anyhow::anyhow!(
                 "no Put Back metadata found for \"{file_name}\" \
-                 (the file may not have been trashed via Finder)"
+                 (the file was not trashed via Finder or Elio)"
             )
         })?;
 
-    // ptbL stores a volume-relative path without a leading slash, e.g.
-    // "Users/regueiro/Documents".  Prepend "/" to get an absolute path.
+    // ptbL stores a volume-relative path without a leading slash.
     let original_path = if parent_dir.is_empty() {
         PathBuf::from(format!("/{original_name}"))
     } else {
         PathBuf::from(format!("/{parent_dir}/{original_name}"))
     };
 
-    if original_path.exists() {
-        anyhow::bail!("destination already exists: {:?}", original_path);
-    }
-
-    if let Some(parent) = original_path.parent()
-        && !parent.exists()
-    {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("cannot create parent dir {:?}", parent))?;
-    }
-
-    fs::rename(entry_path, &original_path)
-        .with_context(|| format!("cannot move {:?} to {:?}", entry_path, original_path))?;
+    perform_restore(entry_path, &original_path)?;
 
     Ok(())
 }

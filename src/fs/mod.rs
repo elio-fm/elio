@@ -37,6 +37,8 @@ pub(crate) use directory::{
     DirectoryFingerprint, DirectorySnapshot, detached_open_command, load_directory_snapshot,
     open_in_system, restore_trash_item, scan_directory_fingerprint,
 };
+#[cfg(target_os = "macos")]
+pub(crate) use directory::save_restore_origins;
 pub(crate) use directory_stats::{DirectoryStats, DirectoryStatsScanResult, scan_directory_stats};
 pub(crate) use format::{
     describe_io_error, format_item_count, format_size, format_time_ago, rect_contains,
