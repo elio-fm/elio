@@ -494,18 +494,23 @@ fn restore_trash_item_macos(entry_path: &Path) -> anyhow::Result<()> {
     // AppleScript string literals have no backslash escape syntax; a literal
     // `"` inside a string must be expressed with the built-in `quote` constant
     // and string concatenation.  See `applescript_posix_path_literal`.
-    // `put back` requires an `alias` (an existing file reference), not a bare
-    // `POSIX file` specifier.  Parentheses are required so the parser groups
-    // `POSIX file ... as alias` as the argument rather than treating `POSIX
-    // file` as part of the command name, which produces a syntax error.
-    let script = format!(
-        "tell application \"Finder\" to put back (POSIX file {} as alias)",
+    // `put back` is parsed by AppleScript as a verb-preposition pair.  Passing
+    // a coercion expression inline (e.g. `put back (POSIX file … as alias)`)
+    // confuses the parser, which expects a bare reference after `back`.
+    //
+    // The reliable form is to assign the alias to a variable first and then
+    // pass the variable to `put back`.  Multiple `-e` flags act as separate
+    // lines of the same script, so this is equivalent to a multi-line block.
+    let set_line = format!(
+        "set f to (POSIX file {}) as alias",
         applescript_posix_path_literal(path_str)
     );
 
     let output = Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
+        .arg("-e").arg("tell application \"Finder\"")
+        .arg("-e").arg(&set_line)
+        .arg("-e").arg("put back f")
+        .arg("-e").arg("end tell")
         .output()
         .with_context(|| "failed to launch osascript")?;
 
