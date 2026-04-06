@@ -170,6 +170,8 @@ fn run_restore(
     let mut errors: Vec<String> = Vec::new();
     let mut stopped_early = false;
     let mut last_progress_at: Option<Instant> = None;
+    #[cfg(target_os = "macos")]
+    let mut restored_names: Vec<&str> = Vec::new();
 
     for target in &request.targets {
         if cancelled.load(Ordering::Relaxed)
@@ -180,7 +182,11 @@ fn run_restore(
         }
 
         match crate::fs::restore_trash_item(&target.path) {
-            Ok(_) => completed += 1,
+            Ok(_) => {
+                completed += 1;
+                #[cfg(target_os = "macos")]
+                restored_names.push(target.name.as_str());
+            }
             Err(e) => {
                 errors.push(format!("Could not restore \"{}\": {e}", target.name));
             }
@@ -189,6 +195,11 @@ fn run_restore(
         if !send_restore_progress(result_tx, request.token, completed, &mut last_progress_at) {
             break;
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    if !restored_names.is_empty() {
+        crate::fs::remove_restore_origins(&restored_names);
     }
 
     (completed, errors, stopped_early)

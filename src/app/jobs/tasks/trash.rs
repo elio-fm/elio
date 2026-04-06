@@ -223,6 +223,12 @@ fn run_permanent_delete(
     let mut errors: Vec<String> = Vec::new();
     let mut stopped_early = false;
     let mut last_progress_at: Option<Instant> = None;
+    // Collect names of items successfully removed from trash so their restore
+    // origins can be pruned after the loop.  Staged directories are included
+    // here even if their background cleanup later fails: the item is already
+    // gone from the trash regardless of whether the staging area is reclaimed.
+    #[cfg(target_os = "macos")]
+    let mut deleted_names: Vec<&str> = Vec::new();
 
     for target in &request.targets {
         if cancelled.load(Ordering::Relaxed)
@@ -243,9 +249,15 @@ fn run_permanent_delete(
                 Some(staged_path) => {
                     staged.push((target.name.clone(), staged_path));
                     completed += 1;
+                    #[cfg(target_os = "macos")]
+                    deleted_names.push(target.name.as_str());
                 }
                 None => match fs::remove_dir_all(&target.path) {
-                    Ok(()) => completed += 1,
+                    Ok(()) => {
+                        completed += 1;
+                        #[cfg(target_os = "macos")]
+                        deleted_names.push(target.name.as_str());
+                    }
                     Err(e) => {
                         errors.push(format!("Could not delete \"{}\": {e}", target.name));
                     }
@@ -253,7 +265,11 @@ fn run_permanent_delete(
             }
         } else {
             match fs::remove_file(&target.path) {
-                Ok(()) => completed += 1,
+                Ok(()) => {
+                    completed += 1;
+                    #[cfg(target_os = "macos")]
+                    deleted_names.push(target.name.as_str());
+                }
                 Err(e) => errors.push(format!("Could not delete \"{}\": {e}", target.name)),
             }
         }
@@ -271,6 +287,11 @@ fn run_permanent_delete(
     completed = completed.saturating_sub(cleanup_errors.len());
     for name in cleanup_errors {
         errors.push(format!("Could not delete \"{name}\": cleanup failed"));
+    }
+
+    #[cfg(target_os = "macos")]
+    if !deleted_names.is_empty() {
+        crate::fs::remove_restore_origins(&deleted_names);
     }
 
     (completed, errors, stopped_early)

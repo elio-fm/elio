@@ -141,6 +141,66 @@ pub(crate) fn save_restore_origins(items: &[(String, PathBuf)]) {
     }
 }
 
+/// Removes entries for the given `trash_names` from the restore-origins store.
+/// For each name, first tries an exact key match, then strips any macOS
+/// collision suffix (` 2`, ` 3`, …) and tries again — so "foo 2.txt"
+/// correctly removes the "foo.txt" key that was saved at trash time.
+/// Best-effort: silently ignores any I/O error.
+#[cfg(target_os = "macos")]
+pub(crate) fn remove_restore_origins(trash_names: &[&str]) {
+    let Some(path) = restore_origins_path() else {
+        return;
+    };
+    let bytes = match fs::read(&path) {
+        Ok(b) => b,
+        Err(_) => return,
+    };
+    let mut map: std::collections::HashMap<String, String> =
+        match serde_json::from_slice(&bytes) {
+            Ok(m) => m,
+            Err(_) => return,
+        };
+    if remove_from_origins_map(&mut map, trash_names) {
+        if let Ok(json) = serde_json::to_vec_pretty(&map) {
+            let _ = fs::write(&path, json);
+        }
+    }
+}
+
+/// Core map-mutation logic for [`remove_restore_origins`]: removes each name
+/// in `trash_names` from `map`, trying the exact key first then the
+/// collision-stripped base name.  Returns `true` if the map was modified.
+#[cfg(target_os = "macos")]
+fn remove_from_origins_map(
+    map: &mut std::collections::HashMap<String, String>,
+    trash_names: &[&str],
+) -> bool {
+    let mut changed = false;
+    for &name in trash_names {
+        if map.remove(name).is_some() {
+            changed = true;
+            continue;
+        }
+        // Collision case: the file was stored under its original name (e.g.
+        // "foo.txt") but appears in trash as "foo 2.txt".  Strip the suffix
+        // and try again.
+        let p = Path::new(name);
+        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+            if let Some(base_stem) = strip_macos_collision_suffix(stem) {
+                let ext = p.extension().and_then(|e| e.to_str());
+                let base_name = match ext {
+                    Some(e) => format!("{base_stem}.{e}"),
+                    None => base_stem.to_owned(),
+                };
+                if map.remove(&base_name).is_some() {
+                    changed = true;
+                }
+            }
+        }
+    }
+    changed
+}
+
 /// Looks up the original path for a file currently named `trash_name`.
 /// Also tries stripping macOS collision suffixes (` 2`, ` 3`, …) from the
 /// stem, so files renamed on collision can still be matched.
@@ -777,5 +837,78 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn decode_utf16be_empty_slice_gives_empty_string() {
         assert_eq!(decode_utf16be(b""), Some(String::new()));
+    }
+
+    // ── remove_from_origins_map ───────────────────────────────────────────────
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn remove_from_origins_map_removes_exact_match() {
+        let mut map = std::collections::HashMap::from([
+            ("report.pdf".to_string(), "/home/user/report.pdf".to_string()),
+            ("notes.txt".to_string(), "/home/user/notes.txt".to_string()),
+        ]);
+        let changed = remove_from_origins_map(&mut map, &["report.pdf"]);
+        assert!(changed);
+        assert!(!map.contains_key("report.pdf"), "target entry should be removed");
+        assert!(map.contains_key("notes.txt"), "unrelated entry should be untouched");
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn remove_from_origins_map_handles_collision_suffix_with_extension() {
+        // "report.pdf" was stored as the key but macOS renamed it "report 2.pdf"
+        // in the trash due to a collision.
+        let mut map = std::collections::HashMap::from([
+            ("report.pdf".to_string(), "/home/user/report.pdf".to_string()),
+        ]);
+        let changed = remove_from_origins_map(&mut map, &["report 2.pdf"]);
+        assert!(changed);
+        assert!(map.is_empty(), "collision-suffixed name should strip and remove base key");
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn remove_from_origins_map_handles_collision_suffix_without_extension() {
+        let mut map = std::collections::HashMap::from([
+            ("notes".to_string(), "/home/user/notes".to_string()),
+        ]);
+        let changed = remove_from_origins_map(&mut map, &["notes 2"]);
+        assert!(changed);
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn remove_from_origins_map_returns_false_when_key_not_found() {
+        let mut map = std::collections::HashMap::from([
+            ("other.txt".to_string(), "/home/user/other.txt".to_string()),
+        ]);
+        let changed = remove_from_origins_map(&mut map, &["missing.txt"]);
+        assert!(!changed, "no match should return false and leave map untouched");
+        assert_eq!(map.len(), 1);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn remove_from_origins_map_removes_multiple_names() {
+        let mut map = std::collections::HashMap::from([
+            ("a.txt".to_string(), "/home/user/a.txt".to_string()),
+            ("b.txt".to_string(), "/home/user/b.txt".to_string()),
+            ("c.txt".to_string(), "/home/user/c.txt".to_string()),
+        ]);
+        let changed = remove_from_origins_map(&mut map, &["a.txt", "c.txt"]);
+        assert!(changed);
+        assert!(!map.contains_key("a.txt"));
+        assert!(map.contains_key("b.txt"), "untargeted entry must survive");
+        assert!(!map.contains_key("c.txt"));
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn remove_from_origins_map_no_op_on_empty_map() {
+        let mut map = std::collections::HashMap::new();
+        let changed = remove_from_origins_map(&mut map, &["foo.txt"]);
+        assert!(!changed);
     }
 }

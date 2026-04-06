@@ -40,7 +40,7 @@ pub(crate) use directory::{
 };
 pub(crate) use restore::restore_trash_item;
 #[cfg(target_os = "macos")]
-pub(crate) use restore::save_restore_origins;
+pub(crate) use restore::{remove_restore_origins, save_restore_origins};
 pub(crate) use directory_stats::{DirectoryStats, DirectoryStatsScanResult, scan_directory_stats};
 pub(crate) use format::{
     describe_io_error, format_item_count, format_size, format_time_ago, rect_contains,
