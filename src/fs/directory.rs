@@ -497,6 +497,15 @@ fn restore_trash_item_macos(entry_path: &Path) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("cannot determine trash dir for {:?}", entry_path))?;
     let ds_store_path = trash_dir.join(".DS_Store");
 
+    // Guard: never treat the metadata file itself as the item to restore.
+    // If entry_path IS the .DS_Store, we would rename the metadata out of
+    // the trash and break all subsequent restores.
+    if entry_path == ds_store_path {
+        anyhow::bail!(
+            "cannot restore \".DS_Store\" — it is a system metadata file"
+        );
+    }
+
     if !ds_store_path.exists() {
         anyhow::bail!(
             "no Put Back metadata found for \"{file_name}\" \
