@@ -229,7 +229,7 @@ impl App {
                 self.adjust_zoom(-1);
             }
             KeyCode::F(2) => {
-                if !self.navigation.in_trash {
+                if !self.navigation.in_trash && !self.cwd_is_inside_trash_subfolder() {
                     if !self.navigation.selected_paths.is_empty() {
                         self.open_bulk_rename_prompt();
                     } else {
@@ -259,6 +259,10 @@ impl App {
             Action::Rename => {
                 if self.navigation.in_trash {
                     self.open_restore_prompt();
+                } else if self.cwd_is_inside_trash_subfolder() {
+                    self.status = "Cannot restore from inside a trashed folder \
+                                   — go up to the trash to restore the folder itself"
+                        .to_string();
                 } else if !self.navigation.selected_paths.is_empty() {
                     self.open_bulk_rename_prompt();
                 } else {
