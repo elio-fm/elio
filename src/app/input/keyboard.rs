@@ -16,6 +16,13 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
+        // The kitty keyboard protocol (enabled when the terminal supports it) emits
+        // Press, Repeat, and Release events. Ignore Release so each keystroke is only
+        // handled once. Repeat is kept so held navigation keys continue to scroll.
+        if key.kind == KeyEventKind::Release {
+            return Ok(());
+        }
+
         if self.overlays.trash.is_some() {
             return self.handle_trash_key(key);
         }

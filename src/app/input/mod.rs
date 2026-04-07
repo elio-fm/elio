@@ -5,7 +5,7 @@ mod wheel;
 use super::*;
 use anyhow::Result;
 use crossterm::event::{
-    Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 use std::path::Path;
 use std::time::{Duration, Instant};
