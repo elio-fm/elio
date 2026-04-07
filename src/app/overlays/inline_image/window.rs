@@ -140,7 +140,7 @@ fn query_cell_pixel_size_from_terminal() -> Option<(u32, u32)> {
     const WAIT_OBJECT_0: u32 = 0x00000000;
     const INVALID_HANDLE_VALUE: *mut c_void = usize::MAX as *mut c_void;
 
-    extern "system" {
+    unsafe extern "system" {
         fn GetStdHandle(nStdHandle: u32) -> *mut c_void;
         fn WaitForSingleObject(hHandle: *mut c_void, dwMilliseconds: u32) -> u32;
         fn ReadFile(
