@@ -63,7 +63,7 @@ impl App {
         );
         let image_changed = self.preview.image.displayed.as_ref() != Some(&displayed);
         let excluded_changed = excluded != self.preview.image.displayed_excluded.as_slice();
-        let needs_repaint = force_repaint && protocol == ImageProtocol::ItermInline;
+        let needs_repaint = force_repaint && protocol.is_raster();
         if !image_changed && !excluded_changed && !needs_repaint {
             preview_log("present_static_image_overlay: already displayed → Displayed");
             return Ok(OverlayPresentState::Displayed);
@@ -80,6 +80,7 @@ impl App {
             placement,
             excluded,
             prepared.inline_payload.as_deref(),
+            Some(window_size),
         ) {
             Ok(bytes) => {
                 preview_log(format_args!(
@@ -153,7 +154,7 @@ impl App {
         );
         let image_changed = self.preview.image.displayed.as_ref() != Some(&displayed);
         let excluded_changed = excluded != self.preview.image.displayed_excluded.as_slice();
-        let needs_repaint = force_repaint && protocol == ImageProtocol::ItermInline;
+        let needs_repaint = force_repaint && protocol.is_raster();
         if !image_changed && !excluded_changed && !needs_repaint {
             preview_log("present_preview_visual_overlay: already displayed → Displayed");
             return Ok(OverlayPresentState::Displayed);
@@ -167,6 +168,7 @@ impl App {
             placement,
             excluded,
             prepared.inline_payload.as_deref(),
+            Some(window_size),
         ) {
             Ok(bytes) => {
                 preview_log(format_args!(
@@ -210,7 +212,7 @@ impl App {
     }
 
     fn static_image_clear_area(&self, request: &StaticImageOverlayRequest) -> Rect {
-        if self.preview.terminal_images.protocol == ImageProtocol::ItermInline {
+        if self.preview.terminal_images.protocol.is_raster() {
             if request.mode == StaticImageOverlayMode::Inline {
                 return self
                     .input
@@ -246,6 +248,10 @@ impl App {
         dimensions: RenderedImageDimensions,
         window_size: TerminalWindowSize,
     ) -> Rect {
+        // Kitty fills the entire cell area and lets the terminal handle scaling
+        // via unicode placeholders, so no fitting is needed.  iTerm2 and Sixel
+        // both paint pixel buffers and need a cell area that matches the image's
+        // aspect ratio so the encoder can produce the correct pixel dimensions.
         if self.preview.terminal_images.protocol == ImageProtocol::KittyGraphics {
             request.area
         } else {

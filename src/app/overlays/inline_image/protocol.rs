@@ -27,6 +27,13 @@ pub(in crate::app) fn detect_terminal_identity() -> TerminalIdentity {
         || env::var_os("ALACRITTY_SOCKET").is_some()
     {
         TerminalIdentity::Alacritty
+    } else if term == "foot" || term == "foot-extra" {
+        // Foot sets TERM=foot or TERM=foot-extra and supports Sixel natively.
+        TerminalIdentity::Foot
+    } else if env::var_os("WT_SESSION").is_some() {
+        // WT_SESSION is a GUID set by Windows Terminal in every shell it hosts.
+        // WT_PROFILE_ID is also available but WT_SESSION is the canonical marker.
+        TerminalIdentity::WindowsTerminal
     } else {
         TerminalIdentity::Other
     }
@@ -41,6 +48,8 @@ pub(in crate::app) fn select_image_protocol(
         TerminalIdentity::Ghostty => ImageProtocol::KittyGraphics,
         TerminalIdentity::Warp => ImageProtocol::KittyGraphics,
         TerminalIdentity::WezTerm | TerminalIdentity::ITerm2 => ImageProtocol::ItermInline,
+        // Foot and Windows Terminal ≥ 1.22 both support Sixel graphics.
+        TerminalIdentity::Foot | TerminalIdentity::WindowsTerminal => ImageProtocol::Sixel,
         // ELIO_IMAGE_PREVIEWS=1 force-enables KittyGraphics on unrecognised terminals
         // for testing. Alacritty is excluded — it does not support image protocols.
         TerminalIdentity::Other if image_previews_override => ImageProtocol::KittyGraphics,
@@ -121,6 +130,7 @@ mod tests {
                 "KITTY_WINDOW_ID",
                 "WARP_SESSION_ID",
                 "ALACRITTY_SOCKET",
+                "WT_SESSION",
             ];
 
             let saved = VARS
@@ -238,6 +248,85 @@ mod tests {
         assert_eq!(
             select_image_protocol(TerminalIdentity::Other, true),
             ImageProtocol::KittyGraphics
+        );
+    }
+
+    #[test]
+    fn detect_terminal_identity_recognizes_foot_term() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+
+        unsafe {
+            env::set_var("TERM", "foot");
+        }
+
+        assert_eq!(detect_terminal_identity(), TerminalIdentity::Foot);
+    }
+
+    #[test]
+    fn detect_terminal_identity_recognizes_foot_extra_term() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+
+        unsafe {
+            env::set_var("TERM", "foot-extra");
+        }
+
+        assert_eq!(detect_terminal_identity(), TerminalIdentity::Foot);
+    }
+
+    #[test]
+    fn select_image_protocol_foot_uses_sixel() {
+        assert_eq!(
+            select_image_protocol(TerminalIdentity::Foot, false),
+            ImageProtocol::Sixel
+        );
+        assert_eq!(
+            select_image_protocol(TerminalIdentity::Foot, true),
+            ImageProtocol::Sixel
+        );
+    }
+
+    #[test]
+    fn detect_terminal_identity_recognizes_windows_terminal_wt_session() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+
+        unsafe {
+            env::set_var("WT_SESSION", "00000000-0000-0000-0000-000000000001");
+        }
+
+        assert_eq!(
+            detect_terminal_identity(),
+            TerminalIdentity::WindowsTerminal
+        );
+    }
+
+    #[test]
+    fn select_image_protocol_windows_terminal_uses_sixel() {
+        assert_eq!(
+            select_image_protocol(TerminalIdentity::WindowsTerminal, false),
+            ImageProtocol::Sixel
+        );
+        assert_eq!(
+            select_image_protocol(TerminalIdentity::WindowsTerminal, true),
+            ImageProtocol::Sixel
+        );
+    }
+
+    #[test]
+    fn windows_terminal_takes_precedence_over_other_fallback() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+
+        // WT_SESSION present, no other terminal markers → WindowsTerminal
+        unsafe {
+            env::set_var("WT_SESSION", "some-guid");
+        }
+
+        assert_eq!(
+            detect_terminal_identity(),
+            TerminalIdentity::WindowsTerminal
         );
     }
 

@@ -145,7 +145,9 @@ impl App {
         match self.preview.terminal_images.protocol {
             ImageProtocol::KittyGraphics => self.static_image_can_display_directly_now(request),
             ImageProtocol::ItermInline => static_image_supports_iterm_source_passthrough(request),
-            ImageProtocol::None => false,
+            // Sixel requires decoding and re-encoding the image, so the source path
+            // can never be used directly — always go through the prepare pipeline.
+            ImageProtocol::Sixel | ImageProtocol::None => false,
         }
     }
 

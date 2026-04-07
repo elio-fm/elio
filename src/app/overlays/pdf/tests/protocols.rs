@@ -59,6 +59,7 @@ fn iterm_inline_protocol_uses_preencoded_payload_without_reading_source() {
             },
             &[],
             Some("YWJj"),
+            None,
         )
         .expect("preencoded iterm payload should not require source file"),
     )

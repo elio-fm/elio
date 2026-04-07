@@ -2,6 +2,7 @@ mod geometry;
 mod iterm;
 mod kitty;
 mod protocol;
+mod sixel;
 mod window;
 
 use anyhow::{Context, Result};
@@ -53,6 +54,8 @@ pub(in crate::app) enum TerminalIdentity {
     WezTerm,
     ITerm2,
     Alacritty,
+    Foot,
+    WindowsTerminal,
     Other,
 }
 
@@ -66,8 +69,20 @@ pub(in crate::app) enum ImageProtocol {
     KittyGraphics,
     /// iTerm2 inline image protocol (OSC 1337). Used by WezTerm and iTerm2.
     ItermInline,
+    /// Sixel graphics protocol (DCS). Used by Windows Terminal (≥ 1.22).
+    Sixel,
     #[default]
     None,
+}
+
+impl ImageProtocol {
+    /// Returns `true` for pixel-buffer protocols that write directly into the
+    /// terminal framebuffer and have no dedicated clear command (iTerm2 and
+    /// Sixel).  These protocols require a pre-draw cell-erase pass before
+    /// ratatui can safely overpaint stale image content.
+    pub(in crate::app) fn is_raster(self) -> bool {
+        matches!(self, ImageProtocol::ItermInline | ImageProtocol::Sixel)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -90,11 +105,12 @@ impl App {
         let image_previews_override = env::var_os("ELIO_IMAGE_PREVIEWS").is_some();
         let protocol = select_image_protocol(identity, image_previews_override);
         preview_log(format_args!(
-            "enable_terminal_image_previews:\n  TERM={}\n  TERM_PROGRAM={}\n  KITTY_WINDOW_ID={}\n  WARP_SESSION_ID={}\n  identity={identity:?}\n  override={image_previews_override}\n  protocol={protocol:?}",
+            "enable_terminal_image_previews:\n  TERM={}\n  TERM_PROGRAM={}\n  KITTY_WINDOW_ID={}\n  WARP_SESSION_ID={}\n  WT_SESSION={}\n  identity={identity:?}\n  override={image_previews_override}\n  protocol={protocol:?}",
             env::var("TERM").unwrap_or_default(),
             env::var("TERM_PROGRAM").unwrap_or_default(),
             env::var_os("KITTY_WINDOW_ID").is_some(),
             env::var_os("WARP_SESSION_ID").is_some(),
+            env::var_os("WT_SESSION").is_some(),
         ));
         self.preview.terminal_images.protocol = protocol;
         self.preview.pdf.pdf_tools_available = pdf_preview_tools_available();
@@ -175,7 +191,7 @@ impl App {
     /// erased cells with the correct panel background in the same render pass,
     /// avoiding the black-background artifact that occurs when erasing after draw.
     pub(crate) fn iterm_pre_draw_erase(&mut self) -> Vec<u8> {
-        if self.preview.terminal_images.protocol != ImageProtocol::ItermInline {
+        if !self.preview.terminal_images.protocol.is_raster() {
             return Vec::new();
         }
         let mut areas = std::mem::take(&mut self.preview.terminal_images.pending_iterm_erase);
@@ -221,13 +237,13 @@ impl App {
         }
 
         let popup_open = self.any_modal_overlay_open();
-        if protocol == ImageProtocol::ItermInline
+        if protocol.is_raster()
             && popup_open
             && (self.static_image_overlay_displayed() || self.pdf_overlay_displayed())
         {
             self.preview.terminal_images.pending_iterm_popup_restore = true;
         }
-        let force_iterm_popup_repaint = protocol == ImageProtocol::ItermInline
+        let force_iterm_popup_repaint = protocol.is_raster()
             && self.preview.terminal_images.pending_iterm_popup_restore
             && !popup_open;
 
@@ -362,7 +378,7 @@ impl App {
     }
 
     pub(crate) fn queue_forced_iterm_preview_erase(&mut self) {
-        if self.preview.terminal_images.protocol != ImageProtocol::ItermInline {
+        if !self.preview.terminal_images.protocol.is_raster() {
             return;
         }
         if let Some(area) = self.displayed_static_image_clear_area() {
@@ -396,6 +412,7 @@ pub(in crate::app) fn place_terminal_image(
     area: Rect,
     excluded: &[Rect],
     inline_payload: Option<&str>,
+    window_size: Option<TerminalWindowSize>,
 ) -> Result<Vec<u8>> {
     match protocol {
         ImageProtocol::KittyGraphics => {
@@ -404,6 +421,12 @@ pub(in crate::app) fn place_terminal_image(
         ImageProtocol::ItermInline => {
             iterm::place_terminal_image_with_iterm_protocol(path, area, inline_payload)
         }
+        ImageProtocol::Sixel => {
+            let ws = window_size.ok_or_else(|| {
+                anyhow::anyhow!("sixel protocol requires terminal window size, but none available")
+            })?;
+            sixel::place_terminal_image_with_sixel_protocol(path, area, ws)
+        }
         ImageProtocol::None => Ok(Vec::new()),
     }
 }
@@ -411,8 +434,10 @@ pub(in crate::app) fn place_terminal_image(
 pub(in crate::app) fn clear_terminal_images(protocol: ImageProtocol) -> Result<Vec<u8>> {
     match protocol {
         ImageProtocol::KittyGraphics => kitty::clear_terminal_images_with_kitty_protocol(),
-        // iTerm2 protocol has no clear primitive — the overlay is erased by
-        // the next ratatui draw call overwriting the cell region.
+        // iTerm2 has no clear primitive — the overlay is erased by the next
+        // ratatui draw call overwriting the cell region.
         ImageProtocol::ItermInline | ImageProtocol::None => Ok(Vec::new()),
+        // Sixel also has no clear primitive (same as iTerm2).
+        ImageProtocol::Sixel => sixel::clear_terminal_images_with_sixel_protocol(),
     }
 }

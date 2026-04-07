@@ -28,6 +28,9 @@ fn app_ui_access_stays_confined_to_inline_image_theme_helpers() {
         &[
             "src/app/overlays/inline_image/iterm.rs",
             "src/app/overlays/inline_image/kitty.rs",
+            // Sixel composites RGBA pixels over the panel background colour
+            // before quantising, requiring the same theme access as iterm/kitty.
+            "src/app/overlays/inline_image/sixel.rs",
         ],
     );
 }

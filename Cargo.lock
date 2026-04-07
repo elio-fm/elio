@@ -428,6 +428,7 @@ dependencies = [
  "anyhow",
  "base64",
  "cfb",
+ "color_quant",
  "crossterm 0.28.1",
  "dirs",
  "flate2",

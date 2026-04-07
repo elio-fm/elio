@@ -375,6 +375,7 @@ fn terminal_supports_osc52_clipboard() -> bool {
         || term_program.contains("alacritty")
         || env::var_os("ALACRITTY_SOCKET").is_some()
         || env::var_os("VTE_VERSION").is_some()
+        || env::var_os("WT_SESSION").is_some()
 }
 
 fn run_clipboard_command(program: &str, args: &[String], text: &str) -> Result<()> {

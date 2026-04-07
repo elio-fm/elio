@@ -51,7 +51,7 @@ impl App {
         let displayed = DisplayedPdfPreview::from_request(&request, placement);
         let image_changed = self.preview.pdf.displayed.as_ref() != Some(&displayed);
         let excluded_changed = excluded != self.preview.pdf.displayed_excluded.as_slice();
-        let needs_repaint = force_repaint && protocol == ImageProtocol::ItermInline;
+        let needs_repaint = force_repaint && protocol.is_raster();
         if !image_changed && !excluded_changed && !needs_repaint {
             preview_log("present_pdf_overlay: already displayed → Displayed");
             return Ok(OverlayPresentState::Displayed);
@@ -59,8 +59,15 @@ impl App {
         if image_changed {
             out.extend(self.clear_preview_overlay()?);
         }
-        let bytes = place_terminal_image(protocol, &rendered, placement.image_area, excluded, None)
-            .context("failed to display PDF page")?;
+        let bytes = place_terminal_image(
+            protocol,
+            &rendered,
+            placement.image_area,
+            excluded,
+            None,
+            self.cached_terminal_window(),
+        )
+        .context("failed to display PDF page")?;
         preview_log(format_args!(
             "present_pdf_overlay: placed {} bytes via {protocol:?}",
             bytes.len()
