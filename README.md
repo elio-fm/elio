@@ -1,6 +1,8 @@
 <h1 align="left"><img src="assets/logo.png" width="75" alt="elio logo" align="absmiddle" />&nbsp;elio</h1>
 
-A terminal-native, mouse-capable file manager with rich previews and inline images.
+A terminal-native file manager with a three-pane layout, rich previews, and inline images.
+
+It combines rich previews, customizable Places, trash, and quick actions like Go-to, Open With, and copy-to-clipboard in a terminal-native workflow.
 
 ![elio — default theme](examples/themes/default/screenshot.webp)
 
@@ -9,12 +11,14 @@ A terminal-native, mouse-capable file manager with rich previews and inline imag
 ## Features
 
 - **Three-pane layout** — Places, Files, and Preview side by side
-- **Keyboard and mouse** — both are first-class; navigate however you prefer
-- **Rich previews** — text, code with syntax highlighting, structured data, archives, EPUB, comics, images, and PDFs
+- **Rich previews** — text, code, documents, archives, media, and more; see [Preview Types](#preview-types)
 - **Inline images** — rendered directly in the terminal on supported terminals
+- **Customizable Places and devices** — pinned folders plus auto-detected drives and mounts
+- **Quick actions** — Go-to, Open With, and copy-to-clipboard
+- **Trash and restore** — move items to trash and bring them back when needed
+- **Keyboard and mouse navigation** — browse comfortably either way
 - **Grid and list views** — switch with `v`, zoom the grid with `+` / `-`
 - **Fuzzy search** — find folders and files quickly
-- **Live updates** — watches the current directory with a polling fallback
 - **Theming** — full palette and file-class control via `theme.toml`
 
 ---
@@ -55,6 +59,7 @@ Inline image and PDF previews work automatically on supported terminals — no c
 | [Ghostty](https://ghostty.org/) | Kitty Graphics Protocol | ✓ Auto-detected |
 | [Warp](https://www.warp.dev/) | Kitty Graphics Protocol | ✓ Auto-detected |
 | [WezTerm](https://wezfurlong.org/wezterm/) | iTerm2 Inline Protocol | ✓ Auto-detected |
+| [iTerm2](https://iterm2.com/) | iTerm2 Inline Protocol | ✓ Auto-detected |
 | Alacritty | — | Not supported |
 | Other | Kitty Graphics Protocol | Set `ELIO_IMAGE_PREVIEWS=1` to enable |
 
@@ -73,18 +78,44 @@ Inline image and PDF previews work automatically on supported terminals — no c
 | Category | Tool | Command(s) | What it enables |
 |---|---|---|---|
 | PDF | Poppler | `pdfinfo`, `pdftocairo` | PDF metadata and rendered page previews |
-| Images | ffmpeg | `ffmpeg` | Broader raster image format support |
+| Media | ffprobe | `ffprobe` | Audio and video metadata |
+| Media | ffmpeg | `ffmpeg` | Audio artwork, video thumbnails, and broader raster image format support |
 | Images | resvg | `resvg` | SVG rasterization (preferred) |
 | Images | ImageMagick | `magick` | SVG rasterization fallback |
 | Archives | 7-Zip | `7z` | Comic archive preview and edge-case archive fallback |
 | Archives | libarchive | `bsdtar` | Rare archive types and ISO fallback |
 | Archives | isoinfo | `isoinfo` | Additional ISO listing fallback |
-| Clipboard | Wayland | `wl-copy` | Copy file metadata to clipboard with `c` |
-| Clipboard | X11 | `xclip` or `xsel` | Copy file metadata to clipboard with `c` |
-| Clipboard | macOS | `pbcopy` | Copy file metadata to clipboard with `c` |
-| Clipboard | Windows | `clip` | Copy file metadata to clipboard with `c` |
 
-Opening files externally (`o` / `Enter`) uses the system launcher: `open` on macOS, `cmd /c start` on Windows, and `xdg-open` or `gio` on Linux and BSD desktop sessions. `O` opens the `Open With` chooser when multiple applications are available.
+For `c`, elio copies file metadata to the clipboard using OSC52 on supported terminals, or platform clipboard tools when needed: `wl-copy` (Wayland), `xclip` / `xsel` (X11), `pbcopy` (macOS), and `clip` (Windows).
+
+---
+
+## Behavioral Notes
+
+### Opening Files
+
+`Enter` enters folders and opens files with the system default application. `o` always opens the selected file or folder externally using the system launcher: `open` on macOS, `cmd /c start` on Windows, and `xdg-open` or `gio` on Linux and BSD desktop sessions.
+
+`O` is for files. On macOS and Linux/BSD desktop sessions, elio discovers matching applications, opens the file directly when there is one match, and shows the Open With chooser when there are multiple. Terminal apps such as `nvim` are supported too. When no match is found, or on platforms without app discovery, elio falls back to the default opener.
+
+### Go-to Menu
+
+`g` opens a quick jump menu with shortcuts for the top of the current folder, Downloads, Home, the platform config folder, and Trash. The config destination is `~/.config` or `$XDG_CONFIG_HOME` on Linux and BSD, `~/Library/Application Support` on macOS, and `%APPDATA%` on Windows.
+
+---
+
+## Preview Types
+
+`elio` can preview a broad mix of content directly in the Preview pane, including the categories below. Some previews are text- or metadata-based; others can include inline images, covers, or rendered pages when the needed tools are available.
+
+- **Text and code** — plain text, source code with syntax highlighting, and Markdown
+- **Structured data** — JSON, JSONC, JSON5, YAML, TOML, `.env`, logs, CSV/TSV, and SQLite
+- **Documents** — PDF, EPUB, DOC, DOCX, DOCM, ODT, Pages, XLSX, XLSM, ODS, PPTX, PPTM, and ODP
+- **Media** — images, audio, and video
+- **Folders and archives** — directories, ZIP/TAR-family archives, comic archives, torrents, ISO images, and other disk-image-style containers
+- **Binary files** — binary metadata previews for non-text files
+
+See [Optional Tools](#optional-tools) for the extra helpers that unlock richer metadata, rendered page previews, thumbnails, and broader format coverage.
 
 ---
 
@@ -236,7 +267,7 @@ Keys marked with `*` are rebindable via `[keys]` in `config.toml` — the defaul
 | `↑` / `↓` · `j` / `k` | Move selection |
 | `←` · `h` · `Backspace` | Go to parent directory |
 | `→` · `l` · `Enter` | Enter folder / open file |
-| `g` | Go-to menu (`g` top, `d` downloads, `h` home, `c` .config, `t` trash) |
+| `g` | Go-to menu (`g` top, `d` downloads, `h` home, `c` config folder, `t` trash) |
 | `G` | Jump to last item |
 | `PageUp` / `PageDown` | Page up / down |
 | `Tab` / `Shift+Tab` | Cycle places |
