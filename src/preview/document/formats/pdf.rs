@@ -111,7 +111,13 @@ fn parse_pdfinfo_fields(output: &str) -> BTreeMap<String, String> {
 }
 
 fn parse_pdf_version(bytes: &[u8]) -> Option<&str> {
-    let header = std::str::from_utf8(bytes).ok()?;
-    let header = header.lines().next()?.trim();
-    header.strip_prefix("%PDF-")
+    // Scan only the first line; PDFs commonly include binary sentinel bytes
+    // on the second line (e.g. `%âãÏÓ`) that would make the full buffer
+    // invalid UTF-8.
+    let first_line_end = bytes
+        .iter()
+        .position(|&b| b == b'\n' || b == b'\r')
+        .unwrap_or(bytes.len());
+    let first_line = std::str::from_utf8(&bytes[..first_line_end]).ok()?;
+    first_line.trim().strip_prefix("%PDF-")
 }

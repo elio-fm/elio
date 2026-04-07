@@ -4,7 +4,7 @@ use image::{GenericImageView, imageops};
 use ratatui::layout::Rect;
 use std::{io::Write as _, path::Path};
 
-use super::TerminalWindowSize;
+use super::{TerminalWindowSize, fit_image_area};
 
 /// Render a PNG image as a Sixel graphics sequence positioned at `area`.
 ///
@@ -16,14 +16,20 @@ pub(super) fn place_terminal_image_with_sixel_protocol(
     area: Rect,
     window_size: TerminalWindowSize,
 ) -> Result<Vec<u8>> {
-    let (target_w, target_h) = area_pixel_size(area, window_size);
-
     let img = image::ImageReader::open(path)
         .with_context(|| format!("failed to open sixel preview image {}", path.display()))?
         .decode()
         .with_context(|| format!("failed to decode sixel preview image {}", path.display()))?;
 
-    // Resize to the pixel footprint of the cell area, preserving aspect ratio.
+    // Compute the centred placement rect using the image's native aspect ratio,
+    // then derive the pixel target from that rect so the resize and the cursor
+    // offset are always consistent.
+    let (orig_w, orig_h) = img.dimensions();
+    let aspect_ratio = orig_w as f32 / orig_h.max(1) as f32;
+    let placement = fit_image_area(area, window_size, aspect_ratio);
+    let (target_w, target_h) = area_pixel_size(placement, window_size);
+
+    // Resize to the pixel footprint of the centred area, preserving aspect ratio.
     let img = img.resize(target_w, target_h, imageops::FilterType::Lanczos3);
     let (w, h) = img.dimensions();
 
@@ -54,7 +60,7 @@ pub(super) fn place_terminal_image_with_sixel_protocol(
         .map(|px| nq.index_of(px) as u8)
         .collect();
 
-    encode_sixel(area, w, h, &palette, &indices)
+    encode_sixel(placement, w, h, &palette, &indices)
 }
 
 /// No explicit clear primitive exists for Sixel — the next ratatui draw
@@ -276,9 +282,12 @@ mod tests {
         )
         .expect("sixel output should be valid utf8");
 
-        // Cursor should be at row 8 (7+1), column 4 (3+1)
+        // Image aspect 3:2, area 20×10 cells at 8×16 px/cell (160×160 px).
+        // Fit: width-constrained → 160×107 px → 20×7 cells.
+        // x offset: (20-20)/2=0 → col 4 (3+1).
+        // y offset: (10-7)/2=1 → row 9 (7+1+1).
         assert!(
-            output.starts_with("\x1b[8;4H"),
+            output.starts_with("\x1b[9;4H"),
             "cursor positioning missing or wrong"
         );
 
