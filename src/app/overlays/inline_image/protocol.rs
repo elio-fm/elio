@@ -64,11 +64,16 @@ pub(in crate::app) fn command_exists(program: &str) -> bool {
 
     let program_path = Path::new(program);
     if program_path.components().count() > 1 {
-        return executable_file_exists(program_path);
+        return executable_file_exists(program_path)
+            || cfg!(windows) && executable_file_exists(&program_path.with_extension("exe"));
     }
 
     env::var_os("PATH").is_some_and(|paths| {
-        env::split_paths(&paths).any(|dir| executable_file_exists(&dir.join(program)))
+        env::split_paths(&paths).any(|dir| {
+            let candidate = dir.join(program);
+            executable_file_exists(&candidate)
+                || cfg!(windows) && executable_file_exists(&candidate.with_extension("exe"))
+        })
     })
 }
 
