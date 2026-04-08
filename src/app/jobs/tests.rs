@@ -214,7 +214,7 @@ fn low_priority_preview_eviction_updates_metrics() {
 }
 
 #[test]
-fn low_priority_heavy_preview_does_not_start_a_second_heavy_job() {
+fn low_priority_heavy_preview_allows_two_concurrent_heavy_jobs() {
     let scheduler = JobScheduler::new_for_tests(0, 0, 4);
     let first = Entry {
         path: PathBuf::from("first.zip"),
@@ -262,18 +262,11 @@ fn low_priority_heavy_preview_does_not_start_a_second_heavy_job() {
         .pop_next_pending_preview_for_tests()
         .expect("first heavy preview should start");
     assert_eq!(started.entry.path, first.path);
-    assert!(scheduler.pop_next_pending_preview_for_tests().is_none());
-    assert_eq!(
-        scheduler.snapshot().preview_pending_low,
-        vec![PreviewJobKey {
-            path: second.path,
-            size: 1,
-            modified: None,
-            variant: PreviewRequestOptions::Default,
-            code_line_limit: default_code_preview_line_limit(),
-            code_render_limit: default_code_preview_line_limit(),
-        }]
-    );
+    let second_started = scheduler
+        .pop_next_pending_preview_for_tests()
+        .expect("second heavy preview should also start");
+    assert_eq!(second_started.entry.path, second.path);
+    assert!(scheduler.snapshot().preview_pending_low.is_empty());
 }
 
 #[test]

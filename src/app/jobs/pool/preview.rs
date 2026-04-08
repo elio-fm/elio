@@ -12,7 +12,7 @@ use std::{
     time::{Instant, SystemTime},
 };
 
-const MAX_CONCURRENT_LOW_PRIORITY_HEAVY_PREVIEWS: usize = 1;
+const MAX_CONCURRENT_LOW_PRIORITY_HEAVY_PREVIEWS: usize = 2;
 
 pub(in crate::app::jobs) struct PreviewPool {
     shared: Arc<PreviewShared>,

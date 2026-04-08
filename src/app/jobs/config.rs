@@ -4,7 +4,8 @@ const DIRECTORY_ITEM_COUNT_WORKER_COUNT: usize = 1;
 const DIRECTORY_STATS_WORKER_COUNT: usize = 1;
 const DIRECTORY_FINGERPRINT_WORKER_COUNT: usize = 1;
 const PREVIEW_LINE_COUNT_WORKER_COUNT: usize = 1;
-const IMAGE_PREPARE_WORKER_COUNT: usize = 3;
+const IMAGE_PREPARE_WORKER_COUNT_MIN: usize = 3;
+const IMAGE_PREPARE_WORKER_COUNT_MAX: usize = 6;
 const PDF_PROBE_WORKER_COUNT: usize = 2;
 const PDF_RENDER_WORKER_COUNT: usize = 2;
 const PREVIEW_QUEUE_LIMIT: usize = 8;
@@ -43,7 +44,7 @@ impl SchedulerConfig {
             directory_fingerprint_worker_count: DIRECTORY_FINGERPRINT_WORKER_COUNT,
             preview_line_count_worker_count: PREVIEW_LINE_COUNT_WORKER_COUNT,
             preview_line_count_queue_limit: PREVIEW_LINE_COUNT_QUEUE_LIMIT,
-            image_prepare_worker_count: IMAGE_PREPARE_WORKER_COUNT,
+            image_prepare_worker_count: image_prepare_worker_count(),
             image_prepare_queue_limit: IMAGE_PREPARE_QUEUE_LIMIT,
             pdf_probe_worker_count: PDF_PROBE_WORKER_COUNT,
             pdf_probe_queue_limit: PDF_PROBE_QUEUE_LIMIT,
@@ -79,4 +80,10 @@ impl SchedulerConfig {
     pub(super) const fn directory_stats_worker_count(self) -> usize {
         DIRECTORY_STATS_WORKER_COUNT
     }
+}
+
+fn image_prepare_worker_count() -> usize {
+    std::thread::available_parallelism()
+        .map(|count| (count.get() / 4).clamp(IMAGE_PREPARE_WORKER_COUNT_MIN, IMAGE_PREPARE_WORKER_COUNT_MAX))
+        .unwrap_or(IMAGE_PREPARE_WORKER_COUNT_MIN)
 }
