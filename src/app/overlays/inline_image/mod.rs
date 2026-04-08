@@ -266,7 +266,7 @@ impl App {
         {
             self.preview.terminal_images.pending_iterm_popup_restore = true;
         }
-        let force_sixel_repaint = self.needs_sixel_repaint_workaround()
+        let force_sixel_repaint = protocol == ImageProtocol::Sixel
             && std::mem::take(&mut self.preview.terminal_images.pending_sixel_repaint);
         let force_iterm_popup_repaint = protocol.is_raster()
             && self.preview.terminal_images.pending_iterm_popup_restore
@@ -390,6 +390,14 @@ impl App {
 
     pub(in crate::app) fn queue_sixel_repaint(&mut self) {
         if self.needs_sixel_repaint_workaround() {
+            self.preview.terminal_images.pending_sixel_repaint = true;
+        }
+    }
+
+    pub(in crate::app) fn queue_windows_terminal_pdf_sixel_repaint(&mut self) {
+        if self.preview.terminal_images.protocol == ImageProtocol::Sixel
+            && self.preview.terminal_images.identity == TerminalIdentity::WindowsTerminal
+        {
             self.preview.terminal_images.pending_sixel_repaint = true;
         }
     }

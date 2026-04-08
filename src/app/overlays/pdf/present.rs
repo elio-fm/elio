@@ -100,6 +100,7 @@ impl App {
         out.extend(bytes);
         if protocol == ImageProtocol::Sixel && image_changed {
             self.queue_sixel_repaint();
+            self.queue_windows_terminal_pdf_sixel_repaint();
         }
         self.preview.pdf.displayed = Some(displayed);
         self.preview.pdf.displayed_excluded = excluded.to_vec();
