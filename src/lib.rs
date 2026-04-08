@@ -16,8 +16,8 @@ use crossterm::{
     },
     execute,
     terminal::{
-        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-        supports_keyboard_enhancement,
+        BeginSynchronizedUpdate, EndSynchronizedUpdate, EnterAlternateScreen,
+        LeaveAlternateScreen, disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement,
     },
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
@@ -273,31 +273,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> 
         }
 
         if dirty && terminal_focused {
-            if app.take_pending_resize_clear() {
-                terminal.clear()?;
-            }
-            // Erase stale image cells before terminal.draw() so ratatui can
-            // overpaint them with the correct panel background in the same pass.
-            // - iTerm2: images are drawn at pixel level; erasing prevents ghost pixels.
-            // - Kitty unicode placeholder: placeholder chars are terminal cells;
-            //   ratatui's differential renderer skips "unchanged" cells leaving
-            //   stale image content visible after navigation or resize.
-            let pre_erase = app.iterm_pre_draw_erase();
-            let kitty_erase = app.kitty_pre_draw_erase();
-            if !pre_erase.is_empty() || !kitty_erase.is_empty() {
-                terminal.backend_mut().write_all(&pre_erase)?;
-                terminal.backend_mut().write_all(&kitty_erase)?;
-            }
-            let mut frame_state = app::FrameState::default();
-            terminal.draw(|frame| ui::render(frame, &app, &mut frame_state))?;
-            dirty = app.set_frame_state(frame_state);
-            if !app.browser_wheel_burst_active() {
-                let overlay_bytes = app.present_preview_overlay()?;
-                if !overlay_bytes.is_empty() {
-                    terminal.backend_mut().write_all(&overlay_bytes)?;
-                    terminal.backend_mut().flush()?;
-                }
-            }
+            dirty = draw_terminal_frame(terminal, &mut app)?;
         }
 
         let wants_search_cursor = app.search_is_open()
@@ -416,6 +392,50 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> 
         terminal.backend_mut().flush()?;
     }
     Ok(())
+}
+
+fn draw_terminal_frame(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut App,
+) -> Result<bool> {
+    execute!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
+
+    let draw_result = (|| -> Result<bool> {
+        if app.take_pending_resize_clear() {
+            terminal.clear()?;
+        }
+        // Erase stale image cells before terminal.draw() so ratatui can
+        // overpaint them with the correct panel background in the same pass.
+        // - iTerm2: images are drawn at pixel level; erasing prevents ghost pixels.
+        // - Kitty unicode placeholder: placeholder chars are terminal cells;
+        //   ratatui's differential renderer skips "unchanged" cells leaving
+        //   stale image content visible after navigation or resize.
+        let pre_erase = app.iterm_pre_draw_erase();
+        let kitty_erase = app.kitty_pre_draw_erase();
+        if !pre_erase.is_empty() || !kitty_erase.is_empty() {
+            terminal.backend_mut().write_all(&pre_erase)?;
+            terminal.backend_mut().write_all(&kitty_erase)?;
+        }
+        let mut frame_state = app::FrameState::default();
+        terminal.draw(|frame| ui::render(frame, &app, &mut frame_state))?;
+        let dirty = app.set_frame_state(frame_state);
+        if !app.browser_wheel_burst_active() {
+            let overlay_bytes = app.present_preview_overlay()?;
+            if !overlay_bytes.is_empty() {
+                terminal.backend_mut().write_all(&overlay_bytes)?;
+            }
+        }
+        terminal.backend_mut().flush()?;
+        Ok(dirty)
+    })();
+
+    let end_result = execute!(terminal.backend_mut(), EndSynchronizedUpdate);
+    match (draw_result, end_result) {
+        (Ok(dirty), Ok(())) => Ok(dirty),
+        (Err(error), Ok(())) => Err(error),
+        (Ok(_), Err(error)) => Err(error.into()),
+        (Err(error), Err(_)) => Err(error),
+    }
 }
 
 fn event_poll_interval<I>(
