@@ -16,8 +16,8 @@ use crossterm::{
     },
     execute,
     terminal::{
-        BeginSynchronizedUpdate, EndSynchronizedUpdate, EnterAlternateScreen,
-        LeaveAlternateScreen, disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement,
+        BeginSynchronizedUpdate, EndSynchronizedUpdate, EnterAlternateScreen, LeaveAlternateScreen,
+        disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement,
     },
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
@@ -417,7 +417,7 @@ fn draw_terminal_frame(
             terminal.backend_mut().write_all(&kitty_erase)?;
         }
         let mut frame_state = app::FrameState::default();
-        terminal.draw(|frame| ui::render(frame, &app, &mut frame_state))?;
+        terminal.draw(|frame| ui::render(frame, app, &mut frame_state))?;
         let dirty = app.set_frame_state(frame_state);
         if !app.browser_wheel_burst_active() {
             let overlay_bytes = app.present_preview_overlay()?;

@@ -15,15 +15,15 @@ impl App {
 
         let candidates = self.visible_nearby_pdf_entry_candidates(limit);
         for entry in candidates {
-            let Some(request) = self.pdf_overlay_request_for_entry_page(&entry, PDF_PAGE_MIN) else {
+            let Some(request) = self.pdf_overlay_request_for_entry_page(&entry, PDF_PAGE_MIN)
+            else {
                 continue;
             };
             let page_key = PdfPageKey::from_request(&request);
             if !self.preview.pdf.page_dimensions.contains_key(&page_key)
                 && !self.preview.pdf.pending_page_probes.contains(&page_key)
                 && !self.preview.pdf.failed_page_probes.contains(&page_key)
-            {
-                if self.jobs.scheduler.submit_pdf_probe(
+                && self.jobs.scheduler.submit_pdf_probe(
                     jobs::PdfProbeRequest {
                         path: request.path.clone(),
                         size: request.size,
@@ -31,9 +31,12 @@ impl App {
                         page: request.page,
                     },
                     jobs::PdfJobPriority::Prefetch,
-                ) {
-                    self.preview.pdf.pending_page_probes.insert(page_key.clone());
-                }
+                )
+            {
+                self.preview
+                    .pdf
+                    .pending_page_probes
+                    .insert(page_key.clone());
             }
 
             let Some(placement) = self.overlay_placement_for_request(&request) else {
@@ -50,11 +53,12 @@ impl App {
             let sixel_prepare = if self.preview.terminal_images.protocol
                 == crate::app::overlays::inline_image::ImageProtocol::Sixel
             {
-                self.cached_terminal_window().map(|window_size| jobs::SixelPrepareConfig {
-                    area_width: placement.image_area.width,
-                    area_height: placement.image_area.height,
-                    window_size,
-                })
+                self.cached_terminal_window()
+                    .map(|window_size| jobs::SixelPrepareConfig {
+                        area_width: placement.image_area.width,
+                        area_height: placement.image_area.height,
+                        window_size,
+                    })
             } else {
                 None
             };

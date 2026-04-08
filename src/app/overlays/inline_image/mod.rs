@@ -51,7 +51,7 @@ pub(in crate::app) enum OverlayPresentState {
     Displayed,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) enum TerminalIdentity {
     Kitty,
     Ghostty,
@@ -61,13 +61,8 @@ pub(in crate::app) enum TerminalIdentity {
     Alacritty,
     Foot,
     WindowsTerminal,
+    #[default]
     Other,
-}
-
-impl Default for TerminalIdentity {
-    fn default() -> Self {
-        Self::Other
-    }
 }
 
 /// The wire protocol used to render images in the terminal preview pane.
@@ -238,7 +233,13 @@ impl App {
         for area in areas {
             geometry::push_unique_rect(
                 &mut expanded_areas,
-                iterm::expand_iterm_erase_area(&self.input.frame_state, area),
+                if self.preview.terminal_images.identity == TerminalIdentity::WindowsTerminal
+                    && self.preview.terminal_images.protocol == ImageProtocol::Sixel
+                {
+                    iterm::expand_raster_erase_area(&self.input.frame_state, area, 1, 1)
+                } else {
+                    iterm::expand_raster_erase_area(&self.input.frame_state, area, 0, 2)
+                },
             );
         }
         expanded_areas

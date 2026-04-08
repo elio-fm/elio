@@ -84,6 +84,11 @@ impl SchedulerConfig {
 
 fn image_prepare_worker_count() -> usize {
     std::thread::available_parallelism()
-        .map(|count| (count.get() / 4).clamp(IMAGE_PREPARE_WORKER_COUNT_MIN, IMAGE_PREPARE_WORKER_COUNT_MAX))
+        .map(|count| {
+            (count.get() / 4).clamp(
+                IMAGE_PREPARE_WORKER_COUNT_MIN,
+                IMAGE_PREPARE_WORKER_COUNT_MAX,
+            )
+        })
         .unwrap_or(IMAGE_PREPARE_WORKER_COUNT_MIN)
 }

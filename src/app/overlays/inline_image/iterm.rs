@@ -69,7 +69,12 @@ pub(super) fn erase_cells(area: Rect) -> Vec<u8> {
     out
 }
 
-pub(super) fn expand_iterm_erase_area(frame_state: &FrameState, area: Rect) -> Rect {
+pub(super) fn expand_raster_erase_area(
+    frame_state: &FrameState,
+    area: Rect,
+    expand_right: u16,
+    expand_bottom: u16,
+) -> Rect {
     let safe_bounds = frame_state
         .preview_body_area
         .or(frame_state.preview_content_area)
@@ -78,16 +83,56 @@ pub(super) fn expand_iterm_erase_area(frame_state: &FrameState, area: Rect) -> R
         return area;
     };
     let clamped = intersect_rect(area, safe_bounds).unwrap_or(area);
+    let right = clamped.x.saturating_add(clamped.width);
     let bottom = clamped.y.saturating_add(clamped.height);
+    let bounds_right = bounds.x.saturating_add(bounds.width);
     let bounds_bottom = bounds.y.saturating_add(bounds.height);
-    if bottom >= bounds_bottom {
-        return clamped;
-    }
-    let extra_rows = bounds_bottom.saturating_sub(bottom).min(2);
+    let extra_cols = bounds_right.saturating_sub(right).min(expand_right);
+    let extra_rows = bounds_bottom.saturating_sub(bottom).min(expand_bottom);
     Rect {
         x: clamped.x,
         y: clamped.y,
-        width: clamped.width,
+        width: clamped.width.saturating_add(extra_cols),
         height: clamped.height.saturating_add(extra_rows),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expand_raster_erase_area_can_grow_right_and_bottom_within_preview_bounds() {
+        let frame_state = FrameState {
+            preview_panel: Some(Rect {
+                x: 10,
+                y: 5,
+                width: 40,
+                height: 20,
+            }),
+            preview_body_area: Some(Rect {
+                x: 12,
+                y: 7,
+                width: 30,
+                height: 10,
+            }),
+            ..FrameState::default()
+        };
+        let area = Rect {
+            x: 12,
+            y: 7,
+            width: 20,
+            height: 8,
+        };
+
+        assert_eq!(
+            expand_raster_erase_area(&frame_state, area, 1, 1),
+            Rect {
+                x: 12,
+                y: 7,
+                width: 21,
+                height: 9,
+            }
+        );
     }
 }
