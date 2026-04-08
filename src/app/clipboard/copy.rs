@@ -366,6 +366,8 @@ fn terminal_supports_osc52_clipboard() -> bool {
         || term_program == "kitty"
         || term.contains("ghostty")
         || term_program == "ghostty"
+        || term == "foot"
+        || term == "foot-extra"
         || term.contains("wezterm")
         || term_program == "wezterm"
         || term_program == "iterm.app"
