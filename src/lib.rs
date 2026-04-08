@@ -22,7 +22,7 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{
-    io::{self, Write},
+    io::{self, ErrorKind, Write},
     process::Command,
     time::{Duration, Instant},
 };
@@ -41,6 +41,16 @@ pub fn run() -> Result<()> {
 }
 
 fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
+    match try_init_terminal() {
+        Ok(terminal) => Ok(terminal),
+        Err(error) => {
+            let _ = cleanup_terminal_state();
+            Err(error)
+        }
+    }
+}
+
+fn try_init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(
@@ -65,19 +75,8 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     write!(stdout, "\x1b[>4;1m")?;
 
     stdout.flush()?;
+    push_keyboard_enhancement_if_supported(&mut stdout)?;
 
-    if matches!(supports_keyboard_enhancement(), Ok(true)) {
-        // Ctrl+Backspace and similar modified editing keys need the kitty keyboard
-        // protocol's "all keys as escape codes" mode to stay distinguishable.
-        execute!(
-            stdout,
-            PushKeyboardEnhancementFlags(
-                KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                    | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
-                    | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
-            )
-        )?;
-    }
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
@@ -92,13 +91,13 @@ fn suspend_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
     write!(backend, "\x1b[>4;0m")?;
     write!(backend, "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l")?;
     backend.flush()?;
+    pop_keyboard_enhancement_if_supported(terminal.backend_mut())?;
     execute!(
         terminal.backend_mut(),
         event::DisableMouseCapture,
         DisableFocusChange,
         SetCursorStyle::DefaultUserShape,
-        PopKeyboardEnhancementFlags,
-        LeaveAlternateScreen,
+        LeaveAlternateScreen
     )?;
     disable_raw_mode()?;
     terminal.show_cursor()?;
@@ -119,16 +118,7 @@ fn resume_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Res
     write!(stdout, "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h")?;
     write!(stdout, "\x1b[>4;1m")?;
     stdout.flush()?;
-    if matches!(supports_keyboard_enhancement(), Ok(true)) {
-        execute!(
-            stdout,
-            PushKeyboardEnhancementFlags(
-                KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                    | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
-                    | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
-            )
-        )?;
-    }
+    push_keyboard_enhancement_if_supported(&mut stdout)?;
     terminal.clear()?;
     terminal.hide_cursor()?;
     Ok(())
@@ -148,18 +138,67 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
     write!(backend, "\x1b[>4;0m")?; // reset XTSHIFTESCAPE
     write!(backend, "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l")?; // disable mouse modes
     backend.flush()?;
-
+    pop_keyboard_enhancement_if_supported(terminal.backend_mut())?;
     execute!(
         terminal.backend_mut(),
         event::DisableMouseCapture,
         DisableFocusChange,
         SetCursorStyle::DefaultUserShape,
-        PopKeyboardEnhancementFlags,
-        LeaveAlternateScreen,
+        LeaveAlternateScreen
     )?;
     disable_raw_mode()?;
     terminal.show_cursor()?;
     Ok(())
+}
+
+fn cleanup_terminal_state() -> io::Result<()> {
+    let mut stdout = io::stdout();
+    let _ = write!(stdout, "\x1b[>4;0m");
+    let _ = write!(stdout, "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l");
+    let _ = stdout.flush();
+    let _ = execute!(
+        stdout,
+        event::DisableMouseCapture,
+        DisableFocusChange,
+        SetCursorStyle::DefaultUserShape,
+        LeaveAlternateScreen,
+    );
+    disable_raw_mode()?;
+    Ok(())
+}
+
+fn push_keyboard_enhancement_if_supported<W: Write>(writer: &mut W) -> io::Result<()> {
+    if !matches!(supports_keyboard_enhancement(), Ok(true)) {
+        return Ok(());
+    }
+
+    match execute!(
+        writer,
+        PushKeyboardEnhancementFlags(
+            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
+                | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
+        )
+    ) {
+        Ok(()) => Ok(()),
+        Err(error) if keyboard_enhancement_is_unsupported(&error) => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+fn pop_keyboard_enhancement_if_supported<W: Write>(writer: &mut W) -> io::Result<()> {
+    match execute!(writer, PopKeyboardEnhancementFlags) {
+        Ok(()) => Ok(()),
+        Err(error) if keyboard_enhancement_is_unsupported(&error) => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+fn keyboard_enhancement_is_unsupported(error: &io::Error) -> bool {
+    error.kind() == ErrorKind::Unsupported
+        && error
+            .to_string()
+            .contains("Keyboard progressive enhancement not implemented")
 }
 
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
@@ -403,7 +442,7 @@ where
 mod tests {
     use crate::{ACTIVE_SCROLL_POLL_INTERVAL, IDLE_POLL_INTERVAL, event_poll_interval};
     use ratatui::{buffer::Buffer, layout::Rect, style::Style};
-    use std::time::Duration;
+    use std::{io, time::Duration};
 
     #[test]
     fn ratatui_diff_preserves_positions_beyond_u16_max_cells() {
@@ -448,5 +487,22 @@ mod tests {
         );
 
         assert!(interval <= delay);
+    }
+
+    #[test]
+    fn keyboard_enhancement_unsupported_detection_matches_crossterm_error() {
+        let error = io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Keyboard progressive enhancement not implemented for the legacy Windows API.",
+        );
+
+        assert!(crate::keyboard_enhancement_is_unsupported(&error));
+    }
+
+    #[test]
+    fn keyboard_enhancement_unsupported_detection_rejects_other_errors() {
+        let error = io::Error::other("some other terminal error");
+
+        assert!(!crate::keyboard_enhancement_is_unsupported(&error));
     }
 }
