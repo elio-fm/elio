@@ -761,9 +761,7 @@ pub(super) fn detect_wheel_profile() -> WheelProfile {
         || env::var_os("ALACRITTY_SOCKET").is_some();
     let is_vte = env::var_os("VTE_VERSION").is_some();
     let is_warp = term_program.contains("warp") || env::var_os("WARP_SESSION_ID").is_some();
-    let is_windows_terminal = env::var_os("WT_SESSION").is_some();
-
-    if is_ghostty || is_alacritty || is_vte || is_warp || is_windows_terminal {
+    if is_ghostty || is_alacritty || is_vte || is_warp {
         WheelProfile::HighFrequency
     } else {
         WheelProfile::Default
@@ -773,60 +771,6 @@ pub(super) fn detect_wheel_profile() -> WheelProfile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        ffi::OsString,
-        sync::{Mutex, OnceLock},
-    };
-
-    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-
-    struct EnvGuard {
-        saved: Vec<(&'static str, Option<OsString>)>,
-    }
-
-    impl EnvGuard {
-        fn isolate() -> Self {
-            const VARS: &[&str] = &[
-                "TERM",
-                "TERM_PROGRAM",
-                "ALACRITTY_SOCKET",
-                "VTE_VERSION",
-                "WARP_SESSION_ID",
-                "WT_SESSION",
-            ];
-            let saved = VARS
-                .iter()
-                .map(|name| (*name, std::env::var_os(name)))
-                .collect::<Vec<_>>();
-            for name in VARS {
-                unsafe {
-                    std::env::remove_var(name);
-                }
-            }
-            Self { saved }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            for (name, value) in &self.saved {
-                if let Some(value) = value {
-                    unsafe {
-                        std::env::set_var(name, value);
-                    }
-                } else {
-                    unsafe {
-                        std::env::remove_var(name);
-                    }
-                }
-            }
-        }
-    }
 
     #[test]
     fn startup_view_mode_defaults_to_list() {
@@ -836,16 +780,5 @@ mod tests {
     #[test]
     fn startup_view_mode_can_start_in_grid() {
         assert_eq!(startup_view_mode(true), ViewMode::Grid);
-    }
-
-    #[test]
-    fn detect_wheel_profile_treats_windows_terminal_as_high_frequency() {
-        let _lock = env_lock();
-        let _guard = EnvGuard::isolate();
-        unsafe {
-            std::env::set_var("WT_SESSION", "some-guid");
-        }
-
-        assert_eq!(detect_wheel_profile(), WheelProfile::HighFrequency);
     }
 }
