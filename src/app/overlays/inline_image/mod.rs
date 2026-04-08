@@ -164,6 +164,10 @@ impl App {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
     }
 
+    pub(crate) fn is_windows_terminal(&self) -> bool {
+        self.preview.terminal_images.identity == TerminalIdentity::WindowsTerminal
+    }
+
     pub(in crate::app) fn needs_sixel_repaint_workaround(&self) -> bool {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
             && self.preview.terminal_images.identity == TerminalIdentity::Foot

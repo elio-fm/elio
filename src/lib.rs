@@ -29,6 +29,7 @@ use std::{
 
 const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const ACTIVE_SCROLL_POLL_INTERVAL: Duration = Duration::from_millis(12);
+const WINDOWS_TERMINAL_ACTIVE_POLL_INTERVAL: Duration = Duration::from_millis(24);
 const RELATIVE_TIME_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
 pub fn run() -> Result<()> {
@@ -303,7 +304,11 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> 
             || app.has_pending_auto_reload()
             || app.has_pending_background_work()
         {
-            ACTIVE_SCROLL_POLL_INTERVAL
+            if app.is_windows_terminal() {
+                WINDOWS_TERMINAL_ACTIVE_POLL_INTERVAL
+            } else {
+                ACTIVE_SCROLL_POLL_INTERVAL
+            }
         } else {
             IDLE_POLL_INTERVAL
         };
