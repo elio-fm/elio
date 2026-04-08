@@ -36,6 +36,7 @@ pub(in crate::app) fn preview_log(msg: impl std::fmt::Display) {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) struct TerminalImageState {
     pub(super) protocol: ImageProtocol,
+    pub(super) identity: TerminalIdentity,
     pub(super) window: Option<TerminalWindowSize>,
     pending_iterm_erase: Vec<Rect>,
     pending_resize_clear: bool,
@@ -61,6 +62,12 @@ pub(in crate::app) enum TerminalIdentity {
     Foot,
     WindowsTerminal,
     Other,
+}
+
+impl Default for TerminalIdentity {
+    fn default() -> Self {
+        Self::Other
+    }
 }
 
 /// The wire protocol used to render images in the terminal preview pane.
@@ -116,6 +123,7 @@ impl App {
             env::var_os("WARP_SESSION_ID").is_some(),
             env::var_os("WT_SESSION").is_some(),
         ));
+        self.preview.terminal_images.identity = identity;
         self.preview.terminal_images.protocol = protocol;
         self.preview.pdf.pdf_tools_available = pdf_preview_tools_available();
         self.refresh_terminal_image_window_size();
@@ -159,6 +167,11 @@ impl App {
 
     pub(in crate::app) fn uses_sixel_image_protocol(&self) -> bool {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
+    }
+
+    pub(in crate::app) fn needs_sixel_repaint_workaround(&self) -> bool {
+        self.preview.terminal_images.protocol == ImageProtocol::Sixel
+            && self.preview.terminal_images.identity == TerminalIdentity::Foot
     }
 
     pub(in crate::app) fn cached_terminal_window(&self) -> Option<TerminalWindowSize> {
@@ -252,7 +265,7 @@ impl App {
         {
             self.preview.terminal_images.pending_iterm_popup_restore = true;
         }
-        let force_sixel_repaint = protocol == ImageProtocol::Sixel
+        let force_sixel_repaint = self.needs_sixel_repaint_workaround()
             && std::mem::take(&mut self.preview.terminal_images.pending_sixel_repaint);
         let force_iterm_popup_repaint = protocol.is_raster()
             && self.preview.terminal_images.pending_iterm_popup_restore
@@ -375,7 +388,7 @@ impl App {
     }
 
     pub(in crate::app) fn queue_sixel_repaint(&mut self) {
-        if self.preview.terminal_images.protocol == ImageProtocol::Sixel {
+        if self.needs_sixel_repaint_workaround() {
             self.preview.terminal_images.pending_sixel_repaint = true;
         }
     }
