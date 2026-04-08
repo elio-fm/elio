@@ -69,8 +69,7 @@ impl PdfRenderPool {
                         request.page,
                         request.width_px,
                         request.height_px,
-                    )
-                    .map_err(|error| error.to_string());
+                    );
                     PdfRenderShared::finish(&shared, &key);
                     if result_tx
                         .send(JobResult::PdfRender(PdfRenderBuild {
@@ -80,7 +79,7 @@ impl PdfRenderPool {
                             page: request.page,
                             width_px: request.width_px,
                             height_px: request.height_px,
-                            result,
+                            result: result.map_err(|error| error.to_string()),
                         }))
                         .is_err()
                     {

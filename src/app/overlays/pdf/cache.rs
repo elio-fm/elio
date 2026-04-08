@@ -131,6 +131,16 @@ impl App {
         }
     }
 
+    pub(super) fn invalidate_rendered_pdf(&mut self, key: &PdfRenderKey) {
+        if let Some(path) = self.preview.pdf.rendered_pages.remove(key) {
+            let _ = fs::remove_file(path);
+        }
+        self.preview.pdf.rendered_page_dimensions.remove(key);
+        self.preview.pdf.render_order.retain(|queued| queued != key);
+        self.preview.pdf.pending_renders.remove(key);
+        self.preview.pdf.failed_renders.remove(key);
+    }
+
     pub(super) fn active_pdf_render_key(&self) -> Option<PdfRenderKey> {
         let request = self.active_pdf_overlay_request()?;
         let placement = self.overlay_placement_for_request(&request)?;

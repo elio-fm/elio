@@ -59,15 +59,25 @@ impl App {
         if image_changed {
             out.extend(self.clear_preview_overlay()?);
         }
-        let bytes = place_terminal_image(
+        let bytes = match place_terminal_image(
             protocol,
             &rendered,
             placement.image_area,
             excluded,
             None,
             self.cached_terminal_window(),
-        )
-        .context("failed to display PDF page")?;
+        ) {
+            Ok(bytes) => bytes,
+            Err(error) if protocol == ImageProtocol::Sixel => {
+                preview_log(format_args!(
+                    "present_pdf_overlay: invalidating cached sixel render after display error: {error}"
+                ));
+                self.invalidate_rendered_pdf(&render_key);
+                let _ = self.ensure_pdf_render(&render_key);
+                return Ok(OverlayPresentState::Waiting);
+            }
+            Err(error) => return Err(error).context("failed to display PDF page"),
+        };
         preview_log(format_args!(
             "present_pdf_overlay: placed {} bytes via {protocol:?}",
             bytes.len()
