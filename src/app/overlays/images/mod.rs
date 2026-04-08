@@ -20,10 +20,10 @@ pub(in crate::app) use self::types::{
     StaticImageOverlayMode, StaticImageOverlayPreparation, StaticImageOverlayRequest,
 };
 
-const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 24;
-const STATIC_IMAGE_INLINE_PAYLOAD_CACHE_LIMIT: usize = 10;
-const SIXEL_DCS_CACHE_LIMIT: usize = 48;
-const STATIC_IMAGE_PRELOAD_LIMIT: usize = 6;
+const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 64;
+const STATIC_IMAGE_INLINE_PAYLOAD_CACHE_LIMIT: usize = 16;
+const SIXEL_DCS_CACHE_LIMIT: usize = 128;
+const STATIC_IMAGE_PRELOAD_LIMIT: usize = 12;
 const STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES: u64 = 512 * 1024;
 const STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES: u64 = 16 * 1024 * 1024;
 const STATIC_IMAGE_RENDER_CACHE_VERSION: usize = 3;
@@ -330,6 +330,67 @@ mod tests {
         assert!(
             app.preview.state.deferred_refresh_at.is_some(),
             "cold sixel jpeg should schedule a deferred refresh"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn sixel_preloads_visible_static_images_before_selection_lands_on_them() {
+        let root = temp_root("sixel-visible-static-preload");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        for name in ["a.txt", "b.jpg", "c.txt"] {
+            let path = root.join(name);
+            if name.ends_with(".jpg") {
+                write_test_raster_image(&path, ImageFormat::Jpeg, 1600, 900);
+            } else {
+                fs::write(path, name).expect("failed to write temp file");
+            }
+        }
+
+        let mut app = App::new_at(root.clone()).expect("app should initialize");
+        configure_terminal_image_support(&mut app);
+        app.preview.terminal_images.protocol = ImageProtocol::Sixel;
+        app.preview.pdf.pdf_tools_available = true;
+        app.navigation.view_mode = ViewMode::List;
+        app.set_ffmpeg_available_for_tests(true);
+        app.navigation.entries = ["a.txt", "b.jpg", "c.txt"]
+            .into_iter()
+            .map(|name| {
+                let path = root.join(name);
+                let metadata = fs::metadata(&path).expect("test file metadata should exist");
+                Entry {
+                    path,
+                    name: name.to_string(),
+                    name_key: name.to_ascii_lowercase(),
+                    kind: EntryKind::File,
+                    size: metadata.len(),
+                    modified: metadata.modified().ok(),
+                    readonly: false,
+                }
+            })
+            .collect();
+        app.navigation.selected = 0;
+        app.input.frame_state.preview_content_area = Some(Rect {
+            x: 2,
+            y: 3,
+            width: 48,
+            height: 20,
+        });
+        app.input.frame_state.metrics.cols = 1;
+        app.input.frame_state.metrics.rows_visible = 6;
+        app.refresh_preview();
+        app.refresh_static_image_preloads();
+
+        let image_entry = &app.navigation.entries[1];
+        let request = app
+            .static_image_overlay_request_for_entry(image_entry)
+            .expect("visible jpeg should have a static image overlay request");
+        let key = StaticImageKey::from_request(&request);
+
+        assert!(
+            app.preview.image.pending_prepares.contains(&key),
+            "visible sixel image should be preloaded even before selection reaches it"
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");

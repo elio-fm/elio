@@ -310,6 +310,24 @@ impl App {
         }
     }
 
+    pub(in crate::app) fn prefetch_visible_nearby_comic_entries(&mut self, limit: usize) {
+        let candidates = self.visible_nearby_comic_entry_candidates(limit);
+        for entry in candidates {
+            let variant = preview::PreviewRequestOptions::ComicPage(0);
+            if self.cached_preview_for(&entry, &variant).is_some() {
+                continue;
+            }
+
+            let request = self.build_preview_request(
+                entry.clone(),
+                variant.clone(),
+                PreviewPriority::Low,
+                preview_work_class(&entry, &variant),
+            );
+            let _ = self.jobs.scheduler.submit_preview(request);
+        }
+    }
+
     pub(in crate::app) fn nearby_comic_preview_visual_overlay_requests(
         &self,
     ) -> Vec<crate::app::overlays::images::StaticImageOverlayRequest> {
@@ -427,6 +445,28 @@ impl App {
                     .filter(|candidate| is_comic_entry(candidate))
                     .cloned()
             })
+            .collect()
+    }
+
+    fn visible_nearby_comic_entry_candidates(&self, limit: usize) -> Vec<Entry> {
+        let mut candidates = self
+            .visible_entry_indices()
+            .into_iter()
+            .filter(|&index| index != self.navigation.selected)
+            .filter_map(|index| {
+                self.navigation
+                    .entries
+                    .get(index)
+                    .filter(|entry| is_comic_entry(entry))
+                    .cloned()
+                    .map(|entry| (index.abs_diff(self.navigation.selected), entry))
+            })
+            .collect::<Vec<_>>();
+        candidates.sort_by_key(|(distance, _)| *distance);
+        candidates
+            .into_iter()
+            .map(|(_, entry)| entry)
+            .take(limit)
             .collect()
     }
 }

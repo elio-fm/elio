@@ -4,8 +4,24 @@ use crate::file_info;
 use crate::preview::{PreviewWorkClass, preview_work_class, should_build_preview_in_background};
 
 const AUDIO_ENTRY_PREFETCH_OFFSETS: [isize; 4] = [1, -1, 2, -2];
+const VISIBLE_HEAVY_PREVIEW_PREFETCH_LIMIT: usize = 4;
+const VISIBLE_MIXED_HEAVY_PREVIEW_PREFETCH_LIMIT: usize = 3;
 
 impl App {
+    pub(in crate::app) fn prefetch_visible_heavy_preview_entries(&mut self) {
+        if !self.uses_sixel_image_protocol()
+            || self.preview.state.deferred_refresh_at.is_some()
+            || self.browser_wheel_burst_active()
+        {
+            return;
+        }
+
+        self.prefetch_visible_mixed_heavy_previews(VISIBLE_MIXED_HEAVY_PREVIEW_PREFETCH_LIMIT);
+        self.prefetch_visible_nearby_comic_entries(VISIBLE_HEAVY_PREVIEW_PREFETCH_LIMIT);
+        self.prefetch_visible_nearby_epub_entries(VISIBLE_HEAVY_PREVIEW_PREFETCH_LIMIT);
+        self.prefetch_visible_nearby_pdf_entries(VISIBLE_HEAVY_PREVIEW_PREFETCH_LIMIT);
+    }
+
     pub(crate) fn process_preview_prefetch_timers(&mut self) -> bool {
         let Some(deadline) = self.preview.state.prefetch_ready_at else {
             return false;
@@ -158,6 +174,48 @@ impl App {
                 is_audio_entry(&entry).then_some(entry)
             })
             .collect()
+    }
+
+    fn prefetch_visible_mixed_heavy_previews(&mut self, limit: usize) {
+        let mut queued = 0usize;
+        let mut candidates = self
+            .visible_entry_indices()
+            .into_iter()
+            .filter(|&index| index != self.navigation.selected)
+            .filter_map(|index| {
+                self.navigation.entries.get(index).cloned().map(|entry| {
+                    let distance = index.abs_diff(self.navigation.selected);
+                    (distance, entry)
+                })
+            })
+            .collect::<Vec<_>>();
+        candidates.sort_by_key(|(distance, _)| *distance);
+
+        for (_, entry) in candidates {
+            if queued >= limit {
+                break;
+            }
+
+            let variant = self.preview_request_options_for_entry(&entry);
+            let work_class = preview_work_class(&entry, &variant);
+            if !should_build_preview_in_background(&entry)
+                || work_class != PreviewWorkClass::Heavy
+                || self.cached_preview_for(&entry, &variant).is_some()
+                || self.should_defer_pdf_document_preview(&entry)
+            {
+                continue;
+            }
+
+            let request = self.build_full_preview_request(
+                entry,
+                variant,
+                PreviewPriority::Low,
+                PreviewWorkClass::Heavy,
+            );
+            if self.jobs.scheduler.submit_preview(request) {
+                queued += 1;
+            }
+        }
     }
 }
 

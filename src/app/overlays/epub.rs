@@ -192,6 +192,24 @@ impl App {
         }
     }
 
+    pub(in crate::app) fn prefetch_visible_nearby_epub_entries(&mut self, limit: usize) {
+        let candidates = self.visible_nearby_epub_entry_candidates(limit);
+        for entry in candidates {
+            let variant = preview::PreviewRequestOptions::EpubSection(0);
+            if self.cached_preview_for(&entry, &variant).is_some() {
+                continue;
+            }
+
+            let request = self.build_preview_request(
+                entry.clone(),
+                variant.clone(),
+                PreviewPriority::Low,
+                preview_work_class(&entry, &variant),
+            );
+            let _ = self.jobs.scheduler.submit_preview(request);
+        }
+    }
+
     pub(in crate::app) fn nearby_epub_preview_visual_overlay_requests(
         &self,
     ) -> Vec<crate::app::overlays::images::StaticImageOverlayRequest> {
@@ -218,6 +236,44 @@ impl App {
                     })
             })
             .collect()
+    }
+
+    pub(in crate::app) fn nearby_epub_entry_preview_visual_overlay_requests(
+        &self,
+    ) -> Vec<crate::app::overlays::images::StaticImageOverlayRequest> {
+        let Some(area) = self.input.frame_state.preview_media_area else {
+            return Vec::new();
+        };
+
+        self.visible_nearby_epub_entry_candidates(usize::MAX)
+            .into_iter()
+            .filter_map(|entry| {
+                let variant = preview::PreviewRequestOptions::EpubSection(0);
+                let cached = self.cached_preview_for(&entry, &variant)?;
+                let visual = cached.preview_visual.as_ref()?;
+                (cached.kind == preview::PreviewKind::Document
+                    && visual.kind == preview::PreviewVisualKind::PageImage)
+                    .then(|| {
+                        self.preview_visual_overlay_request_for_visual(cached.kind, visual, area)
+                    })
+            })
+            .collect()
+    }
+
+    pub(in crate::app) fn refreshes_image_preloads_for_nearby_epub_entry_preview(
+        &self,
+        entry: &Entry,
+        variant: &preview::PreviewRequestOptions,
+    ) -> bool {
+        variant == &preview::PreviewRequestOptions::EpubSection(0)
+            && self
+                .visible_nearby_epub_entry_candidates(usize::MAX)
+                .into_iter()
+                .any(|candidate| {
+                    candidate.path == entry.path
+                        && candidate.size == entry.size
+                        && candidate.modified == entry.modified
+                })
     }
 
     fn cached_epub_section_count(&self, entry: &Entry) -> Option<usize> {
@@ -249,6 +305,28 @@ impl App {
                 code_line_limit: preview::default_code_preview_line_limit(),
                 code_render_limit: preview::default_code_preview_line_limit(),
             })
+    }
+
+    fn visible_nearby_epub_entry_candidates(&self, limit: usize) -> Vec<Entry> {
+        let mut candidates = self
+            .visible_entry_indices()
+            .into_iter()
+            .filter(|&index| index != self.navigation.selected)
+            .filter_map(|index| {
+                self.navigation
+                    .entries
+                    .get(index)
+                    .filter(|entry| is_epub_entry(entry))
+                    .cloned()
+                    .map(|entry| (index.abs_diff(self.navigation.selected), entry))
+            })
+            .collect::<Vec<_>>();
+        candidates.sort_by_key(|(distance, _)| *distance);
+        candidates
+            .into_iter()
+            .map(|(_, entry)| entry)
+            .take(limit)
+            .collect()
     }
 }
 

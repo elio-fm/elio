@@ -8,6 +8,74 @@ use crate::file_info::{self, DocumentFormat};
 use std::time::{Duration, Instant};
 
 impl App {
+    pub(in crate::app) fn prefetch_visible_nearby_pdf_entries(&mut self, limit: usize) {
+        if !self.preview.pdf.pdf_tools_available {
+            return;
+        }
+
+        let candidates = self.visible_nearby_pdf_entry_candidates(limit);
+        for entry in candidates {
+            let Some(request) = self.pdf_overlay_request_for_entry_page(&entry, PDF_PAGE_MIN) else {
+                continue;
+            };
+            let page_key = PdfPageKey::from_request(&request);
+            if !self.preview.pdf.page_dimensions.contains_key(&page_key)
+                && !self.preview.pdf.pending_page_probes.contains(&page_key)
+                && !self.preview.pdf.failed_page_probes.contains(&page_key)
+            {
+                if self.jobs.scheduler.submit_pdf_probe(
+                    jobs::PdfProbeRequest {
+                        path: request.path.clone(),
+                        size: request.size,
+                        modified: request.modified,
+                        page: request.page,
+                    },
+                    jobs::PdfJobPriority::Prefetch,
+                ) {
+                    self.preview.pdf.pending_page_probes.insert(page_key.clone());
+                }
+            }
+
+            let Some(placement) = self.overlay_placement_for_request(&request) else {
+                continue;
+            };
+            let render_key = self.pdf_render_key_from_request(&request, placement);
+            if self.cached_render_exists(&render_key)
+                || self.preview.pdf.pending_renders.contains(&render_key)
+                || self.preview.pdf.failed_renders.contains(&render_key)
+            {
+                continue;
+            }
+
+            let sixel_prepare = if self.preview.terminal_images.protocol
+                == crate::app::overlays::inline_image::ImageProtocol::Sixel
+            {
+                self.cached_terminal_window().map(|window_size| jobs::SixelPrepareConfig {
+                    area_width: placement.image_area.width,
+                    area_height: placement.image_area.height,
+                    window_size,
+                })
+            } else {
+                None
+            };
+
+            if self.jobs.scheduler.submit_pdf_render(
+                jobs::PdfRenderRequest {
+                    path: render_key.path.clone(),
+                    size: render_key.size,
+                    modified: render_key.modified,
+                    page: render_key.page,
+                    width_px: render_key.width_px,
+                    height_px: render_key.height_px,
+                    sixel_prepare,
+                },
+                jobs::PdfJobPriority::Prefetch,
+            ) {
+                self.preview.pdf.pending_renders.insert(render_key);
+            }
+        }
+    }
+
     pub(in crate::app) fn handle_pdf_overlay_resize(&mut self) {
         if self.preview.pdf.session.is_some() {
             self.preview.pdf.activation_ready_at = None;
@@ -196,6 +264,7 @@ impl App {
                     dirty |= current_key.as_ref() == Some(&key);
                 }
                 self.refresh_pdf_prefetch_window();
+                self.prefetch_visible_heavy_preview_entries();
                 dirty
             }
             Err(_) => {
@@ -280,6 +349,51 @@ impl App {
         self.preview.pdf.pending_page_probes.clear();
         self.preview.pdf.pending_renders.clear();
         self.jobs.scheduler.clear_pending_pdf_jobs();
+    }
+
+    fn pdf_overlay_request_for_entry_page(
+        &self,
+        entry: &Entry,
+        page: usize,
+    ) -> Option<PdfOverlayRequest> {
+        if !is_pdf_entry(entry) || !self.terminal_image_overlay_available() {
+            return None;
+        }
+
+        let area = self.input.frame_state.preview_content_area?;
+        if area.width == 0 || area.height == 0 {
+            return None;
+        }
+
+        Some(PdfOverlayRequest {
+            path: entry.path.clone(),
+            size: entry.size,
+            modified: entry.modified,
+            page,
+            area,
+        })
+    }
+
+    fn visible_nearby_pdf_entry_candidates(&self, limit: usize) -> Vec<Entry> {
+        let mut candidates = self
+            .visible_entry_indices()
+            .into_iter()
+            .filter(|&index| index != self.navigation.selected)
+            .filter_map(|index| {
+                self.navigation
+                    .entries
+                    .get(index)
+                    .filter(|entry| is_pdf_entry(entry))
+                    .cloned()
+                    .map(|entry| (index.abs_diff(self.navigation.selected), entry))
+            })
+            .collect::<Vec<_>>();
+        candidates.sort_by_key(|(distance, _)| *distance);
+        candidates
+            .into_iter()
+            .map(|(_, entry)| entry)
+            .take(limit)
+            .collect()
     }
 }
 

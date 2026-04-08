@@ -157,6 +157,10 @@ impl App {
         self.preview.terminal_images.protocol != ImageProtocol::None
     }
 
+    pub(in crate::app) fn uses_sixel_image_protocol(&self) -> bool {
+        self.preview.terminal_images.protocol == ImageProtocol::Sixel
+    }
+
     pub(in crate::app) fn cached_terminal_window(&self) -> Option<TerminalWindowSize> {
         self.preview.terminal_images.window
     }

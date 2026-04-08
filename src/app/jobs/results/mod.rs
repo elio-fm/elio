@@ -27,6 +27,10 @@ impl App {
                         build_entry,
                         build_variant,
                     )
+                    || self.refreshes_image_preloads_for_nearby_epub_entry_preview(
+                        build_entry,
+                        build_variant,
+                    )
             }
             preview::PreviewVisualKind::Cover => {
                 is_current_entry

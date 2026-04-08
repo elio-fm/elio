@@ -27,8 +27,11 @@ impl App {
             let mut requests = self.nearby_comic_preview_visual_overlay_requests();
             requests.extend(self.nearby_comic_entry_preview_visual_overlay_requests());
             requests.extend(self.nearby_epub_preview_visual_overlay_requests());
+            requests.extend(self.nearby_epub_entry_preview_visual_overlay_requests());
             requests.extend(self.nearby_audio_preview_visual_overlay_requests());
             requests
+        } else if self.preview.terminal_images.protocol == ImageProtocol::Sixel {
+            self.nearby_static_image_overlay_requests(None)
         } else {
             Vec::new()
         };
@@ -72,6 +75,7 @@ impl App {
                 self.ensure_static_image_preload(request, jobs::ImageJobPriority::Nearby);
             }
         }
+        self.prefetch_visible_heavy_preview_entries();
     }
 
     pub(in crate::app) fn refresh_static_image_preloads_if_needed(&mut self) {
