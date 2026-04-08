@@ -73,6 +73,7 @@ fn strip_unknown_field_codes(s: &str) -> String {
 
 /// Splits a desktop-spec Exec string into tokens, respecting double-quoted
 /// strings and backslash escapes.
+#[cfg(any(target_os = "macos", all(unix, not(target_os = "macos"))))]
 pub(super) fn tokenize_exec(exec: &str) -> Vec<String> {
     let mut tokens: Vec<String> = Vec::new();
     let mut current = String::new();

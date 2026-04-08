@@ -290,6 +290,7 @@ fn open_with_unix_backends(target: &Path, backends: &[(&str, &[&str])]) -> Resul
     Err(String::from("No desktop opener available in this session"))
 }
 
+#[cfg(any(test, target_os = "macos", all(unix, not(target_os = "macos"))))]
 pub(crate) fn detached_open(program: &str, args: &[&str], target: &Path) -> io::Result<()> {
     let mut command = Command::new(program);
     command.args(args);
