@@ -12,7 +12,7 @@ use std::{
 
 use super::{TerminalWindowSize, area_pixel_size, fit_image_area, protocol::command_exists};
 
-const SIXEL_COLOR_LIMIT: usize = 96;
+const SIXEL_COLOR_LIMIT: usize = 256;
 
 // ── public API ───────────────────────────────────────────────────────────────
 
@@ -126,9 +126,9 @@ pub(in crate::app::overlays) fn encode_sixel_dcs_from_image(
         .collect();
 
     // Foot is noticeably slower than Kitty/iTerm because Sixel is a textual
-    // pixel stream that the terminal must parse. Cap the palette adaptively so
-    // large previews stay visually stable without exploding the wire size.
-    let nq = NeuQuant::new(10, sixel_palette_limit(w, h), &flat_rgba);
+    // pixel stream that the terminal must parse. Keep a modest color cap so
+    // the payload stays reasonable, but let NeuQuant preserve more gradients.
+    let nq = NeuQuant::new(10, SIXEL_COLOR_LIMIT, &flat_rgba);
     let color_map = nq.color_map_rgba();
     let palette: Vec<(u8, u8, u8)> = color_map.chunks(4).map(|c| (c[0], c[1], c[2])).collect();
     let indices: Vec<u8> = flat_rgba
@@ -161,6 +161,8 @@ fn encode_sixel_dcs_with_img2sixel(path: &Path, target_w: u32, target_h: u32) ->
         .arg(target_w.max(1).to_string())
         .arg("-h")
         .arg(target_h.max(1).to_string())
+        .arg("-o")
+        .arg("-")
         .arg("-p")
         .arg(SIXEL_COLOR_LIMIT.to_string())
         .arg("-E")
@@ -182,11 +184,6 @@ fn encode_sixel_dcs_with_img2sixel(path: &Path, target_w: u32, target_h: u32) ->
         return None;
     }
     Some(Arc::from(stdout))
-}
-
-fn sixel_palette_limit(w: u32, h: u32) -> usize {
-    let _ = (w, h);
-    SIXEL_COLOR_LIMIT
 }
 
 fn compact_palette(palette: Vec<(u8, u8, u8)>, indices: Vec<u8>) -> (Vec<(u8, u8, u8)>, Vec<u8>) {

@@ -22,7 +22,7 @@ pub(in crate::app) use self::types::{
 
 const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 24;
 const STATIC_IMAGE_INLINE_PAYLOAD_CACHE_LIMIT: usize = 10;
-const SIXEL_DCS_CACHE_LIMIT: usize = 12;
+const SIXEL_DCS_CACHE_LIMIT: usize = 48;
 const STATIC_IMAGE_PRELOAD_LIMIT: usize = 6;
 const STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES: u64 = 512 * 1024;
 const STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES: u64 = 16 * 1024 * 1024;
@@ -277,6 +277,60 @@ mod tests {
         );
         assert_eq!(prepared.inline_payload.as_deref(), Some(payload.as_ref()));
         assert_ne!(prepared.display_path, image_path);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn cold_sixel_jpeg_selection_defers_first_keyboard_preview_refresh() {
+        let root = temp_root("cold-sixel-jpeg-preview-defer");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        for name in ["a.txt", "b.jpg", "c.txt"] {
+            let path = root.join(name);
+            if name.ends_with(".jpg") {
+                write_test_raster_image(&path, ImageFormat::Jpeg, 1600, 900);
+            } else {
+                fs::write(path, name).expect("failed to write temp file");
+            }
+        }
+
+        let mut app = App::new_at(root.clone()).expect("app should initialize");
+        configure_terminal_image_support(&mut app);
+        app.preview.terminal_images.protocol = ImageProtocol::Sixel;
+        app.preview.pdf.pdf_tools_available = true;
+        app.navigation.view_mode = ViewMode::List;
+        app.set_ffmpeg_available_for_tests(true);
+        app.navigation.entries = ["a.txt", "b.jpg", "c.txt"]
+            .into_iter()
+            .map(|name| {
+                let path = root.join(name);
+                let metadata = fs::metadata(&path).expect("test file metadata should exist");
+                Entry {
+                    path,
+                    name: name.to_string(),
+                    name_key: name.to_ascii_lowercase(),
+                    kind: EntryKind::File,
+                    size: metadata.len(),
+                    modified: metadata.modified().ok(),
+                    readonly: false,
+                }
+            })
+            .collect();
+        app.navigation.selected = 0;
+        app.refresh_preview();
+
+        let token_before = app.preview.state.token;
+        app.move_vertical_keyboard(1);
+
+        assert_eq!(app.navigation.selected, 1);
+        assert_eq!(
+            app.preview.state.token, token_before,
+            "cold sixel jpeg should defer the first keyboard refresh"
+        );
+        assert!(
+            app.preview.state.deferred_refresh_at.is_some(),
+            "cold sixel jpeg should schedule a deferred refresh"
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
