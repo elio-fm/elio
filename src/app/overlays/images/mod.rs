@@ -336,6 +336,55 @@ mod tests {
     }
 
     #[test]
+    fn cold_sixel_comic_selection_defers_first_keyboard_preview_refresh() {
+        let root = temp_root("cold-sixel-comic-preview-defer");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        for name in ["a.txt", "b.cbz", "c.txt"] {
+            let path = root.join(name);
+            fs::write(path, name).expect("failed to write temp file");
+        }
+
+        let mut app = App::new_at(root.clone()).expect("app should initialize");
+        configure_terminal_image_support(&mut app);
+        app.preview.terminal_images.protocol = ImageProtocol::Sixel;
+        app.preview.pdf.pdf_tools_available = true;
+        app.navigation.view_mode = ViewMode::List;
+        app.navigation.entries = ["a.txt", "b.cbz", "c.txt"]
+            .into_iter()
+            .map(|name| {
+                let path = root.join(name);
+                let metadata = fs::metadata(&path).expect("test file metadata should exist");
+                Entry {
+                    path,
+                    name: name.to_string(),
+                    name_key: name.to_ascii_lowercase(),
+                    kind: EntryKind::File,
+                    size: metadata.len(),
+                    modified: metadata.modified().ok(),
+                    readonly: false,
+                }
+            })
+            .collect();
+        app.navigation.selected = 0;
+        app.refresh_preview();
+
+        let token_before = app.preview.state.token;
+        app.move_vertical_keyboard(1);
+
+        assert_eq!(app.navigation.selected, 1);
+        assert_eq!(
+            app.preview.state.token, token_before,
+            "cold sixel comic should defer the first keyboard refresh"
+        );
+        assert!(
+            app.preview.state.deferred_refresh_at.is_some(),
+            "cold sixel comic should schedule a deferred refresh"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn sixel_preloads_visible_static_images_before_selection_lands_on_them() {
         let root = temp_root("sixel-visible-static-preload");
         fs::create_dir_all(&root).expect("failed to create temp root");

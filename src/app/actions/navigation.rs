@@ -120,7 +120,10 @@ impl App {
             && preview_work_class(&entry, &variant) == PreviewWorkClass::Heavy
             && self.cached_preview_for(&entry, &variant).is_none();
         let sixel_static_image = self.sixel_static_image_preview_for_entry(&entry);
-        if cold_heavy_preview || sixel_static_image {
+        let cold_sixel_comic_preview = self.uses_sixel_image_protocol()
+            && variant.comic_page_index().is_some()
+            && self.cached_preview_for(&entry, &variant).is_none();
+        if cold_heavy_preview || sixel_static_image || cold_sixel_comic_preview {
             PreviewRefreshMode::Deferred
         } else {
             PreviewRefreshMode::Immediate
