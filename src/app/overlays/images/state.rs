@@ -70,6 +70,11 @@ impl App {
         static_image_detail_label(entry).is_some() && self.preview_prefers_static_image_surface()
     }
 
+    pub(in crate::app) fn sixel_static_image_preview_for_entry(&self, entry: &Entry) -> bool {
+        self.preview.terminal_images.protocol == ImageProtocol::Sixel
+            && static_image_detail_label(entry).is_some()
+    }
+
     pub(in crate::app) fn static_image_preview_detail(
         &self,
         entry: &Entry,

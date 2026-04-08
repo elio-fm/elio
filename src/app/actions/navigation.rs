@@ -102,24 +102,25 @@ impl App {
     }
 
     fn effective_preview_refresh_mode_for_selection(
-        &self,
+        &mut self,
         index: usize,
         preview_mode: PreviewRefreshMode,
     ) -> PreviewRefreshMode {
         if preview_mode != PreviewRefreshMode::Immediate {
             return preview_mode;
         }
-        let Some(entry) = self.navigation.entries.get(index) else {
+        let Some(entry) = self.navigation.entries.get(index).cloned() else {
             return preview_mode;
         };
-        let variant = self.preview_request_options_for_entry(entry);
+        let variant = self.preview_request_options_for_entry(&entry);
         let builtin_class =
             file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified)
                 .builtin_class;
         let cold_heavy_preview = matches!(builtin_class, FileClass::Audio | FileClass::Video)
-            && preview_work_class(entry, &variant) == PreviewWorkClass::Heavy
-            && self.cached_preview_for(entry, &variant).is_none();
-        if cold_heavy_preview {
+            && preview_work_class(&entry, &variant) == PreviewWorkClass::Heavy
+            && self.cached_preview_for(&entry, &variant).is_none();
+        let sixel_static_image = self.sixel_static_image_preview_for_entry(&entry);
+        if cold_heavy_preview || sixel_static_image {
             PreviewRefreshMode::Deferred
         } else {
             PreviewRefreshMode::Immediate

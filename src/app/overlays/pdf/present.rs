@@ -98,6 +98,9 @@ impl App {
             bytes.len()
         ));
         out.extend(bytes);
+        if protocol == ImageProtocol::Sixel && image_changed {
+            self.queue_sixel_repaint();
+        }
         self.preview.pdf.displayed = Some(displayed);
         self.preview.pdf.displayed_excluded = excluded.to_vec();
         self.clear_pending_iterm_popup_restore();

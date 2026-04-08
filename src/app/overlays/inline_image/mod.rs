@@ -40,6 +40,7 @@ pub(in crate::app) struct TerminalImageState {
     pending_iterm_erase: Vec<Rect>,
     pending_resize_clear: bool,
     pending_iterm_popup_restore: bool,
+    pending_sixel_repaint: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -247,9 +248,12 @@ impl App {
         {
             self.preview.terminal_images.pending_iterm_popup_restore = true;
         }
+        let force_sixel_repaint = protocol == ImageProtocol::Sixel
+            && std::mem::take(&mut self.preview.terminal_images.pending_sixel_repaint);
         let force_iterm_popup_repaint = protocol.is_raster()
             && self.preview.terminal_images.pending_iterm_popup_restore
             && !popup_open;
+        let force_protocol_repaint = force_iterm_popup_repaint || force_sixel_repaint;
 
         // For Kitty, collect rects occupied by open popups so the image can be
         // rendered only in cells not covered by any popup.
@@ -273,7 +277,7 @@ impl App {
         let static_state = self.present_static_image_overlay(
             protocol,
             &excluded,
-            force_iterm_popup_repaint,
+            force_protocol_repaint,
             &mut out,
         )?;
         preview_log(format_args!(
@@ -286,7 +290,7 @@ impl App {
         }
 
         let pdf_state =
-            self.present_pdf_overlay(protocol, &excluded, force_iterm_popup_repaint, &mut out)?;
+            self.present_pdf_overlay(protocol, &excluded, force_protocol_repaint, &mut out)?;
         preview_log(format_args!(
             "present_preview_overlay: pdf={pdf_state:?} out_len={}",
             out.len()
@@ -299,7 +303,7 @@ impl App {
         let visual_state = self.present_preview_visual_overlay(
             protocol,
             &excluded,
-            force_iterm_popup_repaint,
+            force_protocol_repaint,
             &mut out,
         )?;
         preview_log(format_args!(
@@ -364,6 +368,12 @@ impl App {
 
     pub(in crate::app) fn clear_pending_iterm_popup_restore(&mut self) {
         self.preview.terminal_images.pending_iterm_popup_restore = false;
+    }
+
+    pub(in crate::app) fn queue_sixel_repaint(&mut self) {
+        if self.preview.terminal_images.protocol == ImageProtocol::Sixel {
+            self.preview.terminal_images.pending_sixel_repaint = true;
+        }
     }
 
     pub(crate) fn clear_preview_overlay(&mut self) -> Result<Vec<u8>> {

@@ -90,6 +90,9 @@ impl App {
                     bytes.len()
                 ));
                 out.extend(bytes);
+                if protocol == ImageProtocol::Sixel && image_changed {
+                    self.queue_sixel_repaint();
+                }
             }
             Err(error) => {
                 preview_log(format_args!(
@@ -178,6 +181,9 @@ impl App {
                     bytes.len()
                 ));
                 out.extend(bytes);
+                if protocol == ImageProtocol::Sixel && image_changed {
+                    self.queue_sixel_repaint();
+                }
             }
             Err(error) => {
                 preview_log(format_args!(
