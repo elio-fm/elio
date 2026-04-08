@@ -60,8 +60,12 @@ Inline visual previews, including images, covers, thumbnails, and rendered pages
 | [Warp](https://www.warp.dev/) | Kitty Graphics Protocol | ✓ Auto-detected |
 | [WezTerm](https://wezfurlong.org/wezterm/) | iTerm2 Inline Protocol | ✓ Auto-detected |
 | [iTerm2](https://iterm2.com/) | iTerm2 Inline Protocol | ✓ Auto-detected |
+| [foot](https://codeberg.org/dnkl/foot) | Sixel | ✓ Auto-detected |
+| [Windows Terminal](https://github.com/microsoft/terminal) | Sixel | ✓ Auto-detected |
 | Alacritty | — | Not supported |
 | Other | Kitty Graphics Protocol | Set `ELIO_IMAGE_PREVIEWS=1` to enable |
+
+> Sixel terminals can render large or first-time previews more slowly than Kitty Graphics or iTerm2 Inline backends.
 
 Useful environment variables:
 
