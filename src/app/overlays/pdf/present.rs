@@ -1,7 +1,8 @@
 use super::DisplayedPdfPreview;
 use crate::app::App;
+use crate::app::overlays::images::SixelDcsKey;
 use crate::app::overlays::inline_image::{
-    ImageProtocol, OverlayPresentState, place_terminal_image, preview_log,
+    ImageProtocol, OverlayPresentState, place_sixel_from_dcs, place_terminal_image, preview_log,
 };
 use anyhow::{Context, Result};
 use ratatui::layout::Rect;
@@ -59,24 +60,38 @@ impl App {
         if image_changed {
             out.extend(self.clear_preview_overlay()?);
         }
-        let bytes = match place_terminal_image(
-            protocol,
-            &rendered,
-            placement.image_area,
-            excluded,
-            None,
-            self.cached_terminal_window(),
-        ) {
-            Ok(bytes) => bytes,
-            Err(error) if protocol == ImageProtocol::Sixel => {
-                preview_log(format_args!(
-                    "present_pdf_overlay: invalidating cached sixel render after display error: {error}"
-                ));
-                self.invalidate_rendered_pdf(&render_key);
-                let _ = self.ensure_pdf_render(&render_key);
-                return Ok(OverlayPresentState::Waiting);
+        let bytes = match protocol {
+            ImageProtocol::Sixel => {
+                let Some(window_size) = self.cached_terminal_window() else {
+                    return Ok(OverlayPresentState::Waiting);
+                };
+                let dcs_key = SixelDcsKey::new(&rendered, placement.image_area, window_size);
+                let Some(dcs) = self.cached_sixel_dcs(&dcs_key) else {
+                    preview_log("present_pdf_overlay: sixel dcs not ready → Waiting");
+                    let _ = self.ensure_pdf_render(&render_key);
+                    return Ok(OverlayPresentState::Waiting);
+                };
+                place_sixel_from_dcs(&dcs, placement.image_area)
             }
-            Err(error) => return Err(error).context("failed to display PDF page"),
+            _ => match place_terminal_image(
+                protocol,
+                &rendered,
+                placement.image_area,
+                excluded,
+                None,
+                self.cached_terminal_window(),
+            ) {
+                Ok(bytes) => bytes,
+                Err(error) if protocol == ImageProtocol::Sixel => {
+                    preview_log(format_args!(
+                        "present_pdf_overlay: invalidating cached sixel render after display error: {error}"
+                    ));
+                    self.invalidate_rendered_pdf(&render_key);
+                    let _ = self.ensure_pdf_render(&render_key);
+                    return Ok(OverlayPresentState::Waiting);
+                }
+                Err(error) => return Err(error).context("failed to display PDF page"),
+            },
         };
         preview_log(format_args!(
             "present_pdf_overlay: placed {} bytes via {protocol:?}",

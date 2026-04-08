@@ -17,18 +17,18 @@ use std::{
 /// excluded so that the same encoded bytes can be reused when the image moves
 /// to a different screen position without changing its size.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(in crate::app::overlays) struct SixelDcsKey {
-    pub(in crate::app::overlays) path: PathBuf,
-    pub(in crate::app::overlays) area_width: u16,
-    pub(in crate::app::overlays) area_height: u16,
-    pub(in crate::app::overlays) cells_width: u16,
-    pub(in crate::app::overlays) cells_height: u16,
-    pub(in crate::app::overlays) pixels_width: u32,
-    pub(in crate::app::overlays) pixels_height: u32,
+pub(in crate::app) struct SixelDcsKey {
+    pub(in crate::app) path: PathBuf,
+    pub(in crate::app) area_width: u16,
+    pub(in crate::app) area_height: u16,
+    pub(in crate::app) cells_width: u16,
+    pub(in crate::app) cells_height: u16,
+    pub(in crate::app) pixels_width: u32,
+    pub(in crate::app) pixels_height: u32,
 }
 
 impl SixelDcsKey {
-    pub(in crate::app::overlays) fn new(
+    pub(in crate::app) fn new(
         path: &std::path::Path,
         placement: Rect,
         window: TerminalWindowSize,

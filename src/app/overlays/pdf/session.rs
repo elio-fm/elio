@@ -230,6 +230,11 @@ impl App {
                 self.preview.pdf.failed_renders.remove(&key);
                 let image_dimensions = read_png_dimensions(&path);
                 self.remember_rendered_pdf(key.clone(), path, image_dimensions);
+                if let (Some(sixel_dcs), Some(sixel_dcs_key)) =
+                    (build.sixel_dcs, build.sixel_dcs_key)
+                {
+                    self.remember_sixel_dcs(sixel_dcs_key, sixel_dcs);
+                }
                 let dirty = is_current_key;
                 self.refresh_pdf_prefetch_window();
                 dirty

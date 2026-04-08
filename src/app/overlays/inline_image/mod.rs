@@ -17,7 +17,7 @@ pub(in crate::app) use self::geometry::{
 pub(in crate::app) use self::iterm::encode_iterm_inline_payload;
 pub(in crate::app) use self::protocol::{command_exists, select_image_protocol};
 use self::protocol::{detect_terminal_identity, pdf_preview_tools_available};
-pub(in crate::app::overlays) use self::sixel::{encode_sixel_dcs, place_sixel_from_dcs};
+pub(in crate::app) use self::sixel::{encode_sixel_dcs, place_sixel_from_dcs};
 use self::window::query_terminal_window_size;
 
 /// Write a line to `<temp>/elio-preview.log` when `ELIO_DEBUG_PREVIEW` is set.

@@ -281,6 +281,7 @@ impl App {
                 page: key.page,
                 width_px: key.width_px,
                 height_px: key.height_px,
+                sixel_prepare: self.pdf_sixel_prepare_for_render_key(&key),
             },
             priority,
         ) {

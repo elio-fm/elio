@@ -581,6 +581,7 @@ fn retain_pdf_render_variants_discards_stale_pending_requests() {
             page: 2,
             width_px: 640,
             height_px: 896,
+            sixel_prepare: None,
         },
         PdfJobPriority::Current
     ));
@@ -592,6 +593,7 @@ fn retain_pdf_render_variants_discards_stale_pending_requests() {
             page: 3,
             width_px: 704,
             height_px: 960,
+            sixel_prepare: None,
         },
         PdfJobPriority::Prefetch
     ));
@@ -603,6 +605,7 @@ fn retain_pdf_render_variants_discards_stale_pending_requests() {
             page: 1,
             width_px: 640,
             height_px: 896,
+            sixel_prepare: None,
         },
         PdfJobPriority::Prefetch
     ));
@@ -678,6 +681,7 @@ fn current_pdf_render_priority_outranks_prefetch_requests() {
             page: 2,
             width_px: 640,
             height_px: 896,
+            sixel_prepare: None,
         },
         PdfJobPriority::Prefetch,
     ));
@@ -689,6 +693,7 @@ fn current_pdf_render_priority_outranks_prefetch_requests() {
             page: 1,
             width_px: 640,
             height_px: 896,
+            sixel_prepare: None,
         },
         PdfJobPriority::Current,
     ));

@@ -23,7 +23,7 @@ const SIXEL_COLOR_LIMIT: usize = 96;
 /// positioning prefix is included — callers splice one in with
 /// [`place_sixel_from_dcs`] so the same encoded buffer can be reused at
 /// different screen positions.
-pub(in crate::app::overlays) fn encode_sixel_dcs(
+pub(in crate::app) fn encode_sixel_dcs(
     path: &Path,
     target_w: u32,
     target_h: u32,
@@ -45,7 +45,7 @@ pub(in crate::app::overlays) fn encode_sixel_dcs(
 ///
 /// This is O(n) in the DCS buffer size due to the memory copy, but avoids
 /// re-running the expensive encode for re-renders of the same image.
-pub(in crate::app::overlays) fn place_sixel_from_dcs(dcs: &[u8], placement: Rect) -> Vec<u8> {
+pub(in crate::app) fn place_sixel_from_dcs(dcs: &[u8], placement: Rect) -> Vec<u8> {
     let mut out = Vec::with_capacity(dcs.len() + 16);
     let _ = write!(
         out,

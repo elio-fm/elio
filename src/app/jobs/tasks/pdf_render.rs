@@ -70,6 +70,35 @@ impl PdfRenderPool {
                         request.width_px,
                         request.height_px,
                     );
+                    let (sixel_dcs, sixel_dcs_key) = match result.as_ref().ok().and_then(|path| {
+                        path.as_ref().and_then(|path| {
+                            request.sixel_prepare.as_ref().and_then(|config| {
+                                let placement = ratatui::layout::Rect {
+                                    x: 0,
+                                    y: 0,
+                                    width: config.area_width,
+                                    height: config.area_height,
+                                };
+                                let (target_w, target_h) = overlays::inline_image::area_pixel_size(
+                                    placement,
+                                    config.window_size,
+                                );
+                                let dcs = overlays::inline_image::encode_sixel_dcs(
+                                    path, target_w, target_h,
+                                )
+                                .ok()?;
+                                let dcs_key = overlays::images::SixelDcsKey::new(
+                                    path,
+                                    placement,
+                                    config.window_size,
+                                );
+                                Some((dcs, dcs_key))
+                            })
+                        })
+                    }) {
+                        Some((dcs, dcs_key)) => (Some(dcs), Some(dcs_key)),
+                        None => (None, None),
+                    };
                     PdfRenderShared::finish(&shared, &key);
                     if result_tx
                         .send(JobResult::PdfRender(PdfRenderBuild {
@@ -79,6 +108,8 @@ impl PdfRenderPool {
                             page: request.page,
                             width_px: request.width_px,
                             height_px: request.height_px,
+                            sixel_dcs,
+                            sixel_dcs_key,
                             result: result.map_err(|error| error.to_string()),
                         }))
                         .is_err()

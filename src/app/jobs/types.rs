@@ -1,4 +1,4 @@
-use crate::app::overlays::images::PreparedStaticImageAsset;
+use crate::app::overlays::images::{PreparedStaticImageAsset, SixelDcsKey};
 use crate::app::overlays::inline_image::TerminalWindowSize;
 use crate::app::overlays::pdf::PdfProbeResult;
 use crate::app::{ClipOp, SearchScope};
@@ -185,6 +185,8 @@ pub(in crate::app) struct PdfRenderBuild {
     pub(in crate::app) page: usize,
     pub(in crate::app) width_px: u32,
     pub(in crate::app) height_px: u32,
+    pub(in crate::app) sixel_dcs: Option<Arc<[u8]>>,
+    pub(in crate::app) sixel_dcs_key: Option<SixelDcsKey>,
     pub(in crate::app) result: Result<Option<PathBuf>, String>,
 }
 
@@ -196,6 +198,7 @@ pub(in crate::app) struct PdfRenderRequest {
     pub(in crate::app) page: usize,
     pub(in crate::app) width_px: u32,
     pub(in crate::app) height_px: u32,
+    pub(in crate::app) sixel_prepare: Option<SixelPrepareConfig>,
 }
 
 #[derive(Debug)]

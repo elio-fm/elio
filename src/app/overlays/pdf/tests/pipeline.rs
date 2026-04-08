@@ -310,6 +310,8 @@ fn apply_pdf_render_build_prefetches_next_page_when_current_page_is_ready() {
         page: current_request.page,
         width_px: current_key.width_px,
         height_px: current_key.height_px,
+        sixel_dcs: None,
+        sixel_dcs_key: None,
         result: Ok(Some(rendered_path)),
     });
 
