@@ -2,9 +2,17 @@ use anyhow::{Context, Result};
 use color_quant::NeuQuant;
 use image::{DynamicImage, GenericImageView, imageops};
 use ratatui::layout::Rect;
-use std::{io::Write as _, path::Path, sync::Arc};
+use std::{
+    collections::HashMap,
+    io::Write as _,
+    path::Path,
+    process::{Command, Stdio},
+    sync::Arc,
+};
 
-use super::{TerminalWindowSize, area_pixel_size, fit_image_area};
+use super::{TerminalWindowSize, area_pixel_size, fit_image_area, protocol::command_exists};
+
+const SIXEL_COLOR_LIMIT: usize = 96;
 
 // ── public API ───────────────────────────────────────────────────────────────
 
@@ -20,6 +28,10 @@ pub(in crate::app::overlays) fn encode_sixel_dcs(
     target_w: u32,
     target_h: u32,
 ) -> Result<Arc<[u8]>> {
+    if let Some(dcs) = encode_sixel_dcs_with_img2sixel(path, target_w, target_h) {
+        return Ok(dcs);
+    }
+
     let img = image::ImageReader::open(path)
         .with_context(|| format!("failed to open sixel preview image {}", path.display()))?
         .decode()
@@ -113,15 +125,17 @@ pub(in crate::app::overlays) fn encode_sixel_dcs_from_image(
         })
         .collect();
 
-    // Quantise to 256 colours with NeuQuant (neural-network colour reducer).
-    // Sampling factor 10 = fastest preset.
-    let nq = NeuQuant::new(10, 256, &flat_rgba);
+    // Foot is noticeably slower than Kitty/iTerm because Sixel is a textual
+    // pixel stream that the terminal must parse. Cap the palette adaptively so
+    // large previews stay visually stable without exploding the wire size.
+    let nq = NeuQuant::new(10, sixel_palette_limit(w, h), &flat_rgba);
     let color_map = nq.color_map_rgba();
     let palette: Vec<(u8, u8, u8)> = color_map.chunks(4).map(|c| (c[0], c[1], c[2])).collect();
     let indices: Vec<u8> = flat_rgba
         .chunks(4)
         .map(|px| nq.index_of(px) as u8)
         .collect();
+    let (palette, indices) = compact_palette(palette, indices);
 
     encode_dcs_bytes(w as usize, h as usize, &palette, &indices)
 }
@@ -135,6 +149,65 @@ fn panel_background() -> (u8, u8, u8) {
     }
 }
 
+fn encode_sixel_dcs_with_img2sixel(path: &Path, target_w: u32, target_h: u32) -> Option<Arc<[u8]>> {
+    if !command_exists("img2sixel") {
+        return None;
+    }
+
+    let (bg_r, bg_g, bg_b) = panel_background();
+    let bgcolor = format!("#{bg_r:02x}{bg_g:02x}{bg_b:02x}");
+    let output = Command::new("img2sixel")
+        .arg("-w")
+        .arg(target_w.max(1).to_string())
+        .arg("-h")
+        .arg(target_h.max(1).to_string())
+        .arg("-p")
+        .arg(SIXEL_COLOR_LIMIT.to_string())
+        .arg("-E")
+        .arg("size")
+        .arg("-q")
+        .arg("low")
+        .arg("-B")
+        .arg(bgcolor)
+        .arg(path)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = output.stdout;
+    if !(stdout.starts_with(b"\x1bP") || stdout.starts_with(b"\x90")) {
+        return None;
+    }
+    Some(Arc::from(stdout))
+}
+
+fn sixel_palette_limit(w: u32, h: u32) -> usize {
+    let _ = (w, h);
+    SIXEL_COLOR_LIMIT
+}
+
+fn compact_palette(palette: Vec<(u8, u8, u8)>, indices: Vec<u8>) -> (Vec<(u8, u8, u8)>, Vec<u8>) {
+    let mut remap = HashMap::new();
+    let mut dense_palette = Vec::new();
+    let mut dense_indices = Vec::with_capacity(indices.len());
+    for index in indices {
+        let mapped = match remap.get(&index) {
+            Some(&mapped) => mapped,
+            None => {
+                let mapped = dense_palette.len() as u8;
+                dense_palette.push(palette[index as usize]);
+                remap.insert(index, mapped);
+                mapped
+            }
+        };
+        dense_indices.push(mapped);
+    }
+    (dense_palette, dense_indices)
+}
+
 /// Assemble the complete Sixel DCS stream body (no cursor prefix) and return
 /// it as a reference-counted byte slice.
 fn encode_dcs_bytes(
@@ -143,7 +216,7 @@ fn encode_dcs_bytes(
     palette: &[(u8, u8, u8)],
     indices: &[u8],
 ) -> Result<Arc<[u8]>> {
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(w.saturating_mul(h / 3).saturating_add(4096));
 
     // DCS  P0=0 (1:1 pixel aspect)  P1=1 (use colour 0 as background)  P2=0
     write!(out, "\x1bP0;1;0q")?;
@@ -161,8 +234,8 @@ fn encode_dcs_bytes(
 
     // Scratch buffer: color_rows[c * w + x] accumulates the raw 6-bit value
     // for palette entry c at column x within the current band.
-    let mut color_rows = vec![0u8; 256 * w];
-    let mut color_used = [false; 256];
+    let mut color_rows = vec![0u8; palette.len() * w];
+    let mut color_used = vec![false; palette.len()];
 
     let mut band_y = 0usize;
     while band_y < h {
@@ -193,11 +266,7 @@ fn encode_dcs_bytes(
             }
             first = false;
             write!(out, "#{c}")?;
-            let sixel_chars: Vec<u8> = color_rows[c * w..(c + 1) * w]
-                .iter()
-                .map(|&b| b + 63)
-                .collect();
-            rle_encode(&mut out, &sixel_chars)?;
+            rle_encode_sixel_row(&mut out, &color_rows[c * w..(c + 1) * w])?;
         }
 
         // '-' advances to the next six-pixel band.
@@ -211,23 +280,27 @@ fn encode_dcs_bytes(
     Ok(Arc::from(out.as_slice()))
 }
 
-/// RLE-encode a row of sixel characters.
-///
-/// Runs of three or more identical bytes are emitted as `!<count><char>`;
-/// shorter runs are emitted verbatim.
-fn rle_encode(out: &mut Vec<u8>, data: &[u8]) -> Result<()> {
+fn rle_encode_sixel_row(out: &mut Vec<u8>, data: &[u8]) -> Result<()> {
+    let Some(end) = data
+        .iter()
+        .rposition(|&value| value != 0)
+        .map(|index| index + 1)
+    else {
+        return Ok(());
+    };
     let mut i = 0;
-    while i < data.len() {
+    while i < end {
         let current = data[i];
         let mut run = 1usize;
-        while i + run < data.len() && data[i + run] == current && run < 32767 {
+        while i + run < end && data[i + run] == current && run < 32767 {
             run += 1;
         }
+        let encoded = current + 63;
         if run >= 3 {
-            write!(out, "!{run}{}", current as char)?;
+            write!(out, "!{run}{}", encoded as char)?;
         } else {
             for _ in 0..run {
-                out.push(current);
+                out.push(encoded);
             }
         }
         i += run;
@@ -363,9 +436,9 @@ mod tests {
     }
 
     #[test]
-    fn rle_encode_compresses_runs_of_three_or_more() {
+    fn rle_encode_sixel_row_compresses_runs_of_three_or_more() {
         let mut out = Vec::new();
-        rle_encode(&mut out, &[63, 63, 63, 63, 95]).expect("rle should succeed");
+        rle_encode_sixel_row(&mut out, &[0, 0, 0, 0, 32]).expect("rle should succeed");
         let s = String::from_utf8(out).expect("rle output should be utf8");
         // Four '?' → !4?, then one '_'
         assert!(s.starts_with("!4?"), "expected RLE for 4x '?', got: {s}");
@@ -373,9 +446,9 @@ mod tests {
     }
 
     #[test]
-    fn rle_encode_emits_short_runs_verbatim() {
+    fn rle_encode_sixel_row_emits_short_runs_verbatim() {
         let mut out = Vec::new();
-        rle_encode(&mut out, &[63, 95]).expect("rle should succeed");
+        rle_encode_sixel_row(&mut out, &[0, 32]).expect("rle should succeed");
         let s = String::from_utf8(out).expect("rle output should be utf8");
         assert_eq!(s, "?_", "two-byte run should be verbatim, got: {s}");
     }
@@ -416,5 +489,26 @@ mod tests {
             "expected cursor move to row 3 col 5, got: {s}"
         );
         assert!(s.contains("\x1bP"), "DCS stream should follow cursor move");
+    }
+
+    #[test]
+    fn compact_palette_removes_unused_entries_and_reindexes_pixels() {
+        let palette = vec![(1, 2, 3), (4, 5, 6), (7, 8, 9)];
+        let indices = vec![2, 2, 0, 2, 0];
+
+        let (dense_palette, dense_indices) = compact_palette(palette, indices);
+
+        assert_eq!(dense_palette, vec![(7, 8, 9), (1, 2, 3)]);
+        assert_eq!(dense_indices, vec![0, 0, 1, 0, 1]);
+    }
+
+    #[test]
+    fn rle_encode_sixel_row_trims_trailing_blank_columns() {
+        let mut out = Vec::new();
+
+        rle_encode_sixel_row(&mut out, &[0, 0, 1, 1, 0, 0]).expect("row encode should succeed");
+
+        let s = String::from_utf8(out).expect("row encode should be utf8");
+        assert_eq!(s, "??@@");
     }
 }

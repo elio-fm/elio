@@ -325,10 +325,10 @@ mod tests {
 
         app.handle_terminal_image_resize();
 
-        assert!(app.take_pending_kitty_resize_clear());
+        assert!(app.take_pending_resize_clear());
         assert!(!app.static_image_overlay_displayed());
         assert!(app.preview.image.displayed_excluded.is_empty());
-        assert!(!app.take_pending_kitty_resize_clear());
+        assert!(!app.take_pending_resize_clear());
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
@@ -347,8 +347,36 @@ mod tests {
 
         app.handle_terminal_image_resize();
 
-        assert!(!app.take_pending_kitty_resize_clear());
+        assert!(!app.take_pending_resize_clear());
         assert!(app.static_image_overlay_displayed());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn sixel_resize_requests_full_screen_clear_for_displayed_overlay() {
+        let (mut app, root, _image_path) =
+            build_selected_static_image_app("sixel-resize-clear", "demo.png");
+        let request = ready_static_image_overlay(&mut app);
+        app.preview.terminal_images.protocol = ImageProtocol::Sixel;
+        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+            &request,
+            request.area,
+            request.area,
+        ));
+        app.preview.image.displayed_excluded = vec![Rect {
+            x: 2,
+            y: 3,
+            width: 4,
+            height: 2,
+        }];
+
+        app.handle_terminal_image_resize();
+
+        assert!(app.take_pending_resize_clear());
+        assert!(!app.static_image_overlay_displayed());
+        assert!(app.preview.image.displayed_excluded.is_empty());
+        assert!(!app.take_pending_resize_clear());
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

@@ -234,7 +234,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> 
         }
 
         if dirty && terminal_focused {
-            if app.take_pending_kitty_resize_clear() {
+            if app.take_pending_resize_clear() {
                 terminal.clear()?;
             }
             // Erase stale image cells before terminal.draw() so ratatui can
