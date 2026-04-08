@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::jobs::SixelPrepareConfig;
 use std::{
     collections::{HashSet, VecDeque},
     path::PathBuf,
@@ -40,6 +41,9 @@ pub(in crate::app::jobs) struct ImagePrepareJobKey {
     pub(in crate::app::jobs) target_height_px: u32,
     pub(in crate::app::jobs) force_render_to_cache: bool,
     pub(in crate::app::jobs) prepare_inline_payload: bool,
+    /// Included so that Sixel and non-Sixel jobs for the same image are not
+    /// incorrectly deduplicated against each other.
+    pub(in crate::app::jobs) sixel_prepare: Option<SixelPrepareConfig>,
 }
 
 impl ImagePreparePool {
@@ -336,6 +340,7 @@ impl ImagePrepareJobKey {
             target_height_px: request.target_height_px,
             force_render_to_cache: request.force_render_to_cache,
             prepare_inline_payload: request.prepare_inline_payload,
+            sixel_prepare: request.sixel_prepare.clone(),
         }
     }
 }

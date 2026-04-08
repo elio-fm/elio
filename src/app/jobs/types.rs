@@ -1,10 +1,26 @@
 use crate::app::overlays::images::PreparedStaticImageAsset;
+use crate::app::overlays::inline_image::TerminalWindowSize;
 use crate::app::overlays::pdf::PdfProbeResult;
 use crate::app::{ClipOp, SearchScope};
 use crate::core::{Entry, SortMode};
 use crate::fs::search::SearchCandidate;
 use crate::{preview, preview::PreviewWorkClass};
 use std::{path::PathBuf, sync::Arc, time::SystemTime};
+
+/// Parameters needed by the background image-prepare job to pre-encode a
+/// Sixel DCS stream alongside the rendered PNG.  Bundled as an `Option` so
+/// non-Sixel sessions pay no extra memory cost.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(in crate::app) struct SixelPrepareConfig {
+    /// Width of the target area in terminal cells.
+    pub(in crate::app) area_width: u16,
+    /// Height of the target area in terminal cells.
+    pub(in crate::app) area_height: u16,
+    /// Terminal window dimensions at the time the job was submitted.
+    /// Required to reproduce the exact aspect-ratio fitting and pixel-size
+    /// computation that will be used at render time.
+    pub(in crate::app) window_size: TerminalWindowSize,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum PreviewPriority {
@@ -139,6 +155,9 @@ pub(in crate::app) struct ImagePrepareRequest {
     pub(in crate::app) magick_available: bool,
     pub(in crate::app) force_render_to_cache: bool,
     pub(in crate::app) prepare_inline_payload: bool,
+    /// When `Some`, the prepare job also encodes a Sixel DCS stream for the
+    /// rendered image using the area and window dimensions supplied here.
+    pub(in crate::app) sixel_prepare: Option<SixelPrepareConfig>,
 }
 
 #[derive(Debug)]

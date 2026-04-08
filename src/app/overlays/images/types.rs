@@ -9,6 +9,42 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
+/// Cache key that uniquely identifies a rendered Sixel DCS byte stream.
+///
+/// The DCS content depends on the source image (identified by `path`) and the
+/// exact terminal area it will occupy (`area_width × area_height` in cells plus
+/// the window's pixel-per-cell ratio).  Cursor positioning is intentionally
+/// excluded so that the same encoded bytes can be reused when the image moves
+/// to a different screen position without changing its size.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(in crate::app::overlays) struct SixelDcsKey {
+    pub(in crate::app::overlays) path: PathBuf,
+    pub(in crate::app::overlays) area_width: u16,
+    pub(in crate::app::overlays) area_height: u16,
+    pub(in crate::app::overlays) cells_width: u16,
+    pub(in crate::app::overlays) cells_height: u16,
+    pub(in crate::app::overlays) pixels_width: u32,
+    pub(in crate::app::overlays) pixels_height: u32,
+}
+
+impl SixelDcsKey {
+    pub(in crate::app::overlays) fn new(
+        path: &std::path::Path,
+        placement: Rect,
+        window: TerminalWindowSize,
+    ) -> Self {
+        Self {
+            path: path.to_path_buf(),
+            area_width: placement.width,
+            area_height: placement.height,
+            cells_width: window.cells_width,
+            cells_height: window.cells_height,
+            pixels_width: window.pixels_width,
+            pixels_height: window.pixels_height,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub(in crate::app) struct ImagePreviewState {
     pub(in crate::app::overlays) dimensions: HashMap<StaticImageKey, RenderedImageDimensions>,
@@ -16,6 +52,11 @@ pub(in crate::app) struct ImagePreviewState {
     pub(super) render_order: VecDeque<StaticImageKey>,
     pub(super) inline_payloads: HashMap<StaticImageKey, Arc<str>>,
     pub(super) payload_order: VecDeque<StaticImageKey>,
+    /// Cached Sixel DCS byte streams keyed by display path + placement area +
+    /// window dimensions.  Entries are evicted LRU-style once the cache exceeds
+    /// `SIXEL_DCS_CACHE_LIMIT`.
+    pub(in crate::app::overlays) sixel_dcs_payloads: HashMap<SixelDcsKey, Arc<[u8]>>,
+    pub(in crate::app::overlays) sixel_dcs_order: VecDeque<SixelDcsKey>,
     pub(in crate::app::overlays) failed_images: HashSet<StaticImageKey>,
     pub(in crate::app::overlays) pending_prepares: HashSet<StaticImageKey>,
     pub(super) displayed: Option<DisplayedStaticImagePreview>,
@@ -91,6 +132,12 @@ pub(in crate::app) struct PreparedStaticImageAsset {
     pub(in crate::app::overlays) display_path: PathBuf,
     pub(in crate::app::overlays) dimensions: RenderedImageDimensions,
     pub(in crate::app::overlays) inline_payload: Option<Arc<str>>,
+    /// Pre-encoded Sixel DCS stream produced by the background prepare job.
+    /// `None` when the protocol is not Sixel or the encode failed.
+    pub(in crate::app::overlays) sixel_dcs: Option<Arc<[u8]>>,
+    /// Cache key under which `sixel_dcs` should be stored.  Always `Some`
+    /// when `sixel_dcs` is `Some`.
+    pub(in crate::app::overlays) sixel_dcs_key: Option<SixelDcsKey>,
 }
 
 pub(in crate::app) enum StaticImageOverlayPreparation {

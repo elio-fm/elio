@@ -18,7 +18,7 @@ pub(super) use self::types::{
     PasteBuild, PasteRequest, PdfJobPriority, PdfProbeBuild, PdfProbeRequest, PdfRenderBuild,
     PdfRenderRequest, PreviewBuild, PreviewLineCountBuild, PreviewLineCountRequest,
     PreviewPriority, PreviewRequest, RestoreBuild, RestoreRequest, SearchBuild, SearchRequest,
-    TrashBuild, TrashRequest,
+    SixelPrepareConfig, TrashBuild, TrashRequest,
 };
 use self::{config::SchedulerConfig, metrics::SchedulerMetrics};
 #[cfg(test)]

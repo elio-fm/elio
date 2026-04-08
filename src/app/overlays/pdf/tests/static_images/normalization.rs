@@ -20,6 +20,7 @@ fn oriented_jpeg_fallback_preview_uses_exif_corrected_dimensions() {
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
+            sixel_prepare: None,
         },
         || false,
     )
@@ -69,6 +70,7 @@ fn oriented_jpeg_ffmpeg_preview_uses_exif_corrected_dimensions() {
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
+            sixel_prepare: None,
         },
         || false,
     )
@@ -114,6 +116,7 @@ fn oversized_png_static_images_are_normalized_to_cached_overlays() {
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
+            sixel_prepare: None,
         },
         || false,
     )
@@ -167,6 +170,7 @@ fn forced_png_preview_renders_a_cached_overlay_asset() {
             magick_available: true,
             force_render_to_cache: true,
             prepare_inline_payload: false,
+            sixel_prepare: None,
         },
         || false,
     )
@@ -220,6 +224,7 @@ fn oversized_extensionless_png_static_images_are_normalized_to_cached_overlays()
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
+            sixel_prepare: None,
         },
         || false,
     )

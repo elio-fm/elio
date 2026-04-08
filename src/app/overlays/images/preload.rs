@@ -1,5 +1,6 @@
 use super::types::StaticImagePreloadViewport;
 use super::{StaticImageKey, StaticImageOverlayRequest};
+use crate::app::overlays::inline_image::ImageProtocol;
 use crate::app::{App, jobs};
 use std::collections::HashSet;
 
@@ -128,6 +129,9 @@ impl App {
                 if let Some(payload) = prepared.inline_payload {
                     self.remember_static_image_inline_payload(key.clone(), payload);
                 }
+                if let (Some(dcs), Some(dcs_key)) = (prepared.sixel_dcs, prepared.sixel_dcs_key) {
+                    self.remember_sixel_dcs(dcs_key, dcs);
+                }
                 if prepared.display_path != build.path {
                     self.remember_rendered_static_image(key, prepared.display_path);
                 }
@@ -201,6 +205,16 @@ impl App {
         &mut self,
         request: &StaticImageOverlayRequest,
     ) -> jobs::ImagePrepareRequest {
+        let sixel_prepare = if self.preview.terminal_images.protocol == ImageProtocol::Sixel {
+            self.cached_terminal_window()
+                .map(|window_size| jobs::SixelPrepareConfig {
+                    area_width: request.area.width,
+                    area_height: request.area.height,
+                    window_size,
+                })
+        } else {
+            None
+        };
         jobs::ImagePrepareRequest {
             path: request.path.clone(),
             size: request.size,
@@ -212,6 +226,7 @@ impl App {
             magick_available: self.magick_available(),
             force_render_to_cache: request.force_render_to_cache,
             prepare_inline_payload: request.prepare_inline_payload,
+            sixel_prepare,
         }
     }
 }

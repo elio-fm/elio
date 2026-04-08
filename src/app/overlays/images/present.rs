@@ -1,15 +1,17 @@
 use super::types::DisplayedStaticImagePreview;
 use super::{
-    StaticImageKey, StaticImageOverlayMode, StaticImageOverlayPreparation,
+    SixelDcsKey, StaticImageKey, StaticImageOverlayMode, StaticImageOverlayPreparation,
     StaticImageOverlayRequest,
 };
 use crate::app::App;
 use crate::app::overlays::inline_image::{
     ImageProtocol, OverlayPresentState, RenderedImageDimensions, TerminalWindowSize,
-    fit_image_area, place_terminal_image, preview_log,
+    area_pixel_size, encode_sixel_dcs, fit_image_area, place_sixel_from_dcs, place_terminal_image,
+    preview_log,
 };
 use anyhow::Result;
 use ratatui::layout::Rect;
+use std::{path::Path, sync::Arc};
 
 impl App {
     pub(in crate::app) fn present_static_image_overlay(
@@ -74,13 +76,13 @@ impl App {
         if image_changed {
             out.extend(self.clear_preview_overlay()?);
         }
-        match place_terminal_image(
+        match self.place_static_image(
             protocol,
             &prepared.display_path,
             placement,
             excluded,
             prepared.inline_payload.as_deref(),
-            Some(window_size),
+            window_size,
         ) {
             Ok(bytes) => {
                 preview_log(format_args!(
@@ -162,13 +164,13 @@ impl App {
         if image_changed {
             out.extend(self.clear_preview_overlay()?);
         }
-        match place_terminal_image(
+        match self.place_static_image(
             protocol,
             &prepared.display_path,
             placement,
             excluded,
             prepared.inline_payload.as_deref(),
-            Some(window_size),
+            window_size,
         ) {
             Ok(bytes) => {
                 preview_log(format_args!(
@@ -261,6 +263,43 @@ impl App {
                 dimensions.width_px as f32 / dimensions.height_px as f32,
             )
         }
+    }
+
+    /// Place a static image using the active protocol.
+    ///
+    /// For Sixel, looks up the pre-encoded DCS buffer from cache and prepends
+    /// only the cursor-move prefix (cheap).  On a cache miss it encodes fresh
+    /// and stores the result so subsequent renders are fast.
+    fn place_static_image(
+        &mut self,
+        protocol: ImageProtocol,
+        display_path: &Path,
+        placement: Rect,
+        excluded: &[Rect],
+        inline_payload: Option<&str>,
+        window_size: TerminalWindowSize,
+    ) -> Result<Vec<u8>> {
+        if protocol == ImageProtocol::Sixel {
+            let dcs_key = SixelDcsKey::new(display_path, placement, window_size);
+            let dcs: Arc<[u8]> = match self.cached_sixel_dcs(&dcs_key) {
+                Some(cached) => cached,
+                None => {
+                    let (pw, ph) = area_pixel_size(placement, window_size);
+                    let dcs = encode_sixel_dcs(display_path, pw, ph)?;
+                    self.remember_sixel_dcs(dcs_key, Arc::clone(&dcs));
+                    dcs
+                }
+            };
+            return Ok(place_sixel_from_dcs(&dcs, placement));
+        }
+        place_terminal_image(
+            protocol,
+            display_path,
+            placement,
+            excluded,
+            inline_payload,
+            Some(window_size),
+        )
     }
 }
 

@@ -1,16 +1,56 @@
 use anyhow::{Context, Result};
 use color_quant::NeuQuant;
-use image::{GenericImageView, imageops};
+use image::{DynamicImage, GenericImageView, imageops};
 use ratatui::layout::Rect;
-use std::{io::Write as _, path::Path};
+use std::{io::Write as _, path::Path, sync::Arc};
 
-use super::{TerminalWindowSize, fit_image_area};
+use super::{TerminalWindowSize, area_pixel_size, fit_image_area};
 
-/// Render a PNG image as a Sixel graphics sequence positioned at `area`.
+// ── public API ───────────────────────────────────────────────────────────────
+
+/// Encode a Sixel DCS stream for the image at `path`, resized to fit within
+/// `target_w × target_h` pixels (aspect-ratio preserving, Triangle filter).
 ///
-/// The image is resized to exactly fill the pixel footprint of `area`
-/// (calculated from `window_size`), pre-composited over the panel background,
-/// and colour-quantised to 256 entries via NeuQuant before encoding.
+/// The returned bytes start with `\x1bP` and end with `\x1b\\`.  No cursor-
+/// positioning prefix is included — callers splice one in with
+/// [`place_sixel_from_dcs`] so the same encoded buffer can be reused at
+/// different screen positions.
+pub(in crate::app::overlays) fn encode_sixel_dcs(
+    path: &Path,
+    target_w: u32,
+    target_h: u32,
+) -> Result<Arc<[u8]>> {
+    let img = image::ImageReader::open(path)
+        .with_context(|| format!("failed to open sixel preview image {}", path.display()))?
+        .decode()
+        .with_context(|| format!("failed to decode sixel preview image {}", path.display()))?;
+
+    encode_sixel_dcs_from_image(img, target_w, target_h)
+}
+
+/// Prepend the cursor-positioning escape to a pre-encoded Sixel DCS buffer
+/// and return the combined bytes ready to write to the terminal.
+///
+/// This is O(n) in the DCS buffer size due to the memory copy, but avoids
+/// re-running the expensive encode for re-renders of the same image.
+pub(in crate::app::overlays) fn place_sixel_from_dcs(dcs: &[u8], placement: Rect) -> Vec<u8> {
+    let mut out = Vec::with_capacity(dcs.len() + 16);
+    let _ = write!(
+        out,
+        "\x1b[{};{}H",
+        placement.y.saturating_add(1),
+        placement.x.saturating_add(1)
+    );
+    out.extend_from_slice(dcs);
+    out
+}
+
+/// Full pipeline: fit the image's aspect ratio into `area`, encode the Sixel
+/// DCS stream, and return cursor-prefix + DCS ready to write to the terminal.
+///
+/// This is the uncached fallback path.  Call sites that can provide a cached
+/// DCS buffer should use [`encode_sixel_dcs`] + [`place_sixel_from_dcs`]
+/// directly to skip the expensive encode.
 pub(super) fn place_terminal_image_with_sixel_protocol(
     path: &Path,
     area: Rect,
@@ -21,16 +61,38 @@ pub(super) fn place_terminal_image_with_sixel_protocol(
         .decode()
         .with_context(|| format!("failed to decode sixel preview image {}", path.display()))?;
 
-    // Compute the centred placement rect using the image's native aspect ratio,
-    // then derive the pixel target from that rect so the resize and the cursor
-    // offset are always consistent.
     let (orig_w, orig_h) = img.dimensions();
     let aspect_ratio = orig_w as f32 / orig_h.max(1) as f32;
     let placement = fit_image_area(area, window_size, aspect_ratio);
     let (target_w, target_h) = area_pixel_size(placement, window_size);
 
-    // Resize to the pixel footprint of the centred area, preserving aspect ratio.
-    let img = img.resize(target_w, target_h, imageops::FilterType::Lanczos3);
+    let dcs = encode_sixel_dcs_from_image(img, target_w, target_h)?;
+    Ok(place_sixel_from_dcs(&dcs, placement))
+}
+
+/// No explicit clear primitive exists for Sixel — the next ratatui draw
+/// overpaints stale cells, the same as for the iTerm2 protocol.
+pub(super) fn clear_terminal_images_with_sixel_protocol() -> Result<Vec<u8>> {
+    Ok(Vec::new())
+}
+
+// ── shared encode core ───────────────────────────────────────────────────────
+
+/// Resize `img` to fit within `target_w × target_h`, composite over the panel
+/// background, colour-quantise, and encode as a raw Sixel DCS byte stream
+/// (no cursor prefix).
+///
+/// Shared by the public [`encode_sixel_dcs`] (which opens the file) and the
+/// uncached [`place_terminal_image_with_sixel_protocol`] (which has already
+/// decoded the image to read its dimensions).
+pub(in crate::app::overlays) fn encode_sixel_dcs_from_image(
+    img: DynamicImage,
+    target_w: u32,
+    target_h: u32,
+) -> Result<Arc<[u8]>> {
+    // Triangle is ~5× faster than Lanczos3 and imperceptible at terminal
+    // pixel densities.
+    let img = img.resize(target_w, target_h, imageops::FilterType::Triangle);
     let (w, h) = img.dimensions();
 
     // Flatten RGBA and composite alpha over the panel background colour.
@@ -52,6 +114,7 @@ pub(super) fn place_terminal_image_with_sixel_protocol(
         .collect();
 
     // Quantise to 256 colours with NeuQuant (neural-network colour reducer).
+    // Sampling factor 10 = fastest preset.
     let nq = NeuQuant::new(10, 256, &flat_rgba);
     let color_map = nq.color_map_rgba();
     let palette: Vec<(u8, u8, u8)> = color_map.chunks(4).map(|c| (c[0], c[1], c[2])).collect();
@@ -60,24 +123,10 @@ pub(super) fn place_terminal_image_with_sixel_protocol(
         .map(|px| nq.index_of(px) as u8)
         .collect();
 
-    encode_sixel(placement, w, h, &palette, &indices)
+    encode_dcs_bytes(w as usize, h as usize, &palette, &indices)
 }
 
-/// No explicit clear primitive exists for Sixel — the next ratatui draw
-/// overpaints stale cells, the same as for the iTerm2 protocol.
-pub(super) fn clear_terminal_images_with_sixel_protocol() -> Result<Vec<u8>> {
-    Ok(Vec::new())
-}
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-fn area_pixel_size(area: Rect, window_size: TerminalWindowSize) -> (u32, u32) {
-    let cell_px_w = window_size.pixels_width as f64 / window_size.cells_width.max(1) as f64;
-    let cell_px_h = window_size.pixels_height as f64 / window_size.cells_height.max(1) as f64;
-    let w = (area.width as f64 * cell_px_w).round() as u32;
-    let h = (area.height as f64 * cell_px_h).round() as u32;
-    (w.max(1), h.max(1))
-}
+// ── private helpers ───────────────────────────────────────────────────────────
 
 fn panel_background() -> (u8, u8, u8) {
     match crate::ui::theme::palette().panel {
@@ -86,31 +135,21 @@ fn panel_background() -> (u8, u8, u8) {
     }
 }
 
-/// Assemble the complete Sixel DCS stream and return it as raw bytes.
-fn encode_sixel(
-    area: Rect,
-    image_w: u32,
-    image_h: u32,
+/// Assemble the complete Sixel DCS stream body (no cursor prefix) and return
+/// it as a reference-counted byte slice.
+fn encode_dcs_bytes(
+    w: usize,
+    h: usize,
     palette: &[(u8, u8, u8)],
     indices: &[u8],
-) -> Result<Vec<u8>> {
-    let w = image_w as usize;
-    let h = image_h as usize;
+) -> Result<Arc<[u8]>> {
     let mut out = Vec::new();
-
-    // Move cursor to the top-left corner of the placement area.
-    write!(
-        out,
-        "\x1b[{};{}H",
-        area.y.saturating_add(1),
-        area.x.saturating_add(1)
-    )?;
 
     // DCS  P0=0 (1:1 pixel aspect)  P1=1 (use colour 0 as background)  P2=0
     write!(out, "\x1bP0;1;0q")?;
 
     // Raster attributes: pixel aspect 1:1, full image dimensions.
-    write!(out, "\"1;1;{image_w};{image_h}")?;
+    write!(out, "\"1;1;{w};{h}")?;
 
     // Colour definitions.  Sixel uses 0-100 percentages for each RGB channel.
     for (i, &(r, g, b)) in palette.iter().enumerate() {
@@ -121,8 +160,7 @@ fn encode_sixel(
     }
 
     // Scratch buffer: color_rows[c * w + x] accumulates the raw 6-bit value
-    // for palette entry c at column x within the current band.  Initialised to
-    // 0 (no pixels set); converted to Sixel characters (+63) at output time.
+    // for palette entry c at column x within the current band.
     let mut color_rows = vec![0u8; 256 * w];
     let mut color_used = [false; 256];
 
@@ -130,12 +168,9 @@ fn encode_sixel(
     while band_y < h {
         let band_h = (h - band_y).min(6);
 
-        // Reset scratch buffers for this band.
         color_rows.fill(0);
         color_used.fill(false);
 
-        // Accumulate: for each pixel in the band, OR the appropriate bit into
-        // its colour's column entry.
         for bit in 0..band_h {
             let row_start = (band_y + bit) * w;
             let row = &indices[row_start..row_start + w];
@@ -158,7 +193,6 @@ fn encode_sixel(
             }
             first = false;
             write!(out, "#{c}")?;
-            // Convert raw bit values (0-63) to Sixel characters (63-126).
             let sixel_chars: Vec<u8> = color_rows[c * w..(c + 1) * w]
                 .iter()
                 .map(|&b| b + 63)
@@ -174,7 +208,7 @@ fn encode_sixel(
     // String Terminator ends the DCS sequence.
     write!(out, "\x1b\\")?;
 
-    Ok(out)
+    Ok(Arc::from(out.as_slice()))
 }
 
 /// RLE-encode a row of sixel characters.
@@ -344,5 +378,43 @@ mod tests {
         rle_encode(&mut out, &[63, 95]).expect("rle should succeed");
         let s = String::from_utf8(out).expect("rle output should be utf8");
         assert_eq!(s, "?_", "two-byte run should be verbatim, got: {s}");
+    }
+
+    #[test]
+    fn encode_sixel_dcs_returns_dcs_without_cursor_prefix() {
+        let root = temp_root("sixel-dcs-no-cursor");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("demo.png");
+        write_test_png(&path, 24, 16);
+
+        let dcs = encode_sixel_dcs(&path, 80, 48).expect("encode_sixel_dcs should succeed");
+        let s = String::from_utf8(dcs.to_vec()).expect("sixel dcs should be valid utf8");
+
+        assert!(
+            s.starts_with("\x1bP"),
+            "dcs should start with DCS introducer, not cursor move"
+        );
+        assert!(s.ends_with("\x1b\\"), "missing String Terminator");
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn place_sixel_from_dcs_prepends_cursor_move() {
+        let dcs = b"\x1bP0;1;0q\"1;1;8;8#0;2;0;0;0\x1b\\";
+        let placement = Rect {
+            x: 4,
+            y: 2,
+            width: 1,
+            height: 1,
+        };
+        let out = place_sixel_from_dcs(dcs, placement);
+        let s = String::from_utf8(out).expect("output should be valid utf8");
+
+        assert!(
+            s.starts_with("\x1b[3;5H"),
+            "expected cursor move to row 3 col 5, got: {s}"
+        );
+        assert!(s.contains("\x1bP"), "DCS stream should follow cursor move");
     }
 }

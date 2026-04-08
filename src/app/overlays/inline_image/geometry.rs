@@ -60,6 +60,17 @@ pub(in crate::app) fn fit_image_area(
     }
 }
 
+/// Convert a cell-sized `area` into its exact pixel footprint given the
+/// terminal window dimensions.  The result is what a Sixel DCS stream must
+/// resize to in order to fill that area exactly.
+pub(in crate::app) fn area_pixel_size(area: Rect, window_size: TerminalWindowSize) -> (u32, u32) {
+    let cell_px_w = window_size.pixels_width as f64 / window_size.cells_width.max(1) as f64;
+    let cell_px_h = window_size.pixels_height as f64 / window_size.cells_height.max(1) as f64;
+    let w = (area.width as f64 * cell_px_w).round() as u32;
+    let h = (area.height as f64 * cell_px_h).round() as u32;
+    (w.max(1), h.max(1))
+}
+
 pub(super) fn push_unique_rect(rects: &mut Vec<Rect>, area: Rect) {
     if area.width == 0 || area.height == 0 || rects.contains(&area) {
         return;

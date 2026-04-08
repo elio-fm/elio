@@ -75,6 +75,7 @@ fn extensionless_png_static_image_preparation_succeeds() {
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
+            sixel_prepare: None,
         },
         || false,
     )
@@ -133,6 +134,7 @@ fn raster_static_images_use_png_display_paths() {
                 magick_available: true,
                 force_render_to_cache: false,
                 prepare_inline_payload: false,
+                sixel_prepare: None,
             },
             || false,
         )
@@ -176,6 +178,7 @@ fn svg_static_images_prefer_resvg_when_available() {
             magick_available: false,
             force_render_to_cache: false,
             prepare_inline_payload: false,
+            sixel_prepare: None,
         },
         || false,
     )
@@ -221,6 +224,7 @@ fn svg_static_images_fall_back_to_magick_when_resvg_is_unavailable() {
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
+            sixel_prepare: None,
         },
         || false,
     )
@@ -269,6 +273,7 @@ fn extensionless_svg_static_image_preparation_succeeds() {
             magick_available: false,
             force_render_to_cache: false,
             prepare_inline_payload: false,
+            sixel_prepare: None,
         },
         || false,
     )
@@ -313,6 +318,7 @@ fn png_static_image_preparation_preserves_alpha_channel() {
             magick_available: true,
             force_render_to_cache: false,
             prepare_inline_payload: false,
+            sixel_prepare: None,
         },
         || false,
     )

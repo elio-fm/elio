@@ -1,6 +1,6 @@
 use super::{
-    PreparedStaticImage, STATIC_IMAGE_INLINE_PAYLOAD_CACHE_LIMIT, STATIC_IMAGE_RENDER_CACHE_LIMIT,
-    StaticImageKey, StaticImageOverlayRequest,
+    PreparedStaticImage, SIXEL_DCS_CACHE_LIMIT, STATIC_IMAGE_INLINE_PAYLOAD_CACHE_LIMIT,
+    STATIC_IMAGE_RENDER_CACHE_LIMIT, SixelDcsKey, StaticImageKey, StaticImageOverlayRequest,
 };
 use crate::app::App;
 use std::{fs, path::PathBuf, sync::Arc};
@@ -71,6 +71,37 @@ impl App {
             dimensions,
             inline_payload,
         })
+    }
+
+    /// Look up a pre-encoded Sixel DCS buffer in the cache.
+    pub(in crate::app::overlays) fn cached_sixel_dcs(
+        &self,
+        key: &SixelDcsKey,
+    ) -> Option<Arc<[u8]>> {
+        self.preview.image.sixel_dcs_payloads.get(key).cloned()
+    }
+
+    /// Insert a Sixel DCS buffer into the LRU cache, evicting the oldest
+    /// entry once the limit is reached.
+    pub(in crate::app::overlays) fn remember_sixel_dcs(
+        &mut self,
+        key: SixelDcsKey,
+        dcs: Arc<[u8]>,
+    ) {
+        self.preview
+            .image
+            .sixel_dcs_payloads
+            .insert(key.clone(), dcs);
+        self.preview
+            .image
+            .sixel_dcs_order
+            .retain(|queued| queued != &key);
+        self.preview.image.sixel_dcs_order.push_back(key);
+        while self.preview.image.sixel_dcs_order.len() > SIXEL_DCS_CACHE_LIMIT {
+            if let Some(stale_key) = self.preview.image.sixel_dcs_order.pop_front() {
+                self.preview.image.sixel_dcs_payloads.remove(&stale_key);
+            }
+        }
     }
 
     pub(super) fn remember_rendered_static_image(&mut self, key: StaticImageKey, path: PathBuf) {

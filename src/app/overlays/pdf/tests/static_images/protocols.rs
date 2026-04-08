@@ -79,6 +79,8 @@ fn prepared_full_pane_image_uses_full_pane_kitty_placement() {
                 height_px: 540,
             },
             inline_payload: None,
+            sixel_dcs: None,
+            sixel_dcs_key: None,
         }),
     });
 

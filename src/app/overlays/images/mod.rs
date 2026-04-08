@@ -14,6 +14,7 @@ use super::inline_image::read_png_dimensions;
 use ratatui::layout::Rect;
 
 pub(crate) use self::prepare::prepare_static_image_asset;
+pub(in crate::app::overlays) use self::types::SixelDcsKey;
 pub(in crate::app) use self::types::{
     ImagePreviewState, PreparedStaticImage, PreparedStaticImageAsset, StaticImageKey,
     StaticImageOverlayMode, StaticImageOverlayPreparation, StaticImageOverlayRequest,
@@ -21,6 +22,7 @@ pub(in crate::app) use self::types::{
 
 const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 24;
 const STATIC_IMAGE_INLINE_PAYLOAD_CACHE_LIMIT: usize = 10;
+const SIXEL_DCS_CACHE_LIMIT: usize = 12;
 const STATIC_IMAGE_PRELOAD_LIMIT: usize = 6;
 const STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES: u64 = 512 * 1024;
 const STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES: u64 = 16 * 1024 * 1024;

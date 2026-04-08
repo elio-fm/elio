@@ -26,6 +26,7 @@ fn iterm_png_and_jpeg_static_images_use_direct_source_payloads() {
                 magick_available: true,
                 force_render_to_cache: false,
                 prepare_inline_payload: true,
+                sixel_prepare: None,
             },
             || false,
         )

@@ -14,6 +14,7 @@ fn image_prepare_request(name: &str) -> ImagePrepareRequest {
         magick_available: true,
         force_render_to_cache: false,
         prepare_inline_payload: false,
+        sixel_prepare: None,
     }
 }
 
@@ -424,6 +425,7 @@ fn current_image_prepare_priority_outranks_nearby_requests() {
                 target_height_px: 480,
                 force_render_to_cache: false,
                 prepare_inline_payload: false,
+                sixel_prepare: None,
             },
             ImagePrepareJobKey {
                 path: PathBuf::from("nearby.png"),
@@ -433,6 +435,7 @@ fn current_image_prepare_priority_outranks_nearby_requests() {
                 target_height_px: 480,
                 force_render_to_cache: false,
                 prepare_inline_payload: false,
+                sixel_prepare: None,
             },
         ]
     );
@@ -462,6 +465,7 @@ fn retain_image_prepares_discards_stale_nearby_requests() {
                 target_height_px: 480,
                 force_render_to_cache: false,
                 prepare_inline_payload: false,
+                sixel_prepare: None,
             },
             ImagePrepareJobKey {
                 path: PathBuf::from("keep.png"),
@@ -471,6 +475,7 @@ fn retain_image_prepares_discards_stale_nearby_requests() {
                 target_height_px: 480,
                 force_render_to_cache: false,
                 prepare_inline_payload: false,
+                sixel_prepare: None,
             },
         ]
     );
@@ -511,6 +516,7 @@ fn retain_image_prepares_promotes_nearby_job_to_current_when_it_becomes_current(
             target_height_px: 480,
             force_render_to_cache: false,
             prepare_inline_payload: false,
+            sixel_prepare: None,
         },
         "nearby job should have been promoted to current"
     );

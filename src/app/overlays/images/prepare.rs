@@ -8,12 +8,15 @@ use super::render::{
 };
 use super::{
     PreparedStaticImageAsset, STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES,
-    STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES, STATIC_IMAGE_RENDER_CACHE_VERSION,
+    STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES, STATIC_IMAGE_RENDER_CACHE_VERSION, SixelDcsKey,
     StaticImageKey, StaticImageOverlayRequest,
 };
 use crate::app::jobs;
-use crate::app::overlays::inline_image::encode_iterm_inline_payload;
+use crate::app::overlays::inline_image::{
+    area_pixel_size, encode_iterm_inline_payload, encode_sixel_dcs, fit_image_area,
+};
 use image::{ImageFormat, ImageReader};
+use ratatui::layout::Rect;
 use std::{
     collections::hash_map::DefaultHasher,
     env, fs,
@@ -59,12 +62,38 @@ where
         }
         Some(Some(encode_iterm_inline_payload(path)?))
     };
+    // When the job was submitted for a Sixel session, pre-encode the DCS stream
+    // so it can be cached and reused at render time without re-decoding.
+    let prepare_sixel_dcs = |display_path: &Path| -> (Option<Arc<[u8]>>, Option<SixelDcsKey>) {
+        let config = match request.sixel_prepare.as_ref() {
+            Some(c) => c,
+            None => return (None, None),
+        };
+        let aspect = source_dimensions.width_px as f32 / source_dimensions.height_px.max(1) as f32;
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width: config.area_width,
+            height: config.area_height,
+        };
+        let fitted = fit_image_area(area, config.window_size, aspect);
+        let (target_w, target_h) = area_pixel_size(fitted, config.window_size);
+        let Ok(dcs) = encode_sixel_dcs(display_path, target_w, target_h) else {
+            return (None, None);
+        };
+        let key = SixelDcsKey::new(display_path, fitted, config.window_size);
+        (Some(dcs), Some(key))
+    };
 
     if static_image_supports_iterm_source_passthrough_for_prepare(request, format) {
+        let payload = inline_payload(&request.path)?;
+        let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&request.path);
         return Some(PreparedStaticImageAsset {
             dimensions: source_dimensions,
             display_path: request.path.clone(),
-            inline_payload: inline_payload(&request.path)?,
+            inline_payload: payload,
+            sixel_dcs,
+            sixel_dcs_key,
         });
     }
 
@@ -72,10 +101,13 @@ where
         let cache_path = static_image_render_cache_path(&key)?;
         if cache_path.exists() {
             let payload = inline_payload(&cache_path)?;
+            let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
             return Some(PreparedStaticImageAsset {
                 dimensions: source_dimensions,
                 display_path: cache_path,
                 inline_payload: payload,
+                sixel_dcs,
+                sixel_dcs_key,
             });
         }
         let temp_path = static_image_render_temp_path(&cache_path)?;
@@ -99,10 +131,13 @@ where
         if rendered {
             finalize_static_image_render(&temp_path, &cache_path)?;
             let payload = inline_payload(&cache_path)?;
+            let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
             return Some(PreparedStaticImageAsset {
                 dimensions: source_dimensions,
                 display_path: cache_path,
                 inline_payload: payload,
+                sixel_dcs,
+                sixel_dcs_key,
             });
         }
         let _ = fs::remove_file(temp_path);
@@ -112,10 +147,13 @@ where
     let cache_path = static_image_render_cache_path(&key)?;
     if cache_path.exists() {
         let payload = inline_payload(&cache_path)?;
+        let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
         return Some(PreparedStaticImageAsset {
             dimensions: source_dimensions,
             display_path: cache_path,
             inline_payload: payload,
+            sixel_dcs,
+            sixel_dcs_key,
         });
     }
     if canceled() {
@@ -136,10 +174,13 @@ where
     {
         finalize_static_image_render(&temp_path, &cache_path)?;
         let payload = inline_payload(&cache_path)?;
+        let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
         return Some(PreparedStaticImageAsset {
             dimensions: source_dimensions,
             display_path: cache_path,
             inline_payload: payload,
+            sixel_dcs,
+            sixel_dcs_key,
         });
     }
 
@@ -163,11 +204,14 @@ where
     image.save_with_format(&temp_path, ImageFormat::Png).ok()?;
     finalize_static_image_render(&temp_path, &cache_path)?;
     let payload = inline_payload(&cache_path)?;
+    let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
 
     Some(PreparedStaticImageAsset {
         dimensions: source_dimensions,
         display_path: cache_path,
         inline_payload: payload,
+        sixel_dcs,
+        sixel_dcs_key,
     })
 }
 

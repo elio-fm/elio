@@ -105,6 +105,7 @@ fn concurrent_inline_raster_prepares_keep_shared_render_cache_readable() {
         magick_available: false,
         force_render_to_cache: false,
         prepare_inline_payload: false,
+        sixel_prepare: None,
     });
     let barrier = Arc::new(Barrier::new(7));
     let mut handles = Vec::new();
@@ -202,6 +203,8 @@ fn current_comic_prepare_build_marks_preview_dirty() {
                 height_px: 432,
             },
             inline_payload: None,
+            sixel_dcs: None,
+            sixel_dcs_key: None,
         }),
     });
 
