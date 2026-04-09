@@ -10,9 +10,15 @@ use std::{
     sync::Arc,
 };
 
-use super::{TerminalWindowSize, area_pixel_size, fit_image_area, protocol::command_exists};
+use super::{
+    TerminalIdentity, TerminalWindowSize, area_pixel_size, fit_image_area,
+    protocol::{command_exists, detect_terminal_identity},
+};
 
-const SIXEL_COLOR_LIMIT: usize = 256;
+const SIXEL_COLOR_LIMIT_DEFAULT: usize = 256;
+const SIXEL_COLOR_LIMIT_FOOT: usize = 64;
+const SIXEL_NEUQUANT_SAMPLE_DEFAULT: i32 = 10;
+const SIXEL_NEUQUANT_SAMPLE_FOOT: i32 = 20;
 
 // ── public API ───────────────────────────────────────────────────────────────
 
@@ -28,7 +34,8 @@ pub(in crate::app) fn encode_sixel_dcs(
     target_w: u32,
     target_h: u32,
 ) -> Result<Arc<[u8]>> {
-    if let Some(dcs) = encode_sixel_dcs_with_img2sixel(path, target_w, target_h) {
+    let profile = sixel_encode_profile();
+    if let Some(dcs) = encode_sixel_dcs_with_img2sixel(path, target_w, target_h, profile) {
         return Ok(dcs);
     }
 
@@ -37,7 +44,7 @@ pub(in crate::app) fn encode_sixel_dcs(
         .decode()
         .with_context(|| format!("failed to decode sixel preview image {}", path.display()))?;
 
-    encode_sixel_dcs_from_image(img, target_w, target_h)
+    encode_sixel_dcs_from_image(img, target_w, target_h, profile)
 }
 
 /// Prepend the cursor-positioning escape to a pre-encoded Sixel DCS buffer
@@ -78,7 +85,7 @@ pub(super) fn place_terminal_image_with_sixel_protocol(
     let placement = fit_image_area(area, window_size, aspect_ratio);
     let (target_w, target_h) = area_pixel_size(placement, window_size);
 
-    let dcs = encode_sixel_dcs_from_image(img, target_w, target_h)?;
+    let dcs = encode_sixel_dcs_from_image(img, target_w, target_h, sixel_encode_profile())?;
     Ok(place_sixel_from_dcs(&dcs, placement))
 }
 
@@ -97,10 +104,11 @@ pub(super) fn clear_terminal_images_with_sixel_protocol() -> Result<Vec<u8>> {
 /// Shared by the public [`encode_sixel_dcs`] (which opens the file) and the
 /// uncached [`place_terminal_image_with_sixel_protocol`] (which has already
 /// decoded the image to read its dimensions).
-pub(in crate::app::overlays) fn encode_sixel_dcs_from_image(
+fn encode_sixel_dcs_from_image(
     img: DynamicImage,
     target_w: u32,
     target_h: u32,
+    profile: SixelEncodeProfile,
 ) -> Result<Arc<[u8]>> {
     // Triangle is ~5× faster than Lanczos3 and imperceptible at terminal
     // pixel densities.
@@ -128,7 +136,7 @@ pub(in crate::app::overlays) fn encode_sixel_dcs_from_image(
     // Foot is noticeably slower than Kitty/iTerm because Sixel is a textual
     // pixel stream that the terminal must parse. Keep a modest color cap so
     // the payload stays reasonable, but let NeuQuant preserve more gradients.
-    let nq = NeuQuant::new(10, SIXEL_COLOR_LIMIT, &flat_rgba);
+    let nq = NeuQuant::new(profile.neuquant_sample, profile.color_limit, &flat_rgba);
     let color_map = nq.color_map_rgba();
     let palette: Vec<(u8, u8, u8)> = color_map.chunks(4).map(|c| (c[0], c[1], c[2])).collect();
     let indices: Vec<u8> = flat_rgba
@@ -140,6 +148,27 @@ pub(in crate::app::overlays) fn encode_sixel_dcs_from_image(
     encode_dcs_bytes(w as usize, h as usize, &palette, &indices)
 }
 
+#[derive(Clone, Copy)]
+struct SixelEncodeProfile {
+    color_limit: usize,
+    neuquant_sample: i32,
+}
+
+fn sixel_encode_profile() -> SixelEncodeProfile {
+    match detect_terminal_identity() {
+        // Foot spends most of the time parsing the Sixel stream, so reducing
+        // palette size helps more than preserving subtle gradients.
+        TerminalIdentity::Foot => SixelEncodeProfile {
+            color_limit: SIXEL_COLOR_LIMIT_FOOT,
+            neuquant_sample: SIXEL_NEUQUANT_SAMPLE_FOOT,
+        },
+        _ => SixelEncodeProfile {
+            color_limit: SIXEL_COLOR_LIMIT_DEFAULT,
+            neuquant_sample: SIXEL_NEUQUANT_SAMPLE_DEFAULT,
+        },
+    }
+}
+
 // ── private helpers ───────────────────────────────────────────────────────────
 
 fn panel_background() -> (u8, u8, u8) {
@@ -149,7 +178,12 @@ fn panel_background() -> (u8, u8, u8) {
     }
 }
 
-fn encode_sixel_dcs_with_img2sixel(path: &Path, target_w: u32, target_h: u32) -> Option<Arc<[u8]>> {
+fn encode_sixel_dcs_with_img2sixel(
+    path: &Path,
+    target_w: u32,
+    target_h: u32,
+    profile: SixelEncodeProfile,
+) -> Option<Arc<[u8]>> {
     if !command_exists("img2sixel") {
         return None;
     }
@@ -164,7 +198,7 @@ fn encode_sixel_dcs_with_img2sixel(path: &Path, target_w: u32, target_h: u32) ->
         .arg("-o")
         .arg("-")
         .arg("-p")
-        .arg(SIXEL_COLOR_LIMIT.to_string())
+        .arg(profile.color_limit.to_string())
         .arg("-E")
         .arg("size")
         .arg("-q")
@@ -310,8 +344,10 @@ mod tests {
     use super::*;
     use image::ImageFormat;
     use std::{
+        ffi::OsString,
         fs,
         path::{Path, PathBuf},
+        sync::{Mutex, OnceLock},
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -338,6 +374,54 @@ mod tests {
             cells_height: 50,
             pixels_width: 1600,
             pixels_height: 800,
+        }
+    }
+
+    fn terminal_env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    struct TerminalEnvGuard {
+        saved: Vec<(&'static str, Option<OsString>)>,
+    }
+
+    impl TerminalEnvGuard {
+        fn isolate() -> Self {
+            const VARS: &[&str] = &[
+                "TERM",
+                "TERM_PROGRAM",
+                "KITTY_WINDOW_ID",
+                "WARP_SESSION_ID",
+                "ALACRITTY_SOCKET",
+                "WT_SESSION",
+            ];
+
+            let saved = VARS
+                .iter()
+                .map(|&var| (var, std::env::var_os(var)))
+                .collect::<Vec<_>>();
+            unsafe {
+                for &var in VARS {
+                    std::env::remove_var(var);
+                }
+            }
+            Self { saved }
+        }
+    }
+
+    impl Drop for TerminalEnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                for (var, value) in self.saved.drain(..) {
+                    match value {
+                        Some(value) => std::env::set_var(var, value),
+                        None => std::env::remove_var(var),
+                    }
+                }
+            }
         }
     }
 
@@ -467,6 +551,34 @@ mod tests {
         assert!(s.ends_with("\x1b\\"), "missing String Terminator");
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn sixel_encode_profile_uses_aggressive_settings_for_foot() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+        unsafe {
+            std::env::set_var("TERM", "foot");
+        }
+
+        let profile = sixel_encode_profile();
+
+        assert_eq!(profile.color_limit, SIXEL_COLOR_LIMIT_FOOT);
+        assert_eq!(profile.neuquant_sample, SIXEL_NEUQUANT_SAMPLE_FOOT);
+    }
+
+    #[test]
+    fn sixel_encode_profile_keeps_full_palette_elsewhere() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+        unsafe {
+            std::env::set_var("TERM", "xterm-kitty");
+        }
+
+        let profile = sixel_encode_profile();
+
+        assert_eq!(profile.color_limit, SIXEL_COLOR_LIMIT_DEFAULT);
+        assert_eq!(profile.neuquant_sample, SIXEL_NEUQUANT_SAMPLE_DEFAULT);
     }
 
     #[test]
