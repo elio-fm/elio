@@ -173,6 +173,14 @@ impl App {
             && self.preview.terminal_images.identity == TerminalIdentity::Foot
     }
 
+    pub(in crate::app) fn needs_slow_sixel_navigation_workaround(&self) -> bool {
+        self.preview.terminal_images.protocol == ImageProtocol::Sixel
+            && matches!(
+                self.preview.terminal_images.identity,
+                TerminalIdentity::Foot | TerminalIdentity::WindowsTerminal
+            )
+    }
+
     pub(in crate::app) fn cached_terminal_window(&self) -> Option<TerminalWindowSize> {
         self.preview.terminal_images.window
     }

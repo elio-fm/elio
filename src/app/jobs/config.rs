@@ -8,8 +8,8 @@ const DIRECTORY_FINGERPRINT_WORKER_COUNT: usize = 1;
 const PREVIEW_LINE_COUNT_WORKER_COUNT: usize = 1;
 const IMAGE_PREPARE_WORKER_COUNT_MIN: usize = 3;
 const IMAGE_PREPARE_WORKER_COUNT_MAX: usize = 6;
-const IMAGE_PREPARE_WORKER_COUNT_FOOT_MIN: usize = 1;
-const IMAGE_PREPARE_WORKER_COUNT_FOOT_MAX: usize = 2;
+const IMAGE_PREPARE_WORKER_COUNT_SLOW_SIXEL_MIN: usize = 1;
+const IMAGE_PREPARE_WORKER_COUNT_SLOW_SIXEL_MAX: usize = 2;
 const PDF_PROBE_WORKER_COUNT: usize = 2;
 const PDF_RENDER_WORKER_COUNT: usize = 2;
 const PREVIEW_QUEUE_LIMIT: usize = 8;
@@ -87,16 +87,16 @@ impl SchedulerConfig {
 }
 
 fn image_prepare_worker_count() -> usize {
-    let is_foot = matches!(
+    let slow_sixel_terminal = matches!(
         env::var("TERM").ok().as_deref(),
         Some("foot") | Some("foot-extra")
-    );
+    ) || env::var_os("WT_SESSION").is_some();
     std::thread::available_parallelism()
         .map(|count| {
-            if is_foot {
+            if slow_sixel_terminal {
                 (count.get() / 8).clamp(
-                    IMAGE_PREPARE_WORKER_COUNT_FOOT_MIN,
-                    IMAGE_PREPARE_WORKER_COUNT_FOOT_MAX,
+                    IMAGE_PREPARE_WORKER_COUNT_SLOW_SIXEL_MIN,
+                    IMAGE_PREPARE_WORKER_COUNT_SLOW_SIXEL_MAX,
                 )
             } else {
                 (count.get() / 4).clamp(
@@ -105,8 +105,8 @@ fn image_prepare_worker_count() -> usize {
                 )
             }
         })
-        .unwrap_or(if is_foot {
-            IMAGE_PREPARE_WORKER_COUNT_FOOT_MIN
+        .unwrap_or(if slow_sixel_terminal {
+            IMAGE_PREPARE_WORKER_COUNT_SLOW_SIXEL_MIN
         } else {
             IMAGE_PREPARE_WORKER_COUNT_MIN
         })

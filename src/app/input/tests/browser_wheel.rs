@@ -409,3 +409,63 @@ fn foot_sixel_browser_wheel_defers_preview_refresh() {
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[test]
+fn windows_terminal_sixel_browser_wheel_defers_preview_refresh() {
+    let _lock = terminal_env_lock();
+    let _guard = TerminalEnvGuard::isolate();
+    unsafe {
+        std::env::set_var("WT_SESSION", "00000000-0000-0000-0000-000000000001");
+    }
+
+    let root = temp_path("wheel-wt-sixel-preview-defer");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    for name in ["a.jpg", "b.jpg", "c.jpg"] {
+        fs::write(root.join(name), name).expect("failed to write temp file");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::Default;
+    app.enable_terminal_image_previews();
+    app.select_index(0);
+    app.set_frame_state(FrameState {
+        entries_panel: Some(Rect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 8,
+        }),
+        preview_content_area: Some(Rect {
+            x: 20,
+            y: 0,
+            width: 20,
+            height: 8,
+        }),
+        metrics: ViewMetrics {
+            cols: 1,
+            rows_visible: 1,
+        },
+        ..FrameState::default()
+    });
+    let initial_preview_token = app.preview.state.token;
+
+    app.handle_event(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: 1,
+        row: 1,
+        modifiers: KeyModifiers::NONE,
+    }))
+    .expect("scroll down should be handled");
+    assert!(app.process_pending_scroll());
+
+    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.preview.state.token, initial_preview_token);
+    assert!(app.preview.state.deferred_refresh_at.is_some());
+
+    thread::sleep(HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY + Duration::from_millis(20));
+    assert!(app.process_preview_refresh_timers());
+    assert!(app.preview.state.token > initial_preview_token);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}

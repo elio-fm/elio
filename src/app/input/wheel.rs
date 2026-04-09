@@ -344,7 +344,7 @@ impl App {
     }
 
     fn entry_wheel_preview_mode(&self) -> PreviewRefreshMode {
-        if self.needs_sixel_repaint_workaround() {
+        if self.needs_slow_sixel_navigation_workaround() {
             PreviewRefreshMode::Deferred
         } else {
             PreviewRefreshMode::Immediate
