@@ -1,6 +1,6 @@
 use super::types::StaticImagePreloadViewport;
 use super::{StaticImageKey, StaticImageOverlayRequest};
-use crate::app::overlays::inline_image::ImageProtocol;
+use crate::app::overlays::inline_image::{ImageProtocol, TerminalIdentity};
 use crate::app::{App, jobs};
 use std::collections::HashSet;
 
@@ -158,6 +158,13 @@ impl App {
         &self,
         current: Option<&StaticImageOverlayRequest>,
     ) -> Vec<StaticImageOverlayRequest> {
+        let preload_limit = if self.preview.terminal_images.protocol == ImageProtocol::Sixel
+            && self.preview.terminal_images.identity == TerminalIdentity::Foot
+        {
+            super::STATIC_IMAGE_PRELOAD_LIMIT_FOOT_SIXEL
+        } else {
+            super::STATIC_IMAGE_PRELOAD_LIMIT
+        };
         let current_path = current.as_ref().map(|request| &request.path);
         let mut requests = self
             .visible_entry_indices()
@@ -176,7 +183,7 @@ impl App {
         requests
             .into_iter()
             .map(|(_, request)| request)
-            .take(super::STATIC_IMAGE_PRELOAD_LIMIT)
+            .take(preload_limit)
             .collect()
     }
 

@@ -1,3 +1,5 @@
+use std::env;
+
 const PREVIEW_WORKER_COUNT: usize = 2;
 const SEARCH_WORKER_COUNT: usize = 1;
 const DIRECTORY_ITEM_COUNT_WORKER_COUNT: usize = 1;
@@ -6,6 +8,8 @@ const DIRECTORY_FINGERPRINT_WORKER_COUNT: usize = 1;
 const PREVIEW_LINE_COUNT_WORKER_COUNT: usize = 1;
 const IMAGE_PREPARE_WORKER_COUNT_MIN: usize = 3;
 const IMAGE_PREPARE_WORKER_COUNT_MAX: usize = 6;
+const IMAGE_PREPARE_WORKER_COUNT_FOOT_MIN: usize = 1;
+const IMAGE_PREPARE_WORKER_COUNT_FOOT_MAX: usize = 2;
 const PDF_PROBE_WORKER_COUNT: usize = 2;
 const PDF_RENDER_WORKER_COUNT: usize = 2;
 const PREVIEW_QUEUE_LIMIT: usize = 8;
@@ -83,12 +87,27 @@ impl SchedulerConfig {
 }
 
 fn image_prepare_worker_count() -> usize {
+    let is_foot = matches!(
+        env::var("TERM").ok().as_deref(),
+        Some("foot") | Some("foot-extra")
+    );
     std::thread::available_parallelism()
         .map(|count| {
-            (count.get() / 4).clamp(
-                IMAGE_PREPARE_WORKER_COUNT_MIN,
-                IMAGE_PREPARE_WORKER_COUNT_MAX,
-            )
+            if is_foot {
+                (count.get() / 8).clamp(
+                    IMAGE_PREPARE_WORKER_COUNT_FOOT_MIN,
+                    IMAGE_PREPARE_WORKER_COUNT_FOOT_MAX,
+                )
+            } else {
+                (count.get() / 4).clamp(
+                    IMAGE_PREPARE_WORKER_COUNT_MIN,
+                    IMAGE_PREPARE_WORKER_COUNT_MAX,
+                )
+            }
         })
-        .unwrap_or(IMAGE_PREPARE_WORKER_COUNT_MIN)
+        .unwrap_or(if is_foot {
+            IMAGE_PREPARE_WORKER_COUNT_FOOT_MIN
+        } else {
+            IMAGE_PREPARE_WORKER_COUNT_MIN
+        })
 }
