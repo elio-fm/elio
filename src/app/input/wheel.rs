@@ -308,7 +308,7 @@ impl App {
             }
 
             let previous = self.navigation.selected;
-            self.move_vertical(step);
+            self.move_vertical_with_preview_mode(step, self.entry_wheel_preview_mode());
             dirty |= previous != self.navigation.selected;
         }
         dirty
@@ -334,13 +334,21 @@ impl App {
         self.input.wheel_scroll.vertical.remainder = 0;
         let step = self.high_frequency_entry_step_multiplier(burst_count);
         let preview_mode = if burst_count <= 1 {
-            PreviewRefreshMode::Immediate
+            self.entry_wheel_preview_mode()
         } else {
             PreviewRefreshMode::Deferred
         };
         let previous = self.navigation.selected;
         self.move_vertical_with_preview_mode(delta * step, preview_mode);
         previous != self.navigation.selected
+    }
+
+    fn entry_wheel_preview_mode(&self) -> PreviewRefreshMode {
+        if self.needs_sixel_repaint_workaround() {
+            PreviewRefreshMode::Deferred
+        } else {
+            PreviewRefreshMode::Immediate
+        }
     }
 
     fn flush_search_scroll(&mut self) -> bool {
