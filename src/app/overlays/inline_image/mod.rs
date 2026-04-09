@@ -181,6 +181,16 @@ impl App {
             )
     }
 
+    #[cfg(test)]
+    pub(in crate::app) fn set_terminal_image_protocol_for_tests(
+        &mut self,
+        protocol: ImageProtocol,
+        identity: TerminalIdentity,
+    ) {
+        self.preview.terminal_images.protocol = protocol;
+        self.preview.terminal_images.identity = identity;
+    }
+
     pub(in crate::app) fn cached_terminal_window(&self) -> Option<TerminalWindowSize> {
         self.preview.terminal_images.window
     }
