@@ -519,3 +519,92 @@ jobs:
             --commit "${RELEASE_COMMIT}" \
             --spec packaging/fedora/elio.spec \
             --method make_srpm
+
+  update-homebrew:
+    name: Update Homebrew tap
+    needs:
+      - validate
+      - publish-crates
+    runs-on: ubuntu-latest
+    environment: release
+    permissions: {}
+    env:
+      HOMEBREW_TAP_REPO: MiguelRegueiro/homebrew-elio
+
+    steps:
+      - name: Install tooling
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl git
+
+      - name: Clone Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
+            echo "HOMEBREW_TAP_TOKEN is not configured" >&2
+            exit 1
+          fi
+
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${HOMEBREW_TAP_TOKEN}" \
+            clone "https://github.com/${HOMEBREW_TAP_REPO}.git" homebrew-elio
+
+      - name: Update formula
+        working-directory: homebrew-elio
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          formula="Formula/elio.rb"
+          source_url="https://github.com/MiguelRegueiro/elio/archive/refs/tags/${RELEASE_TAG}.tar.gz"
+          sha256="$(curl -fsSL "${source_url}" | sha256sum | awk '{print $1}')"
+
+          sed -i "s|^  url \".*\"|  url \"${source_url}\"|" "${formula}"
+          sed -i "s|^  sha256 \".*\"|  sha256 \"${sha256}\"|" "${formula}"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          formula = Path("Formula/elio.rb")
+          text = formula.read_text()
+          old = '''  test do
+            assert_predicate bin/"elio", :executable?
+          end
+          '''
+          new = '''  test do
+            assert_match "elio #{version}", shell_output("#{bin}/elio --version")
+          end
+          '''
+          if old in text:
+              formula.write_text(text.replace(old, new))
+          PY
+
+      - name: Commit and push Homebrew update
+        working-directory: homebrew-elio
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add Formula/elio.rb
+
+          if git diff --cached --quiet; then
+            echo "Homebrew formula is already up to date"
+            exit 0
+          fi
+
+          git commit -m "Update elio to ${RELEASE_VERSION}"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${HOMEBREW_TAP_TOKEN}" push

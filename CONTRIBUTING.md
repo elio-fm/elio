@@ -158,6 +158,6 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-The release workflow validates the tag and crate metadata, extracts release notes from `CHANGELOG.md`, runs `cargo test --locked`, builds release artifacts for Linux, macOS, and Windows, creates or updates the GitHub release, and then publishes the crate to crates.io.
+The release workflow validates the tag and crate metadata, extracts release notes from `CHANGELOG.md`, runs `cargo test --locked`, builds release artifacts for Linux, macOS, and Windows, creates or updates the GitHub release, publishes the crate to crates.io, and then updates downstream AUR, COPR, and Homebrew packaging.
 
 If the crates.io publish step fails for a transient external reason, rerun the workflow for the same tag. If the tagged commit itself is wrong, fix the issue in a new commit, update the version and changelog as needed, and cut a new tag.
