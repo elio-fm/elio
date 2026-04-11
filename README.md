@@ -42,6 +42,14 @@ sudo dnf copr enable miguelregueiro/elio
 sudo dnf install elio
 ```
 
+### Homebrew
+
+Install from the Homebrew tap:
+
+```bash
+brew install MiguelRegueiro/elio/elio
+```
+
 ### Cargo
 
 Install from crates.io:
