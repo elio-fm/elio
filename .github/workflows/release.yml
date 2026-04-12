@@ -102,41 +102,6 @@ jobs:
             exit 1
           fi
 
-      - name: Fail if version already exists on crates.io
-        env:
-          CRATE_NAME: ${{ steps.meta.outputs.crate_name }}
-          VERSION: ${{ steps.meta.outputs.version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          import sys
-          import urllib.error
-          import urllib.request
-
-          crate_name = os.environ["CRATE_NAME"]
-          version = os.environ["VERSION"]
-          url = f"https://crates.io/api/v1/crates/{crate_name}"
-
-          try:
-              with urllib.request.urlopen(url) as response:
-                  payload = json.load(response)
-          except urllib.error.HTTPError as error:
-              if error.code == 404:
-                  sys.exit(0)
-              raise
-
-          versions = {entry["num"] for entry in payload.get("versions", [])}
-          if version in versions:
-              print(
-                  f"{crate_name} {version} is already published on crates.io",
-                  file=sys.stderr,
-              )
-              sys.exit(1)
-          PY
-
       - name: Upload release notes
         uses: actions/upload-artifact@v4
         with:
@@ -353,17 +318,62 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
 
+      - name: Check whether version exists on crates.io
+        id: crates
+        env:
+          CRATE_NAME: ${{ needs.validate.outputs.crate_name }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          crate_name = os.environ["CRATE_NAME"]
+          version = os.environ["VERSION"]
+          url = f"https://crates.io/api/v1/crates/{crate_name}"
+
+          try:
+              with urllib.request.urlopen(url) as response:
+                  payload = json.load(response)
+          except urllib.error.HTTPError as error:
+              if error.code == 404:
+                  print("published=false")
+                  sys.exit(0)
+              raise
+
+          versions = {entry["num"] for entry in payload.get("versions", [])}
+          if version in versions:
+              print("published=true")
+          else:
+              print("published=false")
+          PY
+
       - name: Authenticate with crates.io
         id: auth
+        if: steps.crates.outputs.published != 'true'
         uses: rust-lang/crates-io-auth-action@v1
 
       - name: Publish to crates.io
+        if: steps.crates.outputs.published != 'true'
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: cargo publish --locked
 
+      - name: Skip crates.io publish
+        if: steps.crates.outputs.published == 'true'
+        env:
+          CRATE_NAME: ${{ needs.validate.outputs.crate_name }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        shell: bash
+        run: echo "${CRATE_NAME} ${RELEASE_VERSION} is already published on crates.io"
+
   update-aur:
-    name: Update AUR package
+    name: Update AUR package (${{ matrix.package.name }})
     needs:
       - validate
       - publish-crates
@@ -372,8 +382,16 @@ jobs:
     permissions: {}
     container:
       image: archlinux:base-devel
-    env:
-      AUR_REPO: ssh://aur@aur.archlinux.org/elio.git
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: elio
+            repo: ssh://aur@aur.archlinux.org/elio.git
+            dir: aur-elio
+          - name: elio-bin
+            repo: ssh://aur@aur.archlinux.org/elio-bin.git
+            dir: aur-elio-bin
 
     steps:
       - name: Install packaging tools
@@ -413,45 +431,84 @@ jobs:
           chmod 600 ~/.ssh/config
 
       - name: Clone AUR package repository
+        env:
+          AUR_REPO: ${{ matrix.package.repo }}
+          AUR_DIR: ${{ matrix.package.dir }}
         shell: bash
         run: |
           set -euo pipefail
-          git clone "${AUR_REPO}" aur-elio
-          chown -R builder:builder aur-elio
+          git clone "${AUR_REPO}" "${AUR_DIR}"
+          chown -R builder:builder "${AUR_DIR}"
 
       - name: Update PKGBUILD and .SRCINFO
         env:
+          AUR_DIR: ${{ matrix.package.dir }}
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
 
-          runuser -u builder -- bash -c "
+          runuser -u builder -- env \
+            AUR_DIR="${AUR_DIR}" \
+            RELEASE_VERSION="${RELEASE_VERSION}" \
+            bash <<'BASH'
             set -euo pipefail
-            cd aur-elio
-            sed -i 's/^pkgver=.*/pkgver=${RELEASE_VERSION}/' PKGBUILD
-            sed -i 's/^pkgrel=.*/pkgrel=1/' PKGBUILD
-            sed -i \"s/^sha256sums=.*/sha256sums=('SKIP')/\" PKGBUILD
+            cd "${AUR_DIR}"
 
-            for attempt in {1..12}; do
-              if updpkgsums; then
-                break
-              fi
+            current_pkgver="$(sed -n 's/^pkgver=//p' PKGBUILD | head -n1)"
+            current_pkgrel="$(sed -n 's/^pkgrel=//p' PKGBUILD | head -n1)"
 
-              if [[ \"\${attempt}\" -eq 12 ]]; then
-                echo 'Failed to generate AUR checksum after 12 attempts' >&2
-                exit 1
-              fi
+            if [[ -z "${current_pkgver}" || -z "${current_pkgrel}" ]]; then
+              echo "Failed to read pkgver/pkgrel from ${AUR_DIR}/PKGBUILD" >&2
+              exit 1
+            fi
 
-              sleep 10
-            done
+            if [[ ! "${current_pkgrel}" =~ ^[0-9]+$ ]]; then
+              echo "Unsupported non-numeric pkgrel '${current_pkgrel}' in ${AUR_DIR}/PKGBUILD" >&2
+              exit 1
+            fi
 
-            makepkg --printsrcinfo > .SRCINFO
-          "
+            same_version=false
+            target_pkgrel=1
+            if [[ "${current_pkgver}" == "${RELEASE_VERSION}" ]]; then
+              same_version=true
+              target_pkgrel="${current_pkgrel}"
+            fi
+
+            update_pkgbuild() {
+              local pkgrel="$1"
+
+              sed -i "s/^pkgver=.*/pkgver=${RELEASE_VERSION}/" PKGBUILD
+              sed -i "s/^pkgrel=.*/pkgrel=${pkgrel}/" PKGBUILD
+              sed -i "s/^sha256sums=.*/sha256sums=('SKIP')/" PKGBUILD
+
+              for attempt in {1..12}; do
+                if updpkgsums; then
+                  break
+                fi
+
+                if [[ "${attempt}" -eq 12 ]]; then
+                  echo "Failed to generate AUR checksum after 12 attempts" >&2
+                  exit 1
+                fi
+
+                sleep 10
+              done
+
+              makepkg --printsrcinfo > .SRCINFO
+            }
+
+            update_pkgbuild "${target_pkgrel}"
+
+            if [[ "${same_version}" == "true" ]] && ! git diff --quiet -- PKGBUILD .SRCINFO; then
+              update_pkgbuild "$((current_pkgrel + 1))"
+            fi
+          BASH
 
       - name: Commit and push AUR update
-        working-directory: aur-elio
+        working-directory: ${{ matrix.package.dir }}
         env:
+          AUR_PACKAGE: ${{ matrix.package.name }}
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         shell: bash
         run: |
@@ -468,7 +525,7 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Update to ${RELEASE_VERSION}"
+          git commit -m "Update ${AUR_PACKAGE} to ${RELEASE_VERSION}"
           git push
 
   update-copr:
