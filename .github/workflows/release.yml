@@ -535,20 +535,28 @@ jobs:
       - publish-crates
     runs-on: ubuntu-latest
     environment: release
-    permissions: {}
+    permissions:
+      contents: read
     container:
       image: fedora:43
     env:
       COPR_PROJECT: elio
-      COPR_CLONE_URL: https://github.com/${{ github.repository }}.git
-      RELEASE_COMMIT: ${{ github.sha }}
 
     steps:
-      - name: Install COPR CLI
+      - name: Install COPR build tooling
         shell: bash
         run: |
           set -euxo pipefail
-          dnf -y install copr-cli
+          dnf -y install \
+            cargo \
+            copr-cli \
+            git \
+            make \
+            rpm-build \
+            zstd
+
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Configure COPR credentials
         env:
@@ -566,16 +574,26 @@ jobs:
           printf '%s\n' "${COPR_CONFIG}" > ~/.config/copr
           chmod 600 ~/.config/copr
 
-      - name: Build COPR package from release commit
+      - name: Build and submit COPR SRPM
         shell: bash
         run: |
           set -euo pipefail
 
-          copr-cli buildscm "${COPR_PROJECT}" \
-            --clone-url "${COPR_CLONE_URL}" \
-            --commit "${RELEASE_COMMIT}" \
-            --spec packaging/fedora/elio.spec \
-            --method make_srpm
+          srpm_dir="$(mktemp -d)"
+          trap 'rm -rf "${srpm_dir}"' EXIT
+
+          make -f .copr/Makefile srpm \
+            outdir="${srpm_dir}" \
+            spec=packaging/fedora/elio.spec \
+            release=1
+
+          srpm_path="$(find "${srpm_dir}" -maxdepth 1 -name '*.src.rpm' -print -quit)"
+          if [[ -z "${srpm_path}" ]]; then
+            echo "No source RPM was created in ${srpm_dir}" >&2
+            exit 1
+          fi
+
+          copr-cli build "${COPR_PROJECT}" "${srpm_path}"
 
   update-homebrew:
     name: Update Homebrew tap

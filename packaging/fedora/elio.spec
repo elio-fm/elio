@@ -1,9 +1,10 @@
 %bcond_with check
 %global fallback_version 1.0.0
+%global fallback_release 1
 
 Name:           elio
 Version:        %{?elio_version}%{!?elio_version:%{fallback_version}}
-Release:        1%{?dist}
+Release:        %{?elio_release}%{!?elio_release:%{fallback_release}}%{?dist}
 Summary:        Terminal-native file manager with rich previews and inline images
 
 License:        MIT
