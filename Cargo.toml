@@ -1,6 +1,6 @@
 [package]
 name = "elio"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 rust-version = "1.93"
 description = "Terminal-native file manager with rich previews, inline images, and mouse support."

@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-04-12
+
 ### Added
 
 - Added `--help`/`-h` and `--version`/`-V` CLI flags.
+- Added release packaging automation for AUR, Fedora COPR, and Homebrew, including Homebrew bottle publishing.
 
 ## [1.0.0] - 2026-04-10
 
@@ -25,5 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Trash and restore support for safer file management workflows.
 - Optional external-tool integrations such as Poppler, ffmpeg, ffprobe, resvg, and 7-Zip for richer previews and metadata.
 
-[Unreleased]: https://github.com/elio-fm/elio/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/elio-fm/elio/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0

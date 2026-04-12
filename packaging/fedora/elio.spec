@@ -1,5 +1,5 @@
 %bcond_with check
-%global fallback_version 1.0.0
+%global fallback_version 1.0.1
 %global fallback_release 1
 
 Name:           elio
@@ -44,5 +44,9 @@ install -Dpm0755 target/rpm/%{name} %{buildroot}%{_bindir}/%{name}
 %{_bindir}/elio
 
 %changelog
+* Sun Apr 12 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.0.1-1
+- Add CLI help and version flags
+- Add release packaging automation
+
 * Sat Apr 11 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.0.0-1
 - Initial COPR package

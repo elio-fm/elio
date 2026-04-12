@@ -149,6 +149,7 @@ Before tagging a release:
 - update `version` in `Cargo.toml`
 - regenerate `Cargo.lock` so the root package version matches
 - move the upcoming notes from `Unreleased` into a new `## [x.y.z] - YYYY-MM-DD` section in `CHANGELOG.md`
+- update `packaging/fedora/elio.spec` fallback version and `%changelog`; the release workflow overrides the version from `Cargo.toml` for COPR, but keeping the fallback current preserves correct manual SRPM builds
 - confirm the release commit is on `main` and CI is green
 
 To publish a release:
