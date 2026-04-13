@@ -29,6 +29,6 @@ body:
     id: suggested-change
     attributes:
       label: Suggested Change
-      description: If you know the fix, describe it or paste the replacement text.
+      description: Describe the fix or paste replacement text.
     validations:
       required: false
