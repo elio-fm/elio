@@ -1,0 +1,54 @@
+name: Documentation Issue
+description: Report unclear, missing, or incorrect documentation.
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for README, contributing, release, packaging, configuration, theme, or example documentation issues.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before Opening
+      options:
+        - label: I have searched the existing issues.
+          required: true
+  - type: dropdown
+    id: docs-area
+    attributes:
+      label: Documentation Area
+      options:
+        - README
+        - CONTRIBUTING
+        - SECURITY
+        - CHANGELOG
+        - Config examples
+        - Theme examples
+        - Packaging docs
+        - Architecture docs
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Location
+      description: Link the page, heading, or file path if known.
+      placeholder: "Example: README.md#optional-tools"
+    validations:
+      required: false
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is unclear, missing, or incorrect?
+    validations:
+      required: true
+  - type: textarea
+    id: suggested-change
+    attributes:
+      label: Suggested Change
+      description: If you know the fix, describe it or paste the replacement text.
+    validations:
+      required: false

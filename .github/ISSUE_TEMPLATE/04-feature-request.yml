@@ -1,0 +1,60 @@
+name: Feature Request
+description: Propose a user-visible change or enhancement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for new behavior, preview coverage, platform support, configuration, theming, or workflow improvements.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before Opening
+      options:
+        - label: I have searched the existing issues.
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Navigation and file operations
+        - Preview support
+        - Inline images
+        - Terminal or platform integration
+        - Configuration
+        - Theming
+        - Installation or packaging
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: What should elio do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: What workarounds or alternative designs have you considered?
+    validations:
+      required: false
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility Notes
+      description: Mention any platform, terminal, config, theme, keybinding, or dependency implications.
+    validations:
+      required: false

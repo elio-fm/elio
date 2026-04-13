@@ -1,0 +1,62 @@
+name: Question
+description: Ask a usage or project question that is not a bug report.
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when you are not sure whether the behavior is a bug or when you need help understanding an `elio` workflow.
+
+        For suspected vulnerabilities, use private vulnerability reporting instead.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before Opening
+      options:
+        - label: I have searched the existing issues.
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Installation
+        - File navigation
+        - Preview behavior
+        - Inline images
+        - Configuration
+        - Theming
+        - Keybindings
+        - Platform integration
+        - Release or packaging
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to understand or do?
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What Have You Tried?
+      description: Include commands, config, docs, or workarounds you already checked.
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include elio version, OS, terminal, and install source if relevant.
+      value: |
+        - elio:
+        - OS:
+        - Terminal:
+        - Install source:
+      render: markdown
+    validations:
+      required: false

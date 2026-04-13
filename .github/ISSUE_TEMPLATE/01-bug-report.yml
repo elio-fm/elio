@@ -1,0 +1,105 @@
+name: Bug Report
+description: Report broken behavior in elio.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for reproducible runtime issues that are not primarily preview, installation, packaging, or security reports.
+
+        For suspected vulnerabilities, use private vulnerability reporting instead.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before Opening
+      options:
+        - label: I have searched the existing issues.
+          required: true
+        - label: I have tested the latest released version, or the current `main` branch when practical.
+          required: false
+  - type: input
+    id: version
+    attributes:
+      label: elio Version
+      description: Run `elio --version`, or include the commit if building from source.
+      placeholder: "elio 1.0.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: install-source
+    attributes:
+      label: Installation Source
+      options:
+        - AUR
+        - Fedora COPR
+        - Homebrew
+        - crates.io / cargo install
+        - Built from source
+        - Release artifact
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating System
+      placeholder: "Example: Fedora 41, Arch Linux, macOS 15, Windows 11"
+    validations:
+      required: true
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal
+      placeholder: "Example: Ghostty 1.1, Kitty 0.39, WezTerm nightly, Windows Terminal"
+    validations:
+      required: false
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: Current Behavior
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Include the folder layout, config, key sequence, mouse action, or command that triggers the issue.
+      placeholder: |
+        1. Open `elio` in ...
+        2. Select ...
+        3. Press ...
+        4. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant Config or Theme
+      description: Paste only the relevant `config.toml` or `theme.toml` entries, if any.
+      render: toml
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or Terminal Output
+      description: Paste warnings, panic output, or relevant command output.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Add screenshots, recordings, links, or notes that help reproduce the issue.
+    validations:
+      required: false

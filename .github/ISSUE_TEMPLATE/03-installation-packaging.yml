@@ -1,0 +1,84 @@
+name: Installation or Packaging Issue
+description: Report install, update, package, or release artifact problems.
+title: "[Install]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for problems installing or updating `elio` from AUR, Fedora COPR, Homebrew, crates.io, source builds, or release artifacts.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before Opening
+      options:
+        - label: I have searched the existing issues.
+          required: true
+        - label: I have refreshed my package manager metadata or retried the install.
+          required: false
+  - type: dropdown
+    id: install-source
+    attributes:
+      label: Installation Source
+      options:
+        - AUR
+        - Fedora COPR
+        - Homebrew
+        - crates.io / cargo install
+        - Built from source
+        - GitHub release artifact
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: target-version
+    attributes:
+      label: Target Version
+      description: Which elio version were you trying to install or update to?
+      placeholder: "Example: 1.0.1"
+    validations:
+      required: false
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating System
+      placeholder: "Example: Fedora 41, Arch Linux, macOS 15, Windows 11"
+    validations:
+      required: true
+  - type: input
+    id: architecture
+    attributes:
+      label: CPU Architecture
+      placeholder: "Example: x86_64, aarch64"
+    validations:
+      required: false
+  - type: textarea
+    id: command
+    attributes:
+      label: Install or Update Command
+      description: Paste the exact command you ran.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: failure
+    attributes:
+      label: Failure Output
+      description: Paste the relevant error output.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Include package manager versions, logs, links, or downstream package details if relevant.
+    validations:
+      required: false

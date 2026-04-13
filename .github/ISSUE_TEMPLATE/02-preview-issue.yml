@@ -1,0 +1,124 @@
+name: Preview or File Type Issue
+description: Report incorrect or missing previews for files, archives, documents, media, or images.
+title: "[Preview]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when the main problem is in the Preview pane, file classification, inline images, thumbnails, metadata, or optional helper-tool behavior.
+
+        Do not attach private or sensitive files. If possible, use a minimal public sample file.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before Opening
+      options:
+        - label: I have searched the existing issues.
+          required: true
+        - label: I can reproduce this with the latest released version, or the current `main` branch when practical.
+          required: false
+  - type: input
+    id: version
+    attributes:
+      label: elio Version
+      description: Run `elio --version`, or include the commit if building from source.
+      placeholder: "elio 1.0.1"
+    validations:
+      required: true
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating System
+      placeholder: "Example: Fedora 41, Arch Linux, macOS 15, Windows 11"
+    validations:
+      required: true
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal
+      placeholder: "Example: Ghostty 1.1, Kitty 0.39, WezTerm nightly, Windows Terminal"
+    validations:
+      required: true
+  - type: input
+    id: file-type
+    attributes:
+      label: File Type
+      description: Include the extension and what the file contains.
+      placeholder: "Example: PDF, EPUB, DOCX, SVG, PNG, MP4, ZIP, CBZ, ISO, SQLite"
+    validations:
+      required: true
+  - type: dropdown
+    id: preview-area
+    attributes:
+      label: Preview Area
+      options:
+        - Text or code preview
+        - Image preview
+        - PDF or document preview
+        - Archive preview
+        - Audio or video metadata
+        - Folder preview
+        - Binary metadata
+        - File classification
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: helper-tools
+    attributes:
+      label: Optional Helper Tools
+      description: Include versions or command output for tools involved in the preview.
+      value: |
+        - ffmpeg:
+        - ffprobe:
+        - pdfinfo:
+        - pdftocairo:
+        - resvg:
+        - magick:
+        - 7z:
+        - bsdtar:
+        - isoinfo:
+      render: markdown
+    validations:
+      required: false
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: Current Preview Behavior
+      description: What does elio show now?
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Preview Behavior
+      description: What should elio show instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Include where the file is located, how it is selected, and any relevant environment variables.
+      placeholder: |
+        1. Run `elio` in ...
+        2. Select a file named ...
+        3. Observe the Preview pane ...
+    validations:
+      required: true
+  - type: textarea
+    id: debug-log
+    attributes:
+      label: Preview Debug Output
+      description: If relevant, set `ELIO_DEBUG_PREVIEW=1` and paste the useful lines from `elio-preview.log`.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: sample-file
+    attributes:
+      label: Sample File or Screenshot
+      description: Attach a minimal public sample file, screenshot, or recording if it helps reproduce the issue.
+    validations:
+      required: false
