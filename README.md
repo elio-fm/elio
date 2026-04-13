@@ -1,8 +1,11 @@
-<h1 align="left"><img src="assets/logo.png" width="75" alt="elio logo" align="absmiddle" />&nbsp;elio</h1>
+<h1 align="left">
+  <img src="assets/logo.png" width="64" alt="elio logo" style="vertical-align: middle; margin-right: 8px;" />
+  elio
+</h1>
 
 A terminal-native file manager with a three-pane layout, rich previews, and inline images.
 
-It combines rich previews, customizable Places, trash, and quick actions like Go-to, Open With, and copy-to-clipboard in a terminal-native workflow.
+Built for fast workflows with bulk actions, customizable Places, trash, and quick actions like Go-to, Open With, and copy-to-clipboard.
 
 ![elio — default theme](examples/themes/default/screenshot.webp)
 
@@ -12,10 +15,10 @@ It combines rich previews, customizable Places, trash, and quick actions like Go
 
 - **Three-pane layout** — Places, Files, and Preview side by side
 - **Rich previews** — text, code, documents, archives, media, and more; see [Preview Coverage](#preview-coverage)
-- **Inline images** — rendered directly in the terminal on supported terminals
+- **Inline images** — rendered directly in supported terminals
 - **Customizable Places and devices** — pinned folders plus auto-detected drives and mounts
 - **Quick actions** — Go-to, Open With, and copy-to-clipboard
-- **Trash and restore** — move items to trash and bring them back when needed
+- **Trash management** — trash, restore, or permanently delete files
 - **Keyboard and mouse navigation** — browse comfortably either way
 - **Grid and list views** — switch with `v`, zoom the grid with `+` / `-`
 - **Fuzzy search** — find folders and files quickly
