@@ -1,5 +1,1 @@
 blank_issues_enabled: false
-contact_links:
-  - name: Report a security vulnerability
-    url: https://github.com/elio-fm/elio/security/advisories/new
-    about: Please report suspected vulnerabilities privately.
