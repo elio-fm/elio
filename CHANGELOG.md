@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Improved fuzzy search indexing and filtering responsiveness for large directory trees.
+- Documented fuzzy search scope, hidden-file handling, pruning, refresh behavior, and large-tree caps.
+
+### Fixed
+
+- Fixed fuzzy search reusing stale indexes after directory reloads, so pasted, cut, deleted, or newly created entries are reflected after filesystem changes.
+
 ## [1.0.1] - 2026-04-12
 
 ### Added
