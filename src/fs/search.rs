@@ -31,6 +31,31 @@ pub(crate) fn collect_candidates(
     collect_candidates_with_limits(cwd, show_hidden, scope, usize::MAX, SEARCH_NODE_VISIT_LIMIT)
 }
 
+struct PendingSearchNode {
+    path: PathBuf,
+    name: String,
+    name_key: String,
+    relative: Option<String>,
+    relative_key: Option<String>,
+    is_dir: bool,
+    enqueue_children: bool,
+}
+
+impl PendingSearchNode {
+    fn into_candidate(self) -> Option<SearchCandidate> {
+        let relative = self.relative?;
+        let relative_key = self.relative_key?;
+        Some(SearchCandidate {
+            path: self.path,
+            name: self.name,
+            name_key: self.name_key,
+            relative,
+            relative_key,
+            is_dir: self.is_dir,
+        })
+    }
+}
+
 fn collect_candidates_with_limits(
     cwd: &Path,
     show_hidden: bool,
@@ -69,11 +94,9 @@ fn collect_candidates_with_limits(
                 continue;
             }
 
-            let path = entry.path();
-            let Ok(metadata) = fs::symlink_metadata(&path) else {
+            let Ok(file_type) = entry.file_type() else {
                 continue;
             };
-            let file_type = metadata.file_type();
             if file_type.is_symlink() {
                 continue;
             }
@@ -86,35 +109,54 @@ fn collect_candidates_with_limits(
 
             visited_nodes += 1;
 
-            let Ok(relative_path) = path.strip_prefix(cwd) else {
+            let include_candidate = should_include_candidate(is_dir, scope);
+            if !is_dir && !include_candidate {
                 continue;
-            };
-            let relative = relative_path.to_string_lossy().replace('\\', "/");
+            }
+
             let name = file_name.to_string_lossy().to_string();
             let name_key = name.to_lowercase();
-            let relative_key = relative.to_lowercase();
-            nodes.push(SearchCandidate {
+            let enqueue_children = is_dir && !should_prune_dir(&name_key);
+            if !include_candidate && !enqueue_children {
+                continue;
+            }
+
+            let path = entry.path();
+            let (relative, relative_key) = if include_candidate {
+                let Ok(relative_path) = path.strip_prefix(cwd) else {
+                    continue;
+                };
+                let relative = relative_path.to_string_lossy().replace('\\', "/");
+                let relative_key = relative.to_lowercase();
+                (Some(relative), Some(relative_key))
+            } else {
+                (None, None)
+            };
+
+            nodes.push(PendingSearchNode {
                 path,
                 name,
                 name_key,
                 relative,
                 relative_key,
                 is_dir,
+                enqueue_children,
             });
         }
 
         nodes.sort_by(|left, right| {
+            // Siblings share the same parent prefix, so sorting by name preserves
+            // the same natural order as sorting by their relative paths.
             super::natural_cmp(&left.name_key, &right.name_key)
-                .then_with(|| super::natural_cmp(&left.relative_key, &right.relative_key))
-                .then_with(|| left.relative.cmp(&right.relative))
+                .then_with(|| left.name.cmp(&right.name))
         });
 
         for node in nodes {
-            if node.is_dir && !should_prune_dir(&node.name_key) {
+            if node.enqueue_children {
                 queue.push_back(node.path.clone());
             }
-            if should_include_candidate(node.is_dir, scope) {
-                candidates.push(node);
+            if let Some(candidate) = node.into_candidate() {
+                candidates.push(candidate);
             }
         }
     }
@@ -356,6 +398,51 @@ mod tests {
                 .iter()
                 .any(|candidate| candidate.relative == ".hidden-root/needle")
         );
+
+        fs::remove_dir_all(root).expect("failed to remove temp tree");
+    }
+
+    #[test]
+    fn collect_candidates_prune_known_dirs_without_hiding_the_directory_itself() {
+        let root = temp_path("pruned-dirs");
+        fs::create_dir_all(root.join("node_modules/package"))
+            .expect("failed to create node_modules");
+        fs::create_dir_all(root.join("src/feature")).expect("failed to create src tree");
+
+        let candidates =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
+                .expect("failed to collect candidates");
+        let names = candidates
+            .iter()
+            .map(|candidate| candidate.relative.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(names.contains(&"node_modules"));
+        assert!(!names.contains(&"node_modules/package"));
+        assert!(names.contains(&"src"));
+        assert!(names.contains(&"src/feature"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp tree");
+    }
+
+    #[test]
+    fn collect_candidates_still_descends_directories_when_searching_files() {
+        let root = temp_path("file-search-descend");
+        fs::create_dir_all(root.join("alpha")).expect("failed to create alpha");
+        fs::write(root.join("alpha/needle.txt"), "needle").expect("failed to write needle");
+        fs::write(root.join("top.txt"), "top").expect("failed to write top");
+
+        let candidates =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
+                .expect("failed to collect file candidates");
+        let names = candidates
+            .iter()
+            .map(|candidate| candidate.relative.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(names.contains(&"top.txt"));
+        assert!(names.contains(&"alpha/needle.txt"));
+        assert!(!names.contains(&"alpha"));
 
         fs::remove_dir_all(root).expect("failed to remove temp tree");
     }
