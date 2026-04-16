@@ -152,6 +152,10 @@ For `c`, elio copies file metadata to the clipboard using OSC52 on supported ter
 
 `g` opens a quick jump menu with shortcuts for the top of the current folder, Downloads, Home, the platform config folder, and Trash. The config destination is `~/.config` or `$XDG_CONFIG_HOME` on Linux and BSD, `~/Library/Application Support` on macOS, and `%APPDATA%` on Windows.
 
+### Fuzzy Search
+
+`f` searches folders and `Ctrl+F` searches files in the current directory tree. Search follows the hidden-file setting, skips symlinks, prunes common generated folders such as `.git`, `node_modules`, and `target`, and refreshes when the directory changes. Very large trees are capped so search stays responsive.
+
 ---
 
 ## Preview Coverage
