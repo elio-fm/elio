@@ -29,6 +29,7 @@ pub(in crate::app::jobs) struct SearchJobKey {
     pub(in crate::app::jobs) cwd: PathBuf,
     pub(in crate::app::jobs) scope: SearchScope,
     pub(in crate::app::jobs) show_hidden: bool,
+    pub(in crate::app::jobs) fingerprint: crate::fs::DirectoryFingerprint,
 }
 
 impl SearchPool {
@@ -70,6 +71,7 @@ impl SearchPool {
                             cwd: request.cwd,
                             scope: request.scope,
                             show_hidden: request.show_hidden,
+                            fingerprint: request.fingerprint,
                             result,
                         }))
                         .is_err()
@@ -164,6 +166,7 @@ impl SearchJobKey {
             cwd: request.cwd.clone(),
             scope: request.scope,
             show_hidden: request.show_hidden,
+            fingerprint: request.fingerprint,
         }
     }
 }

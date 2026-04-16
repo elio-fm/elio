@@ -50,6 +50,7 @@ impl App {
             cwd: self.navigation.cwd.clone(),
             scope,
             show_hidden: self.effective_show_hidden(),
+            fingerprint: self.navigation.directory_runtime.fingerprint,
         };
         if !self.jobs.scheduler.submit_search(request) {
             self.jobs.search_loading = false;

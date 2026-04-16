@@ -46,6 +46,7 @@ pub(in crate::app) struct SearchBuild {
     pub(in crate::app) cwd: PathBuf,
     pub(in crate::app) scope: SearchScope,
     pub(in crate::app) show_hidden: bool,
+    pub(in crate::app) fingerprint: crate::fs::DirectoryFingerprint,
     pub(in crate::app) result: Result<Arc<Vec<SearchCandidate>>, String>,
 }
 
@@ -55,6 +56,7 @@ pub(in crate::app) struct SearchRequest {
     pub(in crate::app) cwd: PathBuf,
     pub(in crate::app) scope: SearchScope,
     pub(in crate::app) show_hidden: bool,
+    pub(in crate::app) fingerprint: crate::fs::DirectoryFingerprint,
 }
 
 #[derive(Debug)]

@@ -110,6 +110,8 @@ impl App {
         load: PendingDirectoryLoad,
         snapshot: crate::fs::DirectorySnapshot,
     ) {
+        let should_refresh_open_search = self.overlays.search.is_some();
+        self.invalidate_search_index_for_directory_snapshot(&load.target_cwd);
         self.navigation.directory_runtime.pending_fingerprint_scan = None;
         let cwd_changed = load.target_cwd != self.navigation.cwd;
         let remembered_view = self.remembered_view_for(&load.target_cwd);
@@ -191,7 +193,7 @@ impl App {
             }
         }
 
-        if load.refresh_search {
+        if load.refresh_search || should_refresh_open_search {
             self.refresh_search_after_directory_reload();
         }
 
@@ -200,6 +202,20 @@ impl App {
             DirectoryLoadCompletion::Clear => self.status.clear(),
             DirectoryLoadCompletion::Status(status) => self.status = status,
         }
+    }
+
+    fn invalidate_search_index_for_directory_snapshot(&mut self, cwd: &Path) {
+        if self
+            .jobs
+            .search_cache
+            .as_ref()
+            .is_some_and(|cache| cache.cwd == cwd)
+        {
+            self.jobs.search_cache = None;
+        }
+
+        self.jobs.search_loading = false;
+        self.jobs.search_token = self.jobs.search_token.wrapping_add(1);
     }
 
     fn remembered_view_for(&self, cwd: &Path) -> Option<DirectoryViewMemory> {

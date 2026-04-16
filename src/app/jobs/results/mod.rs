@@ -151,6 +151,7 @@ impl App {
                     if build.token != self.jobs.search_token
                         || build.cwd != self.navigation.cwd
                         || build.show_hidden != self.navigation.show_hidden
+                        || build.fingerprint != self.navigation.directory_runtime.fingerprint
                     {
                         continue;
                     }
@@ -164,6 +165,7 @@ impl App {
                                 cwd: build.cwd,
                                 scope: build.scope,
                                 show_hidden: build.show_hidden,
+                                fingerprint: build.fingerprint,
                                 candidates: candidates.clone(),
                             });
                             if let Some(search) = &mut self.overlays.search

@@ -89,6 +89,7 @@ impl App {
                 cache.cwd == self.navigation.cwd
                     && cache.scope == scope
                     && cache.show_hidden == self.navigation.show_hidden
+                    && cache.fingerprint == self.navigation.directory_runtime.fingerprint
             })
             .map(|cache| cache.candidates.clone());
         let candidates = cached.clone().unwrap_or_else(|| Arc::new(Vec::new()));
