@@ -172,7 +172,9 @@ impl App {
                                 search.candidates = candidates;
                                 search.cached_matches = HashMap::from([(
                                     String::new(),
-                                    (0..search.candidates.len()).collect(),
+                                    crate::app::search::build_base_search_cache_entry(
+                                        (0..search.candidates.len()).collect(),
+                                    ),
                                 )]);
                                 search.loading = false;
                                 search.error = None;
@@ -186,8 +188,10 @@ impl App {
                             {
                                 search.candidates = Arc::new(Vec::new());
                                 search.matches.clear();
-                                search.cached_matches =
-                                    HashMap::from([(String::new(), Vec::new())]);
+                                search.cached_matches = HashMap::from([(
+                                    String::new(),
+                                    crate::app::search::build_base_search_cache_entry(Vec::new()),
+                                )]);
                                 search.selected = 0;
                                 search.scroll = 0;
                                 search.loading = false;

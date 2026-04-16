@@ -399,7 +399,10 @@ impl App {
         if let Some(search) = &mut self.overlays.search {
             search.candidates = Arc::new(Vec::new());
             search.matches.clear();
-            search.cached_matches = HashMap::from([(String::new(), Vec::new())]);
+            search.cached_matches = HashMap::from([(
+                String::new(),
+                super::super::search::build_base_search_cache_entry(Vec::new()),
+            )]);
             search.selected = 0;
             search.scroll = 0;
             search.loading = true;

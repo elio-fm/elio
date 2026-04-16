@@ -172,16 +172,19 @@ pub(crate) fn filter_candidates_in<I>(
     pool: I,
     query: &str,
     limit: usize,
-) -> Vec<usize>
+) -> SearchFilterResult
 where
     I: IntoIterator<Item = usize>,
 {
     if query.trim().is_empty() {
-        return pool.into_iter().take(limit).collect();
+        let pool = pool.into_iter().collect::<Vec<_>>();
+        let matches = pool.iter().copied().take(limit).collect();
+        return SearchFilterResult { pool, matches };
     }
 
     let query_key = query.to_lowercase();
     let needle = query_key.as_bytes();
+    let mut filtered_pool = Vec::new();
     let mut top = Vec::<(usize, i64, usize)>::with_capacity(limit.min(64));
 
     for index in pool {
@@ -196,6 +199,8 @@ where
             (None, Some(path)) => path,
             (None, None) => continue,
         };
+
+        filtered_pool.push(index);
 
         let entry = (index, score, candidate.relative.len());
         let insert_at = top
@@ -212,7 +217,16 @@ where
         }
     }
 
-    top.into_iter().map(|(index, _, _)| index).collect()
+    let matches = top.into_iter().map(|(index, _, _)| index).collect();
+    SearchFilterResult {
+        pool: filtered_pool,
+        matches,
+    }
+}
+
+pub(crate) struct SearchFilterResult {
+    pub(crate) pool: Vec<usize>,
+    pub(crate) matches: Vec<usize>,
 }
 
 fn should_include_candidate(is_dir: bool, scope: SearchCandidateScope) -> bool {
@@ -336,8 +350,8 @@ mod tests {
             },
         ];
 
-        let matches = filter_candidates_in(&candidates, 0..candidates.len(), "mn", 10);
-        assert_eq!(matches.first().copied(), Some(0));
+        let result = filter_candidates_in(&candidates, 0..candidates.len(), "mn", 10);
+        assert_eq!(result.matches.first().copied(), Some(0));
     }
 
     #[test]

@@ -20,7 +20,14 @@ impl App {
         self.overlays
             .search
             .as_ref()
-            .map(|search| search.matches.len())
+            .map(|search| {
+                let query_key = super::search_cache_key(&search.query);
+                search
+                    .cached_matches
+                    .get(&query_key)
+                    .map(|entry| entry.pool.len())
+                    .unwrap_or(search.matches.len())
+            })
             .unwrap_or(0)
     }
 
@@ -28,7 +35,7 @@ impl App {
         self.overlays
             .search
             .as_ref()
-            .and_then(|search| search.cached_matches.get("").map(Vec::len))
+            .and_then(|search| search.cached_matches.get("").map(|entry| entry.pool.len()))
             .unwrap_or(0)
     }
 
@@ -101,7 +108,10 @@ impl App {
             query_cursor: 0,
             candidates,
             matches,
-            cached_matches: HashMap::from([(String::new(), base_matches)]),
+            cached_matches: HashMap::from([(
+                String::new(),
+                super::build_base_search_cache_entry(base_matches),
+            )]),
             selected: 0,
             scroll: 0,
             loading,

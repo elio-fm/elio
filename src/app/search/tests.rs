@@ -18,6 +18,10 @@ fn temp_path(label: &str) -> PathBuf {
     path.canonicalize().unwrap_or(path)
 }
 
+fn base_cache_entry(pool: Vec<usize>) -> SearchMatchCacheEntry {
+    super::build_base_search_cache_entry(pool)
+}
+
 #[test]
 fn opening_search_restarts_index_when_cache_missing_even_if_loading() {
     let root = temp_path("restarts-index");
@@ -99,7 +103,7 @@ fn refining_query_rechecks_full_candidate_set() {
         query_cursor: 1,
         candidates: Arc::new(candidates),
         matches: Vec::new(),
-        cached_matches: HashMap::from([(String::new(), (0..301).collect())]),
+        cached_matches: HashMap::from([(String::new(), base_cache_entry((0..301).collect()))]),
         selected: 0,
         scroll: 0,
         loading: false,
@@ -149,7 +153,7 @@ fn search_query_cursor_inserts_and_deletes_in_place() {
         query_cursor: 2,
         candidates: Arc::new(Vec::new()),
         matches: Vec::new(),
-        cached_matches: HashMap::from([(String::new(), Vec::new())]),
+        cached_matches: HashMap::from([(String::new(), base_cache_entry(Vec::new()))]),
         selected: 0,
         scroll: 0,
         loading: false,
@@ -183,7 +187,7 @@ fn search_query_ctrl_arrows_move_across_word_boundaries() {
         query_cursor: "foo bar/baz".chars().count(),
         candidates: Arc::new(Vec::new()),
         matches: Vec::new(),
-        cached_matches: HashMap::from([(String::new(), Vec::new())]),
+        cached_matches: HashMap::from([(String::new(), base_cache_entry(Vec::new()))]),
         selected: 0,
         scroll: 0,
         loading: false,
@@ -229,7 +233,7 @@ fn search_query_ctrl_backspace_and_delete_remove_word_units() {
         query_cursor: 8,
         candidates: Arc::new(Vec::new()),
         matches: Vec::new(),
-        cached_matches: HashMap::from([(String::new(), Vec::new())]),
+        cached_matches: HashMap::from([(String::new(), base_cache_entry(Vec::new()))]),
         selected: 0,
         scroll: 0,
         loading: false,
@@ -266,7 +270,7 @@ fn search_query_terminal_fallback_word_delete_bindings_work() {
         query_cursor: 8,
         candidates: Arc::new(Vec::new()),
         matches: Vec::new(),
-        cached_matches: HashMap::from([(String::new(), Vec::new())]),
+        cached_matches: HashMap::from([(String::new(), base_cache_entry(Vec::new()))]),
         selected: 0,
         scroll: 0,
         loading: false,
@@ -318,7 +322,7 @@ fn search_rows_ignore_stale_match_indexes() {
         query_cursor: 0,
         candidates: Arc::new(Vec::new()),
         matches: vec![3],
-        cached_matches: HashMap::from([(String::new(), vec![3])]),
+        cached_matches: HashMap::from([(String::new(), base_cache_entry(vec![3]))]),
         selected: 0,
         scroll: 0,
         loading: false,
@@ -357,7 +361,7 @@ fn confirm_search_selection_selects_file_already_in_current_directory() {
             is_dir: false,
         }]),
         matches: vec![0],
-        cached_matches: HashMap::from([(String::new(), vec![0])]),
+        cached_matches: HashMap::from([(String::new(), base_cache_entry(vec![0]))]),
         selected: 0,
         scroll: 0,
         loading: false,
@@ -398,7 +402,7 @@ fn confirm_search_selection_keeps_overlay_open_when_reveal_fails() {
             is_dir: false,
         }]),
         matches: vec![0],
-        cached_matches: HashMap::from([(String::new(), vec![0])]),
+        cached_matches: HashMap::from([(String::new(), base_cache_entry(vec![0]))]),
         selected: 0,
         scroll: 0,
         loading: false,

@@ -189,11 +189,17 @@ pub(super) struct SearchOverlay {
     pub(super) query_cursor: usize,
     pub(super) candidates: Arc<Vec<SearchCandidate>>,
     pub(super) matches: Vec<usize>,
-    pub(super) cached_matches: HashMap<String, Vec<usize>>,
+    pub(super) cached_matches: HashMap<String, SearchMatchCacheEntry>,
     pub(super) selected: usize,
     pub(super) scroll: usize,
     pub(super) loading: bool,
     pub(super) error: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct SearchMatchCacheEntry {
+    pub(super) pool: Vec<usize>,
+    pub(super) matches: Vec<usize>,
 }
 
 #[derive(Clone, Debug)]

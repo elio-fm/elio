@@ -2,32 +2,33 @@ use super::super::*;
 use std::collections::HashMap;
 
 impl App {
-    pub(in crate::app) fn refresh_search_matches(&mut self, _previous_query: &str) {
+    pub(in crate::app) fn refresh_search_matches(&mut self, previous_query: &str) {
         let Some(search) = &mut self.overlays.search else {
             return;
         };
         search.query_cursor = search.query_cursor.min(search.query.chars().count());
 
         let next_query = search.query.clone();
-        if let Some(cached) = search.cached_matches.get(&next_query).cloned() {
-            search.matches = cached;
+        let next_query_key = super::search_cache_key(&next_query);
+        if let Some(cached) = search.cached_matches.get(&next_query_key).cloned() {
+            search.matches = cached.matches;
         } else {
-            let pool = search
-                .cached_matches
-                .get("")
-                .cloned()
-                .unwrap_or_else(|| (0..search.candidates.len()).collect::<Vec<_>>());
+            let result = {
+                let pool = select_search_pool(search, previous_query, &next_query);
+                crate::fs::search::filter_candidates_in(
+                    &search.candidates,
+                    pool.iter().copied(),
+                    &next_query,
+                    SEARCH_MATCH_LIMIT,
+                )
+            };
 
-            search.matches = crate::fs::search::filter_candidates_in(
-                &search.candidates,
-                pool,
-                &next_query,
-                SEARCH_MATCH_LIMIT,
+            search.matches = result.matches.clone();
+            prune_search_cache(&mut search.cached_matches, &next_query_key);
+            search.cached_matches.insert(
+                next_query_key,
+                super::build_search_cache_entry(result.pool, result.matches),
             );
-            prune_search_cache(&mut search.cached_matches, &next_query);
-            search
-                .cached_matches
-                .insert(next_query.clone(), search.matches.clone());
         }
 
         if search.matches.is_empty() {
@@ -62,7 +63,42 @@ impl App {
     }
 }
 
-fn prune_search_cache(cached_matches: &mut HashMap<String, Vec<usize>>, active_query: &str) {
+fn select_search_pool<'a>(
+    search: &'a SearchOverlay,
+    previous_query: &str,
+    next_query: &str,
+) -> &'a [usize] {
+    let next_query_key = super::search_cache_key(next_query);
+    let previous_query_key = super::search_cache_key(previous_query);
+
+    if !previous_query_key.is_empty()
+        && next_query_key.starts_with(&previous_query_key)
+        && let Some(entry) = search.cached_matches.get(&previous_query_key)
+    {
+        return &entry.pool;
+    }
+
+    if let Some(entry) = search
+        .cached_matches
+        .iter()
+        .filter(|(query, _)| !query.is_empty() && next_query_key.starts_with(query.as_str()))
+        .max_by_key(|(query, _)| query.len())
+        .map(|(_, entry)| entry)
+    {
+        return &entry.pool;
+    }
+
+    search
+        .cached_matches
+        .get("")
+        .map(|entry| entry.pool.as_slice())
+        .unwrap_or(&[])
+}
+
+fn prune_search_cache(
+    cached_matches: &mut HashMap<String, SearchMatchCacheEntry>,
+    active_query: &str,
+) {
     if cached_matches.len() < SEARCH_CACHE_LIMIT {
         return;
     }
