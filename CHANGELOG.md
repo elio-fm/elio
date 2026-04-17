@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed fuzzy search reusing stale indexes after directory reloads, so pasted, cut, deleted, or newly created entries are reflected after filesystem changes.
 - Fixed Freedesktop Trash entries with collision-suffixed storage names, such as `photo.jpg.2`, so they display, preview, open, and restore using their original `.trashinfo` names.
 - Fixed stacked browser layouts so the Preview pane expands in tall narrow terminals and respects configured Files/Preview pane weights.
+- Fixed metadata previews for large ZIP-based office documents, including PPTX, PPTM, ODP, DOCX, XLSX, and Pages files.
+- Clarified document metadata preview sections by replacing the repeated `Document` body heading with `Details` and keeping `People` for author fields.
+- Fixed fixed-layout EPUB pages without extractable text so the preview shows page and book context instead of an empty pane.
+- Clarified media and binary metadata previews by using `Details` instead of repeating `Video`, `Audio`, `Image`, or `Binary` as the first body section.
+- Clarified archive metadata previews by using `Details` instead of `Summary`, `Image`, or `Torrent` for the first body section.
+- Clarified SQLite database previews by using `Details` for the first metadata section.
 
 ## [1.0.1] - 2026-04-12
 
