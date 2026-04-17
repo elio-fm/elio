@@ -10,15 +10,15 @@ use ratatui::{Frame, layout::Rect};
 
 const LEGACY_WIDE_SIDEBAR_WIDTH: u16 = 20;
 const LEGACY_NARROW_SIDEBAR_WIDTH: u16 = 22;
-const LEGACY_NARROW_PREVIEW_HEIGHT: u16 = 11;
 const LEGACY_HORIZONTAL_SIDEBAR_MIN_WIDTH: u16 = 18;
 const LEGACY_HORIZONTAL_ENTRIES_MIN_WIDTH: u16 = 26;
 const LEGACY_HORIZONTAL_PREVIEW_MIN_WIDTH: u16 = 22;
+const LEGACY_STACKED_ENTRIES_WEIGHT: u16 = 54;
+const LEGACY_STACKED_PREVIEW_WEIGHT: u16 = 46;
 const CUSTOM_SIDEBAR_MIN_WIDTH: u16 = 16;
 const CUSTOM_ENTRIES_MIN_WIDTH: u16 = 28;
 const CUSTOM_PREVIEW_MIN_WIDTH: u16 = 24;
 const CUSTOM_STACKED_ENTRIES_MIN_HEIGHT: u16 = 10;
-const CUSTOM_STACKED_PREVIEW_DESIRED_HEIGHT: u16 = LEGACY_NARROW_PREVIEW_HEIGHT;
 const CUSTOM_STACKED_PREVIEW_MIN_HEIGHT: u16 = 8;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -122,8 +122,11 @@ fn legacy_stacked_body_layout(area: Rect) -> Option<BodyLayout> {
         LEGACY_NARROW_SIDEBAR_WIDTH,
         CUSTOM_ENTRIES_MIN_WIDTH.max(CUSTOM_PREVIEW_MIN_WIDTH),
     )?;
-    let (entries, preview) =
-        split_stacked_content_with_height(content, LEGACY_NARROW_PREVIEW_HEIGHT)?;
+    let (entries, preview) = split_stacked_content_weighted(
+        content,
+        LEGACY_STACKED_ENTRIES_WEIGHT,
+        LEGACY_STACKED_PREVIEW_WEIGHT,
+    )?;
 
     Some(BodyLayout {
         sidebar: non_empty(sidebar),
@@ -283,7 +286,7 @@ fn stacked_body_layout_with_mins(area: Rect, weights: PaneWeights) -> Option<Bod
     };
 
     let (entries, preview) =
-        split_stacked_content_with_height(content, CUSTOM_STACKED_PREVIEW_DESIRED_HEIGHT)?;
+        split_stacked_content_weighted(content, weights.files, weights.preview)?;
     Some(BodyLayout {
         sidebar,
         entries: non_empty(entries),
@@ -322,27 +325,20 @@ fn split_sidebar_and_content(
     Some((sidebar, content))
 }
 
-fn split_stacked_content_with_height(
+fn split_stacked_content_weighted(
     area: Rect,
-    desired_preview_height: u16,
+    entries_weight: u16,
+    preview_weight: u16,
 ) -> Option<(Rect, Rect)> {
-    if area.height
-        < CUSTOM_STACKED_ENTRIES_MIN_HEIGHT.saturating_add(CUSTOM_STACKED_PREVIEW_MIN_HEIGHT)
-    {
-        return None;
-    }
-
-    let preview_height = area
-        .height
-        .saturating_sub(CUSTOM_STACKED_ENTRIES_MIN_HEIGHT)
-        .min(desired_preview_height);
-    if preview_height < CUSTOM_STACKED_PREVIEW_MIN_HEIGHT {
-        return None;
-    }
-    let entries_height = area.height.saturating_sub(preview_height);
-    if entries_height < CUSTOM_STACKED_ENTRIES_MIN_HEIGHT {
-        return None;
-    }
+    let heights = allocate_weighted_lengths_with_mins(
+        area.height,
+        vec![entries_weight, preview_weight],
+        vec![
+            CUSTOM_STACKED_ENTRIES_MIN_HEIGHT,
+            CUSTOM_STACKED_PREVIEW_MIN_HEIGHT,
+        ],
+    )?;
+    let [entries_height, preview_height]: [u16; 2] = heights.try_into().ok()?;
 
     let entries = Rect {
         x: area.x,
