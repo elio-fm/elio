@@ -14,21 +14,28 @@ mod scan;
 use std::path::Path;
 
 use super::super::state::OpenWithApp;
+use crate::core::Entry;
 
 // ── public entry point ────────────────────────────────────────────────────────
 
-pub(super) fn discover_open_with_apps(path: &Path) -> Vec<OpenWithApp> {
+pub(super) fn discover_open_with_apps_for_entry(entry: &Entry) -> Vec<OpenWithApp> {
+    discover_open_with_apps_inner(&entry.path, Some(entry.name.as_str()))
+}
+
+fn discover_open_with_apps_inner(path: &Path, display_name: Option<&str>) -> Vec<OpenWithApp> {
     #[cfg(target_os = "macos")]
     {
+        let _ = display_name;
         macos::discover_via_nsworkspace(path)
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        discover_xdg(path)
+        discover_xdg(path, display_name)
     }
     #[cfg(not(any(target_os = "macos", all(unix, not(target_os = "macos")))))]
     {
         let _ = path;
+        let _ = display_name;
         vec![]
     }
 }
@@ -80,7 +87,7 @@ pub(super) fn current_desktops() -> Vec<String> {
 // ── XDG discovery (Linux / BSD) ───────────────────────────────────────────────
 
 #[cfg(all(unix, not(target_os = "macos")))]
-fn discover_xdg(path: &Path) -> Vec<OpenWithApp> {
+fn discover_xdg(path: &Path, display_name: Option<&str>) -> Vec<OpenWithApp> {
     use std::time::{Duration, Instant};
 
     // 3-second budget for subprocess fallbacks; pure-Rust MIME lookup is
@@ -88,7 +95,7 @@ fn discover_xdg(path: &Path) -> Vec<OpenWithApp> {
     let deadline = Instant::now() + Duration::from_millis(3000);
     let canceled = || Instant::now() > deadline;
 
-    let Some(mime_type) = mime::detect_mime_type(path, &canceled) else {
+    let Some(mime_type) = mime::detect_mime_type_with_name(path, display_name, &canceled) else {
         return vec![];
     };
 

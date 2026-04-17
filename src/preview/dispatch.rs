@@ -19,7 +19,7 @@ pub(crate) fn preview_work_class(
     entry: &Entry,
     options: &PreviewRequestOptions,
 ) -> PreviewWorkClass {
-    let facts = file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified);
+    let facts = file_info::inspect_entry_cached(entry);
     if options.comic_page_index().is_some()
         || options.epub_section_index().is_some()
         || facts.builtin_class == FileClass::Audio
@@ -43,7 +43,7 @@ pub(crate) fn loading_preview_for(
     if entry.is_dir() {
         return PreviewContent::new(PreviewKind::Directory, Vec::new()).with_detail("Loading");
     }
-    let facts = file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified);
+    let facts = file_info::inspect_entry_cached(entry);
     let detail = facts
         .specific_type_label
         .or_else(|| {
@@ -164,7 +164,7 @@ where
         return directory::build_directory_preview(entry);
     }
 
-    let facts = file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified);
+    let facts = file_info::inspect_entry_cached(entry);
     let preview_spec = facts.preview;
     let type_detail = facts.specific_type_label;
     if preview_spec.kind == file_info::PreviewKind::Iso
@@ -250,8 +250,7 @@ where
     let mut preview_truncation_note = truncation_note(text_preview.bytes_truncated, line_truncated);
 
     if preview_spec.kind == file_info::PreviewKind::Csv {
-        let is_tsv = entry
-            .path
+        let is_tsv = std::path::Path::new(&entry.name)
             .extension()
             .and_then(|e| e.to_str())
             .is_some_and(|e| e.eq_ignore_ascii_case("tsv"));

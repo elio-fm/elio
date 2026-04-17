@@ -8,6 +8,7 @@ mod directory;
 mod directory_stats;
 mod restore;
 mod sort;
+mod trashinfo;
 
 fn is_hidden(file_name: &std::ffi::OsStr) -> bool {
     file_name.to_string_lossy().starts_with('.')

@@ -220,7 +220,5 @@ impl App {
 }
 
 fn is_audio_entry(entry: &Entry) -> bool {
-    file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified)
-        .builtin_class
-        == FileClass::Audio
+    file_info::inspect_entry_cached(entry).builtin_class == FileClass::Audio
 }

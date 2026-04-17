@@ -331,7 +331,7 @@ impl App {
 }
 
 fn is_epub_entry(entry: &Entry) -> bool {
-    file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified)
+    file_info::inspect_entry_cached(entry)
         .preview
         .document_format
         == Some(DocumentFormat::Epub)

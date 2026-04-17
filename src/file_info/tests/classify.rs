@@ -216,6 +216,31 @@ fn extensionless_png_is_detected_from_magic_bytes() {
 }
 
 #[test]
+fn entry_display_name_controls_classification_when_storage_name_has_collision_suffix() {
+    let root = temp_path("display-name-classification");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("photo.jpeg.2");
+    fs::write(&path, [0xff, 0xd8, 0xff, 0xdb]).expect("failed to write jpeg signature");
+    let metadata = fs::metadata(&path).expect("failed to stat temp file");
+    let entry = crate::core::Entry {
+        path: path.clone(),
+        name: "photo.jpeg".to_string(),
+        name_key: "photo.jpeg".to_string(),
+        kind: EntryKind::File,
+        size: metadata.len(),
+        modified: metadata.modified().ok(),
+        readonly: false,
+    };
+
+    let facts = inspect_entry_cached(&entry);
+
+    assert_eq!(facts.builtin_class, FileClass::Image);
+    assert_eq!(facts.specific_type_label, Some("JPEG image"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn extensionless_svg_is_detected_from_contents() {
     let root = temp_path("extensionless-svg");
     fs::create_dir_all(&root).expect("failed to create temp root");

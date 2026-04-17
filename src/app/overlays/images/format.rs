@@ -44,7 +44,7 @@ pub(super) fn static_image_detail_label(entry: &Entry) -> Option<&'static str> {
 }
 
 fn static_image_format_for_entry(entry: &Entry) -> Option<StaticImageFormat> {
-    crate::file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified)
+    crate::file_info::inspect_entry_cached(entry)
         .specific_type_label
         .and_then(StaticImageFormat::from_label)
 }
@@ -60,6 +60,7 @@ pub(super) fn static_image_format_for_overlay_request(
     )
     .specific_type_label
     .and_then(StaticImageFormat::from_label)
+    .or_else(|| sniff_static_image_format(&request.path))
 }
 
 pub(super) fn static_image_format_for_prepare_request(
@@ -73,12 +74,41 @@ pub(super) fn static_image_format_for_prepare_request(
     )
     .specific_type_label
     .and_then(StaticImageFormat::from_label)
+    .or_else(|| sniff_static_image_format(&request.path))
 }
 
 pub(super) fn static_image_format_for_path(path: &Path) -> Option<StaticImageFormat> {
     crate::file_info::inspect_path(path, EntryKind::File)
         .specific_type_label
         .and_then(StaticImageFormat::from_label)
+        .or_else(|| sniff_static_image_format(path))
+}
+
+fn sniff_static_image_format(path: &Path) -> Option<StaticImageFormat> {
+    let mut file = File::open(path).ok()?;
+    let mut buffer = [0_u8; 512];
+    let bytes_read = file.read(&mut buffer).ok()?;
+    let prefix = &buffer[..bytes_read];
+    if prefix.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
+        return Some(StaticImageFormat::Png);
+    }
+    if prefix.starts_with(&[0xff, 0xd8, 0xff]) {
+        return Some(StaticImageFormat::Jpeg);
+    }
+    if prefix.starts_with(b"GIF87a") || prefix.starts_with(b"GIF89a") {
+        return Some(StaticImageFormat::Gif);
+    }
+    if prefix.len() >= 12 && &prefix[..4] == b"RIFF" && &prefix[8..12] == b"WEBP" {
+        return Some(StaticImageFormat::Webp);
+    }
+    if prefix.len() >= 4 && prefix[..4] == [0x00, 0x00, 0x01, 0x00] {
+        return Some(StaticImageFormat::Ico);
+    }
+
+    let text = std::str::from_utf8(prefix).ok()?;
+    let trimmed = text.trim_start_matches(|ch: char| ch.is_ascii_whitespace() || ch == '\u{feff}');
+    (trimmed.starts_with("<svg") || (trimmed.starts_with("<?xml") && trimmed.contains("<svg")))
+        .then_some(StaticImageFormat::Svg)
 }
 
 pub(super) fn read_raster_dimensions(path: &Path) -> Option<RenderedImageDimensions> {
@@ -249,4 +279,36 @@ fn parse_svg_view_box(value: &str) -> Option<(f32, f32)> {
     let width = parts.next()?.parse::<f32>().ok()?;
     let height = parts.next()?.parse::<f32>().ok()?;
     Some((width, height))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn temp_path(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("elio-static-image-format-{label}-{unique}"))
+    }
+
+    #[test]
+    fn static_image_format_sniffs_collision_suffixed_jpeg_path() {
+        let root = temp_path("jpeg-collision-suffix");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("photo.jpeg.2");
+        fs::write(&path, [0xff, 0xd8, 0xff, 0xdb]).expect("failed to write jpeg signature");
+
+        assert_eq!(
+            static_image_format_for_path(&path),
+            Some(StaticImageFormat::Jpeg)
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
 }

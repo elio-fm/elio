@@ -4,15 +4,13 @@ use anyhow::{Context, Result};
 use std::cell::RefCell;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
-#[cfg(test)]
-use std::path::PathBuf;
 use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
     fs,
     hash::{Hash, Hasher},
     io,
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -51,16 +49,37 @@ struct EntryDetails {
     readonly: bool,
 }
 
-/// Reads the `DeletionDate` from a `.trashinfo` file inside `info_dir` for the given file name.
-fn read_trash_deletion_date(info_dir: &Path, name: &str) -> Option<SystemTime> {
+#[derive(Clone, Debug, Default)]
+struct TrashInfoMetadata {
+    original_name: Option<String>,
+    deletion_date: Option<SystemTime>,
+}
+
+fn trash_info_dir_for_files_dir(dir: &Path) -> Option<PathBuf> {
+    (dir.file_name().is_some_and(|n| n == "files"))
+        .then(|| dir.parent().map(|p| p.join("info")).filter(|p| p.is_dir()))
+        .flatten()
+}
+
+/// Reads the display metadata from a `.trashinfo` file inside `info_dir` for
+/// the given stored trash file name.
+fn read_trash_info_metadata(info_dir: &Path, name: &str) -> Option<TrashInfoMetadata> {
     let info_path = info_dir.join(format!("{name}.trashinfo"));
     let content = fs::read_to_string(info_path).ok()?;
+
+    let mut metadata = TrashInfoMetadata::default();
     for line in content.lines() {
         if let Some(date_str) = line.trim().strip_prefix("DeletionDate=") {
-            return parse_trash_deletion_date(date_str);
+            metadata.deletion_date = parse_trash_deletion_date(date_str);
+        } else if let Some(path_str) = line.trim().strip_prefix("Path=") {
+            metadata.original_name = trash_original_name(path_str);
         }
     }
-    None
+    Some(metadata)
+}
+
+fn trash_original_name(encoded_path: &str) -> Option<String> {
+    super::trashinfo::original_basename_from_path_value(encoded_path)
 }
 
 /// Parses a `DeletionDate` value from a `.trashinfo` file into a `SystemTime`.
@@ -148,16 +167,20 @@ pub(crate) fn load_directory_snapshot(
 ) -> Result<DirectorySnapshot> {
     let mut entries = read_entries(dir, show_hidden)?;
 
-    // If this is a freedesktop trash `files/` directory (recognised by the presence of a
-    // sibling `info/` directory), replace each entry's modification time with the deletion
-    // date stored in the corresponding `.trashinfo` file so the listing shows "trashed X ago"
-    // rather than the file's own last-modified timestamp.
-    if dir.file_name().is_some_and(|n| n == "files")
-        && let Some(info_dir) = dir.parent().map(|p| p.join("info")).filter(|p| p.is_dir())
-    {
+    // If this is a freedesktop trash `files/` directory, keep the entry path
+    // pointing at the stored trash file but display the original basename from
+    // the matching `.trashinfo`. The stored name may be collision-renamed
+    // (`foo.txt.2`, `foo.2.txt`, etc.) and is an implementation detail.
+    if let Some(info_dir) = trash_info_dir_for_files_dir(dir) {
         for entry in &mut entries {
-            if let Some(date) = read_trash_deletion_date(&info_dir, &entry.name) {
-                entry.modified = Some(date);
+            if let Some(metadata) = read_trash_info_metadata(&info_dir, &entry.name) {
+                if let Some(date) = metadata.deletion_date {
+                    entry.modified = Some(date);
+                }
+                if let Some(original_name) = metadata.original_name {
+                    entry.name = original_name;
+                    entry.name_key = entry.name.to_lowercase();
+                }
             }
         }
     }
@@ -189,6 +212,7 @@ pub(crate) fn scan_directory_fingerprint(
     show_hidden: bool,
 ) -> Result<DirectoryFingerprint> {
     let mut parts = Vec::new();
+    let trash_info_dir = trash_info_dir_for_files_dir(dir);
     for item in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
         let item = match item {
             Ok(item) => item,
@@ -205,11 +229,23 @@ pub(crate) fn scan_directory_fingerprint(
             Err(_) => continue,
         };
         let details = entry_details(&item.path(), &metadata);
+        let mut name = file_name.to_string_lossy().to_string();
+        let mut modified = details.modified;
+        if let Some(info_dir) = trash_info_dir.as_deref()
+            && let Some(metadata) = read_trash_info_metadata(info_dir, &name)
+        {
+            if let Some(original_name) = metadata.original_name {
+                name = original_name;
+            }
+            if let Some(date) = metadata.deletion_date {
+                modified = Some(date);
+            }
+        }
         parts.push(FingerprintPart {
-            name: file_name.to_string_lossy().to_lowercase(),
+            name: name.to_lowercase(),
             kind: details.kind,
             size: details.size,
-            modified: fingerprint_time(details.modified),
+            modified: fingerprint_time(modified),
             readonly: details.readonly,
         });
     }
@@ -698,6 +734,91 @@ mod tests {
             .expect("should be after epoch")
             .as_secs();
         assert_eq!(secs, 1_710_498_600);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn trash_snapshot_displays_original_name_from_trashinfo() {
+        let root = temp_path("trash-display-name");
+        let files_dir = root.join("files");
+        let info_dir = root.join("info");
+        fs::create_dir_all(&files_dir).expect("failed to create files dir");
+        fs::create_dir_all(&info_dir).expect("failed to create info dir");
+
+        fs::write(files_dir.join("report.pdf.2"), "dummy")
+            .expect("failed to write collision-renamed trashed file");
+        fs::write(
+            info_dir.join("report.pdf.2.trashinfo"),
+            "[Trash Info]\nPath=/home/user/Reports/report%20final.pdf\nDeletionDate=2024-03-15T10:30:00\n",
+        )
+        .expect("failed to write trashinfo");
+
+        let snapshot =
+            load_directory_snapshot(&files_dir, false, SortMode::Name).expect("should load");
+        let entry = snapshot.entries.first().expect("entry should be present");
+
+        assert_eq!(entry.name, "report final.pdf");
+        assert_eq!(entry.name_key, "report final.pdf");
+        assert_eq!(
+            entry.path.file_name().and_then(|n| n.to_str()),
+            Some("report.pdf.2")
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn trash_snapshot_keeps_stored_name_without_original_path_metadata() {
+        let root = temp_path("trash-display-name-fallback");
+        let files_dir = root.join("files");
+        let info_dir = root.join("info");
+        fs::create_dir_all(&files_dir).expect("failed to create files dir");
+        fs::create_dir_all(&info_dir).expect("failed to create info dir");
+
+        fs::write(files_dir.join("stored-name.txt.2"), "dummy")
+            .expect("failed to write trashed file");
+        fs::write(
+            info_dir.join("stored-name.txt.2.trashinfo"),
+            "[Trash Info]\nDeletionDate=2024-03-15T10:30:00\n",
+        )
+        .expect("failed to write trashinfo");
+
+        let snapshot =
+            load_directory_snapshot(&files_dir, false, SortMode::Name).expect("should load");
+        let entry = snapshot.entries.first().expect("entry should be present");
+
+        assert_eq!(entry.name, "stored-name.txt.2");
+        assert_eq!(entry.name_key, "stored-name.txt.2");
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn trash_fingerprint_tracks_original_name_from_trashinfo() {
+        let root = temp_path("trash-fingerprint-display-name");
+        let files_dir = root.join("files");
+        let info_dir = root.join("info");
+        fs::create_dir_all(&files_dir).expect("failed to create files dir");
+        fs::create_dir_all(&info_dir).expect("failed to create info dir");
+        fs::write(files_dir.join("photo.jpeg.2"), "dummy").expect("failed to write trashed file");
+        let info_path = info_dir.join("photo.jpeg.2.trashinfo");
+
+        fs::write(
+            &info_path,
+            "[Trash Info]\nPath=/home/user/photo.jpeg\nDeletionDate=2024-03-15T10:30:00\n",
+        )
+        .expect("failed to write initial trashinfo");
+        let first = scan_directory_fingerprint(&files_dir, false).expect("failed to fingerprint");
+
+        fs::write(
+            &info_path,
+            "[Trash Info]\nPath=/home/user/renamed-photo.jpeg\nDeletionDate=2024-03-15T10:30:00\n",
+        )
+        .expect("failed to update trashinfo");
+        let second = scan_directory_fingerprint(&files_dir, false).expect("failed to fingerprint");
+
+        assert_ne!(first, second);
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

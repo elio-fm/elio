@@ -67,9 +67,10 @@ impl App {
             self.status = "Open With is for files".to_string();
             return;
         }
+        let entry = entry.clone();
         let path = entry.path.clone();
 
-        let apps = super::discovery::discover_open_with_apps(&path);
+        let apps = super::discovery::discover_open_with_apps_for_entry(&entry);
         self.handle_discovered_open_with_apps(&path, apps, open_with_fallback, |app| {
             detached_open_command(&app.program, &app.args)
         });

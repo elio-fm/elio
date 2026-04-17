@@ -3,7 +3,7 @@ use super::{
     license::sniff_license_file_type, names::inspect_exact_name,
 };
 use crate::{
-    core::{EntryKind, FileClass},
+    core::{Entry, EntryKind, FileClass},
     preview::code::registry,
 };
 use std::collections::HashMap;
@@ -20,6 +20,10 @@ const STRONG_SHELL_THRESHOLD: u8 = 4;
 const SCORE_MARGIN: u8 = 2;
 
 pub(crate) fn inspect_path(path: &Path, kind: EntryKind) -> FileFacts {
+    inspect_path_with_name(path, None, kind)
+}
+
+fn inspect_path_with_name(path: &Path, display_name: Option<&str>, kind: EntryKind) -> FileFacts {
     if kind == EntryKind::Directory {
         return FileFacts {
             builtin_class: FileClass::Directory,
@@ -28,11 +32,15 @@ pub(crate) fn inspect_path(path: &Path, kind: EntryKind) -> FileFacts {
         };
     }
 
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(normalize_key)
+    let name_for_type = display_name
+        .map(str::to_owned)
+        .or_else(|| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(str::to_owned)
+        })
         .unwrap_or_default();
+    let name = normalize_key(&name_for_type);
     if let Some(facts) = inspect_exact_name(&name) {
         return facts;
     }
@@ -40,7 +48,7 @@ pub(crate) fn inspect_path(path: &Path, kind: EntryKind) -> FileFacts {
         return facts;
     }
 
-    let ext = path
+    let ext = Path::new(&name_for_type)
         .extension()
         .and_then(|ext| ext.to_str())
         .map(normalize_key)
@@ -63,9 +71,30 @@ pub(crate) fn inspect_path_cached(
     size: u64,
     modified: Option<SystemTime>,
 ) -> FileFacts {
+    inspect_path_with_name_cached(path, None, kind, size, modified)
+}
+
+pub(crate) fn inspect_entry_cached(entry: &Entry) -> FileFacts {
+    inspect_path_with_name_cached(
+        &entry.path,
+        Some(&entry.name),
+        entry.kind,
+        entry.size,
+        entry.modified,
+    )
+}
+
+fn inspect_path_with_name_cached(
+    path: &Path,
+    display_name: Option<&str>,
+    kind: EntryKind,
+    size: u64,
+    modified: Option<SystemTime>,
+) -> FileFacts {
     #[derive(Eq, Hash, PartialEq)]
     struct CacheKey {
         path: PathBuf,
+        display_name: Option<String>,
         is_dir: bool,
         size: u64,
         mtime: Option<(u64, u32)>,
@@ -81,6 +110,7 @@ pub(crate) fn inspect_path_cached(
         .map(|d| (d.as_secs(), d.subsec_nanos()));
     let key = CacheKey {
         path: path.to_path_buf(),
+        display_name: display_name.map(str::to_owned),
         is_dir: kind == EntryKind::Directory,
         size,
         mtime,
@@ -94,7 +124,7 @@ pub(crate) fn inspect_path_cached(
         return facts;
     }
 
-    let facts = inspect_path(path, kind);
+    let facts = inspect_path_with_name(path, display_name, kind);
     facts_cache()
         .lock()
         .expect("file facts cache lock")
