@@ -11,10 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Improved fuzzy search indexing and filtering responsiveness for large directory trees.
 - Documented fuzzy search scope, hidden-file handling, pruning, refresh behavior, and large-tree caps.
+- Documented Trash behavior across Linux, BSD, macOS, and Windows.
+- Prefer `gio trash` on Linux before falling back to the Freedesktop Trash layout for desktop-compatible trashing.
 
 ### Fixed
 
 - Fixed fuzzy search reusing stale indexes after directory reloads, so pasted, cut, deleted, or newly created entries are reflected after filesystem changes.
+- Fixed Freedesktop Trash entries with collision-suffixed storage names, such as `photo.jpg.2`, so they display, preview, open, and restore using their original `.trashinfo` names.
 
 ## [1.0.1] - 2026-04-12
 
