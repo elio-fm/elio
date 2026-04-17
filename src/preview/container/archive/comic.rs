@@ -5,8 +5,9 @@ use super::format::archive_default_label;
 use super::*;
 use crate::fs::natural_cmp;
 use crate::preview::process::run_command_capture_stdout_cancellable;
+use quick_xml::{Reader, events::Event};
 use std::{
-    collections::{HashMap, VecDeque, hash_map::DefaultHasher},
+    collections::{BTreeMap, HashMap, VecDeque, hash_map::DefaultHasher},
     env,
     fs::{self, File},
     hash::{Hash, Hasher},
@@ -18,7 +19,9 @@ use std::{
 use zip::ZipArchive;
 
 const COMIC_ARCHIVE_IMAGE_ENTRY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
+const COMIC_INFO_ENTRY_LIMIT_BYTES: usize = 256 * 1024;
 const COMIC_ARCHIVE_CACHE_LIMIT: usize = 16;
+const COMIC_EXTRA_PREVIEW_LIMIT: usize = 3;
 fn has_unrar() -> bool {
     static RESULT: OnceLock<bool> = OnceLock::new();
     *RESULT.get_or_init(|| Command::new("unrar").output().is_ok())
@@ -67,6 +70,21 @@ struct ComicArchivePage {
 struct CachedComicArchive {
     backend: ComicArchiveBackend,
     page_entries: Vec<ComicArchivePage>,
+    extra_entries: Vec<String>,
+    comic_info: Option<ComicInfoMetadata>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ComicInfoMetadata {
+    title: Option<String>,
+    series: Option<String>,
+    number: Option<String>,
+    volume: Option<String>,
+    year: Option<String>,
+    publisher: Option<String>,
+    writer: Option<String>,
+    penciller: Option<String>,
+    genre: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -124,7 +142,8 @@ where
     let detail = type_detail
         .unwrap_or(archive_default_label(format))
         .to_string();
-    let mut preview = PreviewContent::new(PreviewKind::Comic, Vec::new())
+    let lines = comic_archive_details_lines(&comic, current_index);
+    let mut preview = PreviewContent::new(PreviewKind::Comic, lines)
         .with_detail(detail)
         .with_navigation_position("Page", current_index, comic.page_entries.len(), None);
 
@@ -144,6 +163,187 @@ where
     }
 
     Some(preview)
+}
+
+fn comic_archive_details_lines(
+    comic: &CachedComicArchive,
+    _current_index: usize,
+) -> Vec<Line<'static>> {
+    let palette = theme::palette();
+    let info = comic.comic_info.as_ref();
+    let fields = vec![
+        ("Title", info.and_then(|info| info.title.clone())),
+        ("Series", info.and_then(|info| info.series.clone())),
+        ("Number", info.and_then(|info| info.number.clone())),
+        ("Volume", info.and_then(|info| info.volume.clone())),
+        ("Year", info.and_then(|info| info.year.clone())),
+        ("Publisher", info.and_then(|info| info.publisher.clone())),
+        ("Writer", info.and_then(|info| info.writer.clone())),
+        ("Penciller", info.and_then(|info| info.penciller.clone())),
+        ("Genre", info.and_then(|info| info.genre.clone())),
+        ("Pages", Some(format!("{}", comic.page_entries.len()))),
+        (
+            "Root",
+            info.is_none().then(|| common_root_folder(comic)).flatten(),
+        ),
+    ];
+    let mut lines = Vec::new();
+    push_preview_section(&mut lines, "Details", &fields, palette);
+    let content_fields = comic_archive_content_fields(comic);
+    push_preview_values_section(&mut lines, "Contents", &content_fields, palette);
+    lines
+}
+
+fn comic_archive_content_fields(comic: &CachedComicArchive) -> Vec<(&'static str, String)> {
+    let mut fields = Vec::new();
+    if !comic.extra_entries.is_empty() {
+        fields.push((
+            "Extras",
+            summarize_comic_extra_entries(&comic.extra_entries),
+        ));
+    }
+    fields
+}
+
+fn summarize_comic_extra_entries(entries: &[String]) -> String {
+    let count = entries.len();
+    let noun = if count == 1 { "file" } else { "files" };
+    let names = entries
+        .iter()
+        .take(COMIC_EXTRA_PREVIEW_LIMIT)
+        .map(|entry| entry.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    if count > COMIC_EXTRA_PREVIEW_LIMIT {
+        format!("{count} {noun}: {names}, ...")
+    } else {
+        format!("{count} {noun}: {names}")
+    }
+}
+
+fn common_root_folder(comic: &CachedComicArchive) -> Option<String> {
+    let mut root: Option<String> = None;
+    for entry_name in comic
+        .page_entries
+        .iter()
+        .map(|entry| entry.entry_name.as_str())
+        .chain(comic.extra_entries.iter().map(String::as_str))
+    {
+        let normalized = normalize_archive_path(entry_name, false)?;
+        let (candidate, _) = normalized.split_once('/')?;
+        match root.as_deref() {
+            Some(existing) if existing != candidate => return None,
+            Some(_) => {}
+            None => root = Some(candidate.to_string()),
+        }
+    }
+    root
+}
+
+fn push_comic_extra_entry(entries: &mut Vec<String>, entry_name: &str) {
+    if entry_name.trim().is_empty() {
+        return;
+    }
+    entries.push(entry_name.to_string());
+}
+
+fn sort_comic_extra_entries(entries: &mut [String]) {
+    entries.sort_by(|left, right| natural_cmp(&left.to_lowercase(), &right.to_lowercase()));
+}
+
+fn find_comic_info_entry(entries: &[String]) -> Option<&str> {
+    entries
+        .iter()
+        .find(|entry| {
+            entry
+                .replace('\\', "/")
+                .rsplit('/')
+                .next()
+                .is_some_and(|name| name.eq_ignore_ascii_case("ComicInfo.xml"))
+        })
+        .map(String::as_str)
+}
+
+fn parse_comic_info_xml(xml: &str) -> Option<ComicInfoMetadata> {
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    let mut metadata = ComicInfoMetadata::default();
+    let mut current_tag: Option<String> = None;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(event)) => {
+                current_tag = Some(xml_local_name(event.name().as_ref()));
+            }
+            Ok(Event::Text(text)) => {
+                if let Some(tag) = current_tag.as_deref()
+                    && let Ok(value) = text.decode()
+                {
+                    assign_comic_info_text(&mut metadata, tag, value.as_ref());
+                }
+            }
+            Ok(Event::CData(text)) => {
+                if let Some(tag) = current_tag.as_deref()
+                    && let Ok(value) = text.decode()
+                {
+                    assign_comic_info_text(&mut metadata, tag, value.as_ref());
+                }
+            }
+            Ok(Event::End(_)) | Ok(Event::Empty(_)) => current_tag = None,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    metadata.has_visible_fields().then_some(metadata)
+}
+
+fn assign_comic_info_text(metadata: &mut ComicInfoMetadata, tag: &str, value: &str) {
+    match tag {
+        "Title" => set_comic_info_field(&mut metadata.title, value),
+        "Series" => set_comic_info_field(&mut metadata.series, value),
+        "Number" => set_comic_info_field(&mut metadata.number, value),
+        "Volume" => set_comic_info_field(&mut metadata.volume, value),
+        "Year" => set_comic_info_field(&mut metadata.year, value),
+        "Publisher" => set_comic_info_field(&mut metadata.publisher, value),
+        "Writer" => set_comic_info_field(&mut metadata.writer, value),
+        "Penciller" => set_comic_info_field(&mut metadata.penciller, value),
+        "Genre" => set_comic_info_field(&mut metadata.genre, value),
+        _ => {}
+    }
+}
+
+fn set_comic_info_field(field: &mut Option<String>, value: &str) {
+    if field.is_some() {
+        return;
+    }
+    let value = value.trim();
+    if !value.is_empty() {
+        *field = Some(value.to_string());
+    }
+}
+
+impl ComicInfoMetadata {
+    fn has_visible_fields(&self) -> bool {
+        self.title.is_some()
+            || self.series.is_some()
+            || self.number.is_some()
+            || self.volume.is_some()
+            || self.year.is_some()
+            || self.publisher.is_some()
+            || self.writer.is_some()
+            || self.penciller.is_some()
+            || self.genre.is_some()
+    }
+}
+
+fn xml_local_name(name: &[u8]) -> String {
+    let local = name
+        .iter()
+        .position(|byte| *byte == b':')
+        .map(|index| &name[index + 1..])
+        .unwrap_or(name);
+    String::from_utf8_lossy(local).to_string()
 }
 
 fn load_comic_archive<F>(path: &Path, canceled: &F) -> Option<Arc<CachedComicArchive>>
@@ -243,13 +443,14 @@ where
     F: Fn() -> bool,
 {
     let file = File::open(path).ok()?;
-    let archive = ZipArchive::new(file).ok()?;
+    let mut archive = ZipArchive::new(file).ok()?;
     let mut page_entries = Vec::new();
+    let mut extra_entries = Vec::new();
 
     // Use file_names() to iterate the central directory without seeking to each
     // entry — much faster for archives with many pages.
     let names: Vec<String> = archive.file_names().map(|n| n.to_string()).collect();
-    for name in names {
+    for name in &names {
         if canceled() {
             return None;
         }
@@ -257,14 +458,15 @@ where
         if name.ends_with('/') {
             continue;
         }
-        let Some(extension) = archive_image_extension(&name) else {
+        let Some(extension) = archive_image_extension(name) else {
+            push_comic_extra_entry(&mut extra_entries, name);
             continue;
         };
-        let sort_key = normalize_archive_path(&name, false)
+        let sort_key = normalize_archive_path(name, false)
             .unwrap_or_else(|| name.clone())
             .to_lowercase();
         page_entries.push(ComicArchivePage {
-            entry_name: name,
+            entry_name: name.clone(),
             sort_key,
             extension: extension.to_string(),
         });
@@ -274,10 +476,22 @@ where
         return None;
     }
     page_entries.sort_by(|left, right| natural_cmp(&left.sort_key, &right.sort_key));
+    sort_comic_extra_entries(&mut extra_entries);
+    let comic_info = find_comic_info_entry(&extra_entries).and_then(|entry_name| {
+        read_zip_entry_bytes_limited(
+            &mut archive,
+            entry_name,
+            COMIC_INFO_ENTRY_LIMIT_BYTES,
+            canceled,
+        )
+        .and_then(|bytes| parse_comic_info_xml(&String::from_utf8_lossy(&bytes)))
+    });
 
     Some(CachedComicArchive {
         backend: ComicArchiveBackend::Zip,
         page_entries,
+        extra_entries,
+        comic_info,
     })
 }
 
@@ -289,7 +503,13 @@ where
     command.arg("l").arg("-slt").arg(path);
     let output = run_command_capture_stdout_cancellable(command, "comic-list", canceled)?;
 
-    parse_comic_archive_from_7z_output(&String::from_utf8_lossy(&output), canceled)
+    let mut comic =
+        parse_comic_archive_from_7z_output(&String::from_utf8_lossy(&output), canceled)?;
+    comic.comic_info = find_comic_info_entry(&comic.extra_entries).and_then(|entry_name| {
+        read_7z_entry_bytes_limited(path, entry_name, COMIC_INFO_ENTRY_LIMIT_BYTES, canceled)
+            .and_then(|bytes| parse_comic_info_xml(&String::from_utf8_lossy(&bytes)))
+    });
+    Some(comic)
 }
 
 fn parse_comic_archive_from_7z_output<F>(output: &str, canceled: &F) -> Option<CachedComicArchive>
@@ -297,6 +517,7 @@ where
     F: Fn() -> bool,
 {
     let mut page_entries = Vec::new();
+    let mut extra_entries = Vec::new();
     let mut in_entries = false;
     let mut current = BTreeMap::<String, String>::new();
 
@@ -315,7 +536,7 @@ where
         }
 
         if line.is_empty() {
-            push_7z_comic_page_entry(&mut current, &mut page_entries);
+            push_7z_comic_entry(&mut current, &mut page_entries, &mut extra_entries);
             continue;
         }
 
@@ -323,22 +544,26 @@ where
             current.insert(field.to_string(), value.to_string());
         }
     }
-    push_7z_comic_page_entry(&mut current, &mut page_entries);
+    push_7z_comic_entry(&mut current, &mut page_entries, &mut extra_entries);
 
     if canceled() || page_entries.is_empty() {
         return None;
     }
 
     page_entries.sort_by(|left, right| natural_cmp(&left.sort_key, &right.sort_key));
+    sort_comic_extra_entries(&mut extra_entries);
     Some(CachedComicArchive {
         backend: ComicArchiveBackend::SevenZip,
         page_entries,
+        extra_entries,
+        comic_info: None,
     })
 }
 
-fn push_7z_comic_page_entry(
+fn push_7z_comic_entry(
     current: &mut BTreeMap<String, String>,
     page_entries: &mut Vec<ComicArchivePage>,
+    extra_entries: &mut Vec<String>,
 ) {
     if current.is_empty() {
         return;
@@ -350,18 +575,19 @@ fn push_7z_comic_page_entry(
             .get("Attributes")
             .is_some_and(|value| value.starts_with('D'));
 
-    if !is_dir
-        && let Some(entry_name) = entry_name
-        && let Some(extension) = archive_image_extension(&entry_name)
-    {
-        let sort_key = normalize_archive_path(&entry_name, false)
-            .unwrap_or_else(|| entry_name.clone())
-            .to_lowercase();
-        page_entries.push(ComicArchivePage {
-            entry_name,
-            sort_key,
-            extension: extension.to_string(),
-        });
+    if !is_dir && let Some(entry_name) = entry_name {
+        if let Some(extension) = archive_image_extension(&entry_name) {
+            let sort_key = normalize_archive_path(&entry_name, false)
+                .unwrap_or_else(|| entry_name.clone())
+                .to_lowercase();
+            page_entries.push(ComicArchivePage {
+                entry_name,
+                sort_key,
+                extension: extension.to_string(),
+            });
+        } else {
+            push_comic_extra_entry(extra_entries, &entry_name);
+        }
     }
 
     current.clear();
@@ -376,6 +602,7 @@ where
     let output = run_command_capture_stdout_cancellable(command, "comic-list", canceled)?;
     let listing = String::from_utf8_lossy(&output);
     let mut page_entries = Vec::new();
+    let mut extra_entries = Vec::new();
 
     for line in listing.lines() {
         if canceled() {
@@ -386,6 +613,7 @@ where
             continue;
         }
         let Some(extension) = archive_image_extension(name) else {
+            push_comic_extra_entry(&mut extra_entries, name);
             continue;
         };
         let sort_key = normalize_archive_path(name, false)
@@ -403,9 +631,16 @@ where
     }
 
     page_entries.sort_by(|a, b| natural_cmp(&a.sort_key, &b.sort_key));
+    sort_comic_extra_entries(&mut extra_entries);
+    let comic_info = find_comic_info_entry(&extra_entries).and_then(|entry_name| {
+        read_unrar_entry_bytes_limited(path, entry_name, COMIC_INFO_ENTRY_LIMIT_BYTES, canceled)
+            .and_then(|bytes| parse_comic_info_xml(&String::from_utf8_lossy(&bytes)))
+    });
     Some(CachedComicArchive {
         backend: ComicArchiveBackend::Unrar,
         page_entries,
+        extra_entries,
+        comic_info,
     })
 }
 

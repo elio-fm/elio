@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clarified media and binary metadata previews by using `Details` instead of repeating `Video`, `Audio`, `Image`, or `Binary` as the first body section.
 - Clarified archive metadata previews by using `Details` instead of `Summary`, `Image`, or `Torrent` for the first body section.
 - Clarified SQLite database previews by using `Details` for the first metadata section.
+- Fixed comic archive previews so CBZ and CBR files show ComicInfo metadata and compact contents when image rendering is unavailable.
 
 ## [1.0.1] - 2026-04-12
 

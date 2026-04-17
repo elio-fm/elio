@@ -366,7 +366,7 @@ fn zip_preview_renders_archive_details_and_tree() {
 }
 
 #[test]
-fn comic_zip_preview_renders_first_page_without_summary() {
+fn comic_zip_preview_uses_comic_info_and_compact_contents() {
     let root = temp_path("comic-zip-preview");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("issue.cbz");
@@ -388,6 +388,21 @@ fn comic_zip_preview_renders_first_page_without_summary() {
     zip.start_file("notes/readme.txt", options)
         .expect("failed to start text entry");
     zip.write_all(b"hello").expect("failed to write text entry");
+    zip.start_file("ComicInfo.xml", options)
+        .expect("failed to start comic info entry");
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="utf-8"?>
+            <ComicInfo>
+              <Title>Bright Landing</Title>
+              <Series>Orbital Stories</Series>
+              <Number>4</Number>
+              <Year>2026</Year>
+              <Writer>Regueiro</Writer>
+              <Publisher>Elio Press</Publisher>
+              <Genre>Science Fiction</Genre>
+            </ComicInfo>"#,
+    )
+    .expect("failed to write comic info entry");
     zip.finish().expect("failed to finish comic zip");
 
     let preview = build_preview(&file_entry(path));
@@ -409,7 +424,53 @@ fn comic_zip_preview_renders_first_page_without_summary() {
     assert_eq!(position.index, 0);
     assert_eq!(position.count, 2);
     assert!(visual.path.exists());
-    assert!(line_texts.is_empty());
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Title") && text.contains("Bright Landing"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Series") && text.contains("Orbital Stories"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Number") && text.contains("4"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Writer") && text.contains("Regueiro"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Publisher") && text.contains("Elio Press"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Genre") && text.contains("Science Fiction"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Pages") && text.contains("2"))
+    );
+    assert!(line_texts.iter().any(|text| text.trim() == "Contents"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Extras") && text.contains("ComicInfo.xml"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Extras") && text.contains("notes/readme.txt"))
+    );
     assert!(
         !line_texts
             .iter()
@@ -417,10 +478,8 @@ fn comic_zip_preview_renders_first_page_without_summary() {
     );
     assert!(!line_texts.iter().any(|text| text.contains("Packed")));
     assert!(!line_texts.iter().any(|text| text.contains("Archive Size")));
-    assert!(!line_texts.iter().any(|text| text.trim() == "Contents"));
     assert!(!line_texts.iter().any(|text| text.contains("001-cover.jpg")));
     assert!(!line_texts.iter().any(|text| text.contains("002-page.jpg")));
-    assert!(!line_texts.iter().any(|text| text.contains("notes/")));
 
     let _ = fs::remove_file(visual.path);
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -488,6 +547,13 @@ fn comic_zip_preview_uses_natural_page_order_and_page_selection() {
             .map(|position| position.count),
         Some(3)
     );
+    let second_line_texts: Vec<_> = second_preview.lines.iter().map(line_text).collect();
+    assert!(
+        second_line_texts
+            .iter()
+            .any(|text| text.contains("Pages") && text.contains("3"))
+    );
+    assert!(!second_line_texts.iter().any(|text| text.contains("2.jpg")));
 
     let _ = fs::remove_file(first_visual.path.clone());
     let _ = fs::remove_file(second_visual.path.clone());
@@ -531,7 +597,12 @@ fn cbr_file_with_zip_content_renders_as_comic_preview() {
         Some(("Page", 0, 2))
     );
     assert!(visual.path.exists());
-    assert!(line_texts.is_empty());
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Pages") && text.contains("2"))
+    );
 
     let _ = fs::remove_file(visual.path);
     fs::remove_dir_all(root).expect("failed to remove temp root");
