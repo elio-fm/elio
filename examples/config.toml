@@ -35,18 +35,22 @@ show_top_bar = false
 #   "trash",
 # ]
 #
-# Optional pane widths for the browser body. Values are relative weights across
-# the horizontal space. Set a pane to 0 to hide it.
+# Optional pane weights for the browser body. Values are relative: in
+# side-by-side layouts they control horizontal width, and when Preview stacks
+# below Files they control the Files / Preview vertical split.
+# Set a pane to 0 to hide it.
 #
 # If this table is omitted, Elio keeps the built-in responsive layout:
 # - horizontal layout: Places prefers 20 cols, Files / Preview use a 54 / 46
 #   split of the remaining width
 # - tighter windows: Places can shrink to 18 cols before Preview stacks
+# - stacked layout: Files / Preview use a 54 / 46 split of the available height
 # - height-constrained windows: Preview drops out instead of stacking too early
 #
 # Custom layouts keep visible panes side by side whenever they can still meet
 # minimum usable widths. If Preview can no longer fit horizontally but there is
-# enough height, it stacks below Files instead.
+# enough height, it stacks below Files using the configured Files / Preview
+# weights.
 #
 # [layout.panes]
 # places = 10

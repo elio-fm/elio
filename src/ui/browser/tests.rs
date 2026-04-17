@@ -235,8 +235,31 @@ fn narrow_browser_layout_stacks_preview_below_entries() {
     assert_eq!(sidebar.width, 22);
     assert_eq!(entries.x, preview.x);
     assert_eq!(entries.width, preview.width);
-    assert_eq!(entries.height, 10);
-    assert_eq!(preview.height, 10);
+    assert_eq!(entries.height, 11);
+    assert_eq!(preview.height, 9);
+}
+
+#[test]
+fn narrow_tall_browser_layout_gives_preview_more_vertical_space() {
+    let layout = resolve_body_layout(
+        Rect {
+            x: 0,
+            y: 0,
+            width: 65,
+            height: 60,
+        },
+        None,
+    );
+
+    let sidebar = layout.sidebar.expect("sidebar should be visible");
+    let entries = layout.entries.expect("entries should be visible");
+    let preview = layout.preview.expect("preview should be visible");
+
+    assert_eq!(sidebar.width, 22);
+    assert_eq!(entries.x, preview.x);
+    assert_eq!(entries.width, preview.width);
+    assert_eq!(entries.height, 33);
+    assert_eq!(preview.height, 27);
 }
 
 #[test]
@@ -411,8 +434,60 @@ fn weighted_layout_stacks_preview_when_width_is_tight_and_height_is_sufficient()
     assert!(sidebar.width >= 16);
     assert_eq!(entries.x, preview.x);
     assert_eq!(entries.width, preview.width);
-    assert_eq!(entries.height, 10);
-    assert_eq!(preview.height, 10);
+    assert_eq!(entries.height, 11);
+    assert_eq!(preview.height, 9);
+}
+
+#[test]
+fn weighted_stacked_layout_respects_file_and_preview_height_weights() {
+    let layout = resolve_body_layout(
+        Rect {
+            x: 0,
+            y: 0,
+            width: 60,
+            height: 60,
+        },
+        Some(PaneWeights {
+            places: 10,
+            files: 30,
+            preview: 70,
+        }),
+    );
+
+    let sidebar = layout.sidebar.expect("sidebar should be visible");
+    let entries = layout.entries.expect("entries should be visible");
+    let preview = layout.preview.expect("preview should be visible");
+
+    assert!(sidebar.width >= 16);
+    assert_eq!(entries.x, preview.x);
+    assert_eq!(entries.width, preview.width);
+    assert_eq!(entries.height, 23);
+    assert_eq!(preview.height, 37);
+}
+
+#[test]
+fn weighted_stacked_layout_can_favor_files_over_preview() {
+    let layout = resolve_body_layout(
+        Rect {
+            x: 0,
+            y: 0,
+            width: 60,
+            height: 60,
+        },
+        Some(PaneWeights {
+            places: 10,
+            files: 70,
+            preview: 30,
+        }),
+    );
+
+    let entries = layout.entries.expect("entries should be visible");
+    let preview = layout.preview.expect("preview should be visible");
+
+    assert_eq!(entries.x, preview.x);
+    assert_eq!(entries.width, preview.width);
+    assert_eq!(entries.height, 39);
+    assert_eq!(preview.height, 21);
 }
 
 #[test]
