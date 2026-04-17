@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed fuzzy search reusing stale indexes after directory reloads, so pasted, cut, deleted, or newly created entries are reflected after filesystem changes.
 - Fixed Freedesktop Trash entries with collision-suffixed storage names, such as `photo.jpg.2`, so they display, preview, open, and restore using their original `.trashinfo` names.
+- Fixed stacked browser layouts so the Preview pane expands in tall narrow terminals and respects configured Files/Preview pane weights.
 
 ## [1.0.1] - 2026-04-12
 
