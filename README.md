@@ -197,7 +197,7 @@ Supported sections:
 
 - `[ui]`: startup UI options like top bar, hidden files, and initial grid view
 - `[places]`: pinned sidebar entries and the `Devices` section
-- `[layout.panes]`: relative pane widths for Places, Files, and Preview
+- `[layout.panes]`: relative pane weights for Places, Files, and Preview
 - `[keys]`: single-character key rebinding for browser actions
 
 Notes:
@@ -208,6 +208,7 @@ Notes:
 - `places = 0` hides the Places pane, and `preview = 0` hides the Preview pane.
 - `files` must be greater than `0`.
 - Pane weights are relative, so `10/45/45` and `20/90/90` produce the same split.
+- In narrow terminals where Preview stacks below Files, `files` and `preview` control the vertical split.
 - `places.entries` accepts built-in names, `{ builtin, icon? }`, or `{ title, path, icon? }`.
 - Custom `places` paths must be absolute or start with `~/`.
 - Invalid `places` entries are skipped with a warning.
