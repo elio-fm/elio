@@ -3,27 +3,19 @@ use quick_xml::{Reader, events::Event};
 use std::{
     collections::BTreeMap,
     fs::File,
-    io::{Cursor, Read},
+    io::Read,
     path::{Component, Path},
 };
 use zip::ZipArchive;
 
-pub(super) const DOCUMENT_PREVIEW_LIMIT_BYTES: u64 = 512 * 1024;
 pub(super) const DOCUMENT_XML_ENTRY_LIMIT_BYTES: usize = 64 * 1024;
 
 pub(super) fn extract_zip_document_metadata(
     path: &Path,
-    extract: impl FnOnce(&mut ZipArchive<Cursor<Vec<u8>>>) -> DocumentMetadata,
+    extract: impl FnOnce(&mut ZipArchive<File>) -> DocumentMetadata,
 ) -> Option<DocumentMetadata> {
-    let mut bytes = Vec::with_capacity(DOCUMENT_PREVIEW_LIMIT_BYTES as usize);
-    File::open(path)
-        .ok()?
-        .take(DOCUMENT_PREVIEW_LIMIT_BYTES)
-        .read_to_end(&mut bytes)
-        .ok()?;
-
-    let cursor = Cursor::new(bytes);
-    let metadata = match ZipArchive::new(cursor) {
+    let file = File::open(path).ok()?;
+    let metadata = match ZipArchive::new(file) {
         Ok(mut archive) => extract(&mut archive),
         Err(_) => DocumentMetadata::default(),
     };

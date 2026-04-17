@@ -5,7 +5,7 @@ use super::super::{
     metadata::DocumentMetadata,
 };
 use crate::file_info::DocumentFormat;
-use std::io::Read;
+use std::io::{Read, Seek};
 use zip::ZipArchive;
 
 pub(super) fn extract_ooxml_metadata<R: Read + std::io::Seek>(
@@ -43,8 +43,18 @@ pub(super) fn extract_ooxml_metadata<R: Read + std::io::Seek>(
             );
         }
         DocumentFormat::Pptx | DocumentFormat::Pptm => {
-            push_count_stat(&mut metadata, "Slides", present_count(app.get("Slides")));
-            push_count_stat(&mut metadata, "Notes", present_count(app.get("Notes")));
+            let slide_count = archive_part_count(archive, "ppt/slides/slide", ".xml");
+            let notes_count = archive_part_count(archive, "ppt/notesSlides/notesSlide", ".xml");
+            push_count_stat(
+                &mut metadata,
+                "Slides",
+                count_with_archive_fallback(present_count(app.get("Slides")), slide_count),
+            );
+            push_count_stat(
+                &mut metadata,
+                "Notes",
+                count_with_archive_fallback(present_count(app.get("Notes")), notes_count),
+            );
             push_count_stat(
                 &mut metadata,
                 "Hidden Slides",
@@ -65,4 +75,30 @@ pub(super) fn extract_ooxml_metadata<R: Read + std::io::Seek>(
     }
 
     metadata
+}
+
+fn archive_part_count<R: Read + Seek>(
+    archive: &ZipArchive<R>,
+    prefix: &str,
+    suffix: &str,
+) -> Option<u64> {
+    let count = archive
+        .file_names()
+        .filter(|name| {
+            name.strip_prefix(prefix)
+                .and_then(|rest| rest.strip_suffix(suffix))
+                .is_some_and(|part_number| {
+                    !part_number.is_empty() && part_number.bytes().all(|byte| byte.is_ascii_digit())
+                })
+        })
+        .count();
+    (count > 0).then_some(count as u64)
+}
+
+fn count_with_archive_fallback(app_count: Option<u64>, archive_count: Option<u64>) -> Option<u64> {
+    match (app_count, archive_count) {
+        (Some(0), Some(count)) if count > 0 => Some(count),
+        (Some(count), _) => Some(count),
+        (None, count) => count,
+    }
 }

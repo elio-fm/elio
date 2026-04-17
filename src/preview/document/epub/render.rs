@@ -1,6 +1,9 @@
 use super::super::{
     common::{local_name, read_zip_entry_limited, resolve_zip_entry_path, xml_attribute_value},
-    metadata::{DocumentMetadata, render_document_preview, render_document_preview_lines},
+    metadata::{
+        DocumentMetadata, render_document_field_lines, render_document_preview,
+        render_document_preview_lines,
+    },
 };
 use super::{
     EPUB_CONTENT_ENTRY_LIMIT_BYTES, EPUB_COVER_ENTRY_LIMIT_BYTES,
@@ -68,7 +71,7 @@ fn render_epub_preview(preview: EpubPreviewData) -> PreviewContent {
             .as_ref()
             .is_some_and(|visual| visual.kind == PreviewVisualKind::PageImage)
         {
-            Vec::new()
+            epub_page_context_lines(&preview)
         } else {
             vec![Line::from("No readable content in this section")]
         }
@@ -109,6 +112,44 @@ fn render_epub_preview(preview: EpubPreviewData) -> PreviewContent {
         content = content.with_truncation(note);
     }
     content
+}
+
+fn epub_page_context_lines(preview: &EpubPreviewData) -> Vec<Line<'static>> {
+    let mut fields = Vec::new();
+    let page = preview
+        .section_title
+        .as_deref()
+        .map(epub_page_label)
+        .unwrap_or_else(|| format!("{} of {}", preview.section_index + 1, preview.section_count));
+    fields.push(("Page".to_string(), page));
+    push_epub_context_field(&mut fields, "Title", preview.metadata.title.as_deref());
+    push_epub_context_field(&mut fields, "Author", preview.metadata.author.as_deref());
+    push_epub_context_field(&mut fields, "Subject", preview.metadata.subject.as_deref());
+    push_epub_context_field(&mut fields, "Created", preview.metadata.created.as_deref());
+    push_epub_context_field(
+        &mut fields,
+        "Modified",
+        preview.metadata.modified.as_deref(),
+    );
+    fields.extend(preview.metadata.metadata.iter().cloned());
+    fields.extend(preview.metadata.stats.iter().cloned());
+    render_document_field_lines(&fields)
+}
+
+fn epub_page_label(title: &str) -> String {
+    let title = title.trim();
+    title
+        .strip_prefix("Page ")
+        .map(str::trim)
+        .filter(|page| !page.is_empty())
+        .unwrap_or(title)
+        .to_string()
+}
+
+fn push_epub_context_field(fields: &mut Vec<(String, String)>, label: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        fields.push((label.to_string(), value.to_string()));
+    }
 }
 
 fn extract_epub_preview_data<R: Read + std::io::Seek>(

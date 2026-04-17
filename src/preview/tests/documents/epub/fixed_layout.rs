@@ -28,6 +28,7 @@ fn epub_preview_uses_section_image_for_fixed_layout_pages() {
                 <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
                   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
                     <dc:title>Fixed Layout Story</dc:title>
+                    <dc:creator>Elio</dc:creator>
                   </metadata>
                   <manifest>
                     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
@@ -88,7 +89,10 @@ fn epub_preview_uses_section_image_for_fixed_layout_pages() {
     assert_eq!(preview.ebook_section_title.as_deref(), Some("Page 1"));
     assert_eq!(visual.kind, PreviewVisualKind::PageImage);
     assert_eq!(visual.layout, PreviewVisualLayout::FullHeight);
-    assert!(line_texts.is_empty());
+    assert_eq!(
+        line_texts,
+        vec!["Page   1", "Title  Fixed Layout Story", "Author Elio"]
+    );
     assert!(visual.path.exists());
     assert!(
         visual
