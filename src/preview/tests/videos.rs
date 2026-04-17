@@ -29,6 +29,7 @@ fn video_preview_falls_back_to_file_metadata_without_tools() {
 
     assert_eq!(preview.kind, PreviewKind::Video);
     assert_eq!(preview.detail.as_deref(), Some("Matroska video"));
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
     assert!(line_texts.iter().any(|line| line.contains("File Size")
         && line.contains(&crate::fs::format_size(contents.len() as u64))));
     assert!(preview.preview_visual.is_none());

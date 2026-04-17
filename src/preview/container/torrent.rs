@@ -97,7 +97,7 @@ pub(in crate::preview) fn build_torrent_preview(path: &Path) -> Option<PreviewCo
             }),
         ),
     ];
-    push_preview_section(&mut lines, "Torrent", &summary, palette);
+    push_preview_section(&mut lines, "Details", &summary, palette);
 
     let metadata_fields = vec![
         ("Created By", metadata.created_by.clone()),

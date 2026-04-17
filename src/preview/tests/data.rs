@@ -41,10 +41,10 @@ fn sqlite_preview_shows_header_and_tables() {
     assert_eq!(preview.kind, PreviewKind::Data);
     assert_eq!(preview.detail.as_deref(), Some("SQLite database"));
 
-    // Summary section header
+    // Details section header
     assert!(
-        text.iter().any(|l| l.contains("SQLite 3")),
-        "expected 'SQLite 3' section header; got: {text:?}"
+        text.iter().any(|l| l == "Details"),
+        "expected 'Details' section header; got: {text:?}"
     );
     // Page size field
     assert!(

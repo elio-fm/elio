@@ -434,7 +434,7 @@ fn image_metadata_preview(entry: &Entry, type_detail: Option<&'static str>) -> P
         .map(|(label, _)| label.len())
         .max()
         .unwrap_or(8);
-    let mut lines = vec![preview_section_line("Image", palette)];
+    let mut lines = vec![preview_section_line("Details", palette)];
     for (label, value) in fields {
         lines.push(preview_field_line(label, &value, label_width, palette));
     }

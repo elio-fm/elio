@@ -12,6 +12,7 @@ fn pe_preview_shows_windows_executable_metadata() {
 
     assert_eq!(preview.kind, PreviewKind::Binary);
     assert_eq!(preview.detail.as_deref(), Some("Windows executable"));
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
     assert!(
         line_texts
             .iter()

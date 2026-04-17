@@ -34,7 +34,7 @@ fn torrent_preview_shows_single_file_metadata_and_trackers() {
 
     assert_eq!(preview.kind, PreviewKind::Text);
     assert_eq!(preview.detail.as_deref(), Some("BitTorrent file"));
-    assert_eq!(line_texts.first().map(String::as_str), Some("Torrent"));
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
     assert!(
         line_texts
             .iter()
@@ -250,7 +250,7 @@ fn iso_preview_renders_metadata_and_tree() {
     assert_eq!(preview.kind, PreviewKind::Archive);
     assert_eq!(preview.detail.as_deref(), Some("ISO disk image"));
     assert!(header.contains("ISO disk image"));
-    assert_eq!(line_texts.first().map(String::as_str), Some("Image"));
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
     assert!(
         line_texts
             .iter()
@@ -329,7 +329,7 @@ fn iso_preview_lists_contents_when_bsdtar_can_read_image() {
 }
 
 #[test]
-fn zip_preview_renders_archive_summary_and_tree() {
+fn zip_preview_renders_archive_details_and_tree() {
     let root = temp_path("zip-preview");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("bundle.zip");
@@ -350,7 +350,7 @@ fn zip_preview_renders_archive_summary_and_tree() {
     assert_eq!(preview.kind, PreviewKind::Archive);
     assert_eq!(preview.detail.as_deref(), Some("ZIP archive"));
     assert!(header.contains("ZIP archive"));
-    assert!(line_texts.iter().any(|text| text.trim() == "Summary"));
+    assert!(line_texts.iter().any(|text| text.trim() == "Details"));
     assert!(!line_texts.iter().any(|text| text.trim() == "Archive"));
     assert!(
         line_texts

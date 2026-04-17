@@ -165,7 +165,7 @@ pub(in crate::preview) fn render_iso_preview(
         ("Effective", metadata.effective_at.clone()),
     ];
 
-    push_preview_section(&mut lines, "Image", &summary, palette);
+    push_preview_section(&mut lines, "Details", &summary, palette);
 
     let mut rendered_items = 0usize;
     let mut tree_truncated = false;

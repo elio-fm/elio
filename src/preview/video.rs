@@ -186,7 +186,7 @@ fn render_video_metadata_lines(
         .map(|(label, _)| label.len())
         .max()
         .unwrap_or(8);
-    let mut lines = vec![preview_section_line("Video", palette)];
+    let mut lines = vec![preview_section_line("Details", palette)];
     for (label, value) in fields {
         lines.push(preview_field_line(label, &value, label_width, palette));
     }

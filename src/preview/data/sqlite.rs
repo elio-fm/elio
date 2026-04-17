@@ -52,7 +52,7 @@ pub(in crate::preview) fn build_sqlite_preview(path: &Path) -> Option<PreviewCon
         ("Encoding", Some(header.encoding_label().to_string())),
         ("Journal", Some(header.journal_label().to_string())),
     ];
-    push_data_section(&mut lines, "SQLite 3", &summary, palette);
+    push_data_section(&mut lines, "Details", &summary, palette);
 
     let objects = query_schema_objects(&conn).unwrap_or_default();
     let tables: Vec<_> = objects.iter().filter(|o| o.kind == "table").collect();

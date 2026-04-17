@@ -12,6 +12,7 @@ fn raster_image_preview_uses_image_metadata_fallback() {
 
     assert_eq!(preview.kind, PreviewKind::Image);
     assert_eq!(preview.detail.as_deref(), Some("PNG image"));
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
     assert!(
         line_texts
             .iter()

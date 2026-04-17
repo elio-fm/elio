@@ -35,7 +35,7 @@ pub(super) fn render_archive_preview(config: ArchiveRenderConfig) -> PreviewCont
         ),
         ("Comment", config.metadata.comment),
     ];
-    push_preview_section(&mut lines, "Summary", &summary, palette);
+    push_preview_section(&mut lines, "Details", &summary, palette);
 
     for (title, fields) in config.extra_sections {
         push_preview_values_section(&mut lines, title, &fields, palette);

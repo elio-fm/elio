@@ -95,7 +95,7 @@ fn parse_binary_metadata(bytes: &[u8]) -> Option<BinaryMetadata> {
 fn render_binary_preview(detail: &str, metadata: BinaryMetadata) -> PreviewContent {
     let palette = theme::palette();
     let mut lines = Vec::new();
-    push_section(&mut lines, "Binary", &metadata.fields(), palette);
+    push_section(&mut lines, "Details", &metadata.fields(), palette);
     push_section(&mut lines, "Metadata", &metadata.extra_fields(), palette);
 
     PreviewContent::new(PreviewKind::Binary, lines).with_detail(detail)
