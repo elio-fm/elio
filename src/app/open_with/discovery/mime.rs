@@ -5,12 +5,16 @@ use std::process::Command;
 
 use crate::preview::process::run_command_capture_stdout_cancellable;
 
-pub(super) fn detect_mime_type(path: &Path, canceled: &impl Fn() -> bool) -> Option<String> {
+pub(super) fn detect_mime_type_with_name(
+    path: &Path,
+    display_name: Option<&str>,
+    canceled: &impl Fn() -> bool,
+) -> Option<String> {
     // Fast path: look up the file extension in the XDG MIME globs database.
     // This is instant (pure file read), covers virtually all files with a
     // recognisable extension, and works correctly on both Linux and BSD because
     // it searches the full XDG data dir chain rather than a hardcoded path.
-    if let Some(mime) = mime_from_xdg_database(path) {
+    if let Some(mime) = mime_from_data_dirs_with_name(path, display_name, &super::xdg_data_dirs()) {
         return Some(mime);
     }
 
@@ -52,8 +56,14 @@ pub(super) fn detect_mime_type(path: &Path, canceled: &impl Fn() -> bool) -> Opt
 ///
 /// This correctly handles BSD systems where `shared-mime-info` installs to
 /// `/usr/local/share/mime/` rather than `/usr/share/mime/`.
-fn mime_from_xdg_database(path: &Path) -> Option<String> {
-    mime_from_data_dirs(path, &super::xdg_data_dirs())
+fn mime_from_data_dirs_with_name(
+    path: &Path,
+    display_name: Option<&str>,
+    data_dirs: &[PathBuf],
+) -> Option<String> {
+    display_name
+        .and_then(|name| mime_from_data_dirs(Path::new(name), data_dirs))
+        .or_else(|| mime_from_data_dirs(path, data_dirs))
 }
 
 /// Inner implementation that accepts an explicit data-dir list for testing.
@@ -261,6 +271,26 @@ mod tests {
         assert!(result.is_none());
     }
 
+    #[test]
+    fn display_name_extension_can_override_collision_suffixed_storage_path() {
+        let dir = unique_dir("display-name-extension");
+        write_globs2(&dir, "50:image/jpeg:*.jpeg\n");
+
+        let result = mime_from_data_dirs_with_name(
+            Path::new("/trash/files/photo.jpeg.2"),
+            Some("photo.jpeg"),
+            std::slice::from_ref(&dir),
+        );
+        let raw_storage_result = mime_from_data_dirs(
+            Path::new("/trash/files/photo.jpeg.2"),
+            std::slice::from_ref(&dir),
+        );
+        let _ = fs::remove_dir_all(&dir);
+
+        assert_eq!(result.as_deref(), Some("image/jpeg"));
+        assert!(raw_storage_result.is_none());
+    }
+
     // ── mime_from_xdg_database (system integration) ───────────────────────────
     // Uses the real XDG data dirs.  Skips gracefully if no MIME database is
     // present (e.g. minimal CI image).
@@ -274,7 +304,11 @@ mod tests {
             return;
         }
         // .png is universally registered as image/png.
-        let result = mime_from_xdg_database(Path::new("/any/path/image.png"));
+        let result = mime_from_data_dirs_with_name(
+            Path::new("/any/path/image.png"),
+            None,
+            &super::super::xdg_data_dirs(),
+        );
         assert_eq!(
             result.as_deref(),
             Some("image/png"),

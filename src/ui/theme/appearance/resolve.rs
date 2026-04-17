@@ -103,8 +103,7 @@ pub(super) fn builtin_classify_entry(entry: &Entry) -> FileClass {
         return class;
     }
 
-    let class = file_info::inspect_path_cached(&entry.path, entry.kind, entry.size, entry.modified)
-        .builtin_class;
+    let class = file_info::inspect_entry_cached(entry).builtin_class;
     entry_class_cache()
         .lock()
         .expect("entry class cache lock")

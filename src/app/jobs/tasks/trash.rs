@@ -11,11 +11,20 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(target_os = "linux")]
+use std::process::{Command, Stdio};
+
 /// Minimum time between intermediate progress results sent to the UI.
 /// Only applies to permanent delete, which processes files one at a time.
 /// Non-permanent trash is a single batched OS call with no intermediate
 /// progress.
 const PROGRESS_SEND_INTERVAL: Duration = Duration::from_millis(80);
+
+#[cfg(target_os = "linux")]
+const GIO_TRASH_ARG_BUDGET: usize = 128 * 1024;
+
+#[cfg(target_os = "linux")]
+const GIO_TRASH_COMMAND_OVERHEAD: usize = "gio".len() + 1 + "trash".len() + 1 + "--".len() + 1;
 
 pub(in crate::app::jobs) struct TrashPool {
     shared: Arc<TrashShared>,
@@ -461,13 +470,12 @@ fn pid_is_alive(_pid: u32) -> bool {
     true
 }
 
-/// Move all targets to the OS trash in a single batched call to
-/// `trash::delete_all`.
+/// Move all targets to the OS trash in a single batched operation.
 ///
-/// This is significantly faster than per-item trashing because the `trash`
-/// crate amortizes expensive setup work — reading `/proc/mounts`, resolving
-/// the trash directory, checking for name collisions — across the whole
-/// batch instead of repeating it for every file.
+/// On Linux, prefer `gio trash` so Elio uses the same Freedesktop/GVfs trash
+/// backend as GNOME Files and other desktop-aware tools.  The Rust `trash`
+/// crate remains the fallback for systems without GIO, unsupported mounts, or
+/// command failures that leave sources untouched.
 ///
 /// Cancellation is checked once before the batch starts.  The batch itself
 /// is treated as atomic from Elio's perspective: once the OS call is in
@@ -482,11 +490,11 @@ fn run_trash_batch(
         return (0, Vec::new(), true);
     }
 
-    let paths: Vec<_> = request.targets.iter().map(|t| &t.path).collect();
+    let paths: Vec<_> = request.targets.iter().map(|t| t.path.as_path()).collect();
     let total = paths.len();
 
-    match ::trash::delete_all(paths) {
-        Ok(()) => {
+    match trash_with_system_backend(&paths) {
+        TrashBatchBackendResult::Completed => {
             #[cfg(target_os = "macos")]
             {
                 let origins: Vec<(String, std::path::PathBuf)> = request
@@ -498,8 +506,219 @@ fn run_trash_batch(
             }
             (total, Vec::new(), false)
         }
-        Err(e) => (0, vec![e.to_string()], false),
+        TrashBatchBackendResult::Failed { completed, error } => (completed, vec![error], false),
     }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum TrashBatchBackendResult {
+    Completed,
+    Failed { completed: usize, error: String },
+}
+
+fn trash_with_system_backend(paths: &[&Path]) -> TrashBatchBackendResult {
+    #[cfg(target_os = "linux")]
+    {
+        trash_with_gio_first(paths)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    match trash_with_crate(paths) {
+        Ok(()) => TrashBatchBackendResult::Completed,
+        Err(error) => TrashBatchBackendResult::Failed {
+            completed: 0,
+            error,
+        },
+    }
+}
+
+fn trash_with_crate(paths: &[&Path]) -> Result<(), String> {
+    ::trash::delete_all(paths.iter().copied()).map_err(|e| e.to_string())
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Debug, Eq, PartialEq)]
+enum GioTrashCommandResult {
+    Completed,
+    Unavailable,
+    Failed(String),
+}
+
+#[cfg(target_os = "linux")]
+fn trash_with_gio_first(paths: &[&Path]) -> TrashBatchBackendResult {
+    trash_with_gio_runner(paths, run_gio_trash_command, trash_with_crate)
+}
+
+#[cfg(target_os = "linux")]
+fn trash_with_gio_runner<G, F>(
+    paths: &[&Path],
+    mut run_gio: G,
+    mut run_fallback: F,
+) -> TrashBatchBackendResult
+where
+    G: FnMut(&[&Path]) -> GioTrashCommandResult,
+    F: FnMut(&[&Path]) -> Result<(), String>,
+{
+    for range in gio_trash_chunks(paths) {
+        match run_gio(&paths[range.clone()]) {
+            GioTrashCommandResult::Completed => {}
+            GioTrashCommandResult::Unavailable => {
+                return finish_gio_unavailable_fallback(
+                    paths,
+                    range.start,
+                    "gio trash is not available",
+                    |p| run_fallback(p),
+                );
+            }
+            GioTrashCommandResult::Failed(error) => {
+                return finish_gio_failure_fallback(paths, range, &error, |p| run_fallback(p));
+            }
+        }
+    }
+
+    TrashBatchBackendResult::Completed
+}
+
+#[cfg(target_os = "linux")]
+fn finish_gio_unavailable_fallback<F>(
+    paths: &[&Path],
+    remaining_start: usize,
+    gio_error: &str,
+    mut run_fallback: F,
+) -> TrashBatchBackendResult
+where
+    F: FnMut(&[&Path]) -> Result<(), String>,
+{
+    finish_with_fallback(
+        paths[remaining_start..].to_vec(),
+        remaining_start,
+        gio_error,
+        |p| run_fallback(p),
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn finish_gio_failure_fallback<F>(
+    paths: &[&Path],
+    failed_range: std::ops::Range<usize>,
+    gio_error: &str,
+    mut run_fallback: F,
+) -> TrashBatchBackendResult
+where
+    F: FnMut(&[&Path]) -> Result<(), String>,
+{
+    let mut completed = failed_range.start;
+    let mut remaining = Vec::new();
+
+    for path in &paths[failed_range.clone()] {
+        if path.exists() {
+            remaining.push(*path);
+        } else {
+            completed += 1;
+        }
+    }
+    remaining.extend_from_slice(&paths[failed_range.end..]);
+
+    finish_with_fallback(remaining, completed, gio_error, |p| run_fallback(p))
+}
+
+#[cfg(target_os = "linux")]
+fn finish_with_fallback<F>(
+    remaining: Vec<&Path>,
+    completed: usize,
+    gio_error: &str,
+    mut run_fallback: F,
+) -> TrashBatchBackendResult
+where
+    F: FnMut(&[&Path]) -> Result<(), String>,
+{
+    if remaining.is_empty() {
+        return TrashBatchBackendResult::Completed;
+    }
+
+    run_fallback(&remaining).map_or_else(
+        |fallback_error| TrashBatchBackendResult::Failed {
+            completed,
+            error: format!(
+                "Could not trash all items: {gio_error}; fallback failed: {fallback_error}"
+            ),
+        },
+        |()| TrashBatchBackendResult::Completed,
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn run_gio_trash_command(paths: &[&Path]) -> GioTrashCommandResult {
+    if paths.is_empty() {
+        return GioTrashCommandResult::Completed;
+    }
+
+    let output = Command::new("gio")
+        .arg("trash")
+        .arg("--")
+        .args(paths)
+        .stdin(Stdio::null())
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => GioTrashCommandResult::Completed,
+        Ok(output) => GioTrashCommandResult::Failed(format!(
+            "gio trash failed{}",
+            command_output_message(&output.stderr, &output.stdout)
+        )),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            GioTrashCommandResult::Unavailable
+        }
+        Err(error) => GioTrashCommandResult::Failed(format!("could not start gio trash: {error}")),
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn command_output_message(stderr: &[u8], stdout: &[u8]) -> String {
+    let bytes = if stderr.is_empty() { stdout } else { stderr };
+    let text = String::from_utf8_lossy(bytes).trim().to_string();
+    if text.is_empty() {
+        String::new()
+    } else {
+        format!(": {text}")
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn gio_trash_chunks(paths: &[&Path]) -> Vec<std::ops::Range<usize>> {
+    gio_trash_chunks_with_budget(paths, GIO_TRASH_ARG_BUDGET)
+}
+
+#[cfg(target_os = "linux")]
+fn gio_trash_chunks_with_budget(paths: &[&Path], budget: usize) -> Vec<std::ops::Range<usize>> {
+    if paths.is_empty() {
+        return Vec::new();
+    }
+
+    let budget = budget.max(GIO_TRASH_COMMAND_OVERHEAD + 1);
+    let mut ranges = Vec::new();
+    let mut start = 0usize;
+    let mut used = GIO_TRASH_COMMAND_OVERHEAD;
+
+    for (index, path) in paths.iter().enumerate() {
+        let arg_len = gio_trash_arg_len(path);
+        if index > start && used + arg_len > budget {
+            ranges.push(start..index);
+            start = index;
+            used = GIO_TRASH_COMMAND_OVERHEAD;
+        }
+        used += arg_len;
+    }
+
+    ranges.push(start..paths.len());
+    ranges
+}
+
+#[cfg(target_os = "linux")]
+fn gio_trash_arg_len(path: &Path) -> usize {
+    use std::os::unix::ffi::OsStrExt;
+
+    path.as_os_str().as_bytes().len() + 1
 }
 
 /// Send a throttled intermediate progress result for the permanent-delete
@@ -545,6 +764,138 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("elio-test-{tag}-{pid}-{nanos}"));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[cfg(target_os = "linux")]
+    fn path_refs(paths: &[PathBuf]) -> Vec<&Path> {
+        paths.iter().map(|path| path.as_path()).collect()
+    }
+
+    // ── GIO trash backend ─────────────────────────────────────────────────
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn gio_trash_chunks_split_before_budget_is_exceeded() {
+        let paths = vec![
+            PathBuf::from("/home/user/a.jpg"),
+            PathBuf::from("/home/user/b.jpg"),
+            PathBuf::from("/home/user/c.jpg"),
+        ];
+        let refs = path_refs(&paths);
+        let budget = GIO_TRASH_COMMAND_OVERHEAD
+            + gio_trash_arg_len(&paths[0])
+            + gio_trash_arg_len(&paths[1])
+            - 1;
+
+        let chunks = gio_trash_chunks_with_budget(&refs, budget);
+
+        assert_eq!(chunks, vec![0..1, 1..2, 2..3]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn gio_trash_chunks_keep_oversized_path_in_its_own_chunk() {
+        let paths = vec![PathBuf::from("/home/user/really-long-name.jpg")];
+        let refs = path_refs(&paths);
+
+        let chunks = gio_trash_chunks_with_budget(&refs, GIO_TRASH_COMMAND_OVERHEAD + 1);
+
+        assert_eq!(chunks, vec![0..1]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn gio_first_falls_back_when_gio_is_unavailable() {
+        let root = make_tmp_dir("gio-unavailable-fallback");
+        let first = root.join("a.jpg");
+        let second = root.join("b.jpg");
+        fs::write(&first, b"a").unwrap();
+        fs::write(&second, b"b").unwrap();
+        let paths = vec![first, second];
+        let refs = path_refs(&paths);
+        let mut gio_calls = 0usize;
+        let mut fallback_paths = Vec::new();
+
+        let result = trash_with_gio_runner(
+            &refs,
+            |_| {
+                gio_calls += 1;
+                GioTrashCommandResult::Unavailable
+            },
+            |paths| {
+                fallback_paths = paths.iter().map(|path| path.to_path_buf()).collect();
+                Ok(())
+            },
+        );
+
+        assert_eq!(result, TrashBatchBackendResult::Completed);
+        assert_eq!(gio_calls, 1);
+        assert_eq!(fallback_paths, paths);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn gio_first_falls_back_for_remaining_paths_after_partial_failure() {
+        let root = make_tmp_dir("gio-partial-fallback");
+        let moved = root.join("moved.jpg");
+        let remaining = root.join("remaining.jpg");
+        fs::write(&moved, b"moved").unwrap();
+        fs::write(&remaining, b"remaining").unwrap();
+        let paths = vec![moved.clone(), remaining.clone()];
+        let refs = path_refs(&paths);
+        let mut fallback_paths = Vec::new();
+
+        let result = trash_with_gio_runner(
+            &refs,
+            |paths| {
+                fs::remove_file(paths[0]).unwrap();
+                GioTrashCommandResult::Failed("gio failed on this mount".to_string())
+            },
+            |paths| {
+                fallback_paths = paths.iter().map(|path| path.to_path_buf()).collect();
+                for path in paths {
+                    fs::remove_file(*path).unwrap();
+                }
+                Ok(())
+            },
+        );
+
+        assert_eq!(result, TrashBatchBackendResult::Completed);
+        assert_eq!(fallback_paths, vec![remaining]);
+        assert!(!moved.exists());
+        assert!(!paths[1].exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn gio_first_reports_completed_count_when_fallback_fails() {
+        let root = make_tmp_dir("gio-fallback-failure");
+        let moved = root.join("moved.jpg");
+        let remaining = root.join("remaining.jpg");
+        fs::write(&moved, b"moved").unwrap();
+        fs::write(&remaining, b"remaining").unwrap();
+        let paths = vec![moved.clone(), remaining];
+        let refs = path_refs(&paths);
+
+        let result = trash_with_gio_runner(
+            &refs,
+            |paths| {
+                fs::remove_file(paths[0]).unwrap();
+                GioTrashCommandResult::Failed("gio failed on this mount".to_string())
+            },
+            |_| Err("fallback failed too".to_string()),
+        );
+
+        assert_eq!(
+            result,
+            TrashBatchBackendResult::Failed {
+                completed: 1,
+                error: "Could not trash all items: gio failed on this mount; fallback failed: fallback failed too".to_string(),
+            }
+        );
+        let _ = fs::remove_dir_all(&root);
     }
 
     /// Simulates the startup logic: delete cleanup_root/{current_pid}/ if it

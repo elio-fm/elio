@@ -110,12 +110,7 @@ impl App {
         entry: &Entry,
         preview_rows_visible: usize,
     ) -> usize {
-        let facts = crate::file_info::inspect_path_cached(
-            &entry.path,
-            entry.kind,
-            entry.size,
-            entry.modified,
-        );
+        let facts = crate::file_info::inspect_entry_cached(entry);
         if facts.preview.kind == crate::file_info::PreviewKind::Source
             && facts.preview.structured_format.is_none()
         {
