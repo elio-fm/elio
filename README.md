@@ -152,6 +152,16 @@ For `c`, elio copies file metadata to the clipboard using OSC52 on supported ter
 
 `g` opens a quick jump menu with shortcuts for the top of the current folder, Downloads, Home, the platform config folder, and Trash. The config destination is `~/.config` or `$XDG_CONFIG_HOME` on Linux and BSD, `~/Library/Application Support` on macOS, and `%APPDATA%` on Windows.
 
+### Trash
+
+`d` moves the selected item or selection to the operating system trash. In the Trash view, `d` permanently deletes items and `r` restores them.
+
+Trash uses the platform's native behavior where possible: Linux tries `gio trash` first, then falls back to the Freedesktop Trash layout; BSD uses Freedesktop Trash; macOS moves items to `~/.Trash` and records restore metadata for items trashed by elio.
+
+Windows can move items to the Recycle Bin through the platform trash backend, but elio does not expose the Recycle Bin as a browsable Trash view yet, so restore/permanent-delete-from-Trash workflows are not supported there.
+
+On Freedesktop Trash systems, the stored filename may be changed to avoid collisions, for example `photo.jpg.2`. elio reads the matching `.trashinfo` metadata, so the file is still shown, previewed, opened, and restored as the original `photo.jpg`.
+
 ### Fuzzy Search
 
 `f` searches folders and `Ctrl+F` searches files in the current directory tree. Search follows the hidden-file setting, skips symlinks, prunes common generated folders such as `.git`, `node_modules`, and `target`, and refreshes when the directory changes. Very large trees are capped so search stays responsive.
