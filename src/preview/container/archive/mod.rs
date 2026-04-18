@@ -16,8 +16,8 @@ use self::comic::build_comic_archive_preview;
 use self::common::ArchiveMetadata;
 use self::common::normalize_archive_path;
 use self::external::{
-    collect_archive_entries_with_bsdtar, collect_archive_listing_with_7z,
-    fallback_single_file_archive_entry,
+    collect_archive_entries_with_bsdtar, collect_archive_entries_with_unrar,
+    collect_archive_listing_with_7z, fallback_single_file_archive_entry,
 };
 use self::format::{archive_default_label, archive_format_name, detect_archive_format};
 use self::internal::{collect_internal_archive_listing, collect_preferred_archive_entries};
@@ -198,6 +198,25 @@ fn build_external_archive_preview(
         return Some(render_archive_preview(ArchiveRenderConfig {
             detail: detail.to_string(),
             metadata,
+            entries: Some(entries),
+            total_entries_hint: None,
+            empty_label: ARCHIVE_EMPTY_LABEL,
+            unavailable_label: "Unable to read archive contents",
+            extra_sections: Vec::new(),
+            scan_truncated: false,
+        }));
+    }
+
+    if matches!(format, ArchiveFormat::Rar)
+        && let Some(entries) = collect_archive_entries_with_unrar(path)
+    {
+        return Some(render_archive_preview(ArchiveRenderConfig {
+            detail: detail.to_string(),
+            metadata: ArchiveMetadata {
+                format_label: Some(archive_format_name(format).to_string()),
+                physical_size: fs::metadata(path).ok().map(|metadata| metadata.len()),
+                ..ArchiveMetadata::default()
+            },
             entries: Some(entries),
             total_entries_hint: None,
             empty_label: ARCHIVE_EMPTY_LABEL,

@@ -32,6 +32,16 @@ pub(super) fn collect_archive_entries_with_bsdtar(path: &Path) -> Option<Vec<Arc
     ))
 }
 
+pub(super) fn collect_archive_entries_with_unrar(path: &Path) -> Option<Vec<ArchiveEntry>> {
+    let output = Command::new("unrar").arg("lb").arg(path).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(parse_unrar_bare_listing(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
+}
+
 pub(super) fn collect_archive_listing_with_7z(
     path: &Path,
 ) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>)> {
@@ -125,9 +135,13 @@ fn push_7z_entry(
     current.clear();
 }
 
+fn parse_unrar_bare_listing(output: &str) -> Vec<ArchiveEntry> {
+    normalize_archive_entries(output.lines(), false)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::parse_7z_listing;
+    use super::{parse_7z_listing, parse_unrar_bare_listing};
 
     #[test]
     fn parse_7z_listing_collects_external_fallback_metadata_and_entries() {
@@ -178,5 +192,34 @@ Packed Size = 0
                 .iter()
                 .any(|entry| entry.path == "usr/share/icons" && entry.is_dir)
         );
+    }
+
+    #[test]
+    fn parse_unrar_bare_listing_normalizes_nested_entries() {
+        let output = r#"
+./docs/readme.txt
+src\main.rs
+../ignored.txt
+images/
+"#;
+
+        let entries = parse_unrar_bare_listing(output);
+
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "docs/readme.txt" && !entry.is_dir)
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "src/main.rs" && !entry.is_dir)
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path == "images" && entry.is_dir)
+        );
+        assert!(!entries.iter().any(|entry| entry.path.contains("ignored")));
     }
 }

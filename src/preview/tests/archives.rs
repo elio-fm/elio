@@ -366,7 +366,48 @@ fn zip_preview_renders_archive_details_and_tree() {
 }
 
 #[test]
-fn comic_zip_preview_uses_comic_info_and_compact_contents() {
+fn rar_preview_uses_external_listing_when_available() {
+    let root = temp_path("rar-preview");
+    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
+    fs::create_dir_all(root.join("src")).expect("failed to create src dir");
+    fs::write(root.join("docs/readme.txt"), "hello").expect("failed to write readme");
+    fs::write(root.join("src/main.rs"), "fn main() {}\n").expect("failed to write source");
+
+    let path = root.join("bundle.rar");
+    let status = Command::new("7z")
+        .current_dir(&root)
+        .arg("a")
+        .arg("-t7z")
+        .arg(&path)
+        .arg("docs")
+        .arg("src")
+        .status();
+    let Ok(status) = status else {
+        fs::remove_dir_all(&root).expect("failed to remove temp root");
+        return;
+    };
+    if !status.success() {
+        fs::remove_dir_all(&root).expect("failed to remove temp root");
+        return;
+    }
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+    assert_eq!(preview.kind, PreviewKind::Archive);
+    assert_eq!(preview.detail.as_deref(), Some("RAR archive"));
+    assert!(line_texts.iter().any(|text| text == "Details"));
+    assert!(line_texts.iter().any(|text| text == "Contents"));
+    assert!(line_texts.iter().any(|text| text.contains("docs/")));
+    assert!(line_texts.iter().any(|text| text.contains("src/")));
+    assert!(line_texts.iter().any(|text| text.contains("readme.txt")));
+    assert!(line_texts.iter().any(|text| text.contains("main.rs")));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_zip_preview_uses_comic_info_without_archive_noise() {
     let root = temp_path("comic-zip-preview");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("issue.cbz");
@@ -455,22 +496,10 @@ fn comic_zip_preview_uses_comic_info_and_compact_contents() {
             .iter()
             .any(|text| text.contains("Genre") && text.contains("Science Fiction"))
     );
-    assert!(
-        line_texts
-            .iter()
-            .any(|text| text.contains("Pages") && text.contains("2"))
-    );
-    assert!(line_texts.iter().any(|text| text.trim() == "Contents"));
-    assert!(
-        line_texts
-            .iter()
-            .any(|text| text.contains("Extras") && text.contains("ComicInfo.xml"))
-    );
-    assert!(
-        line_texts
-            .iter()
-            .any(|text| text.contains("Extras") && text.contains("notes/readme.txt"))
-    );
+    assert!(!line_texts.iter().any(|text| text.contains("Pages")));
+    assert!(!line_texts.iter().any(|text| text.contains("Root")));
+    assert!(!line_texts.iter().any(|text| text.trim() == "Contents"));
+    assert!(!line_texts.iter().any(|text| text.contains("Extras")));
     assert!(
         !line_texts
             .iter()
@@ -480,6 +509,564 @@ fn comic_zip_preview_uses_comic_info_and_compact_contents() {
     assert!(!line_texts.iter().any(|text| text.contains("Archive Size")));
     assert!(!line_texts.iter().any(|text| text.contains("001-cover.jpg")));
     assert!(!line_texts.iter().any(|text| text.contains("002-page.jpg")));
+    assert!(
+        !line_texts
+            .iter()
+            .any(|text| text.contains("notes/readme.txt"))
+    );
+
+    let _ = fs::remove_file(visual.path);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_zip_preview_reads_comic_book_info_zip_comment() {
+    let root = temp_path("comic-zip-comment-metadata");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("comment.cbz");
+    let file = File::create(&path).expect("failed to create comic zip");
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    zip.start_file("001.jpg", options)
+        .expect("failed to start page entry");
+    zip.write_all(b"page").expect("failed to write page entry");
+    zip.set_comment(
+        r#"{"appID":"FixtureReader/1","ComicBookInfo/1.0":{"series":"Aurora Riders","title":"First Light","issue":"1","publisher":"Elio Press","publicationYear":1958,"genre":"Sci-Fi","credits":[{"role":"Writer","person":"Lee Maven"}]}}"#,
+    );
+    zip.finish().expect("failed to finish comic zip");
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+    let visual = preview
+        .preview_visual
+        .clone()
+        .expect("comic zip should expose a page visual");
+
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Title") && text.contains("First Light"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Series") && text.contains("Aurora Riders"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Number") && text.contains("1"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Year") && text.contains("1958"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Publisher") && text.contains("Elio Press"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Writer") && text.contains("Lee Maven"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Genre") && text.contains("Sci-Fi"))
+    );
+
+    let _ = fs::remove_file(visual.path);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_zip_preview_reads_comet_xml_metadata() {
+    let root = temp_path("comic-zip-comet-metadata");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("comet.cbz");
+    let file = File::create(&path).expect("failed to create comic zip");
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    zip.start_file("001.jpg", options)
+        .expect("failed to start page entry");
+    zip.write_all(b"page").expect("failed to write page entry");
+    zip.start_file("CoMet.xml", options)
+        .expect("failed to start comet entry");
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="utf-8"?>
+            <comet>
+              <title>Moon Orbit</title>
+              <series>Orbital Stories</series>
+              <issue>5</issue>
+              <volume>2</volume>
+              <publisher>Elio Press</publisher>
+              <date>1994-11-05</date>
+              <genre>Science Fiction</genre>
+            </comet>"#,
+    )
+    .expect("failed to write comet entry");
+    zip.finish().expect("failed to finish comic zip");
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+    let visual = preview
+        .preview_visual
+        .clone()
+        .expect("comic zip should expose a page visual");
+
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Title") && text.contains("Moon Orbit"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Series") && text.contains("Orbital Stories"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Number") && text.contains("5"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Volume") && text.contains("2"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Year") && text.contains("1994"))
+    );
+
+    let _ = fs::remove_file(visual.path);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_zip_preview_reads_metron_info_metadata() {
+    let root = temp_path("comic-zip-metron-metadata");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("metron.cbz");
+    let file = File::create(&path).expect("failed to create comic zip");
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    zip.start_file("001.jpg", options)
+        .expect("failed to start page entry");
+    zip.write_all(b"page").expect("failed to write page entry");
+    zip.start_file("MetronInfo.xml", options)
+        .expect("failed to start metron info entry");
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="utf-8"?>
+            <MetronInfo>
+              <Publisher>
+                <Name>Elio Press</Name>
+              </Publisher>
+              <Series>
+                <Name>Signal Hammer</Name>
+                <Volume>1</Volume>
+              </Series>
+              <Number>12</Number>
+              <Stories>
+                <Story>The End</Story>
+              </Stories>
+              <CoverDate>2017-06-21</CoverDate>
+              <Genres>
+                <Genre>Superhero</Genre>
+              </Genres>
+              <Credits>
+                <Credit>
+                  <Creator>Avery Quill</Creator>
+                  <Roles>
+                    <Role>Writer</Role>
+                  </Roles>
+                </Credit>
+                <Credit>
+                  <Creator>Morgan Line</Creator>
+                  <Roles>
+                    <Role>Artist</Role>
+                  </Roles>
+                </Credit>
+              </Credits>
+            </MetronInfo>"#,
+    )
+    .expect("failed to write metron info entry");
+    zip.finish().expect("failed to finish comic zip");
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+    let visual = preview
+        .preview_visual
+        .clone()
+        .expect("comic zip should expose a page visual");
+
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Title") && text.contains("The End"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Series") && text.contains("Signal Hammer"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Number") && text.contains("12"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Volume") && text.contains("1"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Year") && text.contains("2017"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Publisher") && text.contains("Elio Press"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Writer") && text.contains("Avery Quill"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Penciller") && text.contains("Morgan Line"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Genre") && text.contains("Superhero"))
+    );
+
+    let _ = fs::remove_file(visual.path);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_zip_preview_reads_acbf_metadata() {
+    let root = temp_path("comic-zip-acbf-metadata");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("acbf.cbz");
+    let file = File::create(&path).expect("failed to create comic zip");
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    zip.start_file("page01.jpg", options)
+        .expect("failed to start page entry");
+    zip.write_all(b"page").expect("failed to write page entry");
+    zip.start_file("metadata/book.acbf", options)
+        .expect("failed to start acbf entry");
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="utf-8"?>
+            <ACBF xmlns="http://www.acbf.info/xml/acbf/1.1">
+              <meta-data>
+                <book-info>
+                  <author activity="Writer">
+                    <first-name>Rhea</first-name>
+                    <last-name>Quinn</last-name>
+                  </author>
+                  <author activity="Artist">
+                    <nickname>Northline Studio</nickname>
+                  </author>
+                  <book-title>Northline Relay</book-title>
+                  <genre>Science Fiction</genre>
+                  <sequence title="Futuristic Tales" volume="1">3</sequence>
+                </book-info>
+                <publish-info>
+                  <publisher>Elio Press</publisher>
+                  <publish-date value="2007-02-01">February 2007</publish-date>
+                </publish-info>
+              </meta-data>
+            </ACBF>"#,
+    )
+    .expect("failed to write acbf entry");
+    zip.finish().expect("failed to finish comic zip");
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+    let visual = preview
+        .preview_visual
+        .clone()
+        .expect("comic zip should expose a page visual");
+
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Title") && text.contains("Northline Relay"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Series") && text.contains("Futuristic Tales"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Number") && text.contains("3"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Volume") && text.contains("1"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Year") && text.contains("2007"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Publisher") && text.contains("Elio Press"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Writer") && text.contains("Rhea Quinn"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Penciller") && text.contains("Northline Studio"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Genre") && text.contains("Science Fiction"))
+    );
+
+    let _ = fs::remove_file(visual.path);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_zip_preview_derives_metadata_from_structured_names() {
+    let root = temp_path("comic-zip-derived-metadata");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("Moon Ledger v01 (2005) (Digital) (Fixture Group) (ED).cbz");
+    write_zip_binary_entries(
+        &path,
+        &[
+            (
+                "Moon Ledger - c001 (v01) - p000 [Elio Press] [Digital] [Fixture Group].jpg",
+                b"chapter-one",
+            ),
+            (
+                "Moon Ledger - c007 (v01) - p195 [Elio Press] [Digital] [Fixture Group].png",
+                b"chapter-seven",
+            ),
+        ],
+    );
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+    let visual = preview
+        .preview_visual
+        .clone()
+        .expect("comic zip should expose a page visual");
+
+    assert_eq!(preview.kind, PreviewKind::Comic);
+    assert_eq!(preview.detail.as_deref(), Some("Comic ZIP archive"));
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Series") && text.contains("Moon Ledger"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Volume") && text.contains("1"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Year") && text.contains("2005"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Publisher") && text.contains("Elio Press"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Source") && text.contains("Digital"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Chapters") && text.contains("1-7"))
+    );
+    assert!(!line_texts.iter().any(|text| text.contains("Pages")));
+    assert!(!line_texts.iter().any(|text| text.contains("Root")));
+    assert!(!line_texts.iter().any(|text| text.trim() == "Contents"));
+    assert!(!line_texts.iter().any(|text| text.contains("Extras")));
+    assert!(!line_texts.iter().any(|text| text.contains("p000")));
+    assert!(!line_texts.iter().any(|text| text.contains("Fixture Group")));
+    assert!(!line_texts.iter().any(|text| text.contains("ED")));
+
+    let _ = fs::remove_file(visual.path);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_zip_preview_derives_tome_volume_and_digital_source_from_filenames() {
+    let root = temp_path("comic-zip-tome-derived-metadata");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("Skyline Saga T01 (Mira) (2018) [Digital-1699] [Fixture FR].cbz");
+    write_zip_binary_entries(
+        &path,
+        &[("0001_0000.jpg", b"cover"), ("0002_0001.jpg", b"page")],
+    );
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+    let visual = preview
+        .preview_visual
+        .clone()
+        .expect("comic zip should expose a page visual");
+
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Series") && text.contains("Skyline Saga"))
+    );
+    assert!(
+        !line_texts
+            .iter()
+            .any(|text| text.contains("Series") && text.contains("T01"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Volume") && text.contains("1"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Year") && text.contains("2018"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Source") && text.contains("Digital"))
+    );
+
+    let _ = fs::remove_file(visual.path);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_zip_preview_derives_metadata_from_bracketed_names_without_group_noise() {
+    let root = temp_path("comic-zip-bracketed-derived-metadata");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("[ScanGroup] Harbor Case v01 [Digital].cbz");
+    write_zip_binary_entries(&path, &[("001.jpg", b"cover"), ("002.jpg", b"page-one")]);
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+    let visual = preview
+        .preview_visual
+        .clone()
+        .expect("comic zip should expose a page visual");
+
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Series") && text.contains("Harbor Case"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Volume") && text.contains("1"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Source") && text.contains("Digital"))
+    );
+    assert!(!line_texts.iter().any(|text| text.contains("ScanGroup")));
+
+    let _ = fs::remove_file(visual.path);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_zip_preview_derives_series_from_collection_folder() {
+    let root = temp_path("comic-zip-folder-metadata");
+    let collection = root.join("[FixtureGroup] Harbor Case");
+    fs::create_dir_all(&collection).expect("failed to create collection folder");
+    let path = collection.join("Volume 01.cbz");
+    write_zip_binary_entries(&path, &[("000.jpg", b"cover"), ("001.png", b"page-one")]);
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+    let visual = preview
+        .preview_visual
+        .clone()
+        .expect("comic zip should expose a page visual");
+
+    assert_eq!(preview.kind, PreviewKind::Comic);
+    assert_eq!(preview.detail.as_deref(), Some("Comic ZIP archive"));
+    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Series") && text.contains("Harbor Case"))
+    );
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Volume") && text.contains("1"))
+    );
+    assert!(!line_texts.iter().any(|text| text.contains("FixtureGroup")));
+    assert!(!line_texts.iter().any(|text| text.contains("Pages")));
+    assert!(!line_texts.iter().any(|text| text.contains("Root")));
+    assert!(!line_texts.iter().any(|text| text.contains("000.jpg")));
+
+    let _ = fs::remove_file(visual.path);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn comic_zip_preview_avoids_generic_derived_metadata() {
+    let root = temp_path("comic-zip-generic-derived-metadata");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("issue.cbz");
+    write_zip_binary_entries(
+        &path,
+        &[
+            ("c001-p001 [Digital].jpg", b"cover"),
+            ("c001-p002.jpg", b"page-one"),
+        ],
+    );
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+    let visual = preview
+        .preview_visual
+        .clone()
+        .expect("comic zip should expose a page visual");
+
+    assert!(line_texts.is_empty());
 
     let _ = fs::remove_file(visual.path);
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -493,9 +1080,9 @@ fn comic_zip_preview_uses_natural_page_order_and_page_selection() {
     write_zip_binary_entries(
         &path,
         &[
-            ("10.jpg", b"page-ten"),
-            ("2.jpg", b"page-two"),
-            ("1.jpg", b"page-one"),
+            ("18376941278364981273/10.jpg", b"page-ten"),
+            ("18376941278364981273/2.jpg", b"page-two"),
+            ("18376941278364981273/1.jpg", b"page-one"),
         ],
     );
 
@@ -548,12 +1135,13 @@ fn comic_zip_preview_uses_natural_page_order_and_page_selection() {
         Some(3)
     );
     let second_line_texts: Vec<_> = second_preview.lines.iter().map(line_text).collect();
-    assert!(
-        second_line_texts
-            .iter()
-            .any(|text| text.contains("Pages") && text.contains("3"))
-    );
+    assert!(second_line_texts.is_empty());
     assert!(!second_line_texts.iter().any(|text| text.contains("2.jpg")));
+    assert!(
+        !second_line_texts
+            .iter()
+            .any(|text| text.contains("18376941278364981273"))
+    );
 
     let _ = fs::remove_file(first_visual.path.clone());
     let _ = fs::remove_file(second_visual.path.clone());
@@ -597,12 +1185,7 @@ fn cbr_file_with_zip_content_renders_as_comic_preview() {
         Some(("Page", 0, 2))
     );
     assert!(visual.path.exists());
-    assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
-    assert!(
-        line_texts
-            .iter()
-            .any(|text| text.contains("Pages") && text.contains("2"))
-    );
+    assert!(line_texts.is_empty());
 
     let _ = fs::remove_file(visual.path);
     fs::remove_dir_all(root).expect("failed to remove temp root");

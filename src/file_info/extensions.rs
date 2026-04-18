@@ -532,7 +532,7 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         "flac" => plain(FileClass::Audio, Some("FLAC audio")),
         "ogg" => plain(FileClass::Audio, Some("Ogg audio")),
         "m4a" => plain(FileClass::Audio, Some("M4A audio")),
-        "zip" | "tar" | "gz" | "xz" | "bz2" | "7z" => plain(FileClass::Archive, None),
+        "zip" | "tar" | "gz" | "xz" | "bz2" | "7z" | "rar" => plain(FileClass::Archive, None),
         "ttf" | "otf" | "woff" | "woff2" => plain(FileClass::Font, None),
         _ => plain(FileClass::File, None),
     }

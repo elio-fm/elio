@@ -52,8 +52,10 @@ pub(super) fn system_time_key(time: SystemTime) -> Option<(u64, u32)> {
 }
 
 pub(super) fn parse_key_value_line(line: &str) -> Option<(&str, &str)> {
-    let (key, value) = line.split_once(" = ")?;
-    Some((key.trim(), value.trim()))
+    if let Some((key, value)) = line.split_once(" = ") {
+        return Some((key.trim(), value.trim()));
+    }
+    line.strip_suffix(" =").map(|key| (key.trim(), ""))
 }
 
 pub(super) fn parse_u64(value: &str) -> Option<u64> {

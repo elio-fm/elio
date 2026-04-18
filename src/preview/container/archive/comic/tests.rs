@@ -2,7 +2,8 @@ use super::super::ArchiveFormat;
 use super::super::build_archive_preview;
 use super::{
     ComicArchiveBackend, ComicArchiveSignature, build_comic_archive_preview,
-    parse_comic_archive_from_7z_output, parse_zip_comic_archive, sniff_comic_archive_signature,
+    parse_comic_archive_from_7z_output, parse_comic_book_info_comment, parse_unrar_archive_comment,
+    parse_zip_comic_archive, sniff_comic_archive_signature,
 };
 use crate::preview::PreviewKind;
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
@@ -64,7 +65,7 @@ fn sniff_comic_archive_signature_detects_common_formats() {
 #[test]
 fn parses_comic_pages_from_7z_listing_output() {
     let output = r#"
-Path = /tmp/berserk.cbz
+Path = /tmp/orbital.cbz
 Type = Rar
 Physical Size = 1024
 
@@ -98,6 +99,131 @@ Packed Size = 40
     assert_eq!(comic.page_entries[0].entry_name, "001.jpg");
     assert_eq!(comic.page_entries[1].entry_name, "002.jpg");
     assert_eq!(comic.page_entries[2].entry_name, "010.jpg");
+    assert!(comic.archive_comment.is_none());
+}
+
+#[test]
+fn parses_comic_book_info_from_7z_archive_comment() {
+    let output = r#"
+Path = /tmp/commented.cbr
+Type = Rar
+Physical Size = 1024
+Comment = {"ComicBookInfo/1.0":{"series":"Aurora Riders","title":"First Light","issue":"1","publisher":"Elio Press","publicationYear":1958,"genre":"Sci-Fi","credits":[{"role":"Writer","person":"Lee Maven"}]}}
+
+----------
+Path = 001.jpg
+Folder = -
+Size = 10
+Packed Size = 10
+"#;
+
+    let comic = parse_comic_archive_from_7z_output(output, &|| false)
+        .expect("7z output should yield comic pages");
+    let metadata = comic
+        .archive_comment
+        .as_deref()
+        .and_then(parse_comic_book_info_comment)
+        .expect("7z archive comment should contain ComicBookInfo metadata");
+
+    assert_eq!(metadata.series.as_deref(), Some("Aurora Riders"));
+    assert_eq!(metadata.title.as_deref(), Some("First Light"));
+    assert_eq!(metadata.number.as_deref(), Some("1"));
+    assert_eq!(metadata.publisher.as_deref(), Some("Elio Press"));
+    assert_eq!(metadata.year.as_deref(), Some("1958"));
+    assert_eq!(metadata.writer.as_deref(), Some("Lee Maven"));
+    assert_eq!(metadata.genre.as_deref(), Some("Sci-Fi"));
+}
+
+#[test]
+fn parses_multiline_comic_book_info_from_7z_archive_comment() {
+    let output = r#"
+Path = /tmp/commented.cbr
+Type = Rar
+Physical Size = 1024
+Comment =
+{
+{
+  "appMetadata": {},
+  "ComicBookInfo/1.0": {
+    "series": "Orbital Stories",
+    "issue": 4
+  }
+}
+}
+
+----------
+Path = 001.jpg
+Folder = -
+Size = 10
+Packed Size = 10
+"#;
+
+    let comic = parse_comic_archive_from_7z_output(output, &|| false)
+        .expect("7z output should yield comic pages");
+    let metadata = comic
+        .archive_comment
+        .as_deref()
+        .and_then(parse_comic_book_info_comment)
+        .expect("7z multiline archive comment should contain ComicBookInfo metadata");
+
+    assert_eq!(metadata.series.as_deref(), Some("Orbital Stories"));
+    assert_eq!(metadata.number.as_deref(), Some("4"));
+}
+
+#[test]
+fn parses_plain_multiline_comic_book_info_from_7z_archive_comment() {
+    let output = r#"
+Path = /tmp/commented.cbr
+Type = Rar
+Physical Size = 1024
+Comment =
+{
+  "ComicBookInfo/1.0": {
+    "series": "Plain Comment",
+    "issue": 7
+  }
+}
+
+----------
+Path = 001.jpg
+Folder = -
+Size = 10
+Packed Size = 10
+"#;
+
+    let comic = parse_comic_archive_from_7z_output(output, &|| false)
+        .expect("7z output should yield comic pages");
+    let metadata = comic
+        .archive_comment
+        .as_deref()
+        .and_then(parse_comic_book_info_comment)
+        .expect("plain 7z archive comment should contain ComicBookInfo metadata");
+
+    assert_eq!(metadata.series.as_deref(), Some("Plain Comment"));
+    assert_eq!(metadata.number.as_deref(), Some("7"));
+}
+
+#[test]
+fn parses_comic_book_info_from_unrar_archive_comment() {
+    let output = r#"
+UNRAR 7.21
+
+Archive: /tmp/commented.cbr
+{"ComicBookInfo/1.0":{"series":"Orbital Stories","issue":4}}
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....         10  2026-01-01 00:00  001.jpg
+"#;
+
+    let metadata = parse_unrar_archive_comment(output)
+        .as_deref()
+        .and_then(parse_comic_book_info_comment)
+        .expect("unrar archive comment should contain ComicBookInfo metadata");
+
+    assert_eq!(metadata.series.as_deref(), Some("Orbital Stories"));
+    assert_eq!(metadata.number.as_deref(), Some("4"));
 }
 
 #[test]

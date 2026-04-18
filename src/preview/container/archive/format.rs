@@ -5,6 +5,7 @@ use std::path::Path;
 pub(in crate::preview) enum ArchiveFormat {
     ComicZip,
     ComicRar,
+    Rar,
     Zip,
     SevenZip,
     Tar,
@@ -61,6 +62,7 @@ pub(super) fn detect_archive_format(path: &Path) -> ArchiveFormat {
     {
         Some("cbz") => ArchiveFormat::ComicZip,
         Some("cbr") => ArchiveFormat::ComicRar,
+        Some("rar") => ArchiveFormat::Rar,
         Some("zip" | "jar" | "apk" | "aab" | "apkg") => ArchiveFormat::Zip,
         Some("7z") => ArchiveFormat::SevenZip,
         Some("tar") => ArchiveFormat::Tar,
@@ -79,6 +81,7 @@ pub(super) fn archive_default_label(format: ArchiveFormat) -> &'static str {
     match format {
         ArchiveFormat::ComicZip => "Comic ZIP archive",
         ArchiveFormat::ComicRar => "Comic RAR archive",
+        ArchiveFormat::Rar => "RAR archive",
         ArchiveFormat::Zip => "ZIP archive",
         ArchiveFormat::SevenZip => "7z archive",
         ArchiveFormat::Tar => "TAR archive",
@@ -101,6 +104,7 @@ pub(super) fn archive_format_name(format: ArchiveFormat) -> &'static str {
     match format {
         ArchiveFormat::ComicZip => "ZIP",
         ArchiveFormat::ComicRar => "RAR",
+        ArchiveFormat::Rar => "RAR",
         ArchiveFormat::Zip => "ZIP",
         ArchiveFormat::SevenZip => "7z",
         ArchiveFormat::Tar => "TAR",

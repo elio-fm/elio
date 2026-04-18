@@ -426,6 +426,7 @@ fn archive_suffixes_keep_specific_labels_for_common_multi_part_formats() {
     let zip = inspect_path(Path::new("release.zip"), EntryKind::File);
     let cbz = inspect_path(Path::new("issue.cbz"), EntryKind::File);
     let cbr = inspect_path(Path::new("issue.cbr"), EntryKind::File);
+    let rar = inspect_path(Path::new("release.rar"), EntryKind::File);
     let seven_zip = inspect_path(Path::new("release.7z"), EntryKind::File);
 
     assert_eq!(tgz.builtin_class, FileClass::Archive);
@@ -435,6 +436,7 @@ fn archive_suffixes_keep_specific_labels_for_common_multi_part_formats() {
     assert_eq!(zip.specific_type_label, Some("ZIP archive"));
     assert_eq!(cbz.specific_type_label, Some("Comic ZIP archive"));
     assert_eq!(cbr.specific_type_label, Some("Comic RAR archive"));
+    assert_eq!(rar.specific_type_label, Some("RAR archive"));
     assert_eq!(seven_zip.specific_type_label, Some("7z archive"));
 }
 
