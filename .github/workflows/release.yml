@@ -694,7 +694,7 @@ jobs:
           current_revision = int(revision_match.group(1)) if revision_match else 0
 
           def strip_bottle_block(value):
-              return re.sub(r'\n  bottle do\n(?:    .*\n)*  end\n', '\n', value, count=1)
+              return re.sub(r'\n+  bottle do\n(?:    .*\n)*  end\n+', '\n\n', value, count=1)
 
           text = strip_bottle_block(text)
           original_without_bottle = strip_bottle_block(original)
