@@ -1,8 +1,6 @@
 <h1 align="left"><img src="assets/logo.png" width="64" alt="elio logo" align="absmiddle" />&nbsp;elio</h1>
 
-A terminal-native file manager with a three-pane layout, rich previews, and inline images.
-
-Built for fast workflows with bulk actions, customizable Places, trash, and quick actions like Go-to, Open With, and copy-to-clipboard.
+Snappy, batteries-included terminal file manager with rich previews, inline images, bulk actions, and trash support.
 
 ![elio — default theme](examples/themes/default/screenshot.webp)
 
@@ -121,22 +119,44 @@ Useful environment variables:
 
 ---
 
-## Optional Tools
+## Optional Preview Tools
 
-`elio` works without any extra setup. These tools unlock richer previews and additional features when installed:
+`elio` works out of the box with no extra setup. Installing a few common utilities enables richer previews, metadata, thumbnails, and broader file format support. Only install what you need.
 
-| Category | Tool | Command(s) | What it enables |
+Inline image previews also require a compatible terminal. See [Image Previews](#image-previews).
+
+### What to Install
+
+| Category | Package / Tool | Commands | Enables |
 |---|---|---|---|
 | PDF | Poppler | `pdfinfo`, `pdftocairo` | PDF metadata and rendered page previews |
-| Media | ffprobe | `ffprobe` | Audio and video metadata |
-| Media | ffmpeg | `ffmpeg` | Audio artwork, video thumbnails, and broader raster image format support |
-| Images | resvg | `resvg` | SVG rasterization (preferred) |
-| Images | ImageMagick | `magick` | SVG rasterization fallback |
-| Archives | 7-Zip | `7z` | Comic archive preview and edge-case archive fallback |
-| Archives | libarchive | `bsdtar` | Rare archive types and ISO fallback |
-| Archives | isoinfo | `isoinfo` | Additional ISO listing fallback |
+| Media | FFmpeg | `ffprobe`, `ffmpeg` | Audio/video metadata, album art, video thumbnails, and wider image format support |
+| Images | resvg | `resvg` | SVG inline previews |
+| Archives | 7-Zip | `7z` | Comic book archive previews, fallback archive listings, and additional archive formats |
 
-For `c`, elio copies file metadata to the clipboard using OSC52 on supported terminals, or platform clipboard tools when needed: `wl-copy` (Wayland), `xclip` / `xsel` (X11), `pbcopy` (macOS), and `clip` (Windows).
+### Install Examples
+
+| Platform | Install |
+|---|---|
+| Linux | Install packages that provide `pdfinfo`, `pdftocairo`, `ffprobe`, `ffmpeg`, `resvg`, and `7z`. Package names vary by distro. |
+| macOS / Homebrew | `brew install poppler ffmpeg resvg sevenzip` |
+| FreeBSD | `pkg install poppler-utils ffmpeg resvg 7-zip` |
+| Windows / Scoop | `scoop install poppler ffmpeg resvg 7zip` |
+| Windows / WinGet | Install Poppler, FFmpeg, and 7-Zip with WinGet. Install `resvg` separately if needed. |
+
+<details>
+<summary><strong>Optional Fallback Tools</strong></summary>
+
+Most users do **not** need these, but they can help in edge cases:
+
+| Tool | Command | Used for |
+|---|---|---|
+| ImageMagick | `magick` | SVG fallback when `resvg` is unavailable |
+| libarchive | `bsdtar` | Rare archive formats and ISO fallback |
+| cdrtools / cdrkit | `isoinfo` | Additional ISO listing fallback |
+| unrar | `unrar` | RAR/CBR fallback if `7z` lacks RAR support |
+
+</details>
 
 ---
 
@@ -147,6 +167,15 @@ For `c`, elio copies file metadata to the clipboard using OSC52 on supported ter
 `Enter` enters folders and opens files with the system default application. `o` always opens the selected file or folder externally using the system launcher: `open` on macOS, `cmd /c start` on Windows, and `xdg-open` or `gio` on Linux and BSD desktop sessions.
 
 `O` is for files. On macOS and Linux/BSD desktop sessions, elio discovers matching applications, opens the file directly when there is one match, and shows the Open With chooser when there are multiple. Terminal apps such as `nvim` are supported too. When no match is found, or on platforms without app discovery, elio falls back to the default opener.
+
+### Clipboard
+
+`c` copies selected file names, paths, or directory paths using OSC52 on supported terminals, or falls back to platform clipboard tools:
+
+- Wayland: `wl-copy`
+- X11: `xclip` or `xsel`
+- macOS: `pbcopy`
+- Windows: `clip`
 
 ### Go-to Menu
 
@@ -176,10 +205,10 @@ On Freedesktop Trash systems, the stored filename may be changed to avoid collis
 - **Structured data** — JSON, JSONC, JSON5, YAML, TOML, `.env`, logs, CSV/TSV, and SQLite
 - **Documents** — PDF, EPUB, MOBI, AZW3, DOC, DOCX, DOCM, ODT, Pages, XLSX, XLSM, ODS, PPTX, PPTM, and ODP
 - **Media** — image metadata and inline previews, audio metadata and covers, and video metadata and thumbnails
-- **Folders and archives** — directories, ZIP/TAR-family archives, comic archives, torrents, ISO images, and other disk-image-style containers
+- **Folders and archives** — directories, ZIP/TAR/RAR/7z archives, CBZ/CBR comic archives, torrents, ISO images, and other disk-image-style containers
 - **Binary files** — metadata previews for non-text files
 
-See [Optional Tools](#optional-tools) for helpers that unlock richer metadata, thumbnails, and rendered previews.
+See [Optional Preview Tools](#optional-preview-tools) for helpers that unlock richer metadata, thumbnails, and rendered previews.
 
 ---
 
