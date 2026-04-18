@@ -64,6 +64,7 @@ pub(crate) fn loading_preview_for(
         (facts.preview.document_format, options.epub_section_index()),
         (Some(file_info::DocumentFormat::Epub), Some(_))
     );
+    let is_silent_archive_loading = matches!(facts.specific_type_label, Some("RAR archive"));
     let kind = if is_comic_page_preview {
         PreviewKind::Comic
     } else if is_epub_section_preview {
@@ -74,6 +75,7 @@ pub(crate) fn loading_preview_for(
     let lines = if is_comic_page_preview
         || is_epub_section_preview
         || facts.builtin_class == FileClass::Audio
+        || is_silent_archive_loading
     {
         Vec::new()
     } else if facts.builtin_class == FileClass::Archive {

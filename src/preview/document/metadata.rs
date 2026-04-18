@@ -40,20 +40,14 @@ pub(super) fn render_document_preview_lines(metadata: &DocumentMetadata) -> Vec<
         ("Variant", metadata.variant.as_deref()),
         ("Title", metadata.title.as_deref()),
         ("Subject", metadata.subject.as_deref()),
-        ("Application", metadata.application.as_deref()),
-    ];
-    let people = [
         ("Author", metadata.author.as_deref()),
         ("Modified By", metadata.modified_by.as_deref()),
-    ];
-    let dates = [
+        ("Application", metadata.application.as_deref()),
         ("Created", metadata.created.as_deref()),
         ("Modified", metadata.modified.as_deref()),
     ];
     let label_width = details
         .iter()
-        .chain(people.iter())
-        .chain(dates.iter())
         .filter(|(_, value)| value.is_some())
         .map(|(label, _)| label.len())
         .max()
@@ -62,10 +56,14 @@ pub(super) fn render_document_preview_lines(metadata: &DocumentMetadata) -> Vec<
         .max(owned_section_label_width(&metadata.metadata))
         .max(6);
 
-    push_section(&mut lines, "Details", &details, label_width, palette);
-    push_section(&mut lines, "People", &people, label_width, palette);
-    push_section(&mut lines, "Dates", &dates, label_width, palette);
-    push_owned_section(&mut lines, "Stats", &metadata.stats, label_width, palette);
+    push_combined_section(
+        &mut lines,
+        "Details",
+        &details,
+        &metadata.stats,
+        label_width,
+        palette,
+    );
     push_owned_section(
         &mut lines,
         "Metadata",
@@ -85,10 +83,11 @@ pub(super) fn render_document_field_lines(fields: &[(String, String)]) -> Vec<Li
         .collect()
 }
 
-fn push_section(
+fn push_combined_section(
     lines: &mut Vec<Line<'static>>,
     title: &str,
     fields: &[(&str, Option<&str>)],
+    owned_fields: &[(String, String)],
     label_width: usize,
     palette: theme::Palette,
 ) {
@@ -96,7 +95,7 @@ fn push_section(
         .iter()
         .filter_map(|(label, value)| value.map(|value| (*label, value)))
         .collect();
-    if visible_fields.is_empty() {
+    if visible_fields.is_empty() && owned_fields.is_empty() {
         return;
     }
     if !lines.is_empty() {
@@ -104,6 +103,9 @@ fn push_section(
     }
     lines.push(section_line(title, palette));
     for (label, value) in visible_fields {
+        lines.push(document_line(label, value, label_width, palette));
+    }
+    for (label, value) in owned_fields {
         lines.push(document_line(label, value, label_width, palette));
     }
 }

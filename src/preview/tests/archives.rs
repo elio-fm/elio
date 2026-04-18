@@ -407,6 +407,22 @@ fn rar_preview_uses_external_listing_when_available() {
 }
 
 #[test]
+fn rar_loading_preview_is_silent() {
+    let root = temp_path("rar-loading-preview");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("bundle.rar");
+    fs::write(&path, b"not-a-real-rar").expect("failed to write rar fixture");
+
+    let preview = loading_preview_for(&file_entry(path), &PreviewRequestOptions::Default);
+
+    assert_eq!(preview.kind, PreviewKind::Archive);
+    assert_eq!(preview.detail.as_deref(), Some("RAR archive"));
+    assert!(preview.lines.is_empty());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn comic_zip_preview_uses_comic_info_without_archive_noise() {
     let root = temp_path("comic-zip-preview");
     fs::create_dir_all(&root).expect("failed to create temp root");

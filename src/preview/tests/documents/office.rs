@@ -23,9 +23,9 @@ fn doc_preview_shows_legacy_document_metadata() {
     assert_eq!(preview.kind, PreviewKind::Document);
     assert_eq!(preview.detail.as_deref(), Some("DOC document"));
     assert_eq!(line_texts[0], "Details");
-    assert!(line_texts.iter().any(|text| text == "People"));
-    assert!(line_texts.iter().any(|text| text == "Dates"));
-    assert!(line_texts.iter().any(|text| text == "Stats"));
+    assert!(line_texts.iter().all(|text| text != "People"));
+    assert!(line_texts.iter().all(|text| text != "Dates"));
+    assert!(line_texts.iter().all(|text| text != "Stats"));
     assert!(
         line_texts
             .iter()
@@ -96,9 +96,9 @@ fn docx_preview_shows_document_metadata() {
             .iter()
             .all(|text| !text.contains("Format") || !text.contains("DOCX document"))
     );
-    assert!(line_texts.iter().any(|text| text == "People"));
-    assert!(line_texts.iter().any(|text| text == "Dates"));
-    assert!(line_texts.iter().any(|text| text == "Stats"));
+    assert!(line_texts.iter().all(|text| text != "People"));
+    assert!(line_texts.iter().all(|text| text != "Dates"));
+    assert!(line_texts.iter().all(|text| text != "Stats"));
     assert!(
         line_texts
             .iter()
@@ -128,20 +128,9 @@ fn docx_preview_shows_document_metadata() {
             .iter()
             .all(|text| !text.contains("ApplicationLibreOffice"))
     );
-    assert!(
-        line_texts
-            .iter()
-            .position(|text| text == "Details")
-            .unwrap()
-            < line_texts.iter().position(|text| text == "People").unwrap()
-    );
-    assert!(
-        line_texts.iter().position(|text| text == "People").unwrap()
-            < line_texts.iter().position(|text| text == "Dates").unwrap()
-    );
-    assert!(
-        line_texts.iter().position(|text| text == "Dates").unwrap()
-            < line_texts.iter().position(|text| text == "Stats").unwrap()
+    assert_eq!(
+        line_texts.iter().filter(|text| *text == "Details").count(),
+        1
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -177,9 +166,9 @@ fn odt_preview_shows_document_metadata() {
     assert_eq!(preview.kind, PreviewKind::Document);
     assert_eq!(preview.detail.as_deref(), Some("ODT document"));
     assert_eq!(line_texts[0], "Details");
-    assert!(line_texts.iter().any(|text| text == "People"));
-    assert!(line_texts.iter().any(|text| text == "Dates"));
-    assert!(line_texts.iter().any(|text| text == "Stats"));
+    assert!(line_texts.iter().all(|text| text != "People"));
+    assert!(line_texts.iter().all(|text| text != "Dates"));
+    assert!(line_texts.iter().all(|text| text != "Stats"));
     assert!(line_texts.iter().any(|text| text.contains("Project Notes")));
     assert!(line_texts.iter().any(|text| text.contains("LibreOffice")));
     assert!(line_texts.iter().any(|text| text.contains("980")));
@@ -236,6 +225,8 @@ fn pptx_preview_with_no_people_metadata_does_not_show_people_section() {
     assert_eq!(preview.detail.as_deref(), Some("PPTX presentation"));
     assert!(line_texts.iter().any(|text| text == "Details"));
     assert!(line_texts.iter().all(|text| text != "People"));
+    assert!(line_texts.iter().all(|text| text != "Dates"));
+    assert!(line_texts.iter().all(|text| text != "Stats"));
     assert!(
         line_texts
             .iter()
