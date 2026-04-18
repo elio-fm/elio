@@ -1,4 +1,5 @@
 pub(super) mod doc;
+pub(super) mod kindle;
 pub(super) mod ooxml;
 pub(super) mod open_document;
 pub(super) mod pages;
@@ -11,6 +12,10 @@ use zip::ZipArchive;
 
 pub(super) fn extract_doc_metadata(path: &Path) -> Option<DocumentMetadata> {
     doc::extract_doc_metadata(path)
+}
+
+pub(super) fn extract_kindle_metadata(path: &Path) -> Option<DocumentMetadata> {
+    kindle::extract_kindle_metadata(path)
 }
 
 pub(super) fn extract_ooxml_metadata<R: Read + std::io::Seek>(

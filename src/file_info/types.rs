@@ -28,6 +28,8 @@ pub(crate) enum DocumentFormat {
     Xlsm,
     Pages,
     Epub,
+    Mobi,
+    Azw3,
     Pdf,
 }
 
@@ -46,6 +48,8 @@ impl DocumentFormat {
             Self::Xlsm => "XLSM spreadsheet",
             Self::Pages => "Pages document",
             Self::Epub => "EPUB ebook",
+            Self::Mobi => "MOBI ebook",
+            Self::Azw3 => "AZW3 ebook",
             Self::Pdf => "PDF document",
         }
     }

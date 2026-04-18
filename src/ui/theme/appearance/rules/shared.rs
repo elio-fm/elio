@@ -17,6 +17,14 @@ pub(super) fn rule_document_file() -> RuleOverride {
     }
 }
 
+pub(super) fn rule_ebook_file() -> RuleOverride {
+    RuleOverride {
+        class: Some(FileClass::Document),
+        icon: Some("󱗖".to_string()),
+        color: Some(rgb(211, 170, 124)),
+    }
+}
+
 pub(super) fn rule_spreadsheet_file() -> RuleOverride {
     RuleOverride {
         class: Some(FileClass::Document),

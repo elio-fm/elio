@@ -140,6 +140,16 @@ class = "document"
 icon = "󱗖"
 color = "#d3aa7c"
 
+[extensions.mobi]
+class = "document"
+icon = "󱗖"
+color = "#d3aa7c"
+
+[extensions.azw3]
+class = "document"
+icon = "󱗖"
+color = "#d3aa7c"
+
 [extensions.ico]
 class = "image"
 icon = "󰋩"

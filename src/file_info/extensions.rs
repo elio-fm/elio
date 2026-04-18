@@ -509,6 +509,16 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("EPUB ebook"),
             preview: PreviewSpec::document(DocumentFormat::Epub),
         },
+        "mobi" => FileFacts {
+            builtin_class: FileClass::Document,
+            specific_type_label: Some("MOBI ebook"),
+            preview: PreviewSpec::document(DocumentFormat::Mobi),
+        },
+        "azw3" => FileFacts {
+            builtin_class: FileClass::Document,
+            specific_type_label: Some("AZW3 ebook"),
+            preview: PreviewSpec::document(DocumentFormat::Azw3),
+        },
         "cbz" => plain(FileClass::Archive, Some("Comic ZIP archive")),
         "cbr" => plain(FileClass::Archive, Some("Comic RAR archive")),
         "pdf" => FileFacts {

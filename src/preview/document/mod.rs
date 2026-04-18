@@ -6,8 +6,8 @@ mod metadata;
 use self::{
     common::extract_zip_document_metadata,
     formats::{
-        extract_doc_metadata, extract_ooxml_metadata, extract_open_document_metadata,
-        extract_pages_metadata, extract_pdf_metadata,
+        extract_doc_metadata, extract_kindle_metadata, extract_ooxml_metadata,
+        extract_open_document_metadata, extract_pages_metadata, extract_pdf_metadata,
     },
     metadata::render_document_preview,
 };
@@ -40,6 +40,7 @@ pub(super) fn build_document_preview(
         DocumentFormat::Epub => {
             return epub::build_epub_preview(path, epub_section_index.unwrap_or(0));
         }
+        DocumentFormat::Mobi | DocumentFormat::Azw3 => extract_kindle_metadata(path),
         DocumentFormat::Pdf => extract_pdf_metadata(path),
     }?;
 

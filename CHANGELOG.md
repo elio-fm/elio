@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added RAR archive previews using the existing external archive listing backends, with `unrar` as an additional fallback when available.
 - Added non-image comic archive previews for CBZ and CBR files, using embedded XML/comment metadata or conservative structured-name fallbacks instead of showing an empty pane.
+- Added MOBI and AZW3 ebook classification, book icons, and native metadata previews for Kindle ebook files.
 
 ### Changed
 
