@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Improved fuzzy search indexing and filtering responsiveness for large directory trees.
+- Simplified document metadata previews by keeping author, dates, application, and stats in the `Details` section.
+- Kept RAR archive loading previews silent while archive contents are inspected in the background.
 - Documented fuzzy search scope, hidden-file handling, pruning, refresh behavior, and large-tree caps.
 - Documented Trash behavior across Linux, BSD, macOS, and Windows.
 - Prefer `gio trash` on Linux before falling back to the Freedesktop Trash layout for desktop-compatible trashing.
