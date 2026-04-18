@@ -202,7 +202,9 @@ fn render_preview_body(
         frame.render_widget(paragraph, text_area);
     }
 
-    if let Some(scrollbar_area) = scrollbar_area {
+    if let Some(scrollbar_area) = scrollbar_area
+        && text_area.height > 0
+    {
         render_preview_scrollbar(
             frame,
             scrollbar_area,

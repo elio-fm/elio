@@ -1,6 +1,7 @@
 use super::super::types::RuleOverride;
 use super::shared::{
-    rgb, rule_class, rule_document_file, rule_presentation_file, rule_spreadsheet_file,
+    rgb, rule_class, rule_document_file, rule_ebook_file, rule_presentation_file,
+    rule_spreadsheet_file,
 };
 use crate::core::FileClass;
 use std::collections::HashMap;
@@ -538,14 +539,9 @@ pub(super) fn default_extension_rules() -> HashMap<String, RuleOverride> {
             },
         ),
         ("pdf".to_string(), rule_class(FileClass::Document)),
-        (
-            "epub".to_string(),
-            RuleOverride {
-                class: Some(FileClass::Document),
-                icon: Some("󱗖".to_string()),
-                color: Some(rgb(211, 170, 124)),
-            },
-        ),
+        ("epub".to_string(), rule_ebook_file()),
+        ("mobi".to_string(), rule_ebook_file()),
+        ("azw3".to_string(), rule_ebook_file()),
         (
             "cbz".to_string(),
             RuleOverride {

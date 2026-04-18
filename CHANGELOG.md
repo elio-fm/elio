@@ -11,11 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added RAR archive previews using the existing external archive listing backends, with `unrar` as an additional fallback when available.
 - Added non-image comic archive previews for CBZ and CBR files, using embedded XML/comment metadata or conservative structured-name fallbacks instead of showing an empty pane.
+- Added MOBI and AZW3 ebook classification, book icons, native metadata previews, and cover image previews for Kindle ebook files.
 
 ### Changed
 
 - Improved fuzzy search indexing and filtering responsiveness for large directory trees.
-- Simplified document metadata previews by keeping author, dates, application, and stats in the `Details` section.
+- Simplified document metadata previews by keeping author, dates, application, stats, and extra metadata fields in the `Details` section.
+- Made MOBI and AZW3 cover previews larger while preserving room for document details.
+- Made full-height EPUB image sections advance on preview scroll without first scrolling hidden context lines.
 - Kept RAR archive loading previews silent while archive contents are inspected in the background.
 - Documented fuzzy search scope, hidden-file handling, pruning, refresh behavior, and large-tree caps.
 - Documented Trash behavior across Linux, BSD, macOS, and Windows.

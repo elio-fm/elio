@@ -371,6 +371,8 @@ fn office_and_pages_documents_use_metadata_preview() {
     let xlsx = inspect_path(Path::new("budget.xlsx"), EntryKind::File);
     let pages = inspect_path(Path::new("proposal.pages"), EntryKind::File);
     let epub = inspect_path(Path::new("novel.epub"), EntryKind::File);
+    let mobi = inspect_path(Path::new("novel.mobi"), EntryKind::File);
+    let azw3 = inspect_path(Path::new("novel.azw3"), EntryKind::File);
     let pdf = inspect_path(Path::new("manual.pdf"), EntryKind::File);
 
     assert_eq!(doc.builtin_class, FileClass::Document);
@@ -412,6 +414,14 @@ fn office_and_pages_documents_use_metadata_preview() {
     assert_eq!(epub.builtin_class, FileClass::Document);
     assert_eq!(epub.preview.document_format, Some(DocumentFormat::Epub));
     assert_eq!(epub.specific_type_label, Some("EPUB ebook"));
+
+    assert_eq!(mobi.builtin_class, FileClass::Document);
+    assert_eq!(mobi.preview.document_format, Some(DocumentFormat::Mobi));
+    assert_eq!(mobi.specific_type_label, Some("MOBI ebook"));
+
+    assert_eq!(azw3.builtin_class, FileClass::Document);
+    assert_eq!(azw3.preview.document_format, Some(DocumentFormat::Azw3));
+    assert_eq!(azw3.specific_type_label, Some("AZW3 ebook"));
 
     assert_eq!(pdf.builtin_class, FileClass::Document);
     assert_eq!(pdf.preview.document_format, Some(DocumentFormat::Pdf));

@@ -114,6 +114,7 @@ pub(crate) enum PreviewVisualKind {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum PreviewVisualLayout {
     Inline,
+    LargeInline,
     FullHeight,
 }
 

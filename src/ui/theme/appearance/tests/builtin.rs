@@ -375,6 +375,16 @@ fn word_processing_documents_get_blue_document_icons() {
     assert_eq!(epub.icon, "󱗖");
     assert_eq!(epub.color, rgb(211, 170, 124));
 
+    let mobi = theme.resolve(Path::new("novel.mobi"), EntryKind::File);
+    assert_eq!(mobi.class, FileClass::Document);
+    assert_eq!(mobi.icon, "󱗖");
+    assert_eq!(mobi.color, rgb(211, 170, 124));
+
+    let azw3 = theme.resolve(Path::new("novel.azw3"), EntryKind::File);
+    assert_eq!(azw3.class, FileClass::Document);
+    assert_eq!(azw3.icon, "󱗖");
+    assert_eq!(azw3.color, rgb(211, 170, 124));
+
     let comic = theme.resolve(Path::new("issue.cbz"), EntryKind::File);
     assert_eq!(comic.class, FileClass::Archive);
     assert_eq!(comic.icon, "󱗖");

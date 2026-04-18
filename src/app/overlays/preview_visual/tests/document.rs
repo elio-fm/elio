@@ -221,6 +221,35 @@ fn document_page_image_prepares_in_background_before_display() {
 }
 
 #[test]
+fn large_inline_cover_uses_more_height_without_hiding_details() {
+    let root = temp_root("large-inline-cover-document");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_terminal_image_support(&mut app);
+    app.preview.state.content = PreviewContent::new(PreviewKind::Document, Vec::new())
+        .with_preview_visual(PreviewVisual {
+            kind: PreviewVisualKind::Cover,
+            layout: PreviewVisualLayout::LargeInline,
+            path: root.join("cover.png"),
+            size: 11 * 1024,
+            modified: None,
+        });
+
+    assert_eq!(
+        app.preview_visual_rows(Rect {
+            x: 0,
+            y: 0,
+            width: 48,
+            height: 20,
+        }),
+        Some(10)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn iterm_inline_page_image_clear_area_covers_preview_body_without_header() {
     let root = temp_root("iterm-inline-clear-area");
     fs::create_dir_all(&root).expect("failed to create temp root");

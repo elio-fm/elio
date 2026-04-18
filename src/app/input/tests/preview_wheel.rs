@@ -254,7 +254,13 @@ fn preview_wheel_uses_last_focused_panel_when_coordinates_miss() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.navigation.view_mode = ViewMode::List;
-    app.select_index(0);
+    let file_index = app
+        .navigation
+        .entries
+        .iter()
+        .position(|entry| entry.path == file_path)
+        .expect("long file should be visible");
+    app.select_index(file_index);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
             x: 0,
@@ -308,7 +314,13 @@ fn preview_wheel_follows_hovered_panel_without_click() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.navigation.view_mode = ViewMode::List;
-    app.select_index(0);
+    let file_index = app
+        .navigation
+        .entries
+        .iter()
+        .position(|entry| entry.path == file_path)
+        .expect("long file should be visible");
+    app.select_index(file_index);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
             x: 0,
@@ -362,7 +374,13 @@ fn preview_wheel_uses_preview_column_when_row_is_unreliable() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.navigation.view_mode = ViewMode::List;
-    app.select_index(0);
+    let file_index = app
+        .navigation
+        .entries
+        .iter()
+        .position(|entry| entry.path == file_path)
+        .expect("long file should be visible");
+    app.select_index(file_index);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
             x: 0,
@@ -412,7 +430,13 @@ fn preview_wheel_steps_comic_pages_instead_of_scrolling_summary_text() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.navigation.view_mode = ViewMode::List;
-    app.select_index(0);
+    let archive_index = app
+        .navigation
+        .entries
+        .iter()
+        .position(|entry| entry.path == archive)
+        .expect("archive should be visible");
+    app.select_index(archive_index);
     wait_for_background_preview(&mut app);
     app.set_frame_state(FrameState {
         entries_panel: Some(Rect {
@@ -682,6 +706,79 @@ fn preview_wheel_scrolls_epub_section_before_advancing_to_next_section() {
             .any(|line| line.to_string().contains("Second chapter text."))
     );
     assert_eq!(app.preview.state.scroll, 0);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn preview_wheel_advances_full_height_epub_image_without_hidden_scroll() {
+    let root = temp_path("preview-wheel-epub-full-height-image");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let archive = root.join("story.epub");
+    fs::write(&archive, b"epub placeholder").expect("failed to write epub placeholder");
+    let page = root.join("cover.png");
+    fs::write(&page, b"image placeholder").expect("failed to write image placeholder");
+    let page_size = fs::metadata(&page)
+        .expect("page metadata should exist")
+        .len();
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.view_mode = ViewMode::List;
+    let epub_index = app
+        .navigation
+        .entries
+        .iter()
+        .position(|entry| entry.path == archive)
+        .expect("epub should be visible");
+    app.select_index(epub_index);
+    app.sync_epub_preview_selection();
+    app.preview.state.content = crate::preview::PreviewContent::new(
+        crate::preview::PreviewKind::Document,
+        vec![ratatui::text::Line::from("Hidden cover context")],
+    )
+    .with_ebook_section(0, 2, Some("Cover".to_string()))
+    .with_preview_visual(crate::preview::PreviewVisual {
+        kind: crate::preview::PreviewVisualKind::PageImage,
+        layout: crate::preview::PreviewVisualLayout::FullHeight,
+        path: page,
+        size: page_size,
+        modified: None,
+    });
+    app.apply_current_epub_preview_metadata();
+    app.set_frame_state(FrameState {
+        entries_panel: Some(Rect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 8,
+        }),
+        preview_panel: Some(Rect {
+            x: 21,
+            y: 0,
+            width: 24,
+            height: 8,
+        }),
+        preview_rows_visible: 0,
+        preview_cols_visible: 24,
+        ..FrameState::default()
+    });
+
+    app.handle_event(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: 22,
+        row: 1,
+        modifiers: KeyModifiers::NONE,
+    }))
+    .expect("preview wheel should be handled");
+
+    assert_eq!(app.preview.state.scroll, 0);
+    assert_eq!(app.preview.state.content.ebook_section_index, Some(1));
+    assert_eq!(app.preview.state.content.ebook_section_count, Some(2));
+    assert!(
+        app.preview_header_detail(10)
+            .as_deref()
+            .is_some_and(|detail| detail.contains("Section 2/2"))
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

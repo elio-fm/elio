@@ -583,6 +583,9 @@ impl App {
         if delta == 0 || !self.epub_preview_wheel_capture_active() {
             return false;
         }
+        if self.current_epub_section_uses_full_height_image() {
+            return true;
+        }
 
         let visible_cols = self.input.frame_state.preview_cols_visible.max(1);
         let visible_rows = self.input.frame_state.preview_rows_visible.max(1);
@@ -597,6 +600,18 @@ impl App {
         } else {
             self.preview.state.scroll >= max_scroll
         }
+    }
+
+    fn current_epub_section_uses_full_height_image(&self) -> bool {
+        self.preview
+            .state
+            .content
+            .preview_visual
+            .as_ref()
+            .is_some_and(|visual| {
+                visual.kind == preview::PreviewVisualKind::PageImage
+                    && visual.layout == preview::PreviewVisualLayout::FullHeight
+            })
     }
 
     fn preview_has_vertical_overflow(&self) -> bool {

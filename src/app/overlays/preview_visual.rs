@@ -5,6 +5,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
 const PREVIEW_INLINE_COVER_MIN_HEIGHT: u16 = 6;
 const PREVIEW_INLINE_COVER_MAX_HEIGHT: u16 = 12;
+const PREVIEW_LARGE_INLINE_COVER_MAX_HEIGHT: u16 = 18;
 const PREVIEW_INLINE_VIDEO_COVER_MAX_HEIGHT: u16 = 18;
 const PREVIEW_INLINE_MIN_TEXT_HEIGHT: u16 = 6;
 const PREVIEW_INLINE_PAGE_MIN_HEIGHT: u16 = 8;
@@ -17,12 +18,13 @@ impl App {
         {
             return None;
         }
-        match self.current_preview_visual_layout()? {
+        let layout = self.current_preview_visual_layout()?;
+        match layout {
             preview::PreviewVisualLayout::FullHeight => {
                 let rows = (area.width >= 12 && area.height > 0).then_some(area.height)?;
                 return (!self.preview_visual_failed_for_rows(area, rows)).then_some(rows);
             }
-            preview::PreviewVisualLayout::Inline => {}
+            preview::PreviewVisualLayout::Inline | preview::PreviewVisualLayout::LargeInline => {}
         }
         if self.current_preview_visual_kind() == Some(preview::PreviewVisualKind::PageImage) {
             if area.width < 12
@@ -42,21 +44,19 @@ impl App {
             return None;
         }
 
-        let rows = if self.preview.state.content.kind == preview::PreviewKind::Video {
-            (area.height / 2)
-                .clamp(
-                    PREVIEW_INLINE_COVER_MIN_HEIGHT,
-                    PREVIEW_INLINE_VIDEO_COVER_MAX_HEIGHT,
-                )
-                .min(area.height.saturating_sub(PREVIEW_INLINE_MIN_TEXT_HEIGHT))
-        } else {
-            (area.height / 3)
-                .clamp(
-                    PREVIEW_INLINE_COVER_MIN_HEIGHT,
-                    PREVIEW_INLINE_COVER_MAX_HEIGHT,
-                )
-                .min(area.height.saturating_sub(PREVIEW_INLINE_MIN_TEXT_HEIGHT))
+        let (height_divisor, max_height) = match layout {
+            preview::PreviewVisualLayout::LargeInline => (2, PREVIEW_LARGE_INLINE_COVER_MAX_HEIGHT),
+            preview::PreviewVisualLayout::Inline
+                if self.preview.state.content.kind == preview::PreviewKind::Video =>
+            {
+                (2, PREVIEW_INLINE_VIDEO_COVER_MAX_HEIGHT)
+            }
+            preview::PreviewVisualLayout::Inline => (3, PREVIEW_INLINE_COVER_MAX_HEIGHT),
+            preview::PreviewVisualLayout::FullHeight => unreachable!(),
         };
+        let rows = (area.height / height_divisor)
+            .clamp(PREVIEW_INLINE_COVER_MIN_HEIGHT, max_height)
+            .min(area.height.saturating_sub(PREVIEW_INLINE_MIN_TEXT_HEIGHT));
         (!self.preview_visual_failed_for_rows(area, rows)).then_some(rows)
     }
 
