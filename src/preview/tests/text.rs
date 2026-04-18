@@ -7,7 +7,7 @@ fn plain_text_license_preview_shows_specific_license_detail() {
     let path = root.join("LICENSE");
     fs::write(
         &path,
-        "MIT License\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND.\n",
+        "SPDX-License-Identifier: MIT\n\nFixture grant notes.\n",
     )
     .expect("failed to write license");
 
@@ -283,22 +283,18 @@ fn license_file_with_hard_line_breaks_is_reflowed_into_paragraphs() {
     fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("LICENSE");
 
-    // Simulate a hard-wrapped license (lines at ~76 chars, traditional terminal format).
+    // Simulate hard-wrapped license text.
     // Each paragraph is a block of consecutive lines, separated by blank lines.
     let contents = "\
 MIT License
 
 Copyright (c) 2024 Example Author
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the \"Software\"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+All rights reserved for this fixture. No warranty or liability is accepted
+for the generated test text. The synthetic grant should stay together after
+reflowing.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The fixture notice should stay in the same paragraph after reflowing.
 ";
     fs::write(&path, contents).expect("failed to write license");
 
@@ -306,17 +302,17 @@ copies or substantial portions of the Software.
 
     assert_eq!(preview.kind, PreviewKind::Text);
 
-    // After reflowing: the five-line permission-grant block should be ONE long line.
-    let permission_line = preview
+    // After reflowing: the wrapped synthetic grant block should be ONE long line.
+    let grant_line = preview
         .lines
         .iter()
-        .find(|line| line_text(line).contains("Permission is hereby granted"))
-        .expect("permission grant line should exist");
-    let text = line_text(permission_line);
+        .find(|line| line_text(line).contains("synthetic grant"))
+        .expect("synthetic grant line should exist");
+    let text = line_text(grant_line);
     // The reflowed line must contain the last part that was originally on a separate line.
     assert!(
-        text.contains("furnished to do so"),
-        "permission grant should be reflowed into a single line, got: {text:?}"
+        text.contains("after reflowing"),
+        "synthetic grant should be reflowed into a single line, got: {text:?}"
     );
 
     // Blank-line paragraph separators must be preserved.

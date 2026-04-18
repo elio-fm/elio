@@ -33,7 +33,7 @@ fn detected_license_files_use_license_class_appearance() {
     let (root, path) = write_temp_file(
         "license-appearance",
         "LICENSE.md",
-        "# SPDX-License-Identifier: Apache-2.0\n\nLicensed under the Apache License, Version 2.0.\n",
+        "# SPDX-License-Identifier: Apache-2.0\n\nFixture license notes.\n",
     );
 
     let resolved = theme.resolve(&path, EntryKind::File);
@@ -72,7 +72,7 @@ fn resolve_entry_cache_respects_entry_metadata_when_builtin_class_changes() {
     let (root, path) = write_temp_file(
         "appearance-cache",
         "third-party.txt",
-        "Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/LICENSE-2.0\n\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n",
+        "SPDX-License-Identifier: Apache-2.0\n",
     );
 
     let metadata = fs::metadata(&path).expect("metadata should exist");

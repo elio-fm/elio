@@ -419,7 +419,7 @@ fn markdown_license_preview_keeps_detected_detail() {
     let path = root.join("LICENSE.md");
     fs::write(
         &path,
-        "# SPDX-License-Identifier: Apache-2.0\n\nLicensed under the Apache License, Version 2.0.\n",
+        "# SPDX-License-Identifier: Apache-2.0\n\nFixture license notes.\n",
     )
     .expect("failed to write markdown license");
 

@@ -4,8 +4,8 @@ use super::*;
 fn extensionless_shebang_scripts_are_classified_as_shell_code() {
     let (root, path) = write_temp_file(
         "extensionless-bash-script",
-        "apksigner",
-        "#!/bin/bash\n#\n# Copyright (C) 2016 The Android Open Source Project\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n\nexec java -jar apksigner.jar \"$@\"\n",
+        "tool-wrapper",
+        "#!/bin/bash\n#\n# Copyright (C) 2026 Example Project\n# SPDX-License-Identifier: Apache-2.0\n\nexec java -jar fixture.jar \"$@\"\n",
     );
 
     let facts = inspect_path(&path, EntryKind::File);
