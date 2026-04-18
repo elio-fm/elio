@@ -56,18 +56,13 @@ pub(super) fn render_document_preview_lines(metadata: &DocumentMetadata) -> Vec<
         .max(owned_section_label_width(&metadata.metadata))
         .max(6);
 
+    let mut owned_details = metadata.stats.clone();
+    owned_details.extend(metadata.metadata.iter().cloned());
     push_combined_section(
         &mut lines,
         "Details",
         &details,
-        &metadata.stats,
-        label_width,
-        palette,
-    );
-    push_owned_section(
-        &mut lines,
-        "Metadata",
-        &metadata.metadata,
+        &owned_details,
         label_width,
         palette,
     );
@@ -106,25 +101,6 @@ fn push_combined_section(
         lines.push(document_line(label, value, label_width, palette));
     }
     for (label, value) in owned_fields {
-        lines.push(document_line(label, value, label_width, palette));
-    }
-}
-
-fn push_owned_section(
-    lines: &mut Vec<Line<'static>>,
-    title: &str,
-    fields: &[(String, String)],
-    label_width: usize,
-    palette: theme::Palette,
-) {
-    if fields.is_empty() {
-        return;
-    }
-    if !lines.is_empty() {
-        lines.push(Line::from(""));
-    }
-    lines.push(section_line(title, palette));
-    for (label, value) in fields {
         lines.push(document_line(label, value, label_width, palette));
     }
 }

@@ -174,7 +174,7 @@ On Freedesktop Trash systems, the stored filename may be changed to avoid collis
 
 - **Text and code** — plain text, source code with syntax highlighting, and Markdown
 - **Structured data** — JSON, JSONC, JSON5, YAML, TOML, `.env`, logs, CSV/TSV, and SQLite
-- **Documents** — PDF, EPUB, DOC, DOCX, DOCM, ODT, Pages, XLSX, XLSM, ODS, PPTX, PPTM, and ODP
+- **Documents** — PDF, EPUB, MOBI, AZW3, DOC, DOCX, DOCM, ODT, Pages, XLSX, XLSM, ODS, PPTX, PPTM, and ODP
 - **Media** — image metadata and inline previews, audio metadata and covers, and video metadata and thumbnails
 - **Folders and archives** — directories, ZIP/TAR-family archives, comic archives, torrents, ISO images, and other disk-image-style containers
 - **Binary files** — metadata previews for non-text files

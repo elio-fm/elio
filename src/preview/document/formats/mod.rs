@@ -14,8 +14,11 @@ pub(super) fn extract_doc_metadata(path: &Path) -> Option<DocumentMetadata> {
     doc::extract_doc_metadata(path)
 }
 
-pub(super) fn extract_kindle_metadata(path: &Path) -> Option<DocumentMetadata> {
-    kindle::extract_kindle_metadata(path)
+pub(super) fn build_kindle_preview(
+    path: &Path,
+    format: DocumentFormat,
+) -> Option<crate::preview::PreviewContent> {
+    kindle::build_kindle_preview(path, format)
 }
 
 pub(super) fn extract_ooxml_metadata<R: Read + std::io::Seek>(
