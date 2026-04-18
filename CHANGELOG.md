@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added RAR archive previews using the existing external archive listing backends, with `unrar` as an additional fallback when available.
+- Added non-image comic archive previews for CBZ and CBR files, using embedded XML/comment metadata or conservative structured-name fallbacks instead of showing an empty pane.
+
 ### Changed
 
 - Improved fuzzy search indexing and filtering responsiveness for large directory trees.
@@ -25,7 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clarified media and binary metadata previews by using `Details` instead of repeating `Video`, `Audio`, `Image`, or `Binary` as the first body section.
 - Clarified archive metadata previews by using `Details` instead of `Summary`, `Image`, or `Torrent` for the first body section.
 - Clarified SQLite database previews by using `Details` for the first metadata section.
-- Fixed comic archive previews so CBZ and CBR files show ComicInfo metadata and compact contents when image rendering is unavailable.
 
 ## [1.0.1] - 2026-04-12
 
