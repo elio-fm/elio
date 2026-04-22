@@ -171,6 +171,10 @@ mod tests {
                 "cmake",
                 "cmake_minimum_required(VERSION 3.28)\nproject(elio)\n",
             ),
+            (
+                "qml",
+                "import QtQuick\nItem {\n  property bool active: true\n  onActiveChanged: console.log(\"changed\")\n}\n",
+            ),
         ] {
             let preview = render_code_preview(
                 PreviewSpec::code(code_syntax, CodeBackend::Syntect, None),

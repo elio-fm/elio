@@ -63,6 +63,11 @@ pub(crate) const CURATED_SYNTAXES: &[CuratedSyntax] = &[
         source: SyntaxSource::Vendored,
     },
     CuratedSyntax {
+        canonical_id: "qml",
+        lookup_token: "qml",
+        source: SyntaxSource::Vendored,
+    },
+    CuratedSyntax {
         canonical_id: "sql",
         lookup_token: "sql",
         source: SyntaxSource::BundledDefault,

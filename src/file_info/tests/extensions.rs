@@ -62,6 +62,16 @@ fn html_and_css_files_use_code_preview_support() {
 }
 
 #[test]
+fn qml_files_use_code_preview_support() {
+    let qml = inspect_path(Path::new("Main.qml"), EntryKind::File);
+
+    assert_eq!(qml.builtin_class, FileClass::Code);
+    assert_eq!(qml.specific_type_label, Some("QML source file"));
+    assert_eq!(qml.preview.language_hint, Some("qml"));
+    assert_code_spec(qml.preview, Some("qml"), CodeBackend::Syntect);
+}
+
+#[test]
 fn nix_and_cmake_files_use_code_preview_support() {
     let nix = inspect_path(Path::new("flake.nix"), EntryKind::File);
     let cmake = inspect_path(Path::new("toolchain.cmake"), EntryKind::File);

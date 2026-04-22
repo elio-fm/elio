@@ -82,4 +82,12 @@ pub(super) const LANGUAGES: &[RegistryEntry] = &[
         &["tsx"],
         &["tsx"],
     ),
+    entry(
+        language("qml", "QML", CodeBackend::Syntect, None),
+        &["qml"],
+        &[],
+        &[],
+        &["qml"],
+        &["qml"],
+    ),
 ];

@@ -14,6 +14,14 @@ pub(super) fn default_extension_rules() -> HashMap<String, RuleOverride> {
         ("tsx".to_string(), rule_class(FileClass::Code)),
         ("jsx".to_string(), rule_class(FileClass::Code)),
         (
+            "qml".to_string(),
+            RuleOverride {
+                class: Some(FileClass::Code),
+                icon: Some("".to_string()),
+                color: Some(rgb(64, 205, 82)),
+            },
+        ),
+        (
             "sql".to_string(),
             RuleOverride {
                 class: Some(FileClass::Code),

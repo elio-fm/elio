@@ -269,6 +269,51 @@ fn typescript_preview_uses_code_renderer() {
 }
 
 #[test]
+fn qml_preview_uses_curated_syntect_support() {
+    let root = temp_path("qml");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("Main.qml");
+    fs::write(
+        &path,
+        "import QtQuick\nItem {\n  id: root\n  required property var model\n  readonly property bool active: true\n  Component.onCompleted: {\n    if (active) {\n      console.log(\"hello\")\n    }\n  }\n}\n",
+    )
+    .expect("failed to write qml source");
+
+    let preview = build_preview(&file_entry(path));
+    let code_palette = theme::code_preview_palette();
+
+    assert_eq!(preview.kind, PreviewKind::Code);
+    assert!(
+        preview
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("QML"))
+    );
+    assert_eq!(
+        span_color(&preview.lines[1], "Item"),
+        Some(code_palette.r#type)
+    );
+    assert_eq!(
+        span_color(&preview.lines[3], "property"),
+        Some(code_palette.keyword)
+    );
+    assert_ne!(
+        span_color(&preview.lines[4], "active"),
+        Some(code_palette.fg)
+    );
+    assert_eq!(
+        span_color(&preview.lines[6], "if"),
+        Some(code_palette.keyword)
+    );
+    assert_eq!(
+        span_color(&preview.lines[7], "\"hello\""),
+        Some(code_palette.string)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn tsx_preview_uses_code_renderer() {
     let root = temp_path("tsx");
     fs::create_dir_all(&root).expect("failed to create temp root");

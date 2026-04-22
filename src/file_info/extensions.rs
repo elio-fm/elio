@@ -80,6 +80,11 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("Less stylesheet"),
             preview: preview_for_extension(ext),
         },
+        "qml" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("QML source file"),
+            preview: preview_for_extension(ext),
+        },
         "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some(match ext {

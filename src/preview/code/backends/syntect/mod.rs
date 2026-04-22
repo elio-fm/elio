@@ -297,6 +297,10 @@ mod tests {
                 "powershell",
                 "function Invoke-Greeting([string]$Name) {\n  Write-Host \"Hello $Name\"\n}\n",
             ),
+            (
+                "qml",
+                "import QtQuick\nItem {\n  id: root\n  property bool active: true\n  onActiveChanged: console.log(\"changed\")\n}\n",
+            ),
         ] {
             let rendered = render_syntect_code_preview(code_syntax, snippet, true, 20, &|| false)
                 .expect("vendored syntax should render through syntect");
@@ -394,6 +398,26 @@ mod tests {
         assert_ne!(span_color(&rendered[1], "Write-Host"), Some(palette.fg));
         assert_eq!(span_color(&rendered[1], "\"Hello "), Some(palette.string));
         assert_eq!(span_color(&rendered[1], "$Name"), Some(palette.parameter));
+    }
+
+    #[test]
+    fn qml_tokens_map_to_semantic_roles() {
+        let palette = theme::code_preview_palette();
+        let sample = "import QtQuick\nItem {\n  id: root\n  required property bool active: true\n  Component.onCompleted: {\n    if (active) {\n      console.log(\"hello\")\n    }\n  }\n}\n";
+        let rendered = render_syntect_code_preview("qml", sample, true, 20, &|| false)
+            .expect("qml syntax should render through syntect");
+
+        assert_eq!(span_color(&rendered[1], "Item"), Some(palette.r#type));
+        assert_eq!(span_color(&rendered[3], "required"), Some(palette.keyword));
+        assert_eq!(span_color(&rendered[3], "property"), Some(palette.keyword));
+        assert_eq!(span_color(&rendered[3], "active"), Some(palette.parameter));
+        assert_eq!(
+            span_color(&rendered[4], "Component.onCompleted"),
+            Some(palette.parameter)
+        );
+        assert_eq!(span_color(&rendered[5], "if"), Some(palette.keyword));
+        assert_eq!(span_color(&rendered[6], "log"), Some(palette.function));
+        assert_eq!(span_color(&rendered[6], "\"hello\""), Some(palette.string));
     }
 
     #[test]

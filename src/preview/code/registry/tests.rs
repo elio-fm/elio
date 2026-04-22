@@ -76,6 +76,10 @@ fn extension_lookup_returns_canonical_language_ids() {
         language_for_extension("json5").map(|language| language.canonical_id),
         Some("json5")
     );
+    assert_eq!(
+        language_for_extension("qml").map(|language| language.canonical_id),
+        Some("qml")
+    );
 }
 
 #[test]
@@ -227,6 +231,10 @@ fn markdown_fence_lookup_supports_common_aliases() {
     assert_eq!(
         language_for_markdown_fence("rscript").map(|language| language.canonical_id),
         Some("r")
+    );
+    assert_eq!(
+        language_for_markdown_fence("qml").map(|language| language.canonical_id),
+        Some("qml")
     );
 }
 

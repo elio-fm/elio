@@ -314,6 +314,10 @@ fn default_theme_assigns_icons_for_new_language_support() {
     let cobol = theme.resolve(Path::new("ledger.cbl"), EntryKind::File);
     assert_eq!(cobol.class, FileClass::Code);
     assert_eq!(cobol.icon, "");
+
+    let qml = theme.resolve(Path::new("Main.qml"), EntryKind::File);
+    assert_eq!(qml.class, FileClass::Code);
+    assert_eq!(qml.icon, "");
 }
 
 #[test]
