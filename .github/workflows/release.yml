@@ -265,13 +265,13 @@ jobs:
 
     steps:
       - name: Download release notes
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: release-notes
           path: release-notes
 
       - name: Download release artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: release-asset-*
           path: dist
@@ -358,7 +358,7 @@ jobs:
       - name: Authenticate with crates.io
         id: auth
         if: steps.crates.outputs.published != 'true'
-        uses: rust-lang/crates-io-auth-action@v1
+        uses: rust-lang/crates-io-auth-action@v1.0.4
 
       - name: Publish to crates.io
         if: steps.crates.outputs.published != 'true'
