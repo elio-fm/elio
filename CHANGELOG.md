@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added QML source file support with syntax-highlighted code previews.
 - Added a dedicated QML file icon in the built-in browser theme.
+- Added metadata previews for TrueType, OpenType, WOFF, and WOFF2 font files, replacing the generic binary fallback.
 
 ## [1.1.0] - 2026-04-18
 
