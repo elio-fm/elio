@@ -54,6 +54,7 @@ fn font_preview_uses_metadata_details_instead_of_binary_placeholder() {
                 .iter()
                 .all(|line| !line.contains("Binary or unsupported file"))
         );
+        assert!(line_texts.iter().all(|line| !line.contains("PostScript")));
         assert!(
             line_texts
                 .iter()

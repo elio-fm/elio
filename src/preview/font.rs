@@ -16,7 +16,8 @@ use std::{
     sync::OnceLock,
 };
 
-const FC_SCAN_FORMAT: &str = "%{family}\n%{style}\n%{postscriptname}\n%{fontformat}\n%{fontwrapper}\n%{spacing}\n%{variable}\n";
+const FC_SCAN_FORMAT: &str =
+    "%{family}\n%{style}\n%{fontformat}\n%{fontwrapper}\n%{spacing}\n%{variable}\n";
 const WOFF_MAGIC: &[u8; 4] = b"wOFF";
 const WOFF2_MAGIC: &[u8; 4] = b"wOF2";
 const OTTO_MAGIC: &[u8; 4] = b"OTTO";
@@ -28,7 +29,6 @@ const TYPE_1_MAGIC: &[u8; 4] = b"typ1";
 struct FontMetadata {
     family: Option<String>,
     style: Option<String>,
-    postscript: Option<String>,
     format: String,
     monospace: bool,
     variable: bool,
@@ -39,7 +39,6 @@ struct FontMetadata {
 struct FcScanMetadata {
     family: Option<String>,
     style: Option<String>,
-    postscript: Option<String>,
     font_format: Option<String>,
     wrapper: Option<String>,
     monospace: bool,
@@ -66,9 +65,6 @@ where
     let preview_metadata = FontMetadata {
         family: scan_metadata.as_ref().and_then(|scan| scan.family.clone()),
         style: scan_metadata.as_ref().and_then(|scan| scan.style.clone()),
-        postscript: scan_metadata
-            .as_ref()
-            .and_then(|scan| scan.postscript.clone()),
         format: scan_metadata
             .as_ref()
             .and_then(|scan| {
@@ -117,7 +113,6 @@ fn parse_fc_scan_output(output: &str) -> Option<FcScanMetadata> {
     let mut lines = output.lines();
     let family = primary_name_value(lines.next().unwrap_or_default());
     let style = primary_name_value(lines.next().unwrap_or_default());
-    let postscript = clean_fc_scan_value(lines.next().unwrap_or_default());
     let font_format = clean_fc_scan_value(lines.next().unwrap_or_default());
     let wrapper = clean_fc_scan_value(lines.next().unwrap_or_default());
     let monospace = is_monospace_spacing(lines.next().unwrap_or_default());
@@ -127,7 +122,6 @@ fn parse_fc_scan_output(output: &str) -> Option<FcScanMetadata> {
     let metadata = FcScanMetadata {
         family,
         style,
-        postscript,
         font_format,
         wrapper,
         monospace,
@@ -135,7 +129,6 @@ fn parse_fc_scan_output(output: &str) -> Option<FcScanMetadata> {
     };
     if metadata.family.is_none()
         && metadata.style.is_none()
-        && metadata.postscript.is_none()
         && metadata.font_format.is_none()
         && metadata.wrapper.is_none()
         && !metadata.monospace
@@ -262,9 +255,6 @@ fn render_font_preview(detail: &str, metadata: FontMetadata) -> PreviewContent {
     if let Some(style) = metadata.style {
         fields.push(("Style", style));
     }
-    if let Some(postscript) = metadata.postscript {
-        fields.push(("PostScript", postscript));
-    }
     fields.push(("Format", metadata.format));
     if metadata.monospace {
         fields.push(("Monospace", "Yes".to_string()));
@@ -318,7 +308,6 @@ mod tests {
         let output = "\
 JetBrainsMono Nerd Font,JetBrainsMono NF
 Regular
-JetBrainsMonoNF-Regular
 TrueType
 SFNT
 100
@@ -329,10 +318,6 @@ True
 
         assert_eq!(metadata.family.as_deref(), Some("JetBrainsMono Nerd Font"));
         assert_eq!(metadata.style.as_deref(), Some("Regular"));
-        assert_eq!(
-            metadata.postscript.as_deref(),
-            Some("JetBrainsMonoNF-Regular")
-        );
         assert_eq!(metadata.font_format.as_deref(), Some("TrueType"));
         assert_eq!(metadata.wrapper.as_deref(), Some("SFNT"));
         assert!(metadata.monospace);
@@ -360,7 +345,6 @@ True
         let output = "\
 TypoGraphica
 Regular ,Normal, obyéejné, Standard, Kavov ika, Normaali
-TypoGraphica
 TrueType
 SFNT
 
