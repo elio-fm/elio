@@ -7,6 +7,7 @@ mod data;
 mod directory;
 mod dispatch;
 mod document;
+mod font;
 mod layout;
 mod markdown;
 pub(crate) mod process;

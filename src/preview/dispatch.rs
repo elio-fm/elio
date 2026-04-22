@@ -79,6 +79,7 @@ pub(crate) fn loading_preview_for(
     let lines = if is_comic_page_preview
         || is_epub_section_preview
         || facts.builtin_class == FileClass::Audio
+        || facts.builtin_class == FileClass::Font
         || is_silent_kindle_loading
         || is_silent_archive_loading
     {
@@ -110,6 +111,9 @@ fn loading_preview_kind(facts: &file_info::FileFacts) -> PreviewKind {
     }
     if facts.preview.document_format.is_some() {
         return PreviewKind::Document;
+    }
+    if facts.builtin_class == FileClass::Font {
+        return PreviewKind::Font;
     }
     if facts.builtin_class == FileClass::Audio {
         return PreviewKind::Audio;
@@ -228,6 +232,12 @@ where
             ffmpeg_available,
             canceled,
         );
+    }
+    if facts.builtin_class == FileClass::Font {
+        return match font::build_font_preview(entry, type_detail, canceled) {
+            Ok(preview) => preview,
+            Err(error) => apply_type_detail(unavailable_file_preview(&error), type_detail),
+        };
     }
 
     if matches!(

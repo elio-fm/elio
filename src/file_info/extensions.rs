@@ -548,7 +548,10 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         "ogg" => plain(FileClass::Audio, Some("Ogg audio")),
         "m4a" => plain(FileClass::Audio, Some("M4A audio")),
         "zip" | "tar" | "gz" | "xz" | "bz2" | "7z" | "rar" => plain(FileClass::Archive, None),
-        "ttf" | "otf" | "woff" | "woff2" => plain(FileClass::Font, None),
+        "ttf" => plain(FileClass::Font, Some("TrueType font")),
+        "otf" => plain(FileClass::Font, Some("OpenType font")),
+        "woff" => plain(FileClass::Font, Some("WOFF font")),
+        "woff2" => plain(FileClass::Font, Some("WOFF2 font")),
         _ => plain(FileClass::File, None),
     }
 }

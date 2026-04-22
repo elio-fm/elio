@@ -19,6 +19,7 @@ mod binaries;
 mod code;
 mod data;
 mod documents;
+mod fonts;
 mod helpers;
 mod images;
 mod markdown;

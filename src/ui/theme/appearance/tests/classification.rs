@@ -218,6 +218,22 @@ fn type_labels_cover_supported_special_files() {
         specific_type_label(Path::new("app.jar"), EntryKind::File),
         Some("Java archive")
     );
+    assert_eq!(
+        specific_type_label(Path::new("JetBrainsMono.ttf"), EntryKind::File),
+        Some("TrueType font")
+    );
+    assert_eq!(
+        specific_type_label(Path::new("RedHatText.otf"), EntryKind::File),
+        Some("OpenType font")
+    );
+    assert_eq!(
+        specific_type_label(Path::new("KaTeX_Main.woff"), EntryKind::File),
+        Some("WOFF font")
+    );
+    assert_eq!(
+        specific_type_label(Path::new("FiraSans.woff2"), EntryKind::File),
+        Some("WOFF2 font")
+    );
 }
 
 #[test]
@@ -341,5 +357,21 @@ fn builtin_classification_covers_new_special_file_types() {
     assert_eq!(
         builtin_classify_path(Path::new("setup.exe"), EntryKind::File),
         FileClass::File
+    );
+    assert_eq!(
+        builtin_classify_path(Path::new("JetBrainsMono.ttf"), EntryKind::File),
+        FileClass::Font
+    );
+    assert_eq!(
+        builtin_classify_path(Path::new("RedHatText.otf"), EntryKind::File),
+        FileClass::Font
+    );
+    assert_eq!(
+        builtin_classify_path(Path::new("KaTeX_Main.woff"), EntryKind::File),
+        FileClass::Font
+    );
+    assert_eq!(
+        builtin_classify_path(Path::new("FiraSans.woff2"), EntryKind::File),
+        FileClass::Font
     );
 }

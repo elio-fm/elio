@@ -32,6 +32,22 @@ fn supported_video_extensions_keep_specific_video_labels() {
         assert_eq!(facts.specific_type_label, Some(label));
     }
 }
+
+#[test]
+fn font_files_keep_specific_labels() {
+    let cases = [
+        ("JetBrainsMono.ttf", "TrueType font"),
+        ("RedHatText.otf", "OpenType font"),
+        ("KaTeX_Main.woff", "WOFF font"),
+        ("FiraSans.woff2", "WOFF2 font"),
+    ];
+
+    for (path, label) in cases {
+        let facts = inspect_path(Path::new(path), EntryKind::File);
+        assert_eq!(facts.builtin_class, FileClass::Font);
+        assert_eq!(facts.specific_type_label, Some(label));
+    }
+}
 #[test]
 fn html_and_css_files_use_code_preview_support() {
     let html = inspect_path(Path::new("index.html"), EntryKind::File);
