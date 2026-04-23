@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a dedicated QML file icon in the built-in browser theme.
 - Added metadata previews for TrueType, OpenType, WOFF, and WOFF2 font files, replacing the generic binary fallback.
 
+### Fixed
+
+- Fixed compact file browser rows so folder item counts and file sizes stay visually aligned across singular/plural counts and differing size units.
+
 ## [1.1.0] - 2026-04-18
 
 ### Added
