@@ -3,7 +3,12 @@ use std::path::Path;
 
 impl App {
     pub(crate) fn directory_item_count_label(&self, entry: &Entry) -> Option<String> {
-        self.directory_item_count(entry).map(format_item_count)
+        self.directory_item_count_value(entry)
+            .map(format_item_count)
+    }
+
+    pub(crate) fn directory_item_count_value(&self, entry: &Entry) -> Option<usize> {
+        self.directory_item_count(entry)
     }
 
     pub(super) fn cache_directory_item_count(

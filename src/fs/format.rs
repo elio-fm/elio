@@ -1,6 +1,8 @@
 use ratatui::layout::Rect;
 use std::{io, time::SystemTime};
 
+const SIZE_UNITS: [&str; 7] = ["B", "kB", "MB", "GB", "TB", "PB", "EB"];
+
 pub(crate) fn rect_contains(rect: Rect, x: u16, y: u16) -> bool {
     x >= rect.x
         && x < rect.x.saturating_add(rect.width)
@@ -9,14 +11,18 @@ pub(crate) fn rect_contains(rect: Rect, x: u16, y: u16) -> bool {
 }
 
 pub(crate) fn format_size(size: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "kB", "MB", "GB", "TB"];
+    let (quantity, unit) = format_size_parts(size);
+    format!("{quantity} {unit}")
+}
+
+pub(crate) fn format_size_parts(size: u64) -> (String, &'static str) {
     if size < 1000 {
-        return format!("{} B", format_with_grouping(size));
+        return (format_with_grouping(size), SIZE_UNITS[0]);
     }
 
     let mut value = size as f64;
     let mut unit = 0usize;
-    while value >= 1000.0 && unit < UNITS.len() - 1 {
+    while value >= 1000.0 && unit < SIZE_UNITS.len() - 1 {
         value /= 1000.0;
         unit += 1;
     }
@@ -28,7 +34,7 @@ pub(crate) fn format_size(size: u64) -> String {
     } else {
         0
     };
-    format!("{} {}", format_decimal(value, precision), UNITS[unit])
+    (format_decimal(value, precision), SIZE_UNITS[unit])
 }
 
 pub(crate) fn format_item_count(count: usize) -> String {
@@ -115,6 +121,8 @@ mod tests {
         assert_eq!(format_size(2_048), "2.05 kB");
         assert_eq!(format_size(5_488), "5.49 kB");
         assert_eq!(format_size(12_345_678), "12.3 MB");
+        assert_eq!(format_size(1_000_000_000_000_000), "1 PB");
+        assert_eq!(format_size(u64::MAX), "18.4 EB");
     }
 
     #[test]

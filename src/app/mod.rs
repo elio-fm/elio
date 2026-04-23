@@ -32,7 +32,8 @@ pub use self::state::App;
 pub use self::state::PreviewMetricsSnapshot;
 pub(crate) use crate::core::FileClass;
 pub(crate) use crate::fs::{
-    format_item_count, format_size, format_time_ago, rect_contains, sanitize_terminal_text,
+    format_item_count, format_size, format_size_parts, format_time_ago, rect_contains,
+    sanitize_terminal_text,
 };
 
 pub(crate) use self::types::ClipOp;

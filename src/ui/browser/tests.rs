@@ -1613,3 +1613,128 @@ fn compact_list_rows_align_file_and_directory_metadata_columns() {
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[test]
+fn compact_list_rows_align_directory_count_nouns_for_singular_and_plural() {
+    let root = temp_path("compact-list-directory-count-alignment");
+    let single = root.join("single");
+    let many = root.join("many");
+    fs::create_dir_all(&single).expect("failed to create single dir");
+    fs::create_dir_all(&many).expect("failed to create many dir");
+    fs::write(single.join("child-0.txt"), "x").expect("failed to write single child");
+    for index in 0..10 {
+        fs::write(many.join(format!("child-{index}.txt")), "x")
+            .expect("failed to write many child");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
+    draw_ui(&mut terminal, &mut app);
+    wait_for_directory_counts(&mut app);
+
+    let single_entry = app
+        .navigation
+        .entries
+        .iter()
+        .find(|entry| entry.path == single)
+        .expect("single entry should be present");
+    let many_entry = app
+        .navigation
+        .entries
+        .iter()
+        .find(|entry| entry.path == many)
+        .expect("many entry should be present");
+
+    let single_row = line_text(&render_compact_list_row(
+        &app,
+        single_entry,
+        true,
+        90,
+        theme::palette(),
+    ));
+    let many_row = line_text(&render_compact_list_row(
+        &app,
+        many_entry,
+        true,
+        90,
+        theme::palette(),
+    ));
+
+    let single_item_index = single_row
+        .find("item")
+        .expect("single row should show singular item count");
+    let many_item_index = many_row
+        .find("items")
+        .expect("many row should show plural item count");
+    let single_item_column = helpers::display_width(&single_row[..single_item_index]);
+    let many_item_column = helpers::display_width(&many_row[..many_item_index]);
+
+    assert_eq!(
+        single_item_column, many_item_column,
+        "expected singular and plural directory counts to align, got single={single_row:?} many={many_row:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn compact_list_rows_align_file_size_units_for_small_and_large_sizes() {
+    let root = temp_path("compact-list-file-size-alignment");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let small_path = root.join("small.bin");
+    let large_path = root.join("large.bin");
+    let small_file = fs::File::create(&small_path).expect("failed to create small file");
+    small_file.set_len(68).expect("failed to size small file");
+    let large_file = fs::File::create(&large_path).expect("failed to create large file");
+    large_file
+        .set_len(3_720)
+        .expect("failed to size large file");
+
+    let app = App::new_at(root.clone()).expect("app should load temp directory");
+    let small_entry = app
+        .navigation
+        .entries
+        .iter()
+        .find(|entry| entry.path == small_path)
+        .expect("small entry should be present");
+    let large_entry = app
+        .navigation
+        .entries
+        .iter()
+        .find(|entry| entry.path == large_path)
+        .expect("large entry should be present");
+
+    let small_row = line_text(&render_compact_list_row(
+        &app,
+        small_entry,
+        true,
+        90,
+        theme::palette(),
+    ));
+    let large_row = line_text(&render_compact_list_row(
+        &app,
+        large_entry,
+        true,
+        90,
+        theme::palette(),
+    ));
+
+    let small_unit_index = small_row
+        .rfind(" B ")
+        .map(|index| index + 1)
+        .expect("small row should show byte unit");
+    let large_unit_index = large_row
+        .rfind(" kB")
+        .map(|index| index + 1)
+        .expect("large row should show kilobyte unit");
+    let small_unit_column = helpers::display_width(&small_row[..small_unit_index]);
+    let large_unit_column = helpers::display_width(&large_row[..large_unit_index]);
+
+    assert_eq!(
+        small_unit_column, large_unit_column,
+        "expected small and large file size units to align, got small={small_row:?} large={large_row:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}

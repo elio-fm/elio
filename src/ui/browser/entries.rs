@@ -1,7 +1,7 @@
 use super::super::theme::Palette;
 use super::super::{helpers, theme};
 use super::{grid::render_grid, list::render_list};
-use crate::app::{App, ClipOp, Entry, FrameState, format_size, format_time_ago};
+use crate::app::{App, ClipOp, Entry, FrameState, format_size, format_size_parts, format_time_ago};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -87,7 +87,7 @@ pub(super) fn render_compact_list_row(
     const COMPACT_PREFIX_WIDTH: usize = 4;
     const COMPACT_NAME_MIN_WIDTH: usize = 18;
     const COMPACT_NAME_SOFT_MAX_WIDTH: usize = 56;
-    const COMPACT_DETAIL_SLOT_WIDTH: usize = 9;
+    const COMPACT_DETAIL_SLOT_WIDTH: usize = 10;
     const COMPACT_MODIFIED_SLOT_WIDTH: usize = 10;
     const COMPACT_METADATA_LEADING_GAP: usize = 2;
     const COMPACT_METADATA_COLUMN_GAP: usize = 1;
@@ -124,7 +124,8 @@ pub(super) fn render_compact_list_row(
     let muted_style = Style::default().fg(palette.muted);
     let available_width = row_width.saturating_sub(COMPACT_PREFIX_WIDTH as u16).max(1) as usize;
     let min_name_width = available_width.min(COMPACT_NAME_MIN_WIDTH);
-    let detail_text = browser_entry_detail(app, entry).unwrap_or_default();
+    let detail_text =
+        compact_browser_entry_detail(app, entry, COMPACT_DETAIL_SLOT_WIDTH).unwrap_or_default();
     let detail_slot_width = if detail_text.is_empty() {
         0
     } else {
@@ -193,10 +194,7 @@ pub(super) fn render_compact_list_row(
     ];
     if show_detail {
         spans.push(Span::raw(if show_modified { "   " } else { "  " }));
-        spans.push(Span::styled(
-            pad_left(detail_text, detail_slot_width),
-            muted_style,
-        ));
+        spans.push(Span::styled(detail_text, muted_style));
     }
     if show_modified {
         spans.push(Span::raw(if show_detail { " " } else { "  " }));
@@ -224,4 +222,84 @@ fn pad_right(text: String, width: usize) -> String {
         return helpers::clamp_label(&text, width);
     }
     format!("{text}{}", " ".repeat(width - visible))
+}
+
+fn compact_browser_entry_detail(app: &App, entry: &Entry, width: usize) -> Option<String> {
+    if entry.is_dir() {
+        app.directory_item_count_value(entry)
+            .map(|count| format_compact_directory_count(count, width))
+    } else {
+        Some(format_compact_file_size(entry.size, width))
+    }
+}
+
+fn format_compact_directory_count(count: usize, width: usize) -> String {
+    const NOUN_WIDTH: usize = 5;
+    let quantity_width = width.saturating_sub(NOUN_WIDTH + 1);
+    let quantity = format_compact_directory_quantity(count, quantity_width);
+    let noun = if count == 1 { "item" } else { "items" };
+    format_compact_measure(quantity, noun, width, NOUN_WIDTH)
+}
+
+fn format_compact_directory_quantity(count: usize, width: usize) -> String {
+    let exact = count.to_string();
+    if helpers::display_width(&exact) <= width {
+        return exact;
+    }
+
+    for (divisor, suffix) in [
+        (1_000_000_000_000usize, "T"),
+        (1_000_000_000usize, "B"),
+        (1_000_000usize, "M"),
+        (1_000usize, "K"),
+    ] {
+        if count < divisor {
+            continue;
+        }
+
+        let whole = count / divisor;
+        if whole < 10 && width >= 4 {
+            let tenth = (count % divisor) * 10 / divisor;
+            if tenth > 0 {
+                let decimal = format!("{whole}.{tenth}{suffix}");
+                if helpers::display_width(&decimal) <= width {
+                    return decimal;
+                }
+            }
+        }
+
+        let compact = format!("{whole}{suffix}");
+        if helpers::display_width(&compact) <= width {
+            return compact;
+        }
+    }
+
+    helpers::clamp_label(&exact, width)
+}
+
+fn format_compact_file_size(size: u64, width: usize) -> String {
+    const UNIT_WIDTH: usize = 2;
+
+    let (quantity, unit) = format_size_parts(size);
+    format_compact_measure(quantity, unit, width, UNIT_WIDTH)
+}
+
+fn format_compact_measure(
+    quantity: String,
+    suffix: &str,
+    width: usize,
+    suffix_width: usize,
+) -> String {
+    if width <= suffix_width + 1 {
+        return helpers::clamp_label(&format!("{quantity} {suffix}"), width);
+    }
+
+    let quantity_width = width - suffix_width - 1;
+    let quantity = if helpers::display_width(&quantity) > quantity_width {
+        helpers::clamp_label(&quantity, quantity_width)
+    } else {
+        pad_left(quantity, quantity_width)
+    };
+
+    format!("{quantity} {}", pad_right(suffix.to_string(), suffix_width))
 }

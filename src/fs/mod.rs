@@ -41,8 +41,8 @@ pub(crate) use directory::{
 };
 pub(crate) use directory_stats::{DirectoryStats, DirectoryStatsScanResult, scan_directory_stats};
 pub(crate) use format::{
-    describe_io_error, format_item_count, format_size, format_time_ago, rect_contains,
-    sanitize_terminal_text,
+    describe_io_error, format_item_count, format_size, format_size_parts, format_time_ago,
+    rect_contains, sanitize_terminal_text,
 };
 pub(crate) use item_count::count_directory_items;
 pub(crate) use places::{build_sidebar_rows, home_dir, trash_dir};
