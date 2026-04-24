@@ -131,11 +131,63 @@ fn inspect_entry_fast_preserves_canonical_license_detection() {
 }
 
 #[test]
-fn inspect_entry_fast_skips_non_canonical_license_content_sniffing() {
+fn inspect_entry_fast_preserves_non_canonical_spdx_license_detection() {
     let (root, path) = write_temp_file(
         "fast-noncanonical-license",
         "third-party.txt",
         "SPDX-License-Identifier: MIT\n\nRedistribution notes.\n",
+    );
+    let metadata = fs::metadata(&path).expect("metadata should exist");
+    let entry = Entry {
+        path: path.clone(),
+        name: "third-party.txt".to_string(),
+        name_key: "third-party.txt".to_string(),
+        kind: EntryKind::File,
+        size: metadata.len(),
+        modified: metadata.modified().ok(),
+        readonly: false,
+    };
+
+    let facts = inspect_entry_fast(&entry);
+
+    assert_eq!(facts.builtin_class, FileClass::License);
+    assert_eq!(facts.specific_type_label, Some("MIT License"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn inspect_entry_fast_preserves_standalone_license_text_without_canonical_filename() {
+    let (root, path) = write_temp_file(
+        "fast-standalone-license",
+        "third-party.txt",
+        "Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/LICENSE-2.0\n\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n",
+    );
+    let metadata = fs::metadata(&path).expect("metadata should exist");
+    let entry = Entry {
+        path: path.clone(),
+        name: "third-party.txt".to_string(),
+        name_key: "third-party.txt".to_string(),
+        kind: EntryKind::File,
+        size: metadata.len(),
+        modified: metadata.modified().ok(),
+        readonly: false,
+    };
+
+    let facts = inspect_entry_fast(&entry);
+
+    assert_eq!(facts.builtin_class, FileClass::License);
+    assert_eq!(facts.specific_type_label, Some("Apache License 2.0"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn inspect_entry_fast_rejects_non_license_text_without_canonical_filename() {
+    let (root, path) = write_temp_file(
+        "fast-not-a-license",
+        "third-party.txt",
+        "shopping list\n- apples\n- oranges\n",
     );
     let metadata = fs::metadata(&path).expect("metadata should exist");
     let entry = Entry {

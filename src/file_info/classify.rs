@@ -2,7 +2,7 @@ use super::{
     FileFacts, PreviewSpec,
     archives::inspect_archive_name,
     extensions::inspect_extension,
-    license::{sniff_canonical_license_file_type, sniff_license_file_type},
+    license::{sniff_browser_license_file_type, sniff_license_file_type},
     names::inspect_exact_name,
 };
 use crate::{
@@ -63,7 +63,7 @@ fn inspect_path_with_name_fast(
     kind: EntryKind,
 ) -> FileFacts {
     let (_name_for_type, name, ext, facts) = inspect_path_with_name_base(path, display_name, kind);
-    sniff_canonical_license_file_type(path, &name, &ext, facts).unwrap_or(facts)
+    sniff_browser_license_file_type(path, &name, &ext, facts).unwrap_or(facts)
 }
 
 fn inspect_path_with_name_base(

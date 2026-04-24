@@ -129,7 +129,7 @@ fn resolve_browser_entry_preserves_canonical_license_appearance() {
 }
 
 #[test]
-fn resolve_browser_entry_keeps_non_canonical_spdx_documents_fast() {
+fn resolve_browser_entry_preserves_non_canonical_spdx_license_appearance() {
     let (root, path) = write_temp_file(
         "browser-noncanonical-license",
         "third-party.txt",
@@ -150,7 +150,35 @@ fn resolve_browser_entry_keeps_non_canonical_spdx_documents_fast() {
     let browser = resolve_browser_entry(&entry);
     let preview = resolve_entry(&entry);
 
-    assert_eq!(browser.class, FileClass::Document);
+    assert_eq!(browser.class, FileClass::License);
+    assert_eq!(preview.class, FileClass::License);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn resolve_browser_entry_preserves_standalone_license_text_without_canonical_filename() {
+    let (root, path) = write_temp_file(
+        "browser-standalone-license",
+        "third-party.txt",
+        "Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/LICENSE-2.0\n\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n",
+    );
+
+    let metadata = fs::metadata(&path).expect("metadata should exist");
+    let entry = Entry {
+        path: path.clone(),
+        name: "third-party.txt".to_string(),
+        name_key: "third-party.txt".to_string(),
+        kind: EntryKind::File,
+        size: metadata.len(),
+        modified: metadata.modified().ok(),
+        readonly: false,
+    };
+
+    let browser = resolve_browser_entry(&entry);
+    let preview = resolve_entry(&entry);
+
+    assert_eq!(browser.class, FileClass::License);
     assert_eq!(preview.class, FileClass::License);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

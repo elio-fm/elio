@@ -2,6 +2,7 @@ use super::{FileFacts, PreviewKind};
 use crate::core::FileClass;
 use std::{fs::File, io::Read, path::Path};
 
+const FAST_LICENSE_SNIFF_BYTE_LIMIT: usize = 4 * 1024;
 const LICENSE_SNIFF_BYTE_LIMIT: usize = 64 * 1024;
 const LICENSE_MARKER_LINE_LIMIT: usize = 12;
 const LICENSE_PREAMBLE_LINE_LIMIT: usize = 8;
@@ -108,22 +109,44 @@ pub(super) fn sniff_license_file_type(
     }
 
     let detection = detect_license_document(&text)?;
-    Some(FileFacts {
-        builtin_class: FileClass::License,
-        specific_type_label: Some(detection.detail_label()),
-        preview: base_facts.preview,
-    })
+    Some(license_file_facts(detection, base_facts))
 }
 
-pub(super) fn sniff_canonical_license_file_type(
+pub(super) fn sniff_browser_license_file_type(
     path: &Path,
     name: &str,
     ext: &str,
     base_facts: FileFacts,
 ) -> Option<FileFacts> {
-    is_canonical_license_candidate_name(name)
-        .then_some(())
-        .and_then(|_| sniff_license_file_type(path, name, ext, base_facts))
+    let canonical_candidate = is_canonical_license_candidate_name(name);
+    let can_sniff_content = can_sniff_license_content(base_facts);
+    let can_sniff_markers = can_sniff_license_markers(ext, base_facts);
+
+    if !canonical_candidate && !can_sniff_markers {
+        return None;
+    }
+    if canonical_candidate && !can_sniff_content {
+        return None;
+    }
+
+    let prefix = read_license_text_prefix(path, FAST_LICENSE_SNIFF_BYTE_LIMIT)?;
+    if let Some(detection) = detect_spdx_identifier(&prefix) {
+        return Some(license_file_facts(detection, base_facts));
+    }
+
+    if !canonical_candidate
+        && (!has_strong_license_markers(&prefix) || !starts_like_standalone_license(&prefix))
+    {
+        return None;
+    }
+
+    if let Some(detection) = detect_license_document(&prefix) {
+        return Some(license_file_facts(detection, base_facts));
+    }
+
+    let text = read_license_text(path)?;
+    let detection = detect_license_document(&text)?;
+    Some(license_file_facts(detection, base_facts))
 }
 
 fn can_sniff_license_content(base_facts: FileFacts) -> bool {
@@ -158,15 +181,27 @@ fn can_sniff_license_markers(ext: &str, base_facts: FileFacts) -> bool {
     ) && can_sniff_license_content(base_facts)
 }
 
-fn read_license_text(path: &Path) -> Option<String> {
+fn read_license_text_prefix(path: &Path, byte_limit: usize) -> Option<String> {
     let mut file = File::open(path).ok()?;
-    let mut buffer = vec![0_u8; LICENSE_SNIFF_BYTE_LIMIT];
+    let mut buffer = vec![0_u8; byte_limit];
     let bytes_read = file.read(&mut buffer).ok()?;
     let bytes = &buffer[..bytes_read];
     if bytes.contains(&0) {
         return None;
     }
     Some(String::from_utf8_lossy(bytes).into_owned())
+}
+
+fn read_license_text(path: &Path) -> Option<String> {
+    read_license_text_prefix(path, LICENSE_SNIFF_BYTE_LIMIT)
+}
+
+fn license_file_facts(detection: LicenseDetection, base_facts: FileFacts) -> FileFacts {
+    FileFacts {
+        builtin_class: FileClass::License,
+        specific_type_label: Some(detection.detail_label()),
+        preview: base_facts.preview,
+    }
 }
 
 fn has_strong_license_markers(text: &str) -> bool {
