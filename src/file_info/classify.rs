@@ -1,6 +1,9 @@
 use super::{
-    FileFacts, PreviewSpec, archives::inspect_archive_name, extensions::inspect_extension,
-    license::sniff_license_file_type, names::inspect_exact_name,
+    FileFacts, PreviewSpec,
+    archives::inspect_archive_name,
+    extensions::inspect_extension,
+    license::{sniff_canonical_license_file_type, sniff_license_file_type},
+    names::inspect_exact_name,
 };
 use crate::{
     core::{Entry, EntryKind, FileClass},
@@ -59,7 +62,8 @@ fn inspect_path_with_name_fast(
     display_name: Option<&str>,
     kind: EntryKind,
 ) -> FileFacts {
-    inspect_path_with_name_base(path, display_name, kind).3
+    let (_name_for_type, name, ext, facts) = inspect_path_with_name_base(path, display_name, kind);
+    sniff_canonical_license_file_type(path, &name, &ext, facts).unwrap_or(facts)
 }
 
 fn inspect_path_with_name_base(

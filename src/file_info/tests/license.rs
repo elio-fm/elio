@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::Entry;
 
 #[test]
 fn license_like_files_detect_specific_and_generic_licenses() {
@@ -99,6 +100,58 @@ fn spdx_marked_text_files_can_be_detected_without_license_filenames() {
 
     assert_eq!(facts.builtin_class, FileClass::License);
     assert_eq!(facts.specific_type_label, Some("MIT License"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn inspect_entry_fast_preserves_canonical_license_detection() {
+    let (root, path) = write_temp_file(
+        "fast-canonical-license",
+        "LICENSE.md",
+        "# SPDX-License-Identifier: Apache-2.0\n\nFixture license notes.\n",
+    );
+    let metadata = fs::metadata(&path).expect("metadata should exist");
+    let entry = Entry {
+        path: path.clone(),
+        name: "LICENSE.md".to_string(),
+        name_key: "license.md".to_string(),
+        kind: EntryKind::File,
+        size: metadata.len(),
+        modified: metadata.modified().ok(),
+        readonly: false,
+    };
+
+    let facts = inspect_entry_fast(&entry);
+
+    assert_eq!(facts.builtin_class, FileClass::License);
+    assert_eq!(facts.specific_type_label, Some("Apache License 2.0"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn inspect_entry_fast_skips_non_canonical_license_content_sniffing() {
+    let (root, path) = write_temp_file(
+        "fast-noncanonical-license",
+        "third-party.txt",
+        "SPDX-License-Identifier: MIT\n\nRedistribution notes.\n",
+    );
+    let metadata = fs::metadata(&path).expect("metadata should exist");
+    let entry = Entry {
+        path: path.clone(),
+        name: "third-party.txt".to_string(),
+        name_key: "third-party.txt".to_string(),
+        kind: EntryKind::File,
+        size: metadata.len(),
+        modified: metadata.modified().ok(),
+        readonly: false,
+    };
+
+    let facts = inspect_entry_fast(&entry);
+
+    assert_eq!(facts.builtin_class, FileClass::Document);
+    assert_eq!(facts.specific_type_label, None);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

@@ -115,6 +115,17 @@ pub(super) fn sniff_license_file_type(
     })
 }
 
+pub(super) fn sniff_canonical_license_file_type(
+    path: &Path,
+    name: &str,
+    ext: &str,
+    base_facts: FileFacts,
+) -> Option<FileFacts> {
+    is_canonical_license_candidate_name(name)
+        .then_some(())
+        .and_then(|_| sniff_license_file_type(path, name, ext, base_facts))
+}
+
 fn can_sniff_license_content(base_facts: FileFacts) -> bool {
     matches!(
         base_facts.preview.kind,
