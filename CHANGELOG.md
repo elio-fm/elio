@@ -13,9 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a dedicated QML file icon in the built-in browser theme.
 - Added metadata previews for TrueType, OpenType, WOFF, and WOFF2 font files, replacing the generic binary fallback.
 
+### Changed
+
+- Improved large-directory navigation responsiveness by deferring browser directory counts and recursive directory totals until navigation settles, canceling stale directory reload work, and scaling polling reload cadence with directory size.
+
 ### Fixed
 
 - Fixed compact file browser rows so folder item counts and file sizes stay visually aligned across singular/plural counts and differing size units.
+- Fixed browser license icons so canonical license files, SPDX-marked text files, and standalone license documents keep the license appearance during fast-path row rendering.
+- Fixed truncated directory previews so sampled entry counts are no longer shown as exact totals before background directory stats finish loading.
 
 ## [1.1.0] - 2026-04-18
 
