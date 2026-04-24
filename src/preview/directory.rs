@@ -67,17 +67,14 @@ pub(super) fn build_directory_preview(entry: &Entry) -> PreviewContent {
                 ]));
             }
 
-            let detail = if scan_truncated {
-                format!("{total_items}+ items")
-            } else {
-                format!("{total_items} items")
-            };
             let mut preview = PreviewContent::new(PreviewKind::Directory, lines)
-                .with_detail(detail)
                 .with_directory_counts(total_items, folder_count, file_count);
+            if !scan_truncated {
+                preview = preview.with_detail(format!("{total_items} items"));
+            }
             if scan_truncated {
-                preview = preview
-                    .with_truncation(format!("showing first {PREVIEW_RENDER_LINE_LIMIT} items"));
+                preview =
+                    preview.with_truncation(format!("{PREVIEW_RENDER_LINE_LIMIT} items shown"));
             }
             preview
         }

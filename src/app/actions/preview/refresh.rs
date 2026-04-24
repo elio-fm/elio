@@ -3,12 +3,13 @@ use crate::app::jobs::DirectoryStatsRequest;
 use crate::preview::{PreviewContent, PreviewKind, loading_preview_for, preview_work_class};
 
 impl App {
-    fn clear_preview_directory_stats(&mut self) {
+    pub(in crate::app) fn clear_preview_directory_stats(&mut self) {
         self.preview.state.directory_stats = None;
+        self.preview.state.directory_stats_ready_at = None;
         self.jobs.scheduler.cancel_directory_stats();
     }
 
-    fn refresh_current_directory_stats(&mut self) {
+    fn queue_current_directory_stats(&mut self) {
         if self.preview.state.content.kind != PreviewKind::Directory {
             self.clear_preview_directory_stats();
             return;
@@ -23,6 +24,7 @@ impl App {
         };
 
         let token = self.preview.state.token;
+        self.preview.state.directory_stats_ready_at = None;
         self.preview.state.directory_stats = Some(PreviewDirectoryStatsState::Loading {
             token,
             path: entry.path.clone(),
@@ -37,6 +39,19 @@ impl App {
         {
             self.preview.state.directory_stats = None;
         }
+    }
+
+    fn schedule_current_directory_stats(&mut self) {
+        if self.preview.state.content.kind != PreviewKind::Directory
+            || self.selected_entry().is_none_or(|entry| !entry.is_dir())
+        {
+            self.clear_preview_directory_stats();
+            return;
+        }
+        self.preview.state.directory_stats = None;
+        self.jobs.scheduler.cancel_directory_stats();
+        self.preview.state.directory_stats_ready_at =
+            Some(Instant::now() + DIRECTORY_STATS_IDLE_DELAY);
     }
 
     pub(in crate::app) fn apply_preview_directory_stats_result(
@@ -65,6 +80,7 @@ impl App {
             return false;
         }
 
+        self.preview.state.directory_stats_ready_at = None;
         match result {
             crate::fs::DirectoryStatsScanResult::Complete(stats) => {
                 self.preview.state.directory_stats = Some(PreviewDirectoryStatsState::Complete {
@@ -188,7 +204,7 @@ impl App {
         };
         self.apply_current_comic_preview_metadata();
         self.apply_current_epub_preview_metadata();
-        self.refresh_current_directory_stats();
+        self.schedule_current_directory_stats();
         self.sync_current_preview_line_count();
         self.preview.state.scroll = 0;
         self.preview.state.horizontal_scroll = 0;
@@ -212,6 +228,28 @@ impl App {
         self.preview
             .state
             .deferred_refresh_at
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+    }
+
+    pub(crate) fn process_directory_stats_timer(&mut self) -> bool {
+        let Some(deadline) = self.preview.state.directory_stats_ready_at else {
+            return false;
+        };
+        if Instant::now() < deadline
+            || self.preview.state.deferred_refresh_at.is_some()
+            || self.browser_wheel_burst_active()
+        {
+            return false;
+        }
+
+        self.queue_current_directory_stats();
+        false
+    }
+
+    pub(crate) fn pending_directory_stats_timer(&self) -> Option<std::time::Duration> {
+        self.preview
+            .state
+            .directory_stats_ready_at
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))
     }
 

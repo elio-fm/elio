@@ -108,9 +108,10 @@ pub(super) fn render_compact_list_row(
     } else {
         palette.panel_alt
     };
-    let icon = theme::entry_symbol(entry);
+    let appearance = theme::resolve_browser_entry(entry);
+    let icon = appearance.icon;
     let icon_style = Style::default()
-        .fg(theme::entry_color(entry, palette))
+        .fg(appearance.color)
         .add_modifier(Modifier::BOLD);
     let name_style = if selected {
         Style::default()

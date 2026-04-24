@@ -126,9 +126,22 @@ fn parse_trash_deletion_date(s: &str) -> Option<SystemTime> {
     Some(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs))
 }
 
-fn read_entries(dir: &Path, show_hidden: bool) -> Result<Vec<Entry>> {
+fn canceled_scan_error() -> anyhow::Error {
+    io::Error::new(io::ErrorKind::Interrupted, "directory scan canceled").into()
+}
+
+fn check_scan_canceled(canceled: &dyn Fn() -> bool) -> Result<()> {
+    if canceled() {
+        Err(canceled_scan_error())
+    } else {
+        Ok(())
+    }
+}
+
+fn read_entries(dir: &Path, show_hidden: bool, canceled: &dyn Fn() -> bool) -> Result<Vec<Entry>> {
     let mut entries = Vec::new();
     for item in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
+        check_scan_canceled(canceled)?;
         let item = match item {
             Ok(item) => item,
             Err(_) => continue,
@@ -165,7 +178,16 @@ pub(crate) fn load_directory_snapshot(
     show_hidden: bool,
     sort_mode: SortMode,
 ) -> Result<DirectorySnapshot> {
-    let mut entries = read_entries(dir, show_hidden)?;
+    load_directory_snapshot_cancellable(dir, show_hidden, sort_mode, &|| false)
+}
+
+pub(crate) fn load_directory_snapshot_cancellable(
+    dir: &Path,
+    show_hidden: bool,
+    sort_mode: SortMode,
+    canceled: &dyn Fn() -> bool,
+) -> Result<DirectorySnapshot> {
+    let mut entries = read_entries(dir, show_hidden, canceled)?;
 
     // If this is a freedesktop trash `files/` directory, keep the entry path
     // pointing at the stored trash file but display the original basename from
@@ -173,6 +195,7 @@ pub(crate) fn load_directory_snapshot(
     // (`foo.txt.2`, `foo.2.txt`, etc.) and is an implementation detail.
     if let Some(info_dir) = trash_info_dir_for_files_dir(dir) {
         for entry in &mut entries {
+            check_scan_canceled(canceled)?;
             if let Some(metadata) = read_trash_info_metadata(&info_dir, &entry.name) {
                 if let Some(date) = metadata.deletion_date {
                     entry.modified = Some(date);
@@ -185,7 +208,9 @@ pub(crate) fn load_directory_snapshot(
         }
     }
 
+    check_scan_canceled(canceled)?;
     sort_entries(&mut entries, sort_mode);
+    check_scan_canceled(canceled)?;
     let fingerprint = entries_fingerprint(&entries);
     Ok(DirectorySnapshot {
         entries,
@@ -207,13 +232,23 @@ fn entries_fingerprint(entries: &[Entry]) -> DirectoryFingerprint {
     fingerprint_from_parts(&mut parts)
 }
 
+#[cfg(test)]
 pub(crate) fn scan_directory_fingerprint(
     dir: &Path,
     show_hidden: bool,
 ) -> Result<DirectoryFingerprint> {
+    scan_directory_fingerprint_cancellable(dir, show_hidden, &|| false)
+}
+
+pub(crate) fn scan_directory_fingerprint_cancellable(
+    dir: &Path,
+    show_hidden: bool,
+    canceled: &dyn Fn() -> bool,
+) -> Result<DirectoryFingerprint> {
     let mut parts = Vec::new();
     let trash_info_dir = trash_info_dir_for_files_dir(dir);
     for item in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
+        check_scan_canceled(canceled)?;
         let item = match item {
             Ok(item) => item,
             Err(_) => continue,
@@ -249,6 +284,7 @@ pub(crate) fn scan_directory_fingerprint(
             readonly: details.readonly,
         });
     }
+    check_scan_canceled(canceled)?;
     Ok(fingerprint_from_parts(&mut parts))
 }
 
@@ -582,7 +618,7 @@ mod tests {
         fs::write(&target, "hello world").expect("failed to write target file");
         symlink(&target, root.join("linked.txt")).expect("failed to create symlink");
 
-        let entries = read_entries(&root, false).expect("failed to read entries");
+        let entries = read_entries(&root, false, &|| false).expect("failed to read entries");
         let linked = entries
             .iter()
             .find(|entry| entry.name == "linked.txt")
@@ -604,7 +640,7 @@ mod tests {
         fs::create_dir_all(&target).expect("failed to create target dir");
         symlink(&target, root.join("linked-dir")).expect("failed to create directory symlink");
 
-        let entries = read_entries(&root, false).expect("failed to read entries");
+        let entries = read_entries(&root, false, &|| false).expect("failed to read entries");
         let linked = entries
             .iter()
             .find(|entry| entry.name == "linked-dir")

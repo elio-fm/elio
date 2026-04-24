@@ -492,6 +492,7 @@ fn rapid_key_navigation_clears_directory_totals_until_deferred_refresh_runs() {
     app.select_index(0);
     wait_for_background_preview(&mut app);
     for _ in 0..100 {
+        let _ = app.process_directory_stats_timer();
         let _ = app.process_background_jobs();
         if matches!(
             app.preview.state.directory_stats,
@@ -518,9 +519,10 @@ fn rapid_key_navigation_clears_directory_totals_until_deferred_refresh_runs() {
     thread::sleep(HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY + Duration::from_millis(20));
     assert!(app.process_preview_refresh_timers());
     for _ in 0..100 {
+        let _ = app.process_directory_stats_timer();
         let _ = app.process_background_jobs();
         if app.preview_header_detail_for_width(8, 80).as_deref()
-            == Some(&format!("1 total item • {}", crate::app::format_size(100)))
+            == Some(&format!("1 item • {}", crate::app::format_size(100)))
         {
             break;
         }
@@ -528,7 +530,7 @@ fn rapid_key_navigation_clears_directory_totals_until_deferred_refresh_runs() {
     }
     assert_eq!(
         app.preview_header_detail_for_width(8, 80).as_deref(),
-        Some(format!("1 total item • {}", crate::app::format_size(100)).as_str())
+        Some(format!("1 item • {}", crate::app::format_size(100)).as_str())
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

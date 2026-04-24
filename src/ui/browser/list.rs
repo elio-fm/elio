@@ -53,7 +53,8 @@ pub(super) fn render_list(
         let selected = entry_index == app.navigation.selected;
         let multi_selected = app.is_selected(&entry.path);
         let clip_op = app.clipboard_op_for(&entry.path);
-        let icon_color = theme::entry_color(entry, palette);
+        let appearance = theme::resolve_browser_entry(entry);
+        let icon_color = appearance.color;
         let bg = if selected {
             palette.selected_bg
         } else {
@@ -110,7 +111,7 @@ pub(super) fn render_list(
                 Paragraph::new(vec![
                     Line::from(vec![
                         Span::styled(
-                            theme::entry_symbol(entry),
+                            appearance.icon,
                             Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(" "),

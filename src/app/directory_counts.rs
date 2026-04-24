@@ -1,5 +1,5 @@
 use super::*;
-use std::path::Path;
+use std::{path::Path, time::Instant};
 
 impl App {
     pub(crate) fn directory_item_count_label(&self, entry: &Entry) -> Option<String> {
@@ -54,16 +54,56 @@ impl App {
             return;
         }
         self.navigation.directory_count_viewport = Some(viewport);
+        self.navigation.directory_item_count_ready_at =
+            Some(Instant::now() + DIRECTORY_ITEM_COUNT_IDLE_DELAY);
+    }
 
+    pub(crate) fn process_directory_item_count_timer(&mut self) -> bool {
+        let Some(deadline) = self.navigation.directory_item_count_ready_at else {
+            return false;
+        };
+        if Instant::now() < deadline
+            || self.browser_wheel_burst_active()
+            || self.preview.state.deferred_refresh_at.is_some()
+        {
+            return false;
+        }
+
+        self.navigation.directory_item_count_ready_at = None;
+        self.submit_visible_directory_item_counts();
+        false
+    }
+
+    pub(crate) fn pending_directory_item_count_timer(&self) -> Option<std::time::Duration> {
+        self.navigation
+            .directory_item_count_ready_at
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+    }
+
+    fn submit_visible_directory_item_counts(&mut self) {
         let requests = self
             .visible_entry_indices()
             .into_iter()
-            .filter_map(|index| self.navigation.entries.get(index))
-            .filter(|entry| entry.is_dir())
-            .filter_map(|entry| self.directory_item_count_request_for(entry))
+            .filter_map(|index| {
+                self.navigation.entries.get(index).and_then(|entry| {
+                    entry.is_dir().then_some((
+                        index.abs_diff(self.navigation.selected),
+                        index,
+                        entry,
+                    ))
+                })
+            })
             .collect::<Vec<_>>();
+        let mut requests = requests
+            .into_iter()
+            .filter_map(|(distance, index, entry)| {
+                self.directory_item_count_request_for(entry)
+                    .map(|request| (distance, index, request))
+            })
+            .collect::<Vec<_>>();
+        requests.sort_by_key(|(distance, index, _)| (*distance, *index));
 
-        for request in requests {
+        for (_, _, request) in requests {
             let _ = self.jobs.scheduler.submit_directory_item_count(request);
         }
     }

@@ -86,7 +86,7 @@ pub(super) fn builtin_classify_path(path: &Path, kind: EntryKind) -> FileClass {
     file_info::inspect_path(path, kind).builtin_class
 }
 
-pub(super) fn builtin_classify_entry(entry: &Entry) -> FileClass {
+pub(super) fn builtin_classify_browser_entry(entry: &Entry) -> FileClass {
     let key = EntryClassCacheKey {
         path: entry.path.clone(),
         is_dir: entry.kind == EntryKind::Directory,
@@ -94,16 +94,14 @@ pub(super) fn builtin_classify_entry(entry: &Entry) -> FileClass {
         modified: fingerprint_time(entry.modified),
     };
 
-    if let Some(class) = entry_class_cache()
-        .lock()
-        .expect("entry class cache lock")
-        .get(&key)
-        .copied()
     {
-        return class;
+        let cache = entry_class_cache().lock().expect("entry class cache lock");
+        if let Some(class) = cache.get(&key) {
+            return class;
+        }
     }
 
-    let class = file_info::inspect_entry_cached(entry).builtin_class;
+    let class = file_info::inspect_entry_fast(entry).builtin_class;
     entry_class_cache()
         .lock()
         .expect("entry class cache lock")

@@ -85,8 +85,7 @@ impl App {
             match preview_mode {
                 PreviewRefreshMode::Immediate => self.refresh_preview(),
                 PreviewRefreshMode::Deferred => {
-                    self.preview.state.directory_stats = None;
-                    self.jobs.scheduler.cancel_directory_stats();
+                    self.clear_preview_directory_stats();
                     self.preview.state.deferred_refresh_at =
                         Some(Instant::now() + HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY);
                 }
@@ -161,8 +160,7 @@ impl App {
         if self.navigation.entries.is_empty() {
             self.navigation.selected = 0;
             self.preview.state.content = PreviewContent::placeholder("No selection");
-            self.preview.state.directory_stats = None;
-            self.jobs.scheduler.cancel_directory_stats();
+            self.clear_preview_directory_stats();
             self.preview.state.deferred_refresh_at = None;
             return;
         }
@@ -278,8 +276,7 @@ impl App {
             self.navigation.selected = 0;
             self.navigation.scroll_row = 0;
             self.preview.state.content = PreviewContent::placeholder("No selection");
-            self.preview.state.directory_stats = None;
-            self.jobs.scheduler.cancel_directory_stats();
+            self.clear_preview_directory_stats();
             self.preview.state.scroll = 0;
             self.preview.state.horizontal_scroll = 0;
         } else if self.navigation.selected >= self.navigation.entries.len() {

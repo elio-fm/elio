@@ -5,29 +5,43 @@ use std::cmp::Ordering;
 /// Text is compared lexically, but adjacent ASCII digit runs are compared numerically so
 /// filenames like `2` sort before `10`.
 pub(crate) fn natural_cmp(left: &str, right: &str) -> Ordering {
-    let mut left_chars = left.chars().peekable();
-    let mut right_chars = right.chars().peekable();
+    let left_bytes = left.as_bytes();
+    let right_bytes = right.as_bytes();
+    let mut left_index = 0usize;
+    let mut right_index = 0usize;
 
     loop {
-        match (left_chars.peek(), right_chars.peek()) {
+        match (
+            left_bytes.get(left_index).copied(),
+            right_bytes.get(right_index).copied(),
+        ) {
             (None, None) => return Ordering::Equal,
             (None, Some(_)) => return Ordering::Less,
             (Some(_), None) => return Ordering::Greater,
-            (Some(left_ch), Some(right_ch))
-                if left_ch.is_ascii_digit() && right_ch.is_ascii_digit() =>
+            (Some(left_byte), Some(right_byte))
+                if left_byte.is_ascii_digit() && right_byte.is_ascii_digit() =>
             {
-                let left_digits = take_digit_run(&mut left_chars);
-                let right_digits = take_digit_run(&mut right_chars);
-                match compare_numeric_runs(&left_digits, &right_digits) {
-                    Ordering::Equal => {}
+                let left_end = digit_run_end(left_bytes, left_index);
+                let right_end = digit_run_end(right_bytes, right_index);
+                match compare_numeric_runs(
+                    &left[left_index..left_end],
+                    &right[right_index..right_end],
+                ) {
+                    Ordering::Equal => {
+                        left_index = left_end;
+                        right_index = right_end;
+                    }
                     order => return order,
                 }
             }
             (Some(_), Some(_)) => {
-                let left_ch = left_chars.next().unwrap_or_default();
-                let right_ch = right_chars.next().unwrap_or_default();
+                let left_ch = left[left_index..].chars().next().unwrap_or_default();
+                let right_ch = right[right_index..].chars().next().unwrap_or_default();
                 match left_ch.cmp(&right_ch) {
-                    Ordering::Equal => {}
+                    Ordering::Equal => {
+                        left_index += left_ch.len_utf8();
+                        right_index += right_ch.len_utf8();
+                    }
                     order => return order,
                 }
             }
@@ -35,12 +49,12 @@ pub(crate) fn natural_cmp(left: &str, right: &str) -> Ordering {
     }
 }
 
-fn take_digit_run(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
-    let mut digits = String::new();
-    while chars.peek().is_some_and(|ch| ch.is_ascii_digit()) {
-        digits.push(chars.next().unwrap_or_default());
+fn digit_run_end(bytes: &[u8], start: usize) -> usize {
+    let mut index = start;
+    while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+        index += 1;
     }
-    digits
+    index
 }
 
 fn compare_numeric_runs(left: &str, right: &str) -> Ordering {

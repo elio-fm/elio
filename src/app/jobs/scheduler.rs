@@ -119,6 +119,10 @@ impl JobScheduler {
         self.directory_fingerprint.submit(request)
     }
 
+    pub(in crate::app) fn cancel_directory_fingerprints(&self) {
+        self.directory_fingerprint.cancel_all();
+    }
+
     pub(in crate::app) fn submit_directory_item_count(
         &self,
         request: DirectoryItemCountRequest,

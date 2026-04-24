@@ -1,7 +1,11 @@
 use super::*;
 use std::{
     path::PathBuf,
-    sync::{Arc, Condvar, Mutex, mpsc},
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     thread,
     time::Instant,
 };
@@ -20,8 +24,14 @@ struct DirectoryShared {
 struct DirectoryState {
     pending: Option<DirectoryRequest>,
     pending_key: Option<DirectoryJobKey>,
-    active_key: Option<DirectoryJobKey>,
+    active: Option<ActiveDirectoryJob>,
     closed: bool,
+}
+
+#[derive(Clone, Debug)]
+struct ActiveDirectoryJob {
+    key: DirectoryJobKey,
+    canceled: Arc<AtomicBool>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -41,7 +51,7 @@ impl DirectoryPool {
             state: Mutex::new(DirectoryState {
                 pending: None,
                 pending_key: None,
-                active_key: None,
+                active: None,
                 closed: false,
             }),
             available: Condvar::new(),
@@ -52,23 +62,35 @@ impl DirectoryPool {
             let result_tx = result_tx.clone();
             let metrics = Arc::clone(&metrics);
             workers.push(thread::spawn(move || {
-                while let Some(request) = DirectoryShared::pop(&shared) {
+                while let Some((request, canceled)) = DirectoryShared::pop(&shared) {
                     let key = DirectoryJobKey::from_request(&request);
                     let started_at = Instant::now();
-                    let result = crate::fs::load_directory_snapshot(
+                    let result = crate::fs::load_directory_snapshot_cancellable(
                         &request.cwd,
                         request.show_hidden,
                         request.sort_mode,
+                        &|| canceled.load(Ordering::Relaxed),
                     )
                     .map_err(|error| {
-                        error
+                        let canceled = error
                             .downcast_ref::<std::io::Error>()
-                            .map(crate::fs::describe_io_error)
-                            .unwrap_or("Read error")
-                            .to_string()
+                            .is_some_and(|error| error.kind() == std::io::ErrorKind::Interrupted);
+                        (canceled, error)
                     });
                     DirectoryShared::finish(&shared, &key);
                     lock_unpoison(&metrics).record_directory_completed(started_at.elapsed());
+                    if canceled.load(Ordering::Relaxed) {
+                        continue;
+                    }
+                    let result = match result {
+                        Ok(snapshot) => Ok(snapshot),
+                        Err((true, _)) => continue,
+                        Err((false, error)) => Err(error
+                            .downcast_ref::<std::io::Error>()
+                            .map(crate::fs::describe_io_error)
+                            .unwrap_or("Read error")
+                            .to_string()),
+                    };
                     if result_tx
                         .send(JobResult::Directory(DirectoryBuild {
                             token: request.token,
@@ -97,11 +119,17 @@ impl DirectoryPool {
         }
         if state.pending_key.as_ref() == Some(&key) {
             state.pending = Some(request);
+            if let Some(active) = &state.active {
+                active.canceled.store(true, Ordering::Relaxed);
+            }
             self.shared.available.notify_one();
             return true;
         }
         state.pending = Some(request);
         state.pending_key = Some(key);
+        if let Some(active) = &state.active {
+            active.canceled.store(true, Ordering::Relaxed);
+        }
         lock_unpoison(&self.metrics).directory_jobs_submitted += 1;
         self.shared.available.notify_one();
         true
@@ -109,7 +137,7 @@ impl DirectoryPool {
 
     pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
-        state.pending.is_some() || state.active_key.is_some()
+        state.pending.is_some() || state.active.is_some()
     }
 }
 
@@ -120,6 +148,9 @@ impl Drop for DirectoryPool {
             state.closed = true;
             state.pending = None;
             state.pending_key = None;
+            if let Some(active) = &state.active {
+                active.canceled.store(true, Ordering::Relaxed);
+            }
         }
         self.shared.available.notify_all();
         for worker in self.workers.drain(..) {
@@ -129,15 +160,25 @@ impl Drop for DirectoryPool {
 }
 
 impl DirectoryShared {
-    fn pop(shared: &Arc<Self>) -> Option<DirectoryRequest> {
+    fn pop(shared: &Arc<Self>) -> Option<(DirectoryRequest, Arc<AtomicBool>)> {
         let mut state = lock_unpoison(&shared.state);
         loop {
             if state.closed {
                 return None;
             }
-            if let Some(request) = state.pending.take() {
-                state.active_key = state.pending_key.take();
-                return Some(request);
+            if state.active.is_none()
+                && let Some(request) = state.pending.take()
+            {
+                let key = state
+                    .pending_key
+                    .take()
+                    .expect("pending key should exist for directory job");
+                let canceled = Arc::new(AtomicBool::new(false));
+                state.active = Some(ActiveDirectoryJob {
+                    key,
+                    canceled: Arc::clone(&canceled),
+                });
+                return Some((request, canceled));
             }
             state = wait_unpoison(&shared.available, state);
         }
@@ -145,9 +186,14 @@ impl DirectoryShared {
 
     fn finish(shared: &Arc<Self>, key: &DirectoryJobKey) {
         let mut state = lock_unpoison(&shared.state);
-        if state.active_key.as_ref() == Some(key) {
-            state.active_key = None;
+        if state
+            .active
+            .as_ref()
+            .is_some_and(|active| &active.key == key)
+        {
+            state.active = None;
         }
+        shared.available.notify_one();
     }
 }
 

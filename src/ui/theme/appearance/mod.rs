@@ -9,19 +9,27 @@ mod types;
 pub(crate) use self::types::{CodePreviewPalette, Palette};
 use self::{
     loading::load_theme_from_disk,
-    resolve::builtin_classify_entry,
+    resolve::builtin_classify_browser_entry,
     types::{EntryClassCacheKey, ResolvedAppearance, Theme},
 };
 use super::builtin_themes::DEFAULT_THEME_TOML;
 use crate::core::{Entry, EntryKind, FileClass};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     path::Path,
     sync::{Mutex, OnceLock},
 };
 
+const ENTRY_CLASS_CACHE_LIMIT: usize = 4_096;
+
+#[derive(Default)]
+struct EntryClassCache {
+    classes: HashMap<EntryClassCacheKey, FileClass>,
+    order: VecDeque<EntryClassCacheKey>,
+}
+
 static ACTIVE_THEME: OnceLock<Theme> = OnceLock::new();
-static ENTRY_CLASS_CACHE: OnceLock<Mutex<HashMap<EntryClassCacheKey, FileClass>>> = OnceLock::new();
+static ENTRY_CLASS_CACHE: OnceLock<Mutex<EntryClassCache>> = OnceLock::new();
 
 pub(crate) fn initialize() {
     let _ = ACTIVE_THEME.get_or_init(load_theme_from_disk);
@@ -40,7 +48,12 @@ pub(crate) fn resolve_path(path: &Path, kind: EntryKind) -> ResolvedAppearance<'
 }
 
 pub(crate) fn resolve_entry(entry: &Entry) -> ResolvedAppearance<'static> {
-    let builtin_class = builtin_classify_entry(entry);
+    let builtin_class = crate::file_info::inspect_entry_cached(entry).builtin_class;
+    active_theme().resolve_with_builtin_class(&entry.path, entry.kind, builtin_class)
+}
+
+pub(crate) fn resolve_browser_entry(entry: &Entry) -> ResolvedAppearance<'static> {
+    let builtin_class = builtin_classify_browser_entry(entry);
     active_theme().resolve_with_builtin_class(&entry.path, entry.kind, builtin_class)
 }
 
@@ -53,8 +66,25 @@ fn active_theme() -> &'static Theme {
     ACTIVE_THEME.get_or_init(Theme::default_theme)
 }
 
-fn entry_class_cache() -> &'static Mutex<HashMap<EntryClassCacheKey, FileClass>> {
-    ENTRY_CLASS_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+fn entry_class_cache() -> &'static Mutex<EntryClassCache> {
+    ENTRY_CLASS_CACHE.get_or_init(|| Mutex::new(EntryClassCache::default()))
+}
+
+impl EntryClassCache {
+    fn get(&self, key: &EntryClassCacheKey) -> Option<FileClass> {
+        self.classes.get(key).copied()
+    }
+
+    fn insert(&mut self, key: EntryClassCacheKey, class: FileClass) {
+        self.classes.insert(key.clone(), class);
+        self.order.retain(|cached| cached != &key);
+        self.order.push_back(key);
+        while self.order.len() > ENTRY_CLASS_CACHE_LIMIT {
+            if let Some(stale_key) = self.order.pop_front() {
+                self.classes.remove(&stale_key);
+            }
+        }
+    }
 }
 
 impl Theme {

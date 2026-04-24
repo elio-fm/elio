@@ -6,7 +6,7 @@ use crate::{
     core::{Entry, EntryKind, FileClass},
     preview::code::registry,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
@@ -15,21 +15,69 @@ use std::{fs::File, io::Read};
 const CONFIG_SNIFF_BYTE_LIMIT: usize = 16 * 1024;
 const CONFIG_SNIFF_LINE_LIMIT: usize = 80;
 const CONFIG_HINT_LINE_LIMIT: usize = 10;
+const FILE_FACTS_CACHE_LIMIT: usize = 4_096;
 const STRONG_INI_THRESHOLD: u8 = 4;
 const STRONG_SHELL_THRESHOLD: u8 = 4;
 const SCORE_MARGIN: u8 = 2;
+
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct CacheKey {
+    path: PathBuf,
+    display_name: Option<String>,
+    is_dir: bool,
+    size: u64,
+    mtime: Option<(u64, u32)>,
+}
+
+#[derive(Default)]
+struct FactsCache {
+    facts: HashMap<CacheKey, FileFacts>,
+    order: VecDeque<CacheKey>,
+}
 
 pub(crate) fn inspect_path(path: &Path, kind: EntryKind) -> FileFacts {
     inspect_path_with_name(path, None, kind)
 }
 
+pub(crate) fn inspect_entry_fast(entry: &Entry) -> FileFacts {
+    inspect_path_with_name_fast(&entry.path, Some(&entry.name), entry.kind)
+}
+
 fn inspect_path_with_name(path: &Path, display_name: Option<&str>, kind: EntryKind) -> FileFacts {
+    let (_name_for_type, name, ext, mut facts) =
+        inspect_path_with_name_base(path, display_name, kind);
+    if ext.is_empty() {
+        facts = sniff_extensionless_file_type(path).unwrap_or(facts);
+    } else if matches!(ext.as_str(), "conf" | "cfg") {
+        facts = sniff_config_file_type(path).unwrap_or(facts);
+    }
+    sniff_license_file_type(path, &name, &ext, facts).unwrap_or(facts)
+}
+
+fn inspect_path_with_name_fast(
+    path: &Path,
+    display_name: Option<&str>,
+    kind: EntryKind,
+) -> FileFacts {
+    inspect_path_with_name_base(path, display_name, kind).3
+}
+
+fn inspect_path_with_name_base(
+    path: &Path,
+    display_name: Option<&str>,
+    kind: EntryKind,
+) -> (String, String, String, FileFacts) {
     if kind == EntryKind::Directory {
-        return FileFacts {
-            builtin_class: FileClass::Directory,
-            specific_type_label: None,
-            preview: PreviewSpec::plain_text(),
-        };
+        return (
+            String::new(),
+            String::new(),
+            String::new(),
+            FileFacts {
+                builtin_class: FileClass::Directory,
+                specific_type_label: None,
+                preview: PreviewSpec::plain_text(),
+            },
+        );
     }
 
     let name_for_type = display_name
@@ -42,10 +90,10 @@ fn inspect_path_with_name(path: &Path, display_name: Option<&str>, kind: EntryKi
         .unwrap_or_default();
     let name = normalize_key(&name_for_type);
     if let Some(facts) = inspect_exact_name(&name) {
-        return facts;
+        return (name_for_type, name, String::new(), facts);
     }
     if let Some(facts) = inspect_archive_name(&name) {
-        return facts;
+        return (name_for_type, name, String::new(), facts);
     }
 
     let ext = Path::new(&name_for_type)
@@ -53,13 +101,8 @@ fn inspect_path_with_name(path: &Path, display_name: Option<&str>, kind: EntryKi
         .and_then(|ext| ext.to_str())
         .map(normalize_key)
         .unwrap_or_default();
-    let mut facts = inspect_extension(&ext);
-    if ext.is_empty() {
-        facts = sniff_extensionless_file_type(path).unwrap_or(facts);
-    } else if matches!(ext.as_str(), "conf" | "cfg") {
-        facts = sniff_config_file_type(path).unwrap_or(facts);
-    }
-    sniff_license_file_type(path, &name, &ext, facts).unwrap_or(facts)
+    let facts = inspect_extension(&ext);
+    (name_for_type, name, ext, facts)
 }
 
 /// Cached variant of [`inspect_path`] that avoids repeated file I/O for the same file version.
@@ -91,20 +134,6 @@ fn inspect_path_with_name_cached(
     size: u64,
     modified: Option<SystemTime>,
 ) -> FileFacts {
-    #[derive(Eq, Hash, PartialEq)]
-    struct CacheKey {
-        path: PathBuf,
-        display_name: Option<String>,
-        is_dir: bool,
-        size: u64,
-        mtime: Option<(u64, u32)>,
-    }
-
-    fn facts_cache() -> &'static Mutex<HashMap<CacheKey, FileFacts>> {
-        static CACHE: OnceLock<Mutex<HashMap<CacheKey, FileFacts>>> = OnceLock::new();
-        CACHE.get_or_init(|| Mutex::new(HashMap::new()))
-    }
-
     let mtime = modified
         .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
         .map(|d| (d.as_secs(), d.subsec_nanos()));
@@ -116,12 +145,11 @@ fn inspect_path_with_name_cached(
         mtime,
     };
 
-    if let Some(&facts) = facts_cache()
-        .lock()
-        .expect("file facts cache lock")
-        .get(&key)
     {
-        return facts;
+        let cache = facts_cache().lock().expect("file facts cache lock");
+        if let Some(facts) = cache.get(&key) {
+            return facts;
+        }
     }
 
     let facts = inspect_path_with_name(path, display_name, kind);
@@ -130,6 +158,28 @@ fn inspect_path_with_name_cached(
         .expect("file facts cache lock")
         .insert(key, facts);
     facts
+}
+
+fn facts_cache() -> &'static Mutex<FactsCache> {
+    static CACHE: OnceLock<Mutex<FactsCache>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(FactsCache::default()))
+}
+
+impl FactsCache {
+    fn get(&self, key: &CacheKey) -> Option<FileFacts> {
+        self.facts.get(key).copied()
+    }
+
+    fn insert(&mut self, key: CacheKey, facts: FileFacts) {
+        self.facts.insert(key.clone(), facts);
+        self.order.retain(|cached| cached != &key);
+        self.order.push_back(key);
+        while self.order.len() > FILE_FACTS_CACHE_LIMIT {
+            if let Some(stale_key) = self.order.pop_front() {
+                self.facts.remove(&stale_key);
+            }
+        }
+    }
 }
 
 fn normalize_key(input: &str) -> String {

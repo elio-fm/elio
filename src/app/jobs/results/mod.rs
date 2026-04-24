@@ -445,7 +445,7 @@ impl App {
 
                     self.preview.state.content = build.result;
                     if self.preview.state.content.kind != preview::PreviewKind::Directory {
-                        self.preview.state.directory_stats = None;
+                        self.clear_preview_directory_stats();
                     }
                     self.preview.state.load_state = None;
                     self.apply_current_comic_preview_metadata();

@@ -35,6 +35,7 @@ fn draw_ui(terminal: &mut Terminal<TestBackend>, app: &mut App) -> FrameState {
 
 fn wait_for_directory_counts(app: &mut App) {
     for _ in 0..100 {
+        let _ = app.process_directory_item_count_timer();
         let _ = app.process_background_jobs();
         let all_visible_directory_counts_loaded = app
             .navigation

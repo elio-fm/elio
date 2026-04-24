@@ -37,7 +37,7 @@ fn is_hidden_entry(entry: &std::fs::DirEntry) -> bool {
 pub(crate) use directory::set_open_in_system_capture_for_test;
 pub(crate) use directory::{
     DirectoryFingerprint, DirectorySnapshot, detached_open_command, load_directory_snapshot,
-    open_in_system, scan_directory_fingerprint,
+    load_directory_snapshot_cancellable, open_in_system, scan_directory_fingerprint_cancellable,
 };
 pub(crate) use directory_stats::{DirectoryStats, DirectoryStatsScanResult, scan_directory_stats};
 pub(crate) use format::{

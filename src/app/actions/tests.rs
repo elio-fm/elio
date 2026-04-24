@@ -14,8 +14,7 @@ fn temp_path(label: &str) -> PathBuf {
 }
 
 fn make_auto_reload_ready(app: &mut App) {
-    app.navigation.directory_runtime.last_auto_reload_at =
-        Instant::now() - AUTO_RELOAD_INTERVAL - Duration::from_millis(1);
+    app.navigation.directory_runtime.last_auto_reload_at = Instant::now() - Duration::from_secs(3);
 }
 
 fn wait_for_directory_load(app: &mut App) {

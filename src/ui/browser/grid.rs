@@ -110,7 +110,8 @@ fn render_tile(
         multi_selected,
         clip_op,
     } = tile_state;
-    let icon_color = theme::entry_color(entry, palette);
+    let appearance = theme::resolve_browser_entry(entry);
+    let icon_color = appearance.color;
     let background = palette.surface;
     let content_bg = if selected {
         theme::mix_color(palette.selected_bg, icon_color, 22)
@@ -152,7 +153,7 @@ fn render_tile(
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
-                theme::entry_symbol(entry),
+                appearance.icon,
                 Style::default().fg(band_icon).add_modifier(
                     Modifier::BOLD
                         | if spec.emphasize_icon {

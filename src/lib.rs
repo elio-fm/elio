@@ -249,6 +249,14 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> 
             dirty = true;
         }
 
+        if terminal_focused && app.process_directory_stats_timer() {
+            dirty = true;
+        }
+
+        if terminal_focused && app.process_directory_item_count_timer() {
+            dirty = true;
+        }
+
         if terminal_focused && app.process_browser_wheel_timers() {
             dirty = true;
         }
@@ -320,6 +328,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> 
                 app.pending_image_preview_timer(),
                 app.pending_preview_refresh_timer(),
                 app.pending_preview_prefetch_timer(),
+                app.pending_directory_stats_timer(),
+                app.pending_directory_item_count_timer(),
                 app.pending_browser_wheel_timer(),
             ],
         );

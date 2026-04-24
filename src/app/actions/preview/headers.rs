@@ -181,7 +181,10 @@ impl App {
         }
 
         if content.line_coverage.is_none() {
+            let suppress_directory_truncation_note =
+                content.kind == PreviewKind::Directory && directory_stats_detail.is_none();
             let wrapped_note = if content.truncation_note.is_none()
+                && !suppress_directory_truncation_note
                 && self.input.frame_state.preview_cols_visible > 0
             {
                 content.wrapped_truncation_note(self.input.frame_state.preview_cols_visible)
@@ -189,12 +192,17 @@ impl App {
                 None
             };
 
-            if let Some(note) = content
-                .truncation_note
-                .as_deref()
-                .map(sanitize_terminal_text)
-                .or_else(|| wrapped_note.map(|note| sanitize_terminal_text(&note)))
-            {
+            let truncation_note = if suppress_directory_truncation_note {
+                None
+            } else {
+                content
+                    .truncation_note
+                    .as_deref()
+                    .map(sanitize_terminal_text)
+                    .or_else(|| wrapped_note.map(|note| sanitize_terminal_text(&note)))
+            };
+
+            if let Some(note) = truncation_note {
                 for part in note
                     .split("  •  ")
                     .filter(|part| !part.is_empty())
@@ -234,9 +242,9 @@ impl App {
             PreviewDirectoryStatsState::Loading { .. } => None,
             PreviewDirectoryStatsState::Complete { stats, .. } => {
                 let size = format_size(stats.total_size_bytes);
-                let full = format!("{} • {size}", format_total_item_label(stats.item_count));
-                let compact = Some(format!("{} • {size}", format_item_count(stats.item_count)))
-                    .filter(|compact| compact != &full);
+                let full = format!("{} • {size}", format_item_count(stats.item_count));
+                let compact =
+                    Some(format_item_count(stats.item_count)).filter(|compact| compact != &full);
                 Some((full, compact))
             }
             PreviewDirectoryStatsState::Incomplete { partial, .. } => {
@@ -244,15 +252,13 @@ impl App {
                     return None;
                 }
                 let size = format_size(partial.total_size_bytes);
+                let compact = Some(format_incomplete_item_count(partial.item_count));
                 Some((
                     format!(
                         "At least {} • at least {size}",
                         format_item_count(partial.item_count)
                     ),
-                    Some(format!(
-                        "{}+ • {size}+",
-                        format_item_count(partial.item_count)
-                    )),
+                    compact,
                 ))
             }
         }
@@ -271,15 +277,6 @@ impl App {
                 Some((error.clone(), compact_status_note(error)))
             }
         }
-    }
-}
-
-fn format_total_item_label(count: usize) -> String {
-    let count = format_header_count(count);
-    if count == "1" {
-        "1 total item".to_string()
-    } else {
-        format!("{count} total items")
     }
 }
 
@@ -458,6 +455,15 @@ fn format_line_label(count: usize) -> String {
     }
 }
 
+fn format_incomplete_item_count(count: usize) -> String {
+    let count = format_header_count(count);
+    if count == "1" {
+        "1+ item".to_string()
+    } else {
+        format!("{count}+ items")
+    }
+}
+
 fn format_header_count(count: usize) -> String {
     let digits = count.to_string();
     let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
@@ -497,6 +503,14 @@ fn compact_preview_header_note_part(part: &str) -> Option<String> {
         .and_then(|rest| rest.strip_suffix(" items"))
     {
         return Some(format!("{value}-item cap"));
+    }
+
+    if let Some(value) = part.strip_suffix(" items shown") {
+        return Some(format!("{value} shown"));
+    }
+
+    if let Some(value) = part.strip_suffix(" item shown") {
+        return Some(format!("{value} shown"));
     }
 
     if let Some(value) = part
@@ -616,6 +630,17 @@ mod tests {
     }
 
     #[test]
+    fn compact_preview_header_note_shortens_directory_items_shown() {
+        let line_limit = crate::preview::default_code_preview_line_limit();
+        let note = format!("{line_limit} items shown");
+        let expected = format!("{line_limit} shown");
+        assert_eq!(
+            compact_preview_header_note(&note).as_deref(),
+            Some(expected.as_str())
+        );
+    }
+
+    #[test]
     fn compact_preview_header_label_shortens_comic_rar_archive() {
         assert_eq!(
             compact_preview_header_label("Comic RAR archive").as_deref(),
@@ -634,5 +659,20 @@ mod tests {
         let fitted = fit_preview_header_segments(&[detail, lines], 3);
 
         assert_eq!(fitted.as_deref(), Some("Ru…"));
+    }
+
+    #[test]
+    fn fitted_preview_header_prefers_directory_item_count_over_items_shown_when_narrow() {
+        let detail = header_segment(
+            HEADER_SCORE_DETAIL,
+            "4,240 items • 90 MB",
+            Some("4,240 items"),
+        );
+        let truncation =
+            header_segment(HEADER_SCORE_AUXILIARY, "800 items shown", Some("800 shown"));
+
+        let fitted = fit_preview_header_segments(&[detail, truncation], 11);
+
+        assert_eq!(fitted.as_deref(), Some("4,240 items"));
     }
 }

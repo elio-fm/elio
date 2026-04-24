@@ -49,6 +49,10 @@ impl App {
             return Ok(false);
         }
 
+        if self.preview.state.deferred_refresh_at.is_some() || self.browser_wheel_burst_active() {
+            return Ok(false);
+        }
+
         if self
             .navigation
             .directory_runtime
@@ -63,7 +67,7 @@ impl App {
             .directory_runtime
             .last_auto_reload_at
             .elapsed()
-            < AUTO_RELOAD_INTERVAL
+            < self.polling_reload_interval()
         {
             return Ok(false);
         }
@@ -76,6 +80,9 @@ impl App {
         mut load: PendingDirectoryLoad,
     ) -> Result<()> {
         self.navigation.directory_runtime.pending_fingerprint_scan = None;
+        self.jobs.scheduler.cancel_directory_fingerprints();
+        self.jobs.scheduler.cancel_directory_stats();
+        self.preview.state.directory_stats_ready_at = None;
         self.jobs.directory_token = self.jobs.directory_token.wrapping_add(1);
         load.token = self.jobs.directory_token;
         let request = jobs::DirectoryRequest {
@@ -122,6 +129,8 @@ impl App {
         self.navigation.last_sidebar_refresh_at = Instant::now();
         self.navigation.directory_runtime.fingerprint = snapshot.fingerprint;
         self.navigation.directory_runtime.last_auto_reload_at = Instant::now();
+        self.navigation.directory_count_viewport = None;
+        self.navigation.directory_item_count_ready_at = None;
 
         self.navigation.selected = if let Some(path) = &load.reselect_path {
             self.navigation
@@ -346,6 +355,7 @@ impl App {
         self.navigation.directory_runtime.watch = None;
         self.navigation.directory_runtime.pending_reload_at = None;
         self.navigation.directory_runtime.pending_fingerprint_scan = None;
+        self.jobs.scheduler.cancel_directory_fingerprints();
         while self
             .navigation
             .directory_runtime
@@ -405,6 +415,14 @@ impl App {
 
     fn queue_directory_fingerprint_scan(&mut self) -> Result<bool> {
         self.reload_if_directory_changed()
+    }
+
+    fn polling_reload_interval(&self) -> Duration {
+        match self.navigation.entries.len() {
+            0..=255 => AUTO_RELOAD_INTERVAL_SMALL,
+            256..=2047 => AUTO_RELOAD_INTERVAL_MEDIUM,
+            _ => AUTO_RELOAD_INTERVAL_LARGE,
+        }
     }
 
     fn refresh_search_after_directory_reload(&mut self) {

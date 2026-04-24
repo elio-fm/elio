@@ -18,8 +18,27 @@ fn directory_header_upgrades_to_exact_recursive_totals_after_background_stats() 
         &mut app,
         8,
         80,
-        &format!("4 total items • {}", crate::app::format_size(1_700)),
+        &format!("4 items • {}", crate::app::format_size(1_700)),
     );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn truncated_directory_header_stays_blank_until_exact_totals_finish() {
+    let root = temp_path("directory-header-waits-for-exact-totals");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.preview.state.content = PreviewContent::new(PreviewKind::Directory, Vec::new())
+        .with_truncation(format!(
+            "{} items shown",
+            crate::preview::default_code_preview_line_limit()
+        ));
+    app.preview.state.load_state = None;
+    app.preview.state.directory_stats = None;
+
+    assert_eq!(app.preview_header_detail_for_width(8, 120), None);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -91,7 +110,7 @@ fn stale_directory_totals_result_is_ignored_after_selection_changes() {
         .expect("a-dir should be selected first");
 
     app.set_selected(1);
-    let current_entry = app
+    let _current_entry = app
         .selected_entry()
         .cloned()
         .expect("b-dir should be selected second");
@@ -110,20 +129,14 @@ fn stale_directory_totals_result_is_ignored_after_selection_changes() {
         }));
 
     let _ = app.process_background_jobs();
-    assert_eq!(
-        app.preview
-            .state
-            .directory_stats
-            .as_ref()
-            .map(PreviewDirectoryStatsState::path),
-        Some(&current_entry.path),
-    );
+    assert!(app.preview.state.directory_stats.is_none());
+    assert!(app.pending_directory_stats_timer().is_some());
 
     wait_for_preview_header(
         &mut app,
         8,
         80,
-        &format!("1 total item • {}", crate::app::format_size(200)),
+        &format!("1 item • {}", crate::app::format_size(200)),
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -153,7 +166,7 @@ fn unreadable_directory_keeps_permission_denied_header_without_fake_partial_tota
     assert!(
         !app.preview_header_detail_for_width(8, 80)
             .unwrap_or_default()
-            .contains("0 total items")
+            .contains("0 items")
     );
 
     fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("failed to unlock dir");

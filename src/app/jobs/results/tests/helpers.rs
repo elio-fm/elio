@@ -266,6 +266,8 @@ pub(super) fn write_fixed_layout_epub_fixture(path: &Path, section_titles: &[&st
 
 pub(super) fn wait_for_background_preview(app: &mut App) {
     for _ in 0..500 {
+        let _ = app.process_preview_refresh_timers();
+        let _ = app.process_directory_stats_timer();
         if app.process_background_jobs() {
             return;
         }
@@ -299,6 +301,8 @@ pub(super) fn wait_for_preview_header(
             return;
         }
         last_seen = current;
+        let _ = app.process_preview_refresh_timers();
+        let _ = app.process_directory_stats_timer();
         let _ = app.process_background_jobs();
         thread::sleep(Duration::from_millis(10));
     }
