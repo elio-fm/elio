@@ -133,8 +133,10 @@ jobs:
       - name: Build and test on FreeBSD
         uses: vmactions/freebsd-vm@v1
         with:
+          release: "14.4"
           usesh: true
           prepare: |
+            env ASSUME_ALWAYS_YES=yes pkg bootstrap -f
             pkg update -f
             pkg install -y rust 7-zip
             # Some FreeBSD package versions ship 7zz only; keep a 7z fallback for elio's archive preview.
