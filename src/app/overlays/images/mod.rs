@@ -121,7 +121,6 @@ mod tests {
     use crate::app::overlays::inline_image::{
         ImageProtocol, OverlayPresentState, RenderedImageDimensions, TerminalWindowSize,
     };
-    use crossterm::event::{Event, KeyCode, KeyEvent};
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use ratatui::layout::Rect;
     use std::{
@@ -768,8 +767,7 @@ mod tests {
             .expect("initial static image presentation should succeed");
         assert!(app.preview.image.displayed_excluded.is_empty());
 
-        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-            .expect("O should open the open-with overlay");
+        app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
         let popup = Rect {
             x: 4,
             y: 5,
@@ -822,8 +820,7 @@ mod tests {
             .expect("initial Konsole image presentation should succeed");
         assert!(app.static_image_overlay_displayed());
 
-        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
-            .expect("O should open the open-with overlay");
+        app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
         app.input.frame_state.open_with_panel = Some(Rect {
             x: 4,
             y: 5,
