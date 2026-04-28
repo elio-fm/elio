@@ -1,5 +1,5 @@
 %bcond_with check
-%global fallback_version 1.2.0
+%global fallback_version 1.3.0
 %global fallback_release 1
 
 Name:           elio
@@ -44,6 +44,10 @@ install -Dpm0755 target/rpm/%{name} %{buildroot}%{_bindir}/%{name}
 %{_bindir}/elio
 
 %changelog
+* Tue Apr 28 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.3.0-1
+- Add Konsole inline image preview support
+- Fix crates.io installs by upgrading lofty to 0.24
+
 * Sat Apr 25 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.2.0-1
 - Add QML preview support and icon coverage
 - Add font metadata previews
