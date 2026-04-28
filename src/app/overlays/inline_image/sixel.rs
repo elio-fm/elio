@@ -397,6 +397,9 @@ mod tests {
                 "WARP_SESSION_ID",
                 "ALACRITTY_SOCKET",
                 "WT_SESSION",
+                "KONSOLE_DBUS_SESSION",
+                "KONSOLE_DBUS_SERVICE",
+                "KONSOLE_DBUS_WINDOW",
             ];
 
             let saved = VARS
