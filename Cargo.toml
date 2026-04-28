@@ -1,6 +1,6 @@
 [package]
 name = "elio"
-version = "1.2.0"
+version = "1.2.1"
 edition = "2024"
 rust-version = "1.93"
 description = "Snappy, batteries-included terminal file manager with rich previews, inline images, bulk actions, and trash support."
@@ -22,7 +22,7 @@ flate2 = { version = "1.1", default-features = false, features = ["rust_backend"
 image = { version = "0.25", default-features = false, features = ["gif", "ico", "jpeg", "png", "webp"] }
 notify = "8.2"
 json5 = "0.4"
-lofty = "0.23"
+lofty = "0.24"
 pulldown-cmark = "0.13"
 quick-xml = "0.38"
 ratatui = { version = "0.30", default-features = false, features = ["crossterm", "crossterm_0_29"] }
