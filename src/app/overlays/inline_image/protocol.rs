@@ -11,6 +11,9 @@ pub(in crate::app) fn detect_terminal_identity() -> TerminalIdentity {
         .unwrap_or_default()
         .to_ascii_lowercase();
     let kitty_window_id = env::var_os("KITTY_WINDOW_ID").is_some();
+    let konsole_dbus = env::var_os("KONSOLE_DBUS_SESSION").is_some()
+        || env::var_os("KONSOLE_DBUS_SERVICE").is_some()
+        || env::var_os("KONSOLE_DBUS_WINDOW").is_some();
 
     if kitty_window_id || term.contains("xterm-kitty") || term_program == "kitty" {
         TerminalIdentity::Kitty
@@ -27,6 +30,10 @@ pub(in crate::app) fn detect_terminal_identity() -> TerminalIdentity {
         || env::var_os("ALACRITTY_SOCKET").is_some()
     {
         TerminalIdentity::Alacritty
+    } else if konsole_dbus {
+        // Konsole exports D-Bus identifiers into child shells so scripts can
+        // address the current window/session.
+        TerminalIdentity::Konsole
     } else if term == "foot" || term == "foot-extra" {
         // Foot sets TERM=foot or TERM=foot-extra and supports Sixel natively.
         TerminalIdentity::Foot
@@ -47,6 +54,7 @@ pub(in crate::app) fn select_image_protocol(
         TerminalIdentity::Kitty => ImageProtocol::KittyGraphics,
         TerminalIdentity::Ghostty => ImageProtocol::KittyGraphics,
         TerminalIdentity::Warp => ImageProtocol::KittyGraphics,
+        TerminalIdentity::Konsole => ImageProtocol::KonsoleGraphics,
         TerminalIdentity::WezTerm | TerminalIdentity::ITerm2 => ImageProtocol::ItermInline,
         // Foot and Windows Terminal ≥ 1.22 both support Sixel graphics.
         TerminalIdentity::Foot | TerminalIdentity::WindowsTerminal => ImageProtocol::Sixel,
@@ -136,6 +144,9 @@ mod tests {
                 "WARP_SESSION_ID",
                 "ALACRITTY_SOCKET",
                 "WT_SESSION",
+                "KONSOLE_DBUS_SESSION",
+                "KONSOLE_DBUS_SERVICE",
+                "KONSOLE_DBUS_WINDOW",
             ];
 
             let saved = VARS
@@ -226,6 +237,55 @@ mod tests {
             select_image_protocol(TerminalIdentity::ITerm2, true),
             ImageProtocol::ItermInline
         );
+    }
+
+    #[test]
+    fn detect_terminal_identity_recognizes_konsole_dbus_session() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+
+        unsafe {
+            env::set_var("KONSOLE_DBUS_SESSION", "/Sessions/7");
+        }
+
+        assert_eq!(detect_terminal_identity(), TerminalIdentity::Konsole);
+    }
+
+    #[test]
+    fn detect_terminal_identity_recognizes_konsole_dbus_service() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+
+        unsafe {
+            env::set_var("KONSOLE_DBUS_SERVICE", "org.kde.konsole-12345");
+        }
+
+        assert_eq!(detect_terminal_identity(), TerminalIdentity::Konsole);
+    }
+
+    #[test]
+    fn select_image_protocol_konsole_always_enabled() {
+        assert_eq!(
+            select_image_protocol(TerminalIdentity::Konsole, false),
+            ImageProtocol::KonsoleGraphics
+        );
+        assert_eq!(
+            select_image_protocol(TerminalIdentity::Konsole, true),
+            ImageProtocol::KonsoleGraphics
+        );
+    }
+
+    #[test]
+    fn wezterm_takes_precedence_over_inherited_konsole_markers() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+
+        unsafe {
+            env::set_var("TERM_PROGRAM", "WezTerm");
+            env::set_var("KONSOLE_DBUS_SESSION", "/Sessions/9");
+        }
+
+        assert_eq!(detect_terminal_identity(), TerminalIdentity::WezTerm);
     }
 
     #[test]

@@ -206,7 +206,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> 
     let mut app = App::new()?;
 
     // Enable terminal image previews. Detection handles the current policy:
-    // Kitty, Ghostty, Warp, WezTerm, and iTerm2 auto-enable supported image protocols;
+    // Kitty, Ghostty, Warp, WezTerm, iTerm2, and Konsole auto-enable supported
+    // image protocols;
     // ELIO_IMAGE_PREVIEWS=1 force-enables Kitty graphics on otherwise unrecognized terminals.
     // All image bytes are routed through terminal.backend_mut() so they never bypass
     // crossterm and cannot corrupt mouse reporting.

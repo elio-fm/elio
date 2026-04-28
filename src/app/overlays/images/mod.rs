@@ -243,6 +243,40 @@ mod tests {
     }
 
     #[test]
+    fn konsole_png_overlay_uses_source_path_for_direct_display() {
+        let (mut app, root, image_path) =
+            build_selected_static_image_app("konsole-direct-source", "demo.png");
+        app.preview.terminal_images.protocol = ImageProtocol::KonsoleGraphics;
+        let request = ready_static_image_overlay(&mut app);
+        let key = StaticImageKey::from_request(&request);
+
+        match app.prepared_static_image_for_overlay(&request) {
+            StaticImageOverlayPreparation::Ready(prepared) => {
+                assert_eq!(prepared.display_path, image_path);
+                assert_eq!(
+                    prepared.dimensions,
+                    RenderedImageDimensions {
+                        width_px: 600,
+                        height_px: 300,
+                    }
+                );
+                assert!(prepared.inline_payload.is_none());
+            }
+            StaticImageOverlayPreparation::Pending => {
+                panic!("png source path should display directly in Konsole")
+            }
+            StaticImageOverlayPreparation::Failed => {
+                panic!("png source path should not fail direct Konsole display")
+            }
+        }
+
+        assert!(app.preview.image.dimensions.contains_key(&key));
+        assert!(!app.preview.image.pending_prepares.contains(&key));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn cached_rendered_overlay_reuses_cached_path_and_inline_payload() {
         let (mut app, root, image_path) =
             build_selected_static_image_app("cache-reuse", "demo.png");
@@ -633,6 +667,26 @@ mod tests {
     }
 
     #[test]
+    fn konsole_resize_does_not_request_full_screen_clear() {
+        let (mut app, root, _image_path) =
+            build_selected_static_image_app("konsole-resize-no-clear", "demo.png");
+        let request = ready_static_image_overlay(&mut app);
+        app.preview.terminal_images.protocol = ImageProtocol::KonsoleGraphics;
+        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+            &request,
+            request.area,
+            request.area,
+        ));
+
+        app.handle_terminal_image_resize();
+
+        assert!(!app.take_pending_resize_clear());
+        assert!(app.static_image_overlay_displayed());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn sixel_resize_requests_full_screen_clear_for_displayed_overlay() {
         let (mut app, root, _image_path) =
             build_selected_static_image_app("sixel-resize-clear", "demo.png");
@@ -750,6 +804,62 @@ mod tests {
         assert!(
             app.preview.image.displayed_excluded.is_empty(),
             "closing the popup should remove kitty exclusions"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn open_with_overlay_clears_konsole_image_and_closing_it_redraws_it() {
+        let (mut app, root, _image_path) =
+            build_selected_static_image_app("konsole-open-with-clear", "demo.png");
+        app.preview.terminal_images.protocol = ImageProtocol::KonsoleGraphics;
+        app.preview.image.selection_activation_delay = Duration::ZERO;
+        app.sync_image_preview_selection_activation();
+
+        let mut initial = Vec::new();
+        app.present_static_image_overlay(ImageProtocol::KonsoleGraphics, &[], false, &mut initial)
+            .expect("initial Konsole image presentation should succeed");
+        assert!(app.static_image_overlay_displayed());
+
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
+            .expect("O should open the open-with overlay");
+        app.input.frame_state.open_with_panel = Some(Rect {
+            x: 4,
+            y: 5,
+            width: 12,
+            height: 4,
+        });
+
+        let cleared = String::from_utf8(
+            app.present_preview_overlay()
+                .expect("opening the open-with overlay should clear the Konsole image"),
+        )
+        .expect("Konsole clear output should be valid utf8");
+        assert!(
+            cleared.contains("\u{1b}_Ga=d,d=I,"),
+            "opening the popup should send a Konsole delete command"
+        );
+        assert!(
+            !app.static_image_overlay_displayed(),
+            "opening the popup should clear the tracked Konsole image"
+        );
+
+        app.overlays.open_with = None;
+        app.input.frame_state.open_with_panel = None;
+
+        let restored = String::from_utf8(
+            app.present_preview_overlay()
+                .expect("closing the open-with overlay should redraw the Konsole image"),
+        )
+        .expect("Konsole redraw output should be valid utf8");
+        assert!(
+            restored.contains("\u{1b}_Ga=T,"),
+            "closing the popup should redraw the Konsole image"
+        );
+        assert!(
+            app.static_image_overlay_displayed(),
+            "closing the popup should restore the tracked Konsole image"
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");

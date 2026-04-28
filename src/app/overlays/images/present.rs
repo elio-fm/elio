@@ -256,10 +256,10 @@ impl App {
         dimensions: RenderedImageDimensions,
         window_size: TerminalWindowSize,
     ) -> Rect {
-        // Kitty fills the entire cell area and lets the terminal handle scaling
-        // via unicode placeholders, so no fitting is needed.  iTerm2 and Sixel
-        // both paint pixel buffers and need a cell area that matches the image's
-        // aspect ratio so the encoder can produce the correct pixel dimensions.
+        // Kitty unicode placeholders fill the entire cell area and let the
+        // terminal handle scaling, so no fitting is needed. Konsole direct
+        // placements, iTerm2, and Sixel all need a cell area that already
+        // matches the image's aspect ratio.
         if self.preview.terminal_images.protocol == ImageProtocol::KittyGraphics {
             request.area
         } else {

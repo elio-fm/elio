@@ -1,6 +1,7 @@
 mod geometry;
 mod iterm;
 mod kitty;
+mod konsole;
 mod protocol;
 mod sixel;
 mod window;
@@ -58,6 +59,7 @@ pub(in crate::app) enum TerminalIdentity {
     Warp,
     WezTerm,
     ITerm2,
+    Konsole,
     Alacritty,
     Foot,
     WindowsTerminal,
@@ -73,6 +75,10 @@ pub(in crate::app) enum ImageProtocol {
     /// Kitty Graphics Protocol (APC `\x1b_G…\x1b\\`). Supported natively by
     /// Kitty, Ghostty, and Warp.
     KittyGraphics,
+    /// Konsole's kitty-based image placement protocol. Unlike
+    /// `KittyGraphics`, this uses direct placements instead of Unicode
+    /// placeholders and therefore needs explicit delete commands.
+    KonsoleGraphics,
     /// iTerm2 inline image protocol (OSC 1337). Used by WezTerm and iTerm2.
     ItermInline,
     /// Sixel graphics protocol (DCS). Used by Windows Terminal (≥ 1.22).
@@ -111,12 +117,15 @@ impl App {
         let image_previews_override = env::var_os("ELIO_IMAGE_PREVIEWS").is_some();
         let protocol = select_image_protocol(identity, image_previews_override);
         preview_log(format_args!(
-            "enable_terminal_image_previews:\n  TERM={}\n  TERM_PROGRAM={}\n  KITTY_WINDOW_ID={}\n  WARP_SESSION_ID={}\n  WT_SESSION={}\n  identity={identity:?}\n  override={image_previews_override}\n  protocol={protocol:?}",
+            "enable_terminal_image_previews:\n  TERM={}\n  TERM_PROGRAM={}\n  KITTY_WINDOW_ID={}\n  WARP_SESSION_ID={}\n  WT_SESSION={}\n  KONSOLE_DBUS_SESSION={}\n  KONSOLE_DBUS_SERVICE={}\n  KONSOLE_DBUS_WINDOW={}\n  identity={identity:?}\n  override={image_previews_override}\n  protocol={protocol:?}",
             env::var("TERM").unwrap_or_default(),
             env::var("TERM_PROGRAM").unwrap_or_default(),
             env::var_os("KITTY_WINDOW_ID").is_some(),
             env::var_os("WARP_SESSION_ID").is_some(),
             env::var_os("WT_SESSION").is_some(),
+            env::var_os("KONSOLE_DBUS_SESSION").is_some(),
+            env::var_os("KONSOLE_DBUS_SERVICE").is_some(),
+            env::var_os("KONSOLE_DBUS_WINDOW").is_some(),
         ));
         self.preview.terminal_images.identity = identity;
         self.preview.terminal_images.protocol = protocol;
@@ -282,6 +291,13 @@ impl App {
         }
 
         let popup_open = self.any_modal_overlay_open();
+        if protocol == ImageProtocol::KonsoleGraphics && popup_open {
+            if self.static_image_overlay_displayed() || self.pdf_overlay_displayed() {
+                return self.clear_preview_overlay();
+            }
+            return Ok(Vec::new());
+        }
+
         if protocol.is_raster()
             && popup_open
             && (self.static_image_overlay_displayed() || self.pdf_overlay_displayed())
@@ -480,6 +496,9 @@ pub(in crate::app) fn place_terminal_image(
         ImageProtocol::KittyGraphics => {
             kitty::place_terminal_image_with_kitty_protocol(path, area, excluded)
         }
+        ImageProtocol::KonsoleGraphics => {
+            konsole::place_terminal_image_with_konsole_protocol(path, area)
+        }
         ImageProtocol::ItermInline => {
             iterm::place_terminal_image_with_iterm_protocol(path, area, inline_payload)
         }
@@ -496,6 +515,7 @@ pub(in crate::app) fn place_terminal_image(
 pub(in crate::app) fn clear_terminal_images(protocol: ImageProtocol) -> Result<Vec<u8>> {
     match protocol {
         ImageProtocol::KittyGraphics => kitty::clear_terminal_images_with_kitty_protocol(),
+        ImageProtocol::KonsoleGraphics => konsole::clear_terminal_images_with_konsole_protocol(),
         // iTerm2 has no clear primitive — the overlay is erased by the next
         // ratatui draw call overwriting the cell region.
         ImageProtocol::ItermInline | ImageProtocol::None => Ok(Vec::new()),

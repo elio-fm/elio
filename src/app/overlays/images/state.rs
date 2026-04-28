@@ -138,8 +138,10 @@ impl App {
         &self,
         request: &StaticImageOverlayRequest,
     ) -> bool {
-        self.preview.terminal_images.protocol == ImageProtocol::KittyGraphics
-            && !request.force_render_to_cache
+        matches!(
+            self.preview.terminal_images.protocol,
+            ImageProtocol::KittyGraphics | ImageProtocol::KonsoleGraphics
+        ) && !request.force_render_to_cache
             && static_image_format_for_overlay_request(request) == Some(StaticImageFormat::Png)
     }
 
@@ -148,7 +150,9 @@ impl App {
         request: &StaticImageOverlayRequest,
     ) -> bool {
         match self.preview.terminal_images.protocol {
-            ImageProtocol::KittyGraphics => self.static_image_can_display_directly_now(request),
+            ImageProtocol::KittyGraphics | ImageProtocol::KonsoleGraphics => {
+                self.static_image_can_display_directly_now(request)
+            }
             ImageProtocol::ItermInline => static_image_supports_iterm_source_passthrough(request),
             // Sixel requires decoding and re-encoding the image, so the source path
             // can never be used directly — always go through the prepare pipeline.
