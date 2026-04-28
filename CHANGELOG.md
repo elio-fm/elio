@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added Konsole inline image preview support with a dedicated backend and conservative popup clearing to avoid preview artifacts.
 
+### Fixed
+
+- Fixed `cargo install elio` from crates.io by upgrading `lofty` from the yanked `0.23` series to `0.24`. Thanks @jprobichaud for catching this in #66.
+
 ## [1.2.0] - 2026-04-25
 
 ### Added
