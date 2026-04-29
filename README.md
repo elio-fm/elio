@@ -163,6 +163,19 @@ Most users do **not** need these, but they can help in edge cases:
 
 ---
 
+## Using elio over SSH
+
+`elio` works well over SSH for navigation, file operations, text and code previews, and terminal-based workflows. Rich visual previews and open actions depend on the local terminal and the remote host.
+
+- Text and code previews work well, including plain text, source code, Markdown, logs, JSON, YAML, TOML, and HTML previewed as source code.
+- Rich visual previews such as images, rendered PDF pages, video thumbnails, album art, SVG previews, and archive extras depend on terminal image protocol support and optional preview tools on the remote machine.
+- Terminal apps chosen through `Open With`, including default terminal app matches, run inside the current SSH session.
+- `Enter`, `o`, fallback system openers, and GUI-style `Open With` entries use the remote host's opener stack, so they may open there, fail, or do nothing useful from an SSH session.
+
+See [Image Previews](#image-previews) and [Optional Preview Tools](#optional-preview-tools).
+
+---
+
 ## Workflow
 
 ### Opening Files
