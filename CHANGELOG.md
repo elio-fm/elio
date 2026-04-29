@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added an optional startup directory argument, so `elio <directory>` opens that directory and invalid or non-directory paths return a clear error.
+
 ## [1.3.0] - 2026-04-28
 
 ### Added
