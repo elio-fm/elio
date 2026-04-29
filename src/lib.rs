@@ -23,6 +23,7 @@ use crossterm::{
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{
     io::{self, ErrorKind, Write},
+    path::PathBuf,
     process::Command,
     time::{Duration, Instant},
 };
@@ -33,10 +34,18 @@ const WINDOWS_TERMINAL_ACTIVE_POLL_INTERVAL: Duration = Duration::from_millis(24
 const RELATIVE_TIME_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
 pub fn run() -> Result<()> {
+    run_at_path(None)
+}
+
+pub fn run_at(cwd: PathBuf) -> Result<()> {
+    run_at_path(Some(cwd))
+}
+
+fn run_at_path(cwd: Option<PathBuf>) -> Result<()> {
     config::initialize();
     ui::theme::initialize();
     let mut terminal = init_terminal()?;
-    let result = run_app(&mut terminal);
+    let result = run_app(&mut terminal, cwd);
     restore_terminal(&mut terminal)?;
     result
 }
@@ -202,8 +211,14 @@ fn keyboard_enhancement_is_unsupported(error: &io::Error) -> bool {
             .contains("Keyboard progressive enhancement not implemented")
 }
 
-fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
-    let mut app = App::new()?;
+fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    cwd: Option<PathBuf>,
+) -> Result<()> {
+    let mut app = match cwd {
+        Some(cwd) => App::new_at(cwd)?,
+        None => App::new()?,
+    };
 
     // Enable terminal image previews. Detection handles the current policy:
     // Kitty, Ghostty, Warp, WezTerm, iTerm2, and Konsole auto-enable supported
