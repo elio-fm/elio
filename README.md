@@ -56,7 +56,7 @@ Install from crates.io:
 cargo install elio
 ```
 
-`elio` starts in your current working directory.
+`elio` starts in your current working directory by default. Pass a directory path to start there instead, for example `elio path/to/directory`.
 
 > [!TIP]
 > Recommended: use a Nerd Font in your terminal so icons display correctly.
