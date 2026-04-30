@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed inline image and PDF previews not rendering inside tmux when the host terminal uses the Kitty Graphics Protocol (Kitty, Ghostty, Warp), by wrapping the emitted APC sequences in tmux DCS passthrough so tmux relays them to the host terminal. Requires `allow-passthrough on` in tmux.
+- Fixed tmux relaying of Kitty Graphics preview sequences so inline image and PDF previews can render inside tmux when `KittyGraphics` is selected and `allow-passthrough` is enabled. Some tmux setups may still require preserved terminal markers or `ELIO_IMAGE_PREVIEWS=1`. (#74, #70)
 
 ## [1.3.0] - 2026-04-28
 
