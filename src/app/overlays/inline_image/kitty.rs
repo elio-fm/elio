@@ -15,11 +15,52 @@ pub(super) fn place_terminal_image_with_kitty_protocol(
     let id = kitty_image_id();
     let mut out = build_kitty_upload_sequence(path, id, area)?;
     out.extend(build_kitty_placeholder_sequence(id, area, excluded));
-    Ok(out)
+    Ok(maybe_wrap_kitty_apcs_for_tmux(out))
 }
 
 pub(super) fn clear_terminal_images_with_kitty_protocol() -> Result<Vec<u8>> {
-    Ok(build_kitty_clear_sequence().as_bytes().to_vec())
+    Ok(maybe_wrap_kitty_apcs_for_tmux(
+        build_kitty_clear_sequence().as_bytes().to_vec(),
+    ))
+}
+
+/// Inside tmux, wrap each Kitty APC sequence in the tmux DCS passthrough
+/// envelope so tmux relays it to the host terminal. CSI sequences and the
+/// Unicode placeholder characters are emitted unchanged. Outside tmux the
+/// input is returned untouched.
+///
+/// Background: tmux's `allow-passthrough on` only forwards DCS sequences with
+/// the `\ePtmux;<seq>\e\\` envelope. Raw APC sequences (`\e_G…\e\\`, used by
+/// the Kitty Graphics Protocol) are swallowed by tmux and never reach the
+/// host terminal — so the host terminal never registers the image and the
+/// Unicode placeholders render as empty cells.
+fn maybe_wrap_kitty_apcs_for_tmux(buf: Vec<u8>) -> Vec<u8> {
+    if std::env::var_os("TMUX").is_none() {
+        return buf;
+    }
+    wrap_kitty_apcs_for_tmux(&buf)
+}
+
+fn wrap_kitty_apcs_for_tmux(buf: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(buf.len() + buf.len() / 4);
+    let mut i = 0;
+    while i < buf.len() {
+        if buf.len() - i >= 3
+            && &buf[i..i + 3] == b"\x1b_G"
+            && let Some(rel) = buf[i + 3..].iter().position(|&b| b == 0x1b)
+            && buf.get(i + 3 + rel + 1) == Some(&b'\\')
+        {
+            let body_end = i + 3 + rel;
+            out.extend_from_slice(b"\x1bPtmux;\x1b\x1b_G");
+            out.extend_from_slice(&buf[i + 3..body_end]);
+            out.extend_from_slice(b"\x1b\x1b\\\x1b\\");
+            i = body_end + 2;
+            continue;
+        }
+        out.push(buf[i]);
+        i += 1;
+    }
+    out
 }
 
 fn build_kitty_upload_sequence(path: &Path, id: u32, area: Rect) -> Result<Vec<u8>> {
@@ -265,5 +306,21 @@ mod tests {
     #[test]
     fn build_kitty_clear_sequence_deletes_visible_images() {
         assert_eq!(build_kitty_clear_sequence(), "\u{1b}_Ga=d,d=A,q=2\u{1b}\\");
+    }
+
+    #[test]
+    fn wrap_kitty_apcs_for_tmux_envelopes_each_apc_and_leaves_csi_alone() {
+        let input =
+            b"\x1b_Ga=T,i=1,c=2,r=2;AAAA\x1b\\\x1b[5;10H\xf4\x8e\xbb\xae\x1b_Gm=0;BBBB\x1b\\";
+        let out = wrap_kitty_apcs_for_tmux(input);
+        let expected: &[u8] = b"\x1bPtmux;\x1b\x1b_Ga=T,i=1,c=2,r=2;AAAA\x1b\x1b\\\x1b\\\x1b[5;10H\xf4\x8e\xbb\xae\x1bPtmux;\x1b\x1b_Gm=0;BBBB\x1b\x1b\\\x1b\\";
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn wrap_kitty_apcs_for_tmux_is_noop_without_apcs() {
+        let input = b"\x1b[5;10Hhello\x1b[0m";
+        let out = wrap_kitty_apcs_for_tmux(input);
+        assert_eq!(out, input);
     }
 }
