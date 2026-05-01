@@ -72,13 +72,14 @@ pub(in crate::app) enum TerminalIdentity {
 /// the same protocol without coupling detection logic to rendering logic.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) enum ImageProtocol {
-    /// Kitty Graphics Protocol (APC `\x1b_G…\x1b\\`). Supported natively by
-    /// Kitty, Ghostty, and Warp.
+    /// Kitty Graphics Protocol (APC `\x1b_G…\x1b\\`) using the Unicode
+    /// placeholder extension. Used by Kitty and Ghostty.
     KittyGraphics,
-    /// Konsole's kitty-based image placement protocol. Unlike
-    /// `KittyGraphics`, this uses direct placements instead of Unicode
-    /// placeholders and therefore needs explicit delete commands.
-    KonsoleGraphics,
+    /// Direct-placement variant of the Kitty Graphics Protocol: same APC wire
+    /// format, but without the Unicode placeholder extension. Images are
+    /// positioned with an explicit CSI cursor move and need explicit delete
+    /// commands. Used by Konsole and Warp.
+    KittyDirectGraphics,
     /// iTerm2 inline image protocol (OSC 1337). Used by WezTerm and iTerm2.
     ItermInline,
     /// Sixel graphics protocol (DCS). Used by Windows Terminal (≥ 1.22).
@@ -291,7 +292,7 @@ impl App {
         }
 
         let popup_open = self.any_modal_overlay_open();
-        if protocol == ImageProtocol::KonsoleGraphics && popup_open {
+        if protocol == ImageProtocol::KittyDirectGraphics && popup_open {
             if self.static_image_overlay_displayed() || self.pdf_overlay_displayed() {
                 return self.clear_preview_overlay();
             }
@@ -496,7 +497,7 @@ pub(in crate::app) fn place_terminal_image(
         ImageProtocol::KittyGraphics => {
             kitty::place_terminal_image_with_kitty_protocol(path, area, excluded)
         }
-        ImageProtocol::KonsoleGraphics => {
+        ImageProtocol::KittyDirectGraphics => {
             konsole::place_terminal_image_with_konsole_protocol(path, area)
         }
         ImageProtocol::ItermInline => {
@@ -515,7 +516,9 @@ pub(in crate::app) fn place_terminal_image(
 pub(in crate::app) fn clear_terminal_images(protocol: ImageProtocol) -> Result<Vec<u8>> {
     match protocol {
         ImageProtocol::KittyGraphics => kitty::clear_terminal_images_with_kitty_protocol(),
-        ImageProtocol::KonsoleGraphics => konsole::clear_terminal_images_with_konsole_protocol(),
+        ImageProtocol::KittyDirectGraphics => {
+            konsole::clear_terminal_images_with_konsole_protocol()
+        }
         // iTerm2 has no clear primitive — the overlay is erased by the next
         // ratatui draw call overwriting the cell region.
         ImageProtocol::ItermInline | ImageProtocol::None => Ok(Vec::new()),

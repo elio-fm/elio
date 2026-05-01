@@ -79,7 +79,7 @@ fn konsole_protocol_uses_kitty_graphics_sequence_for_pngs() {
 
     let output = String::from_utf8(
         crate::app::overlays::inline_image::place_terminal_image(
-            crate::app::overlays::inline_image::ImageProtocol::KonsoleGraphics,
+            crate::app::overlays::inline_image::ImageProtocol::KittyDirectGraphics,
             &path,
             Rect {
                 x: 2,

@@ -53,8 +53,12 @@ pub(in crate::app) fn select_image_protocol(
     match identity {
         TerminalIdentity::Kitty => ImageProtocol::KittyGraphics,
         TerminalIdentity::Ghostty => ImageProtocol::KittyGraphics,
-        TerminalIdentity::Warp => ImageProtocol::KittyGraphics,
-        TerminalIdentity::Konsole => ImageProtocol::KonsoleGraphics,
+        // Warp implements the basic Kitty Graphics transmit-and-place protocol
+        // but not the Unicode placeholder extension that the `KittyGraphics`
+        // path emits (`U=1`). Route Warp through `KittyDirectGraphics`, which uses
+        // direct CSI cursor placement and matches what Warp actually renders.
+        TerminalIdentity::Warp => ImageProtocol::KittyDirectGraphics,
+        TerminalIdentity::Konsole => ImageProtocol::KittyDirectGraphics,
         TerminalIdentity::WezTerm | TerminalIdentity::ITerm2 => ImageProtocol::ItermInline,
         // Foot and Windows Terminal ≥ 1.22 both support Sixel graphics.
         TerminalIdentity::Foot | TerminalIdentity::WindowsTerminal => ImageProtocol::Sixel,
@@ -267,11 +271,11 @@ mod tests {
     fn select_image_protocol_konsole_always_enabled() {
         assert_eq!(
             select_image_protocol(TerminalIdentity::Konsole, false),
-            ImageProtocol::KonsoleGraphics
+            ImageProtocol::KittyDirectGraphics
         );
         assert_eq!(
             select_image_protocol(TerminalIdentity::Konsole, true),
-            ImageProtocol::KonsoleGraphics
+            ImageProtocol::KittyDirectGraphics
         );
     }
 
@@ -292,11 +296,11 @@ mod tests {
     fn select_image_protocol_warp_always_enabled() {
         assert_eq!(
             select_image_protocol(TerminalIdentity::Warp, false),
-            ImageProtocol::KittyGraphics
+            ImageProtocol::KittyDirectGraphics
         );
         assert_eq!(
             select_image_protocol(TerminalIdentity::Warp, true),
-            ImageProtocol::KittyGraphics
+            ImageProtocol::KittyDirectGraphics
         );
     }
 

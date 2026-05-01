@@ -94,10 +94,10 @@ Inline visual previews, including images, covers, thumbnails, and rendered pages
 |---|---|---|
 | [Kitty](https://sw.kovidgoyal.net/kitty/) | Kitty Graphics Protocol | ✓ Auto-detected |
 | [Ghostty](https://ghostty.org/) | Kitty Graphics Protocol | ✓ Auto-detected |
-| [Warp](https://www.warp.dev/) | Kitty Graphics Protocol | ✓ Auto-detected |
+| [Warp](https://www.warp.dev/) | Kitty direct-placement protocol | ✓ Auto-detected |
 | [WezTerm](https://wezfurlong.org/wezterm/) | iTerm2 Inline Protocol | ✓ Auto-detected |
 | [iTerm2](https://iterm2.com/) | iTerm2 Inline Protocol | ✓ Auto-detected |
-| [Konsole](https://konsole.kde.org/) | Kitty-based image protocol | ✓ Auto-detected |
+| [Konsole](https://konsole.kde.org/) | Kitty direct-placement protocol | ✓ Auto-detected |
 | [foot](https://codeberg.org/dnkl/foot) | Sixel | ✓ Auto-detected |
 | [Windows Terminal](https://github.com/microsoft/terminal) | Sixel | ✓ Auto-detected |
 | Alacritty | — | Not supported |

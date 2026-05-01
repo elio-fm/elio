@@ -245,7 +245,7 @@ mod tests {
     fn konsole_png_overlay_uses_source_path_for_direct_display() {
         let (mut app, root, image_path) =
             build_selected_static_image_app("konsole-direct-source", "demo.png");
-        app.preview.terminal_images.protocol = ImageProtocol::KonsoleGraphics;
+        app.preview.terminal_images.protocol = ImageProtocol::KittyDirectGraphics;
         let request = ready_static_image_overlay(&mut app);
         let key = StaticImageKey::from_request(&request);
 
@@ -670,7 +670,7 @@ mod tests {
         let (mut app, root, _image_path) =
             build_selected_static_image_app("konsole-resize-no-clear", "demo.png");
         let request = ready_static_image_overlay(&mut app);
-        app.preview.terminal_images.protocol = ImageProtocol::KonsoleGraphics;
+        app.preview.terminal_images.protocol = ImageProtocol::KittyDirectGraphics;
         app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
             &request,
             request.area,
@@ -811,13 +811,18 @@ mod tests {
     fn open_with_overlay_clears_konsole_image_and_closing_it_redraws_it() {
         let (mut app, root, _image_path) =
             build_selected_static_image_app("konsole-open-with-clear", "demo.png");
-        app.preview.terminal_images.protocol = ImageProtocol::KonsoleGraphics;
+        app.preview.terminal_images.protocol = ImageProtocol::KittyDirectGraphics;
         app.preview.image.selection_activation_delay = Duration::ZERO;
         app.sync_image_preview_selection_activation();
 
         let mut initial = Vec::new();
-        app.present_static_image_overlay(ImageProtocol::KonsoleGraphics, &[], false, &mut initial)
-            .expect("initial Konsole image presentation should succeed");
+        app.present_static_image_overlay(
+            ImageProtocol::KittyDirectGraphics,
+            &[],
+            false,
+            &mut initial,
+        )
+        .expect("initial Konsole image presentation should succeed");
         assert!(app.static_image_overlay_displayed());
 
         app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);

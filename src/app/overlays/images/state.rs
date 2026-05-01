@@ -140,7 +140,7 @@ impl App {
     ) -> bool {
         matches!(
             self.preview.terminal_images.protocol,
-            ImageProtocol::KittyGraphics | ImageProtocol::KonsoleGraphics
+            ImageProtocol::KittyGraphics | ImageProtocol::KittyDirectGraphics
         ) && !request.force_render_to_cache
             && static_image_format_for_overlay_request(request) == Some(StaticImageFormat::Png)
     }
@@ -150,7 +150,7 @@ impl App {
         request: &StaticImageOverlayRequest,
     ) -> bool {
         match self.preview.terminal_images.protocol {
-            ImageProtocol::KittyGraphics | ImageProtocol::KonsoleGraphics => {
+            ImageProtocol::KittyGraphics | ImageProtocol::KittyDirectGraphics => {
                 self.static_image_can_display_directly_now(request)
             }
             ImageProtocol::ItermInline => static_image_supports_iterm_source_passthrough(request),
