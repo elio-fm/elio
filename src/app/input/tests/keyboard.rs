@@ -637,6 +637,8 @@ fn rebound_quit_key_sets_should_quit() {
 fn capital_o_opens_open_with_overlay_for_selected_file() {
     let root = temp_path("open-with-overlay-file");
     fs::write(root.join("document.txt"), "hello").expect("failed to write temp file");
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let _capture_guard = OpenInSystemCaptureGuard::install(root.join("open-capture.txt"));
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);

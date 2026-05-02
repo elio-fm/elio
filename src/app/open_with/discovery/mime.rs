@@ -22,8 +22,23 @@ pub(super) fn detect_mime_type_with_name(
         return None;
     }
 
-    // Slow path: invoke xdg-mime for extensionless or ambiguous files that
-    // need content-based (magic-byte) detection.
+    // Slow path: gio info uses GLib's MIME detection, which agrees with gio open
+    // and handles extensionless or ambiguous files more consistently than
+    // xdg-mime's generic text fallback.
+    let mut cmd = Command::new("gio");
+    cmd.args(["info", "-a", "standard::content-type"]).arg(path);
+    if let Some(out) = run_command_capture_stdout_cancellable(cmd, "open-with-mime-gio", canceled) {
+        let text = String::from_utf8_lossy(&out);
+        if let Some(mime) = parse_gio_content_type(&text) {
+            return Some(mime);
+        }
+    }
+
+    if canceled() {
+        return None;
+    }
+
+    // Fallback: xdg-mime for systems without gio.
     let mut cmd = Command::new("xdg-mime");
     cmd.args(["query", "filetype"]).arg(path);
     if let Some(out) = run_command_capture_stdout_cancellable(cmd, "open-with-mime", canceled) {
@@ -130,6 +145,18 @@ pub(super) fn mime_from_data_dirs(path: &Path, data_dirs: &[PathBuf]) -> Option<
         }
     }
 
+    None
+}
+
+fn parse_gio_content_type(output: &str) -> Option<String> {
+    for line in output.lines() {
+        if let Some(rest) = line.trim().strip_prefix("standard::content-type:") {
+            let mime = rest.trim().to_string();
+            if !mime.is_empty() {
+                return Some(mime);
+            }
+        }
+    }
     None
 }
 
@@ -314,5 +341,30 @@ mod tests {
             Some("image/png"),
             "expected image/png for .png extension"
         );
+    }
+
+    // ── parse_gio_content_type ────────────────────────────────────────────────
+
+    #[test]
+    fn parse_gio_content_type_extracts_mime_from_gio_info_output() {
+        let output = "uri: file:///home/user/Makefile\n\
+                      local path: /home/user/Makefile\n\
+                      attributes:\n\
+                        standard::content-type: text/x-makefile\n";
+        assert_eq!(
+            super::parse_gio_content_type(output).as_deref(),
+            Some("text/x-makefile")
+        );
+    }
+
+    #[test]
+    fn parse_gio_content_type_returns_none_for_missing_attribute() {
+        let output = "uri: file:///home/user/unknown\nattributes:\n";
+        assert!(super::parse_gio_content_type(output).is_none());
+    }
+
+    #[test]
+    fn parse_gio_content_type_handles_empty_output() {
+        assert!(super::parse_gio_content_type("").is_none());
     }
 }
