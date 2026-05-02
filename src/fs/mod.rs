@@ -6,6 +6,7 @@ pub(crate) mod watch;
 
 mod directory;
 mod directory_stats;
+mod opener;
 mod restore;
 mod sort;
 mod trashinfo;
@@ -33,11 +34,9 @@ fn is_hidden_entry(entry: &std::fs::DirEntry) -> bool {
     is_hidden(entry.file_name().as_os_str())
 }
 
-#[cfg(test)]
-pub(crate) use directory::set_open_in_system_capture_for_test;
 pub(crate) use directory::{
-    DirectoryFingerprint, DirectorySnapshot, detached_open_command, load_directory_snapshot,
-    load_directory_snapshot_cancellable, open_in_system, scan_directory_fingerprint_cancellable,
+    DirectoryFingerprint, DirectorySnapshot, load_directory_snapshot,
+    load_directory_snapshot_cancellable, scan_directory_fingerprint_cancellable,
 };
 pub(crate) use directory_stats::{DirectoryStats, DirectoryStatsScanResult, scan_directory_stats};
 pub(crate) use format::{
@@ -45,6 +44,9 @@ pub(crate) use format::{
     rect_contains, sanitize_terminal_text,
 };
 pub(crate) use item_count::count_directory_items;
+#[cfg(test)]
+pub(crate) use opener::set_open_in_system_capture_for_test;
+pub(crate) use opener::{detached_open_command, open_in_system};
 pub(crate) use places::{build_sidebar_rows, home_dir, trash_dir};
 pub(crate) use restore::restore_trash_item;
 #[cfg(target_os = "macos")]
