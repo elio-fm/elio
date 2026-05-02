@@ -180,7 +180,7 @@ See [Image Previews](#image-previews) and [Optional Preview Tools](#optional-pre
 
 ### Opening Files
 
-`Enter` enters folders and opens files with the system default application. `o` always opens the selected file or folder externally using the system launcher: `open` on macOS, `cmd /c start` on Windows, and `xdg-open` or `gio` on Linux and BSD desktop sessions.
+`Enter` enters folders and opens files with the system default application. `o` always opens the selected file or folder externally using the system launcher: `open` on macOS, `cmd /c start` on Windows, and `gio` (with `xdg-open` as fallback) on Linux and BSD desktop sessions.
 
 `O` is for files. On macOS and Linux/BSD desktop sessions, elio discovers matching applications, opens the file directly when there is one match, and shows the Open With chooser when there are multiple. Terminal apps such as `nvim` are supported too. When no match is found, or on platforms without app discovery, elio falls back to the default opener.
 
