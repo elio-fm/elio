@@ -548,7 +548,8 @@ fn comic_zip_preview_reads_comic_book_info_zip_comment() {
     zip.write_all(b"page").expect("failed to write page entry");
     zip.set_comment(
         r#"{"appID":"FixtureReader/1","ComicBookInfo/1.0":{"series":"Aurora Riders","title":"First Light","issue":"1","publisher":"Elio Press","publicationYear":1958,"genre":"Sci-Fi","credits":[{"role":"Writer","person":"Lee Maven"}]}}"#,
-    );
+    )
+    .expect("failed to set comic zip comment");
     zip.finish().expect("failed to finish comic zip");
 
     let preview = build_preview(&file_entry(path));
