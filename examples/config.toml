@@ -62,19 +62,21 @@ show_top_bar = false
 # Omit any key to keep the built-in default shown in the comment.
 #
 # [keys]
-# quit              = "q"
-# yank              = "y"
-# cut               = "x"
-# paste             = "p"
-# trash             = "d"
-# create            = "a"
-# rename            = "r"
-# copy_path         = "c"
-# search_folders    = "f"
-# open              = "o"
-# open_with         = "O"
-# sort              = "s"
-# toggle_view       = "v"
-# toggle_hidden     = "."
-# scroll_preview_left  = "<"
-# scroll_preview_right = ">"
+# quit                 = "q"
+# yank                 = "y"
+# cut                  = "x"
+# paste                = "p"
+# trash                = "d"
+# create               = "a"
+# rename               = "r"
+# copy_path            = "c"
+# search_folders       = "f"
+# open                 = "o"
+# open_with            = "O"
+# sort                 = "s"
+# toggle_view          = "v"
+# toggle_hidden        = "."
+# scroll_preview_up    = "K"   # Shift+K
+# scroll_preview_down  = "J"   # Shift+J
+# scroll_preview_left  = "H"   # Shift+H
+# scroll_preview_right = "L"   # Shift+L

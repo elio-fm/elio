@@ -55,13 +55,20 @@ pub(super) fn render_help(
         e(&kb.open.to_string(), "open with default app"),
         e(&kb.open_with.to_string(), "open with"),
     ];
-    let scroll_key = format!("{} / {}", kb.scroll_preview_left, kb.scroll_preview_right);
     let view_entries = vec![
         e(&kb.toggle_view.to_string(), "toggle grid / list"),
         e("+ / -", "grid zoom in / out"),
         e(&kb.toggle_hidden.to_string(), "toggle dotfiles"),
         e(&kb.sort.to_string(), "cycle sort"),
-        e(&scroll_key, "scroll preview left / right"),
+    ];
+    let preview_vertical_key =
+        format_preview_scroll_key(kb.scroll_preview_up, kb.scroll_preview_down);
+    let preview_horizontal_key =
+        format_preview_scroll_key(kb.scroll_preview_left, kb.scroll_preview_right);
+    let preview_entries = vec![
+        e(&preview_vertical_key, "step page or scroll"),
+        e("[ / ]", "step page or scroll"),
+        e(&preview_horizontal_key, "scroll left / right"),
     ];
     let mouse_entries = vec![
         e("Click", "select item"),
@@ -79,18 +86,22 @@ pub(super) fn render_help(
             entries: search_entries,
         },
         HelpSection {
-            title: "Mouse",
-            entries: mouse_entries,
+            title: "Selection & Clipboard",
+            entries: clipboard_entries,
         },
     ];
     let right_sections = vec![
+        HelpSection {
+            title: "Mouse",
+            entries: mouse_entries,
+        },
         HelpSection {
             title: "File Actions",
             entries: files_entries,
         },
         HelpSection {
-            title: "Selection & Clipboard",
-            entries: clipboard_entries,
+            title: "Preview",
+            entries: preview_entries,
         },
         HelpSection {
             title: "View",
@@ -98,7 +109,7 @@ pub(super) fn render_help(
         },
     ];
 
-    let popup = helpers::centered_rect(area, 88, 26);
+    let popup = helpers::centered_rect(area, 90, 30);
     state.help_panel = Some(popup);
     frame.render_widget(Clear, popup);
     frame.render_widget(
@@ -140,11 +151,13 @@ pub(super) fn render_help(
             Span::raw(" "),
             helpers::chip_span("search", palette.accent_soft, palette.accent_text, true),
             Span::raw(" "),
+            helpers::chip_span("selection", palette.accent_soft, palette.accent_text, true),
+            Span::raw(" "),
             helpers::chip_span("mouse", palette.accent_soft, palette.accent_text, true),
             Span::raw(" "),
             helpers::chip_span("actions", palette.accent_soft, palette.accent_text, true),
             Span::raw(" "),
-            helpers::chip_span("selection", palette.accent_soft, palette.accent_text, true),
+            helpers::chip_span("preview", palette.accent_soft, palette.accent_text, true),
             Span::raw(" "),
             helpers::chip_span("view", palette.accent_soft, palette.accent_text, true),
         ])])
@@ -157,7 +170,7 @@ pub(super) fn render_help(
         .constraints([
             Constraint::Length(39),
             Constraint::Length(3),
-            Constraint::Length(44),
+            Constraint::Length(46),
         ])
         .split(rows[1]);
 
@@ -200,6 +213,16 @@ pub(super) fn render_help(
         .style(Style::default().bg(palette.chrome_alt).fg(palette.muted)),
         rows[2],
     );
+}
+
+/// Render a preview-scroll key pair: defaults like 'H'/'L' show as "Shift+H / Shift+L";
+/// overrides such as '<'/'>' show as "< / >".
+fn format_preview_scroll_key(low: char, high: char) -> String {
+    if low.is_ascii_uppercase() && high.is_ascii_uppercase() {
+        format!("Shift+{low} / Shift+{high}")
+    } else {
+        format!("{low} / {high}")
+    }
 }
 
 struct HelpEntry {

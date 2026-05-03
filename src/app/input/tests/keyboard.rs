@@ -1,5 +1,7 @@
 use super::super::*;
-use super::helpers::{temp_path, wait_for_background_preview, wait_for_directory_load};
+use super::helpers::{
+    temp_path, wait_for_background_preview, wait_for_directory_load, write_epub_fixture,
+};
 use crate::config::Action;
 use std::{
     fs, thread,
@@ -842,4 +844,189 @@ fn confirm_open_with_launch_failure_sets_status() {
     assert_eq!(app.status, "Failed to open with Ghost App");
 
     fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn bracket_keys_scroll_text_preview_vertically() {
+    let root = temp_path("bracket-scroll-text-preview");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let long_file = root.join("long.txt");
+    let contents = (0..120)
+        .map(|i| format!("line {i}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(&long_file, &contents).expect("failed to write long file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.view_mode = ViewMode::List;
+    let long_index = app
+        .navigation
+        .entries
+        .iter()
+        .position(|e| e.path == long_file)
+        .expect("long.txt should be in entries");
+    app.select_index(long_index);
+    app.set_frame_state(FrameState {
+        preview_panel: Some(Rect {
+            x: 21,
+            y: 0,
+            width: 40,
+            height: 20,
+        }),
+        preview_rows_visible: 16,
+        preview_cols_visible: 38,
+        ..FrameState::default()
+    });
+    wait_for_background_preview(&mut app);
+
+    assert_eq!(app.preview.state.scroll, 0, "preview should start at top");
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(']'))))
+        .expect("] should be handled");
+    let after_down = app.preview.state.scroll;
+    assert!(
+        after_down > 0,
+        "] should scroll the text preview down, got {after_down}"
+    );
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('['))))
+        .expect("[ should be handled");
+    assert!(
+        app.preview.state.scroll < after_down,
+        "[ should scroll the text preview back up, got {} (was {after_down})",
+        app.preview.state.scroll
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn shift_j_k_step_epub_sections_on_paged_preview() {
+    let root = temp_path("shift-jk-step-epub-sections");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let archive = root.join("story.epub");
+    write_epub_fixture(
+        &archive,
+        &[
+            ("Opening", "<p>Opening chapter text.</p>"),
+            ("Middle", "<p>Middle chapter text.</p>"),
+            ("Closing", "<p>Closing chapter text.</p>"),
+        ],
+    );
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.view_mode = ViewMode::List;
+    let archive_index = app
+        .navigation
+        .entries
+        .iter()
+        .position(|e| e.path == archive)
+        .expect("story.epub should be in entries");
+    app.select_index(archive_index);
+    wait_for_background_preview(&mut app);
+    app.set_frame_state(FrameState {
+        preview_panel: Some(Rect {
+            x: 21,
+            y: 0,
+            width: 40,
+            height: 20,
+        }),
+        preview_rows_visible: 16,
+        preview_cols_visible: 38,
+        ..FrameState::default()
+    });
+
+    assert_eq!(
+        app.preview.state.content.ebook_section_index,
+        Some(0),
+        "EPUB preview should open on the first section"
+    );
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('J'),
+        KeyModifiers::SHIFT,
+    )))
+    .expect("Shift+J should be handled");
+    assert_eq!(
+        app.preview.state.content.ebook_section_index,
+        Some(1),
+        "Shift+J should step EPUB to the next section"
+    );
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('K'),
+        KeyModifiers::SHIFT,
+    )))
+    .expect("Shift+K should be handled");
+    assert_eq!(
+        app.preview.state.content.ebook_section_index,
+        Some(0),
+        "Shift+K should step EPUB back to the previous section"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn shift_j_k_scroll_text_preview_vertically() {
+    let root = temp_path("shift-jk-scroll-text-preview");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let long_file = root.join("long.txt");
+    let contents = (0..120)
+        .map(|i| format!("line {i}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(&long_file, &contents).expect("failed to write long file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.view_mode = ViewMode::List;
+    let long_index = app
+        .navigation
+        .entries
+        .iter()
+        .position(|e| e.path == long_file)
+        .expect("long.txt should be in entries");
+    app.select_index(long_index);
+    app.set_frame_state(FrameState {
+        preview_panel: Some(Rect {
+            x: 21,
+            y: 0,
+            width: 40,
+            height: 20,
+        }),
+        preview_rows_visible: 16,
+        preview_cols_visible: 38,
+        ..FrameState::default()
+    });
+    wait_for_background_preview(&mut app);
+
+    let selected_before = app.navigation.selected;
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('J'),
+        KeyModifiers::SHIFT,
+    )))
+    .expect("Shift+J should be handled");
+    let after_down = app.preview.state.scroll;
+    assert!(
+        after_down > 0,
+        "Shift+J should scroll the text preview down, got {after_down}"
+    );
+    assert_eq!(
+        app.navigation.selected, selected_before,
+        "Shift+J must not move the file selection"
+    );
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('K'),
+        KeyModifiers::SHIFT,
+    )))
+    .expect("Shift+K should be handled");
+    assert!(
+        app.preview.state.scroll < after_down,
+        "Shift+K should scroll the text preview back up, got {} (was {after_down})",
+        app.preview.state.scroll
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
 }

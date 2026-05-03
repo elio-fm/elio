@@ -338,7 +338,14 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | `+` / `-` | Grid zoom in / out |
 | `.` `*` | Show / hide dotfiles |
 | `s` `*` | Cycle sort (Name → Modified → Size) |
-| `<` / `>` `*` | Scroll preview left / right |
+
+### Preview
+
+| Key | Action |
+|---|---|
+| `Shift+K` / `Shift+J` `*` | Step page (PDF, comic, EPUB) or scroll preview up / down |
+| `Shift+H` / `Shift+L` `*` | Scroll preview left / right |
+| `[` / `]` | Step page (PDF, comic, EPUB) or scroll text/code |
 
 ### Selection and Clipboard
 
