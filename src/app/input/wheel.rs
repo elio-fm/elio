@@ -651,7 +651,7 @@ impl App {
         preview_ready.then_some(WheelTarget::Preview)
     }
 
-    fn scroll_preview_lines(&mut self, delta: isize) -> bool {
+    pub(in crate::app) fn scroll_preview_lines(&mut self, delta: isize) -> bool {
         let previous = self.preview.state.scroll;
         let step = self.preview_scroll_step();
         if delta.is_negative() {

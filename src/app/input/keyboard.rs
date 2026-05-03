@@ -162,12 +162,16 @@ impl App {
                     {
                         return Ok(());
                     }
+                    self.scroll_preview_lines(-1);
+                    return Ok(());
                 }
                 KeyCode::Char(']') => {
                     if self.step_epub_section(1) || self.step_comic_page(1) || self.step_pdf_page(1)
                     {
                         return Ok(());
                     }
+                    self.scroll_preview_lines(1);
+                    return Ok(());
                 }
                 _ => {}
             }
@@ -288,6 +292,20 @@ impl App {
             }
             Action::ScrollPreviewRight => {
                 let _ = self.scroll_preview_columns(1);
+            }
+            Action::ScrollPreviewUp => {
+                if !self.step_epub_section(-1)
+                    && !self.step_comic_page(-1)
+                    && !self.step_pdf_page(-1)
+                {
+                    let _ = self.scroll_preview_lines(-1);
+                }
+            }
+            Action::ScrollPreviewDown => {
+                if !self.step_epub_section(1) && !self.step_comic_page(1) && !self.step_pdf_page(1)
+                {
+                    let _ = self.scroll_preview_lines(1);
+                }
             }
         }
         Ok(())

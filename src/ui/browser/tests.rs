@@ -1175,7 +1175,7 @@ fn help_overlay_keeps_controls_readable_and_drops_auto_reload_row() {
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
     app.overlays.help = true;
-    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("terminal should init");
+    let mut terminal = Terminal::new(TestBackend::new(100, 40)).expect("terminal should init");
 
     draw_ui(&mut terminal, &mut app);
     let rendered = buffer_text(terminal.backend().buffer());
@@ -1199,6 +1199,22 @@ fn help_overlay_keeps_controls_readable_and_drops_auto_reload_row() {
     assert!(
         rendered.contains("Wheel              scroll"),
         "expected help overlay to describe wheel routing accurately, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("Preview"),
+        "expected help overlay to include the Preview section header, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("Shift+K / Shift+J"),
+        "expected help overlay to list the vertical preview scroll keys, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("View"),
+        "expected help overlay to include the View section header, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("toggle grid / list"),
+        "expected help overlay to keep View entries visible, got: {rendered:?}"
     );
     assert!(
         !rendered.contains("Double clickopen"),

@@ -19,6 +19,8 @@ pub(crate) enum Action {
     ToggleHidden,
     ScrollPreviewLeft,
     ScrollPreviewRight,
+    ScrollPreviewUp,
+    ScrollPreviewDown,
 }
 
 /// Single-character key bindings for browser actions.
@@ -42,6 +44,8 @@ pub(crate) struct KeyBindings {
     pub toggle_hidden: char,
     pub scroll_preview_left: char,
     pub scroll_preview_right: char,
+    pub scroll_preview_up: char,
+    pub scroll_preview_down: char,
 }
 
 /// Characters that are hard-wired to non-configurable actions and may not be
@@ -72,8 +76,10 @@ impl Default for KeyBindings {
             sort: 's',
             toggle_view: 'v',
             toggle_hidden: '.',
-            scroll_preview_left: '<',
-            scroll_preview_right: '>',
+            scroll_preview_left: 'H',
+            scroll_preview_right: 'L',
+            scroll_preview_up: 'K',
+            scroll_preview_down: 'J',
         }
     }
 }
@@ -96,6 +102,8 @@ pub(super) struct KeysConfigOverride {
     toggle_hidden: Option<String>,
     scroll_preview_left: Option<String>,
     scroll_preview_right: Option<String>,
+    scroll_preview_up: Option<String>,
+    scroll_preview_down: Option<String>,
 }
 
 impl KeyBindings {
@@ -118,6 +126,8 @@ impl KeyBindings {
             _ if c == self.toggle_hidden => Some(Action::ToggleHidden),
             _ if c == self.scroll_preview_left => Some(Action::ScrollPreviewLeft),
             _ if c == self.scroll_preview_right => Some(Action::ScrollPreviewRight),
+            _ if c == self.scroll_preview_up => Some(Action::ScrollPreviewUp),
+            _ if c == self.scroll_preview_down => Some(Action::ScrollPreviewDown),
             _ => None,
         }
     }
@@ -135,7 +145,7 @@ impl KeyBindings {
 
     pub(super) fn from_override(overrides: KeysConfigOverride, defaults: &Self) -> Self {
         // Each entry: (field_name, user_override_string, default_char)
-        let raw: [(&str, Option<String>, char); 16] = [
+        let raw: [(&str, Option<String>, char); 18] = [
             ("quit", overrides.quit, defaults.quit),
             ("yank", overrides.yank, defaults.yank),
             ("cut", overrides.cut, defaults.cut),
@@ -168,12 +178,22 @@ impl KeyBindings {
                 overrides.scroll_preview_right,
                 defaults.scroll_preview_right,
             ),
+            (
+                "scroll_preview_up",
+                overrides.scroll_preview_up,
+                defaults.scroll_preview_up,
+            ),
+            (
+                "scroll_preview_down",
+                overrides.scroll_preview_down,
+                defaults.scroll_preview_down,
+            ),
         ];
 
         // Step 1: parse each override string independently, falling back to
         // default on any format or reserved-char error.
         // (resolved_char, is_user_set)
-        let mut candidates: [(char, bool); 16] = [(' ', false); 16];
+        let mut candidates: [(char, bool); 18] = [(' ', false); 18];
         for (index, (name, override_str, default)) in raw.iter().enumerate() {
             candidates[index] = match override_str {
                 None => (*default, false),
@@ -212,12 +232,12 @@ impl KeyBindings {
         // binding does not silently leave a conflict with another.
         loop {
             let mut changed = false;
-            for index in 0..16 {
+            for index in 0..18 {
                 if !candidates[index].1 {
                     continue;
                 }
                 let candidate = candidates[index].0;
-                let collision = (0..16)
+                let collision = (0..18)
                     .filter(|&other_index| other_index != index)
                     .any(|other_index| candidates[other_index].0 == candidate);
                 if collision {
@@ -263,6 +283,8 @@ impl KeyBindings {
             toggle_hidden: resolved(13),
             scroll_preview_left: resolved(14),
             scroll_preview_right: resolved(15),
+            scroll_preview_up: resolved(16),
+            scroll_preview_down: resolved(17),
         }
     }
 }

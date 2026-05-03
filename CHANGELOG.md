@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added an optional startup directory argument, so `elio <directory>` opens that directory and invalid or non-directory paths return a clear error.
+- Added keyboard-driven preview scrolling that mirrors `[` / `]`: `Shift+K` / `Shift+J` (configurable) step pages on PDF, comic, and EPUB previews and otherwise scroll the preview up / down. `[` / `]` now also scrolls text/code/log previews while keeping its page-step behavior on paged previews. ([#79])
+- Added a dedicated Preview section to the help overlay (`?`) listing the new vertical scroll keys, `[` / `]` page-stepping, and the horizontal scroll keys, and rebalanced the overlay columns so both sides end at the same height.
+
+### Changed
+
+- Changed the default horizontal preview scroll bindings from `<` / `>` to `Shift+H` / `Shift+L` so all four preview scroll directions share a consistent vim-style modifier pattern. Existing `scroll_preview_left` / `scroll_preview_right` overrides in `config.toml` continue to work unchanged.
 
 ### Fixed
 
@@ -103,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#79]: https://github.com/elio-fm/elio/issues/79
 [#77]: https://github.com/elio-fm/elio/pull/77
 [#75]: https://github.com/elio-fm/elio/issues/75
 [#74]: https://github.com/elio-fm/elio/pull/74
