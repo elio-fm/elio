@@ -77,7 +77,20 @@ fn open_unix_preferring_gio_impl(target: &Path, gio: &str, xdg_open: &str) -> Re
     // in some sessions. Use a 250ms bounded wait so gio's synchronous failures
     // can fall back. Longer-running portal startup is detached to keep opening
     // responsive; late failures after that point cannot fall back.
-    match gio_open(gio, target) {
+    open_unix_preferring_gio_with(
+        gio,
+        || gio_open(gio, target),
+        || open_with_unix_backends(target, &[(xdg_open, &[][..])]),
+    )
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn open_unix_preferring_gio_with(
+    gio: &str,
+    gio_open: impl FnOnce() -> io::Result<()>,
+    fallback_open: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    match gio_open() {
         Ok(()) => return Ok(()),
         Err(e)
             if matches!(
@@ -89,7 +102,7 @@ fn open_unix_preferring_gio_impl(target: &Path, gio: &str, xdg_open: &str) -> Re
             ) => {}
         Err(e) => return Err(format!("{gio}: {e}")),
     }
-    open_with_unix_backends(target, &[(xdg_open, &[][..])])
+    fallback_open()
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -108,11 +121,20 @@ fn gio_open_with_deadline(
     deadline_duration: std::time::Duration,
     poll: std::time::Duration,
 ) -> io::Result<()> {
+    let mut command = Command::new(program);
+    command.arg("open").arg(target);
+    spawn_with_deadline(command, deadline_duration, poll)
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn spawn_with_deadline(
+    mut command: Command,
+    deadline_duration: std::time::Duration,
+    poll: std::time::Duration,
+) -> io::Result<()> {
     use std::time::Instant;
 
-    let mut child = Command::new(program)
-        .arg("open")
-        .arg(target)
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -275,24 +297,19 @@ mod tests {
     #[test]
     #[cfg(all(unix, not(target_os = "macos")))]
     fn open_with_unix_backends_uses_first_available_backend() {
-        use std::os::unix::fs::PermissionsExt;
-
         let root = temp_path("open-backends-first");
         fs::create_dir_all(&root).expect("failed to create temp root");
 
         let capture = root.join("capture.txt");
-
-        let script = root.join("fake-xdg-open");
-        fs::write(&script, "#!/bin/sh\nprintf 'xdg-open' > \"$1\"\n")
-            .expect("failed to write script");
-        let mut perms = fs::metadata(&script).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&script, perms).unwrap();
+        let capture_str = capture
+            .to_str()
+            .expect("capture path should be valid utf-8");
+        let cmd = format!("printf 'xdg-open' > {}", shell_quote(capture_str));
 
         let result = open_with_unix_backends(
             &capture,
             &[
-                (script.to_str().unwrap(), &[][..]),
+                ("/bin/sh", &["-c", &cmd][..]),
                 ("this-program-does-not-exist-elio", &[][..]),
             ],
         );
@@ -423,169 +440,80 @@ mod tests {
     #[test]
     #[cfg(all(unix, not(target_os = "macos")))]
     fn open_unix_preferring_gio_uses_gio_when_available() {
-        use std::os::unix::fs::PermissionsExt;
+        use std::cell::Cell;
 
-        let root = temp_path("open-gio-preferred");
-        fs::create_dir_all(&root).expect("failed to create temp root");
-
-        let capture = root.join("capture.txt");
-        let capture_str = capture.to_str().unwrap();
-
-        // fake-gio is invoked as: fake-gio open <target>; we only assert which binary ran.
-        let fake_gio = root.join("fake-gio");
-        let cmd = format!("printf 'gio' > {}", shell_quote(capture_str));
-        fs::write(&fake_gio, format!("#!/bin/sh\n{}\n", cmd)).expect("failed to write fake-gio");
-        let mut perms = fs::metadata(&fake_gio).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&fake_gio, perms).unwrap();
-
-        let fake_xdg = root.join("fake-xdg-open");
-        let xdg_cmd = format!("printf 'xdg-open' > {}", shell_quote(capture_str));
-        fs::write(&fake_xdg, format!("#!/bin/sh\n{}\n", xdg_cmd))
-            .expect("failed to write fake-xdg-open");
-        let mut perms = fs::metadata(&fake_xdg).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&fake_xdg, perms).unwrap();
-
-        let result = open_unix_preferring_gio_impl(
-            &capture,
-            fake_gio.to_str().unwrap(),
-            fake_xdg.to_str().unwrap(),
+        let fallback_called = Cell::new(false);
+        let result = open_unix_preferring_gio_with(
+            "gio",
+            || Ok(()),
+            || {
+                fallback_called.set(true);
+                Ok(())
+            },
         );
 
         assert!(result.is_ok(), "expected Ok, got {result:?}");
-
-        // gio exited within the bounded-wait window, so capture is already written.
-        let recorded = fs::read_to_string(&capture).unwrap_or_default();
-        assert_eq!(
-            recorded.trim(),
-            "gio",
-            "gio should have been used, not xdg-open"
-        );
-
-        fs::remove_dir_all(root).expect("failed to remove temp root");
+        assert!(!fallback_called.get(), "fallback should not run");
     }
 
     #[test]
     #[cfg(all(unix, not(target_os = "macos")))]
     fn open_unix_preferring_gio_falls_back_when_gio_missing() {
-        let root = temp_path("open-gio-missing-fallback");
-        fs::create_dir_all(&root).expect("failed to create temp root");
+        use std::cell::Cell;
 
-        let capture = root.join("capture.txt");
-        let capture_str = capture.to_str().unwrap();
-
-        let fake_xdg = root.join("fake-xdg-open");
-        let cmd = format!("printf 'xdg-open' > {}", shell_quote(capture_str));
-        fs::write(&fake_xdg, format!("#!/bin/sh\n{}\n", cmd))
-            .expect("failed to write fake-xdg-open");
-        let mut perms = fs::metadata(&fake_xdg).unwrap().permissions();
-        use std::os::unix::fs::PermissionsExt;
-        perms.set_mode(0o755);
-        fs::set_permissions(&fake_xdg, perms).unwrap();
-
-        let result = open_unix_preferring_gio_impl(
-            &capture,
-            "this-program-does-not-exist-elio-gio",
-            fake_xdg.to_str().unwrap(),
+        let fallback_called = Cell::new(false);
+        let result = open_unix_preferring_gio_with(
+            "gio",
+            || Err(io::Error::new(io::ErrorKind::NotFound, "missing")),
+            || {
+                fallback_called.set(true);
+                Ok(())
+            },
         );
 
         assert!(result.is_ok(), "expected Ok after fallback, got {result:?}");
-
-        // xdg-open is detached (spawned), so poll for the write.
-        let mut recorded = String::new();
-        for _ in 0..300 {
-            match fs::read_to_string(&capture) {
-                Ok(s) if !s.is_empty() => {
-                    recorded = s;
-                    break;
-                }
-                _ => {}
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-
-        assert_eq!(recorded.trim(), "xdg-open");
-
-        fs::remove_dir_all(root).expect("failed to remove temp root");
+        assert!(fallback_called.get(), "fallback should run");
     }
 
     #[test]
     #[cfg(all(unix, not(target_os = "macos")))]
     fn open_unix_preferring_gio_falls_back_when_gio_exits_nonzero() {
-        use std::os::unix::fs::PermissionsExt;
+        use std::cell::Cell;
 
-        let root = temp_path("open-gio-nonzero-fallback");
-        fs::create_dir_all(&root).expect("failed to create temp root");
-
-        let capture = root.join("capture.txt");
-        let capture_str = capture.to_str().unwrap();
-
-        // gio exits 1 (no handler found)
-        let fake_gio = root.join("fake-gio-fail");
-        fs::write(&fake_gio, "#!/bin/sh\nexit 1\n").expect("failed to write fake-gio");
-        let mut perms = fs::metadata(&fake_gio).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&fake_gio, perms).unwrap();
-
-        let fake_xdg = root.join("fake-xdg-open");
-        let cmd = format!("printf 'xdg-open' > {}", shell_quote(capture_str));
-        fs::write(&fake_xdg, format!("#!/bin/sh\n{}\n", cmd))
-            .expect("failed to write fake-xdg-open");
-        let mut perms = fs::metadata(&fake_xdg).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&fake_xdg, perms).unwrap();
-
-        let result = open_unix_preferring_gio_impl(
-            &capture,
-            fake_gio.to_str().unwrap(),
-            fake_xdg.to_str().unwrap(),
+        let fallback_called = Cell::new(false);
+        let result = open_unix_preferring_gio_with(
+            "gio",
+            || Err(io::Error::other("process exited with exit status: 1")),
+            || {
+                fallback_called.set(true);
+                Ok(())
+            },
         );
 
         assert!(result.is_ok(), "expected Ok after fallback, got {result:?}");
-
-        let mut recorded = String::new();
-        for _ in 0..300 {
-            match fs::read_to_string(&capture) {
-                Ok(s) if !s.is_empty() => {
-                    recorded = s;
-                    break;
-                }
-                _ => {}
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-
-        assert_eq!(recorded.trim(), "xdg-open");
-
-        fs::remove_dir_all(root).expect("failed to remove temp root");
+        assert!(fallback_called.get(), "fallback should run");
     }
 
     #[test]
     #[cfg(all(unix, not(target_os = "macos")))]
     fn gio_open_detaches_when_deadline_expires() {
-        use std::os::unix::fs::PermissionsExt;
-
         let root = temp_path("open-gio-timeout-detach");
         fs::create_dir_all(&root).expect("failed to create temp root");
 
         let capture = root.join("capture.txt");
         let capture_str = capture.to_str().unwrap();
 
-        // fake-gio sleeps past the injected deadline before writing. Use whole
-        // seconds because fractional sleep is not portable across all Unix shells.
-        let fake_gio = root.join("fake-gio-slow");
+        // Use a stable shell binary instead of a freshly written fake
+        // executable. This test is about deadline/detach behavior, not opener
+        // discovery, and immediate write→exec of test scripts can hit ETXTBSY
+        // on some Linux filesystems.
         let cmd = format!("sleep 1; printf 'gio' > {}", shell_quote(capture_str));
-        fs::write(&fake_gio, format!("#!/bin/sh\n{}\n", cmd))
-            .expect("failed to write fake-gio-slow");
-        let mut perms = fs::metadata(&fake_gio).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&fake_gio, perms).unwrap();
+        let mut command = Command::new("/bin/sh");
+        command.arg("-c").arg(cmd);
 
         let started = std::time::Instant::now();
-        let result = gio_open_with_deadline(
-            fake_gio.to_str().unwrap(),
-            &capture,
+        let result = spawn_with_deadline(
+            command,
             std::time::Duration::from_millis(50),
             std::time::Duration::from_millis(5),
         );
@@ -597,10 +525,10 @@ mod tests {
         );
         assert!(
             elapsed < std::time::Duration::from_millis(500),
-            "should return before fake-gio finishes its 1s sleep, took {elapsed:?}"
+            "should return before the opener finishes its 1s sleep, took {elapsed:?}"
         );
 
-        // Reaper thread is still waiting on fake-gio; poll for the eventual write
+        // Reaper thread is still waiting on the opener; poll for the eventual write
         // to confirm the child was detached (not killed) and ran to completion.
         let mut recorded = String::new();
         for _ in 0..300 {
