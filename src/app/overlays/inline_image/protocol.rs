@@ -6,22 +6,39 @@ pub(super) fn pdf_preview_tools_available() -> bool {
 }
 
 pub(in crate::app) fn detect_terminal_identity() -> TerminalIdentity {
-    detect_terminal_identity_with(real_env_lookup, query_tmux_client_termname, query_tmux_env)
+    detect_terminal_identity_with(
+        real_env_lookup,
+        query_tmux_client_termname,
+        query_tmux_client_env,
+        query_tmux_env,
+    )
 }
 
 /// Inner detection logic with injectable lookups so tests can drive the tmux
-/// fallback without spawning tmux. Direct process env wins; if it returns
-/// `Other` and `$TMUX` is set, recover Kitty/Ghostty by consulting (in order)
-/// the live tmux client `TERM`, the tmux session env, and the tmux server
-/// global env. Other identities are intentionally not recovered via tmux —
-/// adding them needs per-protocol passthrough verification.
+/// fallback without spawning tmux. Direct process env usually wins; the one
+/// exception is a Kitty identity inside tmux, where a stale `KITTY_WINDOW_ID`
+/// can leak from another attached terminal. In tmux, recover supported
+/// identities by consulting (in order) the live tmux client `TERM`, the live
+/// tmux client environment, the tmux session env, and the tmux server global
+/// env.
 fn detect_terminal_identity_with(
     env_lookup: impl Fn(&str) -> Option<String>,
     tmux_client_term: impl Fn() -> Option<String>,
+    tmux_client_env_lookup: impl Fn(&str) -> Option<String>,
     tmux_env_lookup: impl Fn(&str) -> Option<String>,
 ) -> TerminalIdentity {
     let identity = classify_from_env(&env_lookup);
     if identity != TerminalIdentity::Other {
+        if identity == TerminalIdentity::Kitty
+            && let Some(tmux_identity) = recover_direct_graphics_identity_from_tmux(
+                &env_lookup,
+                &tmux_client_term,
+                &tmux_client_env_lookup,
+                &tmux_env_lookup,
+            )
+        {
+            return tmux_identity;
+        }
         return identity;
     }
     if env_lookup("TMUX").is_none() {
@@ -34,10 +51,11 @@ fn detect_terminal_identity_with(
         return id;
     }
 
-    let kitty_window_id_set = tmux_env_lookup("KITTY_WINDOW_ID").is_some();
-    let term_program = tmux_env_lookup("TERM_PROGRAM").unwrap_or_default();
-    let term = tmux_env_lookup("TERM").unwrap_or_default();
-    if let Some(id) = classify_kitty_or_ghostty(&term, &term_program, kitty_window_id_set) {
+    if let Some(id) = classify_supported_tmux_env(&tmux_client_env_lookup) {
+        return id;
+    }
+
+    if let Some(id) = classify_supported_tmux_env(&tmux_env_lookup) {
         return id;
     }
 
@@ -54,7 +72,7 @@ fn classify_from_env(env_lookup: &impl Fn(&str) -> Option<String>) -> TerminalId
         || env_lookup("KONSOLE_DBUS_SERVICE").is_some()
         || env_lookup("KONSOLE_DBUS_WINDOW").is_some();
 
-    if kitty_window_id || term.contains("xterm-kitty") || term_program == "kitty" {
+    if term.contains("xterm-kitty") || term_program == "kitty" {
         TerminalIdentity::Kitty
     } else if term.contains("ghostty") || term_program == "ghostty" {
         TerminalIdentity::Ghostty
@@ -73,6 +91,8 @@ fn classify_from_env(env_lookup: &impl Fn(&str) -> Option<String>) -> TerminalId
         // Konsole exports D-Bus identifiers into child shells so scripts can
         // address the current window/session.
         TerminalIdentity::Konsole
+    } else if kitty_window_id {
+        TerminalIdentity::Kitty
     } else if term == "foot" || term == "foot-extra" {
         // Foot sets TERM=foot or TERM=foot-extra and supports Sixel natively.
         TerminalIdentity::Foot
@@ -104,6 +124,85 @@ fn classify_kitty_or_ghostty(
     }
 }
 
+fn classify_tmux_recovered_identity(
+    term: &str,
+    term_program: &str,
+    kitty_window_id_set: bool,
+    warp_session_id_set: bool,
+    konsole_dbus_set: bool,
+) -> Option<TerminalIdentity> {
+    let term = term.to_ascii_lowercase();
+    let term_program = term_program.to_ascii_lowercase();
+    if term.contains("xterm-kitty") || term_program == "kitty" {
+        Some(TerminalIdentity::Kitty)
+    } else if term.contains("ghostty") || term_program == "ghostty" {
+        Some(TerminalIdentity::Ghostty)
+    } else if term_program.contains("warp") || warp_session_id_set {
+        Some(TerminalIdentity::Warp)
+    } else if konsole_dbus_set {
+        Some(TerminalIdentity::Konsole)
+    } else if kitty_window_id_set {
+        Some(TerminalIdentity::Kitty)
+    } else {
+        None
+    }
+}
+
+fn classify_supported_tmux_env(
+    env_lookup: &impl Fn(&str) -> Option<String>,
+) -> Option<TerminalIdentity> {
+    classify_tmux_recovered_identity(
+        &env_lookup("TERM").unwrap_or_default(),
+        &env_lookup("TERM_PROGRAM").unwrap_or_default(),
+        env_lookup("KITTY_WINDOW_ID").is_some(),
+        env_lookup("WARP_SESSION_ID").is_some(),
+        env_lookup("KONSOLE_DBUS_SESSION").is_some()
+            || env_lookup("KONSOLE_DBUS_SERVICE").is_some()
+            || env_lookup("KONSOLE_DBUS_WINDOW").is_some(),
+    )
+}
+
+fn recover_direct_graphics_identity_from_tmux(
+    env_lookup: &impl Fn(&str) -> Option<String>,
+    tmux_client_term: &impl Fn() -> Option<String>,
+    tmux_client_env_lookup: &impl Fn(&str) -> Option<String>,
+    tmux_env_lookup: &impl Fn(&str) -> Option<String>,
+) -> Option<TerminalIdentity> {
+    env_lookup("TMUX")?;
+    let term = env_lookup("TERM").unwrap_or_default().to_ascii_lowercase();
+    let term_program = env_lookup("TERM_PROGRAM")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !term.contains("tmux") && term_program != "tmux" {
+        return None;
+    }
+
+    // If tmux can identify a Kitty/Ghostty client directly, preserve that
+    // identity. Direct-placement terminals such as Konsole and Warp typically
+    // report only generic xterm-compatible TERM names to tmux.
+    if let Some(client_term) = tmux_client_term()
+        && classify_kitty_or_ghostty(&client_term, "", false).is_some()
+    {
+        return None;
+    }
+
+    if let Some(client_identity) = classify_supported_tmux_env(tmux_client_env_lookup) {
+        return if client_identity == TerminalIdentity::Kitty {
+            None
+        } else {
+            Some(client_identity)
+        };
+    }
+
+    if let Some(session_identity) = classify_supported_tmux_env(tmux_env_lookup)
+        && session_identity != TerminalIdentity::Kitty
+    {
+        return Some(session_identity);
+    }
+
+    None
+}
+
 fn real_env_lookup(name: &str) -> Option<String> {
     // `to_string_lossy` keeps presence-only semantics for non-UTF-8 values:
     // they still produce `Some(_)` rather than collapsing to `None` like
@@ -129,6 +228,44 @@ fn query_tmux_client_termname() -> Option<String> {
     } else {
         Some(trimmed.to_string())
     }
+}
+
+fn query_tmux_client_env(name: &str) -> Option<String> {
+    let pid = query_tmux_client_pid()?;
+    read_process_env(pid, name)
+}
+
+fn query_tmux_client_pid() -> Option<u32> {
+    let output = Command::new("tmux")
+        .args(["display-message", "-p", "#{client_pid}"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    stdout.trim().parse().ok()
+}
+
+#[cfg(target_os = "linux")]
+fn read_process_env(pid: u32, name: &str) -> Option<String> {
+    let environ = fs::read(format!("/proc/{pid}/environ")).ok()?;
+    parse_proc_environ(&environ, name)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn read_process_env(_: u32, _: &str) -> Option<String> {
+    None
+}
+
+fn parse_proc_environ(environ: &[u8], name: &str) -> Option<String> {
+    let mut prefix = name.as_bytes().to_vec();
+    prefix.push(b'=');
+    environ.split(|&byte| byte == 0).find_map(|entry| {
+        entry
+            .strip_prefix(prefix.as_slice())
+            .map(|value| String::from_utf8_lossy(value).into_owned())
+    })
 }
 
 /// Look up `name` in the tmux session environment, then in the server-global
@@ -391,6 +528,19 @@ mod tests {
     }
 
     #[test]
+    fn konsole_dbus_takes_precedence_over_inherited_kitty_window_id() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+
+        unsafe {
+            env::set_var("KITTY_WINDOW_ID", "1");
+            env::set_var("KONSOLE_DBUS_SESSION", "/Sessions/9");
+        }
+
+        assert_eq!(detect_terminal_identity(), TerminalIdentity::Konsole);
+    }
+
+    #[test]
     fn select_image_protocol_konsole_always_enabled() {
         assert_eq!(
             select_image_protocol(TerminalIdentity::Konsole, false),
@@ -425,6 +575,19 @@ mod tests {
             select_image_protocol(TerminalIdentity::Warp, true),
             ImageProtocol::KittyDirectGraphics
         );
+    }
+
+    #[test]
+    fn warp_markers_take_precedence_over_inherited_kitty_window_id() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
+
+        unsafe {
+            env::set_var("KITTY_WINDOW_ID", "1");
+            env::set_var("WARP_SESSION_ID", "123");
+        }
+
+        assert_eq!(detect_terminal_identity(), TerminalIdentity::Warp);
     }
 
     #[test]
@@ -574,6 +737,7 @@ mod tests {
             tmux_set_only("/tmp/tmux-1000/default,123,4"),
             || Some("xterm-kitty".to_string()),
             no_tmux_env_lookup,
+            no_tmux_env_lookup,
         );
         assert_eq!(id, TerminalIdentity::Kitty);
     }
@@ -583,6 +747,7 @@ mod tests {
         let id = detect_terminal_identity_with(
             tmux_set_only("/tmp/tmux-1000/default,123,4"),
             || Some("xterm-ghostty".to_string()),
+            no_tmux_env_lookup,
             no_tmux_env_lookup,
         );
         assert_eq!(id, TerminalIdentity::Ghostty);
@@ -595,6 +760,7 @@ mod tests {
         let id = detect_terminal_identity_with(
             tmux_set_only("/tmp/tmux-1000/default,123,4"),
             no_tmux_client_term,
+            no_tmux_env_lookup,
             |name| {
                 if name == "KITTY_WINDOW_ID" {
                     Some(String::new())
@@ -611,6 +777,7 @@ mod tests {
         let id = detect_terminal_identity_with(
             tmux_set_only("/tmp/tmux-1000/default,123,4"),
             no_tmux_client_term,
+            no_tmux_env_lookup,
             |name| {
                 if name == "TERM_PROGRAM" {
                     Some("ghostty".to_string())
@@ -623,10 +790,68 @@ mod tests {
     }
 
     #[test]
+    fn detect_terminal_identity_inside_tmux_falls_back_to_session_env_warp() {
+        let id = detect_terminal_identity_with(
+            tmux_set_only("/tmp/tmux-1000/default,123,4"),
+            no_tmux_client_term,
+            no_tmux_env_lookup,
+            |name| {
+                if name == "WARP_SESSION_ID" {
+                    Some("123".to_string())
+                } else {
+                    None
+                }
+            },
+        );
+        assert_eq!(id, TerminalIdentity::Warp);
+    }
+
+    #[test]
+    fn detect_terminal_identity_inside_tmux_falls_back_to_session_env_konsole() {
+        let id = detect_terminal_identity_with(
+            tmux_set_only("/tmp/tmux-1000/default,123,4"),
+            no_tmux_client_term,
+            no_tmux_env_lookup,
+            |name| {
+                if name == "KONSOLE_DBUS_SESSION" {
+                    Some("/Sessions/3".to_string())
+                } else {
+                    None
+                }
+            },
+        );
+        assert_eq!(id, TerminalIdentity::Konsole);
+    }
+
+    #[test]
+    fn detect_terminal_identity_inside_tmux_uses_live_client_env_before_session_env() {
+        let id = detect_terminal_identity_with(
+            tmux_set_only("/tmp/tmux-1000/default,123,4"),
+            no_tmux_client_term,
+            |name| {
+                if name == "WARP_SESSION_ID" {
+                    Some("live-client".to_string())
+                } else {
+                    None
+                }
+            },
+            |name| {
+                if name == "KITTY_WINDOW_ID" {
+                    Some("stale-session".to_string())
+                } else {
+                    None
+                }
+            },
+        );
+        assert_eq!(id, TerminalIdentity::Warp);
+    }
+
+    #[test]
     fn detect_terminal_identity_inside_tmux_returns_other_for_generic_client_termname() {
         let id = detect_terminal_identity_with(
             tmux_set_only("/tmp/tmux-1000/default,123,4"),
             || Some("xterm-256color".to_string()),
+            no_tmux_env_lookup,
             no_tmux_env_lookup,
         );
         assert_eq!(id, TerminalIdentity::Other);
@@ -637,6 +862,7 @@ mod tests {
         use std::cell::Cell;
 
         let client_calls = Cell::new(0u32);
+        let client_env_calls = Cell::new(0u32);
         let env_calls = Cell::new(0u32);
         let id = detect_terminal_identity_with(
             |_| None,
@@ -645,43 +871,199 @@ mod tests {
                 Some("xterm-kitty".to_string())
             },
             |_| {
+                client_env_calls.set(client_env_calls.get() + 1);
+                Some(String::new())
+            },
+            |_| {
                 env_calls.set(env_calls.get() + 1);
                 Some(String::new())
             },
         );
         assert_eq!(id, TerminalIdentity::Other);
         assert_eq!(client_calls.get(), 0);
+        assert_eq!(client_env_calls.get(), 0);
         assert_eq!(env_calls.get(), 0);
     }
 
     #[test]
-    fn detect_terminal_identity_direct_env_takes_precedence_over_tmux_lookups() {
+    fn detect_terminal_identity_non_kitty_direct_env_takes_precedence_over_tmux_lookups() {
         use std::cell::Cell;
 
         let client_calls = Cell::new(0u32);
+        let client_env_calls = Cell::new(0u32);
         let env_calls = Cell::new(0u32);
         let id = detect_terminal_identity_with(
             |name| match name {
                 "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
-                "KITTY_WINDOW_ID" => Some(String::new()),
+                "TERM_PROGRAM" => Some("ghostty".to_string()),
                 _ => None,
             },
             || {
                 client_calls.set(client_calls.get() + 1);
-                Some("xterm-ghostty".to_string())
+                Some("xterm-kitty".to_string())
+            },
+            |_| {
+                client_env_calls.set(client_env_calls.get() + 1);
+                None
             },
             |_| {
                 env_calls.set(env_calls.get() + 1);
                 None
             },
         );
-        assert_eq!(id, TerminalIdentity::Kitty);
+        assert_eq!(id, TerminalIdentity::Ghostty);
         assert_eq!(
             client_calls.get(),
             0,
-            "tmux helpers should not run when direct env detection succeeds"
+            "tmux helpers should not run when non-Kitty direct env detection succeeds"
         );
+        assert_eq!(client_env_calls.get(), 0);
         assert_eq!(env_calls.get(), 0);
+    }
+
+    #[test]
+    fn detect_terminal_identity_recovers_warp_from_tmux_when_stale_kitty_marker_leaks() {
+        let id = detect_terminal_identity_with(
+            |name| match name {
+                "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+                "TERM" => Some("tmux-256color".to_string()),
+                "TERM_PROGRAM" => Some("tmux".to_string()),
+                "KITTY_WINDOW_ID" => Some("1".to_string()),
+                _ => None,
+            },
+            || Some("xterm-256color".to_string()),
+            no_tmux_env_lookup,
+            |name| {
+                if name == "WARP_SESSION_ID" {
+                    Some("123".to_string())
+                } else {
+                    None
+                }
+            },
+        );
+        assert_eq!(id, TerminalIdentity::Warp);
+    }
+
+    #[test]
+    fn detect_terminal_identity_recovers_warp_from_live_client_env_when_stale_kitty_marker_leaks() {
+        let id = detect_terminal_identity_with(
+            |name| match name {
+                "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+                "TERM" => Some("tmux-256color".to_string()),
+                "TERM_PROGRAM" => Some("tmux".to_string()),
+                "KITTY_WINDOW_ID" => Some("1".to_string()),
+                _ => None,
+            },
+            || Some("xterm-256color".to_string()),
+            |name| {
+                if name == "WARP_SESSION_ID" {
+                    Some("live-client".to_string())
+                } else {
+                    None
+                }
+            },
+            no_tmux_env_lookup,
+        );
+        assert_eq!(id, TerminalIdentity::Warp);
+    }
+
+    #[test]
+    fn detect_terminal_identity_recovers_konsole_from_tmux_when_stale_kitty_marker_leaks() {
+        let id = detect_terminal_identity_with(
+            |name| match name {
+                "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+                "TERM" => Some("tmux-256color".to_string()),
+                "TERM_PROGRAM" => Some("tmux".to_string()),
+                "KITTY_WINDOW_ID" => Some("1".to_string()),
+                _ => None,
+            },
+            || Some("xterm-256color".to_string()),
+            no_tmux_env_lookup,
+            |name| {
+                if name == "KONSOLE_DBUS_SESSION" {
+                    Some("/Sessions/3".to_string())
+                } else {
+                    None
+                }
+            },
+        );
+        assert_eq!(id, TerminalIdentity::Konsole);
+    }
+
+    #[test]
+    fn detect_terminal_identity_recovers_konsole_from_live_client_env_when_stale_kitty_marker_leaks()
+     {
+        let id = detect_terminal_identity_with(
+            |name| match name {
+                "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+                "TERM" => Some("tmux-256color".to_string()),
+                "TERM_PROGRAM" => Some("tmux".to_string()),
+                "KITTY_WINDOW_ID" => Some("1".to_string()),
+                _ => None,
+            },
+            || Some("xterm-256color".to_string()),
+            |name| {
+                if name == "KONSOLE_DBUS_SESSION" {
+                    Some("/Sessions/live".to_string())
+                } else {
+                    None
+                }
+            },
+            no_tmux_env_lookup,
+        );
+        assert_eq!(id, TerminalIdentity::Konsole);
+    }
+
+    #[test]
+    fn detect_terminal_identity_keeps_kitty_when_tmux_client_reports_kitty() {
+        let id = detect_terminal_identity_with(
+            |name| match name {
+                "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+                "TERM" => Some("tmux-256color".to_string()),
+                "TERM_PROGRAM" => Some("tmux".to_string()),
+                "KITTY_WINDOW_ID" => Some("1".to_string()),
+                _ => None,
+            },
+            || Some("xterm-kitty".to_string()),
+            no_tmux_env_lookup,
+            |name| {
+                if name == "WARP_SESSION_ID" {
+                    Some("stale".to_string())
+                } else {
+                    None
+                }
+            },
+        );
+        assert_eq!(id, TerminalIdentity::Kitty);
+    }
+
+    #[test]
+    fn detect_terminal_identity_keeps_live_client_kitty_over_stale_session_warp() {
+        let id = detect_terminal_identity_with(
+            |name| match name {
+                "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+                "TERM" => Some("tmux-256color".to_string()),
+                "TERM_PROGRAM" => Some("tmux".to_string()),
+                "KITTY_WINDOW_ID" => Some("1".to_string()),
+                _ => None,
+            },
+            || Some("xterm-256color".to_string()),
+            |name| {
+                if name == "KITTY_WINDOW_ID" {
+                    Some("live-client".to_string())
+                } else {
+                    None
+                }
+            },
+            |name| {
+                if name == "WARP_SESSION_ID" {
+                    Some("stale-session".to_string())
+                } else {
+                    None
+                }
+            },
+        );
+        assert_eq!(id, TerminalIdentity::Kitty);
     }
 
     #[test]
@@ -703,5 +1085,19 @@ mod tests {
             parse_show_environment_line("OTHER=value\nKITTY_WINDOW_ID=7\n", "KITTY_WINDOW_ID"),
             Some("7".to_string())
         );
+    }
+
+    #[test]
+    fn parse_proc_environ_handles_present_empty_and_missing_values() {
+        let environ = b"TERM=xterm-256color\0WARP_SESSION_ID=123\0KITTY_WINDOW_ID=\0";
+        assert_eq!(
+            parse_proc_environ(environ, "WARP_SESSION_ID"),
+            Some("123".to_string())
+        );
+        assert_eq!(
+            parse_proc_environ(environ, "KITTY_WINDOW_ID"),
+            Some(String::new())
+        );
+        assert_eq!(parse_proc_environ(environ, "KONSOLE_DBUS_SESSION"), None);
     }
 }

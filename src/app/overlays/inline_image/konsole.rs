@@ -7,10 +7,33 @@ use std::{
     path::Path,
 };
 
+use super::tmux::{self, TmuxPaneOrigin};
+
 pub(super) fn place_terminal_image_with_konsole_protocol(
     path: &Path,
     area: Rect,
 ) -> Result<Vec<u8>> {
+    let id = konsole_image_id();
+    if tmux::inside_tmux() {
+        let origin = tmux::query_pane_origin()
+            .ok_or_else(|| anyhow::anyhow!("tmux pane origin unavailable"))?;
+        return build_konsole_tmux_placement_sequence(path, id, area, origin);
+    }
+    build_konsole_placement_sequence(path, id, area)
+}
+
+pub(super) fn clear_terminal_images_with_konsole_protocol() -> Result<Vec<u8>> {
+    let raw = build_konsole_clear_sequence(konsole_image_id())
+        .as_bytes()
+        .to_vec();
+    if tmux::inside_tmux() {
+        Ok(tmux::wrap_sequence_for_tmux(&raw))
+    } else {
+        Ok(raw)
+    }
+}
+
+fn build_konsole_placement_sequence(path: &Path, id: u32, area: Rect) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     let _ = write!(
         out,
@@ -18,21 +41,49 @@ pub(super) fn place_terminal_image_with_konsole_protocol(
         area.y.saturating_add(1),
         area.x.saturating_add(1)
     );
-    out.extend(build_konsole_upload_sequence(
-        path,
-        konsole_image_id(),
-        area,
-    )?);
+    for chunk in build_konsole_upload_chunks(path, id, area)? {
+        out.extend(chunk);
+    }
     Ok(out)
 }
 
-pub(super) fn clear_terminal_images_with_konsole_protocol() -> Result<Vec<u8>> {
-    Ok(build_konsole_clear_sequence(konsole_image_id())
-        .as_bytes()
-        .to_vec())
+fn build_konsole_tmux_placement_sequence(
+    path: &Path,
+    id: u32,
+    area: Rect,
+    origin: TmuxPaneOrigin,
+) -> Result<Vec<u8>> {
+    let (row, col) = origin.absolute_cursor_for(area);
+    let mut chunks = build_konsole_upload_chunks(path, id, area)?
+        .into_iter()
+        .peekable();
+    let mut out = Vec::new();
+    while let Some(chunk) = chunks.next() {
+        if chunks.peek().is_some() {
+            out.extend(tmux::wrap_sequence_for_tmux(&chunk));
+        } else {
+            // Direct placement uses the cursor position when the final m=0
+            // chunk arrives, so move the outer terminal cursor in the same
+            // passthrough envelope as that final chunk.
+            let mut final_chunk = Vec::new();
+            let _ = write!(final_chunk, "\x1b[{row};{col}H");
+            final_chunk.extend(chunk);
+            out.extend(tmux::wrap_sequence_for_tmux(&final_chunk));
+        }
+    }
+    Ok(out)
 }
 
+#[cfg(test)]
 fn build_konsole_upload_sequence(path: &Path, id: u32, area: Rect) -> Result<Vec<u8>> {
+    let mut out = Vec::new();
+    for chunk in build_konsole_upload_chunks(path, id, area)? {
+        out.extend(chunk);
+    }
+    Ok(out)
+}
+
+fn build_konsole_upload_chunks(path: &Path, id: u32, area: Rect) -> Result<Vec<Vec<u8>>> {
     let mut file = File::open(path)
         .with_context(|| format!("failed to open Konsole preview image {}", path.display()))?;
     let total = file
@@ -45,7 +96,7 @@ fn build_konsole_upload_sequence(path: &Path, id: u32, area: Rect) -> Result<Vec
 
     let mut sent = 0usize;
     let mut chunk = vec![0u8; 3 * 4096 / 4];
-    let mut out = Vec::new();
+    let mut chunks = Vec::new();
     while sent < total {
         let remaining = total.saturating_sub(sent);
         let chunk_len = remaining.min(chunk.len());
@@ -54,6 +105,7 @@ fn build_konsole_upload_sequence(path: &Path, id: u32, area: Rect) -> Result<Vec
         sent += chunk_len;
         let more = sent < total;
         let payload = base64::engine::general_purpose::STANDARD.encode(&chunk[..chunk_len]);
+        let mut out = Vec::new();
         if sent == chunk_len {
             write!(
                 out,
@@ -69,8 +121,9 @@ fn build_konsole_upload_sequence(path: &Path, id: u32, area: Rect) -> Result<Vec
                 if more { 1 } else { 0 },
             )?;
         }
+        chunks.push(out);
     }
-    Ok(out)
+    Ok(chunks)
 }
 
 fn build_konsole_clear_sequence(id: u32) -> String {
@@ -155,8 +208,9 @@ mod tests {
         write_test_raster_image(&path, ImageFormat::Png, 16, 16);
 
         let output = String::from_utf8(
-            place_terminal_image_with_konsole_protocol(
+            build_konsole_placement_sequence(
                 &path,
+                42,
                 Rect {
                     x: 10,
                     y: 4,
@@ -174,16 +228,97 @@ mod tests {
     }
 
     #[test]
+    fn tmux_konsole_placement_wraps_absolute_cursor_and_upload_together() {
+        let root = temp_root("konsole-tmux-placement");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("demo.png");
+        write_test_raster_image(&path, ImageFormat::Png, 16, 16);
+
+        let output = String::from_utf8(
+            build_konsole_tmux_placement_sequence(
+                &path,
+                42,
+                Rect {
+                    x: 10,
+                    y: 4,
+                    width: 8,
+                    height: 6,
+                },
+                TmuxPaneOrigin { top: 2, left: 3 },
+            )
+            .expect("Konsole tmux placement should build"),
+        )
+        .expect("Konsole tmux placement should be utf8");
+
+        assert!(output.starts_with("\x1bPtmux;\x1b\x1b[7;14H\x1b\x1b_G"));
+        assert!(output.ends_with("\x1b\x1b\\\x1b\\"));
+        assert_eq!(output.matches("\x1bPtmux;").count(), 1);
+        assert!(output.contains("a=T"));
+        assert!(output.contains("c=8"));
+        assert!(output.contains("r=6"));
+        assert!(output.contains("C=1"));
+        assert!(!output.contains("\x1b[5;11H"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn tmux_konsole_placement_wraps_each_chunk_and_positions_final_chunk() {
+        let root = temp_root("konsole-tmux-chunked-placement");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("demo.png");
+        let payload = (0..5000).map(|i| (i % 251) as u8).collect::<Vec<_>>();
+        fs::write(&path, payload).expect("failed to write chunked payload");
+
+        let output = String::from_utf8(
+            build_konsole_tmux_placement_sequence(
+                &path,
+                42,
+                Rect {
+                    x: 10,
+                    y: 4,
+                    width: 8,
+                    height: 6,
+                },
+                TmuxPaneOrigin { top: 2, left: 3 },
+            )
+            .expect("Konsole tmux placement should build"),
+        )
+        .expect("Konsole tmux placement should be utf8");
+
+        assert_eq!(output.matches("\x1bPtmux;").count(), 2);
+        assert!(output.starts_with("\x1bPtmux;\x1b\x1b_Ga=T"));
+        assert!(output.contains("m=1;"));
+        assert!(output.contains("\x1b\x1b\\\x1b\\\x1bPtmux;\x1b\x1b[7;14H\x1b\x1b_Gm=0;"));
+        assert!(!output.starts_with("\x1bPtmux;\x1b\x1b[7;14H\x1b\x1b_Ga=T"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
     fn clear_konsole_uses_targeted_delete_sequence() {
         let sequence = String::from_utf8(
-            clear_terminal_images_with_konsole_protocol()
-                .expect("Konsole clear sequence should build"),
+            build_konsole_clear_sequence(konsole_image_id())
+                .as_bytes()
+                .to_vec(),
         )
         .expect("Konsole clear sequence should be utf8");
 
         assert_eq!(
             sequence,
             format!("\u{1b}_Ga=d,d=I,i={},p=1,q=2\u{1b}\\", konsole_image_id())
+        );
+    }
+
+    #[test]
+    fn tmux_konsole_clear_wraps_delete_sequence() {
+        let raw = build_konsole_clear_sequence(42);
+        let wrapped = String::from_utf8(tmux::wrap_sequence_for_tmux(raw.as_bytes()))
+            .expect("wrapped clear should be utf8");
+
+        assert_eq!(
+            wrapped,
+            "\x1bPtmux;\x1b\x1b_Ga=d,d=I,i=42,p=1,q=2\x1b\x1b\\\x1b\\"
         );
     }
 }

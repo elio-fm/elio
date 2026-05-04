@@ -4,6 +4,7 @@ mod kitty;
 mod konsole;
 mod protocol;
 mod sixel;
+mod tmux;
 mod window;
 
 use anyhow::{Context, Result};
