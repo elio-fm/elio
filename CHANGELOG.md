@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Improved Kitty and Ghostty image preview auto-detection inside tmux when tmux hides the usual terminal environment markers. ([#70])
+
 ## [1.4.0] - 2026-05-03
 
 ### Added
