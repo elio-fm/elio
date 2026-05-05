@@ -6,6 +6,7 @@ pub(super) fn default_palette() -> Palette {
         bg: rgb(2, 5, 12),
         chrome: rgb(7, 13, 22),
         chrome_alt: rgb(11, 18, 32),
+        chip_text: rgb(12, 12, 12),
         panel: rgb(9, 16, 27),
         panel_alt: rgb(6, 11, 20),
         surface: rgb(16, 25, 42),

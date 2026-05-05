@@ -158,7 +158,7 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
                 label,
                 Style::default()
                     .bg(palette.trash_bar)
-                    .fg(palette.chrome)
+                    .fg(palette.chip_text)
                     .add_modifier(Modifier::BOLD),
             ));
             spans.push(Span::raw("  "));
@@ -170,7 +170,7 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
                 label,
                 Style::default()
                     .bg(palette.restore_bar)
-                    .fg(palette.chrome)
+                    .fg(palette.chip_text)
                     .add_modifier(Modifier::BOLD),
             ));
             spans.push(Span::raw("  "));
@@ -193,7 +193,7 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
                 label,
                 Style::default()
                     .bg(color)
-                    .fg(palette.chrome)
+                    .fg(palette.chip_text)
                     .add_modifier(Modifier::BOLD),
             ));
             spans.push(Span::raw("  "));
@@ -207,7 +207,7 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
                 label,
                 Style::default()
                     .bg(color)
-                    .fg(palette.chrome)
+                    .fg(palette.chip_text)
                     .add_modifier(Modifier::BOLD),
             ));
             spans.push(Span::raw("  "));
@@ -220,7 +220,7 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
                 chip,
                 Style::default()
                     .bg(palette.selection_bar)
-                    .fg(palette.chrome)
+                    .fg(palette.chip_text)
                     .add_modifier(Modifier::BOLD),
             ));
             spans.push(Span::raw("  "));

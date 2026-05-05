@@ -290,6 +290,8 @@ Rules:
 
 **Built-in file classes:** `directory` · `code` · `config` · `document` · `license` · `image` · `audio` · `video` · `archive` · `font` · `data` · `file`
 
+Any color value also accepts `"none"` (alias: `"transparent"`) to reset that foreground or background to the terminal default. For background fields, this lets transparent terminals show through. See [`examples/themes/transparent/theme.toml`](examples/themes/transparent/theme.toml).
+
 See [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml) for the full default theme.
 
 ---

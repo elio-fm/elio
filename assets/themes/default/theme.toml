@@ -4,6 +4,7 @@
 bg = "#050505"
 chrome = "#0c0c0c"
 chrome_alt = "#101010"
+chip_text = "#0c0c0c"
 panel = "#121212"
 panel_alt = "#0f0f0f"
 surface = "#161616"

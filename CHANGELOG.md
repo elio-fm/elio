@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `"none"` (alias: `"transparent"`) as accepted color values in `theme.toml`, resetting foreground or background colors to the terminal default. For background fields, this lets transparent terminals show through. See `examples/themes/transparent/theme.toml`. ([#86])
+- Added a `chip_text` palette field that controls the foreground of toolbar status chips (yank, cut, selected, trash, restore). Defaults to `#0c0c0c` on all themes; previously this color was reused from `chrome`. ([#86])
+
 ### Changed
 
+- Improved chip text contrast on the bundled light themes (`default-light`, `blush-light`) as a side effect of the new `chip_text` palette field — chips now use a dark default fg instead of the theme's light chrome color. ([#86])
 - Improved Kitty and Ghostty image preview auto-detection inside tmux when tmux hides the usual terminal environment markers. ([#70])
 
 ### Fixed
@@ -120,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#86]: https://github.com/elio-fm/elio/issues/86
 [#79]: https://github.com/elio-fm/elio/issues/79
 [#77]: https://github.com/elio-fm/elio/pull/77
 [#75]: https://github.com/elio-fm/elio/issues/75
