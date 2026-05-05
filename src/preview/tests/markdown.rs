@@ -168,7 +168,7 @@ fn markdown_preview_renders_images_with_icon_and_alt_text() {
     let path = root.join("README.md");
     fs::write(
         &path,
-        "![Catppuccin Mocha](examples/themes/catppuccin-mocha/screenshot.png)\n",
+        "![Catppuccin Mocha](examples/themes/catppuccin-mocha/screenshot.webp)\n",
     )
     .expect("failed to write markdown");
 
@@ -180,7 +180,7 @@ fn markdown_preview_renders_images_with_icon_and_alt_text() {
     // Alt text shown
     assert!(texts.iter().any(|t| t.contains("Catppuccin Mocha")));
     // Path not shown
-    assert!(!texts.iter().any(|t| t.contains("screenshot.png")));
+    assert!(!texts.iter().any(|t| t.contains("screenshot.webp")));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
