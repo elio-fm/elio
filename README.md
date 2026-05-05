@@ -78,9 +78,11 @@ A few bundled themes are shown below. More are available in [`examples/themes/`]
 
 | Catppuccin Mocha | Navi |
 |---|---|
-| <img src="examples/themes/catppuccin-mocha/screenshot.webp" alt="Catppuccin Mocha" width="440"> | <img src="examples/themes/navi/screenshot.webp" alt="Navi" width="440"> |
+| <p align="center"><img src="examples/themes/catppuccin-mocha/screenshot.webp" alt="Catppuccin Mocha" width="440"></p> | <p align="center"><img src="examples/themes/navi/screenshot.webp" alt="Navi" width="440"></p> |
+
 | Amber Dusk | Blush Light |
-| <img src="examples/themes/amber-dusk/screenshot.webp" alt="Amber Dusk" width="440"> | <img src="examples/themes/blush-light/screenshot.webp" alt="Blush Light" width="440"> |
+|---|---|
+| <p align="center"><img src="examples/themes/amber-dusk/screenshot.webp" alt="Amber Dusk" width="440"></p> | <p align="center"><img src="examples/themes/blush-light/screenshot.webp" alt="Blush Light" width="440"></p> |
 
 ---
 
