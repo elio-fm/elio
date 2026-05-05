@@ -22,6 +22,7 @@ struct PaletteOverride {
     bg: Option<String>,
     chrome: Option<String>,
     chrome_alt: Option<String>,
+    chip_text: Option<String>,
     panel: Option<String>,
     panel_alt: Option<String>,
     surface: Option<String>,
@@ -149,6 +150,7 @@ fn apply_palette_overrides(
     apply_palette_color(&mut palette.bg, overrides.bg)?;
     apply_palette_color(&mut palette.chrome, overrides.chrome)?;
     apply_palette_color(&mut palette.chrome_alt, overrides.chrome_alt)?;
+    apply_palette_color(&mut palette.chip_text, overrides.chip_text)?;
     apply_palette_color(&mut palette.panel, overrides.panel)?;
     apply_palette_color(&mut palette.panel_alt, overrides.panel_alt)?;
     apply_palette_color(&mut palette.surface, overrides.surface)?;
@@ -277,7 +279,13 @@ pub(super) fn parse_class_name(name: &str) -> Option<FileClass> {
 }
 
 pub(super) fn parse_color(value: &str) -> anyhow::Result<Color> {
-    let hex = value.trim().trim_start_matches('#');
+    let trimmed = value.trim();
+    match trimmed.to_ascii_lowercase().as_str() {
+        "none" | "transparent" => return Ok(Color::Reset),
+        _ => {}
+    }
+
+    let hex = trimmed.trim_start_matches('#');
     if hex.len() != 6 {
         anyhow::bail!("invalid color {value}");
     }

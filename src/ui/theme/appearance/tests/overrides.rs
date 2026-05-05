@@ -1,5 +1,6 @@
 use super::super::{loading::load_theme_from_disk, rules::rgb};
 use super::*;
+use ratatui::style::Color;
 use std::{
     env,
     ffi::OsString,
@@ -237,6 +238,88 @@ icon = "F"
     let resolved = theme.resolve(Path::new("Cargo.toml"), EntryKind::File);
     assert_eq!(resolved.class, FileClass::Config);
     assert_eq!(resolved.icon, "F");
+}
+
+#[test]
+fn palette_accepts_transparent_sentinels() {
+    let theme = Theme::from_config_str(
+        r##"
+[palette]
+bg = "none"
+chrome = "transparent"
+panel = "  None  "
+path_bg = "  Transparent  "
+
+[preview.code]
+bg = "none"
+"##,
+    )
+    .expect("theme should parse");
+
+    assert_eq!(theme.palette.bg, Color::Reset);
+    assert_eq!(theme.palette.chrome, Color::Reset);
+    assert_eq!(theme.palette.panel, Color::Reset);
+    assert_eq!(theme.palette.path_bg, Color::Reset);
+    assert_eq!(theme.preview.code.bg, Color::Reset);
+
+    let default_theme = Theme::default_theme();
+    assert_eq!(theme.palette.chrome_alt, default_theme.palette.chrome_alt);
+    assert_eq!(theme.palette.text, default_theme.palette.text);
+}
+
+#[test]
+fn chip_text_defaults_to_dark_contrast_color_and_is_overridable() {
+    let default_theme = Theme::default_theme();
+    assert_eq!(default_theme.palette.chip_text, rgb(0x0c, 0x0c, 0x0c));
+
+    let custom = Theme::from_config_str(
+        r##"
+[palette]
+chip_text = "#ffffff"
+"##,
+    )
+    .expect("theme should parse");
+    assert_eq!(custom.palette.chip_text, rgb(0xff, 0xff, 0xff));
+}
+
+#[test]
+fn class_and_rule_colors_accept_transparent_sentinel() {
+    let theme = Theme::from_config_str(
+        r##"
+[classes.code]
+color = "none"
+
+[extensions.rs]
+color = "transparent"
+"##,
+    )
+    .expect("theme should parse");
+
+    assert_eq!(
+        theme.classes.get(&FileClass::Code).unwrap().color,
+        Color::Reset
+    );
+
+    let rs = theme.resolve(Path::new("main.rs"), EntryKind::File);
+    assert_eq!(rs.color, Color::Reset);
+}
+
+#[test]
+fn invalid_color_strings_still_fail_to_parse() {
+    let error = match Theme::from_config_str(
+        r##"
+[palette]
+bg = "almost-transparent"
+"##,
+    ) {
+        Ok(_) => panic!("unknown sentinel should fail to parse"),
+        Err(error) => error,
+    };
+
+    assert!(
+        error.to_string().contains("invalid color"),
+        "unexpected parse error: {error}",
+    );
 }
 
 #[test]

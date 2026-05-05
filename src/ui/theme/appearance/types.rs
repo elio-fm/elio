@@ -7,6 +7,7 @@ pub(crate) struct Palette {
     pub bg: Color,
     pub chrome: Color,
     pub chrome_alt: Color,
+    pub chip_text: Color,
     pub panel: Color,
     pub panel_alt: Color,
     pub surface: Color,
