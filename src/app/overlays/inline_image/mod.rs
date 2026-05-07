@@ -131,6 +131,12 @@ impl App {
         ));
         self.preview.terminal_images.identity = identity;
         self.preview.terminal_images.protocol = protocol;
+        if matches!(
+            protocol,
+            ImageProtocol::KittyGraphics | ImageProtocol::KittyDirectGraphics
+        ) {
+            tmux::enable_allow_passthrough();
+        }
         self.preview.pdf.pdf_tools_available = pdf_preview_tools_available();
         self.refresh_terminal_image_window_size();
         preview_log(format_args!(

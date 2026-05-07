@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Auto-enable tmux `allow-passthrough` for image previews in supported terminals, so users no longer need to configure it manually.
 - Fixed Kitty direct-placement preview transport and placement inside tmux for Konsole and Warp. ([#70])
 
 ## [1.4.0] - 2026-05-03

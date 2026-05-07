@@ -1,7 +1,7 @@
 //! tmux DCS-passthrough helpers for terminal image escape sequences.
 
 use ratatui::layout::Rect;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct TmuxPaneOrigin {
@@ -20,6 +20,37 @@ impl TmuxPaneOrigin {
 
 pub(super) fn inside_tmux() -> bool {
     std::env::var_os("TMUX").is_some()
+}
+
+pub(super) fn enable_allow_passthrough() {
+    if !inside_tmux() {
+        return;
+    }
+
+    let mut command = Command::new("tmux");
+    command.args(allow_passthrough_args(
+        std::env::var_os("TMUX_PANE").as_deref(),
+    ));
+    let _ = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+fn allow_passthrough_args(target_pane: Option<&std::ffi::OsStr>) -> Vec<std::ffi::OsString> {
+    let mut args = ["set-option", "-p", "-q"]
+        .into_iter()
+        .map(std::ffi::OsString::from)
+        .collect::<Vec<_>>();
+    if let Some(pane) = target_pane
+        && !pane.is_empty()
+    {
+        args.push("-t".into());
+        args.push(pane.into());
+    }
+    args.extend(["allow-passthrough", "on"].into_iter().map(Into::into));
+    args
 }
 
 pub(super) fn query_pane_origin() -> Option<TmuxPaneOrigin> {
@@ -134,6 +165,30 @@ mod tests {
         assert_eq!(parse_pane_origin("12\n"), None);
         assert_eq!(parse_pane_origin("top,4\n"), None);
         assert_eq!(parse_pane_origin("4,left\n"), None);
+    }
+
+    #[test]
+    fn allow_passthrough_args_target_current_pane_when_available() {
+        assert_eq!(
+            allow_passthrough_args(Some(std::ffi::OsStr::new("%7"))),
+            vec![
+                "set-option",
+                "-p",
+                "-q",
+                "-t",
+                "%7",
+                "allow-passthrough",
+                "on"
+            ]
+        );
+    }
+
+    #[test]
+    fn allow_passthrough_args_fall_back_to_implicit_target() {
+        assert_eq!(
+            allow_passthrough_args(None),
+            vec!["set-option", "-p", "-q", "allow-passthrough", "on"]
+        );
     }
 
     #[test]
