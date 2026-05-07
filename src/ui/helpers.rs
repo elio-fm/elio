@@ -11,11 +11,21 @@ use std::{env, path::Path};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 pub(super) fn render_empty_state(frame: &mut Frame<'_>, area: Rect, label: &str, palette: Palette) {
-    fill_area(frame, area, palette.panel_alt, palette.muted);
+    render_empty_state_with_bg(frame, area, label, palette, palette.panel_alt);
+}
+
+pub(super) fn render_empty_state_with_bg(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    label: &str,
+    palette: Palette,
+    bg: Color,
+) {
+    fill_area(frame, area, bg, palette.muted);
     frame.render_widget(
         Paragraph::new(label)
             .alignment(Alignment::Center)
-            .style(Style::default().bg(palette.panel_alt).fg(palette.muted)),
+            .style(Style::default().bg(bg).fg(palette.muted)),
         area,
     );
 }

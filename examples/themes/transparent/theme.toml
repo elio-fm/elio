@@ -4,13 +4,12 @@
 [palette]
 bg = "none"
 chrome = "none"
-chrome_alt = "none"
+# chrome_alt and path_bg stay opaque to keep popups readable over images.
 border = "#6f7d8d"
 panel = "none"
 panel_alt = "none"
 surface = "none"
 elevated = "none"
-path_bg = "none"
 button_bg = "none"
 button_disabled_bg = "none"
 sidebar_active = "none"
