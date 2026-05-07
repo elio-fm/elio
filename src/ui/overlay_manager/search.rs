@@ -124,27 +124,30 @@ pub(super) fn render_search_overlay(
 
     let rows_data = app.search_rows(visible_rows);
     if app.search_is_loading() {
-        helpers::render_empty_state(
+        helpers::render_empty_state_with_bg(
             frame,
             results_area,
             "Indexing current folder tree…",
             palette,
+            palette.chrome_alt,
         );
     } else if let Some(error) = app.search_error() {
-        helpers::render_empty_state(
+        helpers::render_empty_state_with_bg(
             frame,
             results_area,
             &helpers::truncate_middle(error, results_area.width.saturating_sub(4) as usize),
             palette,
+            palette.chrome_alt,
         );
     } else if rows_data.is_empty() {
-        helpers::render_empty_state(
+        helpers::render_empty_state_with_bg(
             frame,
             results_area,
             app.search_scope()
                 .map(|scope| scope.empty_label())
                 .unwrap_or("No matches in this folder tree"),
             palette,
+            palette.chrome_alt,
         );
     } else {
         for (offset, row) in rows_data.iter().enumerate() {
@@ -162,7 +165,7 @@ pub(super) fn render_search_overlay(
             let bg = if row.selected {
                 palette.selected_bg
             } else {
-                palette.surface
+                palette.chrome_alt
             };
             frame.render_widget(Block::default().style(Style::default().bg(bg)), rect);
             if row.selected {
