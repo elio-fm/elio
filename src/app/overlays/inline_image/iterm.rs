@@ -5,7 +5,10 @@ use std::{fs, io::Write as _, path::Path, sync::Arc};
 
 use crate::app::FrameState;
 
-use super::geometry::intersect_rect;
+use super::{
+    geometry::intersect_rect,
+    tmux::{self, TmuxPaneOrigin},
+};
 
 pub(in crate::app) fn encode_iterm_inline_payload(path: &Path) -> Option<Arc<str>> {
     let data = fs::read(path).ok()?;
@@ -25,17 +28,44 @@ pub(super) fn place_terminal_image_with_iterm_protocol(
             .map(|payload| payload.to_string())
             .context("failed to encode iTerm inline image payload")?,
     };
+    if tmux::inside_tmux() {
+        let origin = tmux::query_pane_origin()
+            .ok_or_else(|| anyhow::anyhow!("tmux pane origin unavailable"))?;
+        return Ok(build_iterm_tmux_placement_sequence(&encoded, area, origin));
+    }
+    Ok(build_iterm_placement_sequence(&encoded, area))
+}
+
+fn build_iterm_placement_sequence(encoded: &str, area: Rect) -> Vec<u8> {
+    build_iterm_placement_sequence_at(
+        encoded,
+        area.y.saturating_add(1).into(),
+        area.x.saturating_add(1).into(),
+        area,
+    )
+}
+
+fn build_iterm_tmux_placement_sequence(
+    encoded: &str,
+    area: Rect,
+    origin: TmuxPaneOrigin,
+) -> Vec<u8> {
+    let (row, col) = origin.absolute_cursor_for(area);
+    tmux::wrap_sequence_for_tmux(&build_iterm_placement_sequence_at(encoded, row, col, area))
+}
+
+fn build_iterm_placement_sequence_at(encoded: &str, row: u32, col: u32, area: Rect) -> Vec<u8> {
     // Move cursor to the top-left cell of the placement area, then emit the
     // OSC 1337 sequence. `width` and `height` are in terminal cells.
-    let seq = format!(
+    format!(
         "\x1b[{};{}H\x1b]1337;File=inline=1;width={};height={};preserveAspectRatio=1:{}\x07",
-        area.y.saturating_add(1),
-        area.x.saturating_add(1),
+        row,
+        col,
         area.width.max(1),
         area.height.max(1),
         encoded
-    );
-    Ok(seq.into_bytes())
+    )
+    .into_bytes()
 }
 
 /// Overwrite every cell in `area` with a space colored with the panel background
@@ -100,6 +130,28 @@ pub(super) fn expand_raster_erase_area(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_iterm_tmux_placement_wraps_absolute_cursor_and_inline_payload() {
+        let output = String::from_utf8(build_iterm_tmux_placement_sequence(
+            "YWJj",
+            Rect {
+                x: 10,
+                y: 4,
+                width: 8,
+                height: 6,
+            },
+            TmuxPaneOrigin { top: 2, left: 3 },
+        ))
+        .expect("tmux iTerm placement should be utf8");
+
+        assert!(output.starts_with("\x1bPtmux;\x1b\x1b[7;14H\x1b\x1b]1337;File=inline=1;"));
+        assert!(output.contains("width=8"));
+        assert!(output.contains("height=6"));
+        assert!(output.contains("preserveAspectRatio=1:YWJj\x07"));
+        assert!(output.ends_with("\x1b\\"));
+        assert!(!output.contains("\x1b[5;11H"));
+    }
 
     #[test]
     fn expand_raster_erase_area_can_grow_right_and_bottom_within_preview_bounds() {

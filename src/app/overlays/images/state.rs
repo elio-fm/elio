@@ -234,6 +234,7 @@ impl App {
             .ffmpeg_available
             .unwrap_or_else(|| command_exists("ffmpeg"));
         !static_image_can_prepare_inline(visual.size, format, ffmpeg_available)
+            || self.uses_iterm_inline_protocol_inside_tmux()
     }
 
     pub(in crate::app) fn displayed_static_image_matches_active(&self) -> bool {
@@ -312,7 +313,7 @@ impl App {
             target_width_px: image_target_width_px(area, self.cached_terminal_window()),
             target_height_px: image_target_height_px(area, self.cached_terminal_window()),
             mode: StaticImageOverlayMode::FullPane,
-            force_render_to_cache: false,
+            force_render_to_cache: self.uses_iterm_inline_protocol_inside_tmux(),
             prepare_inline_payload: self.preview.terminal_images.protocol
                 == ImageProtocol::ItermInline,
         })

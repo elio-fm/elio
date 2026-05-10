@@ -135,6 +135,45 @@ pub(super) fn render_raster_to_png_with_ffmpeg(
         .is_some_and(|status| status.success() && output_path.exists())
 }
 
+pub(super) fn render_raster_to_jpeg_with_ffmpeg(
+    input_path: &Path,
+    output_path: &Path,
+    target_width_px: u32,
+    target_height_px: u32,
+    canceled: &impl Fn() -> bool,
+) -> bool {
+    if let Some(parent) = output_path.parent()
+        && fs::create_dir_all(parent).is_err()
+    {
+        return false;
+    }
+
+    let mut command = Command::new("ffmpeg");
+    command
+        .arg("-v")
+        .arg("error")
+        .arg("-y")
+        .arg("-i")
+        .arg(input_path)
+        .arg("-frames:v")
+        .arg("1")
+        .arg("-vf")
+        .arg(format!(
+            "scale=w={}:h={}:force_original_aspect_ratio=decrease",
+            target_width_px.max(1),
+            target_height_px.max(1)
+        ))
+        .arg("-q:v")
+        // Good preview-pane quality while keeping iTerm inline payloads small.
+        .arg("3")
+        .arg(output_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    run_cancelable_command(&mut command, canceled)
+        .is_some_and(|status| status.success() && output_path.exists())
+}
+
 pub(super) fn apply_raster_orientation(image: DynamicImage, orientation: u16) -> DynamicImage {
     match orientation {
         2 => image.fliph(),

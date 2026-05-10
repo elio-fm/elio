@@ -133,7 +133,9 @@ impl App {
         self.preview.terminal_images.protocol = protocol;
         if matches!(
             protocol,
-            ImageProtocol::KittyGraphics | ImageProtocol::KittyDirectGraphics
+            ImageProtocol::KittyGraphics
+                | ImageProtocol::KittyDirectGraphics
+                | ImageProtocol::ItermInline
         ) {
             tmux::enable_allow_passthrough();
         }
@@ -179,6 +181,10 @@ impl App {
 
     pub(in crate::app) fn uses_sixel_image_protocol(&self) -> bool {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
+    }
+
+    pub(in crate::app) fn uses_iterm_inline_protocol_inside_tmux(&self) -> bool {
+        self.preview.terminal_images.protocol == ImageProtocol::ItermInline && tmux::inside_tmux()
     }
 
     pub(crate) fn is_windows_terminal(&self) -> bool {

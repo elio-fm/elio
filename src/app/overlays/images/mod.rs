@@ -25,9 +25,11 @@ const STATIC_IMAGE_INLINE_PAYLOAD_CACHE_LIMIT: usize = 16;
 const SIXEL_DCS_CACHE_LIMIT: usize = 128;
 const STATIC_IMAGE_PRELOAD_LIMIT: usize = 12;
 const STATIC_IMAGE_PRELOAD_LIMIT_SLOW_SIXEL: usize = 2;
+// Keep base64 + OSC overhead below the 1 MiB iTerm/tmux single-sequence limit.
+const STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES: u64 = 700 * 1024;
 const STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES: u64 = 512 * 1024;
 const STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES: u64 = 16 * 1024 * 1024;
-const STATIC_IMAGE_RENDER_CACHE_VERSION: usize = 3;
+const STATIC_IMAGE_RENDER_CACHE_VERSION: usize = 5;
 const FAST_FORCE_RENDER_FFMPEG_RASTER_ARGS: [&str; 4] =
     ["-compression_level", "1", "-sws_flags", "fast_bilinear"];
 const DEFAULT_FFMPEG_RASTER_ARGS: [&str; 0] = [];

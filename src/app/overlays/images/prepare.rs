@@ -3,13 +3,15 @@ use super::format::{
     static_image_format_for_overlay_request, static_image_format_for_prepare_request,
 };
 use super::render::{
-    apply_raster_orientation, render_raster_to_png_with_ffmpeg, render_svg_to_png_with_magick,
-    render_svg_to_png_with_resvg, should_render_raster_with_ffmpeg, shrink_image_to_fit,
+    apply_raster_orientation, render_raster_to_jpeg_with_ffmpeg, render_raster_to_png_with_ffmpeg,
+    render_svg_to_png_with_magick, render_svg_to_png_with_resvg, should_render_raster_with_ffmpeg,
+    shrink_image_to_fit,
 };
 use super::{
     PreparedStaticImageAsset, STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES,
-    STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES, STATIC_IMAGE_RENDER_CACHE_VERSION, SixelDcsKey,
-    StaticImageKey, StaticImageOverlayRequest,
+    STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES,
+    STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES, STATIC_IMAGE_RENDER_CACHE_VERSION,
+    SixelDcsKey, StaticImageKey, StaticImageOverlayRequest,
 };
 use crate::app::jobs;
 use crate::app::overlays::inline_image::{
@@ -98,7 +100,7 @@ where
     }
 
     if format == StaticImageFormat::Svg {
-        let cache_path = static_image_render_cache_path(&key)?;
+        let cache_path = static_image_render_cache_path(&key, StaticImageRenderCacheFormat::Png)?;
         if cache_path.exists() {
             let payload = inline_payload(&cache_path)?;
             let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
@@ -144,7 +146,8 @@ where
         return None;
     }
 
-    let cache_path = static_image_render_cache_path(&key)?;
+    let render_format = static_image_render_cache_format(request, format);
+    let cache_path = static_image_render_cache_path(&key, render_format)?;
     if cache_path.exists() {
         let payload = inline_payload(&cache_path)?;
         let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
@@ -161,17 +164,26 @@ where
     }
     let temp_path = static_image_render_temp_path(&cache_path)?;
 
-    if request.ffmpeg_available
+    let rendered_with_ffmpeg = request.ffmpeg_available
         && should_render_raster_with_ffmpeg(format)
-        && render_raster_to_png_with_ffmpeg(
-            &request.path,
-            &temp_path,
-            target_width_px,
-            target_height_px,
-            request.force_render_to_cache,
-            &canceled,
-        )
-    {
+        && match render_format {
+            StaticImageRenderCacheFormat::Jpeg => render_raster_to_jpeg_with_ffmpeg(
+                &request.path,
+                &temp_path,
+                target_width_px,
+                target_height_px,
+                &canceled,
+            ),
+            StaticImageRenderCacheFormat::Png => render_raster_to_png_with_ffmpeg(
+                &request.path,
+                &temp_path,
+                target_width_px,
+                target_height_px,
+                static_image_use_fast_png_render(request),
+                &canceled,
+            ),
+        };
+    if rendered_with_ffmpeg {
         finalize_static_image_render(&temp_path, &cache_path)?;
         let payload = inline_payload(&cache_path)?;
         let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
@@ -201,7 +213,7 @@ where
     if canceled() {
         return None;
     }
-    image.save_with_format(&temp_path, ImageFormat::Png).ok()?;
+    save_dynamic_image(&image, &temp_path, render_format)?;
     finalize_static_image_render(&temp_path, &cache_path)?;
     let payload = inline_payload(&cache_path)?;
     let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
@@ -215,20 +227,74 @@ where
     })
 }
 
-fn static_image_render_cache_path(key: &StaticImageKey) -> Option<PathBuf> {
+#[derive(Clone, Copy, Hash)]
+enum StaticImageRenderCacheFormat {
+    Png,
+    Jpeg,
+}
+
+impl StaticImageRenderCacheFormat {
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Png => "png",
+            Self::Jpeg => "jpg",
+        }
+    }
+}
+
+fn static_image_render_cache_format(
+    request: &jobs::ImagePrepareRequest,
+    format: StaticImageFormat,
+) -> StaticImageRenderCacheFormat {
+    if request.prepare_inline_payload && format == StaticImageFormat::Jpeg {
+        StaticImageRenderCacheFormat::Jpeg
+    } else {
+        StaticImageRenderCacheFormat::Png
+    }
+}
+
+fn static_image_use_fast_png_render(request: &jobs::ImagePrepareRequest) -> bool {
+    request.force_render_to_cache && !request.prepare_inline_payload
+}
+
+fn save_dynamic_image(
+    image: &image::DynamicImage,
+    path: &Path,
+    format: StaticImageRenderCacheFormat,
+) -> Option<()> {
+    match format {
+        StaticImageRenderCacheFormat::Png => image.save_with_format(path, ImageFormat::Png).ok()?,
+        StaticImageRenderCacheFormat::Jpeg => image
+            .to_rgb8()
+            .save_with_format(path, ImageFormat::Jpeg)
+            .ok()?,
+    }
+    Some(())
+}
+
+fn static_image_render_cache_path(
+    key: &StaticImageKey,
+    format: StaticImageRenderCacheFormat,
+) -> Option<PathBuf> {
     let mut hasher = DefaultHasher::new();
     STATIC_IMAGE_RENDER_CACHE_VERSION.hash(&mut hasher);
+    format.hash(&mut hasher);
     key.path.hash(&mut hasher);
     key.size.hash(&mut hasher);
     key.modified.hash(&mut hasher);
     key.target_width_px.hash(&mut hasher);
     key.target_height_px.hash(&mut hasher);
     key.force_render_to_cache.hash(&mut hasher);
+    key.prepare_inline_payload.hash(&mut hasher);
     let cache_dir = env::temp_dir().join(format!(
         "elio-image-preview-v{STATIC_IMAGE_RENDER_CACHE_VERSION}"
     ));
     fs::create_dir_all(&cache_dir).ok()?;
-    Some(cache_dir.join(format!("image-{:016x}.png", hasher.finish())))
+    Some(cache_dir.join(format!(
+        "image-{:016x}.{}",
+        hasher.finish(),
+        format.extension()
+    )))
 }
 
 fn static_image_render_temp_path(path: &Path) -> Option<PathBuf> {
@@ -286,9 +352,13 @@ pub(super) fn static_image_can_prepare_inline(
 pub(super) fn static_image_supports_iterm_source_passthrough(
     request: &StaticImageOverlayRequest,
 ) -> bool {
+    if request.force_render_to_cache
+        || request.size > STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES
+    {
+        return false;
+    }
     static_image_format_for_overlay_request(request)
         .is_some_and(|format| static_image_supports_iterm_source_format(&request.path, format))
-        && !request.force_render_to_cache
 }
 
 fn static_image_supports_iterm_source_passthrough_for_prepare(
@@ -297,6 +367,7 @@ fn static_image_supports_iterm_source_passthrough_for_prepare(
 ) -> bool {
     request.prepare_inline_payload
         && !request.force_render_to_cache
+        && request.size <= STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES
         && static_image_supports_iterm_source_format(&request.path, format)
 }
 
@@ -306,5 +377,42 @@ fn static_image_supports_iterm_source_format(path: &Path, format: StaticImageFor
         StaticImageFormat::Ico => false,
         StaticImageFormat::Jpeg => read_exif_orientation(path).unwrap_or(1) == 1,
         StaticImageFormat::Gif | StaticImageFormat::Webp | StaticImageFormat::Svg => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn image_prepare_request(
+        force_render_to_cache: bool,
+        prepare_inline_payload: bool,
+    ) -> jobs::ImagePrepareRequest {
+        jobs::ImagePrepareRequest {
+            path: PathBuf::from("demo.gif"),
+            size: 1024,
+            modified: None,
+            target_width_px: 320,
+            target_height_px: 180,
+            ffmpeg_available: true,
+            resvg_available: false,
+            magick_available: false,
+            force_render_to_cache,
+            prepare_inline_payload,
+            sixel_prepare: None,
+        }
+    }
+
+    #[test]
+    fn iterm_inline_forced_cache_does_not_use_fast_png_rendering() {
+        assert!(!static_image_use_fast_png_render(&image_prepare_request(
+            true, true,
+        )));
+        assert!(static_image_use_fast_png_render(&image_prepare_request(
+            true, false,
+        )));
+        assert!(!static_image_use_fast_png_render(&image_prepare_request(
+            false, true,
+        )));
     }
 }

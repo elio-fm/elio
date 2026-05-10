@@ -137,8 +137,12 @@ fn classify_tmux_recovered_identity(
         Some(TerminalIdentity::Kitty)
     } else if term.contains("ghostty") || term_program == "ghostty" {
         Some(TerminalIdentity::Ghostty)
+    } else if term.contains("wezterm") || term_program == "wezterm" {
+        Some(TerminalIdentity::WezTerm)
     } else if term_program.contains("warp") || warp_session_id_set {
         Some(TerminalIdentity::Warp)
+    } else if term_program == "iterm.app" {
+        Some(TerminalIdentity::ITerm2)
     } else if konsole_dbus_set {
         Some(TerminalIdentity::Konsole)
     } else if kitty_window_id_set {
@@ -787,6 +791,40 @@ mod tests {
             },
         );
         assert_eq!(id, TerminalIdentity::Ghostty);
+    }
+
+    #[test]
+    fn detect_terminal_identity_inside_tmux_falls_back_to_session_env_term_program_wezterm() {
+        let id = detect_terminal_identity_with(
+            tmux_set_only("/tmp/tmux-1000/default,123,4"),
+            no_tmux_client_term,
+            no_tmux_env_lookup,
+            |name| {
+                if name == "TERM_PROGRAM" {
+                    Some("WezTerm".to_string())
+                } else {
+                    None
+                }
+            },
+        );
+        assert_eq!(id, TerminalIdentity::WezTerm);
+    }
+
+    #[test]
+    fn detect_terminal_identity_inside_tmux_falls_back_to_session_env_term_program_iterm2() {
+        let id = detect_terminal_identity_with(
+            tmux_set_only("/tmp/tmux-1000/default,123,4"),
+            no_tmux_client_term,
+            no_tmux_env_lookup,
+            |name| {
+                if name == "TERM_PROGRAM" {
+                    Some("iTerm.app".to_string())
+                } else {
+                    None
+                }
+            },
+        );
+        assert_eq!(id, TerminalIdentity::ITerm2);
     }
 
     #[test]

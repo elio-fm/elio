@@ -1,6 +1,22 @@
 use super::helpers::*;
+use image::{DynamicImage, Rgb, RgbImage};
 use ratatui::layout::Rect;
 use std::fs;
+
+fn write_large_test_jpeg(path: &std::path::Path) {
+    let mut image = RgbImage::new(1800, 1200);
+    for (x, y, pixel) in image.enumerate_pixels_mut() {
+        *pixel = Rgb([
+            ((x * 31 + y * 17) & 0xff) as u8,
+            ((x * 13 + y * 47) & 0xff) as u8,
+            ((x * 71 + y * 5) & 0xff) as u8,
+        ]);
+    }
+
+    DynamicImage::ImageRgb8(image)
+        .save_with_format(path, ImageFormat::Jpeg)
+        .expect("failed to write large jpeg");
+}
 
 #[test]
 fn iterm_png_and_jpeg_static_images_use_direct_source_payloads() {
@@ -44,6 +60,67 @@ fn iterm_png_and_jpeg_static_images_use_direct_source_payloads() {
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
+}
+
+#[test]
+fn iterm_large_jpeg_static_image_uses_compact_cached_payload() {
+    let root = temp_root("iterm-compact-static-image");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("large.jpg");
+    write_large_test_jpeg(&path);
+    let metadata = fs::metadata(&path).expect("image metadata should exist");
+    assert!(
+        metadata.len() > 800 * 1024,
+        "test jpeg should be large enough to skip source passthrough"
+    );
+
+    let prepared = crate::app::overlays::images::prepare_static_image_asset(
+        &crate::app::jobs::ImagePrepareRequest {
+            path: path.clone(),
+            size: metadata.len(),
+            modified: None,
+            target_width_px: 360,
+            target_height_px: 240,
+            ffmpeg_available: false,
+            resvg_available: false,
+            magick_available: false,
+            force_render_to_cache: false,
+            prepare_inline_payload: true,
+            sixel_prepare: None,
+        },
+        || false,
+    )
+    .expect("large iterm jpeg should prepare successfully");
+
+    assert_ne!(prepared.display_path, path);
+    assert_eq!(
+        prepared
+            .display_path
+            .extension()
+            .and_then(|extension| extension.to_str()),
+        Some("jpg")
+    );
+    assert!(
+        prepared
+            .inline_payload
+            .as_ref()
+            .is_some_and(|payload| payload.len() < metadata.len() as usize)
+    );
+
+    let rendered = image::ImageReader::open(&prepared.display_path)
+        .expect("compact jpeg should exist")
+        .decode()
+        .expect("compact jpeg should decode");
+    assert!(rendered.width() <= 360);
+    assert!(rendered.height() <= 240);
+    assert!(
+        fs::metadata(&prepared.display_path)
+            .expect("compact jpeg metadata should exist")
+            .len()
+            < metadata.len()
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
 #[test]
