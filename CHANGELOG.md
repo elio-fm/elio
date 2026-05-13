@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Auto-enable tmux `allow-passthrough` for image previews in supported terminals, so users no longer need to configure it manually.
+- Fixed Sixel preview support inside tmux, including Foot and Windows Terminal detection from tmux client/session environment. Windows Terminal now uses tmux's native Sixel path to avoid corrupted alternate-screen rendering in WSL. ([#70])
+- Fixed undersized Windows Terminal Sixel previews on WSL outside tmux by querying the terminal cell pixel size before falling back to default cell dimensions.
 - Fixed iTerm inline preview transport and placement inside tmux, including correct pane-relative positioning and compact cached payloads for large JPEG/GIF previews that could otherwise lag or disappear. ([#70])
 - Fixed Kitty direct-placement preview transport and placement inside tmux for Konsole and Warp. ([#70])
 
