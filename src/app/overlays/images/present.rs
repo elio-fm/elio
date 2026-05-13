@@ -296,7 +296,7 @@ impl App {
                     dcs
                 }
             };
-            return Ok(place_sixel_from_dcs(&dcs, placement));
+            return place_sixel_from_dcs(&dcs, placement);
         }
         place_terminal_image(
             protocol,

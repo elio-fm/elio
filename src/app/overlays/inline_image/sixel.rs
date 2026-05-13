@@ -13,6 +13,7 @@ use std::{
 use super::{
     TerminalIdentity, TerminalWindowSize, area_pixel_size, fit_image_area,
     protocol::{command_exists, detect_terminal_identity},
+    tmux::{self, TmuxPaneOrigin},
 };
 
 const SIXEL_COLOR_LIMIT_DEFAULT: usize = 256;
@@ -52,14 +53,35 @@ pub(in crate::app) fn encode_sixel_dcs(
 ///
 /// This is O(n) in the DCS buffer size due to the memory copy, but avoids
 /// re-running the expensive encode for re-renders of the same image.
-pub(in crate::app) fn place_sixel_from_dcs(dcs: &[u8], placement: Rect) -> Vec<u8> {
+pub(in crate::app) fn place_sixel_from_dcs(dcs: &[u8], placement: Rect) -> Result<Vec<u8>> {
+    if tmux::inside_tmux() {
+        let origin = tmux::query_pane_origin()
+            .ok_or_else(|| anyhow::anyhow!("tmux pane origin unavailable"))?;
+        return Ok(build_sixel_tmux_placement_sequence(dcs, placement, origin));
+    }
+    Ok(build_sixel_placement_sequence(dcs, placement))
+}
+
+fn build_sixel_placement_sequence(dcs: &[u8], placement: Rect) -> Vec<u8> {
+    build_sixel_placement_sequence_at(
+        dcs,
+        placement.y.saturating_add(1).into(),
+        placement.x.saturating_add(1).into(),
+    )
+}
+
+fn build_sixel_tmux_placement_sequence(
+    dcs: &[u8],
+    placement: Rect,
+    origin: TmuxPaneOrigin,
+) -> Vec<u8> {
+    let (row, col) = origin.absolute_cursor_for(placement);
+    tmux::wrap_sequence_for_tmux(&build_sixel_placement_sequence_at(dcs, row, col))
+}
+
+fn build_sixel_placement_sequence_at(dcs: &[u8], row: u32, col: u32) -> Vec<u8> {
     let mut out = Vec::with_capacity(dcs.len() + 16);
-    let _ = write!(
-        out,
-        "\x1b[{};{}H",
-        placement.y.saturating_add(1),
-        placement.x.saturating_add(1)
-    );
+    let _ = write!(out, "\x1b[{row};{col}H");
     out.extend_from_slice(dcs);
     out
 }
@@ -86,7 +108,7 @@ pub(super) fn place_terminal_image_with_sixel_protocol(
     let (target_w, target_h) = area_pixel_size(placement, window_size);
 
     let dcs = encode_sixel_dcs_from_image(img, target_w, target_h, sixel_encode_profile())?;
-    Ok(place_sixel_from_dcs(&dcs, placement))
+    place_sixel_from_dcs(&dcs, placement)
 }
 
 /// No explicit clear primitive exists for Sixel — the next ratatui draw
@@ -400,6 +422,8 @@ mod tests {
                 "KONSOLE_DBUS_SESSION",
                 "KONSOLE_DBUS_SERVICE",
                 "KONSOLE_DBUS_WINDOW",
+                "TMUX",
+                "TMUX_PANE",
             ];
 
             let saved = VARS
@@ -430,6 +454,8 @@ mod tests {
 
     #[test]
     fn sixel_sequence_has_dcs_preamble_and_terminator() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
         let root = temp_root("sixel-preamble");
         fs::create_dir_all(&root).expect("failed to create temp root");
         let path = root.join("demo.png");
@@ -456,6 +482,8 @@ mod tests {
 
     #[test]
     fn sixel_sequence_positions_cursor_at_area_top_left() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
         let root = temp_root("sixel-cursor");
         fs::create_dir_all(&root).expect("failed to create temp root");
         let path = root.join("demo.png");
@@ -487,6 +515,8 @@ mod tests {
 
     #[test]
     fn sixel_sequence_contains_raster_attributes_and_palette() {
+        let _lock = terminal_env_lock();
+        let _guard = TerminalEnvGuard::isolate();
         let root = temp_root("sixel-raster");
         fs::create_dir_all(&root).expect("failed to create temp root");
         let path = root.join("demo.png");
@@ -593,7 +623,7 @@ mod tests {
             width: 1,
             height: 1,
         };
-        let out = place_sixel_from_dcs(dcs, placement);
+        let out = build_sixel_placement_sequence(dcs, placement);
         let s = String::from_utf8(out).expect("output should be valid utf8");
 
         assert!(
@@ -601,6 +631,25 @@ mod tests {
             "expected cursor move to row 3 col 5, got: {s}"
         );
         assert!(s.contains("\x1bP"), "DCS stream should follow cursor move");
+    }
+
+    #[test]
+    fn build_sixel_tmux_placement_wraps_absolute_cursor_and_dcs() {
+        let dcs = b"\x1bP0;1;0qABC\x1b\\";
+        let placement = Rect {
+            x: 10,
+            y: 4,
+            width: 3,
+            height: 2,
+        };
+        let origin = TmuxPaneOrigin { top: 2, left: 3 };
+        let out = build_sixel_tmux_placement_sequence(dcs, placement, origin);
+        let s = String::from_utf8(out).expect("output should be valid utf8");
+
+        assert_eq!(
+            s,
+            "\x1bPtmux;\x1b\x1b[7;14H\x1b\x1bP0;1;0qABC\x1b\x1b\\\x1b\\"
+        );
     }
 
     #[test]

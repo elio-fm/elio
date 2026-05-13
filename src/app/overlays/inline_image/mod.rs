@@ -136,6 +136,7 @@ impl App {
             ImageProtocol::KittyGraphics
                 | ImageProtocol::KittyDirectGraphics
                 | ImageProtocol::ItermInline
+                | ImageProtocol::Sixel
         ) {
             tmux::enable_allow_passthrough();
         }
