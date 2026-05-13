@@ -1,6 +1,6 @@
 use super::TerminalWindowSize;
 use crossterm::terminal;
-#[cfg(windows)]
+#[cfg(any(unix, windows))]
 use std::{env, sync::OnceLock};
 
 pub(super) fn query_terminal_window_size() -> Option<TerminalWindowSize> {
@@ -9,15 +9,16 @@ pub(super) fn query_terminal_window_size() -> Option<TerminalWindowSize> {
         .as_ref()
         .map(|size| (size.columns, size.rows))
         .or_else(|| terminal::size().ok())?;
-    let (pixels_width, pixels_height) = terminal_size
-        .as_ref()
-        .and_then(|size| {
-            let width = u32::from(size.width);
-            let height = u32::from(size.height);
-            (width > 0 && height > 0).then_some((width, height))
-        })
-        .or_else(|| query_windows_terminal_pixels_from_cell_size(cells_width, cells_height))
-        .unwrap_or_else(|| fallback_window_size_pixels(cells_width, cells_height));
+    let (pixels_width, pixels_height) =
+        query_windows_terminal_pixels_from_cell_size(cells_width, cells_height)
+            .or_else(|| {
+                terminal_size.as_ref().and_then(|size| {
+                    let width = u32::from(size.width);
+                    let height = u32::from(size.height);
+                    (width > 0 && height > 0).then_some((width, height))
+                })
+            })
+            .unwrap_or_else(|| fallback_window_size_pixels(cells_width, cells_height));
     Some(TerminalWindowSize {
         cells_width,
         cells_height,
@@ -26,14 +27,14 @@ pub(super) fn query_terminal_window_size() -> Option<TerminalWindowSize> {
     })
 }
 
-#[cfg(windows)]
+#[cfg(any(unix, windows))]
 fn query_windows_terminal_pixels_from_cell_size(
     cells_width: u16,
     cells_height: u16,
 ) -> Option<(u32, u32)> {
     static CELL_PX: OnceLock<Option<(u32, u32)>> = OnceLock::new();
 
-    if env::var_os("WT_SESSION").is_none() {
+    if env::var_os("WT_SESSION").is_none() || env::var_os("TMUX").is_some() {
         return None;
     }
 
@@ -44,7 +45,7 @@ fn query_windows_terminal_pixels_from_cell_size(
     ))
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(unix, windows)))]
 fn query_windows_terminal_pixels_from_cell_size(
     _cells_width: u16,
     _cells_height: u16,
@@ -128,7 +129,58 @@ fn query_windows_terminal_cell_pixel_size() -> Option<(u32, u32)> {
     parse_cell_pixel_response(std::str::from_utf8(&buf[..filled]).ok()?)
 }
 
-#[cfg(any(test, windows))]
+#[cfg(unix)]
+fn query_windows_terminal_cell_pixel_size() -> Option<(u32, u32)> {
+    use std::io::Write;
+    use std::time::{Duration, Instant};
+
+    let mut stdout = std::io::stdout();
+    stdout.write_all(b"\x1b[16t").ok()?;
+    stdout.flush().ok()?;
+
+    let deadline = Instant::now() + Duration::from_millis(300);
+    let mut buf = [0u8; 64];
+    let mut filled = 0usize;
+
+    loop {
+        let remaining_ms = deadline
+            .saturating_duration_since(Instant::now())
+            .as_millis()
+            .min(300) as i32;
+        if remaining_ms <= 0 {
+            return None;
+        }
+
+        let mut poll_fd = libc::pollfd {
+            fd: libc::STDIN_FILENO,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let poll_result = unsafe { libc::poll(&mut poll_fd, 1, remaining_ms) };
+        if poll_result <= 0 || poll_fd.revents & libc::POLLIN == 0 {
+            return None;
+        }
+
+        let space = buf.len().saturating_sub(filled);
+        if space == 0 {
+            return None;
+        }
+        let bytes_read =
+            unsafe { libc::read(libc::STDIN_FILENO, buf[filled..].as_mut_ptr().cast(), space) };
+        if bytes_read <= 0 {
+            return None;
+        }
+        filled += bytes_read as usize;
+
+        if buf[..filled].contains(&b't') {
+            break;
+        }
+    }
+
+    parse_cell_pixel_response(std::str::from_utf8(&buf[..filled]).ok()?)
+}
+
+#[cfg(any(test, unix, windows))]
 fn parse_cell_pixel_response(s: &str) -> Option<(u32, u32)> {
     let start = s.find("\x1b[6;")?;
     let rest = &s[start + 4..];
