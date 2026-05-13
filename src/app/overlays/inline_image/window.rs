@@ -1,15 +1,7 @@
 use super::TerminalWindowSize;
 use crossterm::terminal;
-use std::env;
 #[cfg(windows)]
-use std::sync::OnceLock;
-
-// Reject TIOCGWINSZ pixels outside these per-cell bounds: tmux on WSL/ConPTY
-// leaks Windows Terminal's full-window pixel size as if it were the pane's.
-const MIN_PLAUSIBLE_CELL_PX_WIDTH: u32 = 4;
-const MAX_PLAUSIBLE_CELL_PX_WIDTH: u32 = 20;
-const MIN_PLAUSIBLE_CELL_PX_HEIGHT: u32 = 8;
-const MAX_PLAUSIBLE_CELL_PX_HEIGHT: u32 = 40;
+use std::{env, sync::OnceLock};
 
 pub(super) fn query_terminal_window_size() -> Option<TerminalWindowSize> {
     let terminal_size = terminal::window_size().ok();
@@ -22,15 +14,7 @@ pub(super) fn query_terminal_window_size() -> Option<TerminalWindowSize> {
         .and_then(|size| {
             let width = u32::from(size.width);
             let height = u32::from(size.height);
-            if width == 0 || height == 0 {
-                return None;
-            }
-            if env::var_os("TMUX").is_some()
-                && !is_plausible_cell_pixel_ratio(width, height, cells_width, cells_height)
-            {
-                return None;
-            }
-            Some((width, height))
+            (width > 0 && height > 0).then_some((width, height))
         })
         .or_else(|| query_windows_terminal_pixels_from_cell_size(cells_width, cells_height))
         .unwrap_or_else(|| fallback_window_size_pixels(cells_width, cells_height));
@@ -40,18 +24,6 @@ pub(super) fn query_terminal_window_size() -> Option<TerminalWindowSize> {
         pixels_width,
         pixels_height,
     })
-}
-
-fn is_plausible_cell_pixel_ratio(
-    pixels_width: u32,
-    pixels_height: u32,
-    cells_width: u16,
-    cells_height: u16,
-) -> bool {
-    let cell_px_w = pixels_width / u32::from(cells_width.max(1));
-    let cell_px_h = pixels_height / u32::from(cells_height.max(1));
-    (MIN_PLAUSIBLE_CELL_PX_WIDTH..=MAX_PLAUSIBLE_CELL_PX_WIDTH).contains(&cell_px_w)
-        && (MIN_PLAUSIBLE_CELL_PX_HEIGHT..=MAX_PLAUSIBLE_CELL_PX_HEIGHT).contains(&cell_px_h)
 }
 
 #[cfg(windows)]
@@ -204,13 +176,5 @@ mod tests {
     fn fallback_window_size_pixels_uses_reasonable_cell_defaults() {
         assert_eq!(fallback_window_size_pixels(100, 40), (800, 640));
         assert_eq!(fallback_window_size_pixels(0, 0), (8, 16));
-    }
-
-    #[test]
-    fn plausible_cell_pixel_ratio_filters_leaked_window_pixels() {
-        assert!(is_plausible_cell_pixel_ratio(800, 480, 80, 24)); // 10×20
-        assert!(is_plausible_cell_pixel_ratio(1280, 768, 80, 24)); // 16×32
-        assert!(!is_plausible_cell_pixel_ratio(1920, 1080, 80, 24)); // 24×45
-        assert!(!is_plausible_cell_pixel_ratio(10, 10, 80, 24)); // 0×0
     }
 }
