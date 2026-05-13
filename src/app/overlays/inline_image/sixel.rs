@@ -55,6 +55,9 @@ pub(in crate::app) fn encode_sixel_dcs(
 /// re-running the expensive encode for re-renders of the same image.
 pub(in crate::app) fn place_sixel_from_dcs(dcs: &[u8], placement: Rect) -> Result<Vec<u8>> {
     if tmux::inside_tmux() {
+        if detect_terminal_identity() == TerminalIdentity::WindowsTerminal {
+            return Ok(build_sixel_tmux_native_placement_sequence(dcs, placement));
+        }
         let origin = tmux::query_pane_origin()
             .ok_or_else(|| anyhow::anyhow!("tmux pane origin unavailable"))?;
         return Ok(build_sixel_tmux_placement_sequence(dcs, placement, origin));
@@ -68,6 +71,13 @@ fn build_sixel_placement_sequence(dcs: &[u8], placement: Rect) -> Vec<u8> {
         placement.y.saturating_add(1).into(),
         placement.x.saturating_add(1).into(),
     )
+}
+
+// Windows Terminal via WSL+tmux renders tmux passthrough Sixel incorrectly in
+// the alternate screen. Let tmux consume the raw Sixel and render it through
+// its native Sixel path instead.
+fn build_sixel_tmux_native_placement_sequence(dcs: &[u8], placement: Rect) -> Vec<u8> {
+    build_sixel_placement_sequence(dcs, placement)
 }
 
 fn build_sixel_tmux_placement_sequence(
@@ -650,6 +660,21 @@ mod tests {
             s,
             "\x1bPtmux;\x1b\x1b[7;14H\x1b\x1bP0;1;0qABC\x1b\x1b\\\x1b\\"
         );
+    }
+
+    #[test]
+    fn build_sixel_tmux_native_placement_keeps_pane_local_cursor_and_raw_dcs() {
+        let dcs = b"\x1bP0;1;0qABC\x1b\\";
+        let placement = Rect {
+            x: 10,
+            y: 4,
+            width: 3,
+            height: 2,
+        };
+        let out = build_sixel_tmux_native_placement_sequence(dcs, placement);
+        let s = String::from_utf8(out).expect("output should be valid utf8");
+
+        assert_eq!(s, "\x1b[5;11H\x1bP0;1;0qABC\x1b\\");
     }
 
     #[test]
