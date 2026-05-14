@@ -28,6 +28,7 @@ pub(super) fn render_help(
         e("Alt+← / Alt+→", "back / forward"),
     ];
     let search_entries = vec![
+        e(&kb.zoxide.to_string(), "zoxide history"),
         e(&kb.search_folders.to_string(), "search folders"),
         e("Ctrl+F", "search files"),
         e("Ctrl+←→", "move by word"),
@@ -109,7 +110,7 @@ pub(super) fn render_help(
         },
     ];
 
-    let popup = helpers::centered_rect(area, 90, 30);
+    let popup = helpers::centered_rect(area, 90, 31);
     state.help_panel = Some(popup);
     frame.render_widget(Clear, popup);
     frame.render_widget(

@@ -583,6 +583,12 @@ pub(in crate::app) struct InputRuntime {
     pub(in crate::app) last_key_nav_at: Instant,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum PendingTerminalTask {
+    Command { program: String, args: Vec<String> },
+    Zoxide,
+}
+
 pub struct App {
     pub(crate) navigation: NavigationState,
     pub(in crate::app) preview: PreviewRuntime,
@@ -591,10 +597,9 @@ pub struct App {
     pub(in crate::app) input: InputRuntime,
     pub(in crate::app) status: String,
     pub(crate) should_quit: bool,
-    /// Set by open-with when the chosen app has `Terminal=true`.  The event
-    /// loop in `lib.rs` drains this, suspends the TUI, runs the command
-    /// blocking in the current terminal, then restores the TUI.
-    pub(crate) pending_terminal_command: Option<(String, Vec<String>)>,
+    /// Set by features that need direct terminal control.  The event loop in
+    /// `lib.rs` drains this, suspends the TUI, runs the task, then restores the TUI.
+    pub(crate) pending_terminal_task: Option<PendingTerminalTask>,
 }
 
 impl App {
@@ -706,7 +711,7 @@ impl App {
             },
             status: String::new(),
             should_quit: false,
-            pending_terminal_command: None,
+            pending_terminal_task: None,
         };
         app.navigation.in_trash = App::path_is_trash(&app.navigation.cwd);
         let snapshot = crate::fs::load_directory_snapshot(

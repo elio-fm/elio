@@ -636,6 +636,49 @@ fn rebound_quit_key_sets_should_quit() {
 }
 
 #[test]
+fn zoxide_action_queues_pending_terminal_task() {
+    let root = temp_path("zoxide-action");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+    app.dispatch_action(Action::Zoxide)
+        .expect("dispatch should succeed");
+
+    assert_eq!(app.pending_terminal_task, Some(PendingTerminalTask::Zoxide));
+    assert!(app.status.is_empty());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn zoxide_selection_opens_directory() {
+    let root = temp_path("zoxide-selection");
+    let target = root.join("target");
+    fs::create_dir_all(&target).expect("failed to create target");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+    app.open_zoxide_selection(target.clone());
+    wait_for_directory_load(&mut app);
+
+    assert_eq!(app.navigation.cwd, target);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn missing_zoxide_selection_reports_error() {
+    let root = temp_path("zoxide-missing-selection");
+    let missing = root.join("missing");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+    app.open_zoxide_selection(missing);
+
+    assert!(app.status_message().starts_with("Cannot open "));
+    assert_eq!(app.navigation.cwd, root);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn capital_o_opens_open_with_overlay_for_selected_file() {
     let root = temp_path("open-with-overlay-file");
     fs::write(root.join("document.txt"), "hello").expect("failed to write temp file");

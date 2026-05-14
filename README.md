@@ -17,6 +17,7 @@ Snappy, batteries-included terminal file manager with rich previews, inline imag
 - **Keyboard and mouse navigation** — browse comfortably either way
 - **Grid and list views** — switch with `v`, zoom the grid with `+` / `-`
 - **Fuzzy search** — find folders and files quickly
+- **Zoxide jumps** — jump to frequent directories from your zoxide history
 - **Theming** — full palette and file-class control via `theme.toml`
 
 ---
@@ -115,6 +116,7 @@ Useful environment variables:
 | Variable | Effect |
 |---|---|
 | `ELIO_IMAGE_PREVIEWS=1` | Force-enable on unrecognized terminals that support the Kitty Graphics Protocol |
+| `ELIO_ZOXIDE_OPTS` | Extra options appended to the zoxide interactive picker options |
 | `ELIO_DEBUG_PREVIEW` | Log image preview activity to `elio-preview.log` in the system temp directory |
 | `ELIO_LOG_MOUSE` | Log raw mouse events to `elio-mouse.log` in the system temp directory |
 
@@ -210,6 +212,10 @@ On Freedesktop Trash systems, the stored filename may be changed to avoid collis
 ### Fuzzy Search
 
 `f` searches folders and `Ctrl+F` searches files in the current directory tree. Search follows the hidden-file setting, skips symlinks, prunes common generated folders such as `.git`, `node_modules`, and `target`, and refreshes when the directory changes. Very large trees are capped so search stays responsive.
+
+### Zoxide
+
+`z` opens `zoxide query -i` for jumping to directories from your zoxide history. It requires `zoxide` to be installed and available in `PATH`, and it shows results only after zoxide has recorded directory history. The current directory is excluded from the picker. Extra picker options can be appended with `ELIO_ZOXIDE_OPTS`.
 
 ---
 
@@ -320,6 +326,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 |---|---|
 | `f` `*` | Fuzzy-find folders in the current tree |
 | `Ctrl+F` | Fuzzy-find files in the current tree |
+| `z` `*` | Jump with zoxide directory history |
 
 ### File Actions
 

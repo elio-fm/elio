@@ -1,5 +1,8 @@
 use super::{
-    super::{App, state::OpenWithApp},
+    super::{
+        App,
+        state::{OpenWithApp, PendingTerminalTask},
+    },
     overlay::FallbackOpenOutcome,
     path_is_text_like,
 };
@@ -144,8 +147,11 @@ fn single_terminal_app_queues_pending_command_without_overlay() {
         "overlay must remain closed for direct terminal launch"
     );
     assert_eq!(
-        app.pending_terminal_command,
-        Some(("nvim".to_string(), vec!["/tmp/file.txt".to_string()]))
+        app.pending_terminal_task,
+        Some(PendingTerminalTask::Command {
+            program: "nvim".to_string(),
+            args: vec!["/tmp/file.txt".to_string()],
+        })
     );
     assert!(app.status.is_empty());
 
@@ -174,8 +180,11 @@ fn confirm_terminal_app_from_overlay_queues_pending_command() {
 
     assert!(app.overlays.open_with.is_none(), "overlay must close");
     assert_eq!(
-        app.pending_terminal_command,
-        Some(("nvim".to_string(), vec!["/tmp/file.txt".to_string()]))
+        app.pending_terminal_task,
+        Some(PendingTerminalTask::Command {
+            program: "nvim".to_string(),
+            args: vec!["/tmp/file.txt".to_string()],
+        })
     );
     assert!(app.status.is_empty());
 

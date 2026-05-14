@@ -1193,6 +1193,10 @@ fn help_overlay_keeps_controls_readable_and_drops_auto_reload_row() {
         "expected help overlay to keep the file search shortcut visible, got: {rendered:?}"
     );
     assert!(
+        rendered.contains("zoxide history"),
+        "expected help overlay to list the zoxide shortcut, got: {rendered:?}"
+    );
+    assert!(
         rendered.contains("Alt/Shift+Enter"),
         "expected help overlay to show the current create prompt newline hint, got: {rendered:?}"
     );

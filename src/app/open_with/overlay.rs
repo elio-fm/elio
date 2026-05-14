@@ -2,7 +2,7 @@ use std::path::Path;
 
 use super::super::{
     App,
-    state::{OpenWithApp, OpenWithOverlay, OpenWithRow},
+    state::{OpenWithApp, OpenWithOverlay, OpenWithRow, PendingTerminalTask},
 };
 use crate::fs::{detached_open_command, open_in_system};
 use anyhow::Result;
@@ -93,7 +93,7 @@ impl App {
         self.overlays.open_with = None;
 
         if requires_terminal {
-            self.pending_terminal_command = Some((program, args));
+            self.pending_terminal_task = Some(PendingTerminalTask::Command { program, args });
             self.status.clear();
         } else {
             match detached_open_command(&program, &args) {
@@ -110,7 +110,7 @@ impl App {
     /// more.
     ///
     /// `launch_app` is called only for GUI apps (`requires_terminal == false`).
-    /// Terminal apps set `pending_terminal_command` on `self` directly so that
+    /// Terminal apps set `pending_terminal_task` on `self` directly so that
     /// the caller in `lib.rs` can suspend the TUI before running them.
     pub(in crate::app) fn handle_discovered_open_with_apps<F, G>(
         &mut self,
@@ -136,7 +136,10 @@ impl App {
             1 => {
                 let app = apps.remove(0);
                 if app.requires_terminal {
-                    self.pending_terminal_command = Some((app.program.clone(), app.args.clone()));
+                    self.pending_terminal_task = Some(PendingTerminalTask::Command {
+                        program: app.program.clone(),
+                        args: app.args.clone(),
+                    });
                     self.status.clear();
                 } else {
                     match launch_app(&app) {

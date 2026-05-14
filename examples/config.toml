@@ -71,6 +71,7 @@ show_top_bar = false
 # rename               = "r"
 # copy_path            = "c"
 # search_folders       = "f"
+# zoxide               = "z"
 # open                 = "o"
 # open_with            = "O"
 # sort                 = "s"
