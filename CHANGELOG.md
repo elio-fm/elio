@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-05-14
+
 ### Added
 
 - Added a configurable `z` shortcut for jumping to directories with `zoxide query -i`, excluding the current directory from the picker and reporting missing zoxide, empty history, or history containing only the current directory clearly. ([#103])
@@ -124,7 +126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Trash and restore support for safer file management workflows.
 - Optional external-tool integrations such as Poppler, ffmpeg, ffprobe, resvg, and 7-Zip for richer previews and metadata.
 
-[Unreleased]: https://github.com/elio-fm/elio/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/elio-fm/elio/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/elio-fm/elio/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/elio-fm/elio/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/elio-fm/elio/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/elio-fm/elio/compare/v1.1.0...v1.2.0

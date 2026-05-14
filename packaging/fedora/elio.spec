@@ -1,5 +1,5 @@
 %bcond_with check
-%global fallback_version 1.4.0
+%global fallback_version 1.5.0
 %global fallback_release 1
 
 Name:           elio
@@ -44,6 +44,13 @@ install -Dpm0755 target/rpm/%{name} %{buildroot}%{_bindir}/%{name}
 %{_bindir}/elio
 
 %changelog
+* Thu May 14 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.5.0-1
+- Add zoxide directory jumps
+- Add transparent theme color values and chip text palette control
+- Improve image previews inside tmux with automatic passthrough setup and expanded Sixel, iTerm inline, and Kitty direct-placement handling
+- Fix Windows Terminal Sixel preview sizing on WSL
+- Improve bundled light-theme chip contrast
+
 * Sun May 03 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.4.0-1
 - Add startup directory argument
 - Add keyboard preview scrolling and updated preview controls
