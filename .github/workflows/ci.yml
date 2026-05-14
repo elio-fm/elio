@@ -52,6 +52,8 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: cargo fmt --check
         run: cargo fmt --check
@@ -95,6 +97,8 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: cargo build --locked
         run: cargo build --locked
@@ -115,6 +119,8 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: cargo build --locked
         run: cargo build --locked
