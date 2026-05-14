@@ -5,8 +5,9 @@ mod file_info;
 mod fs;
 mod preview;
 mod ui;
+mod zoxide;
 
-use crate::app::App;
+use crate::app::{App, PendingTerminalTask};
 use anyhow::Result;
 use crossterm::{
     cursor::SetCursorStyle,
@@ -96,7 +97,10 @@ fn try_init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
 
 /// Temporarily tears down the TUI so a blocking terminal app can use stdout.
 /// Call [`resume_terminal`] afterwards to restore the TUI.
-fn suspend_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+fn suspend_terminal(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    leave_alternate: bool,
+) -> Result<()> {
     let backend = terminal.backend_mut();
     write!(backend, "\x1b[>4;0m")?;
     write!(backend, "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l")?;
@@ -106,9 +110,13 @@ fn suspend_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
         terminal.backend_mut(),
         event::DisableMouseCapture,
         DisableFocusChange,
-        SetCursorStyle::DefaultUserShape,
-        LeaveAlternateScreen
+        SetCursorStyle::DefaultUserShape
     )?;
+    if leave_alternate {
+        execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    } else {
+        terminal.clear()?;
+    }
     disable_raw_mode()?;
     terminal.show_cursor()?;
     Ok(())
@@ -139,6 +147,20 @@ fn resume_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Res
 /// unable to open a file) should not crash the file manager.
 fn run_blocking_in_terminal(program: &str, args: &[String]) {
     let _ = Command::new(program).args(args).status();
+}
+
+fn apply_zoxide_query_result(app: &mut App, result: zoxide::QueryResult) {
+    match result {
+        zoxide::QueryResult::Selected(path) => app.open_zoxide_selection(path),
+        zoxide::QueryResult::Cancelled => {}
+        zoxide::QueryResult::NotFound => app.set_status_message("zoxide not found"),
+        zoxide::QueryResult::PickerNotFound => app.set_status_message("fzf not found"),
+        zoxide::QueryResult::Empty => app.set_status_message("No zoxide directory history found"),
+        zoxide::QueryResult::OnlyCurrentDirectory => {
+            app.set_status_message("Zoxide history only contains the current directory")
+        }
+        zoxide::QueryResult::LaunchFailed => app.set_status_message("Could not run zoxide"),
+    }
 }
 
 fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
@@ -404,12 +426,31 @@ fn run_app(
                 break;
             }
 
-            // A terminal app (e.g. nvim) was chosen from Open With.
-            // Suspend the TUI, run the command blocking, then restore.
-            if let Some((program, args)) = app.pending_terminal_command.take() {
-                suspend_terminal(terminal)?;
-                run_blocking_in_terminal(&program, &args);
-                resume_terminal(terminal)?;
+            // A terminal task (e.g. nvim from Open With, or zoxide) needs the real terminal.
+            // Suspend the TUI, run the task blocking, then restore.
+            if let Some(task) = app.pending_terminal_task.take() {
+                let zoxide_result = match task {
+                    PendingTerminalTask::Command { program, args } => {
+                        suspend_terminal(terminal, true)?;
+                        run_blocking_in_terminal(&program, &args);
+                        resume_terminal(terminal)?;
+                        None
+                    }
+                    PendingTerminalTask::Zoxide => {
+                        let cwd = app.navigation.cwd.clone();
+                        if let Some(result) = zoxide::preflight(&cwd) {
+                            Some(result)
+                        } else {
+                            suspend_terminal(terminal, false)?;
+                            let result = zoxide::run_query_in_terminal(&cwd);
+                            resume_terminal(terminal)?;
+                            Some(result)
+                        }
+                    }
+                };
+                if let Some(result) = zoxide_result {
+                    apply_zoxide_query_result(&mut app, result);
+                }
                 dirty = true;
             }
         }

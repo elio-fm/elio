@@ -282,6 +282,10 @@ impl App {
             }
             Action::CopyPath => self.open_copy_overlay(),
             Action::SearchFolders => self.open_search_with_status(SearchScope::Folders),
+            Action::Zoxide => {
+                self.pending_terminal_task = Some(PendingTerminalTask::Zoxide);
+                self.status.clear();
+            }
             Action::Open => self.open_in_system()?,
             Action::OpenWith => self.open_open_with_overlay(),
             Action::Sort => self.cycle_sort_mode()?,

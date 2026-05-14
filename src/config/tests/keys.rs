@@ -7,6 +7,7 @@ fn keys_default_bindings_are_sane() {
     assert_eq!(config.keys.cut, 'x');
     assert_eq!(config.keys.paste, 'p');
     assert_eq!(config.keys.quit, 'q');
+    assert_eq!(config.keys.zoxide, 'z');
 }
 
 #[test]
@@ -119,8 +120,8 @@ fn action_for_returns_correct_action_for_default_bindings() {
     assert_eq!(key_bindings.action_for('q'), Some(Action::Quit));
     assert_eq!(key_bindings.action_for('o'), Some(Action::Open));
     assert_eq!(key_bindings.action_for('O'), Some(Action::OpenWith));
+    assert_eq!(key_bindings.action_for('z'), Some(Action::Zoxide));
     assert_eq!(key_bindings.action_for('j'), None);
-    assert_eq!(key_bindings.action_for('z'), None);
 }
 
 #[test]
@@ -154,6 +155,19 @@ open_with = "w"
     .expect("config should parse");
     assert_eq!(config.keys.action_for('w'), Some(Action::OpenWith));
     assert_eq!(config.keys.action_for('O'), None);
+}
+
+#[test]
+fn zoxide_can_be_overridden() {
+    let config = Config::from_str(
+        r#"
+[keys]
+zoxide = "Z"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('Z'), Some(Action::Zoxide));
+    assert_eq!(config.keys.action_for('z'), None);
 }
 
 #[test]

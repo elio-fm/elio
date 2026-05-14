@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a configurable `z` shortcut for jumping to directories with `zoxide query -i`, excluding the current directory from the picker and reporting missing zoxide, empty history, or history containing only the current directory clearly. ([#103])
 - Added `"none"` (alias: `"transparent"`) as accepted color values in `theme.toml`, resetting foreground or background colors to the terminal default. For background fields, this lets transparent terminals show through. See `examples/themes/transparent/theme.toml`. ([#86])
 - Added a `chip_text` palette field that controls the foreground of toolbar status chips (yank, cut, selected, trash, restore). Defaults to `#0c0c0c` on all themes; previously this color was reused from `chrome`. ([#86])
 
@@ -137,3 +138,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#74]: https://github.com/elio-fm/elio/pull/74
 [#70]: https://github.com/elio-fm/elio/issues/70
 [#66]: https://github.com/elio-fm/elio/pull/66
+[#103]: https://github.com/elio-fm/elio/issues/103

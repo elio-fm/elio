@@ -30,6 +30,21 @@ impl App {
         }
     }
 
+    pub(crate) fn open_zoxide_selection(&mut self, path: PathBuf) {
+        let target = if path.is_absolute() {
+            path
+        } else {
+            self.navigation.cwd.join(path)
+        };
+        if let Err(error) = self.set_dir(target) {
+            self.status = error.to_string();
+        }
+    }
+
+    pub(crate) fn set_status_message(&mut self, status: impl Into<String>) {
+        self.status = status.into();
+    }
+
     pub(in crate::app) fn toggle_view_mode(&mut self) {
         self.clear_wheel_scroll();
         self.navigation.view_mode = self.navigation.view_mode.toggle();
