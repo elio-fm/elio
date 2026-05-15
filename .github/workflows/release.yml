@@ -169,6 +169,8 @@ jobs:
           mkdir -p "${bundle_dir}"
           cp target/release/elio "${bundle_dir}/"
           cp README.md LICENSE-MIT "${bundle_dir}/"
+          mkdir -p "${bundle_dir}/packaging"
+          cp -R packaging/linux "${bundle_dir}/packaging/"
           tar -C dist -czf "dist/elio-${version}-${host_target}.tar.gz" "$(basename "${bundle_dir}")"
 
       - name: Upload Linux artifact

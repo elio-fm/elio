@@ -18,6 +18,8 @@ BuildRequires:  rust >= 1.93
 BuildRequires:  gcc
 BuildRequires:  pkgconf-pkg-config
 BuildRequires:  zstd
+BuildRequires:  desktop-file-utils
+Requires:       hicolor-icon-theme
 
 %description
 elio is a terminal-native file manager with a three-pane layout, rich previews,
@@ -32,8 +34,13 @@ inline images, customizable Places, trash support, and quick actions.
 
 %install
 install -Dpm0755 target/rpm/%{name} %{buildroot}%{_bindir}/%{name}
+install -Dpm0644 packaging/linux/%{name}.desktop %{buildroot}%{_datadir}/applications/%{name}.desktop
+for size in 48 128 256 512; do
+    install -Dpm0644 packaging/linux/icons/hicolor/${size}x${size}/apps/%{name}.png %{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/%{name}.png
+done
 
 %check
+desktop-file-validate packaging/linux/%{name}.desktop
 %if %{with check}
 %cargo_test
 %endif
@@ -42,6 +49,8 @@ install -Dpm0755 target/rpm/%{name} %{buildroot}%{_bindir}/%{name}
 %license LICENSE-MIT
 %doc README.md CHANGELOG.md
 %{_bindir}/elio
+%{_datadir}/applications/%{name}.desktop
+%{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
 * Thu May 14 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.5.0-1
