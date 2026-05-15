@@ -143,7 +143,7 @@ jobs:
   build-linux:
     name: Build release artifact (Linux)
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
@@ -155,8 +155,21 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
 
+      - name: Install Debian packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y desktop-file-utils dpkg-dev liblzma-dev pkg-config
+          cargo install --locked cargo-deb --version 3.7.0
+
       - name: Build release binary
         run: cargo build --locked --release
+
+      - name: Build Debian package
+        run: |
+          desktop-file-validate packaging/linux/elio.desktop
+          cargo deb --no-build
+          mkdir -p dist
+          cp target/debian/*.deb dist/elio_amd64.deb
 
       - name: Package Linux artifact
         shell: bash
@@ -177,7 +190,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: release-asset-linux
-          path: dist/*.tar.gz
+          path: |
+            dist/*.tar.gz
+            dist/*.deb
 
   build-macos:
     name: Build release artifact (macOS)

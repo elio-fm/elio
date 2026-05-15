@@ -41,6 +41,17 @@ sudo dnf copr enable miguelregueiro/elio
 sudo dnf install elio
 ```
 
+### Debian / Ubuntu
+
+Download the `amd64` `.deb` package from the [latest release](https://github.com/elio-fm/elio/releases/latest) and install it with `apt`:
+
+```bash
+curl -LO https://github.com/elio-fm/elio/releases/latest/download/elio_amd64.deb
+sudo apt install ./elio_amd64.deb
+```
+
+This does not configure an apt repository. To update elio, re-run the two commands above — they always fetch the latest release.
+
 ### Homebrew
 
 Install from the Homebrew tap:

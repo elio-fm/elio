@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added Linux desktop entry metadata and hicolor application icons for packaged installs, allowing desktop launchers to discover elio as a terminal file manager. ([#67])
+- Added `amd64` Debian package assets to GitHub releases, including the Linux desktop entry and hicolor application icons for launcher integration.
 
 ## [1.5.0] - 2026-05-14
 
