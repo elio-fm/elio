@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=elio
+Comment=Snappy terminal file manager with rich previews
+Icon=elio
+TryExec=elio
+Exec=elio %f
+Terminal=true
+MimeType=inode/directory;
+Categories=System;FileManager;FileTools;ConsoleOnly;
+Keywords=Files;Folders;Directory;Manager;Explorer;Terminal;TUI;Preview;

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added Linux desktop entry metadata and hicolor application icons for packaged installs, allowing desktop launchers to discover elio as a terminal file manager. ([#67])
+
 ## [1.5.0] - 2026-05-14
 
 ### Added
@@ -140,5 +144,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#75]: https://github.com/elio-fm/elio/issues/75
 [#74]: https://github.com/elio-fm/elio/pull/74
 [#70]: https://github.com/elio-fm/elio/issues/70
+[#67]: https://github.com/elio-fm/elio/issues/67
 [#66]: https://github.com/elio-fm/elio/pull/66
 [#103]: https://github.com/elio-fm/elio/issues/103
