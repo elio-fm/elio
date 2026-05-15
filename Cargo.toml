@@ -46,6 +46,27 @@ strip = true
 lto = "thin"
 codegen-units = 1
 
+[package.metadata.deb]
+maintainer = "Miguel Regueiro <67692547+MiguelRegueiro@users.noreply.github.com>"
+license-file = ["LICENSE-MIT", "0"]
+section = "utils"
+priority = "optional"
+depends = "$auto, hicolor-icon-theme, desktop-file-utils"
+extended-description = """\
+elio is a snappy, batteries-included terminal file manager with rich previews, \
+inline images, bulk actions, and trash support.
+"""
+assets = [
+    ["target/release/elio", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/elio/README.md", "644"],
+    ["CHANGELOG.md", "usr/share/doc/elio/CHANGELOG.md", "644"],
+    ["packaging/linux/elio.desktop", "usr/share/applications/elio.desktop", "644"],
+    ["packaging/linux/icons/hicolor/48x48/apps/elio.png", "usr/share/icons/hicolor/48x48/apps/elio.png", "644"],
+    ["packaging/linux/icons/hicolor/128x128/apps/elio.png", "usr/share/icons/hicolor/128x128/apps/elio.png", "644"],
+    ["packaging/linux/icons/hicolor/256x256/apps/elio.png", "usr/share/icons/hicolor/256x256/apps/elio.png", "644"],
+    ["packaging/linux/icons/hicolor/512x512/apps/elio.png", "usr/share/icons/hicolor/512x512/apps/elio.png", "644"],
+]
+
 [target.'cfg(target_os = "macos")'.dependencies]
 # Foundation types for path/string handling, display names, and bundle IDs.
 # CoreServices (linked inline in macos.rs) provides the Launch Services C API

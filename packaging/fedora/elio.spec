@@ -22,8 +22,8 @@ BuildRequires:  desktop-file-utils
 Requires:       hicolor-icon-theme
 
 %description
-elio is a terminal-native file manager with a three-pane layout, rich previews,
-inline images, customizable Places, trash support, and quick actions.
+elio is a snappy, batteries-included terminal file manager with rich previews,
+inline images, bulk actions, and trash support.
 
 %prep
 %autosetup -a 1
