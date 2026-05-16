@@ -41,7 +41,7 @@ sudo dnf copr enable miguelregueiro/elio
 sudo dnf install elio
 ```
 
-### Debian / Ubuntu
+### Debian and Ubuntu-based Linux
 
 Configure the official apt repository and install with `apt`:
 
