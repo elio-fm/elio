@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed `Tab` / `Shift+Tab` cycling and the active highlight for symlinked Places entries, which previously reset to Home after opening the symlink target. ([#109])
+
 ## [1.5.1] - 2026-05-15
 
 ### Added
