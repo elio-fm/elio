@@ -201,11 +201,13 @@ fn tab_and_shift_tab_cycle_sidebar_locations_and_skip_section_rows() {
                 "Home",
                 "H",
                 root.clone(),
+                root.clone(),
             )),
             SidebarRow::Item(SidebarItem::new(
                 SidebarItemKind::Downloads,
                 "Downloads",
                 "D",
+                downloads.clone(),
                 downloads.clone(),
             )),
             SidebarRow::Section { title: "Devices" },
@@ -213,6 +215,7 @@ fn tab_and_shift_tab_cycle_sidebar_locations_and_skip_section_rows() {
                 SidebarItemKind::Device { removable: true },
                 "USB",
                 "U",
+                usb.clone(),
                 usb.clone(),
             )),
         ]
@@ -247,6 +250,80 @@ fn tab_and_shift_tab_cycle_sidebar_locations_and_skip_section_rows() {
         .expect("shift-tab should walk sidebar locations in reverse");
     wait_for_directory_load(&mut app);
     assert_eq!(app.navigation.cwd, downloads);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn tab_and_shift_tab_match_symlinked_sidebar_locations_by_identity() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_path("tab-cycles-symlinked-places");
+    let target = root.join("target");
+    let linked = root.join("linked");
+    let next = root.join("next");
+    fs::create_dir_all(&target).expect("failed to create target dir");
+    fs::create_dir_all(&next).expect("failed to create next dir");
+    symlink(&target, &linked).expect("failed to create sidebar symlink");
+
+    let root_identity = root.canonicalize().expect("root should canonicalize");
+    let target_identity = target.canonicalize().expect("target should canonicalize");
+    let next_identity = next.canonicalize().expect("next should canonicalize");
+    let sidebar_rows = || {
+        vec![
+            SidebarRow::Item(SidebarItem::new(
+                SidebarItemKind::Home,
+                "Home",
+                "H",
+                root.clone(),
+                root_identity.clone(),
+            )),
+            SidebarRow::Item(SidebarItem::new(
+                SidebarItemKind::Custom,
+                "Linked",
+                "L",
+                linked.clone(),
+                target_identity.clone(),
+            )),
+            SidebarRow::Item(SidebarItem::new(
+                SidebarItemKind::Downloads,
+                "Next",
+                "N",
+                next.clone(),
+                next_identity.clone(),
+            )),
+        ]
+    };
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.set_dir(linked.clone())
+        .expect("symlinked place should open");
+    wait_for_directory_load(&mut app);
+    assert_eq!(app.navigation.cwd, target_identity);
+
+    app.navigation.sidebar = sidebar_rows();
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
+        .expect("tab should advance past the symlinked sidebar location");
+    wait_for_directory_load(&mut app);
+    assert_eq!(app.navigation.cwd, next_identity);
+
+    app.set_dir(linked.clone())
+        .expect("symlinked place should reopen");
+    wait_for_directory_load(&mut app);
+    app.navigation.sidebar = sidebar_rows();
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::BackTab)))
+        .expect("shift-tab should walk backward from the symlinked sidebar location");
+    wait_for_directory_load(&mut app);
+    assert_eq!(app.navigation.cwd, root_identity);
+
+    app.set_dir(next.clone()).expect("next place should open");
+    wait_for_directory_load(&mut app);
+    app.navigation.sidebar = sidebar_rows();
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::BackTab)))
+        .expect("shift-tab should open the symlinked sidebar location");
+    wait_for_directory_load(&mut app);
+    assert_eq!(app.navigation.cwd, target_identity);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

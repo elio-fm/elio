@@ -527,6 +527,7 @@ fn sidebar_clamps_long_labels_when_width_is_tight() {
         "Downloads Directory",
         "D",
         root.clone(),
+        root.clone(),
     ))];
 
     let mut terminal = Terminal::new(TestBackend::new(14, 5)).expect("terminal should init");
@@ -566,6 +567,7 @@ fn sidebar_sections_render_without_creating_click_targets() {
             "Vacation",
             "U",
             drive.clone(),
+            drive.clone(),
         )),
     ];
 
@@ -591,6 +593,52 @@ fn sidebar_sections_render_without_creating_click_targets() {
     );
     assert_eq!(frame_state.sidebar_hits.len(), 1);
     assert_eq!(frame_state.sidebar_hits[0].path, drive);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn sidebar_marks_symlinked_place_active_by_identity_path() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_path("sidebar-symlink-active");
+    let target = root.join("target");
+    let linked = root.join("linked");
+    fs::create_dir_all(&target).expect("failed to create target dir");
+    symlink(&target, &linked).expect("failed to create sidebar symlink");
+
+    let target_identity = target.canonicalize().expect("target should canonicalize");
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.navigation.cwd = target_identity.clone();
+    app.navigation.sidebar = vec![SidebarRow::Item(SidebarItem::new(
+        SidebarItemKind::Custom,
+        "Linked",
+        "L",
+        linked.clone(),
+        target_identity,
+    ))];
+
+    let mut terminal = Terminal::new(TestBackend::new(18, 4)).expect("terminal should init");
+    let mut frame_state = FrameState::default();
+    terminal
+        .draw(|frame| {
+            render_sidebar(
+                frame,
+                frame.area(),
+                &app,
+                &mut frame_state,
+                theme::palette(),
+            );
+        })
+        .expect("sidebar should render");
+
+    assert!(
+        row_text(terminal.backend().buffer(), 1).contains("▌"),
+        "symlinked sidebar place should render as active"
+    );
+    assert_eq!(frame_state.sidebar_hits.len(), 1);
+    assert_eq!(frame_state.sidebar_hits[0].path, linked);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

@@ -609,6 +609,7 @@ impl App {
     }
 
     pub fn new_at(cwd: PathBuf) -> Result<Self> {
+        let cwd = cwd.canonicalize().unwrap_or(cwd);
         let scheduler = JobScheduler::new();
         let (directory_watch_tx, directory_watch_rx) = std::sync::mpsc::channel();
         let mut app = Self {

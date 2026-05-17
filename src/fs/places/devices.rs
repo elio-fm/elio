@@ -4,7 +4,7 @@
     target_os = "freebsd",
     target_os = "openbsd"
 ))]
-use super::resolution::path_identity_key;
+use super::resolution::{path_identity_key, sidebar_item};
 use crate::core::SidebarItem;
 #[cfg(any(
     target_os = "macos",
@@ -67,7 +67,7 @@ pub(super) fn mounted_device_items(
             continue;
         };
 
-        items.push(SidebarItem::new(
+        items.push(sidebar_item(
             SidebarItemKind::Device { removable: false },
             title,
             "󰋊",
@@ -95,7 +95,7 @@ pub(super) fn mounted_device_items(
     for letter in b'A'..=b'Z' {
         let path = PathBuf::from(format!("{}:\\", letter as char));
         if path.exists() && !pinned_paths.contains(&path_identity_key(&path)) {
-            items.push(SidebarItem::new(
+            items.push(sidebar_item(
                 SidebarItemKind::Device { removable: false },
                 format!("{}:", letter as char),
                 "󰋊",
@@ -155,7 +155,7 @@ pub(super) fn mounted_device_items(
             })
             .unwrap_or_else(|| path.display().to_string());
 
-        items.push(SidebarItem::new(
+        items.push(sidebar_item(
             SidebarItemKind::Device { removable: false },
             title,
             "󰋊",

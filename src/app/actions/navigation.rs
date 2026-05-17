@@ -343,7 +343,7 @@ impl App {
 
         let current = places
             .iter()
-            .position(|item| item.path == self.navigation.cwd);
+            .position(|item| item.identity_path == self.navigation.cwd);
         let next = if delta >= 0 {
             current.map(|index| (index + 1) % places.len()).unwrap_or(0)
         } else {

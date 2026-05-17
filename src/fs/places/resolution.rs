@@ -50,7 +50,7 @@ pub(super) fn build_sidebar_rows_with_context(
     let pinned_items = build_pinned_sidebar_items(places, context);
     let pinned_paths = pinned_items
         .iter()
-        .map(|item| path_identity_key(&item.path))
+        .map(|item| item.identity_path.clone())
         .collect::<HashSet<_>>();
     let mut rows = pinned_items
         .into_iter()
@@ -97,7 +97,7 @@ fn build_pinned_sidebar_items(
         let Some(item) = resolve_place_entry(entry, context) else {
             continue;
         };
-        if seen_paths.insert(path_identity_key(&item.path)) {
+        if seen_paths.insert(item.identity_path.clone()) {
             items.push(item);
         }
     }
@@ -113,7 +113,7 @@ fn resolve_place_entry(
         PlaceEntrySpec::Builtin { place, icon } => {
             resolve_builtin_place(*place, icon.as_deref(), context)
         }
-        PlaceEntrySpec::Custom { title, path, icon } => Some(SidebarItem::new(
+        PlaceEntrySpec::Custom { title, path, icon } => Some(sidebar_item(
             SidebarItemKind::Custom,
             title.clone(),
             icon.as_deref().unwrap_or(CUSTOM_PLACE_ICON),
@@ -128,14 +128,14 @@ fn resolve_builtin_place(
     context: &PlaceResolutionContext,
 ) -> Option<SidebarItem> {
     match place {
-        BuiltinPlace::Home => Some(SidebarItem::new(
+        BuiltinPlace::Home => Some(sidebar_item(
             SidebarItemKind::Home,
             "Home",
             icon_override.unwrap_or("󰋜"),
             context.home.clone(),
         )),
         BuiltinPlace::Desktop => context.desktop.clone().map(|path| {
-            SidebarItem::new(
+            sidebar_item(
                 SidebarItemKind::Desktop,
                 localized_place_title(&path, "Desktop"),
                 icon_override.unwrap_or("󰍹"),
@@ -143,7 +143,7 @@ fn resolve_builtin_place(
             )
         }),
         BuiltinPlace::Documents => context.documents.clone().map(|path| {
-            SidebarItem::new(
+            sidebar_item(
                 SidebarItemKind::Documents,
                 localized_place_title(&path, "Documents"),
                 icon_override.unwrap_or("󰲃"),
@@ -151,7 +151,7 @@ fn resolve_builtin_place(
             )
         }),
         BuiltinPlace::Downloads => context.downloads.clone().map(|path| {
-            SidebarItem::new(
+            sidebar_item(
                 SidebarItemKind::Downloads,
                 localized_place_title(&path, "Downloads"),
                 icon_override.unwrap_or("󰉍"),
@@ -159,7 +159,7 @@ fn resolve_builtin_place(
             )
         }),
         BuiltinPlace::Pictures => context.pictures.clone().map(|path| {
-            SidebarItem::new(
+            sidebar_item(
                 SidebarItemKind::Pictures,
                 localized_place_title(&path, "Pictures"),
                 icon_override.unwrap_or("󰉏"),
@@ -167,7 +167,7 @@ fn resolve_builtin_place(
             )
         }),
         BuiltinPlace::Music => context.music.clone().map(|path| {
-            SidebarItem::new(
+            sidebar_item(
                 SidebarItemKind::Music,
                 localized_place_title(&path, "Music"),
                 icon_override.unwrap_or("󱍙"),
@@ -175,7 +175,7 @@ fn resolve_builtin_place(
             )
         }),
         BuiltinPlace::Videos => context.videos.clone().map(|path| {
-            SidebarItem::new(
+            sidebar_item(
                 SidebarItemKind::Videos,
                 localized_place_title(&path, videos_label()),
                 icon_override.unwrap_or("󰕧"),
@@ -183,7 +183,7 @@ fn resolve_builtin_place(
             )
         }),
         BuiltinPlace::Root => context.root.clone().map(|path| {
-            SidebarItem::new(
+            sidebar_item(
                 SidebarItemKind::Root,
                 "Root",
                 icon_override.unwrap_or("󰋊"),
@@ -191,7 +191,7 @@ fn resolve_builtin_place(
             )
         }),
         BuiltinPlace::Trash => context.trash.clone().map(|path| {
-            SidebarItem::new(
+            sidebar_item(
                 SidebarItemKind::Trash,
                 "Trash",
                 icon_override.unwrap_or("󰩺"),
@@ -199,6 +199,16 @@ fn resolve_builtin_place(
             )
         }),
     }
+}
+
+pub(super) fn sidebar_item(
+    kind: SidebarItemKind,
+    title: impl Into<String>,
+    icon: impl Into<String>,
+    path: PathBuf,
+) -> SidebarItem {
+    let identity_path = path_identity_key(&path);
+    SidebarItem::new(kind, title, icon, path, identity_path)
 }
 
 fn localized_place_title(path: &Path, fallback: &'static str) -> String {

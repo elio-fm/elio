@@ -193,3 +193,36 @@ fn places_deduplicate_entries_by_resolved_path() {
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[cfg(unix)]
+#[test]
+fn custom_symlinked_places_store_resolved_identity_path() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_path("symlink-identity-sidebar");
+    let context = context_for(&root);
+    let target = root.join("target");
+    let linked = root.join("linked");
+    fs::create_dir_all(&target).expect("failed to create target dir");
+    symlink(&target, &linked).expect("failed to create symlinked place");
+    let places = PlacesConfig {
+        show_devices: false,
+        entries: vec![PlaceEntrySpec::Custom {
+            title: "Linked".to_string(),
+            path: linked.clone(),
+            icon: None,
+        }],
+    };
+
+    let rows = build_sidebar_rows_with_context(&places, &context);
+    let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].path, linked);
+    assert_eq!(
+        items[0].identity_path,
+        target.canonicalize().expect("target should canonicalize")
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}

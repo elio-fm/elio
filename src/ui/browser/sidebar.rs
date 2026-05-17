@@ -50,7 +50,7 @@ pub(super) fn render_sidebar(
                 );
             }
             SidebarRow::Item(item) => {
-                let active = helpers::path_is_active(&app.navigation.cwd, &item.path);
+                let active = helpers::path_is_active(&app.navigation.cwd, &item.identity_path);
                 let bg = if active {
                     palette.sidebar_active
                 } else {

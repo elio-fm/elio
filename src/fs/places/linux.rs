@@ -1,4 +1,4 @@
-use super::resolution::path_identity_key;
+use super::resolution::{path_identity_key, sidebar_item};
 use crate::core::{SidebarItem, SidebarItemKind};
 use std::{
     collections::{HashMap, HashSet},
@@ -69,7 +69,7 @@ fn linux_device_items_from_mounts(
             continue;
         }
 
-        items.push(SidebarItem::new(
+        items.push(sidebar_item(
             SidebarItemKind::Device { removable },
             linux_mount_title(mount, labels),
             if removable { "󰕓" } else { "󰋊" },

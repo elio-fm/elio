@@ -5,6 +5,8 @@ pub struct SidebarItem {
     pub kind: SidebarItemKind,
     pub title: String,
     pub icon: String,
+    /// Canonical comparison key for this path. `path` remains the path to open.
+    pub identity_path: PathBuf,
     pub path: PathBuf,
 }
 
@@ -14,11 +16,13 @@ impl SidebarItem {
         title: impl Into<String>,
         icon: impl Into<String>,
         path: PathBuf,
+        identity_path: PathBuf,
     ) -> Self {
         Self {
             kind,
             title: title.into(),
             icon: icon.into(),
+            identity_path,
             path,
         }
     }
