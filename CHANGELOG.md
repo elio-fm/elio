@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Improved fuzzy search for large directory trees: matches now appear while scanning continues, stale scans are canceled automatically, the scan cap is much higher, and the overlay reports `scan limit reached` when the cap is hit.
 - Fixed fuzzy search so symlinked folders, symlinked files, and broken symlinks appear as searchable entries. Linked directories are listed but not descended into.
 - Fixed `Tab` / `Shift+Tab` cycling and the active highlight for symlinked Places entries, which previously reset to Home after opening the symlink target. ([#109])
 

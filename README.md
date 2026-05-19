@@ -224,7 +224,7 @@ On Freedesktop Trash systems, the stored filename may be changed to avoid collis
 
 ### Fuzzy Search
 
-`f` searches folders and `Ctrl+F` searches files in the current directory tree. Search follows the hidden-file setting, includes symlinks as leaf entries (linked directories appear in folder search, linked files and broken symlinks in file search) but does not descend into linked directories, prunes common generated folders such as `.git`, `node_modules`, and `target`, and refreshes when the directory changes. Very large trees are capped so search stays responsive.
+`f` searches folders and `Ctrl+F` searches files in the current directory tree. Search follows the hidden-file setting, includes symlinks as leaf entries (linked directories appear in folder search, linked files and broken symlinks in file search) but does not descend into linked directories, prunes common generated folders such as `.git`, `node_modules`, and `target`, streams results while scanning, and refreshes when the directory changes. Very large trees are capped so search stays responsive; when the cap is reached, the overlay shows `scan limit reached`.
 
 ### Zoxide
 
