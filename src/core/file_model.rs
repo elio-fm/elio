@@ -56,6 +56,14 @@ pub struct SymlinkInfo {
     pub target_kind: Option<EntryKind>,
 }
 
+impl SymlinkInfo {
+    /// Returns true when the target cannot be resolved, including missing
+    /// targets, permission failures, and symlink cycles.
+    pub fn is_broken(&self) -> bool {
+        self.target_kind.is_none()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Entry {
     pub path: PathBuf,
@@ -86,5 +94,13 @@ impl Default for Entry {
 impl Entry {
     pub fn is_dir(&self) -> bool {
         self.kind == EntryKind::Directory
+    }
+
+    pub fn is_symlink(&self) -> bool {
+        self.symlink.is_some()
+    }
+
+    pub fn is_broken_symlink(&self) -> bool {
+        self.symlink.as_ref().is_some_and(SymlinkInfo::is_broken)
     }
 }

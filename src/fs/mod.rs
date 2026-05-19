@@ -35,13 +35,13 @@ fn is_hidden_entry(entry: &std::fs::DirEntry) -> bool {
 }
 
 pub(crate) use directory::{
-    DirectoryFingerprint, DirectorySnapshot, load_directory_snapshot,
+    DirectoryFingerprint, DirectorySnapshot, entry_from_path, load_directory_snapshot,
     load_directory_snapshot_cancellable, scan_directory_fingerprint_cancellable,
 };
 pub(crate) use directory_stats::{DirectoryStats, DirectoryStatsScanResult, scan_directory_stats};
 pub(crate) use format::{
     describe_io_error, format_item_count, format_size, format_size_parts, format_time_ago,
-    rect_contains, sanitize_terminal_text,
+    rect_contains, sanitize_terminal_text, symlink_target_display_label,
 };
 pub(crate) use item_count::count_directory_items;
 #[cfg(test)]

@@ -226,3 +226,95 @@ fn custom_symlinked_places_store_resolved_identity_path() {
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[cfg(unix)]
+#[test]
+fn symlinked_places_use_link_icon_unless_icon_is_configured() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_path("symlink-icons-sidebar");
+    let home = root.join("home");
+    let downloads = home.join("Downloads");
+    let downloads_target = root.join("downloads-target");
+    let normal = root.join("normal");
+    let linked = root.join("linked");
+    let linked_target = root.join("linked-target");
+    let manual = root.join("manual");
+    let manual_target = root.join("manual-target");
+    let broken = root.join("broken");
+    let missing_target = root.join("missing-target");
+    for dir in [
+        &home,
+        &downloads_target,
+        &normal,
+        &linked_target,
+        &manual_target,
+    ] {
+        fs::create_dir_all(dir).expect("failed to create test dir");
+    }
+    for (target, link) in [
+        (&downloads_target, &downloads),
+        (&linked_target, &linked),
+        (&manual_target, &manual),
+        (&missing_target, &broken),
+    ] {
+        symlink(target, link).expect("failed to create symlinked place");
+    }
+    let context = PlaceResolutionContext {
+        home,
+        desktop: None,
+        documents: None,
+        downloads: Some(downloads),
+        pictures: None,
+        music: None,
+        videos: None,
+        root: None,
+        trash: None,
+    };
+    let places = PlacesConfig {
+        show_devices: false,
+        entries: vec![
+            PlaceEntrySpec::Builtin {
+                place: BuiltinPlace::Downloads,
+                icon: None,
+            },
+            PlaceEntrySpec::Custom {
+                title: "Normal".to_string(),
+                path: normal,
+                icon: None,
+            },
+            PlaceEntrySpec::Custom {
+                title: "Linked".to_string(),
+                path: linked,
+                icon: None,
+            },
+            PlaceEntrySpec::Custom {
+                title: "Manual".to_string(),
+                path: manual,
+                icon: Some("L".to_string()),
+            },
+            PlaceEntrySpec::Custom {
+                title: "Broken".to_string(),
+                path: broken,
+                icon: None,
+            },
+        ],
+    };
+
+    let rows = build_sidebar_rows_with_context(&places, &context);
+    let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+
+    assert_eq!(items.len(), 5);
+    assert_eq!(items[0].title, "Downloads");
+    assert_eq!(items[0].icon, "");
+    assert_eq!(items[1].title, "Normal");
+    assert_eq!(items[1].icon, "󰉋");
+    assert_eq!(items[2].title, "Linked");
+    assert_eq!(items[2].icon, "");
+    assert_eq!(items[3].title, "Manual");
+    assert_eq!(items[3].icon, "L");
+    assert_eq!(items[4].title, "Broken");
+    assert_eq!(items[4].icon, "󰌺");
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
