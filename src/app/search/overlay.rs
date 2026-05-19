@@ -39,6 +39,22 @@ impl App {
             .unwrap_or(0)
     }
 
+    pub fn search_scanned_count(&self) -> usize {
+        let candidate_count = self.search_candidate_count();
+        self.overlays
+            .search
+            .as_ref()
+            .map(|search| search.stats.visited_nodes.max(candidate_count))
+            .unwrap_or(0)
+    }
+
+    pub fn search_index_is_limited(&self) -> bool {
+        self.overlays
+            .search
+            .as_ref()
+            .is_some_and(|search| search.stats.is_limited())
+    }
+
     pub fn search_scope(&self) -> Option<SearchScope> {
         self.overlays.search.as_ref().map(|search| search.scope)
     }
@@ -82,6 +98,7 @@ impl App {
     pub(in crate::app) fn open_fuzzy_finder(&mut self, scope: SearchScope) -> Result<()> {
         self.clear_wheel_scroll();
         self.overlays.help = false;
+        let show_hidden = self.effective_show_hidden();
         let cached = self
             .jobs
             .search_cache
@@ -89,11 +106,16 @@ impl App {
             .filter(|cache| {
                 cache.cwd == self.navigation.cwd
                     && cache.scope == scope
-                    && cache.show_hidden == self.navigation.show_hidden
+                    && cache.show_hidden == show_hidden
                     && cache.fingerprint == self.navigation.directory_runtime.fingerprint
             })
-            .map(|cache| cache.candidates.clone());
-        let candidates = cached.clone().unwrap_or_else(|| Arc::new(Vec::new()));
+            .map(|cache| (cache.candidates.clone(), cache.stats));
+        let (candidates, stats) = cached.clone().unwrap_or_else(|| {
+            (
+                Arc::new(Vec::new()),
+                crate::fs::search::SearchIndexStats::default(),
+            )
+        });
         let base_matches = (0..candidates.len()).collect::<Vec<_>>();
         let matches = base_matches
             .iter()
@@ -118,23 +140,30 @@ impl App {
             scroll: 0,
             loading,
             error: None,
+            stats,
         });
         self.status.clear();
         Ok(())
     }
 
+    fn close_search_overlay(&mut self) {
+        self.overlays.search = None;
+        self.jobs.search_loading = false;
+        self.jobs.search_token = self.jobs.search_token.wrapping_add(1);
+        self.jobs.scheduler.cancel_search();
+        self.clear_wheel_scroll();
+    }
+
     pub(in crate::app) fn handle_search_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.overlays.search = None;
-            self.clear_wheel_scroll();
+            self.close_search_overlay();
             self.status.clear();
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.overlays.search = None;
-                self.clear_wheel_scroll();
+                self.close_search_overlay();
                 self.status.clear();
             }
             KeyCode::Enter => self.confirm_search_selection()?,
@@ -240,8 +269,7 @@ impl App {
                     .search_panel
                     .is_none_or(|rect| !rect_contains(rect, mouse.column, mouse.row))
                 {
-                    self.overlays.search = None;
-                    self.clear_wheel_scroll();
+                    self.close_search_overlay();
                     self.status.clear();
                 }
             }
@@ -342,7 +370,7 @@ impl App {
         };
 
         self.reveal_path(path)?;
-        self.overlays.search = None;
+        self.close_search_overlay();
         Ok(())
     }
 

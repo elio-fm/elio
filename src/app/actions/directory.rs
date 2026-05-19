@@ -225,6 +225,7 @@ impl App {
 
         self.jobs.search_loading = false;
         self.jobs.search_token = self.jobs.search_token.wrapping_add(1);
+        self.jobs.scheduler.cancel_search();
     }
 
     fn remembered_view_for(&self, cwd: &Path) -> Option<DirectoryViewMemory> {
@@ -441,6 +442,7 @@ impl App {
             search.scroll = 0;
             search.loading = true;
             search.error = None;
+            search.stats = crate::fs::search::SearchIndexStats::default();
         }
         self.prewarm_search_index(scope);
     }

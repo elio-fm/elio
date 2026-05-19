@@ -1,6 +1,5 @@
 use super::*;
 use crate::preview::{PreviewRequestOptions, PreviewWorkClass, default_code_preview_line_limit};
-use std::sync::Arc;
 
 fn image_prepare_request(name: &str) -> ImagePrepareRequest {
     ImagePrepareRequest {
@@ -395,6 +394,23 @@ fn scheduler_reports_pending_work_when_jobs_are_queued() {
 }
 
 #[test]
+fn scheduler_can_cancel_pending_search_work() {
+    let scheduler = JobScheduler::new_for_tests(0, 0, 2);
+    assert!(scheduler.submit_search(SearchRequest {
+        token: 1,
+        cwd: PathBuf::from("/tmp/a"),
+        scope: SearchScope::Files,
+        show_hidden: false,
+        fingerprint: crate::fs::DirectoryFingerprint::default(),
+    }));
+
+    scheduler.cancel_search();
+
+    assert!(!scheduler.has_pending_work());
+    assert!(scheduler.snapshot().search_pending.is_none());
+}
+
+#[test]
 fn scheduler_reports_pending_work_for_buffered_results() {
     let scheduler = JobScheduler::new_for_tests(0, 0, 2);
     scheduler.defer_result(JobResult::Search(SearchBuild {
@@ -403,7 +419,10 @@ fn scheduler_reports_pending_work_for_buffered_results() {
         scope: SearchScope::Files,
         show_hidden: false,
         fingerprint: crate::fs::DirectoryFingerprint::default(),
-        result: Ok(Arc::new(Vec::new())),
+        result: Ok(crate::fs::search::SearchIndex {
+            candidates: Vec::new(),
+            stats: crate::fs::search::SearchIndexStats::default(),
+        }),
     }));
 
     assert!(scheduler.has_pending_work());

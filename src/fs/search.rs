@@ -6,7 +6,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const SEARCH_NODE_VISIT_LIMIT: usize = 250_000;
+const SEARCH_NODE_VISIT_LIMIT: usize = 5_000_000;
+const SEARCH_CANDIDATE_BATCH_SIZE: usize = 512;
+const SEARCH_PROGRESS_NODE_INTERVAL: usize = 2_048;
 
 #[derive(Clone, Debug)]
 pub(crate) struct SearchCandidate {
@@ -19,18 +21,56 @@ pub(crate) struct SearchCandidate {
     pub symlink: Option<SymlinkInfo>,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct SearchIndexStats {
+    pub(crate) visited_nodes: usize,
+    pub(crate) node_limit_reached: bool,
+    pub(crate) candidate_limit_reached: bool,
+}
+
+impl SearchIndexStats {
+    pub(crate) fn is_limited(self) -> bool {
+        self.node_limit_reached || self.candidate_limit_reached
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct SearchIndex {
+    pub(crate) candidates: Vec<SearchCandidate>,
+    pub(crate) stats: SearchIndexStats,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct SearchIndexBatch {
+    pub(crate) candidates: Vec<SearchCandidate>,
+    pub(crate) stats: SearchIndexStats,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SearchCandidateScope {
     Files,
     Folders,
 }
 
-pub(crate) fn collect_candidates(
+pub(crate) fn collect_candidates_streaming(
     cwd: &Path,
     show_hidden: bool,
     scope: SearchCandidateScope,
-) -> Result<Vec<SearchCandidate>> {
-    collect_candidates_with_limits(cwd, show_hidden, scope, usize::MAX, SEARCH_NODE_VISIT_LIMIT)
+    is_canceled: impl Fn() -> bool,
+    emit_batch: impl FnMut(SearchIndexBatch) -> bool,
+) -> Result<SearchIndex> {
+    collect_candidates_with_limits_and_emitter(
+        cwd,
+        show_hidden,
+        scope,
+        SearchCollectionLimits {
+            candidate_limit: usize::MAX,
+            node_visit_limit: SEARCH_NODE_VISIT_LIMIT,
+            batch_size: SEARCH_CANDIDATE_BATCH_SIZE,
+        },
+        is_canceled,
+        emit_batch,
+    )
 }
 
 struct PendingSearchNode {
@@ -42,6 +82,13 @@ struct PendingSearchNode {
     is_dir: bool,
     symlink: Option<SymlinkInfo>,
     enqueue_children: bool,
+}
+
+#[derive(Clone, Copy)]
+struct SearchCollectionLimits {
+    candidate_limit: usize,
+    node_visit_limit: usize,
+    batch_size: usize,
 }
 
 impl PendingSearchNode {
@@ -60,19 +107,55 @@ impl PendingSearchNode {
     }
 }
 
+#[cfg(test)]
 fn collect_candidates_with_limits(
     cwd: &Path,
     show_hidden: bool,
     scope: SearchCandidateScope,
     candidate_limit: usize,
     node_visit_limit: usize,
-) -> Result<Vec<SearchCandidate>> {
+) -> Result<SearchIndex> {
+    collect_candidates_with_limits_and_emitter(
+        cwd,
+        show_hidden,
+        scope,
+        SearchCollectionLimits {
+            candidate_limit,
+            node_visit_limit,
+            batch_size: 0,
+        },
+        || false,
+        |_| true,
+    )
+}
+
+fn collect_candidates_with_limits_and_emitter(
+    cwd: &Path,
+    show_hidden: bool,
+    scope: SearchCandidateScope,
+    limits: SearchCollectionLimits,
+    is_canceled: impl Fn() -> bool,
+    mut emit_batch: impl FnMut(SearchIndexBatch) -> bool,
+) -> Result<SearchIndex> {
     let mut queue = VecDeque::from([cwd.to_path_buf()]);
     let mut visited_nodes = 0usize;
+    let mut node_limit_reached = false;
     let mut candidates = Vec::new();
+    let emit_batches = limits.batch_size > 0;
+    let mut pending_candidates = Vec::with_capacity(limits.batch_size);
+    let mut next_progress_at = SEARCH_PROGRESS_NODE_INTERVAL;
 
     while let Some(dir) = queue.pop_front() {
-        if visited_nodes >= node_visit_limit {
+        if is_canceled() {
+            return Ok(build_search_index(
+                candidates,
+                visited_nodes,
+                node_limit_reached,
+                limits.candidate_limit,
+            ));
+        }
+        if search_scan_limit_reached(visited_nodes, limits.node_visit_limit) {
+            node_limit_reached = true;
             break;
         }
 
@@ -86,7 +169,16 @@ fn collect_candidates_with_limits(
 
         let mut nodes = Vec::new();
         for entry in read_dir {
-            if visited_nodes >= node_visit_limit {
+            if is_canceled() {
+                return Ok(build_search_index(
+                    candidates,
+                    visited_nodes,
+                    node_limit_reached,
+                    limits.candidate_limit,
+                ));
+            }
+            if search_scan_limit_reached(visited_nodes, limits.node_visit_limit) {
+                node_limit_reached = true;
                 break;
             }
 
@@ -111,6 +203,32 @@ fn collect_candidates_with_limits(
             let is_symlink_entry = classified.symlink.is_some();
 
             visited_nodes += 1;
+            if emit_batches && visited_nodes >= next_progress_at {
+                let stats = SearchIndexStats {
+                    visited_nodes,
+                    node_limit_reached: false,
+                    candidate_limit_reached: false,
+                };
+                if !emit_search_batch(
+                    &mut pending_candidates,
+                    limits.batch_size,
+                    stats,
+                    true,
+                    &mut emit_batch,
+                ) {
+                    return Ok(SearchIndex { candidates, stats });
+                }
+                next_progress_at = visited_nodes.saturating_add(SEARCH_PROGRESS_NODE_INTERVAL);
+            }
+
+            if is_canceled() {
+                return Ok(build_search_index(
+                    candidates,
+                    visited_nodes,
+                    node_limit_reached,
+                    limits.candidate_limit,
+                ));
+            }
 
             let include_candidate = should_include_candidate(is_dir, scope);
             if !is_dir && !include_candidate {
@@ -155,19 +273,101 @@ fn collect_candidates_with_limits(
         });
 
         for node in nodes {
+            if is_canceled() {
+                return Ok(build_search_index(
+                    candidates,
+                    visited_nodes,
+                    node_limit_reached,
+                    limits.candidate_limit,
+                ));
+            }
             if node.enqueue_children {
                 queue.push_back(node.path.clone());
             }
             if let Some(candidate) = node.into_candidate() {
                 candidates.push(candidate);
+                if emit_batches {
+                    pending_candidates.push(
+                        candidates
+                            .last()
+                            .expect("candidate was just pushed")
+                            .clone(),
+                    );
+                    if pending_candidates.len() >= limits.batch_size {
+                        let stats = SearchIndexStats {
+                            visited_nodes,
+                            node_limit_reached,
+                            candidate_limit_reached: false,
+                        };
+                        if !emit_search_batch(
+                            &mut pending_candidates,
+                            limits.batch_size,
+                            stats,
+                            false,
+                            &mut emit_batch,
+                        ) {
+                            return Ok(SearchIndex { candidates, stats });
+                        }
+                    }
+                }
             }
         }
     }
 
-    if candidates.len() > candidate_limit {
+    let index = build_search_index(
+        candidates,
+        visited_nodes,
+        node_limit_reached,
+        limits.candidate_limit,
+    );
+    if emit_batches {
+        let _ = emit_search_batch(
+            &mut pending_candidates,
+            limits.batch_size,
+            index.stats,
+            false,
+            &mut emit_batch,
+        );
+    }
+    Ok(index)
+}
+
+fn build_search_index(
+    mut candidates: Vec<SearchCandidate>,
+    visited_nodes: usize,
+    node_limit_reached: bool,
+    candidate_limit: usize,
+) -> SearchIndex {
+    let candidate_limit_reached = candidates.len() > candidate_limit;
+    if candidate_limit_reached {
         candidates.truncate(candidate_limit);
     }
-    Ok(candidates)
+    SearchIndex {
+        candidates,
+        stats: SearchIndexStats {
+            visited_nodes,
+            node_limit_reached,
+            candidate_limit_reached,
+        },
+    }
+}
+
+fn emit_search_batch(
+    pending_candidates: &mut Vec<SearchCandidate>,
+    batch_size: usize,
+    stats: SearchIndexStats,
+    force_progress: bool,
+    emit_batch: &mut impl FnMut(SearchIndexBatch) -> bool,
+) -> bool {
+    if pending_candidates.is_empty() && !force_progress {
+        return true;
+    }
+    let candidates = std::mem::replace(pending_candidates, Vec::with_capacity(batch_size));
+    emit_batch(SearchIndexBatch { candidates, stats })
+}
+
+fn search_scan_limit_reached(visited_nodes: usize, node_visit_limit: usize) -> bool {
+    visited_nodes >= node_visit_limit
 }
 
 pub(crate) fn filter_candidates_in<I>(
@@ -405,7 +605,8 @@ mod tests {
 
         let hidden_off =
             collect_candidates_with_limits(&root, false, SearchCandidateScope::Folders, 100, 1_000)
-                .expect("failed to collect visible candidates");
+                .expect("failed to collect visible candidates")
+                .candidates;
         assert!(
             hidden_off
                 .iter()
@@ -424,7 +625,8 @@ mod tests {
 
         let hidden_on =
             collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
-                .expect("failed to collect hidden candidates");
+                .expect("failed to collect hidden candidates")
+                .candidates;
         assert!(
             hidden_on
                 .iter()
@@ -444,7 +646,8 @@ mod tests {
 
         let candidates =
             collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 6, 1_000)
-                .expect("failed to collect candidates");
+                .expect("failed to collect candidates")
+                .candidates;
 
         assert_eq!(candidates[0].relative, ".hidden-root");
         assert_eq!(candidates[1].relative, "alpha");
@@ -468,7 +671,8 @@ mod tests {
 
         let candidates =
             collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
-                .expect("failed to collect candidates");
+                .expect("failed to collect candidates")
+                .candidates;
         let names = candidates
             .iter()
             .map(|candidate| candidate.relative.as_str())
@@ -491,7 +695,8 @@ mod tests {
 
         let candidates =
             collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
-                .expect("failed to collect file candidates");
+                .expect("failed to collect file candidates")
+                .candidates;
         let names = candidates
             .iter()
             .map(|candidate| candidate.relative.as_str())
@@ -500,6 +705,125 @@ mod tests {
         assert!(names.contains(&"top.txt"));
         assert!(names.contains(&"alpha/needle.txt"));
         assert!(!names.contains(&"alpha"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp tree");
+    }
+
+    #[test]
+    fn collect_candidates_reports_node_limit_truncation() {
+        let root = temp_path("node-limit");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("alpha.txt"), "alpha").expect("failed to write alpha");
+        fs::write(root.join("beta.txt"), "beta").expect("failed to write beta");
+        fs::write(root.join("gamma.txt"), "gamma").expect("failed to write gamma");
+
+        let index =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 2)
+                .expect("failed to collect candidates");
+
+        assert_eq!(index.stats.visited_nodes, 2);
+        assert!(index.stats.node_limit_reached);
+        assert!(!index.stats.candidate_limit_reached);
+        assert!(index.stats.is_limited());
+        assert_eq!(index.candidates.len(), 2);
+
+        fs::remove_dir_all(root).expect("failed to remove temp tree");
+    }
+
+    #[test]
+    fn collect_candidates_reports_candidate_limit_truncation() {
+        let root = temp_path("candidate-limit");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("alpha.txt"), "alpha").expect("failed to write alpha");
+        fs::write(root.join("beta.txt"), "beta").expect("failed to write beta");
+        fs::write(root.join("gamma.txt"), "gamma").expect("failed to write gamma");
+
+        let index =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 2, 100)
+                .expect("failed to collect candidates");
+
+        assert_eq!(index.stats.visited_nodes, 3);
+        assert!(!index.stats.node_limit_reached);
+        assert!(index.stats.candidate_limit_reached);
+        assert!(index.stats.is_limited());
+        assert_eq!(index.candidates.len(), 2);
+
+        fs::remove_dir_all(root).expect("failed to remove temp tree");
+    }
+
+    #[test]
+    fn collect_candidates_streaming_emits_batches_before_final_index() {
+        let root = temp_path("streaming-batches");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        for index in 0..(SEARCH_CANDIDATE_BATCH_SIZE + 1) {
+            fs::write(root.join(format!("file-{index:04}.txt")), "data")
+                .expect("failed to write file");
+        }
+
+        let mut batches = Vec::new();
+        let index = collect_candidates_streaming(
+            &root,
+            true,
+            SearchCandidateScope::Files,
+            || false,
+            |batch| {
+                batches.push((batch.candidates.len(), batch.stats.visited_nodes));
+                true
+            },
+        )
+        .expect("failed to collect streaming candidates");
+
+        assert_eq!(index.candidates.len(), SEARCH_CANDIDATE_BATCH_SIZE + 1);
+        assert!(
+            batches
+                .iter()
+                .any(|(candidate_count, _)| *candidate_count == SEARCH_CANDIDATE_BATCH_SIZE),
+            "expected at least one full candidate batch, got {batches:?}"
+        );
+        assert!(
+            batches
+                .iter()
+                .any(|(candidate_count, _)| *candidate_count == 1),
+            "expected the trailing candidate to be flushed, got {batches:?}"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp tree");
+    }
+
+    #[test]
+    fn collect_candidates_streaming_stops_after_cancellation() {
+        use std::cell::Cell;
+
+        let root = temp_path("streaming-cancel");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        for index in 0..10 {
+            fs::write(root.join(format!("file-{index:04}.txt")), "data")
+                .expect("failed to write file");
+        }
+
+        let canceled = Cell::new(false);
+        let mut batches = 0usize;
+        let index = collect_candidates_with_limits_and_emitter(
+            &root,
+            true,
+            SearchCandidateScope::Files,
+            SearchCollectionLimits {
+                candidate_limit: usize::MAX,
+                node_visit_limit: 100,
+                batch_size: 1,
+            },
+            || canceled.get(),
+            |batch| {
+                batches += 1;
+                assert_eq!(batch.candidates.len(), 1);
+                canceled.set(true);
+                true
+            },
+        )
+        .expect("failed to collect streaming candidates");
+
+        assert_eq!(batches, 1);
+        assert_eq!(index.candidates.len(), 1);
 
         fs::remove_dir_all(root).expect("failed to remove temp tree");
     }
@@ -516,7 +840,8 @@ mod tests {
 
         let candidates =
             collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
-                .expect("failed to collect folder candidates");
+                .expect("failed to collect folder candidates")
+                .candidates;
         let linked = candidates
             .iter()
             .find(|candidate| candidate.relative == "linked-dir")
@@ -555,7 +880,8 @@ mod tests {
 
         let candidates =
             collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
-                .expect("failed to collect file candidates");
+                .expect("failed to collect file candidates")
+                .candidates;
         let linked = candidates
             .iter()
             .find(|candidate| candidate.relative == "linked.txt")
@@ -584,7 +910,8 @@ mod tests {
 
         let candidates =
             collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
-                .expect("failed to collect file candidates");
+                .expect("failed to collect file candidates")
+                .candidates;
         let broken = candidates
             .iter()
             .find(|candidate| candidate.relative == "dangling")
@@ -598,7 +925,8 @@ mod tests {
 
         let folder_candidates =
             collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
-                .expect("failed to collect folder candidates");
+                .expect("failed to collect folder candidates")
+                .candidates;
         assert!(
             !folder_candidates
                 .iter()
@@ -624,7 +952,8 @@ mod tests {
 
         let candidates =
             collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
-                .expect("failed to collect candidates");
+                .expect("failed to collect candidates")
+                .candidates;
         let loop_entry = candidates
             .iter()
             .find(|candidate| candidate.relative == "loop")
@@ -654,7 +983,8 @@ mod tests {
 
         let visible =
             collect_candidates_with_limits(&root, false, SearchCandidateScope::Files, 100, 1_000)
-                .expect("failed to collect non-hidden candidates");
+                .expect("failed to collect non-hidden candidates")
+                .candidates;
         assert!(
             !visible
                 .iter()
@@ -664,7 +994,8 @@ mod tests {
 
         let all =
             collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
-                .expect("failed to collect hidden candidates");
+                .expect("failed to collect hidden candidates")
+                .candidates;
         assert!(
             all.iter()
                 .any(|candidate| candidate.relative == ".hidden-link"),
@@ -684,7 +1015,8 @@ mod tests {
 
         let candidates =
             collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 10, 1_000)
-                .expect("failed to collect candidates");
+                .expect("failed to collect candidates")
+                .candidates;
         let names = candidates
             .iter()
             .map(|candidate| candidate.name.as_str())

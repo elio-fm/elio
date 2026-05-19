@@ -3,7 +3,7 @@ use crate::app::overlays::inline_image::TerminalWindowSize;
 use crate::app::overlays::pdf::PdfProbeResult;
 use crate::app::{ClipOp, SearchScope};
 use crate::core::{Entry, SortMode};
-use crate::fs::search::SearchCandidate;
+use crate::fs::search::{SearchIndex, SearchIndexBatch};
 use crate::{preview, preview::PreviewWorkClass};
 use std::{path::PathBuf, sync::Arc, time::SystemTime};
 
@@ -47,7 +47,17 @@ pub(in crate::app) struct SearchBuild {
     pub(in crate::app) scope: SearchScope,
     pub(in crate::app) show_hidden: bool,
     pub(in crate::app) fingerprint: crate::fs::DirectoryFingerprint,
-    pub(in crate::app) result: Result<Arc<Vec<SearchCandidate>>, String>,
+    pub(in crate::app) result: Result<SearchIndex, String>,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct SearchBatchBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) scope: SearchScope,
+    pub(in crate::app) show_hidden: bool,
+    pub(in crate::app) fingerprint: crate::fs::DirectoryFingerprint,
+    pub(in crate::app) batch: SearchIndexBatch,
 }
 
 #[derive(Clone, Debug)]
@@ -292,6 +302,7 @@ pub(in crate::app) enum JobResult {
     ImagePrepare(ImagePrepareBuild),
     PdfProbe(PdfProbeBuild),
     PdfRender(PdfRenderBuild),
+    SearchBatch(SearchBatchBuild),
     Search(SearchBuild),
     Preview(Box<PreviewBuild>),
     Paste(PasteBuild),

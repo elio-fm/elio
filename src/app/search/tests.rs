@@ -22,6 +22,18 @@ fn base_cache_entry(pool: Vec<usize>) -> SearchMatchCacheEntry {
     super::build_base_search_cache_entry(pool)
 }
 
+fn folder_candidate(root: &std::path::Path, name: &str) -> crate::fs::search::SearchCandidate {
+    crate::fs::search::SearchCandidate {
+        path: root.join(name),
+        name: name.to_string(),
+        name_key: name.to_lowercase(),
+        relative: name.to_string(),
+        relative_key: name.to_lowercase(),
+        is_dir: true,
+        symlink: None,
+    }
+}
+
 fn wait_for_search_candidates(app: &mut App, expected: usize) {
     for _ in 0..300 {
         let _ = app.process_background_jobs();
@@ -80,6 +92,7 @@ fn opening_search_ignores_hidden_cache_when_browser_hides_dotfiles() {
             is_dir: true,
             symlink: None,
         }]),
+        stats: crate::fs::search::SearchIndexStats::default(),
     });
 
     app.open_fuzzy_finder(SearchScope::Folders)
@@ -87,6 +100,251 @@ fn opening_search_ignores_hidden_cache_when_browser_hides_dotfiles() {
 
     assert_eq!(app.search_candidate_count(), 0);
     assert!(app.search_is_loading());
+
+    fs::remove_dir_all(root).expect("failed to remove temp tree");
+}
+
+#[test]
+fn opening_search_preserves_cached_limit_status() {
+    let root = temp_path("cached-limit-status");
+    fs::create_dir_all(root.join("needle")).expect("failed to create temp tree");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    let stats = crate::fs::search::SearchIndexStats {
+        visited_nodes: 5_000_000,
+        node_limit_reached: true,
+        candidate_limit_reached: false,
+    };
+    app.jobs.search_cache = Some(SearchCache {
+        cwd: root.clone(),
+        scope: SearchScope::Folders,
+        show_hidden: app.navigation.show_hidden,
+        fingerprint: app.navigation.directory_runtime.fingerprint,
+        candidates: Arc::new(vec![crate::fs::search::SearchCandidate {
+            path: root.join("needle"),
+            name: "needle".to_string(),
+            name_key: "needle".to_string(),
+            relative: "needle".to_string(),
+            relative_key: "needle".to_string(),
+            is_dir: true,
+            symlink: None,
+        }]),
+        stats,
+    });
+
+    app.open_fuzzy_finder(SearchScope::Folders)
+        .expect("failed to open search");
+
+    assert!(!app.search_is_loading());
+    assert!(app.search_index_is_limited());
+    assert_eq!(app.search_candidate_count(), 1);
+
+    fs::remove_dir_all(root).expect("failed to remove temp tree");
+}
+
+#[test]
+fn search_progress_batch_updates_open_overlay_while_loading() {
+    let root = temp_path("progress-batch");
+    fs::create_dir_all(&root).expect("failed to create temp tree");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.jobs.search_token = 42;
+    app.jobs.search_loading = true;
+    app.overlays.search = Some(SearchOverlay {
+        scope: SearchScope::Folders,
+        query: "link".to_string(),
+        query_cursor: 4,
+        candidates: Arc::new(Vec::new()),
+        matches: Vec::new(),
+        cached_matches: HashMap::from([(String::new(), base_cache_entry(Vec::new()))]),
+        selected: 0,
+        scroll: 0,
+        loading: true,
+        error: None,
+        stats: crate::fs::search::SearchIndexStats::default(),
+    });
+
+    app.jobs
+        .scheduler
+        .defer_result(crate::app::jobs::JobResult::SearchBatch(
+            crate::app::jobs::SearchBatchBuild {
+                token: 42,
+                cwd: root.clone(),
+                scope: SearchScope::Folders,
+                show_hidden: app.navigation.show_hidden,
+                fingerprint: app.navigation.directory_runtime.fingerprint,
+                batch: crate::fs::search::SearchIndexBatch {
+                    candidates: vec![crate::fs::search::SearchCandidate {
+                        path: root.join("linked-folder"),
+                        name: "linked-folder".to_string(),
+                        name_key: "linked-folder".to_string(),
+                        relative: "linked-folder".to_string(),
+                        relative_key: "linked-folder".to_string(),
+                        is_dir: true,
+                        symlink: None,
+                    }],
+                    stats: crate::fs::search::SearchIndexStats {
+                        visited_nodes: 9,
+                        node_limit_reached: false,
+                        candidate_limit_reached: false,
+                    },
+                },
+            },
+        ));
+
+    assert!(app.process_background_jobs());
+
+    assert!(app.search_is_loading());
+    assert_eq!(app.search_candidate_count(), 1);
+    assert_eq!(app.search_match_count(), 1);
+    assert_eq!(app.search_scanned_count(), 9);
+    assert_eq!(app.search_rows(10)[0].relative, "linked-folder");
+
+    fs::remove_dir_all(root).expect("failed to remove temp tree");
+}
+
+#[test]
+fn search_progress_batches_update_current_query_incrementally() {
+    let root = temp_path("progress-batch-query-cache");
+    fs::create_dir_all(&root).expect("failed to create temp tree");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.jobs.search_token = 42;
+    app.jobs.search_loading = true;
+    app.overlays.search = Some(SearchOverlay {
+        scope: SearchScope::Folders,
+        query: "fast".to_string(),
+        query_cursor: 4,
+        candidates: Arc::new(Vec::new()),
+        matches: Vec::new(),
+        cached_matches: HashMap::from([
+            (String::new(), base_cache_entry(Vec::new())),
+            (
+                "fast".to_string(),
+                super::build_search_cache_entry(Vec::new(), Vec::new()),
+            ),
+        ]),
+        selected: 0,
+        scroll: 0,
+        loading: true,
+        error: None,
+        stats: crate::fs::search::SearchIndexStats::default(),
+    });
+
+    for (visited_nodes, candidates) in [
+        (
+            2,
+            vec![
+                folder_candidate(&root, "alpha"),
+                folder_candidate(&root, "fastfetch"),
+            ],
+        ),
+        (3, vec![folder_candidate(&root, "fastlane")]),
+    ] {
+        app.jobs
+            .scheduler
+            .defer_result(crate::app::jobs::JobResult::SearchBatch(
+                crate::app::jobs::SearchBatchBuild {
+                    token: 42,
+                    cwd: root.clone(),
+                    scope: SearchScope::Folders,
+                    show_hidden: app.navigation.show_hidden,
+                    fingerprint: app.navigation.directory_runtime.fingerprint,
+                    batch: crate::fs::search::SearchIndexBatch {
+                        candidates,
+                        stats: crate::fs::search::SearchIndexStats {
+                            visited_nodes,
+                            node_limit_reached: false,
+                            candidate_limit_reached: false,
+                        },
+                    },
+                },
+            ));
+        assert!(app.process_background_jobs());
+    }
+
+    let search = app.overlays.search.as_ref().expect("search should be open");
+    assert_eq!(search.candidates.len(), 3);
+    assert_eq!(app.search_match_count(), 2);
+    let rows = app.search_rows(10);
+    let relatives = rows
+        .iter()
+        .map(|row| row.relative.as_str())
+        .collect::<Vec<_>>();
+    assert!(relatives.contains(&"fastfetch"));
+    assert!(relatives.contains(&"fastlane"));
+    assert_eq!(
+        search
+            .cached_matches
+            .get("")
+            .expect("base cache should exist")
+            .pool,
+        vec![0, 1, 2]
+    );
+    assert_eq!(
+        search
+            .cached_matches
+            .get("fast")
+            .expect("query cache should stay warm")
+            .pool
+            .len(),
+        2
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp tree");
+}
+
+#[test]
+fn closing_search_cancels_inflight_index_token() {
+    let root = temp_path("close-cancels-search");
+    fs::create_dir_all(&root).expect("failed to create temp tree");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.jobs.search_token = 42;
+    app.jobs.search_loading = true;
+    app.overlays.search = Some(SearchOverlay {
+        scope: SearchScope::Folders,
+        query: String::new(),
+        query_cursor: 0,
+        candidates: Arc::new(Vec::new()),
+        matches: Vec::new(),
+        cached_matches: HashMap::from([(String::new(), base_cache_entry(Vec::new()))]),
+        selected: 0,
+        scroll: 0,
+        loading: true,
+        error: None,
+        stats: crate::fs::search::SearchIndexStats::default(),
+    });
+
+    app.handle_search_key(KeyEvent::from(KeyCode::Esc))
+        .expect("closing search should work");
+
+    assert!(!app.search_is_open());
+    assert!(!app.jobs.search_loading);
+    assert_eq!(app.jobs.search_token, 43);
+
+    app.jobs
+        .scheduler
+        .defer_result(crate::app::jobs::JobResult::SearchBatch(
+            crate::app::jobs::SearchBatchBuild {
+                token: 42,
+                cwd: root.clone(),
+                scope: SearchScope::Folders,
+                show_hidden: app.navigation.show_hidden,
+                fingerprint: app.navigation.directory_runtime.fingerprint,
+                batch: crate::fs::search::SearchIndexBatch {
+                    candidates: vec![folder_candidate(&root, "stale")],
+                    stats: crate::fs::search::SearchIndexStats {
+                        visited_nodes: 1,
+                        node_limit_reached: false,
+                        candidate_limit_reached: false,
+                    },
+                },
+            },
+        ));
+
+    assert!(!app.process_background_jobs());
+    assert!(!app.search_is_open());
 
     fs::remove_dir_all(root).expect("failed to remove temp tree");
 }
@@ -171,6 +429,7 @@ fn refining_query_rechecks_full_candidate_set() {
         scroll: 0,
         loading: false,
         error: None,
+        stats: crate::fs::search::SearchIndexStats::default(),
     });
     app.refresh_search_matches("");
     let fastfetch_index = app
@@ -221,6 +480,7 @@ fn search_query_cursor_inserts_and_deletes_in_place() {
         scroll: 0,
         loading: false,
         error: None,
+        stats: crate::fs::search::SearchIndexStats::default(),
     });
 
     app.handle_search_key(KeyEvent::from(KeyCode::Char('s')))
@@ -255,6 +515,7 @@ fn search_query_ctrl_arrows_move_across_word_boundaries() {
         scroll: 0,
         loading: false,
         error: None,
+        stats: crate::fs::search::SearchIndexStats::default(),
     });
 
     app.handle_search_key(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL))
@@ -301,6 +562,7 @@ fn search_query_ctrl_backspace_and_delete_remove_word_units() {
         scroll: 0,
         loading: false,
         error: None,
+        stats: crate::fs::search::SearchIndexStats::default(),
     });
 
     app.handle_search_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::CONTROL))
@@ -338,6 +600,7 @@ fn search_query_terminal_fallback_word_delete_bindings_work() {
         scroll: 0,
         loading: false,
         error: None,
+        stats: crate::fs::search::SearchIndexStats::default(),
     });
 
     app.handle_search_key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::CONTROL))
@@ -390,6 +653,7 @@ fn search_rows_ignore_stale_match_indexes() {
         scroll: 0,
         loading: false,
         error: None,
+        stats: crate::fs::search::SearchIndexStats::default(),
     });
 
     assert!(app.search_rows(10).is_empty());
@@ -430,6 +694,7 @@ fn confirm_search_selection_selects_file_already_in_current_directory() {
         scroll: 0,
         loading: false,
         error: None,
+        stats: crate::fs::search::SearchIndexStats::default(),
     });
 
     app.confirm_search_selection()
@@ -472,6 +737,7 @@ fn confirm_search_selection_keeps_overlay_open_when_reveal_fails() {
         scroll: 0,
         loading: false,
         error: None,
+        stats: crate::fs::search::SearchIndexStats::default(),
     });
 
     assert!(app.confirm_search_selection().is_err());

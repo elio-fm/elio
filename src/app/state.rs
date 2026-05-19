@@ -14,7 +14,7 @@ use super::{
     types::*,
 };
 use crate::core::{Entry, SidebarRow, SortMode};
-use crate::fs::search::SearchCandidate;
+use crate::fs::search::{SearchCandidate, SearchIndexStats};
 use crate::preview;
 
 #[derive(Clone, Debug)]
@@ -194,6 +194,7 @@ pub(super) struct SearchOverlay {
     pub(super) scroll: usize,
     pub(super) loading: bool,
     pub(super) error: Option<String>,
+    pub(super) stats: SearchIndexStats,
 }
 
 #[derive(Clone, Debug)]
@@ -270,6 +271,7 @@ pub(super) struct SearchCache {
     pub(super) show_hidden: bool,
     pub(super) fingerprint: crate::fs::DirectoryFingerprint,
     pub(super) candidates: Arc<Vec<SearchCandidate>>,
+    pub(super) stats: SearchIndexStats,
 }
 
 #[derive(Clone, Debug)]
