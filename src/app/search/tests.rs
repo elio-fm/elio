@@ -78,6 +78,7 @@ fn opening_search_ignores_hidden_cache_when_browser_hides_dotfiles() {
             relative: ".hidden-root/needle".to_string(),
             relative_key: ".hidden-root/needle".to_string(),
             is_dir: true,
+            symlink: None,
         }]),
     });
 
@@ -146,6 +147,7 @@ fn refining_query_rechecks_full_candidate_set() {
             relative: name.clone(),
             relative_key: name,
             is_dir: true,
+            symlink: None,
         });
     }
     candidates.push(crate::fs::search::SearchCandidate {
@@ -155,6 +157,7 @@ fn refining_query_rechecks_full_candidate_set() {
         relative: "fastfetch".to_string(),
         relative_key: "fastfetch".to_string(),
         is_dir: true,
+        symlink: None,
     });
 
     app.overlays.search = Some(SearchOverlay {
@@ -419,6 +422,7 @@ fn confirm_search_selection_selects_file_already_in_current_directory() {
             relative: "beta.txt".to_string(),
             relative_key: "beta.txt".to_string(),
             is_dir: false,
+            symlink: None,
         }]),
         matches: vec![0],
         cached_matches: HashMap::from([(String::new(), base_cache_entry(vec![0]))]),
@@ -460,6 +464,7 @@ fn confirm_search_selection_keeps_overlay_open_when_reveal_fails() {
             relative: "missing/file.txt".to_string(),
             relative_key: "missing/file.txt".to_string(),
             is_dir: false,
+            symlink: None,
         }]),
         matches: vec![0],
         cached_matches: HashMap::from([(String::new(), base_cache_entry(vec![0]))]),
