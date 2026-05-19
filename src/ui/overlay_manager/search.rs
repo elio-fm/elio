@@ -10,6 +10,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Clear, Paragraph},
 };
+use unicode_width::UnicodeWidthStr;
 
 pub(super) fn render_search_overlay(
     frame: &mut Frame<'_>,
@@ -44,15 +45,17 @@ pub(super) fn render_search_overlay(
         .search_scope()
         .map(|scope| scope.label())
         .unwrap_or("Search");
-    let summary = if app.search_is_loading() {
-        "indexing…".to_string()
-    } else {
-        format!(
-            "{} results  •  {} indexed",
-            app.search_match_count(),
-            app.search_candidate_count()
-        )
-    };
+    let summary_prefix = format!("{scope_label}  ");
+    let summary_width = usize::from(rows[0].width)
+        .saturating_sub(UnicodeWidthStr::width(summary_prefix.as_str()))
+        .saturating_sub(2);
+    let summary = build_search_summary(
+        app.search_is_loading(),
+        app.search_index_is_limited(),
+        app.search_match_count(),
+        app.search_scanned_count(),
+        summary_width,
+    );
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
@@ -61,7 +64,6 @@ pub(super) fn render_search_overlay(
                     .fg(palette.accent)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled("  current folder tree", Style::default().fg(palette.muted)),
             Span::raw("  "),
             helpers::chip_span(&summary, palette.accent_soft, palette.accent_text, true),
         ]))
@@ -123,11 +125,11 @@ pub(super) fn render_search_overlay(
     state.search_rows_visible = visible_rows;
 
     let rows_data = app.search_rows(visible_rows);
-    if app.search_is_loading() {
+    if app.search_is_loading() && rows_data.is_empty() {
         helpers::render_empty_state_with_bg(
             frame,
             results_area,
-            "Indexing current folder tree…",
+            "Scanning current tree…",
             palette,
             palette.chrome_alt,
         );
@@ -283,4 +285,80 @@ fn render_query_line(
         .saturating_add(visible_cursor as u16)
         .min(origin_x.saturating_add(width.saturating_sub(1)));
     (Line::from(spans), cursor_x)
+}
+
+fn format_search_count(count: usize) -> String {
+    let digits = count.to_string();
+    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
+    for (index, ch) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+    grouped
+}
+
+fn build_search_summary(
+    loading: bool,
+    limited: bool,
+    result_count: usize,
+    scanned_count: usize,
+    max_width: usize,
+) -> String {
+    let results = format_search_count(result_count);
+    let scanned = format_search_count(scanned_count);
+    let variants = if loading && scanned_count == 0 {
+        vec!["scanning…".to_string()]
+    } else if loading {
+        vec![
+            format!("{results} results  •  {scanned} scanned  •  scanning…"),
+            format!("scanning…  •  {scanned} scanned"),
+            "scanning…".to_string(),
+        ]
+    } else if limited {
+        vec![
+            format!("scan limit reached  •  {scanned} scanned  •  {results} results"),
+            format!("scan limit reached  •  {scanned} scanned"),
+            "scan limit reached".to_string(),
+            "limit reached".to_string(),
+        ]
+    } else {
+        vec![
+            format!("{results} results  •  {scanned} scanned"),
+            format!("{scanned} scanned"),
+        ]
+    };
+
+    variants
+        .iter()
+        .find(|variant| UnicodeWidthStr::width(variant.as_str()) <= max_width)
+        .cloned()
+        .unwrap_or_else(|| variants.last().cloned().unwrap_or_default())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn limited_search_summary_keeps_limit_status_when_width_is_tight() {
+        let summary = build_search_summary(false, true, 127_053, 5_000_000, 45);
+
+        assert_eq!(summary, "scan limit reached  •  5,000,000 scanned");
+    }
+
+    #[test]
+    fn loading_search_summary_prioritizes_scanning_status_when_width_is_tight() {
+        let summary = build_search_summary(true, false, 127_053, 1_000_000, 40);
+
+        assert_eq!(summary, "scanning…  •  1,000,000 scanned");
+    }
+
+    #[test]
+    fn loading_search_summary_keeps_count_order_when_width_allows() {
+        let summary = build_search_summary(true, false, 86_472, 518_144, 60);
+
+        assert_eq!(summary, "86,472 results  •  518,144 scanned  •  scanning…");
+    }
 }

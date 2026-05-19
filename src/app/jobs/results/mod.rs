@@ -147,10 +147,36 @@ impl App {
                 JobResult::ImagePrepare(build) => {
                     dirty |= self.apply_image_prepare_build(build);
                 }
+                JobResult::SearchBatch(build) => {
+                    if build.token != self.jobs.search_token
+                        || build.cwd != self.navigation.cwd
+                        || build.show_hidden != self.effective_show_hidden()
+                        || build.fingerprint != self.navigation.directory_runtime.fingerprint
+                    {
+                        continue;
+                    }
+
+                    let mut sync_search_scroll = false;
+                    if let Some(search) = &mut self.overlays.search
+                        && search.scope == build.scope
+                    {
+                        search.loading = true;
+                        search.error = None;
+                        search.stats = build.batch.stats;
+                        if !build.batch.candidates.is_empty() {
+                            append_streamed_search_candidates(search, build.batch.candidates);
+                            sync_search_scroll = true;
+                        }
+                        dirty = true;
+                    }
+                    if sync_search_scroll {
+                        self.sync_search_scroll();
+                    }
+                }
                 JobResult::Search(build) => {
                     if build.token != self.jobs.search_token
                         || build.cwd != self.navigation.cwd
-                        || build.show_hidden != self.navigation.show_hidden
+                        || build.show_hidden != self.effective_show_hidden()
                         || build.fingerprint != self.navigation.directory_runtime.fingerprint
                     {
                         continue;
@@ -160,13 +186,16 @@ impl App {
                     dirty = true;
 
                     match build.result {
-                        Ok(candidates) => {
+                        Ok(index) => {
+                            let stats = index.stats;
+                            let candidates = Arc::new(index.candidates);
                             self.jobs.search_cache = Some(SearchCache {
                                 cwd: build.cwd,
                                 scope: build.scope,
                                 show_hidden: build.show_hidden,
                                 fingerprint: build.fingerprint,
                                 candidates: candidates.clone(),
+                                stats,
                             });
                             if let Some(search) = &mut self.overlays.search
                                 && search.scope == build.scope
@@ -180,6 +209,7 @@ impl App {
                                 )]);
                                 search.loading = false;
                                 search.error = None;
+                                search.stats = stats;
                             }
                             self.refresh_search_matches("");
                         }
@@ -198,6 +228,7 @@ impl App {
                                 search.scroll = 0;
                                 search.loading = false;
                                 search.error = Some(error);
+                                search.stats = crate::fs::search::SearchIndexStats::default();
                             }
                         }
                     }
@@ -486,6 +517,106 @@ impl App {
 
         dirty
     }
+}
+
+fn append_streamed_search_candidates(
+    search: &mut SearchOverlay,
+    candidates: Vec<crate::fs::search::SearchCandidate>,
+) {
+    let start = search.candidates.len();
+    let end = start + candidates.len();
+    Arc::make_mut(&mut search.candidates).extend(candidates);
+
+    append_empty_query_search_cache(search, start, end);
+
+    let query = search.query.clone();
+    let query_key = crate::app::search::search_cache_key(&query);
+    search
+        .cached_matches
+        .retain(|cached_query, _| cached_query.is_empty() || cached_query == &query_key);
+
+    if query_key.is_empty() {
+        if let Some(entry) = search.cached_matches.get("") {
+            search.matches = entry.matches.clone();
+        }
+    } else {
+        update_streamed_query_search_cache(search, &query, &query_key, start, end);
+    }
+
+    clamp_search_selection(search);
+}
+
+fn append_empty_query_search_cache(search: &mut SearchOverlay, start: usize, end: usize) {
+    let base = search
+        .cached_matches
+        .entry(String::new())
+        .or_insert_with(|| crate::app::search::build_base_search_cache_entry((0..start).collect()));
+    for index in start..end {
+        base.pool.push(index);
+        if base.matches.len() < SEARCH_MATCH_LIMIT {
+            base.matches.push(index);
+        }
+    }
+}
+
+fn update_streamed_query_search_cache(
+    search: &mut SearchOverlay,
+    query: &str,
+    query_key: &str,
+    start: usize,
+    end: usize,
+) {
+    let Some(existing) = search.cached_matches.remove(query_key) else {
+        let result = crate::fs::search::filter_candidates_in(
+            &search.candidates,
+            0..end,
+            query,
+            SEARCH_MATCH_LIMIT,
+        );
+        search.matches = result.matches.clone();
+        search.cached_matches.insert(
+            query_key.to_string(),
+            crate::app::search::build_search_cache_entry(result.pool, result.matches),
+        );
+        return;
+    };
+
+    let new_result = crate::fs::search::filter_candidates_in(
+        &search.candidates,
+        start..end,
+        query,
+        SEARCH_MATCH_LIMIT,
+    );
+    let mut pool = existing.pool;
+    pool.extend(new_result.pool.iter().copied());
+
+    let rerank_pool = existing
+        .matches
+        .iter()
+        .copied()
+        .chain(new_result.pool.iter().copied());
+    let matches = crate::fs::search::filter_candidates_in(
+        &search.candidates,
+        rerank_pool,
+        query,
+        SEARCH_MATCH_LIMIT,
+    )
+    .matches;
+
+    search.matches = matches.clone();
+    search.cached_matches.insert(
+        query_key.to_string(),
+        crate::app::search::build_search_cache_entry(pool, matches),
+    );
+}
+
+fn clamp_search_selection(search: &mut SearchOverlay) {
+    if search.matches.is_empty() {
+        search.selected = 0;
+        search.scroll = 0;
+        return;
+    }
+    search.selected = search.selected.min(search.matches.len().saturating_sub(1));
 }
 
 #[cfg(test)]

@@ -233,6 +233,10 @@ impl JobScheduler {
         self.search.submit(request)
     }
 
+    pub(in crate::app) fn cancel_search(&self) {
+        self.search.cancel_all();
+    }
+
     pub(in crate::app) fn submit_preview(&self, request: PreviewRequest) -> bool {
         self.preview.submit(request)
     }
