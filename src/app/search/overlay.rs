@@ -72,6 +72,7 @@ impl App {
                     name: candidate.name.clone(),
                     relative: candidate.relative.clone(),
                     is_dir: candidate.is_dir,
+                    symlink: candidate.symlink.clone(),
                     selected: visible_index == search.selected,
                 })
             })

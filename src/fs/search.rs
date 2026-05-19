@@ -1,3 +1,4 @@
+use crate::core::{EntryKind, SymlinkInfo};
 use anyhow::{Context, Result};
 use std::{
     collections::VecDeque,
@@ -15,6 +16,7 @@ pub(crate) struct SearchCandidate {
     pub relative: String,
     pub relative_key: String,
     pub is_dir: bool,
+    pub symlink: Option<SymlinkInfo>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -38,6 +40,7 @@ struct PendingSearchNode {
     relative: Option<String>,
     relative_key: Option<String>,
     is_dir: bool,
+    symlink: Option<SymlinkInfo>,
     enqueue_children: bool,
 }
 
@@ -52,6 +55,7 @@ impl PendingSearchNode {
             relative,
             relative_key,
             is_dir: self.is_dir,
+            symlink: self.symlink,
         })
     }
 }
@@ -97,15 +101,14 @@ fn collect_candidates_with_limits(
             let Ok(file_type) = entry.file_type() else {
                 continue;
             };
-            if file_type.is_symlink() {
-                continue;
-            }
 
-            let is_dir = file_type.is_dir();
-            let is_file = file_type.is_file();
-            if !is_dir && !is_file {
+            let path = entry.path();
+            let classified = classify_entry(&path, &file_type);
+            let Some(classified) = classified else {
                 continue;
-            }
+            };
+            let is_dir = classified.is_dir;
+            let is_symlink_entry = classified.symlink.is_some();
 
             visited_nodes += 1;
 
@@ -116,12 +119,11 @@ fn collect_candidates_with_limits(
 
             let name = file_name.to_string_lossy().to_string();
             let name_key = name.to_lowercase();
-            let enqueue_children = is_dir && !should_prune_dir(&name_key);
+            let enqueue_children = is_dir && !is_symlink_entry && !should_prune_dir(&name_key);
             if !include_candidate && !enqueue_children {
                 continue;
             }
 
-            let path = entry.path();
             let (relative, relative_key) = if include_candidate {
                 let Ok(relative_path) = path.strip_prefix(cwd) else {
                     continue;
@@ -140,6 +142,7 @@ fn collect_candidates_with_limits(
                 relative,
                 relative_key,
                 is_dir,
+                symlink: classified.symlink,
                 enqueue_children,
             });
         }
@@ -227,6 +230,44 @@ where
 pub(crate) struct SearchFilterResult {
     pub(crate) pool: Vec<usize>,
     pub(crate) matches: Vec<usize>,
+}
+
+struct ClassifiedSearchEntry {
+    is_dir: bool,
+    symlink: Option<SymlinkInfo>,
+}
+
+fn classify_entry(path: &Path, file_type: &fs::FileType) -> Option<ClassifiedSearchEntry> {
+    if file_type.is_symlink() {
+        let target = fs::read_link(path).ok();
+        let target_kind = fs::metadata(path).ok().map(|metadata| {
+            if metadata.is_dir() {
+                EntryKind::Directory
+            } else {
+                EntryKind::File
+            }
+        });
+        let is_dir = matches!(target_kind, Some(EntryKind::Directory));
+        Some(ClassifiedSearchEntry {
+            is_dir,
+            symlink: Some(SymlinkInfo {
+                target,
+                target_kind,
+            }),
+        })
+    } else if file_type.is_dir() {
+        Some(ClassifiedSearchEntry {
+            is_dir: true,
+            symlink: None,
+        })
+    } else if file_type.is_file() {
+        Some(ClassifiedSearchEntry {
+            is_dir: false,
+            symlink: None,
+        })
+    } else {
+        None
+    }
 }
 
 fn should_include_candidate(is_dir: bool, scope: SearchCandidateScope) -> bool {
@@ -339,6 +380,7 @@ mod tests {
                 relative: "src/main.rs".to_string(),
                 relative_key: "src/main.rs".to_string(),
                 is_dir: false,
+                symlink: None,
             },
             SearchCandidate {
                 path: PathBuf::from("/tmp/docs/readme.md"),
@@ -347,6 +389,7 @@ mod tests {
                 relative: "docs/readme.md".to_string(),
                 relative_key: "docs/readme.md".to_string(),
                 is_dir: false,
+                symlink: None,
             },
         ];
 
@@ -457,6 +500,176 @@ mod tests {
         assert!(names.contains(&"top.txt"));
         assert!(names.contains(&"alpha/needle.txt"));
         assert!(!names.contains(&"alpha"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp tree");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn collect_candidates_includes_linked_directory_in_folder_search() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("symlink-dir-folder");
+        fs::create_dir_all(root.join("real-dir/inner")).expect("failed to create real dir");
+        symlink(root.join("real-dir"), root.join("linked-dir"))
+            .expect("failed to create dir symlink");
+
+        let candidates =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
+                .expect("failed to collect folder candidates");
+        let linked = candidates
+            .iter()
+            .find(|candidate| candidate.relative == "linked-dir")
+            .expect("linked-dir should appear in folder search");
+        assert!(linked.is_dir, "linked dir should be classified as dir");
+        assert_eq!(
+            linked
+                .symlink
+                .as_ref()
+                .and_then(|symlink| symlink.target_kind),
+            Some(EntryKind::Directory)
+        );
+
+        let relatives = candidates
+            .iter()
+            .map(|candidate| candidate.relative.as_str())
+            .collect::<Vec<_>>();
+        assert!(
+            !relatives.contains(&"linked-dir/inner"),
+            "symlinked dir should not be descended into"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp tree");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn collect_candidates_includes_linked_file_in_file_search() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("symlink-file");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("real.txt"), "data").expect("failed to write real file");
+        symlink(root.join("real.txt"), root.join("linked.txt"))
+            .expect("failed to create file symlink");
+
+        let candidates =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
+                .expect("failed to collect file candidates");
+        let linked = candidates
+            .iter()
+            .find(|candidate| candidate.relative == "linked.txt")
+            .expect("linked.txt should appear in file search");
+        assert!(!linked.is_dir);
+        assert_eq!(
+            linked
+                .symlink
+                .as_ref()
+                .and_then(|symlink| symlink.target_kind),
+            Some(EntryKind::File)
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp tree");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn collect_candidates_includes_broken_symlink_in_file_search() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("symlink-broken");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        symlink(root.join("missing-target"), root.join("dangling"))
+            .expect("failed to create broken symlink");
+
+        let candidates =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
+                .expect("failed to collect file candidates");
+        let broken = candidates
+            .iter()
+            .find(|candidate| candidate.relative == "dangling")
+            .expect("broken symlink should appear in file search");
+        assert!(!broken.is_dir);
+        let symlink_info = broken
+            .symlink
+            .as_ref()
+            .expect("broken candidate carries symlink info");
+        assert!(symlink_info.is_broken());
+
+        let folder_candidates =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
+                .expect("failed to collect folder candidates");
+        assert!(
+            !folder_candidates
+                .iter()
+                .any(|candidate| candidate.relative == "dangling"),
+            "broken symlink should not appear in folder search"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp tree");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn collect_candidates_handles_symlink_cycle() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("symlink-cycle");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        // A self-referential symlink: even with the read_link follow this should
+        // be reported as a broken symlink (metadata resolution fails on cycles)
+        // and must never be descended into.
+        symlink(root.join("loop"), root.join("loop"))
+            .expect("failed to create self-referential symlink");
+
+        let candidates =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
+                .expect("failed to collect candidates");
+        let loop_entry = candidates
+            .iter()
+            .find(|candidate| candidate.relative == "loop")
+            .expect("cycle symlink should appear in file search");
+        assert!(!loop_entry.is_dir);
+        let symlink_info = loop_entry
+            .symlink
+            .as_ref()
+            .expect("cycle symlink should carry symlink info");
+        assert!(symlink_info.is_broken());
+        // The important invariant is that we returned at all (no infinite loop).
+        assert!(candidates.len() < 50);
+
+        fs::remove_dir_all(root).expect("failed to remove temp tree");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn collect_candidates_hides_dot_prefixed_symlink_when_hidden_off() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("symlink-hidden");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("visible.txt"), "data").expect("failed to write visible");
+        symlink(root.join("visible.txt"), root.join(".hidden-link"))
+            .expect("failed to create hidden symlink");
+
+        let visible =
+            collect_candidates_with_limits(&root, false, SearchCandidateScope::Files, 100, 1_000)
+                .expect("failed to collect non-hidden candidates");
+        assert!(
+            !visible
+                .iter()
+                .any(|candidate| candidate.relative == ".hidden-link"),
+            "dot-prefixed symlink must respect hidden toggle"
+        );
+
+        let all =
+            collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
+                .expect("failed to collect hidden candidates");
+        assert!(
+            all.iter()
+                .any(|candidate| candidate.relative == ".hidden-link"),
+            "dot-prefixed symlink must appear when hidden toggle is on"
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp tree");
     }

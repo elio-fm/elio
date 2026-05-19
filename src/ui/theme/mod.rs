@@ -1,13 +1,13 @@
 mod appearance;
 mod builtin_themes;
 
-use crate::core::{Entry, EntryKind};
+use crate::core::{Entry, EntryKind, FileClass, SymlinkInfo};
 use ratatui::style::Color;
 use std::path::Path;
 
 pub(crate) use self::appearance::{
     Palette, code_preview_palette, initialize, palette, resolve_browser_entry, resolve_entry,
-    resolve_path,
+    resolve_path, resolve_path_with_class,
 };
 
 pub(super) fn mix_color(base: Color, tint: Color, tint_weight: u8) -> Color {
@@ -51,4 +51,47 @@ pub(super) fn path_symbol(path: &Path, is_dir: bool) -> &'static str {
         EntryKind::File
     };
     resolve_path(path, kind).icon
+}
+
+pub(super) fn path_symbol_with_symlink(
+    path: &Path,
+    is_dir: bool,
+    symlink: Option<&SymlinkInfo>,
+) -> &'static str {
+    let kind = if is_dir {
+        EntryKind::Directory
+    } else {
+        EntryKind::File
+    };
+    match symlink_file_class(symlink) {
+        Some(class) => resolve_path_with_class(path, kind, class).icon,
+        None => resolve_path(path, kind).icon,
+    }
+}
+
+pub(super) fn path_color_with_symlink(
+    path: &Path,
+    is_dir: bool,
+    symlink: Option<&SymlinkInfo>,
+    palette: Palette,
+) -> Color {
+    let _ = palette;
+    let kind = if is_dir {
+        EntryKind::Directory
+    } else {
+        EntryKind::File
+    };
+    match symlink_file_class(symlink) {
+        Some(class) => resolve_path_with_class(path, kind, class).color,
+        None => resolve_path(path, kind).color,
+    }
+}
+
+fn symlink_file_class(symlink: Option<&SymlinkInfo>) -> Option<FileClass> {
+    let symlink = symlink?;
+    match symlink.target_kind {
+        Some(EntryKind::Directory) => Some(FileClass::SymlinkDirectory),
+        None => Some(FileClass::BrokenSymlink),
+        Some(EntryKind::File) => None,
+    }
 }

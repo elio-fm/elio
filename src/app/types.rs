@@ -157,5 +157,6 @@ pub struct SearchRow {
     pub name: String,
     pub relative: String,
     pub is_dir: bool,
+    pub symlink: Option<crate::core::SymlinkInfo>,
     pub selected: bool,
 }

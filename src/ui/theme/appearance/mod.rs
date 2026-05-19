@@ -47,6 +47,14 @@ pub(crate) fn resolve_path(path: &Path, kind: EntryKind) -> ResolvedAppearance<'
     active_theme().resolve(path, kind)
 }
 
+pub(crate) fn resolve_path_with_class(
+    path: &Path,
+    kind: EntryKind,
+    class: FileClass,
+) -> ResolvedAppearance<'static> {
+    active_theme().resolve_with_builtin_class(path, kind, class)
+}
+
 pub(crate) fn resolve_entry(entry: &Entry) -> ResolvedAppearance<'static> {
     let builtin_class = resolve::symlink_entry_class(entry)
         .unwrap_or_else(|| crate::file_info::inspect_entry_cached(entry).builtin_class);
