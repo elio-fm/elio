@@ -25,7 +25,7 @@ impl SortMode {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum EntryKind {
     Directory,
     File,
@@ -47,15 +47,38 @@ pub(crate) enum FileClass {
     File,
 }
 
+/// Symbolic link metadata: the stored link target and the resolved target kind.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SymlinkInfo {
+    pub target: Option<PathBuf>,
+    pub target_kind: Option<EntryKind>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Entry {
     pub path: PathBuf,
     pub name: String,
     pub name_key: String,
     pub kind: EntryKind,
+    pub symlink: Option<SymlinkInfo>,
     pub size: u64,
     pub modified: Option<SystemTime>,
     pub readonly: bool,
+}
+
+impl Default for Entry {
+    fn default() -> Self {
+        Self {
+            path: PathBuf::new(),
+            name: String::new(),
+            name_key: String::new(),
+            kind: EntryKind::File,
+            symlink: None,
+            size: 0,
+            modified: None,
+            readonly: false,
+        }
+    }
 }
 
 impl Entry {

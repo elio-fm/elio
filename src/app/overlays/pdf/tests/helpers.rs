@@ -180,6 +180,7 @@ pub(super) fn set_single_test_entry(app: &mut App, path: &Path) {
         name: name.to_string(),
         name_key: name.to_ascii_lowercase(),
         kind: EntryKind::File,
+        symlink: None,
         size: metadata.len(),
         modified: None,
         readonly: false,

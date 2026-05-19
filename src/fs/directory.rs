@@ -1,4 +1,4 @@
-use crate::core::{Entry, EntryKind, SortMode};
+use crate::core::{Entry, EntryKind, SortMode, SymlinkInfo};
 use anyhow::{Context, Result};
 use std::{
     cmp::Ordering,
@@ -26,14 +26,22 @@ pub(crate) struct DirectorySnapshot {
 struct FingerprintPart {
     name: String,
     kind: EntryKind,
+    symlink: Option<FingerprintSymlink>,
     size: u64,
     modified: Option<(u64, u32)>,
     readonly: bool,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug, Hash)]
+struct FingerprintSymlink {
+    target: Option<PathBuf>,
+    target_kind: Option<EntryKind>,
+}
+
+#[derive(Clone, Debug)]
 struct EntryDetails {
     kind: EntryKind,
+    symlink: Option<SymlinkInfo>,
     size: u64,
     modified: Option<SystemTime>,
     readonly: bool,
@@ -139,28 +147,31 @@ fn read_entries(dir: &Path, show_hidden: bool, canceled: &dyn Fn() -> bool) -> R
         let path = item.path();
         let file_name = item.file_name();
         let name = file_name.to_string_lossy().to_string();
-        let name_key = name.to_lowercase();
         let hidden = super::is_hidden_entry(&item);
         if hidden && !show_hidden {
             continue;
         }
 
-        let metadata = match fs::symlink_metadata(&path) {
-            Ok(metadata) => metadata,
-            Err(_) => continue,
-        };
-        let details = entry_details(&path, &metadata);
-        entries.push(Entry {
-            path,
-            name,
-            name_key,
-            kind: details.kind,
-            size: details.size,
-            modified: details.modified,
-            readonly: details.readonly,
-        });
+        if let Ok(entry) = entry_from_path(path, name) {
+            entries.push(entry);
+        }
     }
     Ok(entries)
+}
+
+pub(crate) fn entry_from_path(path: PathBuf, name: String) -> io::Result<Entry> {
+    let metadata = fs::symlink_metadata(&path)?;
+    let details = entry_details(&path, &metadata);
+    Ok(Entry {
+        path,
+        name_key: name.to_lowercase(),
+        name,
+        kind: details.kind,
+        symlink: details.symlink,
+        size: details.size,
+        modified: details.modified,
+        readonly: details.readonly,
+    })
 }
 
 pub(crate) fn load_directory_snapshot(
@@ -214,6 +225,7 @@ fn entries_fingerprint(entries: &[Entry]) -> DirectoryFingerprint {
         .map(|entry| FingerprintPart {
             name: entry.name_key.clone(),
             kind: entry.kind,
+            symlink: entry.symlink.as_ref().map(fingerprint_symlink),
             size: entry.size,
             modified: fingerprint_time(entry.modified),
             readonly: entry.readonly,
@@ -269,6 +281,7 @@ pub(crate) fn scan_directory_fingerprint_cancellable(
         parts.push(FingerprintPart {
             name: name.to_lowercase(),
             kind: details.kind,
+            symlink: details.symlink.as_ref().map(fingerprint_symlink),
             size: details.size,
             modified: fingerprint_time(modified),
             readonly: details.readonly,
@@ -301,18 +314,17 @@ fn compare_entry_names(left: &Entry, right: &Entry) -> Ordering {
 }
 
 fn entry_details(path: &Path, metadata: &fs::Metadata) -> EntryDetails {
-    let resolved = metadata
-        .file_type()
-        .is_symlink()
-        .then(|| fs::metadata(path).ok())
-        .flatten();
+    let is_symlink = metadata.file_type().is_symlink();
+    let symlink_target = is_symlink.then(|| fs::read_link(path).ok()).flatten();
+    let resolved = is_symlink.then(|| fs::metadata(path).ok()).flatten();
+    let symlink = is_symlink.then(|| SymlinkInfo {
+        target: symlink_target,
+        target_kind: resolved.as_ref().map(metadata_kind),
+    });
     let metadata = resolved.as_ref().unwrap_or(metadata);
     EntryDetails {
-        kind: if metadata.is_dir() {
-            EntryKind::Directory
-        } else {
-            EntryKind::File
-        },
+        kind: metadata_kind(metadata),
+        symlink,
         size: if metadata.is_file() {
             metadata.len()
         } else {
@@ -320,6 +332,21 @@ fn entry_details(path: &Path, metadata: &fs::Metadata) -> EntryDetails {
         },
         modified: metadata.modified().ok(),
         readonly: metadata.permissions().readonly(),
+    }
+}
+
+fn metadata_kind(metadata: &fs::Metadata) -> EntryKind {
+    if metadata.is_dir() {
+        EntryKind::Directory
+    } else {
+        EntryKind::File
+    }
+}
+
+fn fingerprint_symlink(symlink: &SymlinkInfo) -> FingerprintSymlink {
+    FingerprintSymlink {
+        target: symlink.target.clone(),
+        target_kind: symlink.target_kind,
     }
 }
 
@@ -333,6 +360,7 @@ fn fingerprint_from_parts(parts: &mut [FingerprintPart]) -> DirectoryFingerprint
             EntryKind::Directory => 0u8.hash(&mut hasher),
             EntryKind::File => 1u8.hash(&mut hasher),
         }
+        part.symlink.hash(&mut hasher);
         part.size.hash(&mut hasher);
         part.modified.hash(&mut hasher);
         part.readonly.hash(&mut hasher);
@@ -364,27 +392,22 @@ mod tests {
         std::env::temp_dir().join(format!("elio-{label}-{unique}"))
     }
 
+    fn test_entry(name: &str, kind: EntryKind) -> Entry {
+        Entry {
+            path: PathBuf::from(name),
+            name: name.to_string(),
+            name_key: name.to_string(),
+            kind,
+            size: 10,
+            ..Entry::default()
+        }
+    }
+
     #[test]
     fn sort_keeps_directories_before_files() {
         let mut entries = vec![
-            Entry {
-                path: PathBuf::from("beta.txt"),
-                name: "beta.txt".to_string(),
-                name_key: "beta.txt".to_string(),
-                kind: EntryKind::File,
-                size: 10,
-                modified: None,
-                readonly: false,
-            },
-            Entry {
-                path: PathBuf::from("alpha"),
-                name: "alpha".to_string(),
-                name_key: "alpha".to_string(),
-                kind: EntryKind::Directory,
-                size: 0,
-                modified: None,
-                readonly: false,
-            },
+            test_entry("beta.txt", EntryKind::File),
+            test_entry("alpha", EntryKind::Directory),
         ];
 
         sort_entries(&mut entries, SortMode::Name);
@@ -395,33 +418,9 @@ mod tests {
     #[test]
     fn sort_uses_natural_numeric_order_for_names() {
         let mut entries = vec![
-            Entry {
-                path: PathBuf::from("episode 10.mkv"),
-                name: "episode 10.mkv".to_string(),
-                name_key: "episode 10.mkv".to_string(),
-                kind: EntryKind::File,
-                size: 10,
-                modified: None,
-                readonly: false,
-            },
-            Entry {
-                path: PathBuf::from("episode 2.mkv"),
-                name: "episode 2.mkv".to_string(),
-                name_key: "episode 2.mkv".to_string(),
-                kind: EntryKind::File,
-                size: 10,
-                modified: None,
-                readonly: false,
-            },
-            Entry {
-                path: PathBuf::from("episode 1.mkv"),
-                name: "episode 1.mkv".to_string(),
-                name_key: "episode 1.mkv".to_string(),
-                kind: EntryKind::File,
-                size: 10,
-                modified: None,
-                readonly: false,
-            },
+            test_entry("episode 10.mkv", EntryKind::File),
+            test_entry("episode 2.mkv", EntryKind::File),
+            test_entry("episode 1.mkv", EntryKind::File),
         ];
 
         sort_entries(&mut entries, SortMode::Name);
@@ -438,33 +437,9 @@ mod tests {
     #[test]
     fn sort_uses_natural_numeric_order_with_non_latin_names() {
         let mut entries = vec![
-            Entry {
-                path: PathBuf::from("北斗の拳 究極版 10巻.epub"),
-                name: "北斗の拳 究極版 10巻.epub".to_string(),
-                name_key: "北斗の拳 究極版 10巻.epub".to_string(),
-                kind: EntryKind::File,
-                size: 10,
-                modified: None,
-                readonly: false,
-            },
-            Entry {
-                path: PathBuf::from("北斗の拳 究極版 2巻.epub"),
-                name: "北斗の拳 究極版 2巻.epub".to_string(),
-                name_key: "北斗の拳 究極版 2巻.epub".to_string(),
-                kind: EntryKind::File,
-                size: 10,
-                modified: None,
-                readonly: false,
-            },
-            Entry {
-                path: PathBuf::from("北斗の拳 究極版 1巻.epub"),
-                name: "北斗の拳 究極版 1巻.epub".to_string(),
-                name_key: "北斗の拳 究極版 1巻.epub".to_string(),
-                kind: EntryKind::File,
-                size: 10,
-                modified: None,
-                readonly: false,
-            },
+            test_entry("北斗の拳 究極版 10巻.epub", EntryKind::File),
+            test_entry("北斗の拳 究極版 2巻.epub", EntryKind::File),
+            test_entry("北斗の拳 究極版 1巻.epub", EntryKind::File),
         ];
 
         sort_entries(&mut entries, SortMode::Name);
@@ -500,6 +475,14 @@ mod tests {
             .expect("linked file should be present");
 
         assert_eq!(linked.kind, EntryKind::File);
+        assert!(linked.symlink.is_some());
+        assert_eq!(
+            linked
+                .symlink
+                .as_ref()
+                .and_then(|symlink| symlink.target.as_deref()),
+            Some(target.as_path())
+        );
         assert_eq!(linked.size, 11);
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -522,9 +505,68 @@ mod tests {
             .expect("linked dir should be present");
 
         assert!(linked.is_dir());
+        assert!(linked.symlink.is_some());
+        assert_eq!(
+            linked
+                .symlink
+                .as_ref()
+                .and_then(|symlink| symlink.target_kind),
+            Some(EntryKind::Directory)
+        );
         assert_eq!(linked.size, 0);
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn broken_symlink_records_target_without_followed_kind() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("broken-symlink");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let missing = root.join("missing.txt");
+        symlink(&missing, root.join("broken.txt")).expect("failed to create broken symlink");
+
+        let entries = read_entries(&root, false, &|| false).expect("failed to read entries");
+        let linked = entries
+            .iter()
+            .find(|entry| entry.name == "broken.txt")
+            .expect("broken link should be present");
+
+        assert_eq!(linked.kind, EntryKind::File);
+        assert!(
+            linked
+                .symlink
+                .as_ref()
+                .is_some_and(|symlink| symlink.target_kind.is_none())
+        );
+        assert_eq!(
+            linked
+                .symlink
+                .as_ref()
+                .and_then(|symlink| symlink.target.as_deref()),
+            Some(missing.as_path())
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn fingerprint_changes_when_entry_symlink_status_changes() {
+        let base = Entry {
+            symlink: None,
+            ..Entry::default()
+        };
+        let linked = Entry {
+            symlink: Some(SymlinkInfo {
+                target: Some(PathBuf::from("target")),
+                target_kind: Some(EntryKind::File),
+            }),
+            ..base.clone()
+        };
+
+        assert_ne!(entries_fingerprint(&[base]), entries_fingerprint(&[linked]));
     }
 
     #[test]

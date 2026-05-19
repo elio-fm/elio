@@ -81,6 +81,7 @@ mod tests {
                 name: format!("{index}.txt"),
                 name_key: format!("{index}.txt"),
                 kind: EntryKind::File,
+                symlink: None,
                 size: index as u64 + 1,
                 modified: None,
                 readonly: false,
