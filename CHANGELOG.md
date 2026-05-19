@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added symlink-aware rendering in the file browser, directory previews, and Places, with inline `-> target` details, dedicated icons for symlinked folders and broken links, and a broken-link preview. Symlinked files keep their normal file-type appearance.
+- Added themable `symlink_directory` and `broken_symlink` classes, whose default colors track the `directory` class color and `preview.code.invalid` unless explicitly overridden.
+
 ### Fixed
 
 - Fixed `Tab` / `Shift+Tab` cycling and the active highlight for symlinked Places entries, which previously reset to Home after opening the symlink target. ([#109])
