@@ -302,12 +302,14 @@ Supported sections:
 
 Rules:
 
+- `symlink_directory` and `broken_symlink` win over exact-name and extension rules.
 - Exact filename or directory rules win over extension rules.
 - Extension rules win over class defaults.
+- Symlinked files keep their normal file-type appearance.
 - Matching is case-insensitive.
 - Invalid theme files fall back to the built-in defaults, with errors reported to stderr.
 
-**Built-in file classes:** `directory` · `code` · `config` · `document` · `license` · `image` · `audio` · `video` · `archive` · `font` · `data` · `file`
+**Built-in file classes:** `directory` · `symlink_directory` · `broken_symlink` · `code` · `config` · `document` · `license` · `image` · `audio` · `video` · `archive` · `font` · `data` · `file`
 
 Any color value also accepts `"none"` (alias: `"transparent"`) to reset that foreground or background to the terminal default. For background fields, this lets transparent terminals show through. See [`examples/themes/transparent/theme.toml`](examples/themes/transparent/theme.toml).
 

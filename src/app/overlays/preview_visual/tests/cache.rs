@@ -19,6 +19,7 @@ fn page_image_overlay_request_uses_asset_metadata_without_forcing_render_cache()
         name: "book.cbz".to_string(),
         name_key: "book.cbz".to_string(),
         kind: EntryKind::File,
+        symlink: None,
         size: 134 * 1024 * 1024,
         modified: None,
         readonly: false,

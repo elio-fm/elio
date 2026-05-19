@@ -42,13 +42,21 @@ impl Theme {
         let ext_rule = (kind == EntryKind::File)
             .then(|| self.extensions.get(&ext))
             .flatten();
+        let prefer_builtin_symlink = matches!(
+            builtin_class,
+            FileClass::SymlinkDirectory | FileClass::BrokenSymlink
+        );
         let prefer_builtin_license = exact_rule.is_none() && builtin_class == FileClass::License;
 
-        let class = exact_rule
-            .and_then(|rule| rule.class)
-            .or(prefer_builtin_license.then_some(FileClass::License))
-            .or_else(|| ext_rule.and_then(|rule| rule.class))
-            .unwrap_or(builtin_class);
+        let class = if prefer_builtin_symlink {
+            builtin_class
+        } else {
+            exact_rule
+                .and_then(|rule| rule.class)
+                .or(prefer_builtin_license.then_some(FileClass::License))
+                .or_else(|| ext_rule.and_then(|rule| rule.class))
+                .unwrap_or(builtin_class)
+        };
 
         let base = self.classes.get(&class).unwrap_or_else(|| {
             self.classes
@@ -56,22 +64,30 @@ impl Theme {
                 .expect("default file style")
         });
 
-        let icon = exact_rule
-            .and_then(|rule| rule.icon.as_deref())
-            .or_else(|| {
-                (!prefer_builtin_license)
-                    .then(|| ext_rule.and_then(|rule| rule.icon.as_deref()))
-                    .flatten()
-            })
-            .unwrap_or(base.icon.as_str());
-        let color = exact_rule
-            .and_then(|rule| rule.color)
-            .or_else(|| {
-                (!prefer_builtin_license)
-                    .then(|| ext_rule.and_then(|rule| rule.color))
-                    .flatten()
-            })
-            .unwrap_or(base.color);
+        let icon = if prefer_builtin_symlink {
+            base.icon.as_str()
+        } else {
+            exact_rule
+                .and_then(|rule| rule.icon.as_deref())
+                .or_else(|| {
+                    (!prefer_builtin_license)
+                        .then(|| ext_rule.and_then(|rule| rule.icon.as_deref()))
+                        .flatten()
+                })
+                .unwrap_or(base.icon.as_str())
+        };
+        let color = if prefer_builtin_symlink {
+            base.color
+        } else {
+            exact_rule
+                .and_then(|rule| rule.color)
+                .or_else(|| {
+                    (!prefer_builtin_license)
+                        .then(|| ext_rule.and_then(|rule| rule.color))
+                        .flatten()
+                })
+                .unwrap_or(base.color)
+        };
 
         ResolvedAppearance {
             #[cfg(test)]
@@ -87,6 +103,10 @@ pub(super) fn builtin_classify_path(path: &Path, kind: EntryKind) -> FileClass {
 }
 
 pub(super) fn builtin_classify_browser_entry(entry: &Entry) -> FileClass {
+    if let Some(class) = symlink_entry_class(entry) {
+        return class;
+    }
+
     let key = EntryClassCacheKey {
         path: entry.path.clone(),
         is_dir: entry.kind == EntryKind::Directory,
@@ -107,6 +127,15 @@ pub(super) fn builtin_classify_browser_entry(entry: &Entry) -> FileClass {
         .expect("entry class cache lock")
         .insert(key, class);
     class
+}
+
+pub(super) fn symlink_entry_class(entry: &Entry) -> Option<FileClass> {
+    let symlink = entry.symlink.as_ref()?;
+    Some(match symlink.target_kind {
+        Some(EntryKind::Directory) => FileClass::SymlinkDirectory,
+        Some(EntryKind::File) => return None,
+        None => FileClass::BrokenSymlink,
+    })
 }
 
 fn fingerprint_time(modified: Option<SystemTime>) -> Option<(u64, u32)> {

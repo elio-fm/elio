@@ -5,10 +5,13 @@ use crate::{
 };
 use std::{
     collections::HashSet,
+    fs,
     path::{Path, PathBuf},
 };
 
 const CUSTOM_PLACE_ICON: &str = "󰉋";
+const SYMLINKED_PLACE_ICON: &str = "";
+const BROKEN_SYMLINK_PLACE_ICON: &str = "󰌺";
 
 #[derive(Clone, Debug)]
 pub(super) struct PlaceResolutionContext {
@@ -116,7 +119,7 @@ fn resolve_place_entry(
         PlaceEntrySpec::Custom { title, path, icon } => Some(sidebar_item(
             SidebarItemKind::Custom,
             title.clone(),
-            icon.as_deref().unwrap_or(CUSTOM_PLACE_ICON),
+            place_icon(path, icon.as_deref(), CUSTOM_PLACE_ICON),
             path.clone(),
         )),
     }
@@ -131,14 +134,14 @@ fn resolve_builtin_place(
         BuiltinPlace::Home => Some(sidebar_item(
             SidebarItemKind::Home,
             "Home",
-            icon_override.unwrap_or("󰋜"),
+            place_icon(&context.home, icon_override, "󰋜"),
             context.home.clone(),
         )),
         BuiltinPlace::Desktop => context.desktop.clone().map(|path| {
             sidebar_item(
                 SidebarItemKind::Desktop,
                 localized_place_title(&path, "Desktop"),
-                icon_override.unwrap_or("󰍹"),
+                place_icon(&path, icon_override, "󰍹"),
                 path,
             )
         }),
@@ -146,7 +149,7 @@ fn resolve_builtin_place(
             sidebar_item(
                 SidebarItemKind::Documents,
                 localized_place_title(&path, "Documents"),
-                icon_override.unwrap_or("󰲃"),
+                place_icon(&path, icon_override, "󰲃"),
                 path,
             )
         }),
@@ -154,7 +157,7 @@ fn resolve_builtin_place(
             sidebar_item(
                 SidebarItemKind::Downloads,
                 localized_place_title(&path, "Downloads"),
-                icon_override.unwrap_or("󰉍"),
+                place_icon(&path, icon_override, "󰉍"),
                 path,
             )
         }),
@@ -162,7 +165,7 @@ fn resolve_builtin_place(
             sidebar_item(
                 SidebarItemKind::Pictures,
                 localized_place_title(&path, "Pictures"),
-                icon_override.unwrap_or("󰉏"),
+                place_icon(&path, icon_override, "󰉏"),
                 path,
             )
         }),
@@ -170,7 +173,7 @@ fn resolve_builtin_place(
             sidebar_item(
                 SidebarItemKind::Music,
                 localized_place_title(&path, "Music"),
-                icon_override.unwrap_or("󱍙"),
+                place_icon(&path, icon_override, "󱍙"),
                 path,
             )
         }),
@@ -178,7 +181,7 @@ fn resolve_builtin_place(
             sidebar_item(
                 SidebarItemKind::Videos,
                 localized_place_title(&path, videos_label()),
-                icon_override.unwrap_or("󰕧"),
+                place_icon(&path, icon_override, "󰕧"),
                 path,
             )
         }),
@@ -186,7 +189,7 @@ fn resolve_builtin_place(
             sidebar_item(
                 SidebarItemKind::Root,
                 "Root",
-                icon_override.unwrap_or("󰋊"),
+                place_icon(&path, icon_override, "󰋊"),
                 path,
             )
         }),
@@ -194,11 +197,39 @@ fn resolve_builtin_place(
             sidebar_item(
                 SidebarItemKind::Trash,
                 "Trash",
-                icon_override.unwrap_or("󰩺"),
+                place_icon(&path, icon_override, "󰩺"),
                 path,
             )
         }),
     }
+}
+
+fn place_icon<'a>(path: &Path, icon_override: Option<&'a str>, default_icon: &'a str) -> &'a str {
+    icon_override.unwrap_or_else(|| match place_symlink_state(path) {
+        Some(PlaceSymlinkState::Directory) => SYMLINKED_PLACE_ICON,
+        Some(PlaceSymlinkState::Broken) => BROKEN_SYMLINK_PLACE_ICON,
+        None => default_icon,
+    })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PlaceSymlinkState {
+    Directory,
+    Broken,
+}
+
+fn place_symlink_state(path: &Path) -> Option<PlaceSymlinkState> {
+    // symlink_metadata preserves the symlink bit; metadata follows it to verify a directory target.
+    if !fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return None;
+    }
+    Some(
+        if fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()) {
+            PlaceSymlinkState::Directory
+        } else {
+            PlaceSymlinkState::Broken
+        },
+    )
 }
 
 pub(super) fn sidebar_item(

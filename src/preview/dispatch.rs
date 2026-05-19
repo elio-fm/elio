@@ -19,6 +19,9 @@ pub(crate) fn preview_work_class(
     entry: &Entry,
     options: &PreviewRequestOptions,
 ) -> PreviewWorkClass {
+    if entry.is_broken_symlink() {
+        return PreviewWorkClass::Light;
+    }
     let facts = file_info::inspect_entry_cached(entry);
     if options.comic_page_index().is_some()
         || options.epub_section_index().is_some()
@@ -40,6 +43,10 @@ pub(crate) fn loading_preview_for(
     entry: &Entry,
     options: &PreviewRequestOptions,
 ) -> PreviewContent {
+    if entry.is_broken_symlink() {
+        return PreviewContent::new(PreviewKind::Unavailable, Vec::new())
+            .with_detail("Broken symlink");
+    }
     if entry.is_dir() {
         return PreviewContent::new(PreviewKind::Directory, Vec::new()).with_detail("Loading");
     }
@@ -173,6 +180,9 @@ where
 {
     if entry.is_dir() {
         return directory::build_directory_preview(entry);
+    }
+    if entry.is_broken_symlink() {
+        return broken_symlink_preview(entry);
     }
 
     let facts = file_info::inspect_entry_cached(entry);
@@ -426,6 +436,22 @@ fn binary_preview() -> PreviewContent {
         [
             Line::from("No text preview available"),
             Line::from("Binary or unsupported file"),
+        ],
+    )
+}
+
+fn broken_symlink_preview(entry: &Entry) -> PreviewContent {
+    let target = entry
+        .symlink
+        .as_ref()
+        .map(browser_support::symlink_target_display_label)
+        .unwrap_or_else(|| "unreadable target".to_string());
+    super::status_preview(
+        PreviewKind::Unavailable,
+        "Broken symlink",
+        [
+            Line::from("Broken symbolic link"),
+            Line::from(format!("Target: {target}")),
         ],
     )
 }

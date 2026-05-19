@@ -194,11 +194,7 @@ fn render_tile(
     let mut lines = Vec::new();
     if spec.show_kind_hint {
         lines.push(Line::from(Span::styled(
-            if entry.is_dir() {
-                "Open folder"
-            } else {
-                "Open file"
-            },
+            browser_entry_kind_hint(entry),
             Style::default().fg(icon_color),
         )));
     }
@@ -221,5 +217,17 @@ fn render_tile(
             Paragraph::new(lines).style(Style::default().bg(content_bg).fg(palette.text)),
             content_inner,
         );
+    }
+}
+
+fn browser_entry_kind_hint(entry: &Entry) -> &'static str {
+    if entry.is_broken_symlink() {
+        "Broken link"
+    } else if entry.is_symlink() {
+        "Open link"
+    } else if entry.is_dir() {
+        "Open folder"
+    } else {
+        "Open file"
     }
 }

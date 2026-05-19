@@ -455,6 +455,7 @@ fn closing_open_with_popup_restores_iterm_inline_image() {
         name: "page.png".to_string(),
         name_key: "page.png".to_string(),
         kind: EntryKind::File,
+        symlink: None,
         size: page_metadata.len(),
         modified: page_metadata.modified().ok(),
         readonly: false,

@@ -227,6 +227,7 @@ fn entry_display_name_controls_classification_when_storage_name_has_collision_su
         name: "photo.jpeg".to_string(),
         name_key: "photo.jpeg".to_string(),
         kind: EntryKind::File,
+        symlink: None,
         size: metadata.len(),
         modified: metadata.modified().ok(),
         readonly: false,

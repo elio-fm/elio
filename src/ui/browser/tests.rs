@@ -1,6 +1,6 @@
 use super::super::helpers;
 use super::super::theme;
-use super::entries::render_compact_list_row;
+use super::entries::{browser_symlink_target_detail, render_compact_list_row};
 use super::layout::resolve_body_layout;
 use super::scrollbar::split_scrollbar_area;
 use super::sidebar::render_sidebar;
@@ -1504,6 +1504,137 @@ fn compact_list_rows_hide_metadata_early_on_tight_widths() {
     assert!(
         !rendered.contains("ago"),
         "expected the compact row to hide modified metadata first, got: {rendered:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_list_rows_expose_target_detail_inline() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_path("symlink-list-detail");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let target_label = PathBuf::from("target.txt");
+    let target = root.join(&target_label);
+    let linked = root.join("linked.txt");
+    fs::write(&target, "hello").expect("failed to write target");
+    symlink(&target_label, &linked).expect("failed to create symlink");
+
+    let app = App::new_at(root.clone()).expect("app should load temp directory");
+    let entry = app
+        .navigation
+        .entries
+        .iter()
+        .find(|entry| entry.name == "linked.txt")
+        .expect("linked entry should be visible");
+
+    assert!(entry.is_symlink());
+    let expected_detail = format!("-> {}", target_label.display());
+    assert_eq!(
+        browser_symlink_target_detail(entry).as_deref(),
+        Some(expected_detail.as_str())
+    );
+    let line = render_compact_list_row(&app, entry, true, 80, theme::palette());
+    let rendered = line_text(&line);
+    assert!(
+        rendered.contains("linked.txt -> target.txt"),
+        "expected compact row to show the symlink target inline, got: {rendered:?}"
+    );
+    assert_eq!(
+        line.spans
+            .iter()
+            .find(|span| span.content.as_ref() == " -> target.txt")
+            .and_then(|span| span.style.fg),
+        Some(theme::palette().muted),
+        "expected compact row to dim the symlink target"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_list_rows_sanitize_link_names_and_targets() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_path("symlink-list-sanitized");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let target_label = PathBuf::from("bad\rtarget.txt");
+    let target = root.join(&target_label);
+    let link_name = "bad\u{1b}link.txt";
+    let linked = root.join(link_name);
+    fs::write(&target, "hello").expect("failed to write target");
+    symlink(&target_label, &linked).expect("failed to create symlink");
+
+    let app = App::new_at(root.clone()).expect("app should load temp directory");
+    let entry = app
+        .navigation
+        .entries
+        .iter()
+        .find(|entry| entry.name == link_name)
+        .expect("linked entry should be visible");
+
+    assert_eq!(
+        browser_symlink_target_detail(entry).as_deref(),
+        Some("-> bad^Mtarget.txt")
+    );
+    let rendered = line_text(&render_compact_list_row(
+        &app,
+        entry,
+        true,
+        80,
+        theme::palette(),
+    ));
+    assert!(
+        rendered.contains("bad^[link.txt -> bad^Mtarget.txt"),
+        "expected compact row to sanitize symlink names and targets, got: {rendered:?}"
+    );
+    assert!(!rendered.contains('\r'));
+    assert!(!rendered.contains('\u{1b}'));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn broken_symlink_list_rows_expose_broken_target_detail() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_path("broken-symlink-list-detail");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let missing = PathBuf::from("../real/code/missing.rs");
+    symlink(&missing, root.join("broken_link_with_known_ext.rs"))
+        .expect("failed to create symlink");
+
+    let app = App::new_at(root.clone()).expect("app should load temp directory");
+    let entry = app
+        .navigation
+        .entries
+        .iter()
+        .find(|entry| entry.name == "broken_link_with_known_ext.rs")
+        .expect("broken symlink entry should be visible");
+
+    assert!(entry.is_broken_symlink());
+    let expected_detail = format!("broken -> {}", missing.display());
+    assert_eq!(
+        browser_symlink_target_detail(entry).as_deref(),
+        Some(expected_detail.as_str())
+    );
+    let line = render_compact_list_row(&app, entry, true, 80, theme::palette());
+    let rendered = line_text(&line);
+    assert!(
+        rendered.contains("broken_link_with_known_ext.rs -> ../real/code/missing.rs"),
+        "expected compact row to show the broken symlink target inline, got: {rendered:?}"
+    );
+    assert_eq!(
+        line.spans
+            .iter()
+            .find(|span| span.content.as_ref() == " -> ../real/code/missing.rs")
+            .and_then(|span| span.style.fg),
+        Some(theme::palette().muted),
+        "expected compact row to dim the broken symlink target"
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

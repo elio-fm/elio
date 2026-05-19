@@ -1,3 +1,4 @@
+use crate::core::SymlinkInfo;
 use ratatui::layout::Rect;
 use std::{io, time::SystemTime};
 
@@ -84,6 +85,14 @@ pub(crate) fn sanitize_terminal_text(text: &str) -> String {
     sanitized
 }
 
+pub(crate) fn symlink_target_display_label(symlink: &SymlinkInfo) -> String {
+    symlink
+        .target
+        .as_ref()
+        .map(|path| sanitize_terminal_text(&path.display().to_string()))
+        .unwrap_or_else(|| "unreadable target".to_string())
+}
+
 fn format_with_grouping(value: u64) -> String {
     let digits = value.to_string();
     let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
@@ -114,6 +123,7 @@ fn format_decimal(value: f64, precision: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn size_format_is_human_readable() {
@@ -138,5 +148,15 @@ mod tests {
             sanitize_terminal_text("bad\rname\t\u{1b}"),
             "bad^Mname    ^["
         );
+    }
+
+    #[test]
+    fn symlink_target_label_is_sanitized_before_rendering() {
+        let symlink = SymlinkInfo {
+            target: Some(PathBuf::from("bad\rname\u{1b}")),
+            target_kind: None,
+        };
+
+        assert_eq!(symlink_target_display_label(&symlink), "bad^Mname^[");
     }
 }
