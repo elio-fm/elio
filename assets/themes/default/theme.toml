@@ -52,6 +52,12 @@ invalid = "#ff8585"
 icon = "󰉋"
 color = "#5ba8ff"
 
+[classes.symlink_directory]
+icon = ""
+
+[classes.broken_symlink]
+icon = "󰌺"
+
 [classes.code]
 icon = "󰆍"
 color = "#38d5ff"

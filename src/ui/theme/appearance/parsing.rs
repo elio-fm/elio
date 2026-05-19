@@ -105,6 +105,9 @@ impl Theme {
     }
 
     fn apply_overrides(&mut self, parsed: ThemeFile) -> anyhow::Result<()> {
+        let mut symlink_directory_color_overridden = false;
+        let mut broken_symlink_color_overridden = false;
+
         if let Some(palette) = parsed.palette {
             apply_palette_overrides(&mut self.palette, palette)?;
         }
@@ -116,18 +119,29 @@ impl Theme {
             for (name, override_style) in classes {
                 let class = parse_class_name(&name)
                     .ok_or_else(|| anyhow::anyhow!("unknown class `{name}`"))?;
+                let ClassStyleOverride { icon, color } = override_style;
                 let style = self
                     .classes
                     .entry(class)
                     .or_insert_with(|| default_class_style(class));
-                if let Some(icon) = override_style.icon {
+                if let Some(icon) = icon {
                     style.icon = icon;
                 }
-                if let Some(color) = override_style.color {
+                if let Some(color) = color {
+                    if class == FileClass::SymlinkDirectory {
+                        symlink_directory_color_overridden = true;
+                    }
+                    if class == FileClass::BrokenSymlink {
+                        broken_symlink_color_overridden = true;
+                    }
                     style.color = parse_color(&color)?;
                 }
             }
         }
+        self.apply_derived_symlink_class_colors(
+            symlink_directory_color_overridden,
+            broken_symlink_color_overridden,
+        );
 
         if let Some(extensions) = parsed.extensions {
             apply_rule_map(&mut self.extensions, extensions)?;
@@ -140,6 +154,29 @@ impl Theme {
         }
 
         Ok(())
+    }
+
+    fn apply_derived_symlink_class_colors(
+        &mut self,
+        symlink_directory_color_overridden: bool,
+        broken_symlink_color_overridden: bool,
+    ) {
+        if !symlink_directory_color_overridden
+            && let Some(color) = self
+                .classes
+                .get(&FileClass::Directory)
+                .map(|style| style.color)
+            && let Some(style) = self.classes.get_mut(&FileClass::SymlinkDirectory)
+        {
+            style.color = color;
+        }
+
+        let invalid_color = self.preview.code.invalid;
+        if !broken_symlink_color_overridden
+            && let Some(style) = self.classes.get_mut(&FileClass::BrokenSymlink)
+        {
+            style.color = invalid_color;
+        }
     }
 }
 
@@ -263,6 +300,8 @@ fn parse_rule_override(value: RuleOverrideDef) -> anyhow::Result<RuleOverride> {
 pub(super) fn parse_class_name(name: &str) -> Option<FileClass> {
     match normalize_key(name).as_str() {
         "directory" | "dir" | "folder" => Some(FileClass::Directory),
+        "symlink_directory" => Some(FileClass::SymlinkDirectory),
+        "broken_symlink" => Some(FileClass::BrokenSymlink),
         "code" => Some(FileClass::Code),
         "config" => Some(FileClass::Config),
         "document" | "doc" | "text" => Some(FileClass::Document),

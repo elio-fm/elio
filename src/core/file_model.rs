@@ -34,6 +34,8 @@ pub enum EntryKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub(crate) enum FileClass {
     Directory,
+    SymlinkDirectory,
+    BrokenSymlink,
     Code,
     Config,
     Document,

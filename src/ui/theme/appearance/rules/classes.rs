@@ -9,6 +9,14 @@ pub(super) fn base_class_styles() -> HashMap<FileClass, ClassStyle> {
             FileClass::Directory,
             default_class_style(FileClass::Directory),
         ),
+        (
+            FileClass::SymlinkDirectory,
+            default_class_style(FileClass::SymlinkDirectory),
+        ),
+        (
+            FileClass::BrokenSymlink,
+            default_class_style(FileClass::BrokenSymlink),
+        ),
         (FileClass::Code, default_class_style(FileClass::Code)),
         (FileClass::Config, default_class_style(FileClass::Config)),
         (
@@ -31,6 +39,14 @@ pub(in crate::ui::theme::appearance) fn default_class_style(class: FileClass) ->
         FileClass::Directory => ClassStyle {
             icon: "󰉋".to_string(),
             color: rgb(65, 143, 222),
+        },
+        FileClass::SymlinkDirectory => ClassStyle {
+            icon: "".to_string(),
+            color: rgb(65, 143, 222),
+        },
+        FileClass::BrokenSymlink => ClassStyle {
+            icon: "󰌺".to_string(),
+            color: rgb(255, 133, 133),
         },
         FileClass::Code => ClassStyle {
             icon: "󰆍".to_string(),

@@ -69,6 +69,16 @@ fn built_in_default_theme_asset_matches_runtime_default_theme() {
         built_in_asset.preview.code.function,
         runtime_default.preview.code.function,
     );
+    for class in [FileClass::SymlinkDirectory, FileClass::BrokenSymlink] {
+        assert_eq!(
+            built_in_asset.classes.get(&class).unwrap().icon,
+            runtime_default.classes.get(&class).unwrap().icon,
+        );
+        assert_eq!(
+            built_in_asset.classes.get(&class).unwrap().color,
+            runtime_default.classes.get(&class).unwrap().color,
+        );
+    }
 
     for (path, kind) in [
         ("projects", EntryKind::Directory),

@@ -60,6 +60,20 @@ fn load_alternate_example_theme(name: &str) -> Theme {
     })
 }
 
+fn assert_symlink_directory_matches_folder_color(theme: &Theme, label: &str) {
+    let directory = theme.classes.get(&FileClass::Directory).unwrap();
+    let symlink_directory = theme.classes.get(&FileClass::SymlinkDirectory).unwrap();
+
+    assert_eq!(
+        symlink_directory.icon, "",
+        "{label}: symlinked directories should use the linked-folder icon",
+    );
+    assert_eq!(
+        symlink_directory.color, directory.color,
+        "{label}: symlinked directories should use the normal folder color",
+    );
+}
+
 fn assert_uses_normal_folder_color_for_generic_dev_directories(theme: &Theme, label: &str) {
     let normal_folder_color = theme
         .resolve(Path::new("projects"), EntryKind::Directory)
@@ -76,6 +90,14 @@ fn assert_uses_normal_folder_color_for_generic_dev_directories(theme: &Theme, la
             resolved.color, normal_folder_color,
             "{label}: {directory} should use the normal folder color",
         );
+    }
+}
+
+#[test]
+fn alternate_example_themes_style_symlinks_like_their_base_kinds() {
+    for name in ALTERNATE_EXAMPLE_THEME_NAMES {
+        let theme = load_alternate_example_theme(name);
+        assert_symlink_directory_matches_folder_color(&theme, name);
     }
 }
 

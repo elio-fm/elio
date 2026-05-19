@@ -1,5 +1,9 @@
-use super::super::{resolve::builtin_classify_path, rules::rgb};
+use super::super::{
+    resolve::{builtin_classify_browser_entry, builtin_classify_path},
+    rules::rgb,
+};
 use super::*;
+use crate::core::SymlinkInfo;
 
 fn write_temp_file(label: &str, file_name: &str, contents: &str) -> (PathBuf, PathBuf) {
     let root = temp_path(label);
@@ -7,6 +11,26 @@ fn write_temp_file(label: &str, file_name: &str, contents: &str) -> (PathBuf, Pa
     let path = root.join(file_name);
     fs::write(&path, contents).expect("failed to write temp file");
     (root, path)
+}
+
+fn test_entry(name: &str, kind: EntryKind) -> Entry {
+    Entry {
+        path: PathBuf::from(name),
+        name: name.to_string(),
+        name_key: name.to_lowercase(),
+        kind,
+        ..Entry::default()
+    }
+}
+
+fn symlink_entry(name: &str, kind: EntryKind, target_kind: Option<EntryKind>) -> Entry {
+    Entry {
+        symlink: Some(SymlinkInfo {
+            target: Some(PathBuf::from("target")),
+            target_kind,
+        }),
+        ..test_entry(name, kind)
+    }
 }
 
 #[test]
@@ -99,6 +123,182 @@ fn resolve_entry_cache_respects_entry_metadata_when_builtin_class_changes() {
     assert_eq!(updated.class, FileClass::Document);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn symlinked_browser_directories_use_link_folder_appearance() {
+    let entry = symlink_entry("linked", EntryKind::Directory, Some(EntryKind::Directory));
+    let directory = resolve_browser_entry(&test_entry("folder", EntryKind::Directory));
+
+    let browser = resolve_browser_entry(&entry);
+    let preview = resolve_entry(&entry);
+
+    assert_eq!(browser.class, FileClass::SymlinkDirectory);
+    assert_eq!(browser.icon, "");
+    assert_eq!(browser.color, directory.color);
+    assert_eq!(preview.class, FileClass::SymlinkDirectory);
+    assert_eq!(preview.icon, "");
+    assert_eq!(preview.color, directory.color);
+}
+
+#[test]
+fn symlinked_browser_files_keep_file_type_appearance() {
+    let entry = symlink_entry("config.toml", EntryKind::File, Some(EntryKind::File));
+    let normal_file = test_entry("config.toml", EntryKind::File);
+
+    let resolved = resolve_browser_entry(&entry);
+    let normal = resolve_browser_entry(&normal_file);
+
+    assert_eq!(resolved.class, normal.class);
+    assert_eq!(resolved.icon, normal.icon);
+    assert_eq!(resolved.color, normal.color);
+}
+
+#[test]
+fn broken_symlinks_use_broken_link_appearance() {
+    let entry = symlink_entry("missing", EntryKind::File, None);
+
+    let resolved = resolve_browser_entry(&entry);
+
+    assert_eq!(resolved.class, FileClass::BrokenSymlink);
+    assert_eq!(resolved.icon, "󰌺");
+    assert_eq!(resolved.color, rgb(0xff, 0x85, 0x85));
+}
+
+#[test]
+fn symlink_state_classes_take_precedence_over_name_rules() {
+    let theme = Theme::from_config_str(
+        r##"
+[classes.symlink_directory]
+icon = "L"
+
+[classes.broken_symlink]
+icon = "B"
+
+[directories.linked]
+icon = "D"
+
+[files.missing]
+icon = "F"
+"##,
+    )
+    .expect("theme should parse symlink state overrides");
+    let linked = symlink_entry("linked", EntryKind::Directory, Some(EntryKind::Directory));
+    let broken = symlink_entry("missing", EntryKind::File, None);
+
+    let linked = theme.resolve_with_builtin_class(
+        &linked.path,
+        linked.kind,
+        builtin_classify_browser_entry(&linked),
+    );
+    let broken = theme.resolve_with_builtin_class(
+        &broken.path,
+        broken.kind,
+        builtin_classify_browser_entry(&broken),
+    );
+
+    assert_eq!(linked.class, FileClass::SymlinkDirectory);
+    assert_eq!(linked.icon, "L");
+    assert_eq!(broken.class, FileClass::BrokenSymlink);
+    assert_eq!(broken.icon, "B");
+}
+
+#[test]
+fn symlink_directory_class_inherits_directory_color_when_color_is_omitted() {
+    let theme = Theme::from_config_str(
+        r##"
+[classes.directory]
+color = "#778899"
+
+[classes.symlink_directory]
+icon = "L"
+"##,
+    )
+    .expect("theme should parse symlink directory class");
+    let entry = symlink_entry("linked", EntryKind::Directory, Some(EntryKind::Directory));
+
+    let resolved = theme.resolve_with_builtin_class(
+        &entry.path,
+        entry.kind,
+        builtin_classify_browser_entry(&entry),
+    );
+
+    assert_eq!(resolved.class, FileClass::SymlinkDirectory);
+    assert_eq!(resolved.icon, "L");
+    assert_eq!(resolved.color, rgb(0x77, 0x88, 0x99));
+}
+
+#[test]
+fn symlink_directory_class_can_override_color_explicitly() {
+    let theme = Theme::from_config_str(
+        r##"
+[classes.directory]
+color = "#778899"
+
+[classes.symlink_directory]
+color = "#112233"
+"##,
+    )
+    .expect("theme should parse symlink directory class");
+    let entry = symlink_entry("linked", EntryKind::Directory, Some(EntryKind::Directory));
+
+    let resolved = theme.resolve_with_builtin_class(
+        &entry.path,
+        entry.kind,
+        builtin_classify_browser_entry(&entry),
+    );
+
+    assert_eq!(resolved.class, FileClass::SymlinkDirectory);
+    assert_eq!(resolved.color, rgb(0x11, 0x22, 0x33));
+}
+
+#[test]
+fn broken_symlink_class_inherits_invalid_color_when_color_is_omitted() {
+    let theme = Theme::from_config_str(
+        r##"
+[preview.code]
+invalid = "#112233"
+
+[classes.broken_symlink]
+icon = "B"
+"##,
+    )
+    .expect("theme should parse broken symlink class");
+    let entry = symlink_entry("missing", EntryKind::File, None);
+
+    let resolved = theme.resolve_with_builtin_class(
+        &entry.path,
+        entry.kind,
+        builtin_classify_browser_entry(&entry),
+    );
+
+    assert_eq!(resolved.class, FileClass::BrokenSymlink);
+    assert_eq!(resolved.icon, "B");
+    assert_eq!(resolved.color, rgb(0x11, 0x22, 0x33));
+}
+
+#[test]
+fn broken_symlink_class_can_override_color_explicitly() {
+    let theme = Theme::from_config_str(
+        r##"
+[preview.code]
+invalid = "#112233"
+
+[classes.broken_symlink]
+color = "#445566"
+"##,
+    )
+    .expect("theme should parse broken symlink class");
+    let entry = symlink_entry("missing", EntryKind::File, None);
+
+    let resolved = theme.resolve_with_builtin_class(
+        &entry.path,
+        entry.kind,
+        builtin_classify_browser_entry(&entry),
+    );
+
+    assert_eq!(resolved.class, FileClass::BrokenSymlink);
+    assert_eq!(resolved.color, rgb(0x44, 0x55, 0x66));
 }
 
 #[test]
