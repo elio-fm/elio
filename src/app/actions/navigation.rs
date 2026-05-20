@@ -390,15 +390,46 @@ impl App {
     }
 
     pub(in crate::app) fn open_in_system(&mut self) -> Result<()> {
-        let Some(entry) = self.selected_entry() else {
+        let targets = self.open_in_system_targets();
+        if targets.is_empty() {
             return Ok(());
-        };
-
-        let target = entry.path.clone();
-        match crate::fs::open_in_system(&target) {
-            Ok(()) => self.status = format!("Opened {}", target.display()),
-            Err(e) => self.status = e,
         }
+
+        let total = targets.len();
+        let mut opened = 0;
+        let mut last_error = None;
+        for target in &targets {
+            match crate::fs::open_in_system(target) {
+                Ok(()) => opened += 1,
+                Err(error) => last_error = Some(error),
+            }
+        }
+
+        self.status = match (total, opened, last_error) {
+            (1, 1, _) => format!("Opened {}", targets[0].display()),
+            (_, opened, None) => format!("Opened {opened} items"),
+            (1, 0, Some(error)) => error,
+            (_, 0, Some(error)) => format!("Failed to open {total} items: {error}"),
+            (_, opened, Some(error)) => {
+                format!("Opened {opened}/{total} items; last error: {error}")
+            }
+        };
         Ok(())
+    }
+
+    fn open_in_system_targets(&self) -> Vec<PathBuf> {
+        if !self.navigation.selected_paths.is_empty() {
+            return self
+                .navigation
+                .entries
+                .iter()
+                .filter(|entry| self.navigation.selected_paths.contains(&entry.path))
+                .map(|entry| entry.path.clone())
+                .collect();
+        }
+
+        self.selected_entry()
+            .map(|entry| vec![entry.path.clone()])
+            .unwrap_or_default()
     }
 }

@@ -195,7 +195,7 @@ See [Image Previews](#image-previews) and [Optional Preview Tools](#optional-pre
 
 ### Opening Files
 
-`Enter` enters folders and opens files with the system default application. `o` always opens the selected file or folder externally using the system launcher: `open` on macOS, `cmd /c start` on Windows, and `gio` (with `xdg-open` as fallback) on Linux and BSD desktop sessions.
+`Enter` enters folders and opens files with the system default application; when items are selected, it opens the selected items instead. `o` always opens the focused item or selected items externally using the system launcher: `open` on macOS, `cmd /c start` on Windows, and `gio` (with `xdg-open` as fallback) on Linux and BSD desktop sessions.
 
 `O` is for files. On macOS and Linux/BSD desktop sessions, elio discovers matching applications, opens the file directly when there is one match, and shows the Open With chooser when there are multiple. Terminal apps such as `nvim` are supported too. When no match is found, or on platforms without app discovery, elio falls back to the default opener.
 
@@ -328,7 +328,8 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 |---|---|
 | `↑` / `↓` · `j` / `k` | Move selection |
 | `←` · `h` · `Backspace` | Go to parent directory |
-| `→` · `l` · `Enter` | Enter folder / open file |
+| `→` · `l` | Enter folder |
+| `Enter` | Enter folder / open file or selection |
 | `g` | Go-to menu (`g` top, `d` downloads, `h` home, `c` config folder, `t` trash) |
 | `G` | Jump to last item |
 | `PageUp` / `PageDown` | Page up / down |
@@ -347,7 +348,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 
 | Key | Action |
 |---|---|
-| `o` `*` | Open with the system default application |
+| `o` `*` | Open focused item or selection with the system default application |
 | `O` `*` | Open With chooser |
 | `a` `*` | Create file or folder |
 | `d` `*` | Trash; permanently delete if already in trash |

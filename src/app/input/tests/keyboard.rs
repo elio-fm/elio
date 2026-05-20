@@ -14,6 +14,7 @@ struct OpenInSystemCaptureGuard;
 #[cfg(all(unix, not(target_os = "macos")))]
 impl OpenInSystemCaptureGuard {
     fn install(path: std::path::PathBuf) -> Self {
+        let _ = fs::remove_file(&path);
         crate::fs::set_open_in_system_capture_for_test(Some(path));
         Self
     }
@@ -24,6 +25,16 @@ impl Drop for OpenInSystemCaptureGuard {
     fn drop(&mut self) {
         crate::fs::set_open_in_system_capture_for_test(None);
     }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn read_open_capture(capture: &std::path::Path) -> String {
+    let deadline = Instant::now() + Duration::from_millis(1000);
+    while !capture.exists() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    fs::read_to_string(capture).expect("capture should exist")
 }
 
 #[test]
@@ -85,12 +96,7 @@ fn enter_opens_selected_file_with_system_opener() {
     )))
     .expect("enter should open selected file");
 
-    let deadline = Instant::now() + Duration::from_millis(1000);
-    while !capture.exists() && Instant::now() < deadline {
-        thread::sleep(Duration::from_millis(10));
-    }
-
-    let opened = fs::read_to_string(&capture).expect("capture should exist");
+    let opened = read_open_capture(&capture);
     assert_eq!(opened, file_path.display().to_string());
 
     fs::remove_dir_all(root).ok();
@@ -115,13 +121,82 @@ fn newline_key_event_also_opens_selected_file() {
     )))
     .expect("newline key event should open selected file");
 
-    let deadline = Instant::now() + Duration::from_millis(1000);
-    while !capture.exists() && Instant::now() < deadline {
-        thread::sleep(Duration::from_millis(10));
-    }
-
-    let opened = fs::read_to_string(&capture).expect("capture should exist");
+    let opened = read_open_capture(&capture);
     assert_eq!(opened, file_path.display().to_string());
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn enter_opens_selected_entries_with_system_opener() {
+    let root = temp_path("enter-opens-selection");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let alpha = root.join("alpha.txt");
+    let beta = root.join("beta.txt");
+    let gamma = root.join("gamma.txt");
+    fs::write(&alpha, "alpha").expect("failed to write alpha");
+    fs::write(&beta, "beta").expect("failed to write beta");
+    fs::write(&gamma, "gamma").expect("failed to write gamma");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.selected_paths.insert(gamma.clone());
+    app.navigation.selected_paths.insert(alpha.clone());
+    let beta_index = app
+        .navigation
+        .entries
+        .iter()
+        .position(|entry| entry.path == beta)
+        .expect("beta should be visible");
+    app.select_index(beta_index);
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .expect("enter should open selected entries");
+
+    let opened = read_open_capture(&capture);
+    let opened: Vec<_> = opened.lines().map(str::to_owned).collect();
+    assert_eq!(
+        opened,
+        vec![alpha.display().to_string(), gamma.display().to_string()]
+    );
+    assert_eq!(app.status, "Opened 2 items");
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn open_action_opens_selected_entries_with_system_opener() {
+    let root = temp_path("open-action-opens-selection");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let alpha = root.join("alpha.txt");
+    let beta = root.join("beta.txt");
+    fs::write(&alpha, "alpha").expect("failed to write alpha");
+    fs::write(&beta, "beta").expect("failed to write beta");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.selected_paths.insert(alpha.clone());
+    app.navigation.selected_paths.insert(beta.clone());
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('o'))))
+        .expect("o should open selected entries");
+
+    let opened = read_open_capture(&capture);
+    let opened: Vec<_> = opened.lines().map(str::to_owned).collect();
+    assert_eq!(
+        opened,
+        vec![alpha.display().to_string(), beta.display().to_string()]
+    );
+    assert_eq!(app.status, "Opened 2 items");
 
     fs::remove_dir_all(root).ok();
 }

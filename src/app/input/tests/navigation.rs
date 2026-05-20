@@ -52,6 +52,31 @@ fn right_arrow_enters_selected_directory_in_list_view() {
 }
 
 #[test]
+fn right_arrow_enters_focused_directory_even_when_selection_exists() {
+    let root = temp_path("right-dir-with-selection");
+    let child = root.join("child");
+    let file = root.join("selected.txt");
+    fs::create_dir_all(&child).expect("failed to create temp dirs");
+    fs::write(&file, "hello").expect("failed to write selected file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.view_mode = ViewMode::List;
+    app.navigation.selected_paths.insert(file);
+    app.select_index(0);
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Right,
+        KeyModifiers::NONE,
+    )))
+    .expect("right arrow should be handled");
+    wait_for_directory_load(&mut app);
+
+    assert_eq!(app.navigation.cwd, child);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn left_arrow_in_list_view_reselects_previous_directory_in_parent() {
     let root = temp_path("left-parent-selection");
     let alpha = root.join("alpha");

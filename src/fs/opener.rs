@@ -16,7 +16,18 @@ thread_local! {
 pub(crate) fn open_in_system(target: &Path) -> Result<(), String> {
     #[cfg(test)]
     if let Some(capture) = TEST_OPEN_IN_SYSTEM_CAPTURE.with(|slot| slot.borrow().clone()) {
-        return std::fs::write(&capture, target.display().to_string()).map_err(|e| e.to_string());
+        use std::{fs::OpenOptions, io::Write};
+
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&capture)
+            .map_err(|e| e.to_string())?;
+        if file.metadata().map_err(|e| e.to_string())?.len() > 0 {
+            writeln!(file).map_err(|e| e.to_string())?;
+        }
+        write!(file, "{}", target.display()).map_err(|e| e.to_string())?;
+        return Ok(());
     }
 
     #[cfg(target_os = "macos")]

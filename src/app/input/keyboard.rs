@@ -214,8 +214,8 @@ impl App {
             KeyCode::Right | KeyCode::Char('l') => {
                 if self.navigation.view_mode == ViewMode::Grid {
                     self.move_by_keyboard(1);
-                } else if self.selected_entry().is_some_and(Entry::is_dir) {
-                    self.open_selected()?;
+                } else if let Some(entry) = self.selected_entry().filter(|entry| entry.is_dir()) {
+                    self.set_dir(entry.path.clone())?;
                 } else {
                     self.status = "Press Enter to open files".to_string();
                 }
@@ -358,6 +358,10 @@ impl App {
     }
 
     pub(in crate::app) fn open_selected(&mut self) -> Result<()> {
+        if !self.navigation.selected_paths.is_empty() {
+            return self.dispatch_action(crate::config::Action::Open);
+        }
+
         let Some(entry) = self.selected_entry() else {
             return Ok(());
         };

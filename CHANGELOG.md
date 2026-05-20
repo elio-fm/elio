@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added bulk opening for selected items: `Enter` and `o` now open the current selection instead of only the focused row. ([#111])
 - Added symlink-aware rendering in the file browser, directory previews, and Places, with inline `-> target` details, dedicated icons for symlinked folders and broken links, and a broken-link preview. Symlinked files keep their normal file-type appearance.
 - Added themable `symlink_directory` and `broken_symlink` classes, whose default colors track the `directory` class color and `preview.code.invalid` unless explicitly overridden.
 
@@ -162,3 +163,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#67]: https://github.com/elio-fm/elio/issues/67
 [#66]: https://github.com/elio-fm/elio/pull/66
 [#103]: https://github.com/elio-fm/elio/issues/103
+[#109]: https://github.com/elio-fm/elio/issues/109
+[#111]: https://github.com/elio-fm/elio/issues/111
