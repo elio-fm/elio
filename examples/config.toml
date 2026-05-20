@@ -72,6 +72,7 @@ show_top_bar = false
 # copy_path            = "c"
 # search_folders       = "f"
 # zoxide               = "z"
+# shell                = "!"
 # open                 = "o"
 # open_with            = "O"
 # sort                 = "s"

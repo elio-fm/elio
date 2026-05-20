@@ -53,6 +53,7 @@ pub(super) fn render_help(
         e(&kb.trash.to_string(), "trash (delete if in trash)"),
         e(&rename_key, "rename (bulk if selection)"),
         e(&rename_trash_key, "restore from trash"),
+        e(&kb.shell.to_string(), "open shell here"),
         e(&kb.open.to_string(), "open with default app"),
         e(&kb.open_with.to_string(), "open with"),
     ];

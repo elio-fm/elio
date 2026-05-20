@@ -286,6 +286,12 @@ impl App {
                 self.pending_terminal_task = Some(PendingTerminalTask::Zoxide);
                 self.status.clear();
             }
+            Action::Shell => {
+                self.pending_terminal_task = Some(PendingTerminalTask::Shell {
+                    cwd: self.navigation.cwd.clone(),
+                });
+                self.status.clear();
+            }
             Action::Open => self.open_in_system()?,
             Action::OpenWith => self.open_open_with_overlay(),
             Action::Sort => self.cycle_sort_mode()?,

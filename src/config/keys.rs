@@ -13,6 +13,7 @@ pub(crate) enum Action {
     CopyPath,
     SearchFolders,
     Zoxide,
+    Shell,
     Open,
     OpenWith,
     Sort,
@@ -39,6 +40,7 @@ pub(crate) struct KeyBindings {
     pub copy_path: char,
     pub search_folders: char,
     pub zoxide: char,
+    pub shell: char,
     pub open: char,
     pub open_with: char,
     pub sort: char,
@@ -74,6 +76,7 @@ impl Default for KeyBindings {
             copy_path: 'c',
             search_folders: 'f',
             zoxide: 'z',
+            shell: '!',
             open: 'o',
             open_with: 'O',
             sort: 's',
@@ -99,6 +102,7 @@ pub(super) struct KeysConfigOverride {
     copy_path: Option<String>,
     search_folders: Option<String>,
     zoxide: Option<String>,
+    shell: Option<String>,
     open: Option<String>,
     open_with: Option<String>,
     sort: Option<String>,
@@ -124,6 +128,7 @@ impl KeyBindings {
             _ if c == self.copy_path => Some(Action::CopyPath),
             _ if c == self.search_folders => Some(Action::SearchFolders),
             _ if c == self.zoxide => Some(Action::Zoxide),
+            _ if c == self.shell => Some(Action::Shell),
             _ if c == self.open => Some(Action::Open),
             _ if c == self.open_with => Some(Action::OpenWith),
             _ if c == self.sort => Some(Action::Sort),
@@ -150,7 +155,7 @@ impl KeyBindings {
 
     pub(super) fn from_override(overrides: KeysConfigOverride, defaults: &Self) -> Self {
         // Each entry: (field_name, user_override_string, default_char)
-        let raw: [(&str, Option<String>, char); 19] = [
+        let raw: [(&str, Option<String>, char); 20] = [
             ("quit", overrides.quit, defaults.quit),
             ("yank", overrides.yank, defaults.yank),
             ("cut", overrides.cut, defaults.cut),
@@ -165,6 +170,7 @@ impl KeyBindings {
                 defaults.search_folders,
             ),
             ("zoxide", overrides.zoxide, defaults.zoxide),
+            ("shell", overrides.shell, defaults.shell),
             ("open", overrides.open, defaults.open),
             ("open_with", overrides.open_with, defaults.open_with),
             ("sort", overrides.sort, defaults.sort),
@@ -199,7 +205,7 @@ impl KeyBindings {
         // Step 1: parse each override string independently, falling back to
         // default on any format or reserved-char error.
         // (resolved_char, is_user_set)
-        let mut candidates: [(char, bool); 19] = [(' ', false); 19];
+        let mut candidates: [(char, bool); 20] = [(' ', false); 20];
         for (index, (name, override_str, default)) in raw.iter().enumerate() {
             candidates[index] = match override_str {
                 None => (*default, false),
@@ -238,12 +244,12 @@ impl KeyBindings {
         // binding does not silently leave a conflict with another.
         loop {
             let mut changed = false;
-            for index in 0..19 {
+            for index in 0..20 {
                 if !candidates[index].1 {
                     continue;
                 }
                 let candidate = candidates[index].0;
-                let collision = (0..19)
+                let collision = (0..20)
                     .filter(|&other_index| other_index != index)
                     .any(|other_index| candidates[other_index].0 == candidate);
                 if collision {
@@ -283,15 +289,16 @@ impl KeyBindings {
             copy_path: resolved(7),
             search_folders: resolved(8),
             zoxide: resolved(9),
-            open: resolved(10),
-            open_with: resolved(11),
-            sort: resolved(12),
-            toggle_view: resolved(13),
-            toggle_hidden: resolved(14),
-            scroll_preview_left: resolved(15),
-            scroll_preview_right: resolved(16),
-            scroll_preview_up: resolved(17),
-            scroll_preview_down: resolved(18),
+            shell: resolved(10),
+            open: resolved(11),
+            open_with: resolved(12),
+            sort: resolved(13),
+            toggle_view: resolved(14),
+            toggle_hidden: resolved(15),
+            scroll_preview_left: resolved(16),
+            scroll_preview_right: resolved(17),
+            scroll_preview_up: resolved(18),
+            scroll_preview_down: resolved(19),
         }
     }
 }

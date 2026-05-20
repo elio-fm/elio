@@ -230,6 +230,12 @@ On Freedesktop Trash systems, the stored filename may be changed to avoid collis
 
 `z` opens `zoxide query -i` for jumping to directories from your zoxide history. It requires `zoxide` to be installed and available in `PATH`, and it shows results only after zoxide has recorded directory history. The current directory is excluded from the picker. Extra picker options can be appended with `ELIO_ZOXIDE_OPTS`.
 
+### Shell
+
+`!` opens your shell in the current folder. elio temporarily leaves its TUI, shows a short return hint, then resumes and refreshes the folder after the shell exits. Use `exit` to return to elio; Unix-style shells usually also support `Ctrl-D` on an empty prompt.
+
+On Unix, macOS, and WSL, elio uses `$SHELL` with `/bin/sh` as a fallback. On Windows, it uses `COMSPEC` with PowerShell and `cmd` fallbacks. The child shell receives `ELIO_SHELL=1` and an `ELIO_LEVEL` nesting counter for custom prompts and shell startup files.
+
 ---
 
 ## Preview Coverage
@@ -350,6 +356,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 |---|---|
 | `o` `*` | Open focused item or selection with the system default application |
 | `O` `*` | Open With chooser |
+| `!` `*` | Open shell in current folder |
 | `a` `*` | Create file or folder |
 | `d` `*` | Trash; permanently delete if already in trash |
 | `r` `*` | Rename / bulk rename / restore from trash |

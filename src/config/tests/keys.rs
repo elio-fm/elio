@@ -8,6 +8,7 @@ fn keys_default_bindings_are_sane() {
     assert_eq!(config.keys.paste, 'p');
     assert_eq!(config.keys.quit, 'q');
     assert_eq!(config.keys.zoxide, 'z');
+    assert_eq!(config.keys.shell, '!');
 }
 
 #[test]
@@ -121,6 +122,7 @@ fn action_for_returns_correct_action_for_default_bindings() {
     assert_eq!(key_bindings.action_for('o'), Some(Action::Open));
     assert_eq!(key_bindings.action_for('O'), Some(Action::OpenWith));
     assert_eq!(key_bindings.action_for('z'), Some(Action::Zoxide));
+    assert_eq!(key_bindings.action_for('!'), Some(Action::Shell));
     assert_eq!(key_bindings.action_for('j'), None);
 }
 
@@ -168,6 +170,26 @@ zoxide = "Z"
     .expect("config should parse");
     assert_eq!(config.keys.action_for('Z'), Some(Action::Zoxide));
     assert_eq!(config.keys.action_for('z'), None);
+}
+
+#[test]
+fn shell_defaults_to_bang() {
+    let key_bindings = KeyBindings::default();
+    assert_eq!(key_bindings.shell, '!');
+    assert_eq!(key_bindings.action_for('!'), Some(Action::Shell));
+}
+
+#[test]
+fn shell_can_be_overridden() {
+    let config = Config::from_str(
+        r#"
+[keys]
+shell = "S"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('S'), Some(Action::Shell));
+    assert_eq!(config.keys.action_for('!'), None);
 }
 
 #[test]

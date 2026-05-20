@@ -4,6 +4,7 @@ mod core;
 mod file_info;
 mod fs;
 mod preview;
+mod shell;
 mod ui;
 mod zoxide;
 
@@ -24,7 +25,7 @@ use crossterm::{
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{
     io::{self, ErrorKind, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
     time::{Duration, Instant},
 };
@@ -147,6 +148,24 @@ fn resume_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Res
 /// unable to open a file) should not crash the file manager.
 fn run_blocking_in_terminal(program: &str, args: &[String]) {
     let _ = Command::new(program).args(args).status();
+}
+
+fn refresh_after_shell(app: &mut App, cwd: &Path) {
+    match cwd.try_exists() {
+        Ok(true) => {
+            if let Err(error) = app.reload() {
+                app.report_runtime_error("Shell refresh failed", &error);
+            }
+        }
+        Ok(false) => app.set_status_message(format!(
+            "Current folder was removed while shell was open: {}",
+            cwd.display()
+        )),
+        Err(error) => app.set_status_message(format!(
+            "Could not refresh {} after shell: {error}",
+            cwd.display()
+        )),
+    }
 }
 
 fn apply_zoxide_query_result(app: &mut App, result: zoxide::QueryResult) {
@@ -434,6 +453,16 @@ fn run_app(
                         suspend_terminal(terminal, true)?;
                         run_blocking_in_terminal(&program, &args);
                         resume_terminal(terminal)?;
+                        None
+                    }
+                    PendingTerminalTask::Shell { cwd } => {
+                        suspend_terminal(terminal, true)?;
+                        let shell_result = shell::run_in_current_terminal(&cwd);
+                        resume_terminal(terminal)?;
+                        match shell_result {
+                            Ok(()) => refresh_after_shell(&mut app, &cwd),
+                            Err(error) => app.set_status_message(error),
+                        }
                         None
                     }
                     PendingTerminalTask::Zoxide => {

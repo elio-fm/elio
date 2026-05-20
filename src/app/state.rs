@@ -588,6 +588,7 @@ pub(in crate::app) struct InputRuntime {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PendingTerminalTask {
     Command { program: String, args: Vec<String> },
+    Shell { cwd: PathBuf },
     Zoxide,
 }
 
