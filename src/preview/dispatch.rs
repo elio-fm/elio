@@ -7,6 +7,7 @@ use ratatui::{
     style::Style,
     text::{Line, Span},
 };
+use std::fs;
 
 pub(crate) fn should_build_preview_in_background(entry: &Entry) -> bool {
     // Any selected file preview may touch the filesystem or decode enough content to
@@ -188,6 +189,12 @@ where
     let facts = file_info::inspect_entry_cached(entry);
     let preview_spec = facts.preview;
     let type_detail = facts.specific_type_label;
+    if !is_regular_file_for_preview(entry) {
+        return apply_type_detail(
+            PreviewContent::new(PreviewKind::Unavailable, Vec::new()).with_detail("Special file"),
+            type_detail,
+        );
+    }
     if preview_spec.kind == file_info::PreviewKind::Iso
         && let Some(preview) = container::build_iso_preview(&entry.path)
     {
@@ -406,6 +413,12 @@ fn apply_type_detail(
         preview.detail = Some(detail.to_string());
     }
     preview
+}
+
+fn is_regular_file_for_preview(entry: &Entry) -> bool {
+    fs::metadata(&entry.path)
+        .map(|metadata| metadata.file_type().is_file())
+        .unwrap_or(false)
 }
 
 fn source_preview_detail(

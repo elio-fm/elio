@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed quit stalls after browsing special files or large archives by avoiding blocking special-file reads, canceling archive listing commands, and sending oversized ZIP/CBZ archives through the bounded external listing path. ([#121])
 - Improved fuzzy search for large directory trees: matches now appear while scanning continues, stale scans are canceled automatically, the scan cap is much higher, and the overlay reports `scan limit reached` when the cap is hit.
 - Fixed fuzzy search so symlinked folders, symlinked files, and broken symlinks appear as searchable entries. Linked directories are listed but not descended into.
 - Fixed `Tab` / `Shift+Tab` cycling and the active highlight for symlinked Places entries, which previously reset to Home after opening the symlink target. ([#109])
@@ -167,3 +168,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#109]: https://github.com/elio-fm/elio/issues/109
 [#111]: https://github.com/elio-fm/elio/issues/111
 [#112]: https://github.com/elio-fm/elio/issues/112
+[#121]: https://github.com/elio-fm/elio/issues/121

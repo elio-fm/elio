@@ -259,3 +259,35 @@ fn extensionless_svg_is_detected_from_contents() {
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[cfg(unix)]
+#[test]
+fn extensionless_fifo_is_not_opened_for_content_sniffing() {
+    let root = temp_path("extensionless-fifo");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("hidraw-like");
+    make_fifo(&path);
+
+    let facts = inspect_path(&path, EntryKind::File);
+
+    assert_eq!(facts.builtin_class, FileClass::File);
+    assert_eq!(facts.specific_type_label, None);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn config_fifo_is_not_opened_for_content_sniffing() {
+    let root = temp_path("config-fifo");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("settings.conf");
+    make_fifo(&path);
+
+    let facts = inspect_path(&path, EntryKind::File);
+
+    assert_eq!(facts.builtin_class, FileClass::Config);
+    assert_eq!(facts.specific_type_label, Some("Config file"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}

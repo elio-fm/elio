@@ -1,5 +1,5 @@
-use super::super::ArchiveFormat;
 use super::super::build_archive_preview;
+use super::super::{ArchiveFormat, ZIP_INTERNAL_PREVIEW_MAX_BYTES};
 use super::{
     ComicArchiveBackend, ComicArchiveSignature, build_comic_archive_preview,
     parse_comic_archive_from_7z_output, parse_comic_book_info_comment, parse_unrar_archive_comment,
@@ -14,7 +14,7 @@ use std::{
     path::PathBuf,
     process::Command,
     sync::atomic::{AtomicBool, Ordering},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 fn temp_path(label: &str) -> PathBuf {
@@ -247,6 +247,29 @@ fn parse_zip_comic_archive_returns_none_when_canceled() {
     let canceled = AtomicBool::new(true);
     let parsed = parse_zip_comic_archive(&archive, &|| canceled.load(Ordering::Relaxed));
     assert!(parsed.is_none(), "canceled zip parsing should stop early");
+
+    fs::remove_dir_all(&root).expect("failed to remove temp root");
+}
+
+#[test]
+fn oversized_cbz_skips_internal_zip_reader() {
+    let root = temp_path("oversized-cbz-internal-skip");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let archive = root.join("huge.cbz");
+    let mut file = File::create(&archive).expect("failed to create sparse cbz fixture");
+    file.write_all(b"PK\x03\x04")
+        .expect("failed to write zip signature");
+    file.set_len(ZIP_INTERNAL_PREVIEW_MAX_BYTES + 1)
+        .expect("failed to size sparse cbz fixture");
+
+    let started_at = Instant::now();
+    let parsed = parse_zip_comic_archive(&archive, &|| false);
+
+    assert!(parsed.is_none());
+    assert!(
+        started_at.elapsed().as_millis() < 100,
+        "oversized CBZ files should skip the uncancellable zip reader"
+    );
 
     fs::remove_dir_all(&root).expect("failed to remove temp root");
 }

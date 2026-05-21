@@ -1226,8 +1226,20 @@ fn parse_zip_comic_archive<F>(path: &Path, canceled: &F) -> Option<CachedComicAr
 where
     F: Fn() -> bool,
 {
+    let physical_size = fs::metadata(path).ok().map(|metadata| metadata.len());
+    if canceled() || physical_size.is_some_and(|size| size > super::ZIP_INTERNAL_PREVIEW_MAX_BYTES)
+    {
+        return None;
+    }
+
     let file = File::open(path).ok()?;
+    if canceled() {
+        return None;
+    }
     let mut archive = ZipArchive::new(file).ok()?;
+    if canceled() {
+        return None;
+    }
     let mut page_entries = Vec::new();
     let mut metadata_entry = None;
 
@@ -1560,7 +1572,16 @@ where
         }
         let bytes = match comic.backend {
             ComicArchiveBackend::Zip => {
+                let physical_size = fs::metadata(archive_path)
+                    .ok()
+                    .map(|metadata| metadata.len());
+                if physical_size.is_some_and(|size| size > super::ZIP_INTERNAL_PREVIEW_MAX_BYTES) {
+                    return None;
+                }
                 let file = File::open(archive_path).ok()?;
+                if canceled() {
+                    return None;
+                }
                 let mut archive = ZipArchive::new(file).ok()?;
                 read_zip_entry_bytes_limited(
                     &mut archive,

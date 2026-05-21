@@ -29,12 +29,13 @@ pub(super) fn collect_internal_archive_listing(
 pub(super) fn collect_preferred_archive_entries(
     path: &Path,
     format: ArchiveFormat,
+    canceled: &impl Fn() -> bool,
 ) -> Option<Vec<ArchiveEntry>> {
     if prefers_internal_listing(format) {
         // If internal TAR parsing fails, keep bsdtar as the only tar-family CLI fallback.
         return collect_internal_archive_listing(path, format)
             .map(|(_, entries, _, _)| entries)
-            .or_else(|| collect_archive_entries_with_bsdtar(path));
+            .or_else(|| collect_archive_entries_with_bsdtar(path, canceled));
     }
 
     None

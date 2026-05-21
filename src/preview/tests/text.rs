@@ -332,3 +332,19 @@ The fixture notice should stay in the same paragraph after reflowing.
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[cfg(unix)]
+#[test]
+fn fifo_preview_is_not_opened_as_text() {
+    let root = temp_path("fifo-preview");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("hidraw-like");
+    make_fifo(&path);
+
+    let preview = build_preview(&file_entry(path));
+
+    assert_eq!(preview.kind, PreviewKind::Unavailable);
+    assert_eq!(preview.detail.as_deref(), Some("Special file"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}

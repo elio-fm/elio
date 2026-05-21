@@ -4,6 +4,8 @@ use flate2::{Compression, write::GzEncoder};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use ratatui::style::Color;
 use ratatui::text::Line;
+#[cfg(unix)]
+use std::{ffi::CString, os::unix::ffi::OsStrExt};
 use std::{
     fs,
     fs::File,
@@ -47,6 +49,20 @@ pub(super) fn directory_entry(path: PathBuf) -> Entry {
         modified: None,
         readonly: false,
     }
+}
+
+#[cfg(unix)]
+pub(super) fn make_fifo(path: &Path) {
+    let c_path =
+        CString::new(path.as_os_str().as_bytes()).expect("fifo path should not contain NUL");
+    let result = unsafe { libc::mkfifo(c_path.as_ptr(), 0o644) };
+    assert_eq!(
+        result,
+        0,
+        "failed to create fifo at {}: {}",
+        path.display(),
+        std::io::Error::last_os_error()
+    );
 }
 
 pub(super) fn line_text(line: &Line<'_>) -> String {

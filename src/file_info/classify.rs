@@ -13,7 +13,7 @@ use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
-use std::{fs::File, io::Read};
+use std::{fs, fs::File, io::Read};
 
 const CONFIG_SNIFF_BYTE_LIMIT: usize = 16 * 1024;
 const CONFIG_SNIFF_LINE_LIMIT: usize = 80;
@@ -191,11 +191,21 @@ fn normalize_key(input: &str) -> String {
 }
 
 fn sniff_extensionless_file_type(path: &Path) -> Option<FileFacts> {
+    if !is_regular_file(path) {
+        return None;
+    }
+
     let mut file = File::open(path).ok()?;
     let mut buffer = [0_u8; 512];
     let bytes_read = file.read(&mut buffer).ok()?;
     let prefix = &buffer[..bytes_read];
     sniff_image_type(prefix).or_else(|| sniff_shebang_script_type(prefix))
+}
+
+fn is_regular_file(path: &Path) -> bool {
+    fs::metadata(path)
+        .map(|metadata| metadata.file_type().is_file())
+        .unwrap_or(false)
 }
 
 fn sniff_image_type(buffer: &[u8]) -> Option<FileFacts> {
@@ -300,6 +310,10 @@ fn sniff_config_file_type(path: &Path) -> Option<FileFacts> {
 }
 
 fn read_text_prefix(path: &Path) -> Option<String> {
+    if !is_regular_file(path) {
+        return None;
+    }
+
     let mut file = File::open(path).ok()?;
     let mut buffer = vec![0_u8; CONFIG_SNIFF_BYTE_LIMIT];
     let bytes_read = file.read(&mut buffer).ok()?;
