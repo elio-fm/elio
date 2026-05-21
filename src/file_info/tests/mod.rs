@@ -6,6 +6,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(unix)]
+use std::{ffi::CString, os::unix::ffi::OsStrExt};
+
 fn temp_path(label: &str) -> PathBuf {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -29,6 +32,20 @@ fn assert_code_spec(
 ) {
     assert_eq!(preview.code_syntax, code_syntax);
     assert_eq!(preview.code_backend, code_backend);
+}
+
+#[cfg(unix)]
+fn make_fifo(path: &Path) {
+    let c_path =
+        CString::new(path.as_os_str().as_bytes()).expect("fifo path should not contain NUL");
+    let result = unsafe { libc::mkfifo(c_path.as_ptr(), 0o644) };
+    assert_eq!(
+        result,
+        0,
+        "failed to create fifo at {}: {}",
+        path.display(),
+        std::io::Error::last_os_error()
+    );
 }
 
 mod classify;

@@ -1,6 +1,6 @@
 use super::{FileFacts, PreviewKind};
 use crate::core::FileClass;
-use std::{fs::File, io::Read, path::Path};
+use std::{fs, fs::File, io::Read, path::Path};
 
 const FAST_LICENSE_SNIFF_BYTE_LIMIT: usize = 4 * 1024;
 const LICENSE_SNIFF_BYTE_LIMIT: usize = 64 * 1024;
@@ -182,6 +182,10 @@ fn can_sniff_license_markers(ext: &str, base_facts: FileFacts) -> bool {
 }
 
 fn read_license_text_prefix(path: &Path, byte_limit: usize) -> Option<String> {
+    if !is_regular_file(path) {
+        return None;
+    }
+
     let mut file = File::open(path).ok()?;
     let mut buffer = vec![0_u8; byte_limit];
     let bytes_read = file.read(&mut buffer).ok()?;
@@ -194,6 +198,12 @@ fn read_license_text_prefix(path: &Path, byte_limit: usize) -> Option<String> {
 
 fn read_license_text(path: &Path) -> Option<String> {
     read_license_text_prefix(path, LICENSE_SNIFF_BYTE_LIMIT)
+}
+
+fn is_regular_file(path: &Path) -> bool {
+    fs::metadata(path)
+        .map(|metadata| metadata.file_type().is_file())
+        .unwrap_or(false)
 }
 
 fn license_file_facts(detection: LicenseDetection, base_facts: FileFacts) -> FileFacts {

@@ -8,6 +8,7 @@ mod render;
 
 const ARCHIVE_ENTRY_SCAN_LIMIT: usize = 50_000;
 const ZIP_MANIFEST_LIMIT_BYTES: u64 = 64 * 1024;
+const ZIP_INTERNAL_PREVIEW_MAX_BYTES: u64 = 256 * 1024 * 1024;
 
 pub(super) use self::common::{ArchiveEntry, ArchiveTreeNode};
 pub(in crate::preview) use self::format::ArchiveFormat;
@@ -57,36 +58,54 @@ where
     {
         return Some(preview);
     }
-    if let Some(preview) = build_zip_archive_preview(path, format, type_detail) {
+    if let Some(preview) = build_zip_archive_preview(path, format, type_detail, canceled) {
         return Some(preview);
     }
     if let Some(preview) = build_tar_archive_preview(path, format, type_detail) {
         return Some(preview);
     }
-    build_external_archive_preview(path, format, type_detail)
+    build_external_archive_preview(path, format, type_detail, canceled)
 }
 
-fn build_zip_archive_preview(
+fn build_zip_archive_preview<F>(
     path: &Path,
     format: ArchiveFormat,
     type_detail: Option<&'static str>,
-) -> Option<PreviewContent> {
+    canceled: &F,
+) -> Option<PreviewContent>
+where
+    F: Fn() -> bool,
+{
     if !matches!(format, ArchiveFormat::Zip | ArchiveFormat::ComicZip) {
         return None;
     }
 
+    let physical_size = fs::metadata(path).ok().map(|metadata| metadata.len());
+    if canceled() || physical_size.is_some_and(|size| size > ZIP_INTERNAL_PREVIEW_MAX_BYTES) {
+        return None;
+    }
+
     let file = File::open(path).ok()?;
+    if canceled() {
+        return None;
+    }
     let mut archive = ZipArchive::new(file).ok()?;
+    if canceled() {
+        return None;
+    }
     let total_entries = archive.len();
     let mut entries = Vec::with_capacity(total_entries.min(ARCHIVE_ENTRY_SCAN_LIMIT));
     let mut metadata = ArchiveMetadata {
         format_label: Some(archive_format_name(format).to_string()),
-        physical_size: fs::metadata(path).ok().map(|metadata| metadata.len()),
+        physical_size,
         ..ArchiveMetadata::default()
     };
     let mut manifest = ZipManifestMetadata::default();
 
     for index in 0..total_entries.min(ARCHIVE_ENTRY_SCAN_LIMIT) {
+        if canceled() {
+            return None;
+        }
         let entry = archive.by_index(index).ok()?;
         let is_dir = entry.is_dir();
         let name = entry.name().to_string();
@@ -164,16 +183,23 @@ fn build_tar_archive_preview(
     }))
 }
 
-fn build_external_archive_preview(
+fn build_external_archive_preview<F>(
     path: &Path,
     format: ArchiveFormat,
     type_detail: Option<&'static str>,
-) -> Option<PreviewContent> {
+    canceled: &F,
+) -> Option<PreviewContent>
+where
+    F: Fn() -> bool,
+{
     // Common ZIP and TAR previews are handled internally above. This path is for
     // recovery and uncommon archive types, where 7z provides the broadest coverage
     // and bsdtar remains a final generic fallback.
     let detail = type_detail.unwrap_or(archive_default_label(format));
-    if let Some(entries) = collect_preferred_archive_entries(path, format) {
+    if canceled() {
+        return None;
+    }
+    if let Some(entries) = collect_preferred_archive_entries(path, format, canceled) {
         return Some(render_archive_preview(ArchiveRenderConfig {
             detail: detail.to_string(),
             metadata: ArchiveMetadata {
@@ -189,7 +215,10 @@ fn build_external_archive_preview(
         }));
     }
 
-    if let Some((metadata, mut entries)) = collect_archive_listing_with_7z(path) {
+    if canceled() {
+        return None;
+    }
+    if let Some((metadata, mut entries)) = collect_archive_listing_with_7z(path, canceled) {
         if entries.is_empty()
             && let Some(entry) = fallback_single_file_archive_entry(path, format)
         {
@@ -208,7 +237,7 @@ fn build_external_archive_preview(
     }
 
     if matches!(format, ArchiveFormat::Rar)
-        && let Some(entries) = collect_archive_entries_with_unrar(path)
+        && let Some(entries) = collect_archive_entries_with_unrar(path, canceled)
     {
         return Some(render_archive_preview(ArchiveRenderConfig {
             detail: detail.to_string(),
@@ -226,7 +255,10 @@ fn build_external_archive_preview(
         }));
     }
 
-    let entries = collect_archive_entries_with_bsdtar(path)?;
+    if canceled() {
+        return None;
+    }
+    let entries = collect_archive_entries_with_bsdtar(path, canceled)?;
 
     Some(render_archive_preview(ArchiveRenderConfig {
         detail: detail.to_string(),
@@ -241,4 +273,41 @@ fn build_external_archive_preview(
         extra_sections: Vec::new(),
         scan_truncated: false,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ArchiveFormat, ZIP_INTERNAL_PREVIEW_MAX_BYTES, build_zip_archive_preview};
+    use std::{
+        fs,
+        time::{Instant, SystemTime, UNIX_EPOCH},
+    };
+
+    #[test]
+    fn oversized_zip_skips_internal_reader() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock before unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "elio-oversized-zip-internal-skip-{unique}-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("huge.zip");
+        let file = fs::File::create(&path).expect("failed to create sparse zip fixture");
+        file.set_len(ZIP_INTERNAL_PREVIEW_MAX_BYTES + 1)
+            .expect("failed to size sparse zip fixture");
+
+        let started_at = Instant::now();
+        let preview = build_zip_archive_preview(&path, ArchiveFormat::Zip, None, &|| false);
+
+        assert!(preview.is_none());
+        assert!(
+            started_at.elapsed().as_millis() < 100,
+            "oversized ZIP files should skip the uncancellable zip reader"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
 }

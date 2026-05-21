@@ -1,6 +1,40 @@
 use super::common::{normalize_archive_path, parse_key_value_line, parse_u64};
 use super::*;
-use std::{collections::BTreeMap, path::Path, process::Command};
+use std::{
+    collections::BTreeMap,
+    fs::{self, File},
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
+    time::{Duration, Instant},
+};
+
+const ARCHIVE_EXTERNAL_COMMAND_TIMEOUT: Duration = Duration::from_secs(2);
+const ARCHIVE_EXTERNAL_COMMAND_POLL: Duration = Duration::from_millis(20);
+
+static ARCHIVE_OUTPUT_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+struct ArchiveCommandOutputFile {
+    path: PathBuf,
+}
+
+impl ArchiveCommandOutputFile {
+    fn create(program: &str) -> Option<(Self, File)> {
+        let path = archive_command_output_path(program);
+        let file = File::create(&path).ok()?;
+        Some((Self { path }, file))
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for ArchiveCommandOutputFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
 
 pub(super) fn fallback_single_file_archive_entry(
     path: &Path,
@@ -21,40 +55,96 @@ pub(super) fn fallback_single_file_archive_entry(
     })
 }
 
-pub(super) fn collect_archive_entries_with_bsdtar(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    let output = Command::new("bsdtar").arg("-tf").arg(path).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
+pub(super) fn collect_archive_entries_with_bsdtar<F>(
+    path: &Path,
+    canceled: &F,
+) -> Option<Vec<ArchiveEntry>>
+where
+    F: Fn() -> bool,
+{
+    let output = run_archive_listing_command("bsdtar", &["-tf"], path, canceled)?;
     Some(normalize_archive_entries(
-        String::from_utf8_lossy(&output.stdout).lines(),
+        String::from_utf8_lossy(&output).lines(),
         false,
     ))
 }
 
-pub(super) fn collect_archive_entries_with_unrar(path: &Path) -> Option<Vec<ArchiveEntry>> {
-    let output = Command::new("unrar").arg("lb").arg(path).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(parse_unrar_bare_listing(&String::from_utf8_lossy(
-        &output.stdout,
-    )))
+pub(super) fn collect_archive_entries_with_unrar<F>(
+    path: &Path,
+    canceled: &F,
+) -> Option<Vec<ArchiveEntry>>
+where
+    F: Fn() -> bool,
+{
+    let output = run_archive_listing_command("unrar", &["lb"], path, canceled)?;
+    Some(parse_unrar_bare_listing(&String::from_utf8_lossy(&output)))
 }
 
-pub(super) fn collect_archive_listing_with_7z(
+pub(super) fn collect_archive_listing_with_7z<F>(
     path: &Path,
-) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>)> {
-    let output = Command::new("7z")
-        .arg("l")
-        .arg("-slt")
-        .arg(path)
-        .output()
-        .ok()?;
-    if !output.status.success() {
+    canceled: &F,
+) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>)>
+where
+    F: Fn() -> bool,
+{
+    let output = run_archive_listing_command("7z", &["l", "-slt"], path, canceled)?;
+    parse_7z_listing(&String::from_utf8_lossy(&output))
+}
+
+fn run_archive_listing_command<F>(
+    program: &str,
+    args: &[&str],
+    path: &Path,
+    canceled: &F,
+) -> Option<Vec<u8>>
+where
+    F: Fn() -> bool,
+{
+    if canceled() {
         return None;
     }
-    parse_7z_listing(&String::from_utf8_lossy(&output.stdout))
+
+    let (output_guard, output_file) = ArchiveCommandOutputFile::create(program)?;
+    let mut child = Command::new(program)
+        .args(args)
+        .arg(path)
+        .stdout(Stdio::from(output_file))
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let deadline = Instant::now() + ARCHIVE_EXTERNAL_COMMAND_TIMEOUT;
+    loop {
+        if canceled() || Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    return None;
+                }
+                let output = fs::read(output_guard.path()).ok()?;
+                return Some(output);
+            }
+            Ok(None) => std::thread::sleep(ARCHIVE_EXTERNAL_COMMAND_POLL),
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+}
+
+fn archive_command_output_path(program: &str) -> PathBuf {
+    let counter = ARCHIVE_OUTPUT_COUNTER.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "elio-archive-{program}-{}-{counter}.out",
+        std::process::id()
+    ))
 }
 
 fn parse_7z_listing(output: &str) -> Option<(ArchiveMetadata, Vec<ArchiveEntry>)> {
@@ -141,7 +231,12 @@ fn parse_unrar_bare_listing(output: &str) -> Vec<ArchiveEntry> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_7z_listing, parse_unrar_bare_listing};
+    use super::{parse_7z_listing, parse_unrar_bare_listing, run_archive_listing_command};
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{Duration, Instant},
+    };
 
     #[test]
     fn parse_7z_listing_collects_external_fallback_metadata_and_entries() {
@@ -221,5 +316,61 @@ images/
                 .any(|entry| entry.path == "images" && entry.is_dir)
         );
         assert!(!entries.iter().any(|entry| entry.path.contains("ignored")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn external_archive_command_observes_cancellation_while_running() {
+        let started_at = Instant::now();
+        let output = run_archive_listing_command(
+            "sh",
+            &["-c", "sleep 5", "sh"],
+            std::path::Path::new("ignored.zip"),
+            &|| started_at.elapsed() >= Duration::from_millis(40),
+        );
+
+        assert!(output.is_none());
+        assert!(
+            started_at.elapsed() < Duration::from_secs(1),
+            "canceled archive command should not wait for the child process to finish"
+        );
+    }
+
+    #[test]
+    fn external_archive_command_cleans_temp_file_when_spawn_fails() {
+        let program = "elio-definitely-missing-archive-tool-for-cleanup-test";
+        remove_archive_temp_outputs(program);
+
+        let output =
+            run_archive_listing_command(program, &[], std::path::Path::new("ignored.zip"), &|| {
+                false
+            });
+
+        assert!(output.is_none());
+        assert!(
+            archive_temp_outputs(program).is_empty(),
+            "failed spawn should clean up its temp output file"
+        );
+    }
+
+    fn archive_temp_outputs(program: &str) -> Vec<PathBuf> {
+        let prefix = format!("elio-archive-{program}-{}-", std::process::id());
+        fs::read_dir(std::env::temp_dir())
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(&prefix) && name.ends_with(".out"))
+            })
+            .collect()
+    }
+
+    fn remove_archive_temp_outputs(program: &str) {
+        for path in archive_temp_outputs(program) {
+            let _ = fs::remove_file(path);
+        }
     }
 }
