@@ -1,6 +1,8 @@
 use super::super::helpers;
 use super::super::theme;
-use super::entries::{browser_symlink_target_detail, render_compact_list_row};
+#[cfg(unix)]
+use super::entries::browser_symlink_target_detail;
+use super::entries::render_compact_list_row;
 use super::layout::resolve_body_layout;
 use super::scrollbar::split_scrollbar_area;
 use super::sidebar::render_sidebar;

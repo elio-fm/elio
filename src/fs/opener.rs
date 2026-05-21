@@ -168,7 +168,7 @@ fn spawn_with_deadline(
     Ok(())
 }
 
-#[cfg(any(test, target_os = "macos", all(unix, not(target_os = "macos"))))]
+#[cfg(unix)]
 pub(crate) fn detached_open(program: &str, args: &[&str], target: &Path) -> io::Result<()> {
     let mut command = Command::new(program);
     command.args(args);
@@ -220,7 +220,7 @@ fn status_spawn(command: &mut Command) -> io::Result<()> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     #[cfg(all(unix, not(target_os = "macos")))]
