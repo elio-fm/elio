@@ -266,6 +266,7 @@ fn read_process_env(_: u32, _: &str) -> Option<String> {
     None
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn parse_proc_environ(environ: &[u8], name: &str) -> Option<String> {
     let mut prefix = name.as_bytes().to_vec();
     prefix.push(b'=');
@@ -381,12 +382,17 @@ mod tests {
     use super::*;
     use std::{
         ffi::OsString,
+        sync::{Mutex, OnceLock},
+    };
+
+    #[cfg(unix)]
+    use std::{
         fs,
         path::PathBuf,
-        sync::{Mutex, OnceLock},
         time::{SystemTime, UNIX_EPOCH},
     };
 
+    #[cfg(unix)]
     fn temp_root(label: &str) -> PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)

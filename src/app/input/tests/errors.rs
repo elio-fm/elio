@@ -1,5 +1,7 @@
 use super::super::*;
-use super::helpers::{temp_path, wait_for_directory_load};
+use super::helpers::temp_path;
+#[cfg(unix)]
+use super::helpers::wait_for_directory_load;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;

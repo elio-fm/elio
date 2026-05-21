@@ -8,10 +8,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[cfg(all(unix, not(target_os = "macos")))]
 struct OpenInSystemCaptureGuard;
 
-#[cfg(all(unix, not(target_os = "macos")))]
 impl OpenInSystemCaptureGuard {
     fn install(path: std::path::PathBuf) -> Self {
         let _ = fs::remove_file(&path);
@@ -20,7 +18,6 @@ impl OpenInSystemCaptureGuard {
     }
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
 impl Drop for OpenInSystemCaptureGuard {
     fn drop(&mut self) {
         crate::fs::set_open_in_system_capture_for_test(None);
@@ -875,7 +872,6 @@ fn missing_zoxide_selection_reports_error() {
 fn capital_o_opens_open_with_overlay_for_selected_file() {
     let root = temp_path("open-with-overlay-file");
     fs::write(root.join("document.txt"), "hello").expect("failed to write temp file");
-    #[cfg(all(unix, not(target_os = "macos")))]
     let _capture_guard = OpenInSystemCaptureGuard::install(root.join("open-capture.txt"));
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");

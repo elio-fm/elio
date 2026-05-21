@@ -1,16 +1,19 @@
 use super::super::App;
 use crate::app::ClipOp;
 use std::{
-    env,
-    ffi::OsString,
     fs,
     path::PathBuf,
-    sync::{Mutex, OnceLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
+use std::{
+    env,
+    ffi::OsString,
+    sync::{Mutex, OnceLock},
+};
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +52,7 @@ fn wait_for_paste_and_reload(app: &mut App) {
     panic!("timed out waiting for paste and directory reload to complete");
 }
 
+#[cfg(unix)]
 fn clipboard_env_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))

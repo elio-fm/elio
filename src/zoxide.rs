@@ -87,6 +87,17 @@ fn stderr_mentions_missing_fzf(stderr: &[u8]) -> bool {
 }
 
 fn fzf_options() -> String {
+    let defaults = fzf_default_options().join(" ");
+
+    match (env::var("FZF_DEFAULT_OPTS"), env::var("ELIO_ZOXIDE_OPTS")) {
+        (Ok(base), Ok(extra)) => format!("{base} {defaults} {extra}"),
+        (Ok(base), Err(_)) => format!("{base} {defaults}"),
+        (Err(_), Ok(extra)) => format!("{defaults} {extra}"),
+        (Err(_), Err(_)) => defaults,
+    }
+}
+
+fn fzf_default_options() -> Vec<&'static str> {
     let mut defaults = vec![
         "--exact",
         "--no-sort",
@@ -100,27 +111,29 @@ fn fzf_options() -> String {
         "--tabstop=1",
         "--exit-0",
     ];
+    defaults.extend_from_slice(fzf_preview_options());
+    defaults
+}
 
-    #[cfg(target_os = "linux")]
-    {
-        defaults.push("--preview-window=down,30%,sharp");
-        defaults
-            .push("--preview='\\command -p ls -Cp --color=always --group-directories-first {2..}'");
-    }
-    #[cfg(all(unix, not(target_os = "linux")))]
-    {
-        defaults.push("--preview-window=down,30%,sharp");
-        defaults.push("--preview='\\command -p ls -Cp {2..}'");
-    }
+#[cfg(target_os = "linux")]
+fn fzf_preview_options() -> &'static [&'static str] {
+    &[
+        "--preview-window=down,30%,sharp",
+        "--preview='\\command -p ls -Cp --color=always --group-directories-first {2..}'",
+    ]
+}
 
-    let defaults = defaults.join(" ");
+#[cfg(all(unix, not(target_os = "linux")))]
+fn fzf_preview_options() -> &'static [&'static str] {
+    &[
+        "--preview-window=down,30%,sharp",
+        "--preview='\\command -p ls -Cp {2..}'",
+    ]
+}
 
-    match (env::var("FZF_DEFAULT_OPTS"), env::var("ELIO_ZOXIDE_OPTS")) {
-        (Ok(base), Ok(extra)) => format!("{base} {defaults} {extra}"),
-        (Ok(base), Err(_)) => format!("{base} {defaults}"),
-        (Err(_), Ok(extra)) => format!("{defaults} {extra}"),
-        (Err(_), Err(_)) => defaults,
-    }
+#[cfg(not(unix))]
+fn fzf_preview_options() -> &'static [&'static str] {
+    &[]
 }
 
 fn path_from_command_stdout(mut stdout: Vec<u8>) -> Option<PathBuf> {
@@ -138,5 +151,37 @@ fn path_from_command_stdout(mut stdout: Vec<u8>) -> Option<PathBuf> {
     #[cfg(not(unix))]
     {
         String::from_utf8(stdout).ok().map(PathBuf::from)
+    }
+}
+
+#[cfg(test)]
+mod fzf_tests {
+    use super::fzf_default_options;
+
+    #[test]
+    fn fzf_options_include_base_picker_flags() {
+        let options = fzf_default_options();
+        assert!(options.contains(&"--exact"));
+        assert!(options.contains(&"--exit-0"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_fzf_options_include_colored_preview() {
+        let options = fzf_default_options();
+        assert!(options.contains(&"--preview-window=down,30%,sharp"));
+        assert!(
+            options
+                .iter()
+                .any(|option| option.contains("--color=always --group-directories-first"))
+        );
+    }
+
+    #[cfg(all(unix, not(target_os = "linux")))]
+    #[test]
+    fn non_linux_unix_fzf_options_include_plain_preview() {
+        let options = fzf_default_options();
+        assert!(options.contains(&"--preview-window=down,30%,sharp"));
+        assert!(options.contains(&"--preview='\\command -p ls -Cp {2..}'"));
     }
 }
