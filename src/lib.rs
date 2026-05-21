@@ -3,6 +3,7 @@ mod config;
 mod core;
 mod file_info;
 mod fs;
+mod path_display;
 mod preview;
 mod shell;
 mod ui;
@@ -151,6 +152,7 @@ fn run_blocking_in_terminal(program: &str, args: &[String]) {
 }
 
 fn refresh_after_shell(app: &mut App, cwd: &Path) {
+    let cwd_label = path_display::user_facing(cwd);
     match cwd.try_exists() {
         Ok(true) => {
             if let Err(error) = app.reload() {
@@ -159,11 +161,10 @@ fn refresh_after_shell(app: &mut App, cwd: &Path) {
         }
         Ok(false) => app.set_status_message(format!(
             "Current folder was removed while shell was open: {}",
-            cwd.display()
+            cwd_label
         )),
         Err(error) => app.set_status_message(format!(
-            "Could not refresh {} after shell: {error}",
-            cwd.display()
+            "Could not refresh {cwd_label} after shell: {error}"
         )),
     }
 }

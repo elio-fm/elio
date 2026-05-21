@@ -16,7 +16,10 @@ impl App {
                     suffix,
                 )
             }
-            None => format!("0/0  {}", self.navigation.cwd.display()),
+            None => format!(
+                "0/0  {}",
+                crate::path_display::user_facing(&self.navigation.cwd)
+            ),
         }
     }
 

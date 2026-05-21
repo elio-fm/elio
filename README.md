@@ -232,7 +232,7 @@ On Freedesktop Trash systems, the stored filename may be changed to avoid collis
 
 ### Shell
 
-`!` opens your shell in the current folder. elio temporarily leaves its TUI, shows a short return hint, then resumes and refreshes the folder after the shell exits. Use `exit` to return to elio; Linux, macOS, BSD, and WSL shells usually also support `Ctrl-D` on an empty prompt.
+`!` opens your shell in the current folder. elio temporarily leaves its TUI, shows a short return hint, then resumes and refreshes the folder after the shell exits. Use `exit` to return to elio; Linux, macOS, BSD, and WSL shells usually also support `Ctrl+D` on an empty prompt.
 
 Changing directories inside that shell only affects the shell session; when it exits, elio returns to the folder where you opened it.
 

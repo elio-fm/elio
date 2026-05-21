@@ -187,13 +187,13 @@ pub(super) fn stable_path_label(path: &Path, max_chars: usize) -> String {
             if stripped.as_os_str().is_empty() {
                 "~".to_string()
             } else {
-                format!("~/{}", stripped.display())
+                format!("~/{}", crate::path_display::user_facing(stripped))
             }
         } else {
-            path.display().to_string()
+            crate::path_display::user_facing(path)
         }
     } else {
-        path.display().to_string()
+        crate::path_display::user_facing(path)
     };
     truncate_path_tail(&display, max_chars.max(8))
 }

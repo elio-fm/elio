@@ -29,11 +29,12 @@ impl ShellInvocation {
 
 pub(crate) fn run_in_current_terminal(cwd: &Path) -> Result<(), String> {
     ensure_cwd_exists(cwd)?;
+    let cwd_label = crate::path_display::user_facing(cwd);
 
     let invocations = shell_invocations();
     let tried: Vec<String> = invocations.iter().map(ShellInvocation::label).collect();
 
-    print_shell_banner(cwd)?;
+    print_shell_banner(&cwd_label)?;
     for invocation in invocations {
         match Command::new(&invocation.program)
             .args(&invocation.args)
@@ -50,22 +51,18 @@ pub(crate) fn run_in_current_terminal(cwd: &Path) -> Result<(), String> {
                 ensure_cwd_exists(cwd)?;
             }
             Err(error) => {
-                return Err(format!(
-                    "Could not open shell in {}: {error}",
-                    cwd.display()
-                ));
+                return Err(format!("Could not open shell in {cwd_label}: {error}"));
             }
         }
     }
 
     Err(format!(
-        "Could not find a shell to open in {} (tried {})",
-        cwd.display(),
+        "Could not find a shell to open in {cwd_label} (tried {})",
         tried.join(", ")
     ))
 }
 
-fn print_shell_banner(cwd: &Path) -> Result<(), String> {
+fn print_shell_banner(cwd_label: &str) -> Result<(), String> {
     let mut stdout = io::stdout();
     let (label_style, value_style, dim_style, reset_style) = if shell_banner_color_enabled() {
         ("\x1b[1;36m", "\x1b[1m", "\x1b[2m", "\x1b[0m")
@@ -76,7 +73,7 @@ fn print_shell_banner(cwd: &Path) -> Result<(), String> {
     writeln!(
         stdout,
         "{label_style}elio:{reset_style} opened shell in {value_style}{}{reset_style}",
-        cwd.display()
+        cwd_label
     )
     .and_then(|()| {
         writeln!(
@@ -87,7 +84,7 @@ fn print_shell_banner(cwd: &Path) -> Result<(), String> {
     })
     .and_then(|()| writeln!(stdout))
     .and_then(|()| stdout.flush())
-    .map_err(|error| format!("Could not prepare shell in {}: {error}", cwd.display()))
+    .map_err(|error| format!("Could not prepare shell in {cwd_label}: {error}"))
 }
 
 fn shell_banner_color_enabled() -> bool {
@@ -103,7 +100,7 @@ fn shell_return_hint() -> &'static str {
 
     #[cfg(not(windows))]
     {
-        "exit or Ctrl-D"
+        "exit or Ctrl+D"
     }
 }
 
@@ -184,13 +181,14 @@ fn next_shell_level(current: Option<OsString>) -> OsString {
 }
 
 fn ensure_cwd_exists(cwd: &Path) -> Result<(), String> {
+    let cwd_label = crate::path_display::user_facing(cwd);
     match cwd.try_exists() {
         Ok(true) => Ok(()),
         Ok(false) => Err(format!(
             "Cannot open shell in {}: folder no longer exists",
-            cwd.display()
+            cwd_label
         )),
-        Err(error) => Err(format!("Cannot open shell in {}: {error}", cwd.display())),
+        Err(error) => Err(format!("Cannot open shell in {cwd_label}: {error}")),
     }
 }
 

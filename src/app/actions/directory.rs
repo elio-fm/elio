@@ -261,12 +261,15 @@ impl App {
         let metadata = std::fs::metadata(&path).map_err(|error| {
             anyhow!(
                 "Cannot open {}: {}",
-                path.display(),
+                crate::path_display::user_facing(&path),
                 crate::fs::describe_io_error(&error)
             )
         })?;
         if !metadata.is_dir() {
-            bail!("{} is not a directory", path.display());
+            bail!(
+                "{} is not a directory",
+                crate::path_display::user_facing(&path)
+            );
         }
         let normalized = path.canonicalize().unwrap_or(path);
         if normalized == self.navigation.cwd
@@ -278,7 +281,10 @@ impl App {
                 self.apply_directory_completion(completion);
                 return Ok(());
             }
-            self.status = format!("Already in {}", self.navigation.cwd.display());
+            self.status = format!(
+                "Already in {}",
+                crate::path_display::user_facing(&self.navigation.cwd)
+            );
             return Ok(());
         }
         if self
@@ -294,7 +300,10 @@ impl App {
                 }
                 load.completion = completion;
             }
-            self.status = format!("Already opening {}", normalized.display());
+            self.status = format!(
+                "Already opening {}",
+                crate::path_display::user_facing(&normalized)
+            );
             return Ok(());
         }
 
@@ -302,7 +311,7 @@ impl App {
             self.remembered_view_for(&normalized)
                 .and_then(|view| view.selected_path)
         });
-        self.status = format!("Opening {}", normalized.display());
+        self.status = format!("Opening {}", crate::path_display::user_facing(&normalized));
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
             target_cwd: normalized,
