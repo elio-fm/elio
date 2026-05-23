@@ -238,6 +238,64 @@ Changing directories inside that shell only affects the shell session; when it e
 
 On Linux, macOS, BSD, and WSL, elio uses `$SHELL` with `/bin/sh` as a fallback. On Windows, it uses `COMSPEC` with PowerShell and `cmd` fallbacks. The child shell receives `ELIO_SHELL=1` and an `ELIO_LEVEL` nesting counter for custom prompts and shell startup files.
 
+### Change Directory on Quit
+
+> [!NOTE]
+> This feature is currently available on `main` and will be included in the next release.
+
+Shell integration lets elio leave your terminal in the directory you were browsing when you quit.
+
+Enable it with:
+
+```bash
+elio shell install
+```
+
+Then restart your shell, or run the command printed by the installer.
+
+Use elio normally:
+
+```bash
+elio
+```
+
+Press `q` to quit and move your shell to elio's final directory. Press `Q` to quit and keep your shell where it was.
+
+To remove the installed integration:
+
+```bash
+elio shell uninstall
+```
+
+This removes only the managed integration written by `elio shell install`. If you copied output from `elio shell init`, remove that snippet from your shell config manually.
+
+`elio shell install` and `elio shell uninstall` detect your current shell by default. To choose a shell explicitly:
+
+```bash
+elio shell install fish
+elio shell uninstall fish
+```
+
+Replace `fish` with `bash` or `zsh` as needed.
+
+The installer writes a managed block to `~/.bashrc` for bash, to `$ZDOTDIR/.zshrc` or `~/.zshrc` for zsh, and to `$XDG_CONFIG_HOME/fish/conf.d/elio.fish` or `~/.config/fish/conf.d/elio.fish` for fish. Existing bash and zsh files are preserved, including symlinks used by dotfile managers. Fish `conf.d` directories managed through symlinks are preserved too, and elio refuses to overwrite an existing `elio.fish` unless it was previously managed by elio.
+
+If you prefer to manage your shell files yourself, use `elio shell init` instead. It prints the integration snippet without editing any files:
+
+```bash
+elio shell init fish
+elio shell init bash
+elio shell init zsh
+```
+
+For custom wrappers, elio also exposes the file handoff used by the shell integration:
+
+```bash
+elio --cwd-file /path/to/output-file [DIRECTORY]
+```
+
+When elio exits, it writes the final directory to that file. A wrapper can read it and `cd` there. Quitting with `Q` skips writing the file.
+
 ---
 
 ## Preview Coverage
@@ -408,6 +466,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | `?` | Open help overlay |
 | `Esc` | Cancel / clear selection / close overlay |
 | `q` `*` | Quit |
+| `Q` `*` | Quit without changing the shell directory |
 
 </details>
 

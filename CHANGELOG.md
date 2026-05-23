@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `--cwd-file` and installable bash, zsh, and fish shell integration for changing the parent shell directory to elio's final directory on quit, including quit-without-cd, current-shell detection, zsh `ZDOTDIR` support, symlink-aware config updates, and a matching uninstall command. ([#69])
+
 ## [1.6.0] - 2026-05-22
 
 ### Added
@@ -167,6 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#70]: https://github.com/elio-fm/elio/issues/70
 [#67]: https://github.com/elio-fm/elio/issues/67
 [#66]: https://github.com/elio-fm/elio/pull/66
+[#69]: https://github.com/elio-fm/elio/issues/69
 [#103]: https://github.com/elio-fm/elio/issues/103
 [#109]: https://github.com/elio-fm/elio/issues/109
 [#111]: https://github.com/elio-fm/elio/issues/111
