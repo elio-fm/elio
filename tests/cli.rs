@@ -28,11 +28,24 @@ fn help_prints_usage() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Usage: elio [OPTIONS] [DIRECTORY]"));
+    assert!(stdout.contains("       elio shell init <SHELL>"));
+    assert!(stdout.contains("       elio shell uninstall [SHELL]"));
     assert!(stdout.contains("Arguments:"));
     assert!(stdout.contains("[DIRECTORY]          Start elio in this directory"));
     assert!(stdout.contains("--cwd-file FILE  Write the final current directory to FILE on exit"));
     assert!(stdout.contains("-h, --help           Print help"));
     assert!(stdout.contains("-V, --version        Print version"));
+    assert!(stdout.contains("Commands:"));
+    assert!(
+        stdout.contains("shell init <SHELL>        Print shell integration for bash, zsh, or fish")
+    );
+    assert!(
+        stdout
+            .contains("shell install [SHELL]    Install shell integration for bash, zsh, or fish")
+    );
+    assert!(
+        stdout.contains("shell uninstall [SHELL]  Remove shell integration for bash, zsh, or fish")
+    );
     assert!(output.stderr.is_empty());
 }
 

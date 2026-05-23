@@ -1,3 +1,4 @@
+use crate::shell_integration::{self, Shell};
 use anyhow::Result;
 use std::{
     env, fs, io,
@@ -15,6 +16,56 @@ pub(crate) fn run() -> Result<()> {
             print_help();
             Ok(())
         }
+        Command::PrintShellInit(shell) => {
+            let executable = env::current_exe()?;
+            let invocation = env::args().next();
+            let binary = shell_integration::binary_command(invocation.as_deref(), &executable);
+            print!("{}", shell_integration::init_script(shell, &binary));
+            Ok(())
+        }
+        Command::InstallShellIntegration(shell) => {
+            let executable = env::current_exe()?;
+            let invocation = env::args().next();
+            let binary = shell_integration::binary_command(invocation.as_deref(), &executable);
+            let shell = shell.unwrap_or(shell_integration::detect_shell()?);
+            let report = shell_integration::install(shell, &binary)?;
+            println!(
+                "Installed elio shell integration for {}.",
+                report.shell.name()
+            );
+            println!();
+            println!("Wrote: {}", report.path.display());
+            println!();
+            println!("Restart your shell, or run:");
+            println!("  {}", report.reload_command);
+            println!();
+            println!("From now on, `elio` will change your shell directory on quit.");
+            Ok(())
+        }
+        Command::UninstallShellIntegration(shell) => {
+            let shell = shell.unwrap_or(shell_integration::detect_shell()?);
+            let report = shell_integration::uninstall(shell)?;
+            println!(
+                "Uninstalled elio shell integration for {}.",
+                report.shell.name()
+            );
+            println!();
+            if report.changed {
+                if report.removed_file {
+                    println!("Removed: {}", report.path.display());
+                } else {
+                    println!("Updated: {}", report.path.display());
+                }
+            } else {
+                println!("No integration found at: {}", report.path.display());
+            }
+            println!();
+            println!("Restart your shell, or run:");
+            println!("  {}", report.reload_command);
+            println!();
+            println!("From now on, `elio` will leave your shell directory unchanged.");
+            Ok(())
+        }
     }
 }
 
@@ -23,6 +74,9 @@ enum Command {
     Run(elio::RunOptions),
     PrintVersion,
     PrintHelp,
+    PrintShellInit(Shell),
+    InstallShellIntegration(Option<Shell>),
+    UninstallShellIntegration(Option<Shell>),
 }
 
 fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Command> {
@@ -40,6 +94,67 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Command> {
         }
         [arg, unexpected, ..] if arg == "--help" || arg == "-h" => {
             return Err(anyhow::anyhow!(unknown_argument_message(unexpected)));
+        }
+        [command, subcommand, shell] if command == "shell" && subcommand == "init" => {
+            return Shell::parse(shell)
+                .map(Command::PrintShellInit)
+                .map_err(anyhow::Error::msg);
+        }
+        [command, subcommand] if command == "shell" && subcommand == "install" => {
+            return Ok(Command::InstallShellIntegration(None));
+        }
+        [command, subcommand, shell] if command == "shell" && subcommand == "install" => {
+            return Shell::parse(shell)
+                .map(|shell| Command::InstallShellIntegration(Some(shell)))
+                .map_err(anyhow::Error::msg);
+        }
+        [command, subcommand] if command == "shell" && subcommand == "uninstall" => {
+            return Ok(Command::UninstallShellIntegration(None));
+        }
+        [command, subcommand, shell] if command == "shell" && subcommand == "uninstall" => {
+            return Shell::parse(shell)
+                .map(|shell| Command::UninstallShellIntegration(Some(shell)))
+                .map_err(anyhow::Error::msg);
+        }
+        [command, subcommand, _shell, unexpected, ..]
+            if command == "shell" && subcommand == "install" =>
+        {
+            return Err(anyhow::anyhow!(
+                unknown_argument_message(unexpected).replace(
+                    "Usage: elio [OPTIONS] [DIRECTORY]",
+                    "Usage: elio shell install [SHELL]",
+                )
+            ));
+        }
+        [command, subcommand, _shell, unexpected, ..]
+            if command == "shell" && subcommand == "uninstall" =>
+        {
+            return Err(anyhow::anyhow!(
+                unknown_argument_message(unexpected).replace(
+                    "Usage: elio [OPTIONS] [DIRECTORY]",
+                    "Usage: elio shell uninstall [SHELL]",
+                )
+            ));
+        }
+        [command, subcommand, _shell, unexpected, ..]
+            if command == "shell" && subcommand == "init" =>
+        {
+            return Err(anyhow::anyhow!(
+                unknown_argument_message(unexpected).replace(
+                    "Usage: elio [OPTIONS] [DIRECTORY]",
+                    "Usage: elio shell init <SHELL>",
+                )
+            ));
+        }
+        [command, subcommand] if command == "shell" && subcommand == "init" => {
+            return Err(anyhow::anyhow!(
+                "error: expected a shell after 'elio shell init'\n\nsupported shells: bash, zsh, fish"
+            ));
+        }
+        [command, ..] if command == "shell" => {
+            return Err(anyhow::anyhow!(
+                "error: expected subcommand 'init', 'install', or 'uninstall' after 'elio shell'\n\nUsage: elio shell init <SHELL>\n       elio shell install [SHELL]\n       elio shell uninstall [SHELL]"
+            ));
         }
         _ => {}
     }
@@ -111,6 +226,9 @@ fn print_help() {
     println!("elio {}", env!("CARGO_PKG_VERSION"));
     println!();
     println!("Usage: elio [OPTIONS] [DIRECTORY]");
+    println!("       elio shell init <SHELL>");
+    println!("       elio shell install [SHELL]");
+    println!("       elio shell uninstall [SHELL]");
     println!();
     println!("Arguments:");
     println!("  [DIRECTORY]          Start elio in this directory");
@@ -119,6 +237,11 @@ fn print_help() {
     println!("      --cwd-file FILE  Write the final current directory to FILE on exit");
     println!("  -h, --help           Print help");
     println!("  -V, --version        Print version");
+    println!();
+    println!("Commands:");
+    println!("  shell init <SHELL>        Print shell integration for bash, zsh, or fish");
+    println!("  shell install [SHELL]    Install shell integration for bash, zsh, or fish");
+    println!("  shell uninstall [SHELL]  Remove shell integration for bash, zsh, or fish");
 }
 
 fn resolve_startup_directory(arg: &str) -> Result<PathBuf> {
@@ -151,6 +274,8 @@ fn unknown_argument_message(arg: &str) -> String {
     } else if arg != "--help" && arg != "-h" && ("--help".starts_with(arg) || "-h".starts_with(arg))
     {
         message.push_str("\n\n  tip: a similar argument exists: '--help'");
+    } else if arg != "--cwd-file" && "--cwd-file".starts_with(arg) {
+        message.push_str("\n\n  tip: a similar argument exists: '--cwd-file'");
     }
 
     message.push_str("\n\nUsage: elio [OPTIONS] [DIRECTORY]");

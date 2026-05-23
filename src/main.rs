@@ -1,4 +1,5 @@
 mod cli;
+mod shell_integration;
 
 use std::process::ExitCode;
 
