@@ -62,6 +62,8 @@ pub(super) fn render_help(
         e("+ / -", "grid zoom in / out"),
         e(&kb.toggle_hidden.to_string(), "toggle dotfiles"),
         e(&kb.sort.to_string(), "cycle sort"),
+        e(&kb.quit.to_string(), "quit"),
+        e(&kb.quit_without_cd.to_string(), "quit, keep shell cwd"),
     ];
     let preview_vertical_key =
         format_preview_scroll_key(kb.scroll_preview_up, kb.scroll_preview_down);
@@ -111,7 +113,7 @@ pub(super) fn render_help(
         },
     ];
 
-    let popup = helpers::centered_rect(area, 90, 31);
+    let popup = helpers::centered_rect(area, 90, 33);
     state.help_panel = Some(popup);
     frame.render_widget(Clear, popup);
     frame.render_widget(

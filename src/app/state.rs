@@ -600,6 +600,7 @@ pub struct App {
     pub(in crate::app) input: InputRuntime,
     pub(in crate::app) status: String,
     pub(crate) should_quit: bool,
+    pub(crate) should_change_directory_on_quit: bool,
     /// Set by features that need direct terminal control.  The event loop in
     /// `lib.rs` drains this, suspends the TUI, runs the task, then restores the TUI.
     pub(crate) pending_terminal_task: Option<PendingTerminalTask>,
@@ -714,6 +715,7 @@ impl App {
             },
             status: String::new(),
             should_quit: false,
+            should_change_directory_on_quit: true,
             pending_terminal_task: None,
         };
         app.navigation.in_trash = App::path_is_trash(&app.navigation.cwd);

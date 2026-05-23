@@ -5,28 +5,102 @@ use std::{
 };
 
 pub(crate) fn run() -> Result<()> {
-    let args = env::args().skip(1).collect::<Vec<_>>();
-
-    match args.as_slice() {
-        [] => elio::run(),
-        [arg] if arg == "--version" || arg == "-V" => {
+    match parse_args(env::args().skip(1))? {
+        Command::Run(options) => elio::run_with_options(options),
+        Command::PrintVersion => {
             print_version();
             Ok(())
         }
-        [arg] if arg == "--help" || arg == "-h" => {
+        Command::PrintHelp => {
             print_help();
             Ok(())
         }
+    }
+}
+
+#[derive(Debug)]
+enum Command {
+    Run(elio::RunOptions),
+    PrintVersion,
+    PrintHelp,
+}
+
+fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Command> {
+    let args = args.into_iter().collect::<Vec<_>>();
+
+    if args.is_empty() {
+        return Ok(Command::Run(elio::RunOptions::default()));
+    }
+
+    match args.as_slice() {
+        [arg] if arg == "--version" || arg == "-V" => return Ok(Command::PrintVersion),
+        [arg] if arg == "--help" || arg == "-h" => return Ok(Command::PrintHelp),
         [arg, unexpected, ..] if arg == "--version" || arg == "-V" => {
-            Err(anyhow::anyhow!(unknown_argument_message(unexpected)))
+            return Err(anyhow::anyhow!(unknown_argument_message(unexpected)));
         }
         [arg, unexpected, ..] if arg == "--help" || arg == "-h" => {
-            Err(anyhow::anyhow!(unknown_argument_message(unexpected)))
+            return Err(anyhow::anyhow!(unknown_argument_message(unexpected)));
         }
-        [arg] if arg.starts_with('-') => Err(anyhow::anyhow!(unknown_argument_message(arg))),
-        [arg] => elio::run_at(resolve_startup_directory(arg)?),
-        [arg, ..] => Err(anyhow::anyhow!(unknown_argument_message(arg))),
+        _ => {}
     }
+
+    parse_run_args(args)
+}
+
+fn parse_run_args(args: Vec<String>) -> Result<Command> {
+    let mut start_dir = None;
+    let mut cwd_file = None;
+    let mut index = 0;
+
+    while index < args.len() {
+        let arg = &args[index];
+        if let Some(file) = arg.strip_prefix("--cwd-file=") {
+            if cwd_file.is_some() {
+                return Err(anyhow::anyhow!(
+                    "error: '--cwd-file' cannot be used more than once\n\nUsage: elio [OPTIONS] [DIRECTORY]"
+                ));
+            }
+            if file.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "error: expected a file path after '--cwd-file'\n\nUsage: elio [OPTIONS] [DIRECTORY]"
+                ));
+            }
+            cwd_file = Some(PathBuf::from(file));
+            index += 1;
+            continue;
+        }
+
+        if arg == "--cwd-file" {
+            if cwd_file.is_some() {
+                return Err(anyhow::anyhow!(
+                    "error: '--cwd-file' cannot be used more than once\n\nUsage: elio [OPTIONS] [DIRECTORY]"
+                ));
+            }
+            let Some(file) = args.get(index + 1) else {
+                return Err(anyhow::anyhow!(
+                    "error: expected a file path after '--cwd-file'\n\nUsage: elio [OPTIONS] [DIRECTORY]"
+                ));
+            };
+            cwd_file = Some(PathBuf::from(file));
+            index += 2;
+            continue;
+        }
+
+        if arg.starts_with('-') {
+            return Err(anyhow::anyhow!(unknown_argument_message(arg)));
+        }
+
+        if start_dir.is_some() {
+            return Err(anyhow::anyhow!(unknown_argument_message(arg)));
+        }
+        start_dir = Some(resolve_startup_directory(arg)?);
+        index += 1;
+    }
+
+    Ok(Command::Run(elio::RunOptions {
+        start_dir,
+        cwd_file,
+    }))
 }
 
 fn print_version() {
@@ -39,11 +113,12 @@ fn print_help() {
     println!("Usage: elio [OPTIONS] [DIRECTORY]");
     println!();
     println!("Arguments:");
-    println!("  [DIRECTORY]  Start elio in this directory");
+    println!("  [DIRECTORY]          Start elio in this directory");
     println!();
     println!("Options:");
-    println!("  -h, --help     Print help");
-    println!("  -V, --version  Print version");
+    println!("      --cwd-file FILE  Write the final current directory to FILE on exit");
+    println!("  -h, --help           Print help");
+    println!("  -V, --version        Print version");
 }
 
 fn resolve_startup_directory(arg: &str) -> Result<PathBuf> {

@@ -29,9 +29,10 @@ fn help_prints_usage() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Usage: elio [OPTIONS] [DIRECTORY]"));
     assert!(stdout.contains("Arguments:"));
-    assert!(stdout.contains("[DIRECTORY]  Start elio in this directory"));
-    assert!(stdout.contains("-h, --help"));
-    assert!(stdout.contains("-V, --version"));
+    assert!(stdout.contains("[DIRECTORY]          Start elio in this directory"));
+    assert!(stdout.contains("--cwd-file FILE  Write the final current directory to FILE on exit"));
+    assert!(stdout.contains("-h, --help           Print help"));
+    assert!(stdout.contains("-V, --version        Print version"));
     assert!(output.stderr.is_empty());
 }
 
@@ -100,4 +101,25 @@ fn file_argument_exits_with_not_a_directory_error() {
     );
 
     fs::remove_dir_all(root).expect("temp directory should be removed");
+}
+
+#[test]
+fn more_than_one_directory_is_rejected() {
+    let first = temp_path("dir-one");
+    let second = temp_path("dir-two");
+    fs::create_dir_all(&first).expect("first temp directory should be created");
+    fs::create_dir_all(&second).expect("second temp directory should be created");
+
+    let output = elio()
+        .arg(&first)
+        .arg(&second)
+        .output()
+        .expect("failed to run elio with two directory arguments");
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("error: unexpected argument"));
+
+    fs::remove_dir_all(first).expect("first temp directory should be removed");
+    fs::remove_dir_all(second).expect("second temp directory should be removed");
 }
