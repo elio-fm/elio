@@ -25,6 +25,7 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{
+    fs as std_fs,
     io::{self, ErrorKind, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -36,21 +37,33 @@ const ACTIVE_SCROLL_POLL_INTERVAL: Duration = Duration::from_millis(12);
 const WINDOWS_TERMINAL_ACTIVE_POLL_INTERVAL: Duration = Duration::from_millis(24);
 const RELATIVE_TIME_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
+#[derive(Debug, Default)]
+pub struct RunOptions {
+    pub start_dir: Option<PathBuf>,
+    pub cwd_file: Option<PathBuf>,
+}
+
 pub fn run() -> Result<()> {
-    run_at_path(None)
+    run_with_options(RunOptions::default())
 }
 
 pub fn run_at(cwd: PathBuf) -> Result<()> {
-    run_at_path(Some(cwd))
+    run_with_options(RunOptions {
+        start_dir: Some(cwd),
+        cwd_file: None,
+    })
 }
 
-fn run_at_path(cwd: Option<PathBuf>) -> Result<()> {
+pub fn run_with_options(options: RunOptions) -> Result<()> {
     config::initialize();
     ui::theme::initialize();
     let mut terminal = init_terminal()?;
-    let result = run_app(&mut terminal, cwd);
+    let result = run_app(&mut terminal, options.start_dir);
     restore_terminal(&mut terminal)?;
-    result
+    if let Some(final_cwd) = result? {
+        write_cwd_file_if_requested(options.cwd_file.as_deref(), &final_cwd)?;
+    }
+    Ok(())
 }
 
 fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
@@ -253,10 +266,32 @@ fn keyboard_enhancement_is_unsupported(error: &io::Error) -> bool {
             .contains("Keyboard progressive enhancement not implemented")
 }
 
+fn write_cwd_file_if_requested(cwd_file: Option<&Path>, final_cwd: &Path) -> Result<()> {
+    let Some(cwd_file) = cwd_file else {
+        return Ok(());
+    };
+
+    write_cwd_file(cwd_file, final_cwd)
+}
+
+#[cfg(unix)]
+fn write_cwd_file(cwd_file: &Path, final_cwd: &Path) -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+
+    std_fs::write(cwd_file, final_cwd.as_os_str().as_bytes())?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn write_cwd_file(cwd_file: &Path, final_cwd: &Path) -> Result<()> {
+    std_fs::write(cwd_file, final_cwd.to_string_lossy().as_bytes())?;
+    Ok(())
+}
+
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     cwd: Option<PathBuf>,
-) -> Result<()> {
+) -> Result<Option<PathBuf>> {
     let mut app = match cwd {
         Some(cwd) => App::new_at(cwd)?,
         None => App::new()?,
@@ -486,6 +521,9 @@ fn run_app(
         }
     }
 
+    let final_cwd = app
+        .should_change_directory_on_quit
+        .then(|| app.navigation.cwd.clone());
     app.queue_forced_iterm_preview_erase();
     let mut overlay_bytes = app.clear_preview_overlay()?;
     overlay_bytes.extend(app.iterm_pre_draw_erase());
@@ -493,7 +531,7 @@ fn run_app(
         terminal.backend_mut().write_all(&overlay_bytes)?;
         terminal.backend_mut().flush()?;
     }
-    Ok(())
+    Ok(final_cwd)
 }
 
 fn draw_terminal_frame(
@@ -564,7 +602,43 @@ where
 mod tests {
     use crate::{ACTIVE_SCROLL_POLL_INTERVAL, IDLE_POLL_INTERVAL, event_poll_interval};
     use ratatui::{buffer::Buffer, layout::Rect, style::Style};
-    use std::{io, time::Duration};
+    use std::{
+        fs, io,
+        path::{Path, PathBuf},
+        time::{Duration, SystemTime, UNIX_EPOCH},
+    };
+
+    fn temp_path(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("elio-lib-{label}-{unique}"))
+    }
+
+    #[test]
+    fn cwd_file_is_not_written_when_absent() {
+        crate::write_cwd_file_if_requested(None, Path::new("/tmp"))
+            .expect("absent cwd file should be a no-op");
+    }
+
+    #[test]
+    fn cwd_file_writes_path_without_trailing_newline() {
+        let root = temp_path("cwd-file");
+        fs::create_dir_all(&root).expect("temp directory should be created");
+        let cwd_file = root.join("cwd");
+        let final_cwd = root.join("nested");
+        fs::create_dir_all(&final_cwd).expect("nested temp directory should be created");
+
+        crate::write_cwd_file_if_requested(Some(&cwd_file), &final_cwd)
+            .expect("cwd file should be written");
+
+        let bytes = fs::read(&cwd_file).expect("cwd file should be readable");
+        assert!(!bytes.ends_with(b"\n"));
+        assert_eq!(String::from_utf8_lossy(&bytes), final_cwd.to_string_lossy());
+
+        fs::remove_dir_all(root).expect("temp directory should be removed");
+    }
 
     #[test]
     fn ratatui_diff_preserves_positions_beyond_u16_max_cells() {

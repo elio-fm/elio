@@ -4,6 +4,7 @@ use serde::Deserialize;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Action {
     Quit,
+    QuitWithoutCd,
     Yank,
     Cut,
     Paste,
@@ -31,6 +32,7 @@ pub(crate) enum Action {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct KeyBindings {
     pub quit: char,
+    pub quit_without_cd: char,
     pub yank: char,
     pub cut: char,
     pub paste: char,
@@ -67,6 +69,7 @@ impl Default for KeyBindings {
     fn default() -> Self {
         Self {
             quit: 'q',
+            quit_without_cd: 'Q',
             yank: 'y',
             cut: 'x',
             paste: 'p',
@@ -93,6 +96,7 @@ impl Default for KeyBindings {
 #[derive(Deserialize, Default)]
 pub(super) struct KeysConfigOverride {
     quit: Option<String>,
+    quit_without_cd: Option<String>,
     yank: Option<String>,
     cut: Option<String>,
     paste: Option<String>,
@@ -119,6 +123,7 @@ impl KeyBindings {
     pub(crate) fn action_for(&self, c: char) -> Option<Action> {
         match c {
             _ if c == self.quit => Some(Action::Quit),
+            _ if c == self.quit_without_cd => Some(Action::QuitWithoutCd),
             _ if c == self.yank => Some(Action::Yank),
             _ if c == self.cut => Some(Action::Cut),
             _ if c == self.paste => Some(Action::Paste),
@@ -155,8 +160,13 @@ impl KeyBindings {
 
     pub(super) fn from_override(overrides: KeysConfigOverride, defaults: &Self) -> Self {
         // Each entry: (field_name, user_override_string, default_char)
-        let raw: [(&str, Option<String>, char); 20] = [
+        let raw: [(&str, Option<String>, char); 21] = [
             ("quit", overrides.quit, defaults.quit),
+            (
+                "quit_without_cd",
+                overrides.quit_without_cd,
+                defaults.quit_without_cd,
+            ),
             ("yank", overrides.yank, defaults.yank),
             ("cut", overrides.cut, defaults.cut),
             ("paste", overrides.paste, defaults.paste),
@@ -205,7 +215,7 @@ impl KeyBindings {
         // Step 1: parse each override string independently, falling back to
         // default on any format or reserved-char error.
         // (resolved_char, is_user_set)
-        let mut candidates: [(char, bool); 20] = [(' ', false); 20];
+        let mut candidates: [(char, bool); 21] = [(' ', false); 21];
         for (index, (name, override_str, default)) in raw.iter().enumerate() {
             candidates[index] = match override_str {
                 None => (*default, false),
@@ -244,12 +254,12 @@ impl KeyBindings {
         // binding does not silently leave a conflict with another.
         loop {
             let mut changed = false;
-            for index in 0..20 {
+            for index in 0..21 {
                 if !candidates[index].1 {
                     continue;
                 }
                 let candidate = candidates[index].0;
-                let collision = (0..20)
+                let collision = (0..21)
                     .filter(|&other_index| other_index != index)
                     .any(|other_index| candidates[other_index].0 == candidate);
                 if collision {
@@ -280,25 +290,26 @@ impl KeyBindings {
         let resolved = |index: usize| candidates[index].0;
         Self {
             quit: resolved(0),
-            yank: resolved(1),
-            cut: resolved(2),
-            paste: resolved(3),
-            trash: resolved(4),
-            create: resolved(5),
-            rename: resolved(6),
-            copy_path: resolved(7),
-            search_folders: resolved(8),
-            zoxide: resolved(9),
-            shell: resolved(10),
-            open: resolved(11),
-            open_with: resolved(12),
-            sort: resolved(13),
-            toggle_view: resolved(14),
-            toggle_hidden: resolved(15),
-            scroll_preview_left: resolved(16),
-            scroll_preview_right: resolved(17),
-            scroll_preview_up: resolved(18),
-            scroll_preview_down: resolved(19),
+            quit_without_cd: resolved(1),
+            yank: resolved(2),
+            cut: resolved(3),
+            paste: resolved(4),
+            trash: resolved(5),
+            create: resolved(6),
+            rename: resolved(7),
+            copy_path: resolved(8),
+            search_folders: resolved(9),
+            zoxide: resolved(10),
+            shell: resolved(11),
+            open: resolved(12),
+            open_with: resolved(13),
+            sort: resolved(14),
+            toggle_view: resolved(15),
+            toggle_hidden: resolved(16),
+            scroll_preview_left: resolved(17),
+            scroll_preview_right: resolved(18),
+            scroll_preview_up: resolved(19),
+            scroll_preview_down: resolved(20),
         }
     }
 }

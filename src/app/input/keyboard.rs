@@ -262,6 +262,10 @@ impl App {
         use crate::config::Action;
         match action {
             Action::Quit => self.should_quit = true,
+            Action::QuitWithoutCd => {
+                self.should_change_directory_on_quit = false;
+                self.should_quit = true;
+            }
             Action::Yank => self.yank(),
             Action::Cut => self.cut(),
             Action::Paste => self.paste()?,

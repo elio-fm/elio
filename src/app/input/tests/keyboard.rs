@@ -65,11 +65,31 @@ fn q_sets_should_quit() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     assert!(!app.should_quit);
+    assert!(app.should_change_directory_on_quit);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('q'))))
         .expect("q should request quit");
 
     assert!(app.should_quit);
+    assert!(app.should_change_directory_on_quit);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn capital_q_quits_without_changing_directory() {
+    let root = temp_path("quit-without-cd-shortcut");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    assert!(!app.should_quit);
+    assert!(app.should_change_directory_on_quit);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('Q'))))
+        .expect("Q should request quit without cd");
+
+    assert!(app.should_quit);
+    assert!(!app.should_change_directory_on_quit);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -769,15 +789,15 @@ fn rebound_yank_key_dispatches_yank_action() {
 fn rebound_quit_key_sets_should_quit() {
     use crate::config::KeyBindings;
 
-    let kb = KeyBindings::from_toml_str("[keys]\nquit = \"Q\"");
-    assert_eq!(kb.action_for('Q'), Some(Action::Quit));
+    let kb = KeyBindings::from_toml_str("[keys]\nquit = \"u\"");
+    assert_eq!(kb.action_for('u'), Some(Action::Quit));
     assert_eq!(kb.action_for('q'), None);
 
     let root = temp_path("rebind-quit-e2e");
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     assert!(!app.should_quit);
 
-    app.dispatch_action(kb.action_for('Q').unwrap())
+    app.dispatch_action(kb.action_for('u').unwrap())
         .expect("dispatch should succeed");
     assert!(app.should_quit);
 
