@@ -37,6 +37,17 @@ fn binary_command_uses_path_for_absolute_invocations() {
 }
 
 #[test]
+fn binary_command_uses_path_for_windows_invocations() {
+    assert_eq!(
+        binary_command(
+            Some(r"C:\repo\target\debug\elio.exe"),
+            Path::new(r"C:\repo\target\debug\elio.exe")
+        ),
+        r"'C:\repo\target\debug\elio.exe'"
+    );
+}
+
+#[test]
 fn binary_command_uses_path_lookup_for_normal_invocations() {
     assert_eq!(
         binary_command(Some("elio"), Path::new("/versioned/path/elio")),

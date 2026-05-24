@@ -27,7 +27,10 @@ pub(crate) fn run() -> Result<()> {
             let executable = env::current_exe()?;
             let invocation = env::args().next();
             let binary = shell_integration::binary_command(invocation.as_deref(), &executable);
-            let shell = shell.unwrap_or(shell_integration::detect_shell()?);
+            let shell = match shell {
+                Some(shell) => shell,
+                None => shell_integration::detect_shell()?,
+            };
             let report = shell_integration::install(shell, &binary)?;
             println!(
                 "Installed elio shell integration for {}.",
@@ -43,7 +46,10 @@ pub(crate) fn run() -> Result<()> {
             Ok(())
         }
         Command::UninstallShellIntegration(shell) => {
-            let shell = shell.unwrap_or(shell_integration::detect_shell()?);
+            let shell = match shell {
+                Some(shell) => shell,
+                None => shell_integration::detect_shell()?,
+            };
             let report = shell_integration::uninstall(shell)?;
             println!(
                 "Uninstalled elio shell integration for {}.",

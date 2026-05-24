@@ -1,7 +1,61 @@
 mod support;
 
-use std::{fs, process::Command};
+use std::{
+    fs,
+    process::{Command, Output},
+};
 use support::{elio, temp_path};
+
+fn assert_success(command: &str, output: &Output) {
+    assert!(
+        output.status.success(),
+        "{command} failed\nstatus: {}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn assert_no_stderr(command: &str, output: &Output) {
+    assert!(
+        output.stderr.is_empty(),
+        "{command} printed stderr\nstatus: {}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn assert_failure(command: &str, output: &Output) {
+    assert!(
+        !output.status.success(),
+        "{command} unexpectedly succeeded\nstatus: {}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn assert_no_stdout(command: &str, output: &Output) {
+    assert!(
+        output.stdout.is_empty(),
+        "{command} printed stdout\nstatus: {}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn assert_stderr_contains(command: &str, output: &Output, expected: &str) {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(expected),
+        "{command} stderr did not contain {expected:?}\nstatus: {}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        stderr
+    );
+}
 
 #[test]
 fn shell_init_fish_prints_sourceable_function() {
@@ -10,8 +64,8 @@ fn shell_init_fish_prints_sourceable_function() {
         .output()
         .expect("failed to run elio shell init fish");
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_success("elio shell init fish", &output);
+    assert_no_stderr("elio shell init fish", &output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("function elio"));
     assert!(stdout.contains("switch \"$argv[1]\""));
@@ -31,8 +85,8 @@ fn shell_init_bash_prints_function() {
         .output()
         .expect("failed to run elio shell init bash");
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_success("elio shell init bash", &output);
+    assert_no_stderr("elio shell init bash", &output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("elio() {"));
     assert!(stdout.contains("case \"${1-}\" in"));
@@ -55,8 +109,8 @@ fn shell_init_zsh_prints_function() {
         .output()
         .expect("failed to run elio shell init zsh");
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_success("elio shell init zsh", &output);
+    assert_no_stderr("elio shell init zsh", &output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("elio() {"));
     assert!(stdout.contains(env!("CARGO_BIN_EXE_elio")));
@@ -79,8 +133,8 @@ fn shell_install_fish_writes_conf_d_file() {
         .output()
         .expect("failed to run elio shell install fish");
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_success("elio shell install fish", &output);
+    assert_no_stderr("elio shell install fish", &output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Installed elio shell integration for fish"));
     assert!(stdout.contains("conf.d/elio.fish"));
@@ -113,9 +167,9 @@ fn shell_install_fish_refuses_unmanaged_conf_d_file() {
         .output()
         .expect("failed to run elio shell install fish");
 
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("not managed by elio"));
+    assert_failure("elio shell install fish", &output);
+    assert_no_stdout("elio shell install fish", &output);
+    assert_stderr_contains("elio shell install fish", &output, "not managed by elio");
     assert_eq!(
         fs::read_to_string(&integration).expect("unmanaged file should be readable"),
         "function elio\nend\n"
@@ -150,8 +204,8 @@ fn shell_install_fish_preserves_symlinked_managed_conf_d_file() {
         .output()
         .expect("failed to run elio shell install fish");
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_success("elio shell install fish", &output);
+    assert_no_stderr("elio shell install fish", &output);
     assert!(
         fs::symlink_metadata(&integration)
             .expect("integration link metadata should be readable")
@@ -182,11 +236,12 @@ fn shell_install_bash_adds_managed_block_idempotently() {
         let output = elio()
             .args(["shell", "install", "bash"])
             .env("HOME", &root)
+            .env("SHELL", "/bin/sh")
             .output()
             .expect("failed to run elio shell install bash");
 
-        assert!(output.status.success());
-        assert!(output.stderr.is_empty());
+        assert_success("elio shell install bash", &output);
+        assert_no_stderr("elio shell install bash", &output);
     }
 
     let bashrc = root.join(".bashrc");
@@ -226,8 +281,8 @@ fn shell_install_bash_preserves_symlinked_startup_file() {
         .output()
         .expect("failed to run elio shell install bash");
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_success("elio shell install bash", &output);
+    assert_no_stderr("elio shell install bash", &output);
     assert!(
         fs::symlink_metadata(&bashrc)
             .expect("bashrc link metadata should be readable")
@@ -260,8 +315,8 @@ fn shell_install_zsh_uses_zdotdir_when_set() {
         .output()
         .expect("failed to run elio shell install zsh");
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_success("elio shell install zsh", &output);
+    assert_no_stderr("elio shell install zsh", &output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let zdot_zshrc = zdotdir.join(".zshrc");
     assert!(stdout.contains(&format!("Wrote: {}", zdot_zshrc.display())));
@@ -299,8 +354,8 @@ fn shell_install_zsh_uses_zdotdir_and_preserves_symlinked_startup_file() {
         .output()
         .expect("failed to run elio shell install zsh");
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_success("elio shell install zsh", &output);
+    assert_no_stderr("elio shell install zsh", &output);
     assert!(
         fs::symlink_metadata(&zshrc)
             .expect("ZDOTDIR zshrc link metadata should be readable")
@@ -343,7 +398,7 @@ fn shell_uninstall_zsh_uses_zdotdir_and_preserves_symlinked_startup_file() {
         .env("ZDOTDIR", &zdotdir)
         .output()
         .expect("failed to run elio shell install zsh");
-    assert!(install.status.success());
+    assert_success("elio shell install zsh", &install);
 
     let uninstall = elio()
         .args(["shell", "uninstall", "zsh"])
@@ -352,8 +407,8 @@ fn shell_uninstall_zsh_uses_zdotdir_and_preserves_symlinked_startup_file() {
         .output()
         .expect("failed to run elio shell uninstall zsh");
 
-    assert!(uninstall.status.success());
-    assert!(uninstall.stderr.is_empty());
+    assert_success("elio shell uninstall zsh", &uninstall);
+    assert_no_stderr("elio shell uninstall zsh", &uninstall);
     let stdout = String::from_utf8_lossy(&uninstall.stdout);
     assert!(stdout.contains(&format!("Updated: {}", zshrc.display())));
     assert!(
@@ -392,7 +447,7 @@ fn shell_uninstall_zsh_preserves_symlinked_startup_file() {
         .env("HOME", &home)
         .output()
         .expect("failed to run elio shell install zsh");
-    assert!(install.status.success());
+    assert_success("elio shell install zsh", &install);
 
     let uninstall = elio()
         .args(["shell", "uninstall", "zsh"])
@@ -400,8 +455,8 @@ fn shell_uninstall_zsh_preserves_symlinked_startup_file() {
         .output()
         .expect("failed to run elio shell uninstall zsh");
 
-    assert!(uninstall.status.success());
-    assert!(uninstall.stderr.is_empty());
+    assert_success("elio shell uninstall zsh", &uninstall);
+    assert_no_stderr("elio shell uninstall zsh", &uninstall);
     assert!(
         fs::symlink_metadata(&zshrc)
             .expect("zshrc link metadata should be readable")
@@ -430,11 +485,10 @@ fn shell_install_bash_rejects_non_utf8_startup_file() {
         .output()
         .expect("failed to run elio shell install bash");
 
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("failed to read"));
-    assert!(stderr.contains("as UTF-8"));
+    assert_failure("elio shell install bash", &output);
+    assert_no_stdout("elio shell install bash", &output);
+    assert_stderr_contains("elio shell install bash", &output, "failed to read");
+    assert_stderr_contains("elio shell install bash", &output, "as UTF-8");
     assert_eq!(
         fs::read(&bashrc).expect("bashrc should still be readable"),
         vec![0xff, b'a']
@@ -455,8 +509,8 @@ fn shell_install_detects_shell_from_environment() {
         .output()
         .expect("failed to run elio shell install");
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_success("elio shell install", &output);
+    assert_no_stderr("elio shell install", &output);
     assert!(config_home.join("fish/conf.d/elio.fish").exists());
 
     fs::remove_dir_all(root).expect("temp directory should be removed");
@@ -486,12 +540,8 @@ fn shell_install_detects_current_parent_shell_before_login_shell_environment() {
         .output()
         .expect("failed to run elio shell install from zsh");
 
-    assert!(
-        output.status.success(),
-        "zsh parent detection should install successfully\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(output.stderr.is_empty());
+    assert_success("zsh -c elio shell install", &output);
+    assert_no_stderr("zsh -c elio shell install", &output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let zshrc = zdotdir.join(".zshrc");
     assert!(stdout.contains("Installed elio shell integration for zsh."));
@@ -514,7 +564,7 @@ fn shell_uninstall_bash_removes_managed_block_idempotently() {
         .env("HOME", &root)
         .output()
         .expect("failed to run elio shell install bash");
-    assert!(install.status.success());
+    assert_success("elio shell install bash", &install);
 
     let uninstall = elio()
         .args(["shell", "uninstall", "bash"])
@@ -522,8 +572,8 @@ fn shell_uninstall_bash_removes_managed_block_idempotently() {
         .output()
         .expect("failed to run elio shell uninstall bash");
 
-    assert!(uninstall.status.success());
-    assert!(uninstall.stderr.is_empty());
+    assert_success("elio shell uninstall bash", &uninstall);
+    assert_no_stderr("elio shell uninstall bash", &uninstall);
     let stdout = String::from_utf8_lossy(&uninstall.stdout);
     assert!(stdout.contains("Uninstalled elio shell integration for bash"));
     assert!(stdout.contains("Updated:"));
@@ -539,8 +589,8 @@ fn shell_uninstall_bash_removes_managed_block_idempotently() {
         .output()
         .expect("failed to run elio shell uninstall bash again");
 
-    assert!(uninstall_again.status.success());
-    assert!(uninstall_again.stderr.is_empty());
+    assert_success("elio shell uninstall bash", &uninstall_again);
+    assert_no_stderr("elio shell uninstall bash", &uninstall_again);
     assert!(String::from_utf8_lossy(&uninstall_again.stdout).contains("No integration found at:"));
 
     fs::remove_dir_all(root).expect("temp directory should be removed");
@@ -566,8 +616,8 @@ fn shell_install_fish_preserves_symlinked_conf_d_directory() {
         .output()
         .expect("failed to run elio shell install fish");
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_success("elio shell install fish", &output);
+    assert_no_stderr("elio shell install fish", &output);
     assert!(
         fs::symlink_metadata(&conf_d)
             .expect("fish conf.d link metadata should be readable")
@@ -604,7 +654,7 @@ fn shell_uninstall_fish_preserves_symlinked_conf_d_directory() {
         .env("XDG_CONFIG_HOME", &config_home)
         .output()
         .expect("failed to run elio shell install fish");
-    assert!(install.status.success());
+    assert_success("elio shell install fish", &install);
 
     let uninstall = elio()
         .args(["shell", "uninstall", "fish"])
@@ -612,8 +662,8 @@ fn shell_uninstall_fish_preserves_symlinked_conf_d_directory() {
         .output()
         .expect("failed to run elio shell uninstall fish");
 
-    assert!(uninstall.status.success());
-    assert!(uninstall.stderr.is_empty());
+    assert_success("elio shell uninstall fish", &uninstall);
+    assert_no_stderr("elio shell uninstall fish", &uninstall);
     assert!(
         fs::symlink_metadata(&conf_d)
             .expect("fish conf.d link metadata should be readable")
@@ -636,7 +686,7 @@ fn shell_uninstall_fish_removes_managed_conf_d_file() {
         .env("XDG_CONFIG_HOME", &config_home)
         .output()
         .expect("failed to run elio shell install fish");
-    assert!(install.status.success());
+    assert_success("elio shell install fish", &install);
 
     let integration = config_home.join("fish/conf.d/elio.fish");
     assert!(integration.exists());
@@ -647,8 +697,8 @@ fn shell_uninstall_fish_removes_managed_conf_d_file() {
         .output()
         .expect("failed to run elio shell uninstall fish");
 
-    assert!(uninstall.status.success());
-    assert!(uninstall.stderr.is_empty());
+    assert_success("elio shell uninstall fish", &uninstall);
+    assert_no_stderr("elio shell uninstall fish", &uninstall);
     let stdout = String::from_utf8_lossy(&uninstall.stdout);
     assert!(stdout.contains("Uninstalled elio shell integration for fish"));
     assert!(stdout.contains("Removed:"));
@@ -661,8 +711,8 @@ fn shell_uninstall_fish_removes_managed_conf_d_file() {
         .output()
         .expect("failed to run elio shell uninstall fish again");
 
-    assert!(uninstall_again.status.success());
-    assert!(uninstall_again.stderr.is_empty());
+    assert_success("elio shell uninstall fish", &uninstall_again);
+    assert_no_stderr("elio shell uninstall fish", &uninstall_again);
     assert!(String::from_utf8_lossy(&uninstall_again.stdout).contains("No integration found at:"));
 
     fs::remove_dir_all(root).expect("temp directory should be removed");
@@ -687,9 +737,9 @@ fn shell_uninstall_fish_refuses_unmanaged_conf_d_file() {
         .output()
         .expect("failed to run elio shell uninstall fish");
 
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("not managed by elio"));
+    assert_failure("elio shell uninstall fish", &output);
+    assert_no_stdout("elio shell uninstall fish", &output);
+    assert_stderr_contains("elio shell uninstall fish", &output, "not managed by elio");
     assert!(integration.exists());
 
     fs::remove_dir_all(root).expect("temp directory should be removed");
@@ -721,8 +771,8 @@ fn shell_uninstall_fish_removes_symlink_but_preserves_target() {
         .output()
         .expect("failed to run elio shell uninstall fish");
 
-    assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_success("elio shell uninstall fish", &output);
+    assert_no_stderr("elio shell uninstall fish", &output);
     assert!(
         !integration.exists(),
         "uninstall should remove the active fish conf.d entry"
@@ -747,11 +797,18 @@ fn shell_init_rejects_unsupported_shell() {
         .output()
         .expect("failed to run elio shell init powershell");
 
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("error: unsupported shell 'powershell'"));
-    assert!(stderr.contains("supported shells: bash, zsh, fish"));
+    assert_failure("elio shell init powershell", &output);
+    assert_no_stdout("elio shell init powershell", &output);
+    assert_stderr_contains(
+        "elio shell init powershell",
+        &output,
+        "error: unsupported shell 'powershell'",
+    );
+    assert_stderr_contains(
+        "elio shell init powershell",
+        &output,
+        "supported shells: bash, zsh, fish",
+    );
 }
 
 #[test]
@@ -761,11 +818,12 @@ fn cwd_file_requires_value() {
         .output()
         .expect("failed to run elio --cwd-file");
 
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("error: expected a file path after '--cwd-file'")
+    assert_failure("elio --cwd-file", &output);
+    assert_no_stdout("elio --cwd-file", &output);
+    assert_stderr_contains(
+        "elio --cwd-file",
+        &output,
+        "error: expected a file path after '--cwd-file'",
     );
 }
 
@@ -776,11 +834,12 @@ fn cwd_file_equals_requires_value() {
         .output()
         .expect("failed to run elio --cwd-file=");
 
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("error: expected a file path after '--cwd-file'")
+    assert_failure("elio --cwd-file=", &output);
+    assert_no_stdout("elio --cwd-file=", &output);
+    assert_stderr_contains(
+        "elio --cwd-file=",
+        &output,
+        "error: expected a file path after '--cwd-file'",
     );
 }
 
@@ -796,11 +855,12 @@ fn duplicate_cwd_file_is_rejected() {
         .output()
         .expect("failed to run elio with duplicate --cwd-file");
 
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("error: '--cwd-file' cannot be used more than once")
+    assert_failure("elio with duplicate --cwd-file", &output);
+    assert_no_stdout("elio with duplicate --cwd-file", &output);
+    assert_stderr_contains(
+        "elio with duplicate --cwd-file",
+        &output,
+        "error: '--cwd-file' cannot be used more than once",
     );
 }
 
@@ -814,10 +874,11 @@ fn duplicate_cwd_file_equals_is_rejected() {
         .output()
         .expect("failed to run elio with duplicate --cwd-file");
 
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("error: '--cwd-file' cannot be used more than once")
+    assert_failure("elio with duplicate --cwd-file=", &output);
+    assert_no_stdout("elio with duplicate --cwd-file=", &output);
+    assert_stderr_contains(
+        "elio with duplicate --cwd-file=",
+        &output,
+        "error: '--cwd-file' cannot be used more than once",
     );
 }

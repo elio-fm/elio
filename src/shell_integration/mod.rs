@@ -108,7 +108,7 @@ pub(crate) fn binary_command(invocation: Option<&str>, executable: &Path) -> Str
         return shell_quote(executable);
     };
 
-    if invocation.contains('/') || invocation.starts_with('.') {
+    if invocation.contains('/') || invocation.contains('\\') || invocation.starts_with('.') {
         shell_quote(executable)
     } else {
         "command elio".to_string()
@@ -323,7 +323,7 @@ fn write_text_atomic(path: &Path, contents: &str) -> Result<()> {
             .with_context(|| format!("failed to sync {}", temp_path.display()))?;
         drop(temp_file);
 
-        fs::rename(&temp_path, &write_path)
+        replace_with_temp(&temp_path, &write_path)
             .with_context(|| format!("failed to replace {}", write_path.display()))?;
         sync_parent_dir(parent).with_context(|| format!("failed to sync {}", parent.display()))?;
         Ok(())
@@ -401,9 +401,33 @@ fn create_atomic_temp(path: &Path, parent: &Path) -> Result<(PathBuf, fs::File)>
     )
 }
 
+#[cfg(windows)]
+fn replace_with_temp(temp_path: &Path, write_path: &Path) -> io::Result<()> {
+    if write_path.exists() {
+        fs::remove_file(write_path)?;
+    }
+    fs::rename(temp_path, write_path)
+}
+
+#[cfg(not(windows))]
+fn replace_with_temp(temp_path: &Path, write_path: &Path) -> io::Result<()> {
+    fs::rename(temp_path, write_path)
+}
+
 #[cfg(unix)]
 fn sync_parent_dir(parent: &Path) -> io::Result<()> {
-    fs::File::open(parent)?.sync_all()
+    match fs::File::open(parent)?.sync_all() {
+        Ok(()) => Ok(()),
+        Err(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::InvalidInput | io::ErrorKind::Unsupported
+            ) =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
 }
 
 #[cfg(not(unix))]
