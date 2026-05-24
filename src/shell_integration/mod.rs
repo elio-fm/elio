@@ -36,6 +36,35 @@ impl Shell {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum ShellIntegrationAction {
+    Install,
+    Uninstall,
+}
+
+impl ShellIntegrationAction {
+    fn command(self) -> &'static str {
+        match self {
+            Self::Install => "install",
+            Self::Uninstall => "uninstall",
+        }
+    }
+
+    fn active_shell_description(self) -> &'static str {
+        match self {
+            Self::Install => "installs integration for",
+            Self::Uninstall => "removes integration from",
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum ShellDetection {
+    Supported(Shell),
+    Unsupported(String),
+    Unknown,
+}
+
 pub(crate) struct InstallReport {
     pub(crate) shell: Shell,
     pub(crate) path: PathBuf,
@@ -50,43 +79,104 @@ pub(crate) struct UninstallReport {
     pub(crate) removed_file: bool,
 }
 
-pub(crate) fn detect_shell() -> Result<Shell> {
-    if let Some(shell) = detect_parent_shell() {
-        return Ok(shell);
+pub(crate) fn detect_shell(action: ShellIntegrationAction) -> Result<Shell> {
+    match detect_parent_shell() {
+        ShellDetection::Supported(shell) => Ok(shell),
+        ShellDetection::Unsupported(shell) => Err(anyhow::anyhow!(
+            unsupported_active_shell_message(action, &shell)
+        )),
+        ShellDetection::Unknown => detect_shell_from_environment(action),
     }
-
-    detect_shell_from_environment()
 }
 
-fn detect_shell_from_environment() -> Result<Shell> {
-    let shell = env::var("SHELL").context(
-        "error: could not detect your shell from the parent process or $SHELL\n\nRun 'elio shell install fish', 'elio shell install bash', or 'elio shell install zsh' instead.",
-    )?;
+fn detect_shell_from_environment(action: ShellIntegrationAction) -> Result<Shell> {
+    let shell = env::var("SHELL").with_context(|| {
+        format!(
+            "error: could not detect your shell from the parent process or $SHELL\n\n{}",
+            explicit_shell_guidance(action)
+        )
+    })?;
     let name = shell_name_from_command(&shell).unwrap_or(shell);
 
     Shell::parse(&name).map_err(anyhow::Error::msg)
 }
 
 #[cfg(unix)]
-fn detect_parent_shell() -> Option<Shell> {
+fn detect_parent_shell() -> ShellDetection {
     let parent_pid = unsafe { libc::getppid() }.to_string();
     let output = std::process::Command::new("ps")
         .args(["-p", &parent_pid, "-o", "comm="])
         .output()
-        .ok()?;
+        .ok();
+    let Some(output) = output else {
+        return ShellDetection::Unknown;
+    };
 
     if !output.status.success() {
-        return None;
+        return ShellDetection::Unknown;
     }
 
-    let command = String::from_utf8(output.stdout).ok()?;
-    let name = shell_name_from_command(&command)?;
-    Shell::parse(&name).ok()
+    let Ok(command) = String::from_utf8(output.stdout) else {
+        return ShellDetection::Unknown;
+    };
+
+    detect_shell_from_command(&command)
 }
 
 #[cfg(not(unix))]
-fn detect_parent_shell() -> Option<Shell> {
-    None
+fn detect_parent_shell() -> ShellDetection {
+    ShellDetection::Unknown
+}
+
+fn detect_shell_from_command(command: &str) -> ShellDetection {
+    let Some(name) = shell_name_from_command(command) else {
+        return ShellDetection::Unknown;
+    };
+
+    match Shell::parse(&name) {
+        Ok(shell) => ShellDetection::Supported(shell),
+        Err(_) if is_known_unsupported_shell(&name) => ShellDetection::Unsupported(name),
+        Err(_) => ShellDetection::Unknown,
+    }
+}
+
+fn is_known_unsupported_shell(name: &str) -> bool {
+    matches!(
+        name,
+        "sh" | "dash"
+            | "ash"
+            | "ksh"
+            | "mksh"
+            | "pdksh"
+            | "yash"
+            | "csh"
+            | "tcsh"
+            | "nu"
+            | "nushell"
+            | "xonsh"
+            | "elvish"
+            | "ion"
+            | "oil"
+            | "osh"
+            | "pwsh"
+            | "powershell"
+    )
+}
+
+fn unsupported_active_shell_message(action: ShellIntegrationAction, shell: &str) -> String {
+    format!(
+        "error: unsupported active shell '{shell}'\n\n`elio shell {}` {} the active shell.\nsupported shells: bash, zsh, fish\n\n{}",
+        action.command(),
+        action.active_shell_description(),
+        explicit_shell_guidance(action)
+    )
+}
+
+fn explicit_shell_guidance(action: ShellIntegrationAction) -> String {
+    let command = action.command();
+    format!(
+        "Run one of these explicitly if you want to target another shell:\n  elio shell {command} fish\n  elio shell {command} bash\n  elio shell {command} zsh"
+    )
 }
 
 fn shell_name_from_command(command: &str) -> Option<String> {

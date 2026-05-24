@@ -1,4 +1,4 @@
-use crate::shell_integration::{self, Shell};
+use crate::shell_integration::{self, Shell, ShellIntegrationAction};
 use anyhow::Result;
 use std::{
     env, fs, io,
@@ -29,7 +29,7 @@ pub(crate) fn run() -> Result<()> {
             let binary = shell_integration::binary_command(invocation.as_deref(), &executable);
             let shell = match shell {
                 Some(shell) => shell,
-                None => shell_integration::detect_shell()?,
+                None => shell_integration::detect_shell(ShellIntegrationAction::Install)?,
             };
             let report = shell_integration::install(shell, &binary)?;
             println!(
@@ -48,7 +48,7 @@ pub(crate) fn run() -> Result<()> {
         Command::UninstallShellIntegration(shell) => {
             let shell = match shell {
                 Some(shell) => shell,
-                None => shell_integration::detect_shell()?,
+                None => shell_integration::detect_shell(ShellIntegrationAction::Uninstall)?,
             };
             let report = shell_integration::uninstall(shell)?;
             println!(

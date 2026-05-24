@@ -1,7 +1,7 @@
 use super::{
-    MANAGED_END, MANAGED_START, Shell, binary_command, init_script, managed_script,
-    remove_managed_blocks, resolve_write_path, shell_name_from_command, uninstall_reload_command,
-    upsert_managed_block, write_text_atomic,
+    MANAGED_END, MANAGED_START, Shell, ShellDetection, binary_command, detect_shell_from_command,
+    init_script, managed_script, remove_managed_blocks, resolve_write_path,
+    shell_name_from_command, uninstall_reload_command, upsert_managed_block, write_text_atomic,
 };
 use std::{
     fs,
@@ -92,6 +92,22 @@ fn shell_name_from_command_handles_paths_login_shells_and_arguments() {
         Some("fish")
     );
     assert_eq!(shell_name_from_command("  "), None);
+}
+
+#[test]
+fn detect_shell_from_command_distinguishes_supported_unsupported_and_unknown() {
+    assert_eq!(
+        detect_shell_from_command("/usr/bin/fish\n"),
+        ShellDetection::Supported(Shell::Fish)
+    );
+    assert_eq!(
+        detect_shell_from_command("/usr/bin/nu --login\n"),
+        ShellDetection::Unsupported("nu".to_string())
+    );
+    assert_eq!(
+        detect_shell_from_command("shell_integration_cli\n"),
+        ShellDetection::Unknown
+    );
 }
 
 #[test]

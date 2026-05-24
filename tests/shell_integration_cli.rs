@@ -552,6 +552,116 @@ fn shell_install_detects_current_parent_shell_before_login_shell_environment() {
     fs::remove_dir_all(root).expect("temp directory should be removed");
 }
 
+#[cfg(unix)]
+#[test]
+fn shell_install_rejects_unsupported_current_shell_before_login_shell_environment() {
+    if Command::new("sh").arg("-c").arg(":").status().is_err() {
+        return;
+    }
+
+    let root = temp_path("reject-unsupported-parent-install");
+    let config_home = root.join("config");
+    fs::create_dir_all(&root).expect("temp directory should be created");
+
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg("\"$ELIO_TEST_BIN\" shell install; status=$?; exit \"$status\"")
+        .env("ELIO_TEST_BIN", env!("CARGO_BIN_EXE_elio"))
+        .env("SHELL", "/usr/bin/fish")
+        .env("XDG_CONFIG_HOME", &config_home)
+        .output()
+        .expect("failed to run elio shell install from sh");
+
+    assert_failure("sh -c elio shell install", &output);
+    assert_no_stdout("sh -c elio shell install", &output);
+    assert_stderr_contains(
+        "sh -c elio shell install",
+        &output,
+        "error: unsupported active shell 'sh'",
+    );
+    assert_stderr_contains(
+        "sh -c elio shell install",
+        &output,
+        "elio shell install fish",
+    );
+    assert!(!config_home.join("fish/conf.d/elio.fish").exists());
+
+    fs::remove_dir_all(root).expect("temp directory should be removed");
+}
+
+#[cfg(unix)]
+#[test]
+fn shell_install_explicit_target_works_from_unsupported_current_shell() {
+    if Command::new("sh").arg("-c").arg(":").status().is_err() {
+        return;
+    }
+
+    let root = temp_path("explicit-install-from-unsupported-parent");
+    let config_home = root.join("config");
+
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg("\"$ELIO_TEST_BIN\" shell install fish; status=$?; exit \"$status\"")
+        .env("ELIO_TEST_BIN", env!("CARGO_BIN_EXE_elio"))
+        .env("SHELL", "/bin/sh")
+        .env("XDG_CONFIG_HOME", &config_home)
+        .output()
+        .expect("failed to run elio shell install fish from sh");
+
+    assert_success("sh -c elio shell install fish", &output);
+    assert_no_stderr("sh -c elio shell install fish", &output);
+    assert!(config_home.join("fish/conf.d/elio.fish").exists());
+
+    fs::remove_dir_all(root).expect("temp directory should be removed");
+}
+
+#[cfg(unix)]
+#[test]
+fn shell_uninstall_rejects_unsupported_current_shell_before_login_shell_environment() {
+    if Command::new("sh").arg("-c").arg(":").status().is_err() {
+        return;
+    }
+
+    let root = temp_path("reject-unsupported-parent-uninstall");
+    let config_home = root.join("config");
+    let conf_d = config_home.join("fish/conf.d");
+    let integration = conf_d.join("elio.fish");
+    fs::create_dir_all(&conf_d).expect("fish conf.d should be created");
+    fs::write(
+        &integration,
+        "# >>> elio shell integration >>>\nfunction elio\nend\n# <<< elio shell integration <<<\n",
+    )
+    .expect("fish integration should be written");
+
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg("\"$ELIO_TEST_BIN\" shell uninstall; status=$?; exit \"$status\"")
+        .env("ELIO_TEST_BIN", env!("CARGO_BIN_EXE_elio"))
+        .env("SHELL", "/usr/bin/fish")
+        .env("XDG_CONFIG_HOME", &config_home)
+        .output()
+        .expect("failed to run elio shell uninstall from sh");
+
+    assert_failure("sh -c elio shell uninstall", &output);
+    assert_no_stdout("sh -c elio shell uninstall", &output);
+    assert_stderr_contains(
+        "sh -c elio shell uninstall",
+        &output,
+        "error: unsupported active shell 'sh'",
+    );
+    assert_stderr_contains(
+        "sh -c elio shell uninstall",
+        &output,
+        "elio shell uninstall fish",
+    );
+    assert!(
+        integration.exists(),
+        "uninstall should not fall back to the login shell"
+    );
+
+    fs::remove_dir_all(root).expect("temp directory should be removed");
+}
+
 #[test]
 fn shell_uninstall_bash_removes_managed_block_idempotently() {
     let root = temp_path("bash-uninstall");
