@@ -8,7 +8,7 @@ mod tmux;
 mod window;
 
 use anyhow::{Context, Result};
-use ratatui::layout::Rect;
+use ratatui::{buffer::Buffer, layout::Rect};
 use std::{env, io::Write as _, path::Path};
 
 use crate::app::App;
@@ -247,6 +247,53 @@ impl App {
             .unwrap_or_default()
     }
 
+    /// Erases blank modal cells that would otherwise show terminal image content
+    /// through transparent popup surfaces. The tracked image remains logically
+    /// displayed; raster protocols repaint it after the modal closes, while Kitty
+    /// placeholders are redrawn with popup exclusions after the frame render.
+    pub(crate) fn modal_image_post_draw_erase(
+        &mut self,
+        modal_rects: &[Rect],
+        frame_buffer: &Buffer,
+    ) -> Vec<u8> {
+        let protocol = self.preview.terminal_images.protocol;
+        if modal_rects.is_empty()
+            || !matches!(
+                protocol,
+                ImageProtocol::KittyGraphics | ImageProtocol::ItermInline
+            )
+        {
+            return Vec::new();
+        }
+
+        let image_rects = [
+            self.displayed_static_image_clear_area(),
+            self.displayed_pdf_overlay_area(),
+        ];
+        if image_rects.iter().all(Option::is_none) {
+            return Vec::new();
+        }
+
+        let mut to_erase = Vec::new();
+        for popup in modal_rects {
+            for image in image_rects.iter().flatten() {
+                if let Some(mask) = geometry::intersect_rect(*popup, *image) {
+                    push_blank_cell_runs(&mut to_erase, mask, frame_buffer);
+                }
+            }
+        }
+
+        if to_erase.is_empty() {
+            return Vec::new();
+        }
+
+        if protocol.is_raster() {
+            self.preview.terminal_images.pending_iterm_popup_restore = true;
+        }
+
+        to_erase.into_iter().flat_map(iterm::erase_cells).collect()
+    }
+
     /// Returns iTerm2 erase bytes that must be written to the terminal **before**
     /// `terminal.draw()` when an image is about to be replaced or cleared.
     ///
@@ -313,7 +360,13 @@ impl App {
             return Ok(Vec::new());
         }
 
-        if protocol.is_raster()
+        if protocol == ImageProtocol::ItermInline && popup_open {
+            if self.static_image_overlay_displayed() || self.pdf_overlay_displayed() {
+                self.preview.terminal_images.pending_iterm_popup_restore = true;
+            }
+            return Ok(Vec::new());
+        }
+        if protocol == ImageProtocol::Sixel
             && popup_open
             && (self.static_image_overlay_displayed() || self.pdf_overlay_displayed())
         {
@@ -392,7 +445,7 @@ impl App {
         }
     }
 
-    fn collect_popup_rects(&self) -> Vec<Rect> {
+    pub(crate) fn collect_popup_rects(&self) -> Vec<Rect> {
         let mut rects = Vec::new();
         if let Some(r) = self.input.frame_state.trash_panel {
             rects.push(r);
@@ -499,6 +552,48 @@ impl App {
     }
 }
 
+fn push_blank_cell_runs(rects: &mut Vec<Rect>, area: Rect, frame_buffer: &Buffer) {
+    let Some(area) = geometry::intersect_rect(area, *frame_buffer.area()) else {
+        return;
+    };
+
+    for y in area.y..area.y.saturating_add(area.height) {
+        let mut run_start = None;
+        for x in area.x..area.x.saturating_add(area.width) {
+            let transparent_blank = frame_buffer.cell((x, y)).is_some_and(|cell| {
+                cell.symbol() == " " && cell.bg == ratatui::style::Color::Reset
+            });
+            match (transparent_blank, run_start) {
+                (true, None) => run_start = Some(x),
+                (false, Some(start)) => {
+                    geometry::push_unique_rect(
+                        rects,
+                        Rect {
+                            x: start,
+                            y,
+                            width: x.saturating_sub(start),
+                            height: 1,
+                        },
+                    );
+                    run_start = None;
+                }
+                _ => {}
+            }
+        }
+        if let Some(start) = run_start {
+            geometry::push_unique_rect(
+                rects,
+                Rect {
+                    x: start,
+                    y,
+                    width: area.x.saturating_add(area.width).saturating_sub(start),
+                    height: 1,
+                },
+            );
+        }
+    }
+}
+
 pub(in crate::app) fn place_terminal_image(
     protocol: ImageProtocol,
     path: &Path,
@@ -538,5 +633,53 @@ pub(in crate::app) fn clear_terminal_images(protocol: ImageProtocol) -> Result<V
         ImageProtocol::ItermInline | ImageProtocol::None => Ok(Vec::new()),
         // Sixel also has no clear primitive (same as iTerm2).
         ImageProtocol::Sixel => sixel::clear_terminal_images_with_sixel_protocol(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::style::{Color, Style};
+
+    #[test]
+    fn modal_mask_only_targets_reset_background_blank_cells() {
+        let mut buffer = Buffer::empty(Rect {
+            x: 0,
+            y: 0,
+            width: 5,
+            height: 1,
+        });
+        buffer.set_string(1, 0, "  ", Style::default().bg(Color::Blue));
+        buffer.set_string(3, 0, "x", Style::default());
+
+        let mut rects = Vec::new();
+        push_blank_cell_runs(
+            &mut rects,
+            Rect {
+                x: 0,
+                y: 0,
+                width: 5,
+                height: 1,
+            },
+            &buffer,
+        );
+
+        assert_eq!(
+            rects,
+            vec![
+                Rect {
+                    x: 0,
+                    y: 0,
+                    width: 1,
+                    height: 1,
+                },
+                Rect {
+                    x: 4,
+                    y: 0,
+                    width: 1,
+                    height: 1,
+                },
+            ]
+        );
     }
 }

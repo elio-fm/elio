@@ -1,6 +1,6 @@
 use super::*;
 use crossterm::event::{Event, KeyCode, KeyEvent};
-use ratatui::text::Line;
+use ratatui::{buffer::Buffer, text::Line};
 
 fn configure_iterm_image_support(app: &mut App) {
     let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
@@ -11,6 +11,15 @@ fn configure_iterm_image_support(app: &mut App) {
         pixels_width: 1920,
         pixels_height: 1080,
     });
+}
+
+fn blank_frame_buffer() -> Buffer {
+    Buffer::empty(Rect {
+        x: 0,
+        y: 0,
+        width: 120,
+        height: 40,
+    })
 }
 
 #[test]
@@ -368,7 +377,7 @@ fn document_overlay_keeps_previous_page_visible_while_next_page_waits() {
 }
 
 #[test]
-fn iterm_popup_keeps_the_displayed_image_visible() {
+fn iterm_popup_masks_displayed_image_until_close() {
     let root = temp_root("iterm-popup-deferred-erase");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let page = root.join("page.png");
@@ -412,8 +421,22 @@ fn iterm_popup_keeps_the_displayed_image_visible() {
     wait_for_displayed_preview_overlay(&mut app);
     assert!(app.static_image_overlay_displayed());
 
+    let image_area = app
+        .displayed_static_image_clear_area()
+        .expect("displayed image should have a clear area");
+    let popup = Rect {
+        x: image_area.x.saturating_add(1),
+        y: image_area.y.saturating_add(1),
+        width: image_area.width.saturating_sub(2).max(1),
+        height: image_area.height.saturating_sub(2).max(1),
+    };
     app.overlays.help = true;
-    assert!(app.iterm_pre_draw_erase().is_empty());
+    let frame_buffer = blank_frame_buffer();
+    let erase = app.modal_image_post_draw_erase(&[popup], &frame_buffer);
+    assert!(
+        !erase.is_empty(),
+        "opening a transparent popup over an iTerm image should erase the covered image cells"
+    );
     let out = app
         .present_preview_overlay()
         .expect("iTerm popup redraw should not fail");
@@ -488,7 +511,15 @@ fn closing_open_with_popup_restores_iterm_inline_image() {
     assert!(app.static_image_overlay_displayed());
 
     app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
-    assert!(app.iterm_pre_draw_erase().is_empty());
+    let popup = app
+        .displayed_static_image_clear_area()
+        .expect("displayed image should have a clear area");
+    let frame_buffer = blank_frame_buffer();
+    let erase = app.modal_image_post_draw_erase(&[popup], &frame_buffer);
+    assert!(
+        !erase.is_empty(),
+        "opening the open-with popup should erase the covered iTerm image cells"
+    );
 
     let out = app
         .present_preview_overlay()

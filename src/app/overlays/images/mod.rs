@@ -124,12 +124,13 @@ mod tests {
         ImageProtocol, OverlayPresentState, RenderedImageDimensions, TerminalWindowSize,
     };
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
-    use ratatui::layout::Rect;
+    use ratatui::{buffer::Buffer, layout::Rect};
     use std::{
         fs,
         path::{Path, PathBuf},
         sync::Arc,
-        time::{Duration, SystemTime, UNIX_EPOCH},
+        thread,
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
 
     fn temp_root(label: &str) -> PathBuf {
@@ -149,6 +150,15 @@ mod tests {
             pixels_width: 1920,
             pixels_height: 1080,
         });
+    }
+
+    fn blank_frame_buffer() -> Buffer {
+        Buffer::empty(Rect {
+            x: 0,
+            y: 0,
+            width: 120,
+            height: 40,
+        })
     }
 
     fn write_test_raster_image(path: &Path, format: ImageFormat, width_px: u32, height_px: u32) {
@@ -782,6 +792,11 @@ mod tests {
             width: 12,
             height: 4,
         };
+        let erase = app.modal_image_post_draw_erase(&[popup], &blank_frame_buffer());
+        assert!(
+            !erase.is_empty(),
+            "opening a transparent popup over a Kitty placeholder image should erase covered cells"
+        );
         app.input.frame_state.open_with_panel = Some(popup);
 
         let with_popup = String::from_utf8(
@@ -811,6 +826,65 @@ mod tests {
             app.preview.image.displayed_excluded.is_empty(),
             "closing the popup should remove kitty exclusions"
         );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn sixel_popup_skips_post_draw_masking_for_foot_performance() {
+        let (mut app, root, _image_path) =
+            build_selected_static_image_app("sixel-popup-mask", "demo.png");
+        let request = ready_static_image_overlay(&mut app);
+        app.preview.terminal_images.protocol = ImageProtocol::Sixel;
+        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+            &request,
+            request.area,
+            request.area,
+        ));
+        assert!(app.static_image_overlay_displayed());
+
+        app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
+        let popup = Rect {
+            x: request.area.x.saturating_add(1),
+            y: request.area.y.saturating_add(1),
+            width: request.area.width.saturating_sub(2).max(1),
+            height: request.area.height.saturating_sub(2).max(1),
+        };
+        let erase = app.modal_image_post_draw_erase(&[popup], &blank_frame_buffer());
+        assert!(
+            erase.is_empty(),
+            "Sixel should not use post-draw modal masking because Foot processes those erases slowly"
+        );
+
+        let out = app
+            .present_preview_overlay()
+            .expect("Sixel popup redraw should not fail");
+        assert!(
+            out.is_empty(),
+            "Sixel should not repaint raster image bytes while the popup is open"
+        );
+        assert!(app.static_image_overlay_displayed());
+
+        app.overlays.open_with = None;
+        app.input.frame_state.open_with_panel = None;
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut restored = Vec::new();
+        while Instant::now() < deadline {
+            let _ = app.process_background_jobs();
+            restored = app
+                .present_preview_overlay()
+                .expect("closing the popup should repaint the Sixel image");
+            if !restored.is_empty() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            !restored.is_empty(),
+            "closing the popup should repaint the masked Sixel image"
+        );
+        assert!(app.static_image_overlay_displayed());
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

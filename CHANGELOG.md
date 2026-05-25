@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `--cwd-file` and installable bash, zsh, and fish shell integration for changing the parent shell directory to elio's final directory on quit, including quit-without-cd, current-shell detection, zsh `ZDOTDIR` support, symlink-aware config updates, and a matching uninstall command. ([#69])
 
+### Fixed
+
+- Improved popup rendering over inline image previews, preventing images from showing through transparent overlay cells.
+
 ## [1.6.0] - 2026-05-22
 
 ### Added

@@ -12,7 +12,7 @@ mod zoxide;
 use crate::app::{App, PendingTerminalTask};
 use anyhow::Result;
 use crossterm::{
-    cursor::SetCursorStyle,
+    cursor::{RestorePosition, SavePosition, SetCursorStyle},
     event::{
         self, DisableFocusChange, EnableFocusChange, Event, KeyboardEnhancementFlags, MouseEvent,
         MouseEventKind, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
@@ -557,13 +557,17 @@ fn draw_terminal_frame(
             terminal.backend_mut().write_all(&kitty_erase)?;
         }
         let mut frame_state = app::FrameState::default();
-        terminal.draw(|frame| ui::render(frame, app, &mut frame_state))?;
-        let dirty = app.set_frame_state(frame_state);
+        let (dirty, modal_erase) = {
+            let completed = terminal.draw(|frame| ui::render(frame, app, &mut frame_state))?;
+            let dirty = app.set_frame_state(frame_state);
+            let modal_rects = app.collect_popup_rects();
+            let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
+            (dirty, modal_erase)
+        };
+        write_bytes_preserving_cursor(terminal.backend_mut(), &modal_erase)?;
         if !app.browser_wheel_burst_active() {
             let overlay_bytes = app.present_preview_overlay()?;
-            if !overlay_bytes.is_empty() {
-                terminal.backend_mut().write_all(&overlay_bytes)?;
-            }
+            write_bytes_preserving_cursor(terminal.backend_mut(), &overlay_bytes)?;
         }
         terminal.backend_mut().flush()?;
         Ok(dirty)
@@ -576,6 +580,16 @@ fn draw_terminal_frame(
         (Ok(_), Err(error)) => Err(error.into()),
         (Err(error), Err(_)) => Err(error),
     }
+}
+
+fn write_bytes_preserving_cursor<W: Write>(writer: &mut W, bytes: &[u8]) -> io::Result<()> {
+    if bytes.is_empty() {
+        return Ok(());
+    }
+    execute!(writer, SavePosition)?;
+    writer.write_all(bytes)?;
+    execute!(writer, RestorePosition)?;
+    Ok(())
 }
 
 fn event_poll_interval<I>(
