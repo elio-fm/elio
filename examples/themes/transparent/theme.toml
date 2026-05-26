@@ -1,10 +1,7 @@
-# Copy to ~/.config/elio/theme.toml to inherit your terminal's own background
-# instead of Elio's dark surfaces. Selection bars and yank/cut bands stay opaque.
-
 [palette]
 bg = "none"
 chrome = "none"
-# chrome_alt and path_bg stay opaque to keep popups readable over images.
+chrome_alt = "none"
 border = "#6f7d8d"
 panel = "none"
 panel_alt = "none"
@@ -14,6 +11,7 @@ button_bg = "none"
 button_disabled_bg = "none"
 sidebar_active = "none"
 accent_soft = "none"
+path_bg = "none"
 
 [preview.code]
 bg = "none"

@@ -1,5 +1,3 @@
-# Copy to ~/.config/elio/theme.toml to use a warm dark Elio theme.
-
 [palette]
 bg = "#120f0d"
 chrome = "#181310"

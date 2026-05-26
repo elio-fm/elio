@@ -1,5 +1,3 @@
-# Copy to ~/.config/elio/theme.toml to use a Catppuccin Mocha-inspired Elio theme.
-
 [palette]
 bg = "#1e1e2e"
 chrome = "#181825"

@@ -1,5 +1,3 @@
-# Copy to ~/.config/elio/theme.toml to use the original blue-heavy Elio theme.
-
 [palette]
 bg = "#02050c"
 chrome = "#070d16"

@@ -1,5 +1,3 @@
-# Copy to ~/.config/elio/theme.toml to use a light take on Elio's built-in default theme.
-
 [palette]
 bg = "#eff2f5"
 chrome = "#e4e8ed"
