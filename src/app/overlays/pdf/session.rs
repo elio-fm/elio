@@ -210,6 +210,10 @@ impl App {
         })
     }
 
+    pub(in crate::app) fn active_pdf_overlay_requested(&self) -> bool {
+        self.active_pdf_overlay_request().is_some()
+    }
+
     pub(in crate::app) fn apply_pdf_probe_build(&mut self, build: jobs::PdfProbeBuild) -> bool {
         let key = PdfPageKey {
             path: build.path.clone(),

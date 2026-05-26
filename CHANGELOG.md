@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Improved popup rendering over inline image previews, preventing images from showing through transparent overlay cells.
+- Fixed WezTerm and iTerm inline image previews during terminal resize, keeping previews and popups correctly layered.
 
 ## [1.6.0] - 2026-05-22
 

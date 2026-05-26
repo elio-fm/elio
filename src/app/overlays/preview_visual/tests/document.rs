@@ -22,6 +22,54 @@ fn blank_frame_buffer() -> Buffer {
     })
 }
 
+fn build_displayed_iterm_inline_image_app(label: &str) -> (App, PathBuf) {
+    let root = temp_root(label);
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let page = root.join("page.png");
+    write_test_raster_image(&page, ImageFormat::Png, 640, 360);
+    let page_metadata = fs::metadata(&page).expect("page metadata should exist");
+
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_iterm_image_support(&mut app);
+    app.navigation.entries = vec![Entry {
+        path: page.clone(),
+        name: "page.png".to_string(),
+        name_key: "page.png".to_string(),
+        kind: EntryKind::File,
+        symlink: None,
+        size: page_metadata.len(),
+        modified: page_metadata.modified().ok(),
+        readonly: false,
+    }];
+    app.navigation.selected = 0;
+    app.preview.image.selection_activation_delay = Duration::ZERO;
+    app.input.frame_state.preview_media_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 12,
+    });
+    app.input.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 15,
+        width: 48,
+        height: 8,
+    });
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+        .with_preview_visual(PreviewVisual {
+            kind: PreviewVisualKind::PageImage,
+            layout: PreviewVisualLayout::Inline,
+            path: page,
+            size: page_metadata.len(),
+            modified: page_metadata.modified().ok(),
+        });
+
+    app.refresh_static_image_preloads();
+    wait_for_displayed_preview_overlay(&mut app);
+    assert!(app.static_image_overlay_displayed());
+    (app, root)
+}
+
 #[test]
 fn page_image_visual_uses_full_preview_height() {
     let root = temp_root("full-height");
@@ -465,50 +513,7 @@ fn iterm_popup_masks_displayed_image_until_close() {
 
 #[test]
 fn closing_open_with_popup_restores_iterm_inline_image() {
-    let root = temp_root("iterm-open-with-popup");
-    fs::create_dir_all(&root).expect("failed to create temp root");
-    let page = root.join("page.png");
-    write_test_raster_image(&page, ImageFormat::Png, 640, 360);
-    let page_metadata = fs::metadata(&page).expect("page metadata should exist");
-
-    let mut app = App::new_at(root.clone()).expect("app should initialize");
-    configure_iterm_image_support(&mut app);
-    app.navigation.entries = vec![Entry {
-        path: page.clone(),
-        name: "page.png".to_string(),
-        name_key: "page.png".to_string(),
-        kind: EntryKind::File,
-        symlink: None,
-        size: page_metadata.len(),
-        modified: page_metadata.modified().ok(),
-        readonly: false,
-    }];
-    app.navigation.selected = 0;
-    app.preview.image.selection_activation_delay = Duration::ZERO;
-    app.input.frame_state.preview_media_area = Some(Rect {
-        x: 2,
-        y: 3,
-        width: 48,
-        height: 12,
-    });
-    app.input.frame_state.preview_content_area = Some(Rect {
-        x: 2,
-        y: 15,
-        width: 48,
-        height: 8,
-    });
-    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
-        .with_preview_visual(PreviewVisual {
-            kind: PreviewVisualKind::PageImage,
-            layout: PreviewVisualLayout::Inline,
-            path: page,
-            size: page_metadata.len(),
-            modified: page_metadata.modified().ok(),
-        });
-
-    app.refresh_static_image_preloads();
-    wait_for_displayed_preview_overlay(&mut app);
-    assert!(app.static_image_overlay_displayed());
+    let (mut app, root) = build_displayed_iterm_inline_image_app("iterm-open-with-popup");
 
     app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
     let popup = app
@@ -543,6 +548,144 @@ fn closing_open_with_popup_restores_iterm_inline_image() {
             .expect("steady-state redraw should succeed")
             .is_empty()
     );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn iterm_modal_layout_change_repaints_image_behind_popup() {
+    let (mut app, root) = build_displayed_iterm_inline_image_app("iterm-modal-layout-repaint");
+
+    app.input.frame_state.preview_media_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 36,
+        height: 10,
+    });
+    app.input.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 13,
+        width: 36,
+        height: 8,
+    });
+    assert!(
+        !app.displayed_static_image_matches_active(),
+        "resized preview layout should no longer match the displayed iTerm image"
+    );
+
+    let next_request = app
+        .active_static_image_overlay_request()
+        .expect("resized static preview should request a new image target");
+    let next_key = StaticImageKey::from_request(&next_request);
+    app.refresh_static_image_preloads();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while app.preview.image.pending_prepares.contains(&next_key) && Instant::now() < deadline {
+        let _ = app.process_background_jobs();
+        let _ = app.process_image_preview_timers();
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        !app.preview.image.pending_prepares.contains(&next_key),
+        "resized iTerm image target should be prepared before the modal repaint"
+    );
+
+    app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
+    let popup = app
+        .displayed_static_image_clear_area()
+        .expect("displayed image should have a clear area");
+    assert!(app.should_repaint_iterm_inline_under_modal(&[popup]));
+
+    let blocked = app
+        .present_preview_overlay()
+        .expect("normal iTerm modal presentation should not fail");
+    assert!(
+        blocked.is_empty(),
+        "normal iTerm presentation must stay blocked while a modal is open"
+    );
+
+    let repaint = String::from_utf8(
+        app.present_preview_overlay_behind_modal()
+            .expect("controlled iTerm modal repaint should not fail"),
+    )
+    .expect("controlled iTerm repaint output should be valid utf8");
+    assert!(repaint.contains("\x1b]1337;File=inline=1;"));
+    assert!(app.static_image_overlay_displayed());
+    assert!(app.displayed_static_image_matches_active());
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Esc)))
+        .expect("Esc should close the open-with overlay");
+    let restore = String::from_utf8(
+        app.present_preview_overlay()
+            .expect("closing the popup should repaint the covered iTerm image"),
+    )
+    .expect("restored iTerm image output should be valid utf8");
+    assert!(restore.contains("\x1b]1337;File=inline=1;"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn iterm_modal_repaints_image_when_preview_pane_reappears() {
+    let (mut app, root) = build_displayed_iterm_inline_image_app("iterm-modal-preview-reappears");
+
+    app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
+    app.handle_terminal_image_resize();
+    configure_iterm_image_support(&mut app);
+    assert!(
+        app.take_pending_resize_clear(),
+        "iTerm resize should clear stale image geometry before redraw"
+    );
+    assert!(
+        !app.static_image_overlay_displayed(),
+        "resize clear should drop the stale logical image target"
+    );
+
+    app.input.frame_state.preview_media_area = None;
+    app.input.frame_state.preview_content_area = None;
+    assert!(
+        app.active_static_image_overlay_request().is_none(),
+        "hidden preview pane should remove the active static image target"
+    );
+    assert!(
+        app.present_preview_overlay()
+            .expect("hidden pane with popup should not repaint directly")
+            .is_empty()
+    );
+
+    app.input.frame_state.preview_media_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 12,
+    });
+    app.input.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 15,
+        width: 48,
+        height: 8,
+    });
+    let popup = Rect {
+        x: 4,
+        y: 5,
+        width: 24,
+        height: 8,
+    };
+
+    assert!(app.active_static_image_overlay_request().is_some());
+    assert!(
+        !app.displayed_static_image_matches_active(),
+        "restored pane should need a fresh iTerm image placement"
+    );
+    assert!(app.should_repaint_iterm_inline_under_modal(&[popup]));
+    let repaint = String::from_utf8(
+        app.present_preview_overlay_behind_modal()
+            .expect("controlled iTerm modal repaint should not fail"),
+    )
+    .expect("controlled iTerm repaint output should be valid utf8");
+
+    assert!(repaint.contains("\x1b]1337;File=inline=1;"));
+    assert!(app.static_image_overlay_displayed());
+    assert!(app.displayed_static_image_matches_active());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

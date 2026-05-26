@@ -23,7 +23,12 @@ use crossterm::{
         disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement,
     },
 };
-use ratatui::{Terminal, backend::CrosstermBackend};
+use ratatui::{
+    Terminal,
+    backend::CrosstermBackend,
+    buffer::{Buffer, Cell},
+    layout::Rect,
+};
 use std::{
     fs as std_fs,
     io::{self, ErrorKind, Write},
@@ -557,15 +562,26 @@ fn draw_terminal_frame(
             terminal.backend_mut().write_all(&kitty_erase)?;
         }
         let mut frame_state = app::FrameState::default();
-        let (dirty, modal_erase) = {
+        let (dirty, image_behind_modal, popup_restore, modal_erase, skip_overlay_present) = {
             let completed = terminal.draw(|frame| ui::render(frame, app, &mut frame_state))?;
             let dirty = app.set_frame_state(frame_state);
             let modal_rects = app.collect_popup_rects();
-            let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
-            (dirty, modal_erase)
+            if !app.browser_wheel_burst_active()
+                && app.should_repaint_iterm_inline_under_modal(&modal_rects)
+            {
+                let image_behind_modal = app.present_preview_overlay_behind_modal()?;
+                let popup_restore = collect_buffer_cells(&modal_rects, completed.buffer);
+                let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
+                (dirty, image_behind_modal, popup_restore, modal_erase, true)
+            } else {
+                let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
+                (dirty, Vec::new(), Vec::new(), modal_erase, false)
+            }
         };
+        write_bytes_preserving_cursor(terminal.backend_mut(), &image_behind_modal)?;
+        draw_cells_preserving_cursor(terminal.backend_mut(), &popup_restore)?;
         write_bytes_preserving_cursor(terminal.backend_mut(), &modal_erase)?;
-        if !app.browser_wheel_burst_active() {
+        if !skip_overlay_present && !app.browser_wheel_burst_active() {
             let overlay_bytes = app.present_preview_overlay()?;
             write_bytes_preserving_cursor(terminal.backend_mut(), &overlay_bytes)?;
         }
@@ -592,6 +608,56 @@ fn write_bytes_preserving_cursor<W: Write>(writer: &mut W, bytes: &[u8]) -> io::
     Ok(())
 }
 
+fn draw_cells_preserving_cursor<W: Write>(
+    backend: &mut CrosstermBackend<W>,
+    cells: &[(u16, u16, Cell)],
+) -> io::Result<()> {
+    if cells.is_empty() {
+        return Ok(());
+    }
+    execute!(backend, SavePosition)?;
+    ratatui::backend::Backend::draw(backend, cells.iter().map(|(x, y, cell)| (*x, *y, cell)))?;
+    execute!(backend, RestorePosition)?;
+    Ok(())
+}
+
+fn collect_buffer_cells(rects: &[Rect], buffer: &Buffer) -> Vec<(u16, u16, Cell)> {
+    let bounds = *buffer.area();
+    let mut cells = Vec::new();
+    for rect in rects {
+        let Some(area) = intersect_rect(*rect, bounds) else {
+            continue;
+        };
+        for y in area.y..area.y.saturating_add(area.height) {
+            for x in area.x..area.x.saturating_add(area.width) {
+                let Some(cell) = buffer.cell((x, y)) else {
+                    continue;
+                };
+                if cell.skip {
+                    continue;
+                }
+                cells.push((x, y, cell.clone()));
+            }
+        }
+    }
+    cells
+}
+
+fn intersect_rect(a: Rect, b: Rect) -> Option<Rect> {
+    let x1 = a.x.max(b.x);
+    let y1 = a.y.max(b.y);
+    let x2 = a.x.saturating_add(a.width).min(b.x.saturating_add(b.width));
+    let y2 =
+        a.y.saturating_add(a.height)
+            .min(b.y.saturating_add(b.height));
+    (x2 > x1 && y2 > y1).then_some(Rect {
+        x: x1,
+        y: y1,
+        width: x2.saturating_sub(x1),
+        height: y2.saturating_sub(y1),
+    })
+}
+
 fn event_poll_interval<I>(
     base_poll_interval: Duration,
     terminal_focused: bool,
@@ -614,8 +680,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{ACTIVE_SCROLL_POLL_INTERVAL, IDLE_POLL_INTERVAL, event_poll_interval};
-    use ratatui::{buffer::Buffer, layout::Rect, style::Style};
+    use crate::{
+        ACTIVE_SCROLL_POLL_INTERVAL, IDLE_POLL_INTERVAL, collect_buffer_cells, event_poll_interval,
+    };
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        style::{Color, Modifier, Style},
+    };
     use std::{
         fs, io,
         path::{Path, PathBuf},
@@ -671,6 +743,29 @@ mod tests {
                 .map(|(x, y, cell)| (*x, *y, cell.symbol().to_string()))
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn collect_buffer_cells_captures_popup_cells_with_styles() {
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 8, 4));
+        buffer.set_string(
+            2,
+            1,
+            "OK",
+            Style::default()
+                .fg(Color::LightGreen)
+                .bg(Color::Rgb(1, 2, 3))
+                .add_modifier(Modifier::BOLD),
+        );
+
+        let cells = collect_buffer_cells(&[Rect::new(2, 1, 2, 1)], &buffer);
+
+        assert_eq!(cells.len(), 2);
+        assert_eq!((cells[0].0, cells[0].1, cells[0].2.symbol()), (2, 1, "O"));
+        assert_eq!((cells[1].0, cells[1].1, cells[1].2.symbol()), (3, 1, "K"));
+        assert_eq!(cells[0].2.fg, Color::LightGreen);
+        assert_eq!(cells[0].2.bg, Color::Rgb(1, 2, 3));
+        assert!(cells[0].2.modifier.contains(Modifier::BOLD));
     }
 
     #[test]

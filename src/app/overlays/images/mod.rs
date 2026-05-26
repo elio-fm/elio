@@ -664,9 +664,9 @@ mod tests {
     }
 
     #[test]
-    fn iterm_resize_does_not_request_full_screen_clear() {
+    fn iterm_resize_requests_full_screen_clear_for_displayed_overlay() {
         let (mut app, root, _image_path) =
-            build_selected_static_image_app("iterm-resize-no-clear", "demo.png");
+            build_selected_static_image_app("iterm-resize-clear", "demo.png");
         let request = ready_static_image_overlay(&mut app);
         app.preview.terminal_images.protocol = ImageProtocol::ItermInline;
         app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
@@ -677,8 +677,9 @@ mod tests {
 
         app.handle_terminal_image_resize();
 
+        assert!(app.take_pending_resize_clear());
+        assert!(!app.static_image_overlay_displayed());
         assert!(!app.take_pending_resize_clear());
-        assert!(app.static_image_overlay_displayed());
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

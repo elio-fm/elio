@@ -153,11 +153,12 @@ impl App {
         self.refresh_terminal_image_window_size();
         if matches!(
             self.preview.terminal_images.protocol,
-            ImageProtocol::KittyGraphics | ImageProtocol::Sixel
+            ImageProtocol::KittyGraphics | ImageProtocol::ItermInline | ImageProtocol::Sixel
         ) && (self.static_image_overlay_displayed() || self.pdf_overlay_displayed())
         {
-            // Kitty unicode placeholders can reflow on resize, while Sixel can
-            // leave stale framebuffer pixels outside the new bounds in Foot.
+            // Kitty unicode placeholders can reflow on resize, iTerm inline
+            // images can stale against old geometry in WezTerm, and Sixel can
+            // leave framebuffer pixels outside the new bounds in Foot.
             // Force a full-screen clear on the next draw so ratatui repaints
             // the entire alt screen before the image is re-rendered.
             self.preview.terminal_images.pending_resize_clear = true;
@@ -341,7 +342,41 @@ impl App {
             .collect()
     }
 
+    pub(crate) fn should_repaint_iterm_inline_under_modal(&self, modal_rects: &[Rect]) -> bool {
+        let active_static_image = self.active_static_image_overlay_request().is_some()
+            || self
+                .active_preview_visual_overlay_request_unchecked()
+                .is_some();
+        let active_pdf_overlay = self.active_pdf_overlay_requested();
+        self.preview.terminal_images.protocol == ImageProtocol::ItermInline
+            && !modal_rects.is_empty()
+            && self.any_modal_overlay_open()
+            && ((active_static_image
+                && ((!self.displayed_static_image_matches_active()
+                    && !self.keep_displayed_static_image_overlay_while_pending())
+                    || self.preview.terminal_images.pending_iterm_popup_restore))
+                || (active_pdf_overlay && !self.displayed_pdf_overlay_matches_active()))
+    }
+
     pub(crate) fn present_preview_overlay(&mut self) -> Result<Vec<u8>> {
+        self.present_preview_overlay_inner(false)
+    }
+
+    pub(crate) fn present_preview_overlay_behind_modal(&mut self) -> Result<Vec<u8>> {
+        let out = self.present_preview_overlay_inner(true)?;
+        if !out.is_empty()
+            && self.preview.terminal_images.protocol == ImageProtocol::ItermInline
+            && self.any_modal_overlay_open()
+        {
+            self.preview.terminal_images.pending_iterm_popup_restore = true;
+        }
+        Ok(out)
+    }
+
+    fn present_preview_overlay_inner(
+        &mut self,
+        allow_iterm_modal_repaint: bool,
+    ) -> Result<Vec<u8>> {
         if self.browser_wheel_burst_active() || self.preview.state.deferred_refresh_at.is_some() {
             return Ok(Vec::new());
         }
@@ -360,7 +395,7 @@ impl App {
             return Ok(Vec::new());
         }
 
-        if protocol == ImageProtocol::ItermInline && popup_open {
+        if protocol == ImageProtocol::ItermInline && popup_open && !allow_iterm_modal_repaint {
             if self.static_image_overlay_displayed() || self.pdf_overlay_displayed() {
                 self.preview.terminal_images.pending_iterm_popup_restore = true;
             }
@@ -376,7 +411,7 @@ impl App {
             && std::mem::take(&mut self.preview.terminal_images.pending_sixel_repaint);
         let force_iterm_popup_repaint = protocol.is_raster()
             && self.preview.terminal_images.pending_iterm_popup_restore
-            && !popup_open;
+            && (!popup_open || allow_iterm_modal_repaint);
         let force_protocol_repaint = force_iterm_popup_repaint || force_sixel_repaint;
 
         // For Kitty, collect rects occupied by open popups so the image can be

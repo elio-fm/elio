@@ -79,6 +79,58 @@ fn present_pdf_overlay_queues_current_probe_only_once() {
 }
 
 #[test]
+fn iterm_modal_pdf_resize_requeues_render_after_display_state_clear() {
+    let (mut app, root) = build_pdf_overlay_test_app("iterm-modal-resize-render");
+    configure_iterm_image_support(&mut app);
+    let request = app
+        .active_pdf_overlay_request()
+        .expect("PDF overlay request should be available");
+    app.preview.pdf.page_dimensions.insert(
+        PdfPageKey::from_request(&request),
+        PdfPageDimensions {
+            width_pts: 612.0,
+            height_pts: 792.0,
+        },
+    );
+    let placement = app
+        .overlay_placement_for_request(&request)
+        .expect("PDF placement should be available");
+    app.preview.pdf.displayed = Some(DisplayedPdfPreview::from_request(&request, placement));
+    app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
+
+    app.handle_terminal_image_resize();
+    configure_iterm_image_support(&mut app);
+    assert!(
+        app.take_pending_resize_clear(),
+        "iTerm resize should clear stale PDF image geometry before redraw"
+    );
+    assert!(!app.pdf_overlay_displayed());
+
+    let popup = Rect {
+        x: 4,
+        y: 5,
+        width: 24,
+        height: 8,
+    };
+    assert!(app.should_repaint_iterm_inline_under_modal(&[popup]));
+    let out = app
+        .present_preview_overlay_behind_modal()
+        .expect("controlled PDF repaint should not fail");
+
+    assert!(
+        out.is_empty(),
+        "PDF render is not cached yet, so the modal path should queue work"
+    );
+    let render_key = app
+        .active_pdf_render_key()
+        .expect("active PDF render key should be available");
+    assert!(app.preview.pdf.pending_renders.contains(&render_key));
+    assert!(app.jobs.scheduler.has_pending_work());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn process_pdf_preview_timers_releases_selection_activation_once() {
     let (mut app, root) = build_pdf_overlay_test_app("activation-timer");
     app.preview.pdf.activation_ready_at = Some(Instant::now() - Duration::from_millis(1));
