@@ -1,0 +1,178 @@
+[palette]
+bg = "none"
+chrome = "none"
+chrome_alt = "none"
+chip_text = "ansi-black"
+panel = "none"
+panel_alt = "none"
+surface = "none"
+elevated = "none"
+button_bg = "none"
+button_disabled_bg = "none"
+sidebar_active = "none"
+accent_soft = "none"
+path_bg = "none"
+
+border = "ansi-bright-black"
+text = "ansi-white"
+muted = "ansi-bright-black"
+accent = "ansi-blue"
+accent_text = "ansi-bright-white"
+selected_bg = "#243758"
+selected_border = "ansi-blue"
+selection_bar = "ansi-yellow"
+yank_bar = "ansi-green"
+cut_bar = "ansi-red"
+grid_selection_band = "ansi-yellow"
+grid_yank_band = "ansi-green"
+grid_cut_band = "ansi-red"
+trash_bar = "ansi-red"
+restore_bar = "ansi-blue"
+
+[preview.code]
+fg = "ansi-white"
+bg = "none"
+selection_bg = "ansi-blue"
+selection_fg = "ansi-bright-white"
+caret = "ansi-cyan"
+line_highlight = "none"
+line_number = "ansi-bright-black"
+comment = "ansi-bright-black"
+string = "ansi-green"
+constant = "ansi-yellow"
+keyword = "ansi-blue"
+function = "ansi-cyan"
+type = "ansi-magenta"
+parameter = "ansi-yellow"
+tag = "ansi-green"
+operator = "ansi-cyan"
+macro = "ansi-red"
+invalid = "ansi-red"
+
+[classes.directory]
+color = "ansi-blue"
+
+[classes.code]
+color = "ansi-cyan"
+
+[classes.config]
+color = "ansi-magenta"
+
+[classes.document]
+color = "ansi-green"
+
+[classes.license]
+color = "ansi-yellow"
+
+[classes.image]
+color = "ansi-cyan"
+
+[classes.audio]
+color = "ansi-yellow"
+
+[classes.video]
+color = "ansi-magenta"
+
+[classes.archive]
+color = "ansi-red"
+
+[classes.font]
+color = "ansi-magenta"
+
+[classes.data]
+color = "ansi-green"
+
+[classes.file]
+color = "ansi-white"
+
+[directories."node_modules"]
+icon = "󰏗"
+color = "ansi-blue"
+
+[directories."tests"]
+icon = "󰉋"
+color = "ansi-blue"
+
+[directories."test"]
+icon = "󰉋"
+color = "ansi-blue"
+
+[directories."__tests__"]
+icon = "󰉋"
+color = "ansi-blue"
+
+[directories."scripts"]
+icon = "󰉋"
+color = "ansi-blue"
+
+[directories."build"]
+icon = "󰉋"
+color = "ansi-blue"
+
+[directories."dist"]
+icon = "󰉋"
+color = "ansi-blue"
+
+[directories.".next"]
+icon = ""
+color = "ansi-blue"
+
+[directories.".nuxt"]
+icon = "󱄆"
+color = "ansi-blue"
+
+[directories.".svelte-kit"]
+icon = ""
+color = "ansi-blue"
+
+[directories.".astro"]
+icon = ""
+color = "ansi-blue"
+
+[directories."assets"]
+icon = "󰉏"
+color = "ansi-blue"
+
+[directories."coverage"]
+icon = "󰙨"
+color = "ansi-blue"
+
+[directories."tmp"]
+icon = "󰪺"
+color = "ansi-blue"
+
+[directories."temp"]
+icon = "󰪺"
+color = "ansi-blue"
+
+[directories."out"]
+icon = "󰉋"
+color = "ansi-blue"
+
+[directories."target"]
+icon = "󱧽"
+color = "ansi-blue"
+
+[directories."bin"]
+icon = "󱁿"
+color = "ansi-blue"
+
+[directories."lib"]
+icon = "󰉋"
+color = "ansi-blue"
+
+[directories."vendor"]
+icon = "󰉋"
+color = "ansi-blue"
+
+[directories."src"]
+icon = "󰉋"
+color = "ansi-blue"
+
+[directories."config"]
+icon = "󰒓"
+color = "ansi-blue"
+
+[directories."docs"]
+icon = "󱧷"
+color = "ansi-blue"

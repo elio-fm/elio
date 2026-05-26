@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a `terminal-ansi` theme example and support for terminal ANSI colors in `theme.toml`. ([#84])
 - Added `--cwd-file` and installable bash, zsh, and fish shell integration for changing the parent shell directory to elio's final directory on quit, including quit-without-cd, current-shell detection, zsh `ZDOTDIR` support, symlink-aware config updates, and a matching uninstall command. ([#69])
 
 ### Changed
@@ -173,6 +174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
 [#86]: https://github.com/elio-fm/elio/issues/86
+[#84]: https://github.com/elio-fm/elio/issues/84
 [#79]: https://github.com/elio-fm/elio/issues/79
 [#77]: https://github.com/elio-fm/elio/pull/77
 [#75]: https://github.com/elio-fm/elio/issues/75

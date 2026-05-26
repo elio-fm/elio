@@ -377,7 +377,15 @@ Rules:
 
 **Built-in file classes:** `directory` · `symlink_directory` · `broken_symlink` · `code` · `config` · `document` · `license` · `image` · `audio` · `video` · `archive` · `font` · `data` · `file`
 
-Any color value also accepts `"none"` (alias: `"transparent"`) to reset that foreground or background to the terminal default. For background fields, this lets transparent terminals show through. See [`examples/themes/transparent/theme.toml`](examples/themes/transparent/theme.toml).
+Color values can be:
+
+- Hex RGB colors, such as `"#7aaeff"`.
+- `"none"` / `"transparent"` to reset that foreground or background to the terminal default. For background fields, this lets transparent terminals show through.
+- Terminal ANSI palette colors, such as `"ansi-blue"`, `"ansi-bright-blue"`, or `"indexed-12"`.
+
+Use `indexed-N` for terminal indexed colors from `0` to `255`.
+
+The `terminal-ansi` example uses ANSI colors and terminal-default backgrounds, while keeping the default RGB `selected_bg` for more reliable selection contrast. See [`examples/themes/transparent/theme.toml`](examples/themes/transparent/theme.toml) and [`examples/themes/terminal-ansi/theme.toml`](examples/themes/terminal-ansi/theme.toml).
 
 See [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml) for the full default theme.
 

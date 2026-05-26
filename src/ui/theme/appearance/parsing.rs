@@ -319,9 +319,29 @@ pub(super) fn parse_class_name(name: &str) -> Option<FileClass> {
 
 pub(super) fn parse_color(value: &str) -> anyhow::Result<Color> {
     let trimmed = value.trim();
-    match trimmed.to_ascii_lowercase().as_str() {
+    let normalized = trimmed.to_ascii_lowercase();
+    match normalized.as_str() {
         "none" | "transparent" => return Ok(Color::Reset),
+        "ansi-black" => return Ok(Color::Black),
+        "ansi-red" => return Ok(Color::Red),
+        "ansi-green" => return Ok(Color::Green),
+        "ansi-yellow" => return Ok(Color::Yellow),
+        "ansi-blue" => return Ok(Color::Blue),
+        "ansi-magenta" => return Ok(Color::Magenta),
+        "ansi-cyan" => return Ok(Color::Cyan),
+        "ansi-white" => return Ok(Color::Gray),
+        "ansi-bright-black" => return Ok(Color::DarkGray),
+        "ansi-bright-red" => return Ok(Color::LightRed),
+        "ansi-bright-green" => return Ok(Color::LightGreen),
+        "ansi-bright-yellow" => return Ok(Color::LightYellow),
+        "ansi-bright-blue" => return Ok(Color::LightBlue),
+        "ansi-bright-magenta" => return Ok(Color::LightMagenta),
+        "ansi-bright-cyan" => return Ok(Color::LightCyan),
+        "ansi-bright-white" => return Ok(Color::White),
         _ => {}
+    }
+    if let Some(index) = normalized.strip_prefix("indexed-") {
+        return Ok(Color::Indexed(index.parse()?));
     }
 
     let hex = trimmed.trim_start_matches('#');

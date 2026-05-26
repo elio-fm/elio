@@ -9,6 +9,7 @@ const ALTERNATE_EXAMPLE_THEME_NAMES: &[&str] = &[
     "tokyo-night",
     "navi",
     "neon-cherry",
+    "terminal-ansi",
     "transparent",
 ];
 
@@ -49,6 +50,7 @@ fn alternate_example_theme_config(name: &str) -> &'static str {
         "tokyo-night" => include_str!("../../../../../examples/themes/tokyo-night/theme.toml"),
         "navi" => include_str!("../../../../../examples/themes/navi/theme.toml"),
         "neon-cherry" => include_str!("../../../../../examples/themes/neon-cherry/theme.toml"),
+        "terminal-ansi" => include_str!("../../../../../examples/themes/terminal-ansi/theme.toml"),
         "transparent" => include_str!("../../../../../examples/themes/transparent/theme.toml"),
         _ => panic!("unknown alternate example theme fixture: {name}"),
     }

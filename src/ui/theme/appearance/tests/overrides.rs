@@ -1,4 +1,4 @@
-use super::super::{loading::load_theme_from_disk, rules::rgb};
+use super::super::{loading::load_theme_from_disk, parsing::parse_color, rules::rgb};
 use super::*;
 use ratatui::style::Color;
 use std::{
@@ -265,6 +265,58 @@ bg = "none"
     let default_theme = Theme::default_theme();
     assert_eq!(theme.palette.chrome_alt, default_theme.palette.chrome_alt);
     assert_eq!(theme.palette.text, default_theme.palette.text);
+}
+
+#[test]
+fn parse_color_accepts_all_terminal_ansi_names() {
+    for (name, expected) in [
+        ("ansi-black", Color::Black),
+        ("ansi-red", Color::Red),
+        ("ansi-green", Color::Green),
+        ("ansi-yellow", Color::Yellow),
+        ("ansi-blue", Color::Blue),
+        ("ansi-magenta", Color::Magenta),
+        ("ansi-cyan", Color::Cyan),
+        ("ansi-white", Color::Gray),
+        ("ansi-bright-black", Color::DarkGray),
+        ("ansi-bright-red", Color::LightRed),
+        ("ansi-bright-green", Color::LightGreen),
+        ("ansi-bright-yellow", Color::LightYellow),
+        ("ansi-bright-blue", Color::LightBlue),
+        ("ansi-bright-magenta", Color::LightMagenta),
+        ("ansi-bright-cyan", Color::LightCyan),
+        ("ansi-bright-white", Color::White),
+    ] {
+        assert_eq!(parse_color(name).unwrap(), expected);
+    }
+}
+
+#[test]
+fn palette_accepts_terminal_ansi_colors() {
+    let theme = Theme::from_config_str(
+        r##"
+[palette]
+bg = "none"
+text = "ansi-white"
+muted = "  ANSI-BRIGHT-BLACK  "
+accent = "indexed-12"
+accent_text = "ansi-bright-white"
+
+[classes.code]
+color = "ansi-cyan"
+"##,
+    )
+    .expect("theme should parse");
+
+    assert_eq!(theme.palette.bg, Color::Reset);
+    assert_eq!(theme.palette.text, Color::Gray);
+    assert_eq!(theme.palette.muted, Color::DarkGray);
+    assert_eq!(theme.palette.accent, Color::Indexed(12));
+    assert_eq!(theme.palette.accent_text, Color::White);
+    assert_eq!(
+        theme.classes.get(&FileClass::Code).unwrap().color,
+        Color::Cyan
+    );
 }
 
 #[test]
