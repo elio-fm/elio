@@ -50,6 +50,7 @@ impl ShellIntegrationAction {
         }
     }
 
+    #[cfg(any(unix, test))]
     fn active_shell_description(self) -> &'static str {
         match self {
             Self::Install => "installs integration for",
@@ -60,7 +61,9 @@ impl ShellIntegrationAction {
 
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum ShellDetection {
+    #[cfg(any(unix, test))]
     Supported(Shell),
+    #[cfg(any(unix, test))]
     Unsupported(String),
     Unknown,
 }
@@ -81,7 +84,9 @@ pub(crate) struct UninstallReport {
 
 pub(crate) fn detect_shell(action: ShellIntegrationAction) -> Result<Shell> {
     match detect_parent_shell() {
+        #[cfg(any(unix, test))]
         ShellDetection::Supported(shell) => Ok(shell),
+        #[cfg(any(unix, test))]
         ShellDetection::Unsupported(shell) => Err(anyhow::anyhow!(
             unsupported_active_shell_message(action, &shell)
         )),
@@ -128,6 +133,7 @@ fn detect_parent_shell() -> ShellDetection {
     ShellDetection::Unknown
 }
 
+#[cfg(any(unix, test))]
 fn detect_shell_from_command(command: &str) -> ShellDetection {
     let Some(name) = shell_name_from_command(command) else {
         return ShellDetection::Unknown;
@@ -140,6 +146,7 @@ fn detect_shell_from_command(command: &str) -> ShellDetection {
     }
 }
 
+#[cfg(any(unix, test))]
 fn is_known_unsupported_shell(name: &str) -> bool {
     matches!(
         name,
@@ -163,6 +170,7 @@ fn is_known_unsupported_shell(name: &str) -> bool {
     )
 }
 
+#[cfg(any(unix, test))]
 fn unsupported_active_shell_message(action: ShellIntegrationAction, shell: &str) -> String {
     format!(
         "error: unsupported active shell '{shell}'\n\n`elio shell {}` {} the active shell.\nsupported shells: bash, zsh, fish\n\n{}",

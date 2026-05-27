@@ -1,7 +1,9 @@
+#[cfg(unix)]
+use super::resolve_write_path;
 use super::{
     MANAGED_END, MANAGED_START, Shell, ShellDetection, binary_command, detect_shell_from_command,
-    init_script, managed_script, remove_managed_blocks, resolve_write_path,
-    shell_name_from_command, uninstall_reload_command, upsert_managed_block, write_text_atomic,
+    init_script, managed_script, remove_managed_blocks, shell_name_from_command,
+    uninstall_reload_command, upsert_managed_block, write_text_atomic,
 };
 use std::{
     fs,
