@@ -232,11 +232,9 @@ fn parse_unrar_bare_listing(output: &str) -> Vec<ArchiveEntry> {
 #[cfg(test)]
 mod tests {
     use super::{parse_7z_listing, parse_unrar_bare_listing, run_archive_listing_command};
-    use std::{
-        fs,
-        path::PathBuf,
-        time::{Duration, Instant},
-    };
+    #[cfg(unix)]
+    use std::time::{Duration, Instant};
+    use std::{fs, path::PathBuf};
 
     #[test]
     fn parse_7z_listing_collects_external_fallback_metadata_and_entries() {
