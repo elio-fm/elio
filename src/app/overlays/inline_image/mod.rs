@@ -208,7 +208,10 @@ impl App {
 
     pub(in crate::app) fn needs_sixel_repaint_workaround(&self) -> bool {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
-            && self.preview.terminal_images.identity == TerminalIdentity::Foot
+            && matches!(
+                self.preview.terminal_images.identity,
+                TerminalIdentity::Foot | TerminalIdentity::WindowsTerminal
+            )
     }
 
     pub(in crate::app) fn needs_slow_sixel_navigation_workaround(&self) -> bool {
@@ -371,7 +374,7 @@ impl App {
                 || (active_pdf_overlay && !self.displayed_pdf_overlay_matches_active()))
     }
 
-    pub(crate) fn should_repaint_foot_sixel_under_modal(&self, modal_rects: &[Rect]) -> bool {
+    pub(crate) fn should_repaint_sixel_under_modal(&self, modal_rects: &[Rect]) -> bool {
         let active_static_image = self.active_static_image_overlay_request().is_some()
             || self
                 .active_preview_visual_overlay_request_unchecked()
@@ -589,7 +592,7 @@ impl App {
         Ok(bytes)
     }
 
-    pub(crate) fn foot_sixel_modal_collision_erase(
+    pub(crate) fn sixel_modal_collision_erase(
         &mut self,
         modal_rects: &[Rect],
     ) -> (Vec<Rect>, Vec<u8>) {

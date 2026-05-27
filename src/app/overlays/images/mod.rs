@@ -917,7 +917,7 @@ mod tests {
             "Foot Sixel should avoid fragile transparent-cell post-draw masking"
         );
 
-        let (collisions, erase) = app.foot_sixel_modal_collision_erase(&[popup]);
+        let (collisions, erase) = app.sixel_modal_collision_erase(&[popup]);
         assert_eq!(collisions, vec![popup]);
         assert!(
             !erase.is_empty(),
@@ -953,6 +953,77 @@ mod tests {
         assert!(
             !restored.is_empty(),
             "closing the popup should repaint the erased Foot Sixel collision"
+        );
+        assert!(app.static_image_overlay_displayed());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn windows_terminal_sixel_popup_erases_collision_and_repaints_after_close() {
+        let (mut app, root, _image_path) =
+            build_selected_static_image_app("wt-sixel-popup-collision", "demo.png");
+        let request = ready_static_image_overlay(&mut app);
+        app.set_terminal_image_protocol_for_tests(
+            ImageProtocol::Sixel,
+            TerminalIdentity::WindowsTerminal,
+        );
+        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+            &request,
+            request.area,
+            request.area,
+        ));
+        assert!(app.static_image_overlay_displayed());
+
+        app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
+        let popup = Rect {
+            x: request.area.x.saturating_add(1),
+            y: request.area.y.saturating_add(1),
+            width: request.area.width.saturating_sub(2).max(1),
+            height: request.area.height.saturating_sub(2).max(1),
+        };
+        let mask = app.modal_image_post_draw_erase(&[popup], &blank_frame_buffer());
+        assert!(
+            mask.is_empty(),
+            "Windows Terminal Sixel should avoid fragile transparent-cell post-draw masking"
+        );
+
+        let (collisions, erase) = app.sixel_modal_collision_erase(&[popup]);
+        assert_eq!(collisions, vec![popup]);
+        assert!(
+            !erase.is_empty(),
+            "Windows Terminal Sixel should erase the popup/image collision like Yazi's Clear widget"
+        );
+        assert!(
+            app.static_image_overlay_displayed(),
+            "the image remains logically displayed so only the popup intersection is punched out"
+        );
+        assert!(
+            app.present_preview_overlay()
+                .expect("Windows Terminal Sixel popup redraw should not fail")
+                .is_empty(),
+            "Windows Terminal Sixel should not repaint image bytes over an open popup"
+        );
+
+        app.overlays.open_with = None;
+        app.input.frame_state.open_with_panel = None;
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut restored = Vec::new();
+        while Instant::now() < deadline {
+            let _ = app.process_background_jobs();
+            let _ = app.process_image_preview_timers();
+            restored = app
+                .present_preview_overlay()
+                .expect("closing the popup should repaint the Sixel image");
+            if !restored.is_empty() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            !restored.is_empty(),
+            "closing the popup should repaint the erased Windows Terminal Sixel collision"
         );
         assert!(app.static_image_overlay_displayed());
 
@@ -1020,7 +1091,7 @@ mod tests {
             "resize clear removes stale Sixel geometry before redraw"
         );
         assert!(
-            app.should_repaint_foot_sixel_under_modal(&[popup]),
+            app.should_repaint_sixel_under_modal(&[popup]),
             "Foot Sixel should repaint the resized image behind an open popup"
         );
 
@@ -1043,7 +1114,7 @@ mod tests {
         );
         assert!(app.static_image_overlay_displayed());
 
-        let (collisions, erase) = app.foot_sixel_modal_collision_erase(&[popup]);
+        let (collisions, erase) = app.sixel_modal_collision_erase(&[popup]);
         assert_eq!(collisions, vec![popup]);
         assert!(
             !erase.is_empty(),

@@ -589,11 +589,11 @@ fn draw_terminal_frame(
                     true,
                 )
             } else if !app.browser_wheel_burst_active()
-                && app.should_repaint_foot_sixel_under_modal(&modal_rects)
+                && app.should_repaint_sixel_under_modal(&modal_rects)
             {
                 let image_behind_modal = app.present_preview_overlay_behind_modal()?;
                 let (sixel_collision_rects, sixel_collision_erase) =
-                    app.foot_sixel_modal_collision_erase(&modal_rects);
+                    app.sixel_modal_collision_erase(&modal_rects);
                 let popup_restore = collect_buffer_cells(&sixel_collision_rects, completed.buffer);
                 let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
                 (
@@ -606,7 +606,7 @@ fn draw_terminal_frame(
                 )
             } else {
                 let (sixel_collision_rects, sixel_collision_erase) =
-                    app.foot_sixel_modal_collision_erase(&modal_rects);
+                    app.sixel_modal_collision_erase(&modal_rects);
                 let popup_restore = collect_buffer_cells(&sixel_collision_rects, completed.buffer);
                 let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
                 (
