@@ -49,7 +49,7 @@ pub(crate) fn loading_preview_for(
             .with_detail("Broken symlink");
     }
     if entry.is_dir() {
-        return PreviewContent::new(PreviewKind::Directory, Vec::new()).with_detail("Loading");
+        return PreviewContent::new(PreviewKind::Directory, Vec::new());
     }
     let facts = file_info::inspect_entry_cached(entry);
     let detail = facts

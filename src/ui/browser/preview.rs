@@ -118,23 +118,20 @@ fn render_preview_body(
     state.preview_rows_visible = visible_rows;
     state.preview_cols_visible = text_area.width as usize;
     let section_label = app.preview_section_label();
-    let header_detail_width = sections[0]
-        .width
-        .saturating_sub(section_label.len() as u16 + 2) as usize;
+    let header_width = sections[0].width as usize;
+    let show_section_label = section_label != "Contents";
+    let header_detail_width = if show_section_label {
+        header_width.saturating_sub(helpers::display_width(section_label) + 2)
+    } else {
+        header_width
+    };
     let header_detail = app
         .preview_header_detail_for_width(visible_rows, header_detail_width)
         .as_deref()
-        .map(|detail| {
-            if header_detail_width == 0 {
-                String::new()
-            } else {
-                helpers::clamp_label(detail, header_detail_width)
-            }
-        })
+        .map(|detail| helpers::clamp_label(detail, header_detail_width))
         .unwrap_or_default();
-
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
+    let header_line = if show_section_label {
+        Line::from(vec![
             Span::styled(
                 section_label.to_string(),
                 Style::default()
@@ -143,8 +140,16 @@ fn render_preview_body(
             ),
             Span::styled("  ", Style::default().fg(palette.muted)),
             Span::styled(header_detail, Style::default().fg(palette.muted)),
-        ]))
-        .style(Style::default().bg(palette.panel).fg(palette.text)),
+        ])
+    } else {
+        Line::from(Span::styled(
+            header_detail,
+            Style::default().fg(palette.muted),
+        ))
+    };
+
+    frame.render_widget(
+        Paragraph::new(header_line).style(Style::default().bg(palette.panel).fg(palette.text)),
         sections[0],
     );
 

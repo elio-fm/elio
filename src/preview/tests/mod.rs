@@ -55,6 +55,18 @@ fn truncated_directory_preview_omits_sampled_header_count() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
+#[test]
+fn directory_loading_preview_stays_silent() {
+    let preview = loading_preview_for(
+        &directory_entry(temp_path("directory-loading-preview")),
+        &PreviewRequestOptions::Default,
+    );
+
+    assert_eq!(preview.kind, PreviewKind::Directory);
+    assert_eq!(preview.detail, None);
+    assert!(preview.lines.is_empty());
+}
+
 #[cfg(unix)]
 #[test]
 fn directory_preview_marks_symlink_children_and_targets() {

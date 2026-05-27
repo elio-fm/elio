@@ -1358,6 +1358,37 @@ fn preview_header_detail_uses_compact_labels_before_final_clamp() {
 }
 
 #[test]
+fn directory_preview_header_drops_contents_label_before_item_count() {
+    let root = temp_path("directory-preview-header-tight");
+    let folder = root.join("folder");
+    fs::create_dir_all(&folder).expect("failed to create folder");
+    for index in 0..27 {
+        fs::write(folder.join(format!("child-{index}.txt")), "x")
+            .expect("failed to write child file");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    let mut narrow = Terminal::new(TestBackend::new(60, 24)).expect("terminal should init");
+    wait_for_background_preview(&mut app);
+
+    let state = draw_ui(&mut narrow, &mut app);
+    let preview_panel = state
+        .preview_panel
+        .expect("preview panel should be rendered");
+    let narrow_header = row_text(narrow.backend().buffer(), preview_panel.y + 1);
+    assert!(
+        narrow_header.contains("27 items"),
+        "expected tight directory header to keep the item count, got: {narrow_header:?}"
+    );
+    assert!(
+        !narrow_header.contains("Contents"),
+        "expected tight directory header to drop the less useful section label, got: {narrow_header:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn visible_directory_rows_show_cached_item_counts() {
     let root = temp_path("directory-counts");
     let photos = root.join("photos");

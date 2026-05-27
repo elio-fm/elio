@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Simplified directory preview headers by hiding the `Contents` label. ([#125])
 - Updated the transparent theme example to make popups and path surfaces fully transparent, and removed comments from example themes.
 
 ### Fixed
@@ -188,3 +189,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#111]: https://github.com/elio-fm/elio/issues/111
 [#112]: https://github.com/elio-fm/elio/issues/112
 [#121]: https://github.com/elio-fm/elio/issues/121
+[#125]: https://github.com/elio-fm/elio/issues/125
