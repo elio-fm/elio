@@ -454,7 +454,7 @@ fn run_app(
                     terminal_focused = false;
                 } else if matches!(event, Event::FocusGained) {
                     terminal_focused = true;
-                    app.handle_terminal_image_resize();
+                    app.handle_terminal_image_focus_gained();
                     dirty = true;
                 } else if matches!(event, Event::Resize(_, _)) {
                     app.handle_terminal_image_resize();
@@ -549,6 +549,7 @@ fn draw_terminal_frame(
         if app.take_pending_resize_clear() {
             terminal.clear()?;
         }
+
         // Erase stale image cells before terminal.draw() so ratatui can
         // overpaint them with the correct panel background in the same pass.
         // - iTerm2: images are drawn at pixel level; erasing prevents ghost pixels.
@@ -562,7 +563,14 @@ fn draw_terminal_frame(
             terminal.backend_mut().write_all(&kitty_erase)?;
         }
         let mut frame_state = app::FrameState::default();
-        let (dirty, image_behind_modal, popup_restore, modal_erase, skip_overlay_present) = {
+        let (
+            dirty,
+            image_behind_modal,
+            sixel_collision_erase,
+            popup_restore,
+            modal_erase,
+            skip_overlay_present,
+        ) = {
             let completed = terminal.draw(|frame| ui::render(frame, app, &mut frame_state))?;
             let dirty = app.set_frame_state(frame_state);
             let modal_rects = app.collect_popup_rects();
@@ -572,13 +580,47 @@ fn draw_terminal_frame(
                 let image_behind_modal = app.present_preview_overlay_behind_modal()?;
                 let popup_restore = collect_buffer_cells(&modal_rects, completed.buffer);
                 let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
-                (dirty, image_behind_modal, popup_restore, modal_erase, true)
-            } else {
+                (
+                    dirty,
+                    image_behind_modal,
+                    Vec::new(),
+                    popup_restore,
+                    modal_erase,
+                    true,
+                )
+            } else if !app.browser_wheel_burst_active()
+                && app.should_repaint_sixel_under_modal(&modal_rects)
+            {
+                let image_behind_modal = app.present_preview_overlay_behind_modal()?;
+                let (sixel_collision_rects, sixel_collision_erase) =
+                    app.sixel_modal_collision_erase(&modal_rects);
+                let popup_restore = collect_buffer_cells(&sixel_collision_rects, completed.buffer);
                 let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
-                (dirty, Vec::new(), Vec::new(), modal_erase, false)
+                (
+                    dirty,
+                    image_behind_modal,
+                    sixel_collision_erase,
+                    popup_restore,
+                    modal_erase,
+                    true,
+                )
+            } else {
+                let (sixel_collision_rects, sixel_collision_erase) =
+                    app.sixel_modal_collision_erase(&modal_rects);
+                let popup_restore = collect_buffer_cells(&sixel_collision_rects, completed.buffer);
+                let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
+                (
+                    dirty,
+                    Vec::new(),
+                    sixel_collision_erase,
+                    popup_restore,
+                    modal_erase,
+                    false,
+                )
             }
         };
         write_bytes_preserving_cursor(terminal.backend_mut(), &image_behind_modal)?;
+        write_bytes_preserving_cursor(terminal.backend_mut(), &sixel_collision_erase)?;
         draw_cells_preserving_cursor(terminal.backend_mut(), &popup_restore)?;
         write_bytes_preserving_cursor(terminal.backend_mut(), &modal_erase)?;
         if !skip_overlay_present && !app.browser_wheel_burst_active() {

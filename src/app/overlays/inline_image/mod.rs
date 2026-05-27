@@ -151,6 +151,20 @@ impl App {
 
     pub(crate) fn handle_terminal_image_resize(&mut self) {
         self.refresh_terminal_image_window_size();
+        self.queue_terminal_image_resize_clear();
+        self.handle_pdf_overlay_resize();
+    }
+
+    pub(crate) fn handle_terminal_image_focus_gained(&mut self) {
+        let previous_window = self.preview.terminal_images.window;
+        self.refresh_terminal_image_window_size();
+        if self.preview.terminal_images.window != previous_window {
+            self.queue_terminal_image_resize_clear();
+            self.handle_pdf_overlay_resize();
+        }
+    }
+
+    fn queue_terminal_image_resize_clear(&mut self) {
         if matches!(
             self.preview.terminal_images.protocol,
             ImageProtocol::KittyGraphics | ImageProtocol::ItermInline | ImageProtocol::Sixel
@@ -163,7 +177,6 @@ impl App {
             // the entire alt screen before the image is re-rendered.
             self.preview.terminal_images.pending_resize_clear = true;
         }
-        self.handle_pdf_overlay_resize();
     }
 
     pub(crate) fn take_pending_resize_clear(&mut self) -> bool {
@@ -195,7 +208,10 @@ impl App {
 
     pub(in crate::app) fn needs_sixel_repaint_workaround(&self) -> bool {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
-            && self.preview.terminal_images.identity == TerminalIdentity::Foot
+            && matches!(
+                self.preview.terminal_images.identity,
+                TerminalIdentity::Foot | TerminalIdentity::WindowsTerminal
+            )
     }
 
     pub(in crate::app) fn needs_slow_sixel_navigation_workaround(&self) -> bool {
@@ -358,6 +374,21 @@ impl App {
                 || (active_pdf_overlay && !self.displayed_pdf_overlay_matches_active()))
     }
 
+    pub(crate) fn should_repaint_sixel_under_modal(&self, modal_rects: &[Rect]) -> bool {
+        let active_static_image = self.active_static_image_overlay_request().is_some()
+            || self
+                .active_preview_visual_overlay_request_unchecked()
+                .is_some();
+        let active_pdf_overlay = self.active_pdf_overlay_requested();
+        self.needs_sixel_repaint_workaround()
+            && !modal_rects.is_empty()
+            && self.any_modal_overlay_open()
+            && ((active_static_image
+                && !self.displayed_static_image_matches_active()
+                && !self.keep_displayed_static_image_overlay_while_pending())
+                || (active_pdf_overlay && !self.displayed_pdf_overlay_matches_active()))
+    }
+
     pub(crate) fn present_preview_overlay(&mut self) -> Result<Vec<u8>> {
         self.present_preview_overlay_inner(false)
     }
@@ -399,6 +430,9 @@ impl App {
             if self.static_image_overlay_displayed() || self.pdf_overlay_displayed() {
                 self.preview.terminal_images.pending_iterm_popup_restore = true;
             }
+            return Ok(Vec::new());
+        }
+        if self.needs_sixel_repaint_workaround() && popup_open && !allow_iterm_modal_repaint {
             return Ok(Vec::new());
         }
         if protocol == ImageProtocol::Sixel
@@ -556,6 +590,43 @@ impl App {
         self.clear_displayed_static_image();
         self.clear_displayed_pdf_overlay();
         Ok(bytes)
+    }
+
+    pub(crate) fn sixel_modal_collision_erase(
+        &mut self,
+        modal_rects: &[Rect],
+    ) -> (Vec<Rect>, Vec<u8>) {
+        if !self.needs_sixel_repaint_workaround() || modal_rects.is_empty() {
+            return (Vec::new(), Vec::new());
+        }
+
+        let image_rects = [
+            self.displayed_static_image_clear_area(),
+            self.displayed_pdf_overlay_area(),
+        ];
+        if image_rects.iter().all(Option::is_none) {
+            return (Vec::new(), Vec::new());
+        }
+
+        let mut collisions = Vec::new();
+        for popup in modal_rects {
+            for image in image_rects.iter().flatten() {
+                if let Some(collision) = geometry::intersect_rect(*popup, *image) {
+                    geometry::push_unique_rect(&mut collisions, collision);
+                }
+            }
+        }
+        if collisions.is_empty() {
+            return (Vec::new(), Vec::new());
+        }
+
+        self.preview.terminal_images.pending_sixel_repaint = true;
+        let erase = collisions
+            .iter()
+            .copied()
+            .flat_map(iterm::erase_cells)
+            .collect();
+        (collisions, erase)
     }
 
     pub(crate) fn queue_forced_iterm_preview_erase(&mut self) {

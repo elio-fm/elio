@@ -121,7 +121,8 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::overlays::inline_image::{
-        ImageProtocol, OverlayPresentState, RenderedImageDimensions, TerminalWindowSize,
+        ImageProtocol, OverlayPresentState, RenderedImageDimensions, TerminalIdentity,
+        TerminalWindowSize,
     };
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use ratatui::{buffer::Buffer, layout::Rect};
@@ -886,6 +887,245 @@ mod tests {
             "closing the popup should repaint the masked Sixel image"
         );
         assert!(app.static_image_overlay_displayed());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn foot_sixel_popup_erases_collision_and_repaints_after_close() {
+        let (mut app, root, _image_path) =
+            build_selected_static_image_app("foot-sixel-popup-collision", "demo.png");
+        let request = ready_static_image_overlay(&mut app);
+        app.set_terminal_image_protocol_for_tests(ImageProtocol::Sixel, TerminalIdentity::Foot);
+        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+            &request,
+            request.area,
+            request.area,
+        ));
+        assert!(app.static_image_overlay_displayed());
+
+        app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
+        let popup = Rect {
+            x: request.area.x.saturating_add(1),
+            y: request.area.y.saturating_add(1),
+            width: request.area.width.saturating_sub(2).max(1),
+            height: request.area.height.saturating_sub(2).max(1),
+        };
+        let mask = app.modal_image_post_draw_erase(&[popup], &blank_frame_buffer());
+        assert!(
+            mask.is_empty(),
+            "Foot Sixel should avoid fragile transparent-cell post-draw masking"
+        );
+
+        let (collisions, erase) = app.sixel_modal_collision_erase(&[popup]);
+        assert_eq!(collisions, vec![popup]);
+        assert!(
+            !erase.is_empty(),
+            "Foot Sixel should erase the popup/image collision like Yazi's Clear widget"
+        );
+        assert!(
+            app.static_image_overlay_displayed(),
+            "the image remains logically displayed so only the popup intersection is punched out"
+        );
+        assert!(
+            app.present_preview_overlay()
+                .expect("Sixel popup redraw should not fail")
+                .is_empty(),
+            "Foot Sixel should not repaint image bytes over an open popup"
+        );
+
+        app.overlays.open_with = None;
+        app.input.frame_state.open_with_panel = None;
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut restored = Vec::new();
+        while Instant::now() < deadline {
+            let _ = app.process_background_jobs();
+            let _ = app.process_image_preview_timers();
+            restored = app
+                .present_preview_overlay()
+                .expect("closing the popup should repaint the Sixel image");
+            if !restored.is_empty() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            !restored.is_empty(),
+            "closing the popup should repaint the erased Foot Sixel collision"
+        );
+        assert!(app.static_image_overlay_displayed());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn windows_terminal_sixel_popup_erases_collision_and_repaints_after_close() {
+        let (mut app, root, _image_path) =
+            build_selected_static_image_app("wt-sixel-popup-collision", "demo.png");
+        let request = ready_static_image_overlay(&mut app);
+        app.set_terminal_image_protocol_for_tests(
+            ImageProtocol::Sixel,
+            TerminalIdentity::WindowsTerminal,
+        );
+        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+            &request,
+            request.area,
+            request.area,
+        ));
+        assert!(app.static_image_overlay_displayed());
+
+        app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
+        let popup = Rect {
+            x: request.area.x.saturating_add(1),
+            y: request.area.y.saturating_add(1),
+            width: request.area.width.saturating_sub(2).max(1),
+            height: request.area.height.saturating_sub(2).max(1),
+        };
+        let mask = app.modal_image_post_draw_erase(&[popup], &blank_frame_buffer());
+        assert!(
+            mask.is_empty(),
+            "Windows Terminal Sixel should avoid fragile transparent-cell post-draw masking"
+        );
+
+        let (collisions, erase) = app.sixel_modal_collision_erase(&[popup]);
+        assert_eq!(collisions, vec![popup]);
+        assert!(
+            !erase.is_empty(),
+            "Windows Terminal Sixel should erase the popup/image collision like Yazi's Clear widget"
+        );
+        assert!(
+            app.static_image_overlay_displayed(),
+            "the image remains logically displayed so only the popup intersection is punched out"
+        );
+        assert!(
+            app.present_preview_overlay()
+                .expect("Windows Terminal Sixel popup redraw should not fail")
+                .is_empty(),
+            "Windows Terminal Sixel should not repaint image bytes over an open popup"
+        );
+
+        app.overlays.open_with = None;
+        app.input.frame_state.open_with_panel = None;
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut restored = Vec::new();
+        while Instant::now() < deadline {
+            let _ = app.process_background_jobs();
+            let _ = app.process_image_preview_timers();
+            restored = app
+                .present_preview_overlay()
+                .expect("closing the popup should repaint the Sixel image");
+            if !restored.is_empty() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            !restored.is_empty(),
+            "closing the popup should repaint the erased Windows Terminal Sixel collision"
+        );
+        assert!(app.static_image_overlay_displayed());
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn foot_sixel_focus_gain_with_popup_does_not_clear_displayed_image_without_resize() {
+        let (mut app, root, _image_path) =
+            build_selected_static_image_app("foot-sixel-focus-popup", "demo.png");
+        let request = ready_static_image_overlay(&mut app);
+        app.set_terminal_image_protocol_for_tests(ImageProtocol::Sixel, TerminalIdentity::Foot);
+        app.handle_terminal_image_focus_gained();
+        assert!(!app.take_pending_resize_clear());
+
+        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+            &request,
+            request.area,
+            request.area,
+        ));
+        app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
+
+        app.handle_terminal_image_focus_gained();
+        assert!(
+            !app.take_pending_resize_clear(),
+            "focus gained without a terminal-size change must not take the resize-clear path"
+        );
+        assert!(
+            app.static_image_overlay_displayed(),
+            "Foot Sixel image state should survive focus refocus while a popup is open"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn foot_sixel_resize_under_popup_repaints_image_behind_modal() {
+        let (mut app, root, _image_path) =
+            build_selected_static_image_app("foot-sixel-resize-popup", "demo.png");
+        let request = ready_static_image_overlay(&mut app);
+        app.set_terminal_image_protocol_for_tests(ImageProtocol::Sixel, TerminalIdentity::Foot);
+        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+            &request,
+            request.area,
+            request.area,
+        ));
+        app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
+        let popup = Rect {
+            x: request.area.x.saturating_add(1),
+            y: request.area.y.saturating_add(1),
+            width: request.area.width.saturating_sub(2).max(1),
+            height: request.area.height.saturating_sub(2).max(1),
+        };
+
+        app.handle_terminal_image_resize();
+        app.preview.terminal_images.window = Some(TerminalWindowSize {
+            cells_width: 120,
+            cells_height: 40,
+            pixels_width: 1920,
+            pixels_height: 1080,
+        });
+        assert!(app.take_pending_resize_clear());
+        assert!(
+            !app.static_image_overlay_displayed(),
+            "resize clear removes stale Sixel geometry before redraw"
+        );
+        assert!(
+            app.should_repaint_sixel_under_modal(&[popup]),
+            "Foot Sixel should repaint the resized image behind an open popup"
+        );
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut image_bytes = Vec::new();
+        while Instant::now() < deadline {
+            let _ = app.process_background_jobs();
+            let _ = app.process_image_preview_timers();
+            image_bytes = app
+                .present_preview_overlay_behind_modal()
+                .expect("resize-under-popup repaint should not fail");
+            if !image_bytes.is_empty() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            !image_bytes.is_empty(),
+            "resize-under-popup should emit fresh Sixel bytes before collision masking"
+        );
+        assert!(app.static_image_overlay_displayed());
+
+        let (collisions, erase) = app.sixel_modal_collision_erase(&[popup]);
+        assert_eq!(collisions, vec![popup]);
+        assert!(
+            !erase.is_empty(),
+            "the freshly repainted image should still be punched out under the popup"
+        );
+        assert!(
+            app.present_preview_overlay()
+                .expect("normal popup redraw should not fail")
+                .is_empty(),
+            "normal Foot Sixel presentation remains blocked while the popup is open"
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }
