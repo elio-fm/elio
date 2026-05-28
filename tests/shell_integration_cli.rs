@@ -123,6 +123,204 @@ fn shell_init_zsh_prints_function() {
 }
 
 #[test]
+fn shell_init_nu_prints_sourceable_command() {
+    let output = elio()
+        .args(["shell", "init", "nu"])
+        .output()
+        .expect("failed to run elio shell init nu");
+
+    assert_success("elio shell init nu", &output);
+    assert_no_stderr("elio shell init nu", &output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("def --env --wrapped elio [...args]"));
+    assert!(stdout.contains(env!("CARGO_BIN_EXE_elio")));
+    assert!(stdout.contains("run-external"));
+    assert!(stdout.contains("--cwd-file"));
+    assert!(stdout.contains("$env.LAST_EXIT_CODE = $status_code"));
+    assert!(!stdout.contains("command elio"));
+    assert!(!stdout.contains("local tmp"));
+}
+
+#[test]
+fn shell_install_nu_writes_autoload_file() {
+    let root = temp_path("nu-install");
+    let config_home = root.join("config");
+
+    let output = elio()
+        .args(["shell", "install", "nu"])
+        .env("XDG_CONFIG_HOME", &config_home)
+        .output()
+        .expect("failed to run elio shell install nu");
+
+    assert_success("elio shell install nu", &output);
+    assert_no_stderr("elio shell install nu", &output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Installed elio shell integration for nu"));
+    assert!(stdout.contains("nushell/autoload/elio.nu"));
+    assert!(stdout.contains(r#"source ""#));
+
+    let integration = config_home.join("nushell/autoload/elio.nu");
+    let script = fs::read_to_string(&integration).expect("nu integration should be written");
+    assert!(script.contains("def --env --wrapped elio"));
+    assert!(script.contains(env!("CARGO_BIN_EXE_elio")));
+    assert!(script.contains("run-external"));
+    assert!(script.contains("--cwd-file"));
+
+    fs::remove_dir_all(root).expect("temp directory should be removed");
+}
+
+#[test]
+fn shell_install_nu_refuses_unmanaged_autoload_file() {
+    let root = temp_path("nu-install-unmanaged");
+    let config_home = root.join("config");
+    let integration = config_home.join("nushell/autoload/elio.nu");
+    fs::create_dir_all(
+        integration
+            .parent()
+            .expect("integration should have a parent"),
+    )
+    .expect("nu autoload directory should be created");
+    fs::write(
+        &integration,
+        "def elio [] {}
+",
+    )
+    .expect("unmanaged file should be written");
+
+    let output = elio()
+        .args(["shell", "install", "nu"])
+        .env("XDG_CONFIG_HOME", &config_home)
+        .output()
+        .expect("failed to run elio shell install nu");
+
+    assert_failure("elio shell install nu", &output);
+    assert_no_stdout("elio shell install nu", &output);
+    assert_stderr_contains("elio shell install nu", &output, "not managed by elio");
+    assert_eq!(
+        fs::read_to_string(&integration).expect("unmanaged file should be readable"),
+        "def elio [] {}
+"
+    );
+
+    fs::remove_dir_all(root).expect("temp directory should be removed");
+}
+
+#[test]
+fn shell_uninstall_nu_removes_managed_autoload_file_idempotently() {
+    let root = temp_path("nu-uninstall");
+    let config_home = root.join("config");
+    let integration = config_home.join("nushell/autoload/elio.nu");
+
+    let install = elio()
+        .args(["shell", "install", "nu"])
+        .env("XDG_CONFIG_HOME", &config_home)
+        .output()
+        .expect("failed to run elio shell install nu");
+    assert_success("elio shell install nu", &install);
+
+    let uninstall = elio()
+        .args(["shell", "uninstall", "nu"])
+        .env("XDG_CONFIG_HOME", &config_home)
+        .output()
+        .expect("failed to run elio shell uninstall nu");
+
+    assert_success("elio shell uninstall nu", &uninstall);
+    assert_no_stderr("elio shell uninstall nu", &uninstall);
+    let stdout = String::from_utf8_lossy(&uninstall.stdout);
+    assert!(stdout.contains("Uninstalled elio shell integration for nu"));
+    assert!(stdout.contains("Removed:"));
+    assert!(stdout.contains("hide elio"));
+    assert!(!integration.exists());
+
+    let uninstall_again = elio()
+        .args(["shell", "uninstall", "nu"])
+        .env("XDG_CONFIG_HOME", &config_home)
+        .output()
+        .expect("failed to run elio shell uninstall nu again");
+    assert_success("elio shell uninstall nu", &uninstall_again);
+    assert_no_stderr("elio shell uninstall nu", &uninstall_again);
+    assert!(String::from_utf8_lossy(&uninstall_again.stdout).contains("No integration found at:"));
+
+    fs::remove_dir_all(root).expect("temp directory should be removed");
+}
+
+#[cfg(unix)]
+#[test]
+fn shell_install_nu_preserves_symlinked_autoload_directory() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_path("nu-install-autoload-symlink");
+    let config_home = root.join("config");
+    let nushell_dir = config_home.join("nushell");
+    let dotfiles_autoload = root.join("dotfiles/nushell/autoload");
+    fs::create_dir_all(&nushell_dir).expect("nushell directory should be created");
+    fs::create_dir_all(&dotfiles_autoload).expect("dotfiles autoload should be created");
+    symlink(&dotfiles_autoload, nushell_dir.join("autoload"))
+        .expect("autoload symlink should be created");
+
+    let output = elio()
+        .args(["shell", "install", "nu"])
+        .env("XDG_CONFIG_HOME", &config_home)
+        .output()
+        .expect("failed to run elio shell install nu");
+
+    assert_success("elio shell install nu", &output);
+    assert_no_stderr("elio shell install nu", &output);
+    assert!(dotfiles_autoload.join("elio.nu").exists());
+    assert!(config_home.join("nushell/autoload/elio.nu").exists());
+
+    fs::remove_dir_all(root).expect("temp directory should be removed");
+}
+
+#[cfg(unix)]
+#[test]
+fn shell_install_nu_preserves_symlinked_autoload_file() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_path("nu-install-file-symlink");
+    let config_home = root.join("config");
+    let autoload = config_home.join("nushell/autoload");
+    let dotfiles = root.join("dotfiles");
+    fs::create_dir_all(&autoload).expect("autoload should be created");
+    fs::create_dir_all(&dotfiles).expect("dotfiles should be created");
+    let target = dotfiles.join("elio.nu");
+    let link = autoload.join("elio.nu");
+    fs::write(
+        &target,
+        "# >>> elio shell integration >>>
+def elio [] {}
+# <<< elio shell integration <<<
+",
+    )
+    .expect("target should be written");
+    symlink(&target, &link).expect("autoload file symlink should be created");
+
+    let output = elio()
+        .args(["shell", "install", "nu"])
+        .env("XDG_CONFIG_HOME", &config_home)
+        .output()
+        .expect("failed to run elio shell install nu");
+
+    assert_success("elio shell install nu", &output);
+    assert_no_stderr("elio shell install nu", &output);
+    assert!(
+        fs::symlink_metadata(&link)
+            .expect("link metadata should be readable")
+            .file_type()
+            .is_symlink(),
+        "install should preserve symlinked elio.nu"
+    );
+    let target_contents = fs::read_to_string(&target).expect("target should be readable");
+    assert!(target_contents.contains("def --env --wrapped elio"));
+    assert_eq!(
+        fs::read_to_string(&link).expect("link should resolve"),
+        target_contents
+    );
+
+    fs::remove_dir_all(root).expect("temp directory should be removed");
+}
+
+#[test]
 fn shell_install_fish_writes_conf_d_file() {
     let root = temp_path("fish-install");
     let config_home = root.join("config");
@@ -917,7 +1115,7 @@ fn shell_init_rejects_unsupported_shell() {
     assert_stderr_contains(
         "elio shell init powershell",
         &output,
-        "supported shells: bash, zsh, fish",
+        "supported shells: bash, zsh, fish, nu",
     );
 }
 

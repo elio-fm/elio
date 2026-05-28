@@ -37,14 +37,19 @@ fn help_prints_usage() {
     assert!(stdout.contains("-V, --version        Print version"));
     assert!(stdout.contains("Commands:"));
     assert!(
-        stdout.contains("shell init <SHELL>        Print shell integration for bash, zsh, or fish")
+        stdout.contains(
+            "shell init <SHELL>        Print shell integration for bash, zsh, fish, or nu"
+        )
     );
     assert!(
-        stdout
-            .contains("shell install [SHELL]    Install shell integration for bash, zsh, or fish")
+        stdout.contains(
+            "shell install [SHELL]    Install shell integration for bash, zsh, fish, or nu"
+        )
     );
     assert!(
-        stdout.contains("shell uninstall [SHELL]  Remove shell integration for bash, zsh, or fish")
+        stdout.contains(
+            "shell uninstall [SHELL]  Remove shell integration for bash, zsh, fish, or nu"
+        )
     );
     assert!(output.stderr.is_empty());
 }

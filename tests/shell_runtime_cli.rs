@@ -74,6 +74,7 @@ struct RuntimeFixture {
 enum ShellSyntax {
     Posix,
     Fish,
+    Nu,
 }
 
 #[test]
@@ -91,6 +92,11 @@ fn generated_fish_function_runs_when_executed() -> Result<(), Box<dyn Error>> {
     run_generated_function("fish", ShellSyntax::Fish)
 }
 
+#[test]
+fn generated_nu_function_runs_when_executed() -> Result<(), Box<dyn Error>> {
+    run_generated_function("nu", ShellSyntax::Nu)
+}
+
 fn run_generated_function(shell: &str, syntax: ShellSyntax) -> Result<(), Box<dyn Error>> {
     if !shell_available(shell) {
         return Ok(());
@@ -100,11 +106,15 @@ fn run_generated_function(shell: &str, syntax: ShellSyntax) -> Result<(), Box<dy
     let runtime_script = match syntax {
         ShellSyntax::Posix => posix_runtime_script(&fixture.init_script, &fixture.start_dir),
         ShellSyntax::Fish => fish_runtime_script(&fixture.init_script, &fixture.start_dir),
+        ShellSyntax::Nu => nu_runtime_script(&fixture.init_script, &fixture.start_dir),
     };
 
     let mut command = Command::new(shell);
     if matches!(syntax, ShellSyntax::Fish) {
         command.arg("--no-config");
+    }
+    if matches!(syntax, ShellSyntax::Nu) {
+        command.arg("--no-config-file");
     }
     command.arg("-c").arg(runtime_script);
     configure_runtime_environment(&mut command, &fixture)?;
@@ -150,8 +160,13 @@ fn runtime_fixture(shell: &str) -> Result<RuntimeFixture, Box<dyn Error>> {
     );
 
     let script = String::from_utf8(output.stdout)?;
+    let expected_path_call = if shell == "nu" {
+        r#"run-external "elio""#
+    } else {
+        "command elio"
+    };
     assert!(
-        script.contains("command elio"),
+        script.contains(expected_path_call),
         "official-install {shell} init script should call elio from PATH:\n{script}"
     );
     assert!(
@@ -254,6 +269,39 @@ printf 'shell_code=%s\n' "$status"
     )
 }
 
+fn nu_runtime_script(init_script: &Path, start_dir: &Path) -> String {
+    let pipeline_output = start_dir.join("nu-shell-pipeline.txt");
+    format!(
+        r#"source {}
+mkdir {}
+cd {}
+
+elio
+print $"cwd=($env.PWD) code=($env.LAST_EXIT_CODE)"
+
+cd {}
+elio empty
+print $"empty_cwd=($env.PWD) empty_code=($env.LAST_EXIT_CODE)"
+
+elio --help
+print $"help_code=($env.LAST_EXIT_CODE)"
+
+elio shell status
+print $"shell_code=($env.LAST_EXIT_CODE)"
+
+elio shell status | save -f {}
+print $"shell_pipeline_code=($env.LAST_EXIT_CODE)"
+print $"shell_pipeline=(open --raw {})"
+"#,
+        nu_quote(init_script),
+        nu_quote(start_dir),
+        nu_quote(start_dir),
+        nu_quote(start_dir),
+        nu_quote(&pipeline_output),
+        nu_quote(&pipeline_output),
+    )
+}
+
 fn assert_runtime_output(output: std::process::Output, start_dir: &Path) {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -274,22 +322,37 @@ fn assert_runtime_output(output: std::process::Output, start_dir: &Path) {
         stdout.contains(&format!("empty_cwd={} empty_code=9", start_dir.display())),
         "empty cwd file should leave the shell in the original directory\nstdout:\n{stdout}"
     );
-    assert!(
-        stdout.contains("HELP-PASSTHROUGH"),
-        "--help should pass through to the real executable\nstdout:\n{stdout}"
-    );
+    let has_nu_pipeline_checks = stdout.contains("shell_pipeline_code=");
+    if !has_nu_pipeline_checks {
+        assert!(
+            stdout.contains("HELP-PASSTHROUGH"),
+            "--help should pass through to the real executable\nstdout:\n{stdout}"
+        );
+    }
     assert!(
         stdout.contains("help_code=3"),
         "--help should preserve the real executable status\nstdout:\n{stdout}"
     );
-    assert!(
-        stdout.contains("SHELL-PASSTHROUGH"),
-        "shell subcommands should pass through to the real executable\nstdout:\n{stdout}"
-    );
+    if !has_nu_pipeline_checks {
+        assert!(
+            stdout.contains("SHELL-PASSTHROUGH"),
+            "shell subcommands should pass through to the real executable\nstdout:\n{stdout}"
+        );
+    }
     assert!(
         stdout.contains("shell_code=4"),
         "shell subcommands should preserve the real executable status\nstdout:\n{stdout}"
     );
+    if has_nu_pipeline_checks {
+        assert!(
+            stdout.contains("shell_pipeline_code=4"),
+            "Nu shell subcommand pipelines should preserve the real executable status\nstdout:\n{stdout}"
+        );
+        assert!(
+            stdout.contains("shell_pipeline=SHELL-PASSTHROUGH"),
+            "Nu shell subcommand pipelines should receive the real executable stdout\nstdout:\n{stdout}"
+        );
+    }
 }
 
 fn shell_available(shell: &str) -> bool {
@@ -313,4 +376,9 @@ fn path_with_prefix(prefix: &Path) -> Result<OsString, Box<dyn Error>> {
 fn shell_quote(path: &Path) -> String {
     let value = path.to_string_lossy();
     format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn nu_quote(path: &Path) -> String {
+    let value = path.to_string_lossy();
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
 }

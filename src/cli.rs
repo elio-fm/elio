@@ -19,18 +19,20 @@ pub(crate) fn run() -> Result<()> {
         Command::PrintShellInit(shell) => {
             let executable = env::current_exe()?;
             let invocation = env::args().next();
-            let binary = shell_integration::binary_command(invocation.as_deref(), &executable);
+            let binary =
+                shell_integration::binary_command(shell, invocation.as_deref(), &executable);
             print!("{}", shell_integration::init_script(shell, &binary));
             Ok(())
         }
         Command::InstallShellIntegration(shell) => {
             let executable = env::current_exe()?;
             let invocation = env::args().next();
-            let binary = shell_integration::binary_command(invocation.as_deref(), &executable);
             let shell = match shell {
                 Some(shell) => shell,
                 None => shell_integration::detect_shell(ShellIntegrationAction::Install)?,
             };
+            let binary =
+                shell_integration::binary_command(shell, invocation.as_deref(), &executable);
             let report = shell_integration::install(shell, &binary)?;
             println!(
                 "Installed elio shell integration for {}.",
@@ -154,7 +156,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Command> {
         }
         [command, subcommand] if command == "shell" && subcommand == "init" => {
             return Err(anyhow::anyhow!(
-                "error: expected a shell after 'elio shell init'\n\nsupported shells: bash, zsh, fish"
+                "error: expected a shell after 'elio shell init'\n\nsupported shells: bash, zsh, fish, nu"
             ));
         }
         [command, ..] if command == "shell" => {
@@ -245,9 +247,9 @@ fn print_help() {
     println!("  -V, --version        Print version");
     println!();
     println!("Commands:");
-    println!("  shell init <SHELL>        Print shell integration for bash, zsh, or fish");
-    println!("  shell install [SHELL]    Install shell integration for bash, zsh, or fish");
-    println!("  shell uninstall [SHELL]  Remove shell integration for bash, zsh, or fish");
+    println!("  shell init <SHELL>        Print shell integration for bash, zsh, fish, or nu");
+    println!("  shell install [SHELL]    Install shell integration for bash, zsh, fish, or nu");
+    println!("  shell uninstall [SHELL]  Remove shell integration for bash, zsh, fish, or nu");
 }
 
 fn resolve_startup_directory(arg: &str) -> Result<PathBuf> {

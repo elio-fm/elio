@@ -276,9 +276,16 @@ elio shell install fish
 elio shell uninstall fish
 ```
 
-Replace `fish` with `bash` or `zsh` as needed.
+Replace `fish` with `bash`, `zsh`, or `nu` as needed.
 
-The installer writes a managed block to `~/.bashrc` for bash, to `$ZDOTDIR/.zshrc` or `~/.zshrc` for zsh, and to `$XDG_CONFIG_HOME/fish/conf.d/elio.fish` or `~/.config/fish/conf.d/elio.fish` for fish. Existing bash and zsh files are preserved, including symlinks used by dotfile managers. Fish `conf.d` directories managed through symlinks are preserved too, and elio refuses to overwrite an existing `elio.fish` unless it was previously managed by elio.
+The installer writes elio-managed shell integration to:
+
+- `~/.bashrc` for bash
+- `$ZDOTDIR/.zshrc` or `~/.zshrc` for zsh
+- `$XDG_CONFIG_HOME/fish/conf.d/elio.fish` or `~/.config/fish/conf.d/elio.fish` for fish
+- `$XDG_CONFIG_HOME/nushell/autoload/elio.nu` or `~/.config/nushell/autoload/elio.nu` for Nushell
+
+Existing bash and zsh startup files are preserved: elio only adds, updates, or removes its marked integration block, leaving other user config intact, including symlinks used by dotfile managers. Symlinked Fish `conf.d` and Nushell `autoload` directories are preserved too, and elio refuses to overwrite an existing `elio.fish` or `elio.nu` unless it was previously managed by elio.
 
 If you prefer to manage your shell files yourself, use `elio shell init` instead. It prints the integration snippet without editing any files:
 
@@ -286,6 +293,7 @@ If you prefer to manage your shell files yourself, use `elio shell init` instead
 elio shell init fish
 elio shell init bash
 elio shell init zsh
+elio shell init nu
 ```
 
 For custom wrappers, elio also exposes the file handoff used by the shell integration:

@@ -2,7 +2,7 @@
 use super::resolve_write_path;
 use super::{
     MANAGED_END, MANAGED_START, Shell, ShellDetection, binary_command, detect_shell_from_command,
-    init_script, managed_script, remove_managed_blocks, shell_name_from_command,
+    init_script, managed_script, nu_string_literal, remove_managed_blocks, shell_name_from_command,
     uninstall_reload_command, upsert_managed_block, write_text_atomic,
 };
 use std::{
@@ -23,6 +23,7 @@ fn temp_path(label: &str) -> PathBuf {
 fn binary_command_uses_path_for_local_invocations() {
     assert_eq!(
         binary_command(
+            Shell::Bash,
             Some("target/debug/elio"),
             Path::new("/repo/target/debug/elio")
         ),
@@ -33,7 +34,11 @@ fn binary_command_uses_path_for_local_invocations() {
 #[test]
 fn binary_command_uses_path_for_absolute_invocations() {
     assert_eq!(
-        binary_command(Some("/opt/elio/bin/elio"), Path::new("/opt/elio/bin/elio")),
+        binary_command(
+            Shell::Bash,
+            Some("/opt/elio/bin/elio"),
+            Path::new("/opt/elio/bin/elio")
+        ),
         "'/opt/elio/bin/elio'"
     );
 }
@@ -42,6 +47,7 @@ fn binary_command_uses_path_for_absolute_invocations() {
 fn binary_command_uses_path_for_windows_invocations() {
     assert_eq!(
         binary_command(
+            Shell::Bash,
             Some(r"C:\repo\target\debug\elio.exe"),
             Path::new(r"C:\repo\target\debug\elio.exe")
         ),
@@ -52,8 +58,32 @@ fn binary_command_uses_path_for_windows_invocations() {
 #[test]
 fn binary_command_uses_path_lookup_for_normal_invocations() {
     assert_eq!(
-        binary_command(Some("elio"), Path::new("/versioned/path/elio")),
+        binary_command(Shell::Bash, Some("elio"), Path::new("/versioned/path/elio")),
         "command elio"
+    );
+}
+
+#[test]
+fn binary_command_formats_nu_invocations_for_run_external() {
+    assert_eq!(
+        binary_command(Shell::Nu, Some("elio"), Path::new("/versioned/path/elio")),
+        r#""elio""#
+    );
+    assert_eq!(
+        binary_command(
+            Shell::Nu,
+            Some("target/debug/elio"),
+            Path::new("/repo/target/debug/elio")
+        ),
+        r#""/repo/target/debug/elio""#
+    );
+}
+
+#[test]
+fn nu_string_literal_escapes_backslashes_and_quotes() {
+    assert_eq!(
+        nu_string_literal(Path::new(r#"/tmp/path with spaces/eli"o\bin"#)),
+        r#""/tmp/path with spaces/eli\"o\\bin""#
     );
 }
 
@@ -83,6 +113,24 @@ fn fish_init_script_passes_cli_commands_through() {
 }
 
 #[test]
+fn nu_init_script_passes_cli_commands_through_without_posix_syntax() {
+    let script = init_script(Shell::Nu, r#""elio""#);
+
+    assert!(script.contains("def --env --wrapped elio [...args]"));
+    assert!(script.contains("run-external \"elio\" ...$args"));
+    assert!(script.contains("mktemp -t \"elio-cwd.XXXXXX\""));
+    assert!(script.contains("let command_args = ([\"--cwd-file\", $tmp] ++ $args)"));
+    assert!(script.contains("run-external \"elio\" ...$command_args"));
+    assert!(script.contains("$env.LAST_EXIT_CODE = $status_code"));
+    assert!(script.contains("$e.exit_code? | default 127"));
+    assert!(script.contains("cd $cwd"));
+    assert!(!script.contains("local tmp"));
+    assert!(!script.contains("case \"${1-}\""));
+    assert!(!script.contains("command elio"));
+    assert!(!script.contains("return $status_code"));
+}
+
+#[test]
 fn shell_name_from_command_handles_paths_login_shells_and_arguments() {
     assert_eq!(
         shell_name_from_command("/usr/bin/zsh\n").as_deref(),
@@ -104,7 +152,11 @@ fn detect_shell_from_command_distinguishes_supported_unsupported_and_unknown() {
     );
     assert_eq!(
         detect_shell_from_command("/usr/bin/nu --login\n"),
-        ShellDetection::Unsupported("nu".to_string())
+        ShellDetection::Supported(Shell::Nu)
+    );
+    assert_eq!(
+        detect_shell_from_command("-nushell\n"),
+        ShellDetection::Supported(Shell::Nu)
     );
     assert_eq!(
         detect_shell_from_command("shell_integration_cli\n"),
@@ -123,6 +175,7 @@ fn uninstall_reload_command_removes_loaded_function() {
         uninstall_reload_command(Shell::Fish),
         "functions --erase elio"
     );
+    assert_eq!(uninstall_reload_command(Shell::Nu), "hide elio");
 }
 
 #[test]
