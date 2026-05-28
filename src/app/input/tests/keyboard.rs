@@ -25,6 +25,41 @@ impl Drop for OpenInSystemCaptureGuard {
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
+struct DefaultOpenWithAppGuard;
+
+#[cfg(all(unix, not(target_os = "macos")))]
+impl DefaultOpenWithAppGuard {
+    fn install(app: crate::app::state::OpenWithApp) -> Self {
+        crate::app::open_with::set_default_open_with_app_for_test(Some(app));
+        Self
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+impl Drop for DefaultOpenWithAppGuard {
+    fn drop(&mut self) {
+        crate::app::open_with::set_default_open_with_app_for_test(None);
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn fake_default_open_with_app(
+    display_name: &str,
+    program: &str,
+    args: Vec<String>,
+    requires_terminal: bool,
+) -> crate::app::state::OpenWithApp {
+    crate::app::state::OpenWithApp {
+        display_name: display_name.to_string(),
+        desktop_id: None,
+        program: program.to_string(),
+        args,
+        is_default: true,
+        requires_terminal,
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
 fn read_open_capture(capture: &std::path::Path) -> String {
     let deadline = Instant::now() + Duration::from_millis(1000);
     while !capture.exists() && Instant::now() < deadline {
@@ -146,6 +181,77 @@ fn newline_key_event_also_opens_selected_file() {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 #[test]
+fn enter_queues_terminal_default_app_for_selected_file() {
+    let root = temp_path("enter-terminal-default");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let file_path = root.join("note.txt");
+    fs::write(&file_path, "hello").expect("failed to write temp file");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+    let _default_guard = DefaultOpenWithAppGuard::install(fake_default_open_with_app(
+        "Helix",
+        "hx",
+        vec![file_path.display().to_string()],
+        true,
+    ));
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .expect("enter should queue terminal default app");
+
+    assert_eq!(
+        app.pending_terminal_task,
+        Some(PendingTerminalTask::Command {
+            program: "hx".to_string(),
+            args: vec![file_path.display().to_string()],
+        })
+    );
+    assert!(app.status.is_empty());
+    assert!(
+        !capture.exists(),
+        "system opener should not run for terminal default app"
+    );
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn open_action_keeps_system_opener_for_gui_default_app() {
+    let root = temp_path("open-gui-default");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let file_path = root.join("note.txt");
+    fs::write(&file_path, "hello").expect("failed to write temp file");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+    let _default_guard = DefaultOpenWithAppGuard::install(fake_default_open_with_app(
+        "Text Editor",
+        "gedit",
+        vec![file_path.display().to_string()],
+        false,
+    ));
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('o'))))
+        .expect("o should use system opener for GUI defaults");
+
+    let opened = read_open_capture(&capture);
+    assert_eq!(opened, file_path.display().to_string());
+    assert_eq!(app.pending_terminal_task, None);
+    assert_eq!(app.status, format!("Opened {}", file_path.display()));
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
 fn enter_opens_selected_entries_with_system_opener() {
     let root = temp_path("enter-opens-selection");
     fs::create_dir_all(&root).expect("failed to create temp root");
@@ -213,6 +319,44 @@ fn open_action_opens_selected_entries_with_system_opener() {
         opened,
         vec![alpha.display().to_string(), beta.display().to_string()]
     );
+    assert_eq!(app.status, "Opened 2 items");
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn open_action_keeps_system_opener_for_multiple_selection_with_terminal_default() {
+    let root = temp_path("open-selection-terminal-default");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let alpha = root.join("alpha.txt");
+    let beta = root.join("beta.txt");
+    fs::write(&alpha, "alpha").expect("failed to write alpha");
+    fs::write(&beta, "beta").expect("failed to write beta");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+    let _default_guard = DefaultOpenWithAppGuard::install(fake_default_open_with_app(
+        "Helix",
+        "hx",
+        vec![alpha.display().to_string()],
+        true,
+    ));
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.selected_paths.insert(alpha.clone());
+    app.navigation.selected_paths.insert(beta.clone());
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('o'))))
+        .expect("o should use system opener for multiple selection");
+
+    let opened = read_open_capture(&capture);
+    let opened: Vec<_> = opened.lines().map(str::to_owned).collect();
+    assert_eq!(
+        opened,
+        vec![alpha.display().to_string(), beta.display().to_string()]
+    );
+    assert_eq!(app.pending_terminal_task, None);
     assert_eq!(app.status, "Opened 2 items");
 
     fs::remove_dir_all(root).ok();

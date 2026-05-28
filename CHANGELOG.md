@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `o` / `Enter` on Linux and BSD to open default terminal-based apps in the current terminal when opening a single file instead of a separate terminal window. ([#134])
 - Improved popup rendering over image previews, preventing preview content from showing through transparent overlay cells across Kitty/Ghostty, WezTerm/iTerm2, Foot, and Windows Terminal.
 - Fixed WezTerm and iTerm2 inline image previews during terminal resize, keeping previews and popups correctly layered.
 
@@ -190,3 +191,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#112]: https://github.com/elio-fm/elio/issues/112
 [#121]: https://github.com/elio-fm/elio/issues/121
 [#125]: https://github.com/elio-fm/elio/issues/125
+[#134]: https://github.com/elio-fm/elio/issues/134

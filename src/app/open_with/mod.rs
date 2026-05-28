@@ -4,12 +4,42 @@ mod overlay;
 #[cfg(test)]
 mod tests;
 
+#[cfg(all(test, unix, not(target_os = "macos")))]
+use std::cell::RefCell;
 use std::path::Path;
 
+#[cfg(all(unix, not(target_os = "macos")))]
+use super::state::OpenWithApp;
+#[cfg(all(unix, not(target_os = "macos")))]
+use crate::core::Entry;
 use crate::{
     core::{EntryKind, FileClass},
     file_info::{PreviewKind, inspect_path},
 };
+
+#[cfg(all(test, unix, not(target_os = "macos")))]
+thread_local! {
+    static TEST_DEFAULT_OPEN_WITH_APP: RefCell<Option<OpenWithApp>> = const { RefCell::new(None) };
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(in crate::app) fn default_open_with_app_for_entry(entry: &Entry) -> Option<OpenWithApp> {
+    #[cfg(test)]
+    {
+        let _ = entry;
+        TEST_DEFAULT_OPEN_WITH_APP.with(|slot| slot.borrow().clone())
+    }
+
+    #[cfg(not(test))]
+    discovery::discover_open_with_apps_for_entry(entry)
+        .into_iter()
+        .find(|app| app.is_default)
+}
+
+#[cfg(all(test, unix, not(target_os = "macos")))]
+pub(in crate::app) fn set_default_open_with_app_for_test(app: Option<OpenWithApp>) {
+    TEST_DEFAULT_OPEN_WITH_APP.with(|slot| *slot.borrow_mut() = app);
+}
 
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(super) fn path_is_text_like(path: &Path) -> bool {

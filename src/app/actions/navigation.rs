@@ -393,6 +393,20 @@ impl App {
     }
 
     pub(in crate::app) fn open_in_system(&mut self) -> Result<()> {
+        #[cfg(all(unix, not(target_os = "macos")))]
+        if let Some(app) = self
+            .single_file_open_target_entry()
+            .and_then(crate::app::open_with::default_open_with_app_for_entry)
+            .filter(|app| app.requires_terminal)
+        {
+            self.pending_terminal_task = Some(crate::app::PendingTerminalTask::Command {
+                program: app.program,
+                args: app.args,
+            });
+            self.status.clear();
+            return Ok(());
+        }
+
         let targets = self.open_in_system_targets();
         if targets.is_empty() {
             return Ok(());
@@ -418,6 +432,24 @@ impl App {
             }
         };
         Ok(())
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    fn single_file_open_target_entry(&self) -> Option<&Entry> {
+        if self.navigation.selected_paths.len() > 1 {
+            return None;
+        }
+
+        if let Some(path) = self.navigation.selected_paths.iter().next() {
+            return self
+                .navigation
+                .entries
+                .iter()
+                .find(|entry| &entry.path == path)
+                .filter(|entry| !entry.is_dir());
+        }
+
+        self.selected_entry().filter(|entry| !entry.is_dir())
     }
 
     fn open_in_system_targets(&self) -> Vec<PathBuf> {
