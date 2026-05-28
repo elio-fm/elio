@@ -1,28 +1,13 @@
 use super::super::*;
 use super::helpers::{
-    temp_path, wait_for_background_preview, wait_for_directory_load, write_epub_fixture,
+    OpenInSystemCaptureGuard, read_open_capture, temp_path, wait_for_background_preview,
+    wait_for_directory_load, write_epub_fixture,
 };
 use crate::config::Action;
 use std::{
     fs, thread,
     time::{Duration, Instant},
 };
-
-struct OpenInSystemCaptureGuard;
-
-impl OpenInSystemCaptureGuard {
-    fn install(path: std::path::PathBuf) -> Self {
-        let _ = fs::remove_file(&path);
-        crate::fs::set_open_in_system_capture_for_test(Some(path));
-        Self
-    }
-}
-
-impl Drop for OpenInSystemCaptureGuard {
-    fn drop(&mut self) {
-        crate::fs::set_open_in_system_capture_for_test(None);
-    }
-}
 
 #[cfg(all(unix, not(target_os = "macos")))]
 struct DefaultOpenWithAppGuard;
@@ -57,16 +42,6 @@ fn fake_default_open_with_app(
         is_default: true,
         requires_terminal,
     }
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn read_open_capture(capture: &std::path::Path) -> String {
-    let deadline = Instant::now() + Duration::from_millis(1000);
-    while !capture.exists() && Instant::now() < deadline {
-        thread::sleep(Duration::from_millis(10));
-    }
-
-    fs::read_to_string(capture).expect("capture should exist")
 }
 
 #[test]

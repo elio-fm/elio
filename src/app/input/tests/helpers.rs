@@ -1,11 +1,11 @@
 use super::super::*;
 use std::{
-    env,
+    env, fs,
     fs::File,
     io::Write,
     path::{Path, PathBuf},
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
@@ -42,6 +42,31 @@ pub(super) fn wait_for_background_preview(app: &mut App) {
         thread::sleep(Duration::from_millis(10));
     }
     panic!("timed out waiting for background preview");
+}
+
+pub(super) struct OpenInSystemCaptureGuard;
+
+impl OpenInSystemCaptureGuard {
+    pub(super) fn install(path: PathBuf) -> Self {
+        let _ = fs::remove_file(&path);
+        crate::fs::set_open_in_system_capture_for_test(Some(path));
+        Self
+    }
+}
+
+impl Drop for OpenInSystemCaptureGuard {
+    fn drop(&mut self) {
+        crate::fs::set_open_in_system_capture_for_test(None);
+    }
+}
+
+pub(super) fn read_open_capture(capture: &Path) -> String {
+    let deadline = Instant::now() + Duration::from_millis(1000);
+    while !capture.exists() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    fs::read_to_string(capture).expect("capture should exist")
 }
 
 pub(super) fn write_binary_zip_entries(path: &Path, entries: &[(&str, &[u8])]) {

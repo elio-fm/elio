@@ -392,22 +392,58 @@ impl App {
         )
     }
 
+    pub(in crate::app) fn open_entry_at_index(&mut self, index: usize) -> Result<()> {
+        let Some(entry) = self.navigation.entries.get(index).cloned() else {
+            return Ok(());
+        };
+
+        if entry.is_dir() {
+            self.set_dir(entry.path)
+        } else {
+            self.open_entry_in_system(&entry)
+        }
+    }
+
     pub(in crate::app) fn open_in_system(&mut self) -> Result<()> {
         #[cfg(all(unix, not(target_os = "macos")))]
-        if let Some(app) = self
+        if self
             .single_file_open_target_entry()
-            .and_then(crate::app::open_with::default_open_with_app_for_entry)
-            .filter(|app| app.requires_terminal)
+            .cloned()
+            .is_some_and(|entry| self.queue_terminal_default_open_if_needed(&entry))
         {
-            self.pending_terminal_task = Some(crate::app::PendingTerminalTask::Command {
-                program: app.program,
-                args: app.args,
-            });
-            self.status.clear();
             return Ok(());
         }
 
         let targets = self.open_in_system_targets();
+        self.open_paths_in_system(targets)
+    }
+
+    fn open_entry_in_system(&mut self, entry: &Entry) -> Result<()> {
+        #[cfg(all(unix, not(target_os = "macos")))]
+        if self.queue_terminal_default_open_if_needed(entry) {
+            return Ok(());
+        }
+
+        self.open_paths_in_system(vec![entry.path.clone()])
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    fn queue_terminal_default_open_if_needed(&mut self, entry: &Entry) -> bool {
+        let Some(app) = crate::app::open_with::default_open_with_app_for_entry(entry)
+            .filter(|app| app.requires_terminal)
+        else {
+            return false;
+        };
+
+        self.pending_terminal_task = Some(crate::app::PendingTerminalTask::Command {
+            program: app.program,
+            args: app.args,
+        });
+        self.status.clear();
+        true
+    }
+
+    fn open_paths_in_system(&mut self, targets: Vec<PathBuf>) -> Result<()> {
         if targets.is_empty() {
             return Ok(());
         }
