@@ -222,6 +222,29 @@ mod tests {
             .expect("static image overlay request should exist")
     }
 
+    fn displayed_sixel_static_image_overlay(
+        app: &mut App,
+        identity: TerminalIdentity,
+    ) -> StaticImageOverlayRequest {
+        let request = ready_static_image_overlay(app);
+        app.set_terminal_image_protocol_for_tests(ImageProtocol::Sixel, identity);
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            let _ = app.process_background_jobs();
+            let _ = app.process_image_preview_timers();
+            let output = app
+                .present_preview_overlay()
+                .expect("initial Sixel image presentation should succeed");
+            if !output.is_empty() && app.static_image_overlay_displayed() {
+                return request;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        panic!("timed out waiting for initial Sixel image presentation");
+    }
+
     #[test]
     fn kitty_png_overlay_uses_source_path_for_direct_display() {
         let (mut app, root, image_path) =
@@ -836,13 +859,7 @@ mod tests {
     fn sixel_popup_skips_post_draw_masking_for_foot_performance() {
         let (mut app, root, _image_path) =
             build_selected_static_image_app("sixel-popup-mask", "demo.png");
-        let request = ready_static_image_overlay(&mut app);
-        app.preview.terminal_images.protocol = ImageProtocol::Sixel;
-        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
-            &request,
-            request.area,
-            request.area,
-        ));
+        let request = displayed_sixel_static_image_overlay(&mut app, TerminalIdentity::Foot);
         assert!(app.static_image_overlay_displayed());
 
         app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
@@ -895,13 +912,7 @@ mod tests {
     fn foot_sixel_popup_erases_collision_and_repaints_after_close() {
         let (mut app, root, _image_path) =
             build_selected_static_image_app("foot-sixel-popup-collision", "demo.png");
-        let request = ready_static_image_overlay(&mut app);
-        app.set_terminal_image_protocol_for_tests(ImageProtocol::Sixel, TerminalIdentity::Foot);
-        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
-            &request,
-            request.area,
-            request.area,
-        ));
+        let request = displayed_sixel_static_image_overlay(&mut app, TerminalIdentity::Foot);
         assert!(app.static_image_overlay_displayed());
 
         app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
@@ -963,16 +974,8 @@ mod tests {
     fn windows_terminal_sixel_popup_erases_collision_and_repaints_after_close() {
         let (mut app, root, _image_path) =
             build_selected_static_image_app("wt-sixel-popup-collision", "demo.png");
-        let request = ready_static_image_overlay(&mut app);
-        app.set_terminal_image_protocol_for_tests(
-            ImageProtocol::Sixel,
-            TerminalIdentity::WindowsTerminal,
-        );
-        app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
-            &request,
-            request.area,
-            request.area,
-        ));
+        let request =
+            displayed_sixel_static_image_overlay(&mut app, TerminalIdentity::WindowsTerminal);
         assert!(app.static_image_overlay_displayed());
 
         app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
