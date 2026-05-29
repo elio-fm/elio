@@ -57,6 +57,10 @@ fn assert_stderr_contains(command: &str, output: &Output, expected: &str) {
     );
 }
 
+fn nu_literal(value: &str) -> String {
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
 #[test]
 fn shell_init_fish_prints_sourceable_function() {
     let output = elio()
@@ -133,7 +137,7 @@ fn shell_init_nu_prints_sourceable_command() {
     assert_no_stderr("elio shell init nu", &output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("def --env --wrapped elio [...args]"));
-    assert!(stdout.contains(env!("CARGO_BIN_EXE_elio")));
+    assert!(stdout.contains(&nu_literal(env!("CARGO_BIN_EXE_elio"))));
     assert!(stdout.contains("run-external"));
     assert!(stdout.contains("--cwd-file"));
     assert!(stdout.contains("$env.LAST_EXIT_CODE = $status_code"));
@@ -162,7 +166,7 @@ fn shell_install_nu_writes_autoload_file() {
     let integration = config_home.join("nushell/autoload/elio.nu");
     let script = fs::read_to_string(&integration).expect("nu integration should be written");
     assert!(script.contains("def --env --wrapped elio"));
-    assert!(script.contains(env!("CARGO_BIN_EXE_elio")));
+    assert!(script.contains(&nu_literal(env!("CARGO_BIN_EXE_elio"))));
     assert!(script.contains("run-external"));
     assert!(script.contains("--cwd-file"));
 
