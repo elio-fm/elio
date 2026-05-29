@@ -1,7 +1,9 @@
 use super::super::*;
+#[cfg(all(unix, not(target_os = "macos")))]
+use super::helpers::read_open_capture;
 use super::helpers::{
-    OpenInSystemCaptureGuard, read_open_capture, temp_path, wait_for_background_preview,
-    wait_for_directory_load, write_epub_fixture,
+    OpenInSystemCaptureGuard, temp_path, wait_for_background_preview, wait_for_directory_load,
+    write_epub_fixture,
 };
 use crate::config::Action;
 use std::{

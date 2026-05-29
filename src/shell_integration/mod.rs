@@ -10,10 +10,12 @@ mod scripts;
 pub(crate) use install::{install, uninstall};
 pub(crate) use scripts::{binary_command, init_script};
 
+#[cfg(all(test, unix))]
+use install::resolve_write_path;
 #[cfg(test)]
 use install::{
-    MANAGED_END, MANAGED_START, managed_script, remove_managed_blocks, resolve_write_path,
-    uninstall_reload_command, upsert_managed_block, write_text_atomic,
+    MANAGED_END, MANAGED_START, managed_script, remove_managed_blocks, uninstall_reload_command,
+    upsert_managed_block, write_text_atomic,
 };
 #[cfg(test)]
 use scripts::nu_string_literal;
