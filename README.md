@@ -241,9 +241,6 @@ On Linux, macOS, BSD, and WSL, elio uses `$SHELL` with `/bin/sh` as a fallback. 
 
 ### Change Directory on Quit
 
-> [!NOTE]
-> This feature is currently available on `main` and will be included in the next release.
-
 Shell integration lets elio leave your terminal in the directory you were browsing when you quit.
 
 Enable it with:
