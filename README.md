@@ -4,6 +4,11 @@ Snappy, batteries-included terminal file manager with rich previews, inline imag
 
 ![elio — default theme](examples/themes/default/screenshot.webp)
 
+## Documentation
+
+- Installation: https://elio-fm.github.io/install/
+- Usage: https://elio-fm.github.io/docs/
+
 ---
 
 ## Features
@@ -89,7 +94,7 @@ cargo run --release
 
 ## Example Themes
 
-A few bundled themes are shown below. More are available in [`examples/themes/`](examples/themes/) — copy any `theme.toml` to your platform's theme path to apply it. See [Theming](#theming) for the paths and override rules.
+A few bundled themes are shown below. More are available in [`examples/themes/`](examples/themes/). See [Theming](#theming) for theme paths and docs.
 
 | Catppuccin Mocha | Navi |
 |---|---|
@@ -138,262 +143,115 @@ Useful environment variables:
 
 ---
 
+## Preview Coverage
+
+elio previews many file types directly in the Preview pane:
+
+- Text, source code, Markdown, logs, and structured data such as JSON, YAML, TOML, CSV/TSV, and SQLite
+- Documents such as PDFs, ebooks, Office files, OpenDocument files, and Apple Pages
+- Images, audio, and video metadata, with inline images, covers, and thumbnails when supported
+- Folders, archives, comic archives, torrents, ISO images, and other disk-image-style containers
+- Binary files with useful metadata when no richer preview is available
+
+Some richer previews require optional system tools such as Poppler, FFmpeg, resvg, 7-Zip, unar, or FontForge.
+
+See the preview docs:
+https://elio-fm.github.io/docs/previews/
+
+---
+
 ## Optional Preview Tools
 
-`elio` works out of the box with no extra setup. Installing a few common utilities enables richer previews, metadata, thumbnails, and broader file format support. Only install what you need.
+elio works out of the box, but a few external tools enable richer previews for specific file types:
 
-Inline image previews also require a compatible terminal. See [Image Previews](#image-previews).
+- `poppler` for PDF previews
+- `ffmpeg` / `ffprobe` for media metadata and thumbnails
+- `resvg` for SVG previews
+- `7z` / `unar` for archive previews
+- `fontforge` for font previews
 
-### What to Install
-
-| Category | Package / Tool | Commands | Enables |
-|---|---|---|---|
-| PDF | Poppler | `pdfinfo`, `pdftocairo` | PDF metadata and rendered page previews |
-| Media | FFmpeg | `ffprobe`, `ffmpeg` | Audio/video metadata, album art, video thumbnails, and wider image format support |
-| Images | resvg | `resvg` | SVG inline previews |
-| Archives | 7-Zip | `7z` | Comic book archive previews, fallback archive listings, and additional archive formats |
-
-### Install Examples
-
-| Platform | Install |
-|---|---|
-| Linux | Install packages that provide `pdfinfo`, `pdftocairo`, `ffprobe`, `ffmpeg`, `resvg`, and `7z`. Package names vary by distro. |
-| macOS / Homebrew | `brew install poppler ffmpeg resvg sevenzip` |
-| FreeBSD | `pkg install poppler-utils ffmpeg resvg 7-zip` |
-| Windows / Scoop | `scoop install poppler ffmpeg resvg 7zip` |
-| Windows / WinGet | Install Poppler, FFmpeg, and 7-Zip with WinGet. Install `resvg` separately if needed. |
-
-<details>
-<summary><strong>Optional Fallback Tools</strong></summary>
-
-Most users do **not** need these, but they can help in edge cases:
-
-| Tool | Command | Used for |
-|---|---|---|
-| ImageMagick | `magick` | SVG fallback when `resvg` is unavailable |
-| libarchive | `bsdtar` | Rare archive formats and ISO fallback |
-| cdrtools / cdrkit | `isoinfo` | Additional ISO listing fallback |
-| unrar | `unrar` | RAR/CBR fallback if `7z` lacks RAR support |
-
-</details>
+See the full optional tools list and package names in the docs:
+https://elio-fm.github.io/docs/optional-tools/
 
 ---
 
 ## Using elio over SSH
 
-`elio` works well over SSH for navigation, file operations, text and code previews, and terminal-based workflows. Rich visual previews and open actions depend on the local terminal and the remote host.
+elio works well over SSH for navigation, file operations, text/code previews, and terminal-based workflows.
 
-- Text and code previews work well, including plain text, source code, Markdown, logs, JSON, YAML, TOML, and HTML previewed as source code.
-- Rich visual previews such as images, rendered PDF pages, video thumbnails, album art, SVG previews, and archive extras depend on terminal image protocol support and optional preview tools on the remote machine.
-- Terminal apps chosen through `Open With`, including default terminal app matches, run inside the current SSH session.
-- `Enter`, `o`, fallback system openers, and GUI-style `Open With` entries use the remote host's opener stack, so they may open there, fail, or do nothing useful from an SSH session.
+Rich visual previews depend on the remote host and the local terminal:
 
-See [Image Previews](#image-previews) and [Optional Preview Tools](#optional-preview-tools).
+- Text and code previews work normally.
+- Images, PDF pages, video thumbnails, album art, SVG previews, and archive extras need terminal image support plus optional preview tools installed on the remote host.
+- Terminal apps opened through `Open With` run inside the SSH session.
+- System openers such as `Enter`, `o`, `open`, `gio`, `xdg-open`, or `cmd /c start` use the remote host's opener stack. From an SSH session, they may open on the remote host, fail, or do nothing useful.
 
 ---
 
 ## Workflow
 
-### Opening Files
+elio supports common file-manager actions directly from the keyboard:
 
-`Enter` enters folders and opens files with the system default application; when items are selected, it opens the selected items instead. `o` always opens the focused item or selected items externally using the system launcher: `open` on macOS, `cmd /c start` on Windows, and `gio` (with `xdg-open` as fallback) on Linux and BSD desktop sessions.
+- `Enter` opens folders or selected files with the system default application.
+- `O` opens files through the Open With flow when supported, including terminal apps.
+- `c` copies names, paths, or directory paths using OSC52 or the platform clipboard.
+- `g` opens quick jumps for common locations such as Home, Downloads, config, and Trash.
+- `d` moves files to Trash; in the Trash view, `d` deletes permanently and `r` restores.
+- `f` searches folders, while `Ctrl+F` searches files in the current tree.
+- `z` jumps through zoxide history when `zoxide` is installed.
+- `!` opens a shell in the current folder and returns to elio when the shell exits.
 
-`O` is for files. On macOS and Linux/BSD desktop sessions, elio discovers matching applications, opens the file directly when there is one match, and shows the Open With chooser when there are multiple. Terminal apps such as `nvim` are supported too. When no match is found, or on platforms without app discovery, elio falls back to the default opener.
+Platform details vary for clipboard tools, trash backends, file openers, and shell selection. See the workflow docs:
+https://elio-fm.github.io/docs/workflow/
 
-### Clipboard
+---
 
-`c` copies selected file names, paths, or directory paths using OSC52 on supported terminals, or falls back to platform clipboard tools:
+## Change Directory on Quit
 
-- Wayland: `wl-copy`
-- X11: `xclip` or `xsel`
-- macOS: `pbcopy`
-- Windows: `clip`
-
-### Go-to Menu
-
-`g` opens a quick jump menu with shortcuts for the top of the current folder, Downloads, Home, the platform config folder, and Trash. The config destination is `~/.config` or `$XDG_CONFIG_HOME` on Linux and BSD, `~/Library/Application Support` on macOS, and `%APPDATA%` on Windows.
-
-### Trash
-
-`d` moves the selected item or selection to the operating system trash. In the Trash view, `d` permanently deletes items and `r` restores them.
-
-Trash uses the platform's native behavior where possible: Linux tries `gio trash` first, then falls back to the Freedesktop Trash layout; BSD uses Freedesktop Trash; macOS moves items to `~/.Trash` and records restore metadata for items trashed by elio.
-
-Windows can move items to the Recycle Bin through the platform trash backend, but elio does not expose the Recycle Bin as a browsable Trash view yet, so restore/permanent-delete-from-Trash workflows are not supported there.
-
-On Freedesktop Trash systems, the stored filename may be changed to avoid collisions, for example `photo.jpg.2`. elio reads the matching `.trashinfo` metadata, so the file is still shown, previewed, opened, and restored as the original `photo.jpg`.
-
-### Fuzzy Search
-
-`f` searches folders and `Ctrl+F` searches files in the current directory tree. Search follows the hidden-file setting, includes symlinks as leaf entries (linked directories appear in folder search, linked files and broken symlinks in file search) but does not descend into linked directories, prunes common generated folders such as `.git`, `node_modules`, and `target`, streams results while scanning, and refreshes when the directory changes. Very large trees are capped so search stays responsive; when the cap is reached, the overlay shows `scan limit reached`.
-
-### Zoxide
-
-`z` opens `zoxide query -i` for jumping to directories from your zoxide history. It requires `zoxide` to be installed and available in `PATH`, and it shows results only after zoxide has recorded directory history. The current directory is excluded from the picker. Extra picker options can be appended with `ELIO_ZOXIDE_OPTS`.
-
-### Shell
-
-`!` opens your shell in the current folder. elio temporarily leaves its TUI, shows a short return hint, then resumes and refreshes the folder after the shell exits. Use `exit` to return to elio; Linux, macOS, BSD, and WSL shells usually also support `Ctrl+D` on an empty prompt.
-
-Changing directories inside that shell only affects the shell session; when it exits, elio returns to the folder where you opened it.
-
-On Linux, macOS, BSD, and WSL, elio uses `$SHELL` with `/bin/sh` as a fallback. On Windows, it uses `COMSPEC` with PowerShell and `cmd` fallbacks. The child shell receives `ELIO_SHELL=1` and an `ELIO_LEVEL` nesting counter for custom prompts and shell startup files.
-
-### Change Directory on Quit
-
-Shell integration lets elio leave your terminal in the directory you were browsing when you quit.
-
-Enable it with:
+elio can leave your shell in the directory you were browsing when you quit:
 
 ```bash
 elio shell install
 ```
 
-Then restart your shell, or run the command printed by the installer.
+Restart your shell, then run `elio` normally. Press `q` to quit and move your shell to elio's final directory, or `Q` to quit without changing directories.
 
-Use elio normally:
-
-```bash
-elio
-```
-
-Press `q` to quit and move your shell to elio's final directory. Press `Q` to quit and keep your shell where it was.
-
-To remove the installed integration:
-
-```bash
-elio shell uninstall
-```
-
-This removes only the managed integration written by `elio shell install`. If you copied output from `elio shell init`, remove that snippet from your shell config manually.
-
-`elio shell install` and `elio shell uninstall` detect your current shell by default. To choose a shell explicitly:
-
-```bash
-elio shell install fish
-elio shell uninstall fish
-```
-
-Replace `fish` with `bash`, `zsh`, or `nu` as needed.
-
-The installer writes elio-managed shell integration to:
-
-- `~/.bashrc` for bash
-- `$ZDOTDIR/.zshrc` or `~/.zshrc` for zsh
-- `$XDG_CONFIG_HOME/fish/conf.d/elio.fish` or `~/.config/fish/conf.d/elio.fish` for fish
-- `$XDG_CONFIG_HOME/nushell/autoload/elio.nu` or `~/.config/nushell/autoload/elio.nu` for Nushell
-
-Existing bash and zsh startup files are preserved: elio only adds, updates, or removes its marked integration block, leaving other user config intact, including symlinks used by dotfile managers. Symlinked Fish `conf.d` and Nushell `autoload` directories are preserved too, and elio refuses to overwrite an existing `elio.fish` or `elio.nu` unless it was previously managed by elio.
-
-If you prefer to manage your shell files yourself, use `elio shell init` instead. It prints the integration snippet without editing any files:
-
-```bash
-elio shell init fish
-elio shell init bash
-elio shell init zsh
-elio shell init nu
-```
-
-For custom wrappers, elio also exposes the file handoff used by the shell integration:
-
-```bash
-elio --cwd-file /path/to/output-file [DIRECTORY]
-```
-
-When elio exits, it writes the final directory to that file. A wrapper can read it and `cd` there. Quitting with `Q` skips writing the file.
-
----
-
-## Preview Coverage
-
-`elio` can preview a broad range of content in the Preview pane, including text, structured data, document details, archive contents, and media metadata with covers or thumbnails when available.
-
-- **Text and code** — plain text, source code with syntax highlighting, and Markdown
-- **Structured data** — JSON, JSONC, JSON5, YAML, TOML, `.env`, logs, CSV/TSV, and SQLite
-- **Documents** — PDF, EPUB, MOBI, AZW3, DOC, DOCX, DOCM, ODT, Pages, XLSX, XLSM, ODS, PPTX, PPTM, and ODP
-- **Media** — image metadata and inline previews, audio metadata and covers, and video metadata and thumbnails
-- **Folders and archives** — directories, ZIP/TAR/RAR/7z archives, CBZ/CBR comic archives, torrents, ISO images, and other disk-image-style containers
-- **Binary files** — metadata previews for non-text files
-
-See [Optional Preview Tools](#optional-preview-tools) for helpers that unlock richer metadata, thumbnails, and rendered previews.
+See the shell integration docs for uninstall steps, supported shells, and manual setup:
+https://elio-fm.github.io/docs/shell-integration/
 
 ---
 
 ## Configuration
 
+elio reads configuration from:
+
 | Platform | Config file |
 |---|---|
-| Linux / BSD | `~/.config/elio/config.toml` (or `$XDG_CONFIG_HOME/elio/config.toml`) |
+| Linux / BSD | `~/.config/elio/config.toml` or `$XDG_CONFIG_HOME/elio/config.toml` |
 | macOS | `~/Library/Application Support/elio/config.toml` |
 | Windows | `%APPDATA%\elio\config.toml` |
 
-See [examples/config.toml](examples/config.toml) for a complete annotated example.
-
-Supported sections:
-
-- `[ui]`: startup UI options like top bar, hidden files, and initial grid view
-- `[places]`: pinned sidebar entries and the `Devices` section
-- `[layout.panes]`: relative pane weights for Places, Files, and Preview
-- `[keys]`: single-character key rebinding for browser actions
-
-Notes:
-
-- Omit `[places]` to keep the default sidebar.
-- Omit `[layout.panes]` to use the built-in responsive layout.
-- If `[layout.panes]` is set, all three pane weights must be provided.
-- `places = 0` hides the Places pane, and `preview = 0` hides the Preview pane.
-- `files` must be greater than `0`.
-- Pane weights are relative, so `10/45/45` and `20/90/90` produce the same split.
-- In narrow terminals where Preview stacks below Files, `files` and `preview` control the vertical split.
-- `places.entries` accepts built-in names, `{ builtin, icon? }`, or `{ title, path, icon? }`.
-- Custom `places` paths must be absolute or start with `~/`.
-- Invalid `places` entries are skipped with a warning.
-- Invalid or conflicting key bindings fall back to defaults with a warning.
-- Invalid TOML falls back to the built-in defaults.
+See [`examples/config.toml`](examples/config.toml) for an annotated example, or the configuration docs:
+https://elio-fm.github.io/docs/configuration/
 
 ---
 
 ## Theming
 
+elio themes are TOML files layered on top of the built-in defaults, so you only need to set the keys you want to change.
+
 | Platform | Theme file |
 |---|---|
-| Linux / BSD | `~/.config/elio/theme.toml` (or `$XDG_CONFIG_HOME/elio/theme.toml`) |
+| Linux / BSD | `~/.config/elio/theme.toml` or `$XDG_CONFIG_HOME/elio/theme.toml` |
 | macOS | `~/Library/Application Support/elio/theme.toml` |
 | Windows | `%APPDATA%\elio\theme.toml` |
 
-Theme files layer on top of the built-in defaults, so you only need to set the keys you want to change.
+See [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml) for the full default theme and [`examples/themes/`](examples/themes/) for ready-made themes.
 
-Supported sections:
+For transparent or terminal-palette setups, see [`examples/themes/transparent/theme.toml`](examples/themes/transparent/theme.toml) and [`examples/themes/terminal-ansi/theme.toml`](examples/themes/terminal-ansi/theme.toml).
 
-- `[palette]`: app-wide colors
-- `[preview.code]`: syntax highlight colors for code previews
-- `[classes.<name>]`: default icon and color for a file class
-- `[extensions.<ext>]`: overrides by file extension
-- `[files."<name>"]`: overrides by exact filename
-- `[directories."<name>"]`: overrides by exact directory name
-
-Rules:
-
-- `symlink_directory` and `broken_symlink` win over exact-name and extension rules.
-- Exact filename or directory rules win over extension rules.
-- Extension rules win over class defaults.
-- Symlinked files keep their normal file-type appearance.
-- Matching is case-insensitive.
-- Invalid theme files fall back to the built-in defaults, with errors reported to stderr.
-
-**Built-in file classes:** `directory` · `symlink_directory` · `broken_symlink` · `code` · `config` · `document` · `license` · `image` · `audio` · `video` · `archive` · `font` · `data` · `file`
-
-Color values can be:
-
-- Hex RGB colors, such as `"#7aaeff"`.
-- `"none"` / `"transparent"` to reset that foreground or background to the terminal default. For background fields, this lets transparent terminals show through.
-- Terminal ANSI palette colors, such as `"ansi-blue"`, `"ansi-bright-blue"`, or `"indexed-12"`.
-
-Use `indexed-N` for terminal indexed colors from `0` to `255`.
-
-The `terminal-ansi` example uses ANSI colors and terminal-default backgrounds, while keeping the default RGB `selected_bg` for more reliable selection contrast. See [`examples/themes/transparent/theme.toml`](examples/themes/transparent/theme.toml) and [`examples/themes/terminal-ansi/theme.toml`](examples/themes/terminal-ansi/theme.toml).
-
-See [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml) for the full default theme.
+Theme docs:
+https://elio-fm.github.io/docs/themes/
 
 ---
 
