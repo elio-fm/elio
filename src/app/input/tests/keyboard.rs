@@ -106,6 +106,47 @@ fn capital_q_quits_without_changing_directory() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
+#[test]
+fn capital_d_opens_permanent_delete_prompt_outside_trash() {
+    let root = temp_path("delete-permanently-shortcut");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("gone.txt"), "bye").expect("failed to write file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('D'))))
+        .expect("D should open permanent delete prompt");
+
+    assert!(app.trash_is_open());
+    assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn capital_d_permanent_delete_prompt_uses_selection() {
+    let root = temp_path("delete-permanently-selection-shortcut");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let alpha = root.join("alpha.txt");
+    let beta = root.join("beta.txt");
+    fs::write(&alpha, "alpha").expect("failed to write alpha");
+    fs::write(&beta, "beta").expect("failed to write beta");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.selected_paths.insert(alpha);
+    app.navigation.selected_paths.insert(beta);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('D'))))
+        .expect("D should open permanent delete prompt");
+
+    assert!(app.trash_is_open());
+    assert_eq!(app.trash_title(), "Delete permanently 2 files?");
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
 #[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 fn enter_opens_selected_file_with_system_opener() {

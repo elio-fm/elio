@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added a configurable `D` (`delete_permanently`) shortcut for permanently deleting selected entries without first opening Trash. ([#140])
+
 ## [1.7.0] - 2026-05-30
 
 ### Added
@@ -199,3 +203,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#129]: https://github.com/elio-fm/elio/issues/129
 [#134]: https://github.com/elio-fm/elio/issues/134
 [#138]: https://github.com/elio-fm/elio/pull/138
+[#140]: https://github.com/elio-fm/elio/issues/140

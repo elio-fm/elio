@@ -9,6 +9,7 @@ pub(crate) enum Action {
     Cut,
     Paste,
     Trash,
+    DeletePermanently,
     Create,
     Rename,
     CopyPath,
@@ -37,6 +38,7 @@ pub(crate) struct KeyBindings {
     pub cut: char,
     pub paste: char,
     pub trash: char,
+    pub delete_permanently: char,
     pub create: char,
     pub rename: char,
     pub copy_path: char,
@@ -74,6 +76,7 @@ impl Default for KeyBindings {
             cut: 'x',
             paste: 'p',
             trash: 'd',
+            delete_permanently: 'D',
             create: 'a',
             rename: 'r',
             copy_path: 'c',
@@ -101,6 +104,7 @@ pub(super) struct KeysConfigOverride {
     cut: Option<String>,
     paste: Option<String>,
     trash: Option<String>,
+    delete_permanently: Option<String>,
     create: Option<String>,
     rename: Option<String>,
     copy_path: Option<String>,
@@ -128,6 +132,7 @@ impl KeyBindings {
             _ if c == self.cut => Some(Action::Cut),
             _ if c == self.paste => Some(Action::Paste),
             _ if c == self.trash => Some(Action::Trash),
+            _ if c == self.delete_permanently => Some(Action::DeletePermanently),
             _ if c == self.create => Some(Action::Create),
             _ if c == self.rename => Some(Action::Rename),
             _ if c == self.copy_path => Some(Action::CopyPath),
@@ -160,7 +165,7 @@ impl KeyBindings {
 
     pub(super) fn from_override(overrides: KeysConfigOverride, defaults: &Self) -> Self {
         // Each entry: (field_name, user_override_string, default_char)
-        let raw: [(&str, Option<String>, char); 21] = [
+        let raw: [(&str, Option<String>, char); 22] = [
             ("quit", overrides.quit, defaults.quit),
             (
                 "quit_without_cd",
@@ -171,6 +176,11 @@ impl KeyBindings {
             ("cut", overrides.cut, defaults.cut),
             ("paste", overrides.paste, defaults.paste),
             ("trash", overrides.trash, defaults.trash),
+            (
+                "delete_permanently",
+                overrides.delete_permanently,
+                defaults.delete_permanently,
+            ),
             ("create", overrides.create, defaults.create),
             ("rename", overrides.rename, defaults.rename),
             ("copy_path", overrides.copy_path, defaults.copy_path),
@@ -215,7 +225,7 @@ impl KeyBindings {
         // Step 1: parse each override string independently, falling back to
         // default on any format or reserved-char error.
         // (resolved_char, is_user_set)
-        let mut candidates: [(char, bool); 21] = [(' ', false); 21];
+        let mut candidates: [(char, bool); 22] = [(' ', false); 22];
         for (index, (name, override_str, default)) in raw.iter().enumerate() {
             candidates[index] = match override_str {
                 None => (*default, false),
@@ -254,12 +264,12 @@ impl KeyBindings {
         // binding does not silently leave a conflict with another.
         loop {
             let mut changed = false;
-            for index in 0..21 {
+            for index in 0..22 {
                 if !candidates[index].1 {
                     continue;
                 }
                 let candidate = candidates[index].0;
-                let collision = (0..21)
+                let collision = (0..22)
                     .filter(|&other_index| other_index != index)
                     .any(|other_index| candidates[other_index].0 == candidate);
                 if collision {
@@ -295,21 +305,22 @@ impl KeyBindings {
             cut: resolved(3),
             paste: resolved(4),
             trash: resolved(5),
-            create: resolved(6),
-            rename: resolved(7),
-            copy_path: resolved(8),
-            search_folders: resolved(9),
-            zoxide: resolved(10),
-            shell: resolved(11),
-            open: resolved(12),
-            open_with: resolved(13),
-            sort: resolved(14),
-            toggle_view: resolved(15),
-            toggle_hidden: resolved(16),
-            scroll_preview_left: resolved(17),
-            scroll_preview_right: resolved(18),
-            scroll_preview_up: resolved(19),
-            scroll_preview_down: resolved(20),
+            delete_permanently: resolved(6),
+            create: resolved(7),
+            rename: resolved(8),
+            copy_path: resolved(9),
+            search_folders: resolved(10),
+            zoxide: resolved(11),
+            shell: resolved(12),
+            open: resolved(13),
+            open_with: resolved(14),
+            sort: resolved(15),
+            toggle_view: resolved(16),
+            toggle_hidden: resolved(17),
+            scroll_preview_left: resolved(18),
+            scroll_preview_right: resolved(19),
+            scroll_preview_up: resolved(20),
+            scroll_preview_down: resolved(21),
         }
     }
 }

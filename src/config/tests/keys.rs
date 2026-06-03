@@ -6,6 +6,7 @@ fn keys_default_bindings_are_sane() {
     assert_eq!(config.keys.yank, 'y');
     assert_eq!(config.keys.cut, 'x');
     assert_eq!(config.keys.paste, 'p');
+    assert_eq!(config.keys.delete_permanently, 'D');
     assert_eq!(config.keys.quit, 'q');
     assert_eq!(config.keys.quit_without_cd, 'Q');
     assert_eq!(config.keys.zoxide, 'z');
@@ -119,6 +120,10 @@ fn action_for_returns_correct_action_for_default_bindings() {
     assert_eq!(key_bindings.action_for('y'), Some(Action::Yank));
     assert_eq!(key_bindings.action_for('x'), Some(Action::Cut));
     assert_eq!(key_bindings.action_for('p'), Some(Action::Paste));
+    assert_eq!(
+        key_bindings.action_for('D'),
+        Some(Action::DeletePermanently)
+    );
     assert_eq!(key_bindings.action_for('q'), Some(Action::Quit));
     assert_eq!(key_bindings.action_for('Q'), Some(Action::QuitWithoutCd));
     assert_eq!(key_bindings.action_for('o'), Some(Action::Open));
@@ -139,6 +144,19 @@ yank = "Y"
     .expect("config should parse");
     assert_eq!(config.keys.action_for('Y'), Some(Action::Yank));
     assert_eq!(config.keys.action_for('y'), None);
+}
+
+#[test]
+fn delete_permanently_can_be_overridden() {
+    let config = Config::from_str(
+        r#"
+[keys]
+delete_permanently = "X"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('X'), Some(Action::DeletePermanently));
+    assert_eq!(config.keys.action_for('D'), None);
 }
 
 #[test]

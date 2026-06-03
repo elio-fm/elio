@@ -313,6 +313,32 @@ fn confirm_trash_permanently_deletes_selected_items_inside_trash() {
 }
 
 #[test]
+fn confirm_delete_permanently_removes_selected_items_outside_trash() {
+    let root = temp_path("delete-permanent-outside-trash");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("gone.txt"), "bye").expect("failed to write file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.selected_paths.insert(root.join("gone.txt"));
+    app.open_delete_permanently_prompt();
+
+    assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
+    app.confirm_trash().expect("delete should succeed");
+
+    assert!(app.overlays.trash.is_none());
+    assert!(app.navigation.selected_paths.is_empty());
+
+    wait_for_trash_and_reload(&mut app);
+
+    assert!(!root.join("gone.txt").exists());
+    assert_eq!(app.status_message(), "Permanently deleted \"gone.txt\"");
+
+    app.navigation.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn after_delete_cursor_moves_to_next_surviving_entry() {
     // Deleting a middle entry should leave the cursor on what was the
     // entry immediately below it (now occupying the same visual row).

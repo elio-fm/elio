@@ -71,7 +71,20 @@ impl App {
             return;
         }
 
-        let permanent = self.cwd_is_trash();
+        self.open_trash_prompt_for_targets(targets, self.cwd_is_trash());
+    }
+
+    pub(in crate::app) fn open_delete_permanently_prompt(&mut self) {
+        let targets = self.selected_trash_targets();
+
+        if targets.is_empty() {
+            return;
+        }
+
+        self.open_trash_prompt_for_targets(targets, true);
+    }
+
+    fn open_trash_prompt_for_targets(&mut self, targets: Vec<TrashTarget>, permanent: bool) {
         self.overlays.help = false;
         self.overlays.search = None;
         self.overlays.create = None;

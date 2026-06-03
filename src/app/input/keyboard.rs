@@ -270,6 +270,7 @@ impl App {
             Action::Cut => self.cut(),
             Action::Paste => self.paste()?,
             Action::Trash => self.open_trash_prompt(),
+            Action::DeletePermanently => self.open_delete_permanently_prompt(),
             Action::Create => self.open_create_prompt(),
             Action::Rename => {
                 if self.navigation.in_trash {

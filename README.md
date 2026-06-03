@@ -196,7 +196,7 @@ elio supports common file-manager actions directly from the keyboard:
 - `O` opens files through the Open With flow when supported, including terminal apps.
 - `c` copies names, paths, or directory paths using OSC52 or the platform clipboard.
 - `g` opens quick jumps for common locations such as Home, Downloads, config, and Trash.
-- `d` moves files to Trash; in the Trash view, `d` deletes permanently and `r` restores.
+- `d` moves files to Trash; `D` deletes permanently; in the Trash view, `d` also deletes permanently and `r` restores.
 - `f` searches folders, while `Ctrl+F` searches files in the current tree.
 - `z` jumps through zoxide history when `zoxide` is installed.
 - `!` opens a shell in the current folder and returns to elio when the shell exits.
@@ -291,6 +291,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | `!` `*` | Open shell in current folder |
 | `a` `*` | Create file or folder |
 | `d` `*` | Trash; permanently delete if already in trash |
+| `D` `*` | Delete permanently |
 | `r` `*` | Rename / bulk rename / restore from trash |
 | `F2` | Rename / bulk rename |
 

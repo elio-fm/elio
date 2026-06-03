@@ -67,6 +67,7 @@ show_top_bar = false
 # cut                  = "x"
 # paste                = "p"
 # trash                = "d"
+# delete_permanently   = "D"   # Shift+D
 # create               = "a"
 # rename               = "r"
 # copy_path            = "c"

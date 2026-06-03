@@ -51,6 +51,7 @@ pub(super) fn render_help(
         e(&kb.create.to_string(), "create file or folder"),
         e("Alt/Shift+Enter", "add line in create prompt"),
         e(&kb.trash.to_string(), "trash (delete if in trash)"),
+        e(&kb.delete_permanently.to_string(), "delete permanently"),
         e(&rename_key, "rename (bulk if selection)"),
         e(&rename_trash_key, "restore from trash"),
         e(&kb.shell.to_string(), "open shell here"),
