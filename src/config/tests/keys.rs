@@ -74,7 +74,7 @@ fn keys_rejects_invalid_array_member_and_uses_default() {
     let config = Config::from_str(
         r#"
 [keys]
-open = ["e", "enter"]
+open = ["e", "space"]
 "#,
     )
     .expect("config should parse");
@@ -208,6 +208,13 @@ fn action_for_returns_correct_action_for_default_bindings() {
     assert_eq!(key_bindings.action_for('Q'), Some(Action::QuitWithoutCd));
     assert_eq!(key_bindings.action_for('o'), Some(Action::Open));
     assert_eq!(key_bindings.action_for('O'), Some(Action::OpenWith));
+    assert_eq!(
+        key_bindings.action_for_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        )),
+        Some(Action::OpenOrEnter)
+    );
     assert_eq!(key_bindings.action_for('z'), Some(Action::Zoxide));
     assert_eq!(key_bindings.action_for('!'), Some(Action::Shell));
     assert_eq!(key_bindings.action_for('h'), Some(Action::NavLeft));
@@ -374,6 +381,91 @@ open_with = "w"
     .expect("config should parse");
     assert_eq!(config.keys.action_for('w'), Some(Action::OpenWith));
     assert_eq!(config.keys.action_for('O'), None);
+}
+
+#[test]
+fn open_or_enter_defaults_to_enter() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let key_bindings = KeyBindings::default();
+    assert_eq!(key_bindings.open_or_enter.to_string(), "Enter");
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(Action::OpenOrEnter)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::Char('\n'), KeyModifiers::NONE)),
+        Some(Action::OpenOrEnter)
+    );
+}
+
+#[test]
+fn open_or_enter_can_add_l_after_nav_right_frees_it() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+nav_right = "right"
+open_or_enter = ["enter", "l"]
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('l'), Some(Action::OpenOrEnter));
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(Action::OpenOrEnter)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+        Some(Action::NavRight)
+    );
+}
+
+#[test]
+fn open_or_enter_rejects_l_while_nav_right_owns_it() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+open_or_enter = ["enter", "l"]
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('l'), Some(Action::NavRight));
+    assert_eq!(config.keys.open_or_enter.to_string(), "Enter");
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(Action::OpenOrEnter)
+    );
+}
+
+#[test]
+fn enter_can_move_to_another_action_when_open_or_enter_frees_it() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+open_or_enter = "b"
+open = "enter"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('b'), Some(Action::OpenOrEnter));
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(Action::Open)
+    );
 }
 
 #[test]

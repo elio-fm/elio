@@ -214,7 +214,6 @@ impl App {
             KeyCode::End => self.select_last(),
             KeyCode::Char('g') => self.open_goto_overlay(),
             KeyCode::Char('G') => self.select_last(),
-            KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r') => self.open_selected()?,
             KeyCode::Backspace => self.go_parent()?,
             KeyCode::Char(' ') => self.toggle_selection(),
             KeyCode::Char('+') | KeyCode::Char('=')
@@ -287,6 +286,7 @@ impl App {
             }
             Action::Open => self.open_in_system()?,
             Action::OpenWith => self.open_open_with_overlay(),
+            Action::OpenOrEnter => self.open_selected()?,
             Action::Sort => self.cycle_sort_mode()?,
             Action::ToggleView => self.toggle_view_mode(),
             Action::ToggleHidden => self.toggle_hidden_files()?,
@@ -305,7 +305,8 @@ impl App {
                 } else if let Some(entry) = self.selected_entry().filter(|entry| entry.is_dir()) {
                     self.set_dir(entry.path.clone())?;
                 } else {
-                    self.status = "Press Enter to open files".to_string();
+                    let open_key = crate::config::keys().open_or_enter.to_string();
+                    self.status = format!("Press {open_key} to open files");
                 }
             }
             Action::ScrollPreviewLeft => {

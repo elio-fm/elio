@@ -19,6 +19,7 @@ pub(crate) enum Action {
     Shell,
     Open,
     OpenWith,
+    OpenOrEnter,
     Sort,
     ToggleView,
     ToggleHidden,
@@ -38,6 +39,7 @@ pub(crate) enum NamedKey {
     Right,
     Up,
     Down,
+    Enter,
 }
 
 impl NamedKey {
@@ -47,6 +49,7 @@ impl NamedKey {
             "right" => Some(Self::Right),
             "up" => Some(Self::Up),
             "down" => Some(Self::Down),
+            "enter" => Some(Self::Enter),
             _ => None,
         }
     }
@@ -58,6 +61,10 @@ impl NamedKey {
                 | (Self::Right, KeyCode::Right)
                 | (Self::Up, KeyCode::Up)
                 | (Self::Down, KeyCode::Down)
+                | (
+                    Self::Enter,
+                    KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r')
+                )
         )
     }
 }
@@ -69,6 +76,7 @@ impl std::fmt::Display for NamedKey {
             Self::Right => "→",
             Self::Up => "↑",
             Self::Down => "↓",
+            Self::Enter => "Enter",
         })
     }
 }
@@ -163,7 +171,7 @@ impl PartialEq<char> for KeyList {
 /// `config.toml` to override that binding. Values may be either a single
 /// string (`open = "o"`) or a list of strings (`open = ["o", "e"]`).
 /// Character bindings must be one character; named bindings currently support
-/// `left`, `right`, `up`, and `down`.
+/// `left`, `right`, `up`, `down`, and `enter`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct KeyBindings {
     pub quit: KeyList,
@@ -181,6 +189,7 @@ pub(crate) struct KeyBindings {
     pub shell: KeyList,
     pub open: KeyList,
     pub open_with: KeyList,
+    pub open_or_enter: KeyList,
     pub sort: KeyList,
     pub toggle_view: KeyList,
     pub toggle_hidden: KeyList,
@@ -222,6 +231,7 @@ impl Default for KeyBindings {
             shell: KeyList::one('!'),
             open: KeyList::one('o'),
             open_with: KeyList::one('O'),
+            open_or_enter: KeyList(vec![KeySpec::Named(NamedKey::Enter)]),
             sort: KeyList::one('s'),
             toggle_view: KeyList::one('v'),
             toggle_hidden: KeyList::one('.'),
@@ -261,6 +271,7 @@ pub(super) struct KeysConfigOverride {
     shell: Option<KeyConfigOverride>,
     open: Option<KeyConfigOverride>,
     open_with: Option<KeyConfigOverride>,
+    open_or_enter: Option<KeyConfigOverride>,
     sort: Option<KeyConfigOverride>,
     toggle_view: Option<KeyConfigOverride>,
     toggle_hidden: Option<KeyConfigOverride>,
@@ -299,6 +310,7 @@ impl KeyBindings {
             (&self.shell, Action::Shell),
             (&self.open, Action::Open),
             (&self.open_with, Action::OpenWith),
+            (&self.open_or_enter, Action::OpenOrEnter),
             (&self.sort, Action::Sort),
             (&self.toggle_view, Action::ToggleView),
             (&self.toggle_hidden, Action::ToggleHidden),
@@ -409,6 +421,11 @@ impl KeyBindings {
                 name: "open_with",
                 override_value: overrides.open_with,
                 default: defaults.open_with.clone(),
+            },
+            RawBinding {
+                name: "open_or_enter",
+                override_value: overrides.open_or_enter,
+                default: defaults.open_or_enter.clone(),
             },
             RawBinding {
                 name: "sort",
@@ -529,17 +546,18 @@ impl KeyBindings {
             shell: resolved(12),
             open: resolved(13),
             open_with: resolved(14),
-            sort: resolved(15),
-            toggle_view: resolved(16),
-            toggle_hidden: resolved(17),
-            nav_left: resolved(18),
-            nav_down: resolved(19),
-            nav_up: resolved(20),
-            nav_right: resolved(21),
-            scroll_preview_left: resolved(22),
-            scroll_preview_right: resolved(23),
-            scroll_preview_up: resolved(24),
-            scroll_preview_down: resolved(25),
+            open_or_enter: resolved(15),
+            sort: resolved(16),
+            toggle_view: resolved(17),
+            toggle_hidden: resolved(18),
+            nav_left: resolved(19),
+            nav_down: resolved(20),
+            nav_up: resolved(21),
+            nav_right: resolved(22),
+            scroll_preview_left: resolved(23),
+            scroll_preview_right: resolved(24),
+            scroll_preview_up: resolved(25),
+            scroll_preview_down: resolved(26),
         }
     }
 }

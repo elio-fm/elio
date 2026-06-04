@@ -57,9 +57,9 @@
 # files = 45
 # preview = 45
 
-# Rebind browser action keys. Each value may be a single one-character string,
-# a list of one-character strings, or the named arrow keys "left", "right",
-# "up", and "down" for navigation actions.
+# Rebind browser action keys. Each value may be a single key or a list.
+# Keys may be one-character strings or named keys: "left", "right", "up",
+# "down", and "enter".
 # Example: open_with = ["O", "w"].
 # Setting a key replaces that action's full default list, not just one entry.
 # Example: nav_down = "j" removes the default "down" arrow binding.
@@ -85,6 +85,7 @@
 # shell                = "!"
 # open                 = "o"
 # open_with            = "O"
+# open_or_enter        = "enter"
 # sort                 = "s"
 # toggle_view          = "v"
 # toggle_hidden        = "."

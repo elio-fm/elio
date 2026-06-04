@@ -258,7 +258,7 @@ https://elio-fm.github.io/docs/themes/
 <details>
 <summary><strong>Controls</strong></summary>
 
-Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults are shown here. Configurable actions accept either one key or a list, such as `open_with = ["O", "w"]`. Navigation actions also accept `left`, `right`, `up`, and `down`. Setting an action replaces its full default key list.
+Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults are shown here. Configurable actions accept either one key or a list, such as `open_with = ["O", "w"]`. Named keys are supported for `left`, `right`, `up`, `down`, and `enter`. Setting an action replaces its full default key list.
 
 ### Navigation
 
@@ -268,7 +268,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | `j` / `↓` `*` | Move down |
 | `h` / `←` `*` / `Backspace` | Go to parent directory |
 | `l` / `→` `*` | Enter folder |
-| `Enter` | Enter folder / open file or selection |
+| `Enter` `*` | Enter folder / open file or selection |
 | `g` | Go-to menu (`g` top, `d` downloads, `h` home, `c` config folder, `t` trash) |
 | `G` | Jump to last item |
 | `PageUp` / `PageDown` | Page up / down |

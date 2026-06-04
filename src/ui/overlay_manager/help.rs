@@ -24,7 +24,7 @@ pub(super) fn render_help(
         e(&kb.nav_down.to_string(), "move down"),
         e(&parent_key, "parent folder"),
         e(&kb.nav_right.to_string(), "enter folder"),
-        e("Enter", "enter folder / open"),
+        e(&kb.open_or_enter.to_string(), "enter folder / open"),
         e("g", "go-to menu"),
         e("G", "last item"),
         e("PageUp / PageDown", "page up / down"),
