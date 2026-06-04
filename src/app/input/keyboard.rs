@@ -202,23 +202,11 @@ impl App {
             }
             KeyCode::Tab => self.step_sidebar_place(1)?,
             KeyCode::BackTab => self.step_sidebar_place(-1)?,
-            KeyCode::Up | KeyCode::Char('k') => self.move_vertical_keyboard(-1),
-            KeyCode::Down | KeyCode::Char('j') => self.move_vertical_keyboard(1),
-            KeyCode::Left | KeyCode::Char('h') => {
-                if self.navigation.view_mode == ViewMode::Grid {
-                    self.move_by_keyboard(-1);
-                } else {
-                    self.go_parent()?;
-                }
-            }
-            KeyCode::Right | KeyCode::Char('l') => {
-                if self.navigation.view_mode == ViewMode::Grid {
-                    self.move_by_keyboard(1);
-                } else if let Some(entry) = self.selected_entry().filter(|entry| entry.is_dir()) {
-                    self.set_dir(entry.path.clone())?;
-                } else {
-                    self.status = "Press Enter to open files".to_string();
-                }
+            _ if crate::config::keys().action_for_key(key).is_some() => {
+                let action = crate::config::keys()
+                    .action_for_key(key)
+                    .expect("action was checked above");
+                self.dispatch_action(action)?;
             }
             KeyCode::PageUp => self.page(-1),
             KeyCode::PageDown => self.page(1),
@@ -302,6 +290,24 @@ impl App {
             Action::Sort => self.cycle_sort_mode()?,
             Action::ToggleView => self.toggle_view_mode(),
             Action::ToggleHidden => self.toggle_hidden_files()?,
+            Action::NavLeft => {
+                if self.navigation.view_mode == ViewMode::Grid {
+                    self.move_by_keyboard(-1);
+                } else {
+                    self.go_parent()?;
+                }
+            }
+            Action::NavDown => self.move_vertical_keyboard(1),
+            Action::NavUp => self.move_vertical_keyboard(-1),
+            Action::NavRight => {
+                if self.navigation.view_mode == ViewMode::Grid {
+                    self.move_by_keyboard(1);
+                } else if let Some(entry) = self.selected_entry().filter(|entry| entry.is_dir()) {
+                    self.set_dir(entry.path.clone())?;
+                } else {
+                    self.status = "Press Enter to open files".to_string();
+                }
+            }
             Action::ScrollPreviewLeft => {
                 let _ = self.scroll_preview_columns(-1);
             }
@@ -355,16 +361,18 @@ impl App {
             return None;
         }
 
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => Some(NavigationRepeatKey::Up),
-            KeyCode::Down | KeyCode::Char('j') => Some(NavigationRepeatKey::Down),
-            KeyCode::Left | KeyCode::Char('h') => Some(NavigationRepeatKey::Left),
-            KeyCode::Right | KeyCode::Char('l') => Some(NavigationRepeatKey::Right),
-            KeyCode::PageUp => Some(NavigationRepeatKey::PageUp),
-            KeyCode::PageDown => Some(NavigationRepeatKey::PageDown),
-            KeyCode::Home => Some(NavigationRepeatKey::Home),
-            KeyCode::End | KeyCode::Char('G') => Some(NavigationRepeatKey::End),
-            _ => None,
+        match crate::config::keys().action_for_key(key) {
+            Some(crate::config::Action::NavUp) => Some(NavigationRepeatKey::Up),
+            Some(crate::config::Action::NavDown) => Some(NavigationRepeatKey::Down),
+            Some(crate::config::Action::NavLeft) => Some(NavigationRepeatKey::Left),
+            Some(crate::config::Action::NavRight) => Some(NavigationRepeatKey::Right),
+            _ => match key.code {
+                KeyCode::PageUp => Some(NavigationRepeatKey::PageUp),
+                KeyCode::PageDown => Some(NavigationRepeatKey::PageDown),
+                KeyCode::Home => Some(NavigationRepeatKey::Home),
+                KeyCode::End | KeyCode::Char('G') => Some(NavigationRepeatKey::End),
+                _ => None,
+            },
         }
     }
 

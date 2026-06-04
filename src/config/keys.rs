@@ -1,3 +1,4 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde::Deserialize;
 
 /// A browser action that can be triggered by a configurable key binding.
@@ -21,41 +22,131 @@ pub(crate) enum Action {
     Sort,
     ToggleView,
     ToggleHidden,
+    NavLeft,
+    NavDown,
+    NavUp,
+    NavRight,
     ScrollPreviewLeft,
     ScrollPreviewRight,
     ScrollPreviewUp,
     ScrollPreviewDown,
 }
 
-/// One or more single-character key bindings for a browser action.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum NamedKey {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+impl NamedKey {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "left" => Some(Self::Left),
+            "right" => Some(Self::Right),
+            "up" => Some(Self::Up),
+            "down" => Some(Self::Down),
+            _ => None,
+        }
+    }
+
+    fn matches(self, code: KeyCode) -> bool {
+        matches!(
+            (self, code),
+            (Self::Left, KeyCode::Left)
+                | (Self::Right, KeyCode::Right)
+                | (Self::Up, KeyCode::Up)
+                | (Self::Down, KeyCode::Down)
+        )
+    }
+}
+
+impl std::fmt::Display for NamedKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Left => "←",
+            Self::Right => "→",
+            Self::Up => "↑",
+            Self::Down => "↓",
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum KeySpec {
+    Char(char),
+    Named(NamedKey),
+}
+
+impl KeySpec {
+    fn single_char(self) -> Option<char> {
+        match self {
+            Self::Char(c) => Some(c),
+            Self::Named(_) => None,
+        }
+    }
+
+    fn matches_event(self, key: KeyEvent) -> bool {
+        if key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
+            return false;
+        }
+
+        match self {
+            Self::Char(c) => matches!(key.code, KeyCode::Char(actual) if actual == c),
+            Self::Named(named) => named.matches(key.code),
+        }
+    }
+}
+
+impl std::fmt::Display for KeySpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Char(c) => write!(f, "{c}"),
+            Self::Named(named) => write!(f, "{named}"),
+        }
+    }
+}
+
+/// One or more key bindings for a browser action.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct KeyList(Vec<char>);
+pub(crate) struct KeyList(Vec<KeySpec>);
 
 impl KeyList {
     fn one(c: char) -> Self {
-        Self(vec![c])
+        Self(vec![KeySpec::Char(c)])
     }
 
-    fn contains(&self, c: char) -> bool {
-        self.0.contains(&c)
+    fn contains(&self, key: KeySpec) -> bool {
+        self.0.contains(&key)
     }
 
-    fn chars(&self) -> impl Iterator<Item = char> + '_ {
+    fn matches_event(&self, key: KeyEvent) -> bool {
+        self.0.iter().any(|spec| spec.matches_event(key))
+    }
+
+    fn keys(&self) -> impl Iterator<Item = KeySpec> + '_ {
         self.0.iter().copied()
     }
 
-    pub(crate) fn as_slice(&self) -> &[char] {
-        &self.0
+    pub(crate) fn single_char(&self) -> Option<char> {
+        match self.0.as_slice() {
+            [spec] => spec.single_char(),
+            _ => None,
+        }
     }
 }
 
 impl std::fmt::Display for KeyList {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (index, c) in self.0.iter().enumerate() {
+        for (index, key) in self.0.iter().enumerate() {
             if index > 0 {
                 f.write_str("/")?;
             }
-            write!(f, "{c}")?;
+            write!(f, "{key}")?;
         }
         Ok(())
     }
@@ -63,15 +154,16 @@ impl std::fmt::Display for KeyList {
 
 impl PartialEq<char> for KeyList {
     fn eq(&self, other: &char) -> bool {
-        self.0.as_slice() == [*other]
+        self.0.as_slice() == [KeySpec::Char(*other)]
     }
 }
 
-/// Single-character key bindings for browser actions.
+/// Key bindings for browser actions.
 /// All fields default to the built-in keys; set any field in `[keys]` in
 /// `config.toml` to override that binding. Values may be either a single
-/// one-character string (`open = "o"`) or a list of one-character strings
-/// (`open = ["o", "e"]`).
+/// string (`open = "o"`) or a list of strings (`open = ["o", "e"]`).
+/// Character bindings must be one character; named bindings currently support
+/// `left`, `right`, `up`, and `down`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct KeyBindings {
     pub quit: KeyList,
@@ -92,6 +184,10 @@ pub(crate) struct KeyBindings {
     pub sort: KeyList,
     pub toggle_view: KeyList,
     pub toggle_hidden: KeyList,
+    pub nav_left: KeyList,
+    pub nav_down: KeyList,
+    pub nav_up: KeyList,
+    pub nav_right: KeyList,
     pub scroll_preview_left: KeyList,
     pub scroll_preview_right: KeyList,
     pub scroll_preview_up: KeyList,
@@ -101,7 +197,6 @@ pub(crate) struct KeyBindings {
 /// Characters that are hard-wired to non-configurable actions and may not be
 /// used as key binding values.
 const RESERVED_CHARS: &[char] = &[
-    'h', 'j', 'k', 'l', // navigation (vim keys)
     'g', 'G', // go-to overlay / jump to last
     '?', // help
     '[', ']', // page stepping (epub / comic / pdf)
@@ -130,6 +225,10 @@ impl Default for KeyBindings {
             sort: KeyList::one('s'),
             toggle_view: KeyList::one('v'),
             toggle_hidden: KeyList::one('.'),
+            nav_left: KeyList(vec![KeySpec::Char('h'), KeySpec::Named(NamedKey::Left)]),
+            nav_down: KeyList(vec![KeySpec::Char('j'), KeySpec::Named(NamedKey::Down)]),
+            nav_up: KeyList(vec![KeySpec::Char('k'), KeySpec::Named(NamedKey::Up)]),
+            nav_right: KeyList(vec![KeySpec::Char('l'), KeySpec::Named(NamedKey::Right)]),
             scroll_preview_left: KeyList::one('H'),
             scroll_preview_right: KeyList::one('L'),
             scroll_preview_up: KeyList::one('K'),
@@ -165,6 +264,10 @@ pub(super) struct KeysConfigOverride {
     sort: Option<KeyConfigOverride>,
     toggle_view: Option<KeyConfigOverride>,
     toggle_hidden: Option<KeyConfigOverride>,
+    nav_left: Option<KeyConfigOverride>,
+    nav_down: Option<KeyConfigOverride>,
+    nav_up: Option<KeyConfigOverride>,
+    nav_right: Option<KeyConfigOverride>,
     scroll_preview_left: Option<KeyConfigOverride>,
     scroll_preview_right: Option<KeyConfigOverride>,
     scroll_preview_up: Option<KeyConfigOverride>,
@@ -178,33 +281,45 @@ struct RawBinding {
 }
 
 impl KeyBindings {
+    /// Returns the action bound to `key`, if any.
+    pub(crate) fn action_for_key(&self, key: KeyEvent) -> Option<Action> {
+        let bindings = [
+            (&self.quit, Action::Quit),
+            (&self.quit_without_cd, Action::QuitWithoutCd),
+            (&self.yank, Action::Yank),
+            (&self.cut, Action::Cut),
+            (&self.paste, Action::Paste),
+            (&self.trash, Action::Trash),
+            (&self.delete_permanently, Action::DeletePermanently),
+            (&self.create, Action::Create),
+            (&self.rename, Action::Rename),
+            (&self.copy_path, Action::CopyPath),
+            (&self.search_folders, Action::SearchFolders),
+            (&self.zoxide, Action::Zoxide),
+            (&self.shell, Action::Shell),
+            (&self.open, Action::Open),
+            (&self.open_with, Action::OpenWith),
+            (&self.sort, Action::Sort),
+            (&self.toggle_view, Action::ToggleView),
+            (&self.toggle_hidden, Action::ToggleHidden),
+            (&self.nav_left, Action::NavLeft),
+            (&self.nav_down, Action::NavDown),
+            (&self.nav_up, Action::NavUp),
+            (&self.nav_right, Action::NavRight),
+            (&self.scroll_preview_left, Action::ScrollPreviewLeft),
+            (&self.scroll_preview_right, Action::ScrollPreviewRight),
+            (&self.scroll_preview_up, Action::ScrollPreviewUp),
+            (&self.scroll_preview_down, Action::ScrollPreviewDown),
+        ];
+
+        bindings
+            .iter()
+            .find_map(|(keys, action)| keys.matches_event(key).then_some(*action))
+    }
+
     /// Returns the action bound to `c`, if any.
     pub(crate) fn action_for(&self, c: char) -> Option<Action> {
-        match c {
-            _ if self.quit.contains(c) => Some(Action::Quit),
-            _ if self.quit_without_cd.contains(c) => Some(Action::QuitWithoutCd),
-            _ if self.yank.contains(c) => Some(Action::Yank),
-            _ if self.cut.contains(c) => Some(Action::Cut),
-            _ if self.paste.contains(c) => Some(Action::Paste),
-            _ if self.trash.contains(c) => Some(Action::Trash),
-            _ if self.delete_permanently.contains(c) => Some(Action::DeletePermanently),
-            _ if self.create.contains(c) => Some(Action::Create),
-            _ if self.rename.contains(c) => Some(Action::Rename),
-            _ if self.copy_path.contains(c) => Some(Action::CopyPath),
-            _ if self.search_folders.contains(c) => Some(Action::SearchFolders),
-            _ if self.zoxide.contains(c) => Some(Action::Zoxide),
-            _ if self.shell.contains(c) => Some(Action::Shell),
-            _ if self.open.contains(c) => Some(Action::Open),
-            _ if self.open_with.contains(c) => Some(Action::OpenWith),
-            _ if self.sort.contains(c) => Some(Action::Sort),
-            _ if self.toggle_view.contains(c) => Some(Action::ToggleView),
-            _ if self.toggle_hidden.contains(c) => Some(Action::ToggleHidden),
-            _ if self.scroll_preview_left.contains(c) => Some(Action::ScrollPreviewLeft),
-            _ if self.scroll_preview_right.contains(c) => Some(Action::ScrollPreviewRight),
-            _ if self.scroll_preview_up.contains(c) => Some(Action::ScrollPreviewUp),
-            _ if self.scroll_preview_down.contains(c) => Some(Action::ScrollPreviewDown),
-            _ => None,
-        }
+        self.action_for_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE))
     }
 
     /// Parse a full config TOML string and return only the resolved key
@@ -311,6 +426,26 @@ impl KeyBindings {
                 default: defaults.toggle_hidden.clone(),
             },
             RawBinding {
+                name: "nav_left",
+                override_value: overrides.nav_left,
+                default: defaults.nav_left.clone(),
+            },
+            RawBinding {
+                name: "nav_down",
+                override_value: overrides.nav_down,
+                default: defaults.nav_down.clone(),
+            },
+            RawBinding {
+                name: "nav_up",
+                override_value: overrides.nav_up,
+                default: defaults.nav_up.clone(),
+            },
+            RawBinding {
+                name: "nav_right",
+                override_value: overrides.nav_right,
+                default: defaults.nav_right.clone(),
+            },
+            RawBinding {
                 name: "scroll_preview_left",
                 override_value: overrides.scroll_preview_left,
                 default: defaults.scroll_preview_left.clone(),
@@ -355,7 +490,7 @@ impl KeyBindings {
                 if !candidates[index].1 {
                     continue;
                 }
-                let collision = candidates[index].0.chars().find_map(|candidate| {
+                let collision = candidates[index].0.keys().find_map(|candidate| {
                     (0..raw.len())
                         .filter(|&other_index| other_index != index)
                         .find(|&other_index| candidates[other_index].0.contains(candidate))
@@ -397,10 +532,14 @@ impl KeyBindings {
             sort: resolved(15),
             toggle_view: resolved(16),
             toggle_hidden: resolved(17),
-            scroll_preview_left: resolved(18),
-            scroll_preview_right: resolved(19),
-            scroll_preview_up: resolved(20),
-            scroll_preview_down: resolved(21),
+            nav_left: resolved(18),
+            nav_down: resolved(19),
+            nav_up: resolved(20),
+            nav_right: resolved(21),
+            scroll_preview_left: resolved(22),
+            scroll_preview_right: resolved(23),
+            scroll_preview_up: resolved(24),
+            scroll_preview_down: resolved(25),
         }
     }
 }
@@ -420,39 +559,49 @@ fn parse_key_override(name: &str, value: &KeyConfigOverride, default: &KeyList) 
 
     let mut parsed = Vec::with_capacity(values.len());
     for value in values {
-        let mut chars = value.chars();
-        let Some(c) = chars.next() else {
+        let spec = parse_key_spec(name, value, default)?;
+        if parsed.contains(&spec) {
             eprintln!(
-                "elio: keys.{name}: empty strings cannot be used as key bindings; using default '{default}'"
-            );
-            return None;
-        };
-        if chars.next().is_some() {
-            eprintln!(
-                "elio: keys.{name}: {value:?} is not a single character; using default '{default}'"
+                "elio: keys.{name}: '{spec}' is listed more than once; using default '{default}'"
             );
             return None;
         }
-        if RESERVED_CHARS.contains(&c) {
-            eprintln!(
-                "elio: keys.{name}: '{c}' is reserved and cannot be rebound; using default '{default}'"
-            );
-            return None;
-        }
-        if c.is_control() {
-            eprintln!(
-                "elio: keys.{name}: control characters cannot be used as key bindings; using default '{default}'"
-            );
-            return None;
-        }
-        if parsed.contains(&c) {
-            eprintln!(
-                "elio: keys.{name}: '{c}' is listed more than once; using default '{default}'"
-            );
-            return None;
-        }
-        parsed.push(c);
+        parsed.push(spec);
     }
 
     Some(KeyList(parsed))
+}
+
+fn parse_key_spec(name: &str, value: &str, default: &KeyList) -> Option<KeySpec> {
+    if let Some(named) = NamedKey::parse(value) {
+        return Some(KeySpec::Named(named));
+    }
+
+    let mut chars = value.chars();
+    let Some(c) = chars.next() else {
+        eprintln!(
+            "elio: keys.{name}: empty strings cannot be used as key bindings; using default '{default}'"
+        );
+        return None;
+    };
+    if chars.next().is_some() {
+        eprintln!(
+            "elio: keys.{name}: {value:?} is not a single character or supported named key; using default '{default}'"
+        );
+        return None;
+    }
+    if RESERVED_CHARS.contains(&c) {
+        eprintln!(
+            "elio: keys.{name}: '{c}' is reserved and cannot be rebound; using default '{default}'"
+        );
+        return None;
+    }
+    if c.is_control() {
+        eprintln!(
+            "elio: keys.{name}: control characters cannot be used as key bindings; using default '{default}'"
+        );
+        return None;
+    }
+
+    Some(KeySpec::Char(c))
 }

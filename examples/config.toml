@@ -1,7 +1,7 @@
 # Copy to ~/.config/elio/config.toml to customize Elio's behavior.
 
-[ui]
-show_top_bar = false
+# [ui]
+# show_top_bar = false
 # grid_zoom = 1    # starting zoom level for grid view: 0, 1, or 2 (clamped)
 # show_hidden = false  # show dotfiles and hidden files on startup (toggle with .)
 # start_in_grid = false  # open in grid view on startup (toggle with v)
@@ -57,12 +57,20 @@ show_top_bar = false
 # files = 45
 # preview = 45
 
-# Rebind browser action keys. Each value may be a single one-character string
-# or a list of one-character strings, e.g. open_with = ["O", "w"].
-# Reserved (never rebindable): h j k l g G ? [ ] + = - _ Space
+# Rebind browser action keys. Each value may be a single one-character string,
+# a list of one-character strings, or the named arrow keys "left", "right",
+# "up", and "down" for navigation actions.
+# Example: open_with = ["O", "w"].
+# Setting a key replaces that action's full default list, not just one entry.
+# Example: nav_down = "j" removes the default "down" arrow binding.
+# Reserved (never rebindable): g G ? [ ] + = - _ Space
 # Omit any key to keep the built-in default shown in the comment.
 #
 # [keys]
+# nav_left            = ["h", "left"]
+# nav_down            = ["j", "down"]
+# nav_up              = ["k", "up"]
+# nav_right           = ["l", "right"]
 # quit                 = "q"
 # yank                 = "y"
 # cut                  = "x"

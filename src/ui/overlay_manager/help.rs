@@ -17,10 +17,14 @@ pub(super) fn render_help(
 ) {
     let kb = crate::config::keys();
 
+    let parent_key = format!("{} / Backspace", kb.nav_left);
+
     let navigation_entries = vec![
-        e("↑↓ / jk", "move selection"),
-        e("← / h / Backspace", "parent folder"),
-        e("→ / l / Enter", "enter folder / open"),
+        e(&kb.nav_up.to_string(), "move up"),
+        e(&kb.nav_down.to_string(), "move down"),
+        e(&parent_key, "parent folder"),
+        e(&kb.nav_right.to_string(), "enter folder"),
+        e("Enter", "enter folder / open"),
         e("g", "go-to menu"),
         e("G", "last item"),
         e("PageUp / PageDown", "page up / down"),
@@ -226,8 +230,8 @@ fn format_preview_scroll_key(
     low: &crate::config::KeyList,
     high: &crate::config::KeyList,
 ) -> String {
-    match (low.as_slice(), high.as_slice()) {
-        ([low], [high]) if low.is_ascii_uppercase() && high.is_ascii_uppercase() => {
+    match (low.single_char(), high.single_char()) {
+        (Some(low), Some(high)) if low.is_ascii_uppercase() && high.is_ascii_uppercase() => {
             format!("Shift+{low} / Shift+{high}")
         }
         _ => format!("{low} / {high}"),
