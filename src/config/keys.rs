@@ -27,33 +27,75 @@ pub(crate) enum Action {
     ScrollPreviewDown,
 }
 
+/// One or more single-character key bindings for a browser action.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct KeyList(Vec<char>);
+
+impl KeyList {
+    fn one(c: char) -> Self {
+        Self(vec![c])
+    }
+
+    fn contains(&self, c: char) -> bool {
+        self.0.contains(&c)
+    }
+
+    fn chars(&self) -> impl Iterator<Item = char> + '_ {
+        self.0.iter().copied()
+    }
+
+    pub(crate) fn as_slice(&self) -> &[char] {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for KeyList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (index, c) in self.0.iter().enumerate() {
+            if index > 0 {
+                f.write_str("/")?;
+            }
+            write!(f, "{c}")?;
+        }
+        Ok(())
+    }
+}
+
+impl PartialEq<char> for KeyList {
+    fn eq(&self, other: &char) -> bool {
+        self.0.as_slice() == [*other]
+    }
+}
+
 /// Single-character key bindings for browser actions.
 /// All fields default to the built-in keys; set any field in `[keys]` in
-/// `config.toml` to override that binding.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// `config.toml` to override that binding. Values may be either a single
+/// one-character string (`open = "o"`) or a list of one-character strings
+/// (`open = ["o", "e"]`).
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct KeyBindings {
-    pub quit: char,
-    pub quit_without_cd: char,
-    pub yank: char,
-    pub cut: char,
-    pub paste: char,
-    pub trash: char,
-    pub delete_permanently: char,
-    pub create: char,
-    pub rename: char,
-    pub copy_path: char,
-    pub search_folders: char,
-    pub zoxide: char,
-    pub shell: char,
-    pub open: char,
-    pub open_with: char,
-    pub sort: char,
-    pub toggle_view: char,
-    pub toggle_hidden: char,
-    pub scroll_preview_left: char,
-    pub scroll_preview_right: char,
-    pub scroll_preview_up: char,
-    pub scroll_preview_down: char,
+    pub quit: KeyList,
+    pub quit_without_cd: KeyList,
+    pub yank: KeyList,
+    pub cut: KeyList,
+    pub paste: KeyList,
+    pub trash: KeyList,
+    pub delete_permanently: KeyList,
+    pub create: KeyList,
+    pub rename: KeyList,
+    pub copy_path: KeyList,
+    pub search_folders: KeyList,
+    pub zoxide: KeyList,
+    pub shell: KeyList,
+    pub open: KeyList,
+    pub open_with: KeyList,
+    pub sort: KeyList,
+    pub toggle_view: KeyList,
+    pub toggle_hidden: KeyList,
+    pub scroll_preview_left: KeyList,
+    pub scroll_preview_right: KeyList,
+    pub scroll_preview_up: KeyList,
+    pub scroll_preview_down: KeyList,
 }
 
 /// Characters that are hard-wired to non-configurable actions and may not be
@@ -70,84 +112,97 @@ const RESERVED_CHARS: &[char] = &[
 impl Default for KeyBindings {
     fn default() -> Self {
         Self {
-            quit: 'q',
-            quit_without_cd: 'Q',
-            yank: 'y',
-            cut: 'x',
-            paste: 'p',
-            trash: 'd',
-            delete_permanently: 'D',
-            create: 'a',
-            rename: 'r',
-            copy_path: 'c',
-            search_folders: 'f',
-            zoxide: 'z',
-            shell: '!',
-            open: 'o',
-            open_with: 'O',
-            sort: 's',
-            toggle_view: 'v',
-            toggle_hidden: '.',
-            scroll_preview_left: 'H',
-            scroll_preview_right: 'L',
-            scroll_preview_up: 'K',
-            scroll_preview_down: 'J',
+            quit: KeyList::one('q'),
+            quit_without_cd: KeyList::one('Q'),
+            yank: KeyList::one('y'),
+            cut: KeyList::one('x'),
+            paste: KeyList::one('p'),
+            trash: KeyList::one('d'),
+            delete_permanently: KeyList::one('D'),
+            create: KeyList::one('a'),
+            rename: KeyList::one('r'),
+            copy_path: KeyList::one('c'),
+            search_folders: KeyList::one('f'),
+            zoxide: KeyList::one('z'),
+            shell: KeyList::one('!'),
+            open: KeyList::one('o'),
+            open_with: KeyList::one('O'),
+            sort: KeyList::one('s'),
+            toggle_view: KeyList::one('v'),
+            toggle_hidden: KeyList::one('.'),
+            scroll_preview_left: KeyList::one('H'),
+            scroll_preview_right: KeyList::one('L'),
+            scroll_preview_up: KeyList::one('K'),
+            scroll_preview_down: KeyList::one('J'),
         }
     }
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+pub(super) enum KeyConfigOverride {
+    One(String),
+    Many(Vec<String>),
+}
+
 #[derive(Deserialize, Default)]
 pub(super) struct KeysConfigOverride {
-    quit: Option<String>,
-    quit_without_cd: Option<String>,
-    yank: Option<String>,
-    cut: Option<String>,
-    paste: Option<String>,
-    trash: Option<String>,
-    delete_permanently: Option<String>,
-    create: Option<String>,
-    rename: Option<String>,
-    copy_path: Option<String>,
-    search_folders: Option<String>,
-    zoxide: Option<String>,
-    shell: Option<String>,
-    open: Option<String>,
-    open_with: Option<String>,
-    sort: Option<String>,
-    toggle_view: Option<String>,
-    toggle_hidden: Option<String>,
-    scroll_preview_left: Option<String>,
-    scroll_preview_right: Option<String>,
-    scroll_preview_up: Option<String>,
-    scroll_preview_down: Option<String>,
+    quit: Option<KeyConfigOverride>,
+    quit_without_cd: Option<KeyConfigOverride>,
+    yank: Option<KeyConfigOverride>,
+    cut: Option<KeyConfigOverride>,
+    paste: Option<KeyConfigOverride>,
+    trash: Option<KeyConfigOverride>,
+    delete_permanently: Option<KeyConfigOverride>,
+    create: Option<KeyConfigOverride>,
+    rename: Option<KeyConfigOverride>,
+    copy_path: Option<KeyConfigOverride>,
+    search_folders: Option<KeyConfigOverride>,
+    zoxide: Option<KeyConfigOverride>,
+    shell: Option<KeyConfigOverride>,
+    open: Option<KeyConfigOverride>,
+    open_with: Option<KeyConfigOverride>,
+    sort: Option<KeyConfigOverride>,
+    toggle_view: Option<KeyConfigOverride>,
+    toggle_hidden: Option<KeyConfigOverride>,
+    scroll_preview_left: Option<KeyConfigOverride>,
+    scroll_preview_right: Option<KeyConfigOverride>,
+    scroll_preview_up: Option<KeyConfigOverride>,
+    scroll_preview_down: Option<KeyConfigOverride>,
+}
+
+struct RawBinding {
+    name: &'static str,
+    override_value: Option<KeyConfigOverride>,
+    default: KeyList,
 }
 
 impl KeyBindings {
     /// Returns the action bound to `c`, if any.
     pub(crate) fn action_for(&self, c: char) -> Option<Action> {
         match c {
-            _ if c == self.quit => Some(Action::Quit),
-            _ if c == self.quit_without_cd => Some(Action::QuitWithoutCd),
-            _ if c == self.yank => Some(Action::Yank),
-            _ if c == self.cut => Some(Action::Cut),
-            _ if c == self.paste => Some(Action::Paste),
-            _ if c == self.trash => Some(Action::Trash),
-            _ if c == self.delete_permanently => Some(Action::DeletePermanently),
-            _ if c == self.create => Some(Action::Create),
-            _ if c == self.rename => Some(Action::Rename),
-            _ if c == self.copy_path => Some(Action::CopyPath),
-            _ if c == self.search_folders => Some(Action::SearchFolders),
-            _ if c == self.zoxide => Some(Action::Zoxide),
-            _ if c == self.shell => Some(Action::Shell),
-            _ if c == self.open => Some(Action::Open),
-            _ if c == self.open_with => Some(Action::OpenWith),
-            _ if c == self.sort => Some(Action::Sort),
-            _ if c == self.toggle_view => Some(Action::ToggleView),
-            _ if c == self.toggle_hidden => Some(Action::ToggleHidden),
-            _ if c == self.scroll_preview_left => Some(Action::ScrollPreviewLeft),
-            _ if c == self.scroll_preview_right => Some(Action::ScrollPreviewRight),
-            _ if c == self.scroll_preview_up => Some(Action::ScrollPreviewUp),
-            _ if c == self.scroll_preview_down => Some(Action::ScrollPreviewDown),
+            _ if self.quit.contains(c) => Some(Action::Quit),
+            _ if self.quit_without_cd.contains(c) => Some(Action::QuitWithoutCd),
+            _ if self.yank.contains(c) => Some(Action::Yank),
+            _ if self.cut.contains(c) => Some(Action::Cut),
+            _ if self.paste.contains(c) => Some(Action::Paste),
+            _ if self.trash.contains(c) => Some(Action::Trash),
+            _ if self.delete_permanently.contains(c) => Some(Action::DeletePermanently),
+            _ if self.create.contains(c) => Some(Action::Create),
+            _ if self.rename.contains(c) => Some(Action::Rename),
+            _ if self.copy_path.contains(c) => Some(Action::CopyPath),
+            _ if self.search_folders.contains(c) => Some(Action::SearchFolders),
+            _ if self.zoxide.contains(c) => Some(Action::Zoxide),
+            _ if self.shell.contains(c) => Some(Action::Shell),
+            _ if self.open.contains(c) => Some(Action::Open),
+            _ if self.open_with.contains(c) => Some(Action::OpenWith),
+            _ if self.sort.contains(c) => Some(Action::Sort),
+            _ if self.toggle_view.contains(c) => Some(Action::ToggleView),
+            _ if self.toggle_hidden.contains(c) => Some(Action::ToggleHidden),
+            _ if self.scroll_preview_left.contains(c) => Some(Action::ScrollPreviewLeft),
+            _ if self.scroll_preview_right.contains(c) => Some(Action::ScrollPreviewRight),
+            _ if self.scroll_preview_up.contains(c) => Some(Action::ScrollPreviewUp),
+            _ if self.scroll_preview_down.contains(c) => Some(Action::ScrollPreviewDown),
             _ => None,
         }
     }
@@ -164,130 +219,155 @@ impl KeyBindings {
     }
 
     pub(super) fn from_override(overrides: KeysConfigOverride, defaults: &Self) -> Self {
-        // Each entry: (field_name, user_override_string, default_char)
-        let raw: [(&str, Option<String>, char); 22] = [
-            ("quit", overrides.quit, defaults.quit),
-            (
-                "quit_without_cd",
-                overrides.quit_without_cd,
-                defaults.quit_without_cd,
-            ),
-            ("yank", overrides.yank, defaults.yank),
-            ("cut", overrides.cut, defaults.cut),
-            ("paste", overrides.paste, defaults.paste),
-            ("trash", overrides.trash, defaults.trash),
-            (
-                "delete_permanently",
-                overrides.delete_permanently,
-                defaults.delete_permanently,
-            ),
-            ("create", overrides.create, defaults.create),
-            ("rename", overrides.rename, defaults.rename),
-            ("copy_path", overrides.copy_path, defaults.copy_path),
-            (
-                "search_folders",
-                overrides.search_folders,
-                defaults.search_folders,
-            ),
-            ("zoxide", overrides.zoxide, defaults.zoxide),
-            ("shell", overrides.shell, defaults.shell),
-            ("open", overrides.open, defaults.open),
-            ("open_with", overrides.open_with, defaults.open_with),
-            ("sort", overrides.sort, defaults.sort),
-            ("toggle_view", overrides.toggle_view, defaults.toggle_view),
-            (
-                "toggle_hidden",
-                overrides.toggle_hidden,
-                defaults.toggle_hidden,
-            ),
-            (
-                "scroll_preview_left",
-                overrides.scroll_preview_left,
-                defaults.scroll_preview_left,
-            ),
-            (
-                "scroll_preview_right",
-                overrides.scroll_preview_right,
-                defaults.scroll_preview_right,
-            ),
-            (
-                "scroll_preview_up",
-                overrides.scroll_preview_up,
-                defaults.scroll_preview_up,
-            ),
-            (
-                "scroll_preview_down",
-                overrides.scroll_preview_down,
-                defaults.scroll_preview_down,
-            ),
+        let raw = vec![
+            RawBinding {
+                name: "quit",
+                override_value: overrides.quit,
+                default: defaults.quit.clone(),
+            },
+            RawBinding {
+                name: "quit_without_cd",
+                override_value: overrides.quit_without_cd,
+                default: defaults.quit_without_cd.clone(),
+            },
+            RawBinding {
+                name: "yank",
+                override_value: overrides.yank,
+                default: defaults.yank.clone(),
+            },
+            RawBinding {
+                name: "cut",
+                override_value: overrides.cut,
+                default: defaults.cut.clone(),
+            },
+            RawBinding {
+                name: "paste",
+                override_value: overrides.paste,
+                default: defaults.paste.clone(),
+            },
+            RawBinding {
+                name: "trash",
+                override_value: overrides.trash,
+                default: defaults.trash.clone(),
+            },
+            RawBinding {
+                name: "delete_permanently",
+                override_value: overrides.delete_permanently,
+                default: defaults.delete_permanently.clone(),
+            },
+            RawBinding {
+                name: "create",
+                override_value: overrides.create,
+                default: defaults.create.clone(),
+            },
+            RawBinding {
+                name: "rename",
+                override_value: overrides.rename,
+                default: defaults.rename.clone(),
+            },
+            RawBinding {
+                name: "copy_path",
+                override_value: overrides.copy_path,
+                default: defaults.copy_path.clone(),
+            },
+            RawBinding {
+                name: "search_folders",
+                override_value: overrides.search_folders,
+                default: defaults.search_folders.clone(),
+            },
+            RawBinding {
+                name: "zoxide",
+                override_value: overrides.zoxide,
+                default: defaults.zoxide.clone(),
+            },
+            RawBinding {
+                name: "shell",
+                override_value: overrides.shell,
+                default: defaults.shell.clone(),
+            },
+            RawBinding {
+                name: "open",
+                override_value: overrides.open,
+                default: defaults.open.clone(),
+            },
+            RawBinding {
+                name: "open_with",
+                override_value: overrides.open_with,
+                default: defaults.open_with.clone(),
+            },
+            RawBinding {
+                name: "sort",
+                override_value: overrides.sort,
+                default: defaults.sort.clone(),
+            },
+            RawBinding {
+                name: "toggle_view",
+                override_value: overrides.toggle_view,
+                default: defaults.toggle_view.clone(),
+            },
+            RawBinding {
+                name: "toggle_hidden",
+                override_value: overrides.toggle_hidden,
+                default: defaults.toggle_hidden.clone(),
+            },
+            RawBinding {
+                name: "scroll_preview_left",
+                override_value: overrides.scroll_preview_left,
+                default: defaults.scroll_preview_left.clone(),
+            },
+            RawBinding {
+                name: "scroll_preview_right",
+                override_value: overrides.scroll_preview_right,
+                default: defaults.scroll_preview_right.clone(),
+            },
+            RawBinding {
+                name: "scroll_preview_up",
+                override_value: overrides.scroll_preview_up,
+                default: defaults.scroll_preview_up.clone(),
+            },
+            RawBinding {
+                name: "scroll_preview_down",
+                override_value: overrides.scroll_preview_down,
+                default: defaults.scroll_preview_down.clone(),
+            },
         ];
 
-        // Step 1: parse each override string independently, falling back to
-        // default on any format or reserved-char error.
-        // (resolved_char, is_user_set)
-        let mut candidates: [(char, bool); 22] = [(' ', false); 22];
-        for (index, (name, override_str, default)) in raw.iter().enumerate() {
-            candidates[index] = match override_str {
-                None => (*default, false),
-                Some(value) => {
-                    let mut chars = value.chars();
-                    match (chars.next(), chars.next()) {
-                        (Some(c), None) if RESERVED_CHARS.contains(&c) => {
-                            eprintln!(
-                                "elio: keys.{name}: '{c}' is reserved and cannot be rebound; \
-                                 using default '{default}'"
-                            );
-                            (*default, false)
-                        }
-                        (Some(c), None) if c.is_control() => {
-                            eprintln!(
-                                "elio: keys.{name}: control characters cannot be used as key \
-                                 bindings; using default '{default}'"
-                            );
-                            (*default, false)
-                        }
-                        (Some(c), None) => (c, true),
-                        _ => {
-                            eprintln!(
-                                "elio: keys.{name}: {value:?} is not a single character; \
-                                 using default '{default}'"
-                            );
-                            (*default, false)
-                        }
-                    }
-                }
-            };
-        }
+        // Step 1: parse each override independently, falling back to default on
+        // any format or reserved-char error.
+        // (resolved_keys, is_user_set)
+        let mut candidates: Vec<(KeyList, bool)> = raw
+            .iter()
+            .map(|entry| match &entry.override_value {
+                None => (entry.default.clone(), false),
+                Some(value) => match parse_key_override(entry.name, value, &entry.default) {
+                    Some(keys) => (keys, true),
+                    None => (entry.default.clone(), false),
+                },
+            })
+            .collect();
 
         // Step 2: reject user-set bindings that collide with any other binding
         // (user-set or default). Loop until stable so that reverting one
         // binding does not silently leave a conflict with another.
         loop {
             let mut changed = false;
-            for index in 0..22 {
+            for index in 0..raw.len() {
                 if !candidates[index].1 {
                     continue;
                 }
-                let candidate = candidates[index].0;
-                let collision = (0..22)
-                    .filter(|&other_index| other_index != index)
-                    .any(|other_index| candidates[other_index].0 == candidate);
-                if collision {
-                    let (name, _, default) = &raw[index];
-                    let other = raw
-                        .iter()
-                        .enumerate()
-                        .filter(|&(other_index, _)| {
-                            other_index != index && candidates[other_index].0 == candidate
-                        })
-                        .map(|(_, (name, _, _))| *name)
-                        .next()
-                        .unwrap_or("another key");
+                let collision = candidates[index].0.chars().find_map(|candidate| {
+                    (0..raw.len())
+                        .filter(|&other_index| other_index != index)
+                        .find(|&other_index| candidates[other_index].0.contains(candidate))
+                        .map(|other_index| (candidate, other_index))
+                });
+
+                if let Some((candidate, other_index)) = collision {
                     eprintln!(
-                        "elio: keys.{name}: '{candidate}' is already bound to {other}; \
-                         using default '{default}'"
+                        "elio: keys.{}: '{}' is already bound to {}; using default '{}'",
+                        raw[index].name, candidate, raw[other_index].name, raw[index].default
                     );
-                    candidates[index] = (*default, false);
+                    candidates[index] = (raw[index].default.clone(), false);
                     changed = true;
                 }
             }
@@ -297,7 +377,7 @@ impl KeyBindings {
         }
 
         // Step 3: build from the resolved candidates (order matches `raw`).
-        let resolved = |index: usize| candidates[index].0;
+        let resolved = |index: usize| candidates[index].0.clone();
         Self {
             quit: resolved(0),
             quit_without_cd: resolved(1),
@@ -323,4 +403,56 @@ impl KeyBindings {
             scroll_preview_down: resolved(21),
         }
     }
+}
+
+fn parse_key_override(name: &str, value: &KeyConfigOverride, default: &KeyList) -> Option<KeyList> {
+    let values: Vec<&str> = match value {
+        KeyConfigOverride::One(value) => vec![value.as_str()],
+        KeyConfigOverride::Many(values) => values.iter().map(String::as_str).collect(),
+    };
+
+    if values.is_empty() {
+        eprintln!(
+            "elio: keys.{name}: key binding lists cannot be empty; using default '{default}'"
+        );
+        return None;
+    }
+
+    let mut parsed = Vec::with_capacity(values.len());
+    for value in values {
+        let mut chars = value.chars();
+        let Some(c) = chars.next() else {
+            eprintln!(
+                "elio: keys.{name}: empty strings cannot be used as key bindings; using default '{default}'"
+            );
+            return None;
+        };
+        if chars.next().is_some() {
+            eprintln!(
+                "elio: keys.{name}: {value:?} is not a single character; using default '{default}'"
+            );
+            return None;
+        }
+        if RESERVED_CHARS.contains(&c) {
+            eprintln!(
+                "elio: keys.{name}: '{c}' is reserved and cannot be rebound; using default '{default}'"
+            );
+            return None;
+        }
+        if c.is_control() {
+            eprintln!(
+                "elio: keys.{name}: control characters cannot be used as key bindings; using default '{default}'"
+            );
+            return None;
+        }
+        if parsed.contains(&c) {
+            eprintln!(
+                "elio: keys.{name}: '{c}' is listed more than once; using default '{default}'"
+            );
+            return None;
+        }
+        parsed.push(c);
+    }
+
+    Some(KeyList(parsed))
 }

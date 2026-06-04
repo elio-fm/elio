@@ -67,9 +67,9 @@ pub(super) fn render_help(
         e(&kb.quit_without_cd.to_string(), "quit, keep shell cwd"),
     ];
     let preview_vertical_key =
-        format_preview_scroll_key(kb.scroll_preview_up, kb.scroll_preview_down);
+        format_preview_scroll_key(&kb.scroll_preview_up, &kb.scroll_preview_down);
     let preview_horizontal_key =
-        format_preview_scroll_key(kb.scroll_preview_left, kb.scroll_preview_right);
+        format_preview_scroll_key(&kb.scroll_preview_left, &kb.scroll_preview_right);
     let preview_entries = vec![
         e(&preview_vertical_key, "step page or scroll"),
         e("[ / ]", "step page or scroll"),
@@ -222,11 +222,15 @@ pub(super) fn render_help(
 
 /// Render a preview-scroll key pair: defaults like 'H'/'L' show as "Shift+H / Shift+L";
 /// overrides such as '<'/'>' show as "< / >".
-fn format_preview_scroll_key(low: char, high: char) -> String {
-    if low.is_ascii_uppercase() && high.is_ascii_uppercase() {
-        format!("Shift+{low} / Shift+{high}")
-    } else {
-        format!("{low} / {high}")
+fn format_preview_scroll_key(
+    low: &crate::config::KeyList,
+    high: &crate::config::KeyList,
+) -> String {
+    match (low.as_slice(), high.as_slice()) {
+        ([low], [high]) if low.is_ascii_uppercase() && high.is_ascii_uppercase() => {
+            format!("Shift+{low} / Shift+{high}")
+        }
+        _ => format!("{low} / {high}"),
     }
 }
 

@@ -57,7 +57,8 @@ show_top_bar = false
 # files = 45
 # preview = 45
 
-# Rebind browser action keys. Each value must be a single character.
+# Rebind browser action keys. Each value may be a single one-character string
+# or a list of one-character strings, e.g. open_with = ["O", "w"].
 # Reserved (never rebindable): h j k l g G ? [ ] + = - _ Space
 # Omit any key to keep the built-in default shown in the comment.
 #

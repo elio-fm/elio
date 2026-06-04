@@ -9,7 +9,7 @@ mod ui;
 use serde::Deserialize;
 
 pub(crate) use self::{
-    keys::{Action, KeyBindings},
+    keys::{Action, KeyBindings, KeyList},
     layout::{LayoutConfig, PaneWeights},
     loading::config_dir,
     places::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},

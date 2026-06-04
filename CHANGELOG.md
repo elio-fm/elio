@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added support for assigning multiple single-character bindings to each configurable `[keys]` action, while keeping existing single-string key config compatible.
 - Added a configurable `D` (`delete_permanently`) shortcut for permanently deleting selected entries without first opening Trash. ([#140])
 
 ## [1.7.0] - 2026-05-30

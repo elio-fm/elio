@@ -29,6 +29,86 @@ cut = "X"
 }
 
 #[test]
+fn keys_accept_array_overrides() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open = ["o", "e"]
+open_with = ["O"]
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('o'), Some(Action::Open));
+    assert_eq!(config.keys.action_for('e'), Some(Action::Open));
+    assert_eq!(config.keys.action_for('O'), Some(Action::OpenWith));
+}
+
+#[test]
+fn keys_rejects_empty_array_and_uses_default() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open = []
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.open, 'o');
+    assert_eq!(config.keys.action_for('o'), Some(Action::Open));
+}
+
+#[test]
+fn keys_rejects_duplicate_inside_array_and_uses_default() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open = ["e", "e"]
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.open, 'o');
+    assert_eq!(config.keys.action_for('e'), None);
+}
+
+#[test]
+fn keys_rejects_invalid_array_member_and_uses_default() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open = ["e", "enter"]
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.open, 'o');
+    assert_eq!(config.keys.action_for('e'), None);
+}
+
+#[test]
+fn keys_rejects_array_collision_with_other_binding() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open = ["o", "p"]
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.open, 'o');
+    assert_eq!(config.keys.paste, 'p');
+    assert_eq!(config.keys.action_for('p'), Some(Action::Paste));
+}
+
+#[test]
+fn key_display_joins_multiple_bindings() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open = ["o", "e"]
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.open.to_string(), "o/e");
+}
+
+#[test]
 fn keys_rejects_multi_char_string_and_uses_default() {
     let config = Config::from_str(
         r#"
