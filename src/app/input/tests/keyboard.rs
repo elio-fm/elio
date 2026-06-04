@@ -966,6 +966,37 @@ fn rebound_quit_key_sets_should_quit() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn rebound_open_or_enter_key_opens_selected_file() {
+    use crate::config::KeyBindings;
+
+    let kb = KeyBindings::from_toml_str(
+        r#"[keys]
+nav_right = "right"
+open_or_enter = ["enter", "l"]"#,
+    );
+    assert_eq!(kb.action_for('l'), Some(Action::OpenOrEnter));
+
+    let root = temp_path("rebind-open-or-enter-file");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let file_path = root.join("note.txt");
+    fs::write(&file_path, "hello").expect("failed to write temp file");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.dispatch_action(kb.action_for('l').unwrap())
+        .expect("open_or_enter should open selected file");
+
+    let opened = read_open_capture(&capture);
+    assert_eq!(opened, file_path.display().to_string());
+
+    fs::remove_dir_all(root).ok();
+}
+
 #[test]
 fn zoxide_action_queues_pending_terminal_task() {
     let root = temp_path("zoxide-action");
