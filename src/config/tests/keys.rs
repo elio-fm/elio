@@ -137,7 +137,7 @@ fn keys_rejects_reserved_char_and_uses_default() {
     let config = Config::from_str(
         r#"
 [keys]
-yank = "j"
+yank = "?"
 "#,
     )
     .expect("config should parse");
@@ -210,7 +210,111 @@ fn action_for_returns_correct_action_for_default_bindings() {
     assert_eq!(key_bindings.action_for('O'), Some(Action::OpenWith));
     assert_eq!(key_bindings.action_for('z'), Some(Action::Zoxide));
     assert_eq!(key_bindings.action_for('!'), Some(Action::Shell));
-    assert_eq!(key_bindings.action_for('j'), None);
+    assert_eq!(key_bindings.action_for('h'), Some(Action::NavLeft));
+    assert_eq!(key_bindings.action_for('j'), Some(Action::NavDown));
+    assert_eq!(key_bindings.action_for('k'), Some(Action::NavUp));
+    assert_eq!(key_bindings.action_for('l'), Some(Action::NavRight));
+}
+
+#[test]
+fn nav_defaults_include_vim_keys_and_arrow_keys() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let key_bindings = KeyBindings::default();
+    assert_eq!(key_bindings.nav_left.to_string(), "h/←");
+    assert_eq!(key_bindings.nav_down.to_string(), "j/↓");
+    assert_eq!(key_bindings.nav_up.to_string(), "k/↑");
+    assert_eq!(key_bindings.nav_right.to_string(), "l/→");
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
+        Some(Action::NavLeft)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)),
+        Some(Action::NavDown)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)),
+        Some(Action::NavUp)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+        Some(Action::NavRight)
+    );
+}
+
+#[test]
+fn nav_keys_can_be_overridden_with_chars_and_arrows() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+nav_down = ["n", "down"]
+nav_up = "u"
+nav_right = "b"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('n'), Some(Action::NavDown));
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)),
+        Some(Action::NavDown)
+    );
+    assert_eq!(config.keys.action_for('u'), Some(Action::NavUp));
+    assert_eq!(config.keys.action_for('b'), Some(Action::NavRight));
+    assert_eq!(config.keys.action_for('j'), None);
+    assert_eq!(config.keys.action_for('k'), None);
+    assert_eq!(config.keys.action_for('l'), None);
+}
+
+#[test]
+fn overriding_nav_right_frees_l_for_another_action() {
+    let config = Config::from_str(
+        r#"
+[keys]
+nav_right = "right"
+open = ["o", "l"]
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('l'), Some(Action::Open));
+    assert_eq!(config.keys.action_for('o'), Some(Action::Open));
+}
+
+#[test]
+fn keys_rejects_collision_with_default_nav_key() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open = "l"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('l'), Some(Action::NavRight));
+    assert_eq!(config.keys.action_for('o'), Some(Action::Open));
+}
+
+#[test]
+fn keys_rejects_collision_with_default_arrow_key() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+open = "right"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+        Some(Action::NavRight)
+    );
+    assert_eq!(config.keys.action_for('o'), Some(Action::Open));
 }
 
 #[test]
