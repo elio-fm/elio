@@ -9,12 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added support for assigning multiple single-character bindings to each configurable `[keys]` action, while keeping existing single-string key config compatible.
+- Added support for assigning multiple bindings to each configurable `[keys]` action, while keeping existing single-string key config compatible.
 - Added configurable navigation bindings for `nav_left`, `nav_down`, `nav_up`, and `nav_right`, including named arrow keys.
 - Added `open_or_enter` as a configurable binding for the existing `Enter` behavior: entering folders or opening files. ([#141])
 - Added `[]` support for unbinding configurable `[keys]` actions.
 - Added support for modifier `[keys]` bindings such as `ctrl+o`, `alt+o`, and `shift+right`.
+- Added named `[keys]` values for `space`, `tab`, `backtab` / `shift+tab`, `backspace`, `pageup`, `pagedown`, `home`, and `end`.
+- Added configurable browser control bindings for `go_to`, `toggle_selection`, `cycle_places_next`, `cycle_places_previous`, `go_parent`, `page_up`, `page_down`, `select_first`, and `select_last`.
 - Added a configurable `D` (`delete_permanently`) shortcut for permanently deleting selected entries without first opening Trash. ([#140])
+
+### Changed
+
+- Updated the help overlay to reflect the new configurable bindings.
 
 ## [1.7.0] - 2026-05-30
 

@@ -20,6 +20,15 @@ pub(crate) enum Action {
     Open,
     OpenWith,
     OpenOrEnter,
+    GoTo,
+    ToggleSelection,
+    CyclePlacesNext,
+    CyclePlacesPrevious,
+    GoParent,
+    PageUp,
+    PageDown,
+    SelectFirst,
+    SelectLast,
     Sort,
     ToggleView,
     ToggleHidden,
@@ -40,6 +49,14 @@ pub(crate) enum NamedKey {
     Up,
     Down,
     Enter,
+    Space,
+    Tab,
+    BackTab,
+    Backspace,
+    PageUp,
+    PageDown,
+    Home,
+    End,
 }
 
 impl NamedKey {
@@ -50,6 +67,14 @@ impl NamedKey {
             "up" => Some(Self::Up),
             "down" => Some(Self::Down),
             "enter" => Some(Self::Enter),
+            "space" => Some(Self::Space),
+            "tab" => Some(Self::Tab),
+            "backtab" => Some(Self::BackTab),
+            "backspace" => Some(Self::Backspace),
+            "pageup" => Some(Self::PageUp),
+            "pagedown" => Some(Self::PageDown),
+            "home" => Some(Self::Home),
+            "end" => Some(Self::End),
             _ => None,
         }
     }
@@ -65,6 +90,14 @@ impl NamedKey {
                     Self::Enter,
                     KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r')
                 )
+                | (Self::Space, KeyCode::Char(' '))
+                | (Self::Tab, KeyCode::Tab)
+                | (Self::BackTab, KeyCode::BackTab)
+                | (Self::Backspace, KeyCode::Backspace)
+                | (Self::PageUp, KeyCode::PageUp)
+                | (Self::PageDown, KeyCode::PageDown)
+                | (Self::Home, KeyCode::Home)
+                | (Self::End, KeyCode::End)
         )
     }
 }
@@ -77,6 +110,14 @@ impl std::fmt::Display for NamedKey {
             Self::Up => "↑",
             Self::Down => "↓",
             Self::Enter => "Enter",
+            Self::Space => "Space",
+            Self::Tab => "Tab",
+            Self::BackTab => "Shift+Tab",
+            Self::Backspace => "Backspace",
+            Self::PageUp => "PageUp",
+            Self::PageDown => "PageDown",
+            Self::Home => "Home",
+            Self::End => "End",
         })
     }
 }
@@ -170,6 +211,10 @@ fn normalize_key_event(key: KeyEvent) -> (KeyCode, KeyModifierSpec) {
             modifiers.shift = false;
             KeyCode::Char(c)
         }
+        KeyCode::BackTab => {
+            modifiers.shift = false;
+            KeyCode::BackTab
+        }
         code => code,
     };
     (code, modifiers)
@@ -250,7 +295,8 @@ impl PartialEq<char> for KeyList {
 /// string (`open = "o"`) or a list of strings (`open = ["o", "e"]`).
 /// Empty lists unbind the action (`open = []`).
 /// Character bindings must be one character; named bindings currently support
-/// `left`, `right`, `up`, `down`, and `enter`.
+/// `left`, `right`, `up`, `down`, `enter`, `space`, `tab`, `backtab`,
+/// `shift+tab`, `backspace`, `pageup`, `pagedown`, `home`, and `end`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct KeyBindings {
     pub quit: KeyList,
@@ -269,6 +315,15 @@ pub(crate) struct KeyBindings {
     pub open: KeyList,
     pub open_with: KeyList,
     pub open_or_enter: KeyList,
+    pub go_to: KeyList,
+    pub toggle_selection: KeyList,
+    pub cycle_places_next: KeyList,
+    pub cycle_places_previous: KeyList,
+    pub go_parent: KeyList,
+    pub page_up: KeyList,
+    pub page_down: KeyList,
+    pub select_first: KeyList,
+    pub select_last: KeyList,
     pub sort: KeyList,
     pub toggle_view: KeyList,
     pub toggle_hidden: KeyList,
@@ -285,11 +340,9 @@ pub(crate) struct KeyBindings {
 /// Characters that are hard-wired to non-configurable actions and may not be
 /// used as key binding values.
 const RESERVED_CHARS: &[char] = &[
-    'g', 'G', // go-to overlay / jump to last
     '?', // help
     '[', ']', // page stepping (epub / comic / pdf)
     '+', '=', '-', '_', // grid zoom
-    ' ', // toggle selection
 ];
 
 /// Modified keys that are still hard-wired before configurable browser actions.
@@ -319,6 +372,15 @@ impl Default for KeyBindings {
             open: KeyList::one('o'),
             open_with: KeyList::one('O'),
             open_or_enter: KeyList(vec![KeySpec::named(NamedKey::Enter)]),
+            go_to: KeyList::one('g'),
+            toggle_selection: KeyList(vec![KeySpec::named(NamedKey::Space)]),
+            cycle_places_next: KeyList(vec![KeySpec::named(NamedKey::Tab)]),
+            cycle_places_previous: KeyList(vec![KeySpec::named(NamedKey::BackTab)]),
+            go_parent: KeyList(vec![KeySpec::named(NamedKey::Backspace)]),
+            page_up: KeyList(vec![KeySpec::named(NamedKey::PageUp)]),
+            page_down: KeyList(vec![KeySpec::named(NamedKey::PageDown)]),
+            select_first: KeyList(vec![KeySpec::named(NamedKey::Home)]),
+            select_last: KeyList(vec![KeySpec::char('G'), KeySpec::named(NamedKey::End)]),
             sort: KeyList::one('s'),
             toggle_view: KeyList::one('v'),
             toggle_hidden: KeyList::one('.'),
@@ -359,6 +421,15 @@ pub(super) struct KeysConfigOverride {
     open: Option<KeyConfigOverride>,
     open_with: Option<KeyConfigOverride>,
     open_or_enter: Option<KeyConfigOverride>,
+    go_to: Option<KeyConfigOverride>,
+    toggle_selection: Option<KeyConfigOverride>,
+    cycle_places_next: Option<KeyConfigOverride>,
+    cycle_places_previous: Option<KeyConfigOverride>,
+    go_parent: Option<KeyConfigOverride>,
+    page_up: Option<KeyConfigOverride>,
+    page_down: Option<KeyConfigOverride>,
+    select_first: Option<KeyConfigOverride>,
+    select_last: Option<KeyConfigOverride>,
     sort: Option<KeyConfigOverride>,
     toggle_view: Option<KeyConfigOverride>,
     toggle_hidden: Option<KeyConfigOverride>,
@@ -398,6 +469,15 @@ impl KeyBindings {
             (&self.open, Action::Open),
             (&self.open_with, Action::OpenWith),
             (&self.open_or_enter, Action::OpenOrEnter),
+            (&self.go_to, Action::GoTo),
+            (&self.toggle_selection, Action::ToggleSelection),
+            (&self.cycle_places_next, Action::CyclePlacesNext),
+            (&self.cycle_places_previous, Action::CyclePlacesPrevious),
+            (&self.go_parent, Action::GoParent),
+            (&self.page_up, Action::PageUp),
+            (&self.page_down, Action::PageDown),
+            (&self.select_first, Action::SelectFirst),
+            (&self.select_last, Action::SelectLast),
             (&self.sort, Action::Sort),
             (&self.toggle_view, Action::ToggleView),
             (&self.toggle_hidden, Action::ToggleHidden),
@@ -513,6 +593,51 @@ impl KeyBindings {
                 name: "open_or_enter",
                 override_value: overrides.open_or_enter,
                 default: defaults.open_or_enter.clone(),
+            },
+            RawBinding {
+                name: "go_to",
+                override_value: overrides.go_to,
+                default: defaults.go_to.clone(),
+            },
+            RawBinding {
+                name: "toggle_selection",
+                override_value: overrides.toggle_selection,
+                default: defaults.toggle_selection.clone(),
+            },
+            RawBinding {
+                name: "cycle_places_next",
+                override_value: overrides.cycle_places_next,
+                default: defaults.cycle_places_next.clone(),
+            },
+            RawBinding {
+                name: "cycle_places_previous",
+                override_value: overrides.cycle_places_previous,
+                default: defaults.cycle_places_previous.clone(),
+            },
+            RawBinding {
+                name: "go_parent",
+                override_value: overrides.go_parent,
+                default: defaults.go_parent.clone(),
+            },
+            RawBinding {
+                name: "page_up",
+                override_value: overrides.page_up,
+                default: defaults.page_up.clone(),
+            },
+            RawBinding {
+                name: "page_down",
+                override_value: overrides.page_down,
+                default: defaults.page_down.clone(),
+            },
+            RawBinding {
+                name: "select_first",
+                override_value: overrides.select_first,
+                default: defaults.select_first.clone(),
+            },
+            RawBinding {
+                name: "select_last",
+                override_value: overrides.select_last,
+                default: defaults.select_last.clone(),
             },
             RawBinding {
                 name: "sort",
@@ -634,17 +759,26 @@ impl KeyBindings {
             open: resolved(13),
             open_with: resolved(14),
             open_or_enter: resolved(15),
-            sort: resolved(16),
-            toggle_view: resolved(17),
-            toggle_hidden: resolved(18),
-            nav_left: resolved(19),
-            nav_down: resolved(20),
-            nav_up: resolved(21),
-            nav_right: resolved(22),
-            scroll_preview_left: resolved(23),
-            scroll_preview_right: resolved(24),
-            scroll_preview_up: resolved(25),
-            scroll_preview_down: resolved(26),
+            go_to: resolved(16),
+            toggle_selection: resolved(17),
+            cycle_places_next: resolved(18),
+            cycle_places_previous: resolved(19),
+            go_parent: resolved(20),
+            page_up: resolved(21),
+            page_down: resolved(22),
+            select_first: resolved(23),
+            select_last: resolved(24),
+            sort: resolved(25),
+            toggle_view: resolved(26),
+            toggle_hidden: resolved(27),
+            nav_left: resolved(28),
+            nav_down: resolved(29),
+            nav_up: resolved(30),
+            nav_right: resolved(31),
+            scroll_preview_left: resolved(32),
+            scroll_preview_right: resolved(33),
+            scroll_preview_up: resolved(34),
+            scroll_preview_down: resolved(35),
         }
     }
 }
@@ -671,7 +805,26 @@ fn parse_key_override(name: &str, value: &KeyConfigOverride, default: &KeyList) 
 }
 
 fn parse_key_spec(name: &str, value: &str, default: &KeyList) -> Option<KeySpec> {
-    let (modifiers, key_name) = parse_key_modifiers(name, value, default)?;
+    let (mut modifiers, key_name) = parse_key_modifiers(name, value, default)?;
+
+    if modifiers.shift && key_name == "tab" {
+        modifiers.shift = false;
+        return validate_key_spec(
+            name,
+            KeySpec {
+                code: KeyCodeSpec::Named(NamedKey::BackTab),
+                modifiers,
+            },
+            default,
+        );
+    }
+
+    if modifiers.shift && key_name == "space" {
+        eprintln!(
+            "elio: keys.{name}: {value:?} uses shift with space, which terminals do not report reliably; using default '{default}'"
+        );
+        return None;
+    }
 
     if modifiers.shift && key_name.len() == 1 {
         let c = key_name.chars().next().expect("single-char key");
@@ -725,6 +878,16 @@ fn parse_key_spec(name: &str, value: &str, default: &KeyList) -> Option<KeySpec>
             "elio: keys.{name}: control characters cannot be used as key bindings; using default '{default}'"
         );
         return None;
+    }
+    if c == ' ' && modifiers.is_empty() {
+        return validate_key_spec(
+            name,
+            KeySpec {
+                code: KeyCodeSpec::Named(NamedKey::Space),
+                modifiers,
+            },
+            default,
+        );
     }
 
     if (modifiers.ctrl || modifiers.alt) && c.is_ascii_alphabetic() {
