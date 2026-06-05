@@ -29,15 +29,15 @@ pub(super) fn render_help(
         e("Ctrl+W / Alt+D", "fallback word delete"),
     ];
     let clipboard_entries = clipboard_entries(kb);
-    let rename_key = format!("{} / F2", kb.rename);
-    let rename_trash_key = format!("{} (in trash)", kb.rename);
+    let rename_key = kb.rename.to_string();
+    let restore_key = format!("{} (in trash)", kb.restore_from_trash);
     let files_entries = vec![
         e(&kb.create.to_string(), "create file or folder"),
         e("Alt/Shift+Enter", "add line in create prompt"),
         e(&kb.trash.to_string(), "trash (delete if in trash)"),
         e(&kb.delete_permanently.to_string(), "delete permanently"),
         e(&rename_key, "rename (bulk if selection)"),
-        e(&rename_trash_key, "restore from trash"),
+        e(&restore_key, "restore from trash"),
         e(&kb.shell.to_string(), "open shell here"),
         e(&kb.open.to_string(), "open with default app"),
         e(&kb.open_with.to_string(), "open with"),

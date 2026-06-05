@@ -258,7 +258,7 @@ https://elio-fm.github.io/docs/themes/
 <details>
 <summary><strong>Controls</strong></summary>
 
-Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults are shown here. Configurable actions accept one key, a list, or an empty list to unbind the action, such as `open_with = ["O", "w"]` or `delete_permanently = []`. Named keys are supported for arrows, `enter`, `space`, `tab`, `backtab` / `shift+tab`, `backspace`, `pageup`, `pagedown`, `home`, and `end`; modifier bindings such as `ctrl+o`, `alt+o`, and `ctrl+enter` are also supported. Setting an action replaces its full default key list.
+Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults are shown here. Configurable actions accept one key, a list, or an empty list to unbind the action, such as `open_with = ["O", "w"]` or `delete_permanently = []`. Named keys are supported for arrows, `enter`, `space`, `tab`, `backtab` / `shift+tab`, `backspace`, `pageup`, `pagedown`, `home`, `end`, and `F1`–`F12`; named keys and modifiers are case-insensitive, so `F2`, `PageUp`, and `Ctrl+O` work. Modifier bindings such as `ctrl+o`, `alt+o`, and `ctrl+enter` are also supported. Setting an action replaces its full default key list.
 
 ### Navigation
 
@@ -294,8 +294,8 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | `a` `*` | Create file or folder |
 | `d` `*` | Trash; permanently delete if already in trash |
 | `D` `*` | Delete permanently |
-| `r` `*` | Rename / bulk rename / restore from trash |
-| `F2` | Rename / bulk rename |
+| `r` / `F2` `*` | Rename / bulk rename |
+| `r` `*` (in Trash) | Restore from trash |
 
 ### View
 

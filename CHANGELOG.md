@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `restore_from_trash` and function-key bindings such as `F2`, letting restore and rename be configured separately while keeping the default `r` restore behavior in Trash and `r`/`F2` rename behavior elsewhere.
 - Added support for assigning multiple bindings to each configurable `[keys]` action, while keeping existing single-string key config compatible.
 - Added configurable navigation bindings for `nav_left`, `nav_down`, `nav_up`, and `nav_right`, including named arrow keys.
 - Added `open_or_enter` as a configurable binding for the existing `Enter` behavior: entering folders or opening files. ([#141])

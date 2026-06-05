@@ -169,6 +169,9 @@ impl App {
             }
         }
 
+        let configured_action =
+            crate::config::keys().action_for_key_in_context(key, self.key_context());
+
         match key.code {
             KeyCode::Esc => {
                 if let Some(prog) = &self.jobs.trash_progress {
@@ -192,10 +195,8 @@ impl App {
                 self.clear_wheel_scroll();
                 self.overlays.help = true;
             }
-            _ if crate::config::keys().action_for_key(key).is_some() => {
-                let action = crate::config::keys()
-                    .action_for_key(key)
-                    .expect("action was checked above");
+            _ if configured_action.is_some() => {
+                let action = configured_action.expect("action was checked above");
                 self.dispatch_action(action)?;
             }
             KeyCode::Char('+') | KeyCode::Char('=')
@@ -207,28 +208,6 @@ impl App {
                 if self.navigation.view_mode == ViewMode::Grid =>
             {
                 self.adjust_zoom(-1);
-            }
-            KeyCode::F(2) => {
-                if !self.navigation.in_trash && !self.cwd_is_inside_trash_subfolder() {
-                    if !self.navigation.selected_paths.is_empty() {
-                        self.open_bulk_rename_prompt();
-                    } else {
-                        self.open_rename_prompt();
-                    }
-                }
-            }
-            KeyCode::Char(c)
-                if !key.modifiers.intersects(
-                    KeyModifiers::CONTROL
-                        | KeyModifiers::ALT
-                        | KeyModifiers::SUPER
-                        | KeyModifiers::HYPER
-                        | KeyModifiers::META,
-                ) =>
-            {
-                if let Some(action) = crate::config::keys().action_for(c) {
-                    self.dispatch_action(action)?;
-                }
             }
             _ => {}
         }
@@ -250,16 +229,21 @@ impl App {
             Action::DeletePermanently => self.open_delete_permanently_prompt(),
             Action::Create => self.open_create_prompt(),
             Action::Rename => {
+                if !self.navigation.in_trash && !self.cwd_is_inside_trash_subfolder() {
+                    if !self.navigation.selected_paths.is_empty() {
+                        self.open_bulk_rename_prompt();
+                    } else {
+                        self.open_rename_prompt();
+                    }
+                }
+            }
+            Action::RestoreFromTrash => {
                 if self.navigation.in_trash {
                     self.open_restore_prompt();
                 } else if self.cwd_is_inside_trash_subfolder() {
                     self.status = "Cannot restore from inside a trashed folder \
                                    — go up to the trash to restore the folder itself"
                         .to_string();
-                } else if !self.navigation.selected_paths.is_empty() {
-                    self.open_bulk_rename_prompt();
-                } else {
-                    self.open_rename_prompt();
                 }
             }
             Action::CopyPath => self.open_copy_overlay(),
@@ -330,6 +314,14 @@ impl App {
             }
         }
         Ok(())
+    }
+
+    fn key_context(&self) -> crate::config::KeyContext {
+        if self.navigation.in_trash || self.cwd_is_inside_trash_subfolder() {
+            crate::config::KeyContext::Trash
+        } else {
+            crate::config::KeyContext::Normal
+        }
     }
 
     fn should_debounce_navigation_key(&mut self, key: KeyEvent) -> bool {

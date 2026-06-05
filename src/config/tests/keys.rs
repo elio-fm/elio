@@ -319,9 +319,8 @@ open_with = "alt+ctrl+e"
     )
     .expect("config should parse");
 
-    // Modifiers are intentionally lower-case only; uppercase aliases fall back
-    // instead of being accepted ambiguously.
-    assert_eq!(config.keys.open.to_string(), "o");
+    // Modifier names are case-insensitive, while the final character key keeps its case.
+    assert_eq!(config.keys.open.to_string(), "Ctrl+O");
     assert_eq!(config.keys.open_with.to_string(), "Ctrl+Alt+E");
     assert_eq!(
         config.keys.action_for_key(KeyEvent::new(
@@ -521,6 +520,280 @@ cut = "y"
     .expect("config should parse");
     assert_eq!(config.keys.yank, 'x');
     assert_eq!(config.keys.cut, 'y');
+}
+
+#[test]
+fn function_keys_can_be_bound_and_displayed() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+open = "F5"
+open_with = ["O", "f12"]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.open.to_string(), "F5");
+    assert_eq!(config.keys.open_with.to_string(), "O/F12");
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::F(12), KeyModifiers::NONE)),
+        Some(Action::OpenWith)
+    );
+}
+
+#[test]
+fn named_keys_and_modifiers_are_case_insensitive() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+page_up = "PageUp"
+cycle_places_previous = "Shift+Tab"
+open = "Alt+Up"
+open_with = "O"
+open_or_enter = "SHIft+Enter"
+rename = ["r", "F2"]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.page_up.to_string(), "PageUp");
+    assert_eq!(config.keys.cycle_places_previous.to_string(), "Shift+Tab");
+    assert_eq!(config.keys.open.to_string(), "Alt+↑");
+    assert_eq!(config.keys.open_with.to_string(), "O");
+    assert_eq!(config.keys.open_or_enter.to_string(), "Shift+Enter");
+    assert_eq!(config.keys.rename.to_string(), "r/F2");
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE)),
+        Some(Action::PageUp)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)),
+        Some(Action::CyclePlacesPrevious)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Char('O'), KeyModifiers::SHIFT)),
+        Some(Action::OpenWith)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT)),
+        Some(Action::OpenOrEnter)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE)),
+        Some(Action::Rename)
+    );
+}
+
+#[test]
+fn shift_character_bindings_keep_using_uppercase_character_form() {
+    let cases = ["Shift+O", "Shift+o", "SHIft+O", "SHIft+o"];
+
+    for value in cases {
+        let config =
+            Config::from_str(&format!("[keys]\nopen = \"{value}\"")).expect("config should parse");
+
+        assert_eq!(
+            config.keys.open.to_string(),
+            "o",
+            "{value:?} should fall back; shifted characters are written as uppercase chars"
+        );
+    }
+
+    let config = Config::from_str("[keys]\nopen_with = \"O\"").expect("config should parse");
+    assert_eq!(config.keys.open_with.to_string(), "O");
+}
+
+#[test]
+fn shift_backtab_bindings_fall_back_because_backtab_already_means_shift_tab() {
+    let cases = ["Shift+BackTab", "shift+backtab", "SHIft+BackTab"];
+
+    for value in cases {
+        let config = Config::from_str(&format!("[keys]\ncycle_places_previous = \"{value}\""))
+            .expect("config should parse");
+
+        assert_eq!(
+            config.keys.cycle_places_previous.to_string(),
+            "Shift+Tab",
+            "{value:?} should fall back; use shift+tab or backtab instead"
+        );
+    }
+}
+
+#[test]
+fn default_rename_and_restore_share_r_in_disjoint_contexts() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let key_bindings = KeyBindings::default();
+    let r = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE);
+
+    assert_eq!(key_bindings.rename.to_string(), "r/F2");
+    assert_eq!(key_bindings.restore_from_trash.to_string(), "r");
+    assert_eq!(
+        key_bindings.action_for_key_in_context(r, KeyContext::Normal),
+        Some(Action::Rename)
+    );
+    assert_eq!(
+        key_bindings.action_for_key_in_context(r, KeyContext::Trash),
+        Some(Action::RestoreFromTrash)
+    );
+    assert_eq!(
+        key_bindings.action_for_key_in_context(
+            KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE),
+            KeyContext::Normal,
+        ),
+        Some(Action::Rename)
+    );
+    assert_eq!(
+        key_bindings.action_for_key_in_context(
+            KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE),
+            KeyContext::Trash,
+        ),
+        None
+    );
+}
+
+#[test]
+fn normal_actions_cannot_reuse_contextual_r_default() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open = "r"
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.open.to_string(), "o");
+    assert_eq!(config.keys.rename.to_string(), "r/F2");
+    assert_eq!(config.keys.restore_from_trash.to_string(), "r");
+}
+
+#[test]
+fn contextual_rename_and_restore_bindings_can_overlap() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+rename = "e"
+restore_from_trash = "e"
+"#,
+    )
+    .expect("config should parse");
+    let e = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE);
+
+    assert_eq!(
+        config.keys.action_for_key_in_context(e, KeyContext::Normal),
+        Some(Action::Rename)
+    );
+    assert_eq!(
+        config.keys.action_for_key_in_context(e, KeyContext::Trash),
+        Some(Action::RestoreFromTrash)
+    );
+}
+
+#[test]
+fn disabled_rename_removes_f2_without_disabling_restore() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+rename = []
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(
+        config.keys.action_for_key_in_context(
+            KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE),
+            KeyContext::Normal,
+        ),
+        None
+    );
+    assert_eq!(
+        config.keys.action_for_key_in_context(
+            KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+            KeyContext::Trash,
+        ),
+        Some(Action::RestoreFromTrash)
+    );
+}
+
+#[test]
+fn disabled_restore_from_trash_keeps_normal_rename_bindings() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+restore_from_trash = []
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(
+        config.keys.action_for_key_in_context(
+            KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+            KeyContext::Trash,
+        ),
+        None
+    );
+    assert_eq!(
+        config.keys.action_for_key_in_context(
+            KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+            KeyContext::Normal,
+        ),
+        Some(Action::Rename)
+    );
+    assert_eq!(
+        config.keys.action_for_key_in_context(
+            KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE),
+            KeyContext::Normal,
+        ),
+        Some(Action::Rename)
+    );
+}
+
+#[test]
+fn restore_from_trash_cannot_reuse_global_open_binding() {
+    let config = Config::from_str(
+        r#"
+[keys]
+restore_from_trash = "o"
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.open.to_string(), "o");
+    assert_eq!(config.keys.restore_from_trash.to_string(), "r");
 }
 
 #[test]

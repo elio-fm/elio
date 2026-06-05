@@ -47,6 +47,52 @@ fn fake_default_open_with_app(
 }
 
 #[test]
+fn f2_renames_outside_trash_but_not_inside_trash() {
+    let root = temp_path("f2-rename-not-restore");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("note.txt"), "hello").expect("failed to write file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::F(2))))
+        .expect("F2 should open rename outside trash");
+    assert!(app.rename_is_open());
+    app.overlays.rename = None;
+
+    app.navigation.in_trash = true;
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::F(2))))
+        .expect("F2 should be ignored in trash");
+    assert!(!app.rename_is_open());
+    assert!(!app.restore_is_open());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn r_renames_outside_trash_and_restores_inside_trash() {
+    let root = temp_path("r-rename-restore-context");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("note.txt"), "hello").expect("failed to write file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('r'))))
+        .expect("r should open rename outside trash");
+    assert!(app.rename_is_open());
+    app.overlays.rename = None;
+
+    app.navigation.in_trash = true;
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('r'))))
+        .expect("r should open restore inside trash");
+    assert!(!app.rename_is_open());
+    assert!(app.restore_is_open());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn shift_slash_opens_and_closes_help_overlay() {
     let root = temp_path("help-shift-slash");
     fs::create_dir_all(&root).expect("failed to create temp root");

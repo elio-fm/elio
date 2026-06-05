@@ -61,8 +61,9 @@
 #
 # Keys may be one-character strings, named keys, or modifier bindings.
 # Supported named keys: "left", "right", "up", "down", "enter", "space",
-# "tab", "backtab", "shift+tab", "backspace", "pageup", "pagedown", "home", "end".
-# Supported modifiers: "ctrl", "alt", "shift" with lowercase names.
+# "tab", "backtab", "shift+tab", "backspace", "pageup", "pagedown", "home",
+# "end", "f1".."f12".
+# Named keys and modifiers are case-insensitive: "F2", "PageUp", "Ctrl+O".
 #
 # Examples: open_with = ["O", "w"], open = "ctrl+o", nav_right = "shift+right".
 # For shifted letters, use uppercase characters: "O", not "shift+o".
@@ -90,7 +91,8 @@
 # trash                = "d"
 # delete_permanently   = "D"   # Shift+D
 # create               = "a"
-# rename               = "r"
+# rename               = ["r", "F2"]
+# restore_from_trash   = "r"
 # copy_path            = "c"
 # search_folders       = "f"
 # zoxide               = "z"
