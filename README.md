@@ -258,7 +258,7 @@ https://elio-fm.github.io/docs/themes/
 <details>
 <summary><strong>Controls</strong></summary>
 
-Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults are shown here. Configurable actions accept one key, a list, or an empty list to unbind the action, such as `open_with = ["O", "w"]` or `delete_permanently = []`. Named keys are supported for `left`, `right`, `up`, `down`, and `enter`; modifier bindings such as `ctrl+o`, `alt+o`, and `ctrl+enter` are also supported. Setting an action replaces its full default key list.
+Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults are shown here. Configurable actions accept one key, a list, or an empty list to unbind the action, such as `open_with = ["O", "w"]` or `delete_permanently = []`. Named keys are supported for arrows, `enter`, `space`, `tab`, `backtab` / `shift+tab`, `backspace`, `pageup`, `pagedown`, `home`, and `end`; modifier bindings such as `ctrl+o`, `alt+o`, and `ctrl+enter` are also supported. Setting an action replaces its full default key list.
 
 ### Navigation
 
@@ -266,13 +266,14 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 |---|---|
 | `k` / `↑` `*` | Move up |
 | `j` / `↓` `*` | Move down |
-| `h` / `←` `*` / `Backspace` | Go to parent directory |
+| `h` / `←` / `Backspace` `*` | Go to parent directory |
 | `l` / `→` `*` | Enter folder |
 | `Enter` `*` | Enter folder / open file or selection |
-| `g` | Go-to menu (`g` top, `d` downloads, `h` home, `c` config folder, `t` trash) |
-| `G` | Jump to last item |
-| `PageUp` / `PageDown` | Page up / down |
-| `Tab` / `Shift+Tab` | Cycle places |
+| `g` `*` | Go-to menu (`g` top, `d` downloads, `h` home, `c` config folder, `t` trash) |
+| `Home` `*` | Jump to first item |
+| `G` / `End` `*` | Jump to last item |
+| `PageUp` / `PageDown` `*` | Page up / down |
+| `Tab` / `Shift+Tab` `*` | Cycle places |
 | `Alt+←` / `Alt+→` | Back / forward in history |
 
 ### Search
@@ -317,7 +318,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 
 | Key | Action |
 |---|---|
-| `Space` | Toggle selection |
+| `Space` `*` | Toggle selection |
 | `Ctrl+A` | Select all |
 | `y` `*` | Yank (copy) |
 | `x` `*` | Cut |

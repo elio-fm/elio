@@ -286,6 +286,7 @@ fn keys_reject_invalid_modifier_bindings_and_use_default() {
         "open = \"ctrl+ctrl+f\"",
         "open = \"cmd+f\"",
         "open = \"ctrl+spacebar\"",
+        "open = \"shift+space\"",
         "open = \"ctrl+f\"",
         "open = \"ctrl+c\"",
         "open = \"ctrl+a\"",
@@ -394,6 +395,7 @@ fn parser_edge_cases_fall_back_without_panicking() {
         "super+o",
         "cmd+o",
         "ctrl+spacebar",
+        "shift+space",
         "right+ctrl",
         "ctrl+alt+right+extra",
         "enter+ctrl",
@@ -420,6 +422,19 @@ fn parser_edge_cases_fall_back_without_panicking() {
             config.keys.open
         );
     }
+}
+
+#[test]
+fn literal_space_collides_with_space_named_key() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open = " "
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for(' '), Some(Action::ToggleSelection));
+    assert_eq!(config.keys.action_for('o'), Some(Action::Open));
 }
 
 #[test]
@@ -900,5 +915,204 @@ scroll_preview_down = "U"
         config.keys.action_for('J'),
         None,
         "default 'J' is no longer bound because scroll_preview_down was overridden to 'U'"
+    );
+}
+
+#[test]
+fn browser_control_defaults_are_configurable_actions() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let key_bindings = KeyBindings::default();
+    assert_eq!(key_bindings.action_for('g'), Some(Action::GoTo));
+    assert_eq!(key_bindings.action_for('G'), Some(Action::SelectLast));
+    assert_eq!(key_bindings.action_for(' '), Some(Action::ToggleSelection));
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+        Some(Action::CyclePlacesNext)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)),
+        Some(Action::CyclePlacesPrevious)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        Some(Action::CyclePlacesPrevious)
+    );
+
+    let shift_tab = Config::from_str("[keys]\ncycle_places_previous = \"shift+tab\"")
+        .expect("config should parse");
+    assert_eq!(
+        shift_tab
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)),
+        Some(Action::CyclePlacesPrevious)
+    );
+    assert_eq!(
+        shift_tab
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        Some(Action::CyclePlacesPrevious)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)),
+        Some(Action::GoParent)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE)),
+        Some(Action::PageUp)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE)),
+        Some(Action::PageDown)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE)),
+        Some(Action::SelectFirst)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE)),
+        Some(Action::SelectLast)
+    );
+}
+
+#[test]
+fn browser_control_defaults_can_be_freed_for_other_actions() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+go_to = []
+toggle_selection = []
+cycle_places_next = []
+cycle_places_previous = []
+go_parent = []
+page_up = []
+page_down = []
+select_first = []
+select_last = []
+open = ["o", "g", "G", "space", "tab", "backtab", "backspace", "pageup", "pagedown", "home", "end"]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.action_for('g'), Some(Action::Open));
+    assert_eq!(config.keys.action_for('G'), Some(Action::Open));
+    assert_eq!(config.keys.action_for(' '), Some(Action::Open));
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        Some(Action::Open)
+    );
+
+    let nav_right = Config::from_str(
+        r#"
+[keys]
+cycle_places_previous = []
+nav_right = "backtab"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(
+        nav_right
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)),
+        Some(Action::NavRight)
+    );
+    assert_eq!(
+        nav_right
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        Some(Action::NavRight)
+    );
+
+    let shift_tab_nav_right = Config::from_str(
+        r#"
+[keys]
+cycle_places_previous = []
+nav_right = "shift+tab"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(
+        shift_tab_nav_right
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)),
+        Some(Action::NavRight)
+    );
+    assert_eq!(
+        shift_tab_nav_right
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        Some(Action::NavRight)
+    );
+
+    let default_keys = KeyBindings::default();
+    assert_eq!(
+        default_keys.action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)),
+        Some(Action::CyclePlacesPrevious)
+    );
+    assert_eq!(
+        default_keys.action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        Some(Action::CyclePlacesPrevious)
+    );
+
+    let literal_space = Config::from_str(
+        r#"
+[keys]
+toggle_selection = []
+open = " "
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(literal_space.keys.action_for(' '), Some(Action::Open));
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE)),
+        Some(Action::Open)
     );
 }

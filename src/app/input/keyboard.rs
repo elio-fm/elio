@@ -192,22 +192,12 @@ impl App {
                 self.clear_wheel_scroll();
                 self.overlays.help = true;
             }
-            KeyCode::Tab => self.step_sidebar_place(1)?,
-            KeyCode::BackTab => self.step_sidebar_place(-1)?,
             _ if crate::config::keys().action_for_key(key).is_some() => {
                 let action = crate::config::keys()
                     .action_for_key(key)
                     .expect("action was checked above");
                 self.dispatch_action(action)?;
             }
-            KeyCode::PageUp => self.page(-1),
-            KeyCode::PageDown => self.page(1),
-            KeyCode::Home => self.select_index(0),
-            KeyCode::End => self.select_last(),
-            KeyCode::Char('g') => self.open_goto_overlay(),
-            KeyCode::Char('G') => self.select_last(),
-            KeyCode::Backspace => self.go_parent()?,
-            KeyCode::Char(' ') => self.toggle_selection(),
             KeyCode::Char('+') | KeyCode::Char('=')
                 if self.navigation.view_mode == ViewMode::Grid =>
             {
@@ -287,6 +277,15 @@ impl App {
             Action::Open => self.open_in_system()?,
             Action::OpenWith => self.open_open_with_overlay(),
             Action::OpenOrEnter => self.open_selected()?,
+            Action::GoTo => self.open_goto_overlay(),
+            Action::ToggleSelection => self.toggle_selection(),
+            Action::CyclePlacesNext => self.step_sidebar_place(1)?,
+            Action::CyclePlacesPrevious => self.step_sidebar_place(-1)?,
+            Action::GoParent => self.go_parent()?,
+            Action::PageUp => self.page(-1),
+            Action::PageDown => self.page(1),
+            Action::SelectFirst => self.select_index(0),
+            Action::SelectLast => self.select_last(),
             Action::Sort => self.cycle_sort_mode()?,
             Action::ToggleView => self.toggle_view_mode(),
             Action::ToggleHidden => self.toggle_hidden_files()?,
@@ -367,13 +366,11 @@ impl App {
             Some(crate::config::Action::NavDown) => Some(NavigationRepeatKey::Down),
             Some(crate::config::Action::NavLeft) => Some(NavigationRepeatKey::Left),
             Some(crate::config::Action::NavRight) => Some(NavigationRepeatKey::Right),
-            _ => match key.code {
-                KeyCode::PageUp => Some(NavigationRepeatKey::PageUp),
-                KeyCode::PageDown => Some(NavigationRepeatKey::PageDown),
-                KeyCode::Home => Some(NavigationRepeatKey::Home),
-                KeyCode::End | KeyCode::Char('G') => Some(NavigationRepeatKey::End),
-                _ => None,
-            },
+            Some(crate::config::Action::PageUp) => Some(NavigationRepeatKey::PageUp),
+            Some(crate::config::Action::PageDown) => Some(NavigationRepeatKey::PageDown),
+            Some(crate::config::Action::SelectFirst) => Some(NavigationRepeatKey::Home),
+            Some(crate::config::Action::SelectLast) => Some(NavigationRepeatKey::End),
+            _ => None,
         }
     }
 

@@ -1,4 +1,5 @@
 use crate::app::FrameState;
+use crate::config::KeyBindings;
 use crate::ui::{helpers, theme::Palette};
 use ratatui::{
     Frame,
@@ -17,20 +18,7 @@ pub(super) fn render_help(
 ) {
     let kb = crate::config::keys();
 
-    let parent_key = format!("{} / Backspace", kb.nav_left);
-
-    let navigation_entries = vec![
-        e(&kb.nav_up.to_string(), "move up"),
-        e(&kb.nav_down.to_string(), "move down"),
-        e(&parent_key, "parent folder"),
-        e(&kb.nav_right.to_string(), "enter folder"),
-        e(&kb.open_or_enter.to_string(), "enter folder / open"),
-        e("g", "go-to menu"),
-        e("G", "last item"),
-        e("PageUp / PageDown", "page up / down"),
-        e("Tab / Shift+Tab", "cycle places"),
-        e("Alt+← / Alt+→", "back / forward"),
-    ];
+    let navigation_entries = navigation_entries(kb);
     let search_entries = vec![
         e(&kb.zoxide.to_string(), "zoxide history"),
         e(&kb.search_folders.to_string(), "search folders"),
@@ -40,15 +28,7 @@ pub(super) fn render_help(
         e("Ctrl+Del", "delete next word"),
         e("Ctrl+W / Alt+D", "fallback word delete"),
     ];
-    let clipboard_entries = vec![
-        e("Space", "toggle selection"),
-        e("Ctrl+A", "select all"),
-        e("Esc", "clear selection"),
-        e(&kb.yank.to_string(), "yank (copy)"),
-        e(&kb.copy_path.to_string(), "copy path details"),
-        e(&kb.cut.to_string(), "cut"),
-        e(&kb.paste.to_string(), "paste"),
-    ];
+    let clipboard_entries = clipboard_entries(kb);
     let rename_key = format!("{} / F2", kb.rename);
     let rename_trash_key = format!("{} (in trash)", kb.rename);
     let files_entries = vec![
@@ -224,6 +204,46 @@ pub(super) fn render_help(
     );
 }
 
+fn navigation_entries(kb: &KeyBindings) -> Vec<HelpEntry> {
+    let parent_key = format_key_pair(&kb.nav_left, &kb.go_parent);
+    let page_key = format_key_pair(&kb.page_up, &kb.page_down);
+    let place_key = format_key_pair(&kb.cycle_places_next, &kb.cycle_places_previous);
+
+    vec![
+        e(&kb.nav_up.to_string(), "move up"),
+        e(&kb.nav_down.to_string(), "move down"),
+        e(&parent_key, "parent folder"),
+        e(&kb.nav_right.to_string(), "enter folder"),
+        e(&kb.open_or_enter.to_string(), "enter folder / open"),
+        e(&kb.go_to.to_string(), "go-to menu"),
+        e(&kb.select_first.to_string(), "first item"),
+        e(&kb.select_last.to_string(), "last item"),
+        e(&page_key, "page up / down"),
+        e(&place_key, "cycle places"),
+        e("Alt+← / Alt+→", "back / forward"),
+    ]
+}
+
+fn clipboard_entries(kb: &KeyBindings) -> Vec<HelpEntry> {
+    vec![
+        e(&kb.toggle_selection.to_string(), "toggle selection"),
+        e("Ctrl+A", "select all"),
+        e("Esc", "clear selection"),
+        e(&kb.yank.to_string(), "yank (copy)"),
+        e(&kb.copy_path.to_string(), "copy path details"),
+        e(&kb.cut.to_string(), "cut"),
+        e(&kb.paste.to_string(), "paste"),
+    ]
+}
+
+fn format_key_pair(first: &crate::config::KeyList, second: &crate::config::KeyList) -> String {
+    match (first.to_string(), second.to_string()) {
+        (first, second) if first.is_empty() => second,
+        (first, second) if second.is_empty() => first,
+        (first, second) => format!("{first} / {second}"),
+    }
+}
+
 /// Render a preview-scroll key pair: defaults like 'H'/'L' show as "Shift+H / Shift+L";
 /// overrides such as '<'/'>' show as "< / >".
 fn format_preview_scroll_key(
@@ -368,4 +388,60 @@ fn wrap_help_action(text: &str, width: usize) -> Vec<String> {
     }
 
     lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry_key(entries: &[HelpEntry], action: &str) -> String {
+        entries
+            .iter()
+            .find(|entry| entry.action == action)
+            .unwrap_or_else(|| panic!("missing help entry for {action:?}"))
+            .key
+            .clone()
+    }
+
+    #[test]
+    fn help_uses_configurable_browser_control_defaults() {
+        let kb = KeyBindings::default();
+        let navigation = navigation_entries(&kb);
+        let clipboard = clipboard_entries(&kb);
+
+        assert_eq!(entry_key(&navigation, "go-to menu"), "g");
+        assert_eq!(entry_key(&navigation, "first item"), "Home");
+        assert_eq!(entry_key(&navigation, "last item"), "G/End");
+        assert_eq!(
+            entry_key(&navigation, "page up / down"),
+            "PageUp / PageDown"
+        );
+        assert_eq!(entry_key(&navigation, "cycle places"), "Tab / Shift+Tab");
+        assert_eq!(entry_key(&clipboard, "toggle selection"), "Space");
+    }
+
+    #[test]
+    fn help_reflects_rebound_browser_controls() {
+        let kb = KeyBindings::from_toml_str(
+            r#"[keys]
+go_to = "u"
+toggle_selection = "t"
+cycle_places_next = "n"
+cycle_places_previous = "P"
+page_up = "<"
+page_down = ">"
+select_first = "1"
+select_last = "2"
+"#,
+        );
+        let navigation = navigation_entries(&kb);
+        let clipboard = clipboard_entries(&kb);
+
+        assert_eq!(entry_key(&navigation, "go-to menu"), "u");
+        assert_eq!(entry_key(&navigation, "first item"), "1");
+        assert_eq!(entry_key(&navigation, "last item"), "2");
+        assert_eq!(entry_key(&navigation, "page up / down"), "< / >");
+        assert_eq!(entry_key(&navigation, "cycle places"), "n / P");
+        assert_eq!(entry_key(&clipboard, "toggle selection"), "t");
+    }
 }

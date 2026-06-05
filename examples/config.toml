@@ -60,7 +60,8 @@
 # Rebind browser action keys. Each value may be a single key, a list, or [].
 #
 # Keys may be one-character strings, named keys, or modifier bindings.
-# Supported named keys: "left", "right", "up", "down", "enter".
+# Supported named keys: "left", "right", "up", "down", "enter", "space",
+# "tab", "backtab", "shift+tab", "backspace", "pageup", "pagedown", "home", "end".
 # Supported modifiers: "ctrl", "alt", "shift" with lowercase names.
 #
 # Examples: open_with = ["O", "w"], open = "ctrl+o", nav_right = "shift+right".
@@ -73,7 +74,7 @@
 # Example: nav_right = [] frees "l" and "right".
 # Then open_or_enter = ["enter", "l", "right"] can use them.
 #
-# Reserved bare keys: g G ? [ ] + = - _ Space
+# Reserved bare keys: ? [ ] + = - _
 # Reserved shortcuts: Ctrl+C, Ctrl+F, Ctrl+A, Ctrl+Plus/Minus, Alt+Left/Right
 # Omit any key to keep the built-in default shown in the comment.
 #
@@ -97,6 +98,15 @@
 # open                 = "o"
 # open_with            = "O"
 # open_or_enter        = "enter"
+# go_to                = "g"
+# toggle_selection     = "space"
+# cycle_places_next    = "tab"
+# cycle_places_previous = "backtab"
+# go_parent            = "backspace"
+# page_up              = "pageup"
+# page_down            = "pagedown"
+# select_first         = "home"
+# select_last          = ["G", "end"]
 # sort                 = "s"
 # toggle_view          = "v"
 # toggle_hidden        = "."
