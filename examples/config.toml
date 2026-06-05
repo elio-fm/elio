@@ -63,6 +63,8 @@
 # Example: open_with = ["O", "w"].
 # Setting a key replaces that action's full default list, not just one entry.
 # Example: nav_down = "j" removes the default "down" arrow binding.
+# Use [] to unbind an action.
+# Example: nav_right = [] frees "l" and "right" for other actions.
 # Reserved (never rebindable): g G ? [ ] + = - _ Space
 # Omit any key to keep the built-in default shown in the comment.
 #
@@ -93,3 +95,7 @@
 # scroll_preview_down  = "J"   # Shift+J
 # scroll_preview_left  = "H"   # Shift+H
 # scroll_preview_right = "L"   # Shift+L
+#
+# Example: make l/Enter/Right all open or enter.
+# nav_right     = []
+# open_or_enter = ["enter", "l", "right"]

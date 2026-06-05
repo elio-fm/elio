@@ -170,6 +170,7 @@ impl PartialEq<char> for KeyList {
 /// All fields default to the built-in keys; set any field in `[keys]` in
 /// `config.toml` to override that binding. Values may be either a single
 /// string (`open = "o"`) or a list of strings (`open = ["o", "e"]`).
+/// Empty lists unbind the action (`open = []`).
 /// Character bindings must be one character; named bindings currently support
 /// `left`, `right`, `up`, `down`, and `enter`.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -485,7 +486,7 @@ impl KeyBindings {
         ];
 
         // Step 1: parse each override independently, falling back to default on
-        // any format or reserved-char error.
+        // any format or reserved-char error. Empty lists are valid unbinds.
         // (resolved_keys, is_user_set)
         let mut candidates: Vec<(KeyList, bool)> = raw
             .iter()
@@ -568,13 +569,6 @@ fn parse_key_override(name: &str, value: &KeyConfigOverride, default: &KeyList) 
         KeyConfigOverride::Many(values) => values.iter().map(String::as_str).collect(),
     };
 
-    if values.is_empty() {
-        eprintln!(
-            "elio: keys.{name}: key binding lists cannot be empty; using default '{default}'"
-        );
-        return None;
-    }
-
     let mut parsed = Vec::with_capacity(values.len());
     for value in values {
         let spec = parse_key_spec(name, value, default)?;
@@ -598,7 +592,7 @@ fn parse_key_spec(name: &str, value: &str, default: &KeyList) -> Option<KeySpec>
     let mut chars = value.chars();
     let Some(c) = chars.next() else {
         eprintln!(
-            "elio: keys.{name}: empty strings cannot be used as key bindings; using default '{default}'"
+            "elio: keys.{name}: empty strings cannot be used as key bindings; use [] to unbind this action; using default '{default}'"
         );
         return None;
     };

@@ -44,7 +44,7 @@ open_with = ["O"]
 }
 
 #[test]
-fn keys_rejects_empty_array_and_uses_default() {
+fn keys_accepts_empty_array_to_unbind_action() {
     let config = Config::from_str(
         r#"
 [keys]
@@ -52,8 +52,22 @@ open = []
 "#,
     )
     .expect("config should parse");
-    assert_eq!(config.keys.open, 'o');
-    assert_eq!(config.keys.action_for('o'), Some(Action::Open));
+    assert_eq!(config.keys.open.to_string(), "");
+    assert_eq!(config.keys.action_for('o'), None);
+}
+
+#[test]
+fn unbound_action_frees_its_default_key_for_another_action() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open = []
+shell = "o"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('o'), Some(Action::Shell));
+    assert_eq!(config.keys.action_for('!'), None);
 }
 
 #[test]

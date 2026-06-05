@@ -258,7 +258,7 @@ https://elio-fm.github.io/docs/themes/
 <details>
 <summary><strong>Controls</strong></summary>
 
-Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults are shown here. Configurable actions accept either one key or a list, such as `open_with = ["O", "w"]`. Named keys are supported for `left`, `right`, `up`, `down`, and `enter`. Setting an action replaces its full default key list.
+Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults are shown here. Configurable actions accept one key, a list, or an empty list to unbind the action, such as `open_with = ["O", "w"]` or `delete_permanently = []`. Named keys are supported for `left`, `right`, `up`, `down`, and `enter`. Setting an action replaces its full default key list.
 
 ### Navigation
 
