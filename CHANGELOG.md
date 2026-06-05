@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added configurable navigation bindings for `nav_left`, `nav_down`, `nav_up`, and `nav_right`, including named arrow keys.
 - Added `open_or_enter` as a configurable binding for the existing `Enter` behavior: entering folders or opening files. ([#141])
 - Added `[]` support for unbinding configurable `[keys]` actions.
+- Added support for modifier `[keys]` bindings such as `ctrl+o`, `alt+o`, and `shift+right`.
 - Added a configurable `D` (`delete_permanently`) shortcut for permanently deleting selected entries without first opening Trash. ([#140])
 
 ## [1.7.0] - 2026-05-30

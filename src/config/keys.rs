@@ -82,39 +82,117 @@ impl std::fmt::Display for NamedKey {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) enum KeySpec {
+struct KeyModifierSpec {
+    ctrl: bool,
+    alt: bool,
+    shift: bool,
+    other: bool,
+}
+
+impl KeyModifierSpec {
+    const NONE: Self = Self {
+        ctrl: false,
+        alt: false,
+        shift: false,
+        other: false,
+    };
+
+    fn is_empty(self) -> bool {
+        !self.ctrl && !self.alt && !self.shift && !self.other
+    }
+
+    fn from_event(modifiers: KeyModifiers) -> Self {
+        let supported = KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SHIFT;
+        Self {
+            ctrl: modifiers.contains(KeyModifiers::CONTROL),
+            alt: modifiers.contains(KeyModifiers::ALT),
+            shift: modifiers.contains(KeyModifiers::SHIFT),
+            other: modifiers.intersects(!supported),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum KeyCodeSpec {
     Char(char),
     Named(NamedKey),
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct KeySpec {
+    code: KeyCodeSpec,
+    modifiers: KeyModifierSpec,
+}
+
 impl KeySpec {
+    fn char(c: char) -> Self {
+        Self {
+            code: KeyCodeSpec::Char(c),
+            modifiers: KeyModifierSpec::NONE,
+        }
+    }
+
+    fn named(named: NamedKey) -> Self {
+        Self {
+            code: KeyCodeSpec::Named(named),
+            modifiers: KeyModifierSpec::NONE,
+        }
+    }
+
     fn single_char(self) -> Option<char> {
-        match self {
-            Self::Char(c) => Some(c),
-            Self::Named(_) => None,
+        match (self.code, self.modifiers.is_empty()) {
+            (KeyCodeSpec::Char(c), true) => Some(c),
+            _ => None,
         }
     }
 
     fn matches_event(self, key: KeyEvent) -> bool {
-        if key
-            .modifiers
-            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
-        {
+        let (event_code, event_modifiers) = normalize_key_event(key);
+        if event_modifiers != self.modifiers {
             return false;
         }
 
-        match self {
-            Self::Char(c) => matches!(key.code, KeyCode::Char(actual) if actual == c),
-            Self::Named(named) => named.matches(key.code),
+        match self.code {
+            KeyCodeSpec::Char(c) => matches!(event_code, KeyCode::Char(actual) if actual == c),
+            KeyCodeSpec::Named(named) => named.matches(event_code),
         }
     }
 }
 
+fn normalize_key_event(key: KeyEvent) -> (KeyCode, KeyModifierSpec) {
+    let mut modifiers = KeyModifierSpec::from_event(key.modifiers);
+    let code = match key.code {
+        KeyCode::Char(c) if modifiers.ctrl || modifiers.alt => {
+            modifiers.shift = false;
+            KeyCode::Char(c.to_ascii_lowercase())
+        }
+        KeyCode::Char(c) => {
+            modifiers.shift = false;
+            KeyCode::Char(c)
+        }
+        code => code,
+    };
+    (code, modifiers)
+}
+
 impl std::fmt::Display for KeySpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Char(c) => write!(f, "{c}"),
-            Self::Named(named) => write!(f, "{named}"),
+        if self.modifiers.ctrl {
+            f.write_str("Ctrl+")?;
+        }
+        if self.modifiers.alt {
+            f.write_str("Alt+")?;
+        }
+        if self.modifiers.shift {
+            f.write_str("Shift+")?;
+        }
+
+        match self.code {
+            KeyCodeSpec::Char(c) if self.modifiers.ctrl || self.modifiers.alt => {
+                write!(f, "{}", c.to_ascii_uppercase())
+            }
+            KeyCodeSpec::Char(c) => write!(f, "{c}"),
+            KeyCodeSpec::Named(named) => write!(f, "{named}"),
         }
     }
 }
@@ -125,7 +203,7 @@ pub(crate) struct KeyList(Vec<KeySpec>);
 
 impl KeyList {
     fn one(c: char) -> Self {
-        Self(vec![KeySpec::Char(c)])
+        Self(vec![KeySpec::char(c)])
     }
 
     fn contains(&self, key: KeySpec) -> bool {
@@ -162,7 +240,7 @@ impl std::fmt::Display for KeyList {
 
 impl PartialEq<char> for KeyList {
     fn eq(&self, other: &char) -> bool {
-        self.0.as_slice() == [KeySpec::Char(*other)]
+        self.0.as_slice() == [KeySpec::char(*other)]
     }
 }
 
@@ -214,6 +292,14 @@ const RESERVED_CHARS: &[char] = &[
     ' ', // toggle selection
 ];
 
+/// Modified keys that are still hard-wired before configurable browser actions.
+const RESERVED_MODIFIED_CHARS: &[char] = &[
+    'c', // cancel/clear
+    'f', // file search
+    'a', // select all
+    '+', '=', '-', '_', // grid zoom
+];
+
 impl Default for KeyBindings {
     fn default() -> Self {
         Self {
@@ -232,14 +318,14 @@ impl Default for KeyBindings {
             shell: KeyList::one('!'),
             open: KeyList::one('o'),
             open_with: KeyList::one('O'),
-            open_or_enter: KeyList(vec![KeySpec::Named(NamedKey::Enter)]),
+            open_or_enter: KeyList(vec![KeySpec::named(NamedKey::Enter)]),
             sort: KeyList::one('s'),
             toggle_view: KeyList::one('v'),
             toggle_hidden: KeyList::one('.'),
-            nav_left: KeyList(vec![KeySpec::Char('h'), KeySpec::Named(NamedKey::Left)]),
-            nav_down: KeyList(vec![KeySpec::Char('j'), KeySpec::Named(NamedKey::Down)]),
-            nav_up: KeyList(vec![KeySpec::Char('k'), KeySpec::Named(NamedKey::Up)]),
-            nav_right: KeyList(vec![KeySpec::Char('l'), KeySpec::Named(NamedKey::Right)]),
+            nav_left: KeyList(vec![KeySpec::char('h'), KeySpec::named(NamedKey::Left)]),
+            nav_down: KeyList(vec![KeySpec::char('j'), KeySpec::named(NamedKey::Down)]),
+            nav_up: KeyList(vec![KeySpec::char('k'), KeySpec::named(NamedKey::Up)]),
+            nav_right: KeyList(vec![KeySpec::char('l'), KeySpec::named(NamedKey::Right)]),
             scroll_preview_left: KeyList::one('H'),
             scroll_preview_right: KeyList::one('L'),
             scroll_preview_up: KeyList::one('K'),
@@ -585,12 +671,38 @@ fn parse_key_override(name: &str, value: &KeyConfigOverride, default: &KeyList) 
 }
 
 fn parse_key_spec(name: &str, value: &str, default: &KeyList) -> Option<KeySpec> {
-    if let Some(named) = NamedKey::parse(value) {
-        return Some(KeySpec::Named(named));
+    let (modifiers, key_name) = parse_key_modifiers(name, value, default)?;
+
+    if modifiers.shift && key_name.len() == 1 {
+        let c = key_name.chars().next().expect("single-char key");
+        let suggestion = if c.is_ascii_alphabetic() {
+            format!("; use {:?} instead", c.to_ascii_uppercase().to_string())
+        } else {
+            String::new()
+        };
+        eprintln!(
+            "elio: keys.{name}: {value:?} uses shift with a character{suggestion}; using default '{default}'"
+        );
+        return None;
     }
 
-    let mut chars = value.chars();
-    let Some(c) = chars.next() else {
+    if key_name == "shift" || key_name == "ctrl" || key_name == "alt" {
+        eprintln!(
+            "elio: keys.{name}: {value:?} is missing a key after modifiers; using default '{default}'"
+        );
+        return None;
+    }
+
+    if let Some(named) = NamedKey::parse(key_name) {
+        let spec = KeySpec {
+            code: KeyCodeSpec::Named(named),
+            modifiers,
+        };
+        return validate_key_spec(name, spec, default);
+    }
+
+    let mut chars = key_name.chars();
+    let Some(mut c) = chars.next() else {
         eprintln!(
             "elio: keys.{name}: empty strings cannot be used as key bindings; use [] to unbind this action; using default '{default}'"
         );
@@ -598,11 +710,11 @@ fn parse_key_spec(name: &str, value: &str, default: &KeyList) -> Option<KeySpec>
     };
     if chars.next().is_some() {
         eprintln!(
-            "elio: keys.{name}: {value:?} is not a single character or supported named key; using default '{default}'"
+            "elio: keys.{name}: {value:?} is not a single character, modifier binding, or supported named key; using default '{default}'"
         );
         return None;
     }
-    if RESERVED_CHARS.contains(&c) {
+    if RESERVED_CHARS.contains(&c) && modifiers.is_empty() {
         eprintln!(
             "elio: keys.{name}: '{c}' is reserved and cannot be rebound; using default '{default}'"
         );
@@ -615,5 +727,113 @@ fn parse_key_spec(name: &str, value: &str, default: &KeyList) -> Option<KeySpec>
         return None;
     }
 
-    Some(KeySpec::Char(c))
+    if (modifiers.ctrl || modifiers.alt) && c.is_ascii_alphabetic() {
+        c = c.to_ascii_lowercase();
+    }
+
+    validate_key_spec(
+        name,
+        KeySpec {
+            code: KeyCodeSpec::Char(c),
+            modifiers,
+        },
+        default,
+    )
+}
+
+fn validate_key_spec(name: &str, spec: KeySpec, default: &KeyList) -> Option<KeySpec> {
+    if is_reserved_key_spec(spec) {
+        eprintln!(
+            "elio: keys.{name}: '{spec}' is reserved and cannot be rebound; using default '{default}'"
+        );
+        return None;
+    }
+
+    Some(spec)
+}
+
+fn is_reserved_key_spec(spec: KeySpec) -> bool {
+    match spec.code {
+        KeyCodeSpec::Char(c) if spec.modifiers.is_empty() => RESERVED_CHARS.contains(&c),
+        KeyCodeSpec::Char(c) if spec.modifiers.ctrl => {
+            RESERVED_MODIFIED_CHARS.contains(&c.to_ascii_lowercase())
+        }
+        KeyCodeSpec::Named(NamedKey::Left | NamedKey::Right) if spec.modifiers.alt => true,
+        _ => false,
+    }
+}
+
+fn parse_key_modifiers<'a>(
+    name: &str,
+    value: &'a str,
+    default: &KeyList,
+) -> Option<(KeyModifierSpec, &'a str)> {
+    let mut parts = value.split('+').peekable();
+    let mut modifiers = KeyModifierSpec::NONE;
+    let mut key = None;
+
+    while let Some(part) = parts.next() {
+        if part.is_empty() {
+            if value.is_empty() {
+                eprintln!(
+                    "elio: keys.{name}: empty strings cannot be used as key bindings; use [] to unbind this action; using default '{default}'"
+                );
+            } else {
+                eprintln!(
+                    "elio: keys.{name}: {value:?} contains an empty key component; using default '{default}'"
+                );
+            }
+            return None;
+        }
+
+        if parts.peek().is_none() {
+            key = Some(part);
+            break;
+        }
+
+        match part {
+            "ctrl" => {
+                if modifiers.ctrl {
+                    eprintln!(
+                        "elio: keys.{name}: duplicate modifier 'ctrl' in {value:?}; using default '{default}'"
+                    );
+                    return None;
+                }
+                modifiers.ctrl = true;
+            }
+            "alt" => {
+                if modifiers.alt {
+                    eprintln!(
+                        "elio: keys.{name}: duplicate modifier 'alt' in {value:?}; using default '{default}'"
+                    );
+                    return None;
+                }
+                modifiers.alt = true;
+            }
+            "shift" => {
+                if modifiers.shift {
+                    eprintln!(
+                        "elio: keys.{name}: duplicate modifier 'shift' in {value:?}; using default '{default}'"
+                    );
+                    return None;
+                }
+                modifiers.shift = true;
+            }
+            _ => {
+                eprintln!(
+                    "elio: keys.{name}: unknown modifier {part:?} in {value:?}; supported modifiers are ctrl, alt, and shift; using default '{default}'"
+                );
+                return None;
+            }
+        }
+    }
+
+    let Some(key) = key else {
+        eprintln!(
+            "elio: keys.{name}: {value:?} is missing a key after modifiers; using default '{default}'"
+        );
+        return None;
+    };
+
+    Some((modifiers, key))
 }

@@ -57,15 +57,24 @@
 # files = 45
 # preview = 45
 
-# Rebind browser action keys. Each value may be a single key or a list.
-# Keys may be one-character strings or named keys: "left", "right", "up",
-# "down", and "enter".
-# Example: open_with = ["O", "w"].
+# Rebind browser action keys. Each value may be a single key, a list, or [].
+#
+# Keys may be one-character strings, named keys, or modifier bindings.
+# Supported named keys: "left", "right", "up", "down", "enter".
+# Supported modifiers: "ctrl", "alt", "shift" with lowercase names.
+#
+# Examples: open_with = ["O", "w"], open = "ctrl+o", nav_right = "shift+right".
+# For shifted letters, use uppercase characters: "O", not "shift+o".
+#
 # Setting a key replaces that action's full default list, not just one entry.
 # Example: nav_down = "j" removes the default "down" arrow binding.
+#
 # Use [] to unbind an action.
-# Example: nav_right = [] frees "l" and "right" for other actions.
-# Reserved (never rebindable): g G ? [ ] + = - _ Space
+# Example: nav_right = [] frees "l" and "right".
+# Then open_or_enter = ["enter", "l", "right"] can use them.
+#
+# Reserved bare keys: g G ? [ ] + = - _ Space
+# Reserved shortcuts: Ctrl+C, Ctrl+F, Ctrl+A, Ctrl+Plus/Minus, Alt+Left/Right
 # Omit any key to keep the built-in default shown in the comment.
 #
 # [keys]

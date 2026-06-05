@@ -89,6 +89,30 @@ fn q_sets_should_quit() {
 }
 
 #[test]
+fn modified_plain_shortcut_does_not_trigger_plain_action() {
+    let root = temp_path("modified-plain-shortcut");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    assert!(!app.should_quit);
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('q'),
+        KeyModifiers::CONTROL,
+    )))
+    .expect("Ctrl-Q should be ignored by the plain q binding");
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('q'),
+        KeyModifiers::ALT,
+    )))
+    .expect("Alt-Q should be ignored by the plain q binding");
+
+    assert!(!app.should_quit);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn capital_q_quits_without_changing_directory() {
     let root = temp_path("quit-without-cd-shortcut");
     fs::create_dir_all(&root).expect("failed to create temp root");

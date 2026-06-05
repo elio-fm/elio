@@ -128,16 +128,8 @@ impl App {
             && !key.modifiers.contains(KeyModifiers::CONTROL)
         {
             match key.code {
-                KeyCode::Left => {
-                    if self.handle_horizontal_navigation_key(-1) {
-                        return Ok(());
-                    }
-                }
-                KeyCode::Right => {
-                    if self.handle_horizontal_navigation_key(1) {
-                        return Ok(());
-                    }
-                }
+                KeyCode::Left if self.handle_horizontal_navigation_key(-1) => return Ok(()),
+                KeyCode::Right if self.handle_horizontal_navigation_key(1) => return Ok(()),
                 _ => {}
             }
         }
@@ -235,7 +227,15 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char(c) => {
+            KeyCode::Char(c)
+                if !key.modifiers.intersects(
+                    KeyModifiers::CONTROL
+                        | KeyModifiers::ALT
+                        | KeyModifiers::SUPER
+                        | KeyModifiers::HYPER
+                        | KeyModifiers::META,
+                ) =>
+            {
                 if let Some(action) = crate::config::keys().action_for(c) {
                     self.dispatch_action(action)?;
                 }
