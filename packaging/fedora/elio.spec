@@ -13,8 +13,8 @@ Source0:        %{name}-%{version}.tar.gz
 Source1:        vendor-%{version}.tar.zst
 
 BuildRequires:  cargo-rpm-macros
-BuildRequires:  cargo >= 1.93
-BuildRequires:  rust >= 1.93
+BuildRequires:  cargo >= 1.96
+BuildRequires:  rust >= 1.96
 BuildRequires:  gcc
 BuildRequires:  pkgconf-pkg-config
 BuildRequires:  zstd
