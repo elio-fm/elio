@@ -26,7 +26,7 @@ use crossterm::{
 use ratatui::{
     Terminal,
     backend::CrosstermBackend,
-    buffer::{Buffer, Cell},
+    buffer::{Buffer, Cell, CellDiffOption},
     layout::Rect,
 };
 use std::{
@@ -675,7 +675,7 @@ fn collect_buffer_cells(rects: &[Rect], buffer: &Buffer) -> Vec<(u16, u16, Cell)
                 let Some(cell) = buffer.cell((x, y)) else {
                     continue;
                 };
-                if cell.skip {
+                if matches!(cell.diff_option, CellDiffOption::Skip) {
                     continue;
                 }
                 cells.push((x, y, cell.clone()));
