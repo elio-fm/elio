@@ -94,10 +94,10 @@ pub(super) fn parse_epub_package_document(xml: &str) -> EpubPackageDocument {
                         register_epub_meta(&mut package, &event, reader.decoder());
                     }
                     "title" | "subject" | "creator" | "language" | "publisher" | "identifier"
-                    | "date" => {
-                        if stack.last().is_some_and(|section| section == "metadata") {
-                            current_metadata_tag = Some(tag.clone());
-                        }
+                    | "date"
+                        if stack.last().is_some_and(|section| section == "metadata") =>
+                    {
+                        current_metadata_tag = Some(tag.clone());
                     }
                     _ => {}
                 }

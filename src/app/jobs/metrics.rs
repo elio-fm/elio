@@ -51,11 +51,9 @@ impl SchedulerMetrics {
 
     #[cfg(test)]
     pub(super) fn snapshot(&self) -> SchedulerMetricsSnapshot {
-        let preview_avg_build_ms = if self.preview_jobs_completed == 0 {
-            0
-        } else {
-            (self.preview_total_build_time.as_millis() as u64) / self.preview_jobs_completed
-        };
+        let preview_avg_build_ms = (self.preview_total_build_time.as_millis() as u64)
+            .checked_div(self.preview_jobs_completed)
+            .unwrap_or(0);
         SchedulerMetricsSnapshot {
             directory_jobs_submitted: self.directory_jobs_submitted,
             directory_jobs_completed: self.directory_jobs_completed,

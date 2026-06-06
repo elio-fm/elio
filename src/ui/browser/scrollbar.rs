@@ -39,11 +39,11 @@ pub(super) fn render_preview_scrollbar(
         .min(area.height as usize);
     let max_scroll = total.saturating_sub(visible_rows.max(1));
     let thumb_max_top = area.height as usize - thumb_height;
-    let thumb_top = if max_scroll == 0 {
-        0
-    } else {
-        (app.preview_scroll_offset() * thumb_max_top) / max_scroll
-    };
+    let thumb_top = app
+        .preview_scroll_offset()
+        .checked_mul(thumb_max_top)
+        .and_then(|offset| offset.checked_div(max_scroll))
+        .unwrap_or(0);
 
     let thumb = Rect {
         x: area.x,
@@ -108,11 +108,10 @@ pub(super) fn render_browser_scrollbar(
         .min(area.height as usize);
     let max_scroll = total_rows.saturating_sub(visible_rows.max(1));
     let thumb_max_top = area.height as usize - thumb_height;
-    let thumb_top = if max_scroll == 0 {
-        0
-    } else {
-        (scroll_row * thumb_max_top) / max_scroll
-    };
+    let thumb_top = scroll_row
+        .checked_mul(thumb_max_top)
+        .and_then(|offset| offset.checked_div(max_scroll))
+        .unwrap_or(0);
 
     let thumb = Rect {
         x: area.x,

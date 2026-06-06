@@ -91,11 +91,10 @@ pub(super) fn render_create_overlay(
         0
     };
     let max_scroll = line_count.saturating_sub(visible_lines as usize);
-    let thumb_pos = if max_scroll == 0 {
-        0
-    } else {
-        scroll_top * (visible_lines as usize - thumb_size) / max_scroll
-    };
+    let thumb_pos = scroll_top
+        .checked_mul(visible_lines as usize - thumb_size)
+        .and_then(|offset| offset.checked_div(max_scroll))
+        .unwrap_or(0);
     let bar_x = list_area.x + list_area.width.saturating_sub(1);
 
     let mut cursor_screen_pos: Option<(u16, u16)> = None;

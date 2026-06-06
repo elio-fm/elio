@@ -110,7 +110,7 @@ fn discover_via_desktop_scan_inner(
     }
 
     let mut remaining: Vec<_> = candidates.into_iter().collect();
-    remaining.sort_by(|a, b| a.1.name.to_lowercase().cmp(&b.1.name.to_lowercase()));
+    remaining.sort_by_key(|a| a.1.name.to_lowercase());
 
     for (desktop_id, candidate) in remaining {
         let Some((program, args)) = expand_exec_template(&candidate.exec, path) else {

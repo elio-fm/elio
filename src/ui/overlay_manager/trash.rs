@@ -56,11 +56,10 @@ pub(super) fn render_trash_overlay(
         0
     };
     let max_scroll = count.saturating_sub(visible);
-    let thumb_pos = if max_scroll == 0 {
-        0
-    } else {
-        scroll * (visible - thumb_size) / max_scroll
-    };
+    let thumb_pos = scroll
+        .checked_mul(visible - thumb_size)
+        .and_then(|offset| offset.checked_div(max_scroll))
+        .unwrap_or(0);
     let bar_x = list_area.x + list_area.width.saturating_sub(1);
 
     for row_offset in 0..visible {

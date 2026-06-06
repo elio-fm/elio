@@ -45,8 +45,8 @@ jobs:
             fi
           fi
 
-      - name: Install Rust 1.93.0
-        uses: dtolnay/rust-toolchain@1.93.0
+      - name: Install Rust 1.96.0
+        uses: dtolnay/rust-toolchain@1.96.0
         with:
           components: rustfmt, clippy
 
@@ -92,8 +92,8 @@ jobs:
             ln -sf "$(command -v mkisofs)" /usr/local/bin/genisoimage
           fi
 
-      - name: Install Rust 1.93.0
-        uses: dtolnay/rust-toolchain@1.93.0
+      - name: Install Rust 1.96.0
+        uses: dtolnay/rust-toolchain@1.96.0
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -114,8 +114,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Install Rust 1.93.0
-        uses: dtolnay/rust-toolchain@1.93.0
+      - name: Install Rust 1.96.0
+        uses: dtolnay/rust-toolchain@1.96.0
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2

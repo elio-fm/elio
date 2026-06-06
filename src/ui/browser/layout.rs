@@ -403,11 +403,7 @@ fn allocate_weighted_lengths(total: u16, weights: Vec<u16>) -> Vec<u16> {
 
     for (index, weight) in weights.iter().copied().enumerate() {
         let product = total as u32 * weight as u32;
-        let portion = if total_weight == 0 {
-            0
-        } else {
-            (product / total_weight) as u16
-        };
+        let portion = product.checked_div(total_weight).unwrap_or(0) as u16;
         lengths[index] = portion;
         assigned = assigned.saturating_add(portion);
         remainders.push((
