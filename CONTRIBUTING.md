@@ -22,7 +22,7 @@ cd elio
 git checkout -b your-branch-name
 ```
 
-The repository includes [`rust-toolchain.toml`](rust-toolchain.toml), which pins Rust `1.96.0` and installs the required `clippy` and `rustfmt` components automatically.
+The repository includes [`rust-toolchain.toml`](rust-toolchain.toml), which pins Rust `1.95.0` and installs the required `clippy` and `rustfmt` components automatically.
 
 ## Project Structure
 
