@@ -48,7 +48,7 @@ pub(super) fn render_help(
         e(&kb.toggle_hidden.to_string(), "toggle dotfiles"),
         e(&kb.sort.to_string(), "cycle sort"),
         e(&kb.quit.to_string(), "quit"),
-        e(&kb.quit_without_cd.to_string(), "quit, keep shell cwd"),
+        e(&kb.quit_without_cd.to_string(), "quit without cd"),
     ];
     let preview_vertical_key =
         format_preview_scroll_key(&kb.scroll_preview_up, &kb.scroll_preview_down);

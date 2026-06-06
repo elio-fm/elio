@@ -1,5 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 /// A browser action that can be triggered by a configurable key binding.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -525,6 +526,8 @@ pub(super) struct KeysConfigOverride {
     scroll_preview_right: Option<KeyConfigOverride>,
     scroll_preview_up: Option<KeyConfigOverride>,
     scroll_preview_down: Option<KeyConfigOverride>,
+    #[serde(flatten)]
+    unknown: BTreeMap<String, toml::Value>,
 }
 
 struct RawBinding {
@@ -532,6 +535,16 @@ struct RawBinding {
     action: Action,
     override_value: Option<KeyConfigOverride>,
     default: KeyList,
+}
+
+fn warn_unknown_key_actions(unknown: &BTreeMap<String, toml::Value>) {
+    for key in unknown.keys() {
+        eprintln!("{}", unknown_key_action_warning(key));
+    }
+}
+
+pub(super) fn unknown_key_action_warning(key: &str) -> String {
+    format!("elio: keys.{key}: unknown key action; ignoring")
 }
 
 impl KeyBindings {
@@ -620,6 +633,8 @@ impl KeyBindings {
     }
 
     pub(super) fn from_override(overrides: KeysConfigOverride, defaults: &Self) -> Self {
+        warn_unknown_key_actions(&overrides.unknown);
+
         let raw = vec![
             RawBinding {
                 name: "quit",

@@ -85,6 +85,7 @@
 # nav_up               = ["k", "up"]
 # nav_right            = ["l", "right"]
 # quit                 = "q"
+# quit_without_cd      = "Q"
 # yank                 = "y"
 # cut                  = "x"
 # paste                = "p"
