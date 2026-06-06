@@ -53,7 +53,12 @@ pub(super) fn parse_epub_rootfile_path(xml: &str) -> Option<String> {
                     if local_name(attribute.key.as_ref()) != "full-path" {
                         continue;
                     }
-                    let value = attribute.decode_and_unescape_value(reader.decoder()).ok()?;
+                    let value = attribute
+                        .decoded_and_normalized_value(
+                            quick_xml::XmlVersion::Implicit1_0,
+                            reader.decoder(),
+                        )
+                        .ok()?;
                     let value = value.trim();
                     if !value.is_empty() {
                         return Some(value.to_string());

@@ -84,7 +84,11 @@ pub(super) fn xml_attribute_value(
 ) -> Option<String> {
     event.attributes().flatten().find_map(|attribute| {
         (local_name(attribute.key.as_ref()) == name)
-            .then(|| attribute.decode_and_unescape_value(decoder).ok())
+            .then(|| {
+                attribute
+                    .decoded_and_normalized_value(quick_xml::XmlVersion::Implicit1_0, decoder)
+                    .ok()
+            })
             .flatten()
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
@@ -129,7 +133,10 @@ pub(super) fn parse_xml_text_fields(xml: &str) -> BTreeMap<String, String> {
                 if tag == "document-statistic" {
                     for attribute in event.attributes().flatten() {
                         let key = local_name(attribute.key.as_ref());
-                        if let Ok(value) = attribute.decode_and_unescape_value(reader.decoder()) {
+                        if let Ok(value) = attribute.decoded_and_normalized_value(
+                            quick_xml::XmlVersion::Implicit1_0,
+                            reader.decoder(),
+                        ) {
                             let value = value.trim();
                             if !value.is_empty() {
                                 fields.insert(key, value.to_string());
@@ -143,7 +150,10 @@ pub(super) fn parse_xml_text_fields(xml: &str) -> BTreeMap<String, String> {
                 if local_name(event.name().as_ref()) == "document-statistic" {
                     for attribute in event.attributes().flatten() {
                         let key = local_name(attribute.key.as_ref());
-                        if let Ok(value) = attribute.decode_and_unescape_value(reader.decoder()) {
+                        if let Ok(value) = attribute.decoded_and_normalized_value(
+                            quick_xml::XmlVersion::Implicit1_0,
+                            reader.decoder(),
+                        ) {
                             let value = value.trim();
                             if !value.is_empty() {
                                 fields.insert(key, value.to_string());

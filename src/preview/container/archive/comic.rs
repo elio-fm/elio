@@ -1123,7 +1123,11 @@ fn xml_attribute_value(
 ) -> Option<String> {
     event.attributes().flatten().find_map(|attribute| {
         (xml_local_name(attribute.key.as_ref()).eq_ignore_ascii_case(name))
-            .then(|| attribute.decode_and_unescape_value(decoder).ok())
+            .then(|| {
+                attribute
+                    .decoded_and_normalized_value(quick_xml::XmlVersion::Implicit1_0, decoder)
+                    .ok()
+            })
             .flatten()
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())

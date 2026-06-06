@@ -227,7 +227,12 @@ pub(super) fn read_svg_dimensions(path: &Path) -> Option<RenderedImageDimensions
                 let mut view_box = None;
                 for attribute in tag.attributes().flatten() {
                     let key = attribute.key.as_ref();
-                    let value = attribute.decode_and_unescape_value(reader.decoder()).ok()?;
+                    let value = attribute
+                        .decoded_and_normalized_value(
+                            quick_xml::XmlVersion::Implicit1_0,
+                            reader.decoder(),
+                        )
+                        .ok()?;
                     match key {
                         b"width" => width = parse_svg_length_px(&value),
                         b"height" => height = parse_svg_length_px(&value),
