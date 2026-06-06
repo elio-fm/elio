@@ -84,10 +84,8 @@ pub(super) fn parse_epub_package_document(xml: &str) -> EpubPackageDocument {
                 let tag = local_name(event.name().as_ref());
                 match tag.as_str() {
                     "metadata" | "manifest" => {}
-                    "spine" => {
-                        if package.toc_id.is_none() {
-                            package.toc_id = xml_attribute_value(&event, reader.decoder(), "toc");
-                        }
+                    "spine" if package.toc_id.is_none() => {
+                        package.toc_id = xml_attribute_value(&event, reader.decoder(), "toc");
                     }
                     "item" if stack.last().is_some_and(|section| section == "manifest") => {
                         register_epub_manifest_item(&mut package, &event, reader.decoder());

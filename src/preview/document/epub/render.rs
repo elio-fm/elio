@@ -405,10 +405,8 @@ fn extract_xhtml_image_href(xml: &str) -> Option<String> {
                     return Some(data);
                 }
             }
-            Ok(Event::End(event)) => {
-                if local_name(event.name().as_ref()) == "body" {
-                    body_depth = body_depth.saturating_sub(1);
-                }
+            Ok(Event::End(event)) if local_name(event.name().as_ref()) == "body" => {
+                body_depth = body_depth.saturating_sub(1);
             }
             Ok(Event::Eof) | Err(_) => break,
             _ => {}

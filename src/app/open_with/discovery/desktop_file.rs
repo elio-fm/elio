@@ -112,10 +112,8 @@ pub(super) fn parse_desktop_entry(contents: &str) -> Option<DesktopEntryCandidat
         match key {
             // Only accept the unlocalized Name= (localized keys have the form
             // Name[de]=…, whose key contains '[').
-            "Name" => {
-                if name.is_none() {
-                    name = Some(value.to_string());
-                }
+            "Name" if name.is_none() => {
+                name = Some(value.to_string());
             }
             "Exec" => exec = Some(value.to_string()),
             "MimeType" => {

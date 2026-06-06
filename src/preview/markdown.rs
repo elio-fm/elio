@@ -179,10 +179,8 @@ impl MarkdownRenderer {
 
     fn start_tag(&mut self, tag: Tag<'_>) {
         match tag {
-            Tag::Paragraph => {
-                if self.current_item.is_none() {
-                    self.ensure_block_gap();
-                }
+            Tag::Paragraph if self.current_item.is_none() => {
+                self.ensure_block_gap();
             }
             Tag::Heading { level, .. } => {
                 self.ensure_block_gap();

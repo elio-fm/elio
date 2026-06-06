@@ -205,10 +205,10 @@ fn parse_ncx_toc(xml: &str) -> Vec<EpubNavPoint> {
                     _ => {}
                 }
             }
-            Ok(Event::Empty(event)) => {
-                if nav_depth > 0 && local_name(event.name().as_ref()) == "content" {
-                    current_href = xml_attribute_value(&event, reader.decoder(), "src");
-                }
+            Ok(Event::Empty(event))
+                if nav_depth > 0 && local_name(event.name().as_ref()) == "content" =>
+            {
+                current_href = xml_attribute_value(&event, reader.decoder(), "src");
             }
             Ok(Event::Text(text)) => {
                 if in_label
