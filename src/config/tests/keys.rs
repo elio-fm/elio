@@ -29,6 +29,29 @@ cut = "X"
 }
 
 #[test]
+fn unknown_keys_are_ignored_without_dropping_valid_overrides() {
+    let config = Config::from_str(
+        r#"
+[keys]
+open_withh = "w"
+open_with = "P"
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.open_with, 'P');
+    assert_eq!(config.keys.action_for('w'), None);
+}
+
+#[test]
+fn unknown_key_warning_names_config_path() {
+    assert_eq!(
+        super::super::keys::unknown_key_action_warning("open_withh"),
+        "elio: keys.open_withh: unknown key action; ignoring"
+    );
+}
+
+#[test]
 fn keys_accept_array_overrides() {
     let config = Config::from_str(
         r#"
