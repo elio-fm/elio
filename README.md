@@ -274,14 +274,14 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | `G` / `End` `*` | Jump to last item |
 | `PageUp` / `PageDown` `*` | Page up / down |
 | `Tab` / `Shift+Tab` `*` | Cycle places |
-| `Alt+←` / `Alt+→` | Back / forward in history |
+| `Alt+←` / `Alt+→` `*` | Back / forward in history |
 
 ### Search
 
 | Key | Action |
 |---|---|
 | `f` `*` | Fuzzy-find folders in the current tree |
-| `Ctrl+F` | Fuzzy-find files in the current tree |
+| `Ctrl+F` `*` | Fuzzy-find files in the current tree |
 | `z` `*` | Jump with zoxide directory history |
 
 ### File Actions
@@ -310,16 +310,16 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 
 | Key | Action |
 |---|---|
-| `Shift+K` / `Shift+J` `*` | Step page (PDF, comic, EPUB) or scroll preview up / down |
+| `Shift+K` / `[` `*` | Step page (PDF, comic, EPUB) or scroll preview up |
+| `Shift+J` / `]` `*` | Step page (PDF, comic, EPUB) or scroll preview down |
 | `Shift+H` / `Shift+L` `*` | Scroll preview left / right |
-| `[` / `]` | Step page (PDF, comic, EPUB) or scroll text/code |
 
 ### Selection and Clipboard
 
 | Key | Action |
 |---|---|
 | `Space` `*` | Toggle selection |
-| `Ctrl+A` | Select all |
+| `Ctrl+A` `*` | Select all |
 | `y` `*` | Yank (copy) |
 | `x` `*` | Cut |
 | `p` `*` | Paste |

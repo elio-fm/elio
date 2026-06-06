@@ -75,15 +75,15 @@
 # Example: nav_right = [] frees "l" and "right".
 # Then open_or_enter = ["enter", "l", "right"] can use them.
 #
-# Reserved bare keys: ? [ ] + = - _
-# Reserved shortcuts: Ctrl+C, Ctrl+F, Ctrl+A, Ctrl+Plus/Minus, Alt+Left/Right
+# Reserved bare keys: ? + = - _
+# Reserved shortcuts: Ctrl+C, Ctrl+Plus/Minus
 # Omit any key to keep the built-in default shown in the comment.
 #
 # [keys]
-# nav_left            = ["h", "left"]
-# nav_down            = ["j", "down"]
-# nav_up              = ["k", "up"]
-# nav_right           = ["l", "right"]
+# nav_left             = ["h", "left"]
+# nav_down             = ["j", "down"]
+# nav_up               = ["k", "up"]
+# nav_right            = ["l", "right"]
 # quit                 = "q"
 # yank                 = "y"
 # cut                  = "x"
@@ -95,6 +95,7 @@
 # restore_from_trash   = "r"
 # copy_path            = "c"
 # search_folders       = "f"
+# search_files         = "ctrl+f"
 # zoxide               = "z"
 # shell                = "!"
 # open                 = "o"
@@ -107,16 +108,15 @@
 # go_parent            = "backspace"
 # page_up              = "pageup"
 # page_down            = "pagedown"
-# select_first         = "home"
-# select_last          = ["G", "end"]
+# jump_first           = "home"
+# jump_last            = ["G", "end"]
+# select_all           = "ctrl+a"
+# history_back         = "alt+left"
+# history_forward      = "alt+right"
 # sort                 = "s"
 # toggle_view          = "v"
 # toggle_hidden        = "."
-# scroll_preview_up    = "K"   # Shift+K
-# scroll_preview_down  = "J"   # Shift+J
-# scroll_preview_left  = "H"   # Shift+H
-# scroll_preview_right = "L"   # Shift+L
-#
-# Example: make l/Enter/Right all open or enter.
-# nav_right     = []
-# open_or_enter = ["enter", "l", "right"]
+# scroll_preview_up    = ["K", "["]   # Shift+K, [
+# scroll_preview_down  = ["J", "]"]   # Shift+J, ]
+# scroll_preview_left  = "H"           # Shift+H
+# scroll_preview_right = "L"           # Shift+L

@@ -478,7 +478,7 @@ fn g_opens_goto_overlay_and_goto_shortcuts_keep_g_for_top() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.select_last();
+    app.jump_last();
     assert_eq!(
         app.navigation.selected, 2,
         "G behavior should still reach the last item"

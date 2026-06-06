@@ -285,7 +285,7 @@ impl App {
         self.set_selected(index);
     }
 
-    pub(in crate::app) fn select_last(&mut self) {
+    pub(in crate::app) fn jump_last(&mut self) {
         self.set_selected_last();
     }
 

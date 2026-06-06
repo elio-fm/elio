@@ -823,6 +823,34 @@ fn action_for_returns_correct_action_for_default_bindings() {
     assert_eq!(key_bindings.action_for('j'), Some(Action::NavDown));
     assert_eq!(key_bindings.action_for('k'), Some(Action::NavUp));
     assert_eq!(key_bindings.action_for('l'), Some(Action::NavRight));
+    assert_eq!(
+        key_bindings.action_for_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('f'),
+            crossterm::event::KeyModifiers::CONTROL,
+        )),
+        Some(Action::SearchFiles)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('a'),
+            crossterm::event::KeyModifiers::CONTROL,
+        )),
+        Some(Action::SelectAll)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Left,
+            crossterm::event::KeyModifiers::ALT,
+        )),
+        Some(Action::HistoryBack)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Right,
+            crossterm::event::KeyModifiers::ALT,
+        )),
+        Some(Action::HistoryForward)
+    );
 }
 
 #[test]
@@ -1104,15 +1132,20 @@ shell = "S"
 }
 
 #[test]
-fn preview_scroll_defaults_map_to_shift_h_j_k_l() {
+fn preview_scroll_defaults_map_to_shift_h_j_k_l_and_brackets() {
     let key_bindings = KeyBindings::default();
-    assert_eq!(key_bindings.scroll_preview_up, 'K');
-    assert_eq!(key_bindings.scroll_preview_down, 'J');
+    assert_eq!(key_bindings.scroll_preview_up.to_string(), "K/[");
+    assert_eq!(key_bindings.scroll_preview_down.to_string(), "J/]");
     assert_eq!(key_bindings.scroll_preview_left, 'H');
     assert_eq!(key_bindings.scroll_preview_right, 'L');
     assert_eq!(key_bindings.action_for('K'), Some(Action::ScrollPreviewUp));
+    assert_eq!(key_bindings.action_for('['), Some(Action::ScrollPreviewUp));
     assert_eq!(
         key_bindings.action_for('J'),
+        Some(Action::ScrollPreviewDown)
+    );
+    assert_eq!(
+        key_bindings.action_for(']'),
         Some(Action::ScrollPreviewDown)
     );
     assert_eq!(
@@ -1154,7 +1187,8 @@ scroll_preview_up = "y"
     )
     .expect("config should parse");
     assert_eq!(
-        config.keys.scroll_preview_up, 'K',
+        config.keys.scroll_preview_up.to_string(),
+        "K/[",
         "user override colliding with default 'y' (yank) must fall back to default 'K'"
     );
     assert_eq!(config.keys.yank, 'y');
@@ -1180,7 +1214,7 @@ scroll_preview_down = "U"
 "#,
     )
     .expect("config should parse");
-    assert_eq!(config.keys.scroll_preview_up, 'K');
+    assert_eq!(config.keys.scroll_preview_up.to_string(), "K/[");
     assert_eq!(config.keys.scroll_preview_down, 'U');
     assert_eq!(config.keys.action_for('U'), Some(Action::ScrollPreviewDown));
     assert_eq!(config.keys.action_for('K'), Some(Action::ScrollPreviewUp));
@@ -1192,12 +1226,73 @@ scroll_preview_down = "U"
 }
 
 #[test]
+fn remaining_browser_shortcuts_can_be_overridden_and_freed() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+search_files = "ctrl+s"
+select_all = "A"
+history_back = "alt+h"
+history_forward = "alt+l"
+open = ["o", "ctrl+f", "ctrl+a", "alt+left", "alt+right"]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL)),
+        Some(Action::SearchFiles)
+    );
+    assert_eq!(config.keys.action_for('A'), Some(Action::SelectAll));
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::ALT)),
+        Some(Action::HistoryBack)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT)),
+        Some(Action::HistoryForward)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT)),
+        Some(Action::Open)
+    );
+}
+
+#[test]
 fn browser_control_defaults_are_configurable_actions() {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     let key_bindings = KeyBindings::default();
     assert_eq!(key_bindings.action_for('g'), Some(Action::GoTo));
-    assert_eq!(key_bindings.action_for('G'), Some(Action::SelectLast));
+    assert_eq!(key_bindings.action_for('G'), Some(Action::JumpLast));
     assert_eq!(key_bindings.action_for(' '), Some(Action::ToggleSelection));
     assert_eq!(
         key_bindings.action_for_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
@@ -1240,11 +1335,11 @@ fn browser_control_defaults_are_configurable_actions() {
     );
     assert_eq!(
         key_bindings.action_for_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE)),
-        Some(Action::SelectFirst)
+        Some(Action::JumpFirst)
     );
     assert_eq!(
         key_bindings.action_for_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE)),
-        Some(Action::SelectLast)
+        Some(Action::JumpLast)
     );
 }
 
@@ -1262,8 +1357,8 @@ cycle_places_previous = []
 go_parent = []
 page_up = []
 page_down = []
-select_first = []
-select_last = []
+jump_first = []
+jump_last = []
 open = ["o", "g", "G", "space", "tab", "backtab", "backspace", "pageup", "pagedown", "home", "end"]
 "#,
     )

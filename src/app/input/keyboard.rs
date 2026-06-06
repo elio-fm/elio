@@ -103,14 +103,6 @@ impl App {
         }
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {
-                KeyCode::Char('f') => {
-                    self.open_search_with_status(SearchScope::Files);
-                    return Ok(());
-                }
-                KeyCode::Char('a') => {
-                    self.select_all();
-                    return Ok(());
-                }
                 KeyCode::Char('+') | KeyCode::Char('=') => {
                     self.adjust_zoom(1);
                     return Ok(());
@@ -123,9 +115,11 @@ impl App {
             }
         }
 
+        let configured_action =
+            crate::config::keys().action_for_key_in_context(key, self.key_context());
+
         if self.input.wheel_profile == WheelProfile::HighFrequency
-            && key.modifiers.contains(KeyModifiers::ALT)
-            && !key.modifiers.contains(KeyModifiers::CONTROL)
+            && should_handle_high_frequency_horizontal_key(key, configured_action)
         {
             match key.code {
                 KeyCode::Left if self.handle_horizontal_navigation_key(-1) => return Ok(()),
@@ -133,44 +127,6 @@ impl App {
                 _ => {}
             }
         }
-
-        if key.modifiers.contains(KeyModifiers::ALT) {
-            match key.code {
-                KeyCode::Left => return self.go_back(),
-                KeyCode::Right => return self.go_forward(),
-                _ => {}
-            }
-        }
-
-        if !key
-            .modifiers
-            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
-        {
-            match key.code {
-                KeyCode::Char('[') => {
-                    if self.step_epub_section(-1)
-                        || self.step_comic_page(-1)
-                        || self.step_pdf_page(-1)
-                    {
-                        return Ok(());
-                    }
-                    self.scroll_preview_lines(-1);
-                    return Ok(());
-                }
-                KeyCode::Char(']') => {
-                    if self.step_epub_section(1) || self.step_comic_page(1) || self.step_pdf_page(1)
-                    {
-                        return Ok(());
-                    }
-                    self.scroll_preview_lines(1);
-                    return Ok(());
-                }
-                _ => {}
-            }
-        }
-
-        let configured_action =
-            crate::config::keys().action_for_key_in_context(key, self.key_context());
 
         match key.code {
             KeyCode::Esc => {
@@ -248,6 +204,7 @@ impl App {
             }
             Action::CopyPath => self.open_copy_overlay(),
             Action::SearchFolders => self.open_search_with_status(SearchScope::Folders),
+            Action::SearchFiles => self.open_search_with_status(SearchScope::Files),
             Action::Zoxide => {
                 self.pending_terminal_task = Some(PendingTerminalTask::Zoxide);
                 self.status.clear();
@@ -268,8 +225,11 @@ impl App {
             Action::GoParent => self.go_parent()?,
             Action::PageUp => self.page(-1),
             Action::PageDown => self.page(1),
-            Action::SelectFirst => self.select_index(0),
-            Action::SelectLast => self.select_last(),
+            Action::JumpFirst => self.select_index(0),
+            Action::JumpLast => self.jump_last(),
+            Action::SelectAll => self.select_all(),
+            Action::HistoryBack => return self.go_back(),
+            Action::HistoryForward => return self.go_forward(),
             Action::Sort => self.cycle_sort_mode()?,
             Action::ToggleView => self.toggle_view_mode(),
             Action::ToggleHidden => self.toggle_hidden_files()?,
@@ -360,8 +320,8 @@ impl App {
             Some(crate::config::Action::NavRight) => Some(NavigationRepeatKey::Right),
             Some(crate::config::Action::PageUp) => Some(NavigationRepeatKey::PageUp),
             Some(crate::config::Action::PageDown) => Some(NavigationRepeatKey::PageDown),
-            Some(crate::config::Action::SelectFirst) => Some(NavigationRepeatKey::Home),
-            Some(crate::config::Action::SelectLast) => Some(NavigationRepeatKey::End),
+            Some(crate::config::Action::JumpFirst) => Some(NavigationRepeatKey::Home),
+            Some(crate::config::Action::JumpLast) => Some(NavigationRepeatKey::End),
             _ => None,
         }
     }
@@ -382,6 +342,18 @@ impl App {
     }
 }
 
+fn should_handle_high_frequency_horizontal_key(
+    key: KeyEvent,
+    configured_action: Option<crate::config::Action>,
+) -> bool {
+    key.modifiers == KeyModifiers::ALT
+        && matches!(
+            (key.code, configured_action),
+            (KeyCode::Left, Some(crate::config::Action::HistoryBack))
+                | (KeyCode::Right, Some(crate::config::Action::HistoryForward))
+        )
+}
+
 fn is_help_shortcut(key: KeyEvent) -> bool {
     if key
         .modifiers
@@ -392,4 +364,34 @@ fn is_help_shortcut(key: KeyEvent) -> bool {
 
     matches!(key.code, KeyCode::Char('?'))
         || matches!(key.code, KeyCode::Char('/')) && key.modifiers.contains(KeyModifiers::SHIFT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Action;
+
+    #[test]
+    fn high_frequency_horizontal_emulation_only_uses_default_history_actions() {
+        assert!(should_handle_high_frequency_horizontal_key(
+            KeyEvent::new(KeyCode::Left, KeyModifiers::ALT),
+            Some(Action::HistoryBack),
+        ));
+        assert!(should_handle_high_frequency_horizontal_key(
+            KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
+            Some(Action::HistoryForward),
+        ));
+        assert!(!should_handle_high_frequency_horizontal_key(
+            KeyEvent::new(KeyCode::Left, KeyModifiers::ALT),
+            Some(Action::Open),
+        ));
+        assert!(!should_handle_high_frequency_horizontal_key(
+            KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
+            Some(Action::Open),
+        ));
+        assert!(!should_handle_high_frequency_horizontal_key(
+            KeyEvent::new(KeyCode::Char('h'), KeyModifiers::ALT),
+            Some(Action::HistoryBack),
+        ));
+    }
 }

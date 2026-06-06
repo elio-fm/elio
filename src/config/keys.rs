@@ -16,6 +16,7 @@ pub(crate) enum Action {
     RestoreFromTrash,
     CopyPath,
     SearchFolders,
+    SearchFiles,
     Zoxide,
     Shell,
     Open,
@@ -28,8 +29,11 @@ pub(crate) enum Action {
     GoParent,
     PageUp,
     PageDown,
-    SelectFirst,
-    SelectLast,
+    JumpFirst,
+    JumpLast,
+    SelectAll,
+    HistoryBack,
+    HistoryForward,
     Sort,
     ToggleView,
     ToggleHidden,
@@ -225,6 +229,26 @@ impl KeySpec {
         }
     }
 
+    fn ctrl_char(c: char) -> Self {
+        Self {
+            code: KeyCodeSpec::Char(c),
+            modifiers: KeyModifierSpec {
+                ctrl: true,
+                ..KeyModifierSpec::NONE
+            },
+        }
+    }
+
+    fn alt_named(named: NamedKey) -> Self {
+        Self {
+            code: KeyCodeSpec::Named(named),
+            modifiers: KeyModifierSpec {
+                alt: true,
+                ..KeyModifierSpec::NONE
+            },
+        }
+    }
+
     fn single_char(self) -> Option<char> {
         match (self.code, self.modifiers.is_empty()) {
             (KeyCodeSpec::Char(c), true) => Some(c),
@@ -356,6 +380,7 @@ pub(crate) struct KeyBindings {
     pub restore_from_trash: KeyList,
     pub copy_path: KeyList,
     pub search_folders: KeyList,
+    pub search_files: KeyList,
     pub zoxide: KeyList,
     pub shell: KeyList,
     pub open: KeyList,
@@ -368,8 +393,11 @@ pub(crate) struct KeyBindings {
     pub go_parent: KeyList,
     pub page_up: KeyList,
     pub page_down: KeyList,
-    pub select_first: KeyList,
-    pub select_last: KeyList,
+    pub jump_first: KeyList,
+    pub jump_last: KeyList,
+    pub select_all: KeyList,
+    pub history_back: KeyList,
+    pub history_forward: KeyList,
     pub sort: KeyList,
     pub toggle_view: KeyList,
     pub toggle_hidden: KeyList,
@@ -387,15 +415,12 @@ pub(crate) struct KeyBindings {
 /// used as key binding values.
 const RESERVED_CHARS: &[char] = &[
     '?', // help
-    '[', ']', // page stepping (epub / comic / pdf)
     '+', '=', '-', '_', // grid zoom
 ];
 
 /// Modified keys that are still hard-wired before configurable browser actions.
 const RESERVED_MODIFIED_CHARS: &[char] = &[
     'c', // cancel/clear
-    'f', // file search
-    'a', // select all
     '+', '=', '-', '_', // grid zoom
 ];
 
@@ -417,6 +442,7 @@ impl Default for KeyBindings {
             restore_from_trash: KeyList::one('r'),
             copy_path: KeyList::one('c'),
             search_folders: KeyList::one('f'),
+            search_files: KeyList(vec![KeySpec::ctrl_char('f')]),
             zoxide: KeyList::one('z'),
             shell: KeyList::one('!'),
             open: KeyList::one('o'),
@@ -429,8 +455,11 @@ impl Default for KeyBindings {
             go_parent: KeyList(vec![KeySpec::named(NamedKey::Backspace)]),
             page_up: KeyList(vec![KeySpec::named(NamedKey::PageUp)]),
             page_down: KeyList(vec![KeySpec::named(NamedKey::PageDown)]),
-            select_first: KeyList(vec![KeySpec::named(NamedKey::Home)]),
-            select_last: KeyList(vec![KeySpec::char('G'), KeySpec::named(NamedKey::End)]),
+            jump_first: KeyList(vec![KeySpec::named(NamedKey::Home)]),
+            jump_last: KeyList(vec![KeySpec::char('G'), KeySpec::named(NamedKey::End)]),
+            select_all: KeyList(vec![KeySpec::ctrl_char('a')]),
+            history_back: KeyList(vec![KeySpec::alt_named(NamedKey::Left)]),
+            history_forward: KeyList(vec![KeySpec::alt_named(NamedKey::Right)]),
             sort: KeyList::one('s'),
             toggle_view: KeyList::one('v'),
             toggle_hidden: KeyList::one('.'),
@@ -440,8 +469,8 @@ impl Default for KeyBindings {
             nav_right: KeyList(vec![KeySpec::char('l'), KeySpec::named(NamedKey::Right)]),
             scroll_preview_left: KeyList::one('H'),
             scroll_preview_right: KeyList::one('L'),
-            scroll_preview_up: KeyList::one('K'),
-            scroll_preview_down: KeyList::one('J'),
+            scroll_preview_up: KeyList(vec![KeySpec::char('K'), KeySpec::char('[')]),
+            scroll_preview_down: KeyList(vec![KeySpec::char('J'), KeySpec::char(']')]),
         }
     }
 }
@@ -467,6 +496,7 @@ pub(super) struct KeysConfigOverride {
     restore_from_trash: Option<KeyConfigOverride>,
     copy_path: Option<KeyConfigOverride>,
     search_folders: Option<KeyConfigOverride>,
+    search_files: Option<KeyConfigOverride>,
     zoxide: Option<KeyConfigOverride>,
     shell: Option<KeyConfigOverride>,
     open: Option<KeyConfigOverride>,
@@ -479,8 +509,11 @@ pub(super) struct KeysConfigOverride {
     go_parent: Option<KeyConfigOverride>,
     page_up: Option<KeyConfigOverride>,
     page_down: Option<KeyConfigOverride>,
-    select_first: Option<KeyConfigOverride>,
-    select_last: Option<KeyConfigOverride>,
+    jump_first: Option<KeyConfigOverride>,
+    jump_last: Option<KeyConfigOverride>,
+    select_all: Option<KeyConfigOverride>,
+    history_back: Option<KeyConfigOverride>,
+    history_forward: Option<KeyConfigOverride>,
     sort: Option<KeyConfigOverride>,
     toggle_view: Option<KeyConfigOverride>,
     toggle_hidden: Option<KeyConfigOverride>,
@@ -523,7 +556,7 @@ impl KeyBindings {
         })
     }
 
-    fn bindings(&self) -> [(&KeyList, Action); 37] {
+    fn bindings(&self) -> [(&KeyList, Action); 41] {
         [
             (&self.quit, Action::Quit),
             (&self.quit_without_cd, Action::QuitWithoutCd),
@@ -537,6 +570,7 @@ impl KeyBindings {
             (&self.restore_from_trash, Action::RestoreFromTrash),
             (&self.copy_path, Action::CopyPath),
             (&self.search_folders, Action::SearchFolders),
+            (&self.search_files, Action::SearchFiles),
             (&self.zoxide, Action::Zoxide),
             (&self.shell, Action::Shell),
             (&self.open, Action::Open),
@@ -549,8 +583,11 @@ impl KeyBindings {
             (&self.go_parent, Action::GoParent),
             (&self.page_up, Action::PageUp),
             (&self.page_down, Action::PageDown),
-            (&self.select_first, Action::SelectFirst),
-            (&self.select_last, Action::SelectLast),
+            (&self.jump_first, Action::JumpFirst),
+            (&self.jump_last, Action::JumpLast),
+            (&self.select_all, Action::SelectAll),
+            (&self.history_back, Action::HistoryBack),
+            (&self.history_forward, Action::HistoryForward),
             (&self.sort, Action::Sort),
             (&self.toggle_view, Action::ToggleView),
             (&self.toggle_hidden, Action::ToggleHidden),
@@ -657,6 +694,12 @@ impl KeyBindings {
                 default: defaults.search_folders.clone(),
             },
             RawBinding {
+                name: "search_files",
+                action: Action::SearchFiles,
+                override_value: overrides.search_files,
+                default: defaults.search_files.clone(),
+            },
+            RawBinding {
                 name: "zoxide",
                 action: Action::Zoxide,
                 override_value: overrides.zoxide,
@@ -729,16 +772,34 @@ impl KeyBindings {
                 default: defaults.page_down.clone(),
             },
             RawBinding {
-                name: "select_first",
-                action: Action::SelectFirst,
-                override_value: overrides.select_first,
-                default: defaults.select_first.clone(),
+                name: "jump_first",
+                action: Action::JumpFirst,
+                override_value: overrides.jump_first,
+                default: defaults.jump_first.clone(),
             },
             RawBinding {
-                name: "select_last",
-                action: Action::SelectLast,
-                override_value: overrides.select_last,
-                default: defaults.select_last.clone(),
+                name: "jump_last",
+                action: Action::JumpLast,
+                override_value: overrides.jump_last,
+                default: defaults.jump_last.clone(),
+            },
+            RawBinding {
+                name: "select_all",
+                action: Action::SelectAll,
+                override_value: overrides.select_all,
+                default: defaults.select_all.clone(),
+            },
+            RawBinding {
+                name: "history_back",
+                action: Action::HistoryBack,
+                override_value: overrides.history_back,
+                default: defaults.history_back.clone(),
+            },
+            RawBinding {
+                name: "history_forward",
+                action: Action::HistoryForward,
+                override_value: overrides.history_forward,
+                default: defaults.history_forward.clone(),
             },
             RawBinding {
                 name: "sort",
@@ -873,31 +934,35 @@ impl KeyBindings {
             restore_from_trash: resolved(9),
             copy_path: resolved(10),
             search_folders: resolved(11),
-            zoxide: resolved(12),
-            shell: resolved(13),
-            open: resolved(14),
-            open_with: resolved(15),
-            open_or_enter: resolved(16),
-            go_to: resolved(17),
-            toggle_selection: resolved(18),
-            cycle_places_next: resolved(19),
-            cycle_places_previous: resolved(20),
-            go_parent: resolved(21),
-            page_up: resolved(22),
-            page_down: resolved(23),
-            select_first: resolved(24),
-            select_last: resolved(25),
-            sort: resolved(26),
-            toggle_view: resolved(27),
-            toggle_hidden: resolved(28),
-            nav_left: resolved(29),
-            nav_down: resolved(30),
-            nav_up: resolved(31),
-            nav_right: resolved(32),
-            scroll_preview_left: resolved(33),
-            scroll_preview_right: resolved(34),
-            scroll_preview_up: resolved(35),
-            scroll_preview_down: resolved(36),
+            search_files: resolved(12),
+            zoxide: resolved(13),
+            shell: resolved(14),
+            open: resolved(15),
+            open_with: resolved(16),
+            open_or_enter: resolved(17),
+            go_to: resolved(18),
+            toggle_selection: resolved(19),
+            cycle_places_next: resolved(20),
+            cycle_places_previous: resolved(21),
+            go_parent: resolved(22),
+            page_up: resolved(23),
+            page_down: resolved(24),
+            jump_first: resolved(25),
+            jump_last: resolved(26),
+            select_all: resolved(27),
+            history_back: resolved(28),
+            history_forward: resolved(29),
+            sort: resolved(30),
+            toggle_view: resolved(31),
+            toggle_hidden: resolved(32),
+            nav_left: resolved(33),
+            nav_down: resolved(34),
+            nav_up: resolved(35),
+            nav_right: resolved(36),
+            scroll_preview_left: resolved(37),
+            scroll_preview_right: resolved(38),
+            scroll_preview_up: resolved(39),
+            scroll_preview_down: resolved(40),
         }
     }
 }
@@ -1050,7 +1115,6 @@ fn is_reserved_key_spec(spec: KeySpec) -> bool {
         KeyCodeSpec::Char(c) if spec.modifiers.ctrl => {
             RESERVED_MODIFIED_CHARS.contains(&c.to_ascii_lowercase())
         }
-        KeyCodeSpec::Named(NamedKey::Left | NamedKey::Right) if spec.modifiers.alt => true,
         _ => false,
     }
 }

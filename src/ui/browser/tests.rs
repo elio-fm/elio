@@ -1263,7 +1263,7 @@ fn help_overlay_keeps_controls_readable_and_drops_auto_reload_row() {
         "expected help overlay to include the Preview section header, got: {rendered:?}"
     );
     assert!(
-        rendered.contains("Shift+K / Shift+J"),
+        rendered.contains("K/[ / J/]"),
         "expected help overlay to list the vertical preview scroll keys, got: {rendered:?}"
     );
     assert!(

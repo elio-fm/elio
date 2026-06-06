@@ -22,7 +22,7 @@ pub(super) fn render_help(
     let search_entries = vec![
         e(&kb.zoxide.to_string(), "zoxide history"),
         e(&kb.search_folders.to_string(), "search folders"),
-        e("Ctrl+F", "search files"),
+        e(&kb.search_files.to_string(), "search files"),
         e("Ctrl+←→", "move by word"),
         e("Ctrl+Backspace", "delete previous word"),
         e("Ctrl+Del", "delete next word"),
@@ -56,7 +56,6 @@ pub(super) fn render_help(
         format_preview_scroll_key(&kb.scroll_preview_left, &kb.scroll_preview_right);
     let preview_entries = vec![
         e(&preview_vertical_key, "step page or scroll"),
-        e("[ / ]", "step page or scroll"),
         e(&preview_horizontal_key, "scroll left / right"),
     ];
     let mouse_entries = vec![
@@ -208,6 +207,7 @@ fn navigation_entries(kb: &KeyBindings) -> Vec<HelpEntry> {
     let parent_key = format_key_pair(&kb.nav_left, &kb.go_parent);
     let page_key = format_key_pair(&kb.page_up, &kb.page_down);
     let place_key = format_key_pair(&kb.cycle_places_next, &kb.cycle_places_previous);
+    let history_key = format_key_pair(&kb.history_back, &kb.history_forward);
 
     vec![
         e(&kb.nav_up.to_string(), "move up"),
@@ -216,18 +216,18 @@ fn navigation_entries(kb: &KeyBindings) -> Vec<HelpEntry> {
         e(&kb.nav_right.to_string(), "enter folder"),
         e(&kb.open_or_enter.to_string(), "enter folder / open"),
         e(&kb.go_to.to_string(), "go-to menu"),
-        e(&kb.select_first.to_string(), "first item"),
-        e(&kb.select_last.to_string(), "last item"),
+        e(&kb.jump_first.to_string(), "first item"),
+        e(&kb.jump_last.to_string(), "last item"),
         e(&page_key, "page up / down"),
         e(&place_key, "cycle places"),
-        e("Alt+← / Alt+→", "back / forward"),
+        e(&history_key, "back / forward"),
     ]
 }
 
 fn clipboard_entries(kb: &KeyBindings) -> Vec<HelpEntry> {
     vec![
         e(&kb.toggle_selection.to_string(), "toggle selection"),
-        e("Ctrl+A", "select all"),
+        e(&kb.select_all.to_string(), "select all"),
         e("Esc", "clear selection"),
         e(&kb.yank.to_string(), "yank (copy)"),
         e(&kb.copy_path.to_string(), "copy path details"),
@@ -417,7 +417,9 @@ mod tests {
             "PageUp / PageDown"
         );
         assert_eq!(entry_key(&navigation, "cycle places"), "Tab / Shift+Tab");
+        assert_eq!(entry_key(&navigation, "back / forward"), "Alt+← / Alt+→");
         assert_eq!(entry_key(&clipboard, "toggle selection"), "Space");
+        assert_eq!(entry_key(&clipboard, "select all"), "Ctrl+A");
     }
 
     #[test]
@@ -430,8 +432,11 @@ cycle_places_next = "n"
 cycle_places_previous = "P"
 page_up = "<"
 page_down = ">"
-select_first = "1"
-select_last = "2"
+jump_first = "1"
+jump_last = "2"
+select_all = "A"
+history_back = "alt+h"
+history_forward = "alt+l"
 "#,
         );
         let navigation = navigation_entries(&kb);
@@ -442,6 +447,8 @@ select_last = "2"
         assert_eq!(entry_key(&navigation, "last item"), "2");
         assert_eq!(entry_key(&navigation, "page up / down"), "< / >");
         assert_eq!(entry_key(&navigation, "cycle places"), "n / P");
+        assert_eq!(entry_key(&navigation, "back / forward"), "Alt+H / Alt+L");
         assert_eq!(entry_key(&clipboard, "toggle selection"), "t");
+        assert_eq!(entry_key(&clipboard, "select all"), "A");
     }
 }

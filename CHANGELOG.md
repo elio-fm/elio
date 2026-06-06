@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `[]` support for unbinding configurable `[keys]` actions.
 - Added support for modifier `[keys]` bindings such as `ctrl+o`, `alt+o`, and `shift+right`.
 - Added named `[keys]` values for `space`, `tab`, `backtab` / `shift+tab`, `backspace`, `pageup`, `pagedown`, `home`, and `end`.
-- Added configurable browser control bindings for `go_to`, `toggle_selection`, `cycle_places_next`, `cycle_places_previous`, `go_parent`, `page_up`, `page_down`, `select_first`, and `select_last`.
+- Added configurable browser control bindings for `go_to`, `toggle_selection`, `cycle_places_next`, `cycle_places_previous`, `go_parent`, `page_up`, `page_down`, `jump_first`, and `jump_last`.
+- Added configurable `[keys]` bindings for `search_files`, `select_all`, `history_back`, and `history_forward`, and added `[` / `]` as default bindings for the existing `scroll_preview_up` / `scroll_preview_down` actions.
 - Added a configurable `D` (`delete_permanently`) shortcut for permanently deleting selected entries without first opening Trash. ([#140])
 
 ### Changed
