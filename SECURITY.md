@@ -26,9 +26,7 @@ When reporting, please include:
 - reproduction steps or a proof of concept, when possible
 - whether the issue depends on a crafted file, archive, path, config, theme, or
   terminal escape sequence
-- whether the issue depends on optional external tools such as `ffmpeg`,
-  `ffprobe`, `pdfinfo`, `pdftocairo`, `resvg`, `magick`, `7z`, `bsdtar`, or
-  `isoinfo`
+- whether the issue depends on optional external preview tools
 
 We aim to acknowledge new reports within 7 days. Reports will be triaged, and
 confirmed vulnerabilities will be fixed and disclosed with appropriate release
@@ -55,10 +53,6 @@ If you are unsure whether a behavior is security-sensitive, report it privately.
 
 ## Dependency Advisories
 
-Rust dependency advisories are tracked as part of regular maintenance.
-
-The contributor workflow for local dependency auditing is documented in
-[`CONTRIBUTING.md`](CONTRIBUTING.md). `unsound` RustSec advisories are treated
-as release blockers. Known `unmaintained` advisories in transitive dependencies
-may be tracked without blocking a release when there is no practical fixed
-upgrade path.
+Rust dependency advisories are reviewed during maintenance and release work. If
+your report concerns a dependency advisory, include the advisory ID, affected
+versions, and any known impact on `elio`.

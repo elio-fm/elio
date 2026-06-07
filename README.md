@@ -7,7 +7,7 @@ Snappy, batteries-included terminal file manager with rich previews, inline imag
 ## Documentation
 
 - Installation: https://elio-fm.github.io/install/
-- Usage: https://elio-fm.github.io/docs/
+- Docs: https://elio-fm.github.io/docs/
 
 ---
 
