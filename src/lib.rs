@@ -60,10 +60,32 @@ pub fn run_at(cwd: PathBuf) -> Result<()> {
 }
 
 pub fn run_with_options(options: RunOptions) -> Result<()> {
+    run_with_startup_state(options, None, false)
+}
+
+#[doc(hidden)]
+pub fn run_with_startup_options(
+    options: RunOptions,
+    start_focus: Option<PathBuf>,
+    reveal_hidden_start_focus: bool,
+) -> Result<()> {
+    run_with_startup_state(options, start_focus, reveal_hidden_start_focus)
+}
+
+fn run_with_startup_state(
+    options: RunOptions,
+    start_focus: Option<PathBuf>,
+    reveal_hidden_start_focus: bool,
+) -> Result<()> {
     config::initialize();
     ui::theme::initialize();
     let mut terminal = init_terminal()?;
-    let result = run_app(&mut terminal, options.start_dir);
+    let result = run_app(
+        &mut terminal,
+        options.start_dir,
+        start_focus,
+        reveal_hidden_start_focus,
+    );
     restore_terminal(&mut terminal)?;
     if let Some(final_cwd) = result? {
         write_cwd_file_if_requested(options.cwd_file.as_deref(), &final_cwd)?;
@@ -296,9 +318,11 @@ fn write_cwd_file(cwd_file: &Path, final_cwd: &Path) -> Result<()> {
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     cwd: Option<PathBuf>,
+    start_focus: Option<PathBuf>,
+    reveal_hidden_start_focus: bool,
 ) -> Result<Option<PathBuf>> {
     let mut app = match cwd {
-        Some(cwd) => App::new_at(cwd)?,
+        Some(cwd) => App::new_at_startup(cwd, start_focus, reveal_hidden_start_focus)?,
         None => App::new()?,
     };
 
