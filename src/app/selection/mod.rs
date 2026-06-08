@@ -1,4 +1,5 @@
 use super::*;
+use std::path::{Path, PathBuf};
 
 impl App {
     pub fn is_selected(&self, path: &std::path::Path) -> bool {
@@ -33,5 +34,58 @@ impl App {
 
     pub(in crate::app) fn clear_selection(&mut self) {
         self.navigation.selected_paths.clear();
+    }
+
+    pub(crate) fn enable_chooser_mode(&mut self) {
+        self.chooser_mode = true;
+        self.status = "Chooser mode".to_string();
+    }
+
+    pub(crate) fn take_chooser_exit(&mut self) -> Option<ChooserExit> {
+        self.chooser_exit.take()
+    }
+
+    pub(in crate::app) fn confirm_chooser(&mut self) {
+        if !self.chooser_mode {
+            return;
+        }
+        self.chooser_exit = Some(ChooserExit::Confirmed(self.chooser_selection_paths()));
+        self.should_quit = true;
+    }
+
+    pub(in crate::app) fn cancel_chooser(&mut self) {
+        if !self.chooser_mode {
+            return;
+        }
+        self.chooser_exit = Some(ChooserExit::Cancelled);
+        self.should_change_directory_on_quit = false;
+        self.should_quit = true;
+    }
+
+    fn chooser_selection_paths(&self) -> Vec<PathBuf> {
+        if self.navigation.selected_paths.is_empty() {
+            return self
+                .selected_entry()
+                .map(|entry| vec![self.absolute_chooser_path(&entry.path)])
+                .unwrap_or_default();
+        }
+
+        let mut paths: Vec<PathBuf> = self
+            .navigation
+            .selected_paths
+            .iter()
+            .map(|path| self.absolute_chooser_path(path))
+            .collect();
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
+    fn absolute_chooser_path(&self, path: &Path) -> PathBuf {
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.navigation.cwd.join(path)
+        }
     }
 }

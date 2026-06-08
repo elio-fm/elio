@@ -7,6 +7,7 @@ fn keys_default_bindings_are_sane() {
     assert_eq!(config.keys.cut, 'x');
     assert_eq!(config.keys.paste, 'p');
     assert_eq!(config.keys.delete_permanently, 'D');
+    assert_eq!(config.keys.choose.to_string(), "Enter");
     assert_eq!(config.keys.quit, 'q');
     assert_eq!(config.keys.quit_without_cd, 'Q');
     assert_eq!(config.keys.zoxide, 'z');
@@ -1049,6 +1050,109 @@ fn open_or_enter_defaults_to_enter() {
     assert_eq!(
         key_bindings.action_for_key(KeyEvent::new(KeyCode::Char('\n'), KeyModifiers::NONE)),
         Some(Action::OpenOrEnter)
+    );
+}
+
+#[test]
+fn choose_defaults_to_enter_but_normal_enter_stays_open_or_enter() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let key_bindings = KeyBindings::default();
+    assert_eq!(key_bindings.choose.to_string(), "Enter");
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(Action::OpenOrEnter)
+    );
+    assert_eq!(
+        key_bindings.chooser_action_for_key(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            KeyContext::Normal,
+        ),
+        Some(ChooserKeyAction::Choose)
+    );
+}
+
+#[test]
+fn chooser_lookup_prioritizes_choose_over_smart_open_or_enter() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+nav_right = []
+open_or_enter = ["enter", "l", "right"]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(Action::OpenOrEnter)
+    );
+    assert_eq!(
+        config.keys.chooser_action_for_key(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            KeyContext::Normal,
+        ),
+        Some(ChooserKeyAction::Choose)
+    );
+    assert_eq!(
+        config.keys.chooser_action_for_key(
+            KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE),
+            KeyContext::Normal,
+        ),
+        Some(ChooserKeyAction::Normal(Action::OpenOrEnter))
+    );
+    assert_eq!(
+        config.keys.chooser_action_for_key(
+            KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
+            KeyContext::Normal,
+        ),
+        Some(ChooserKeyAction::Normal(Action::OpenOrEnter))
+    );
+}
+
+#[test]
+fn choose_can_be_unbound_or_rebound_without_changing_normal_enter() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let unbound = Config::from_str(
+        r#"
+[keys]
+choose = []
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(
+        unbound.keys.chooser_action_for_key(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            KeyContext::Normal,
+        ),
+        Some(ChooserKeyAction::Normal(Action::OpenOrEnter))
+    );
+
+    let rebound = Config::from_str(
+        r#"
+[keys]
+choose = "ctrl+enter"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(
+        rebound.keys.chooser_action_for_key(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            KeyContext::Normal,
+        ),
+        Some(ChooserKeyAction::Normal(Action::OpenOrEnter))
+    );
+    assert_eq!(
+        rebound.keys.chooser_action_for_key(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL),
+            KeyContext::Normal,
+        ),
+        Some(ChooserKeyAction::Choose)
     );
 }
 

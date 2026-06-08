@@ -5,24 +5,32 @@ use std::{
     ffi::OsStr,
     fs, io,
     path::{Path, PathBuf},
+    process::ExitCode,
 };
 
 const RUN_USAGE: &str = "Usage: elio [OPTIONS] [PATH]";
 
-pub(crate) fn run() -> Result<()> {
+pub(crate) fn run() -> Result<ExitCode> {
     match parse_args(env::args().skip(1))? {
         Command::Run {
             options,
+            chooser_file,
             start_focus,
             reveal_hidden_start_focus,
-        } => elio::run_with_startup_options(options, start_focus, reveal_hidden_start_focus),
+        } => elio::run_with_startup_options(
+            options,
+            start_focus,
+            reveal_hidden_start_focus,
+            chooser_file,
+        )
+        .map(run_outcome_exit_code),
         Command::PrintVersion => {
             print_version();
-            Ok(())
+            Ok(ExitCode::SUCCESS)
         }
         Command::PrintHelp => {
             print_help();
-            Ok(())
+            Ok(ExitCode::SUCCESS)
         }
         Command::PrintShellInit(shell) => {
             let executable = env::current_exe()?;
@@ -30,7 +38,7 @@ pub(crate) fn run() -> Result<()> {
             let binary =
                 shell_integration::binary_command(shell, invocation.as_deref(), &executable);
             print!("{}", shell_integration::init_script(shell, &binary));
-            Ok(())
+            Ok(ExitCode::SUCCESS)
         }
         Command::InstallShellIntegration(shell) => {
             let executable = env::current_exe()?;
@@ -53,7 +61,7 @@ pub(crate) fn run() -> Result<()> {
             println!("  {}", report.reload_command);
             println!();
             println!("From now on, `elio` will change your shell directory on quit.");
-            Ok(())
+            Ok(ExitCode::SUCCESS)
         }
         Command::UninstallShellIntegration(shell) => {
             let shell = match shell {
@@ -80,8 +88,15 @@ pub(crate) fn run() -> Result<()> {
             println!("  {}", report.reload_command);
             println!();
             println!("From now on, `elio` will leave your shell directory unchanged.");
-            Ok(())
+            Ok(ExitCode::SUCCESS)
         }
+    }
+}
+
+fn run_outcome_exit_code(outcome: elio::RunOutcome) -> ExitCode {
+    match outcome {
+        elio::RunOutcome::Success => ExitCode::SUCCESS,
+        elio::RunOutcome::Cancelled => ExitCode::FAILURE,
     }
 }
 
@@ -89,6 +104,7 @@ pub(crate) fn run() -> Result<()> {
 enum Command {
     Run {
         options: elio::RunOptions,
+        chooser_file: Option<PathBuf>,
         start_focus: Option<PathBuf>,
         reveal_hidden_start_focus: bool,
     },
@@ -105,6 +121,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Command> {
     if args.is_empty() {
         return Ok(Command::Run {
             options: elio::RunOptions::default(),
+            chooser_file: None,
             start_focus: None,
             reveal_hidden_start_focus: false,
         });
@@ -185,39 +202,32 @@ fn parse_run_args(args: Vec<String>) -> Result<Command> {
     let mut start_focus = None;
     let mut reveal_hidden_start_focus = false;
     let mut cwd_file = None;
+    let mut chooser_file = None;
     let mut index = 0;
 
     while index < args.len() {
         let arg = &args[index];
-        if let Some(file) = arg.strip_prefix("--cwd-file=") {
+        if path_option_matches(arg, "--cwd-file") {
             if cwd_file.is_some() {
                 return Err(anyhow::anyhow!(
                     "error: '--cwd-file' cannot be used more than once\n\n{RUN_USAGE}"
                 ));
             }
-            if file.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "error: expected a file path after '--cwd-file'\n\n{RUN_USAGE}"
-                ));
-            }
-            cwd_file = Some(PathBuf::from(file));
-            index += 1;
+            let (file, next_index) = take_path_option_value(&args, index, "--cwd-file")?;
+            cwd_file = Some(file);
+            index = next_index;
             continue;
         }
 
-        if arg == "--cwd-file" {
-            if cwd_file.is_some() {
+        if path_option_matches(arg, "--chooser-file") {
+            if chooser_file.is_some() {
                 return Err(anyhow::anyhow!(
-                    "error: '--cwd-file' cannot be used more than once\n\n{RUN_USAGE}"
+                    "error: '--chooser-file' cannot be used more than once\n\n{RUN_USAGE}"
                 ));
             }
-            let Some(file) = args.get(index + 1) else {
-                return Err(anyhow::anyhow!(
-                    "error: expected a file path after '--cwd-file'\n\n{RUN_USAGE}"
-                ));
-            };
-            cwd_file = Some(PathBuf::from(file));
-            index += 2;
+            let (file, next_index) = take_path_option_value(&args, index, "--chooser-file")?;
+            chooser_file = Some(file);
+            index = next_index;
             continue;
         }
 
@@ -240,9 +250,41 @@ fn parse_run_args(args: Vec<String>) -> Result<Command> {
             start_dir,
             cwd_file,
         },
+        chooser_file,
         start_focus,
         reveal_hidden_start_focus,
     })
+}
+
+fn path_option_matches(arg: &str, flag: &str) -> bool {
+    arg == flag
+        || arg
+            .strip_prefix(flag)
+            .is_some_and(|suffix| suffix.starts_with('='))
+}
+
+fn take_path_option_value(
+    args: &[String],
+    index: usize,
+    flag: &'static str,
+) -> Result<(PathBuf, usize)> {
+    let arg = &args[index];
+    let inline_prefix = format!("{flag}=");
+    if let Some(file) = arg.strip_prefix(&inline_prefix) {
+        if file.is_empty() {
+            return Err(anyhow::anyhow!(
+                "error: expected a file path after '{flag}'\n\n{RUN_USAGE}"
+            ));
+        }
+        return Ok((PathBuf::from(file), index + 1));
+    }
+
+    let Some(file) = args.get(index + 1) else {
+        return Err(anyhow::anyhow!(
+            "error: expected a file path after '{flag}'\n\n{RUN_USAGE}"
+        ));
+    };
+    Ok((PathBuf::from(file), index + 2))
 }
 
 fn print_version() {
@@ -263,6 +305,7 @@ fn print_help() {
     );
     println!();
     println!("Options:");
+    println!("      --chooser-file FILE  Write chosen paths to FILE, or stdout with '-'");
     println!("      --cwd-file FILE  Write the final current directory to FILE on exit");
     println!("  -h, --help           Print help");
     println!("  -V, --version        Print version");
@@ -353,6 +396,8 @@ fn unknown_argument_message(arg: &str) -> String {
         message.push_str("\n\n  tip: a similar argument exists: '--help'");
     } else if arg != "--cwd-file" && "--cwd-file".starts_with(arg) {
         message.push_str("\n\n  tip: a similar argument exists: '--cwd-file'");
+    } else if arg != "--chooser-file" && "--chooser-file".starts_with(arg) {
+        message.push_str("\n\n  tip: a similar argument exists: '--chooser-file'");
     }
 
     message.push_str("\n\n");

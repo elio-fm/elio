@@ -115,8 +115,22 @@ impl App {
             }
         }
 
-        let configured_action =
-            crate::config::keys().action_for_key_in_context(key, self.key_context());
+        let configured_action = if self.chooser_mode {
+            match crate::config::keys().chooser_action_for_key(key, self.key_context()) {
+                Some(crate::config::ChooserKeyAction::Choose) => {
+                    self.confirm_chooser();
+                    return Ok(());
+                }
+                Some(crate::config::ChooserKeyAction::Cancel) => {
+                    self.cancel_chooser();
+                    return Ok(());
+                }
+                Some(crate::config::ChooserKeyAction::Normal(action)) => Some(action),
+                None => None,
+            }
+        } else {
+            crate::config::keys().action_for_key_in_context(key, self.key_context())
+        };
 
         if self.input.wheel_profile == WheelProfile::HighFrequency
             && should_handle_high_frequency_horizontal_key(key, configured_action)

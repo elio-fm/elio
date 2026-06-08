@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     match cli::run() {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(exit_code) => exit_code,
         Err(error) => {
             eprintln!("{error}");
             ExitCode::FAILURE
