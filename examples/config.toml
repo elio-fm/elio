@@ -75,6 +75,9 @@
 # Example: nav_right = [] frees "l" and "right".
 # Then open_or_enter = ["enter", "l", "right"] can use them.
 #
+# In chooser mode (--chooser-file), choose takes priority over normal actions
+# that use the same key.
+#
 # Reserved bare keys: ? + = - _
 # Reserved shortcuts: Ctrl+C, Ctrl+Plus/Minus
 # Omit any key to keep the built-in default shown in the comment.
@@ -102,6 +105,7 @@
 # open                 = "o"
 # open_with            = "O"
 # open_or_enter        = "enter"
+# choose               = "enter"  # confirm chooser selection
 # go_to                = "g"
 # toggle_selection     = "space"
 # cycle_places_next    = "tab"
