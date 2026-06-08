@@ -48,6 +48,13 @@ pub(crate) enum Action {
     ScrollPreviewDown,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ChooserKeyAction {
+    Choose,
+    Cancel,
+    Normal(Action),
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum NamedKey {
     Left,
@@ -333,6 +340,16 @@ impl KeyList {
         self.0.iter().copied()
     }
 
+    pub(crate) fn without(&self, shadowed: &Self) -> Self {
+        Self(
+            self.0
+                .iter()
+                .copied()
+                .filter(|key| !shadowed.contains(*key))
+                .collect(),
+        )
+    }
+
     pub(crate) fn single_char(&self) -> Option<char> {
         match self.0.as_slice() {
             [spec] => spec.single_char(),
@@ -369,6 +386,7 @@ impl PartialEq<char> for KeyList {
 /// `shift+tab`, `backspace`, `pageup`, `pagedown`, `home`, `end`, and `f1`..`f12`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct KeyBindings {
+    pub choose: KeyList,
     pub quit: KeyList,
     pub quit_without_cd: KeyList,
     pub yank: KeyList,
@@ -428,6 +446,7 @@ const RESERVED_MODIFIED_CHARS: &[char] = &[
 impl Default for KeyBindings {
     fn default() -> Self {
         Self {
+            choose: KeyList(vec![KeySpec::named(NamedKey::Enter)]),
             quit: KeyList::one('q'),
             quit_without_cd: KeyList::one('Q'),
             yank: KeyList::one('y'),
@@ -485,6 +504,7 @@ pub(super) enum KeyConfigOverride {
 
 #[derive(Deserialize, Default)]
 pub(super) struct KeysConfigOverride {
+    choose: Option<KeyConfigOverride>,
     quit: Option<KeyConfigOverride>,
     quit_without_cd: Option<KeyConfigOverride>,
     yank: Option<KeyConfigOverride>,
@@ -569,6 +589,21 @@ impl KeyBindings {
         })
     }
 
+    pub(crate) fn chooser_action_for_key(
+        &self,
+        key: KeyEvent,
+        context: KeyContext,
+    ) -> Option<ChooserKeyAction> {
+        if self.choose.matches_event(key) {
+            return Some(ChooserKeyAction::Choose);
+        }
+        if self.quit.matches_event(key) || self.quit_without_cd.matches_event(key) {
+            return Some(ChooserKeyAction::Cancel);
+        }
+        self.action_for_key_in_context(key, context)
+            .map(ChooserKeyAction::Normal)
+    }
+
     fn bindings(&self) -> [(&KeyList, Action); 41] {
         [
             (&self.quit, Action::Quit),
@@ -634,6 +669,12 @@ impl KeyBindings {
 
     pub(super) fn from_override(overrides: KeysConfigOverride, defaults: &Self) -> Self {
         warn_unknown_key_actions(&overrides.unknown);
+
+        let choose = overrides
+            .choose
+            .as_ref()
+            .and_then(|value| parse_key_override("choose", value, &defaults.choose))
+            .unwrap_or_else(|| defaults.choose.clone());
 
         let raw = vec![
             RawBinding {
@@ -937,6 +978,7 @@ impl KeyBindings {
         // Step 3: build from the resolved candidates (order matches `raw`).
         let resolved = |index: usize| candidates[index].0.clone();
         Self {
+            choose,
             quit: resolved(0),
             quit_without_cd: resolved(1),
             yank: resolved(2),

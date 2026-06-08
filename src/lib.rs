@@ -9,7 +9,7 @@ mod shell;
 mod ui;
 mod zoxide;
 
-use crate::app::{App, PendingTerminalTask};
+use crate::app::{App, ChooserExit, PendingTerminalTask};
 use anyhow::Result;
 use crossterm::{
     cursor::{RestorePosition, SavePosition, SetCursorStyle},
@@ -48,6 +48,19 @@ pub struct RunOptions {
     pub cwd_file: Option<PathBuf>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[doc(hidden)]
+pub enum RunOutcome {
+    Success,
+    Cancelled,
+}
+
+#[derive(Debug)]
+struct AppExit {
+    final_cwd: Option<PathBuf>,
+    chooser: Option<ChooserExit>,
+}
+
 pub fn run() -> Result<()> {
     run_with_options(RunOptions::default())
 }
@@ -60,7 +73,7 @@ pub fn run_at(cwd: PathBuf) -> Result<()> {
 }
 
 pub fn run_with_options(options: RunOptions) -> Result<()> {
-    run_with_startup_state(options, None, false)
+    run_with_startup_state(options, None, false, None).map(|_| ())
 }
 
 #[doc(hidden)]
@@ -68,29 +81,49 @@ pub fn run_with_startup_options(
     options: RunOptions,
     start_focus: Option<PathBuf>,
     reveal_hidden_start_focus: bool,
-) -> Result<()> {
-    run_with_startup_state(options, start_focus, reveal_hidden_start_focus)
+    chooser_file: Option<PathBuf>,
+) -> Result<RunOutcome> {
+    run_with_startup_state(
+        options,
+        start_focus,
+        reveal_hidden_start_focus,
+        chooser_file,
+    )
 }
 
 fn run_with_startup_state(
     options: RunOptions,
     start_focus: Option<PathBuf>,
     reveal_hidden_start_focus: bool,
-) -> Result<()> {
+    chooser_file: Option<PathBuf>,
+) -> Result<RunOutcome> {
+    let RunOptions {
+        start_dir,
+        cwd_file,
+    } = options;
     config::initialize();
     ui::theme::initialize();
     let mut terminal = init_terminal()?;
     let result = run_app(
         &mut terminal,
-        options.start_dir,
+        start_dir,
         start_focus,
         reveal_hidden_start_focus,
+        chooser_file.is_some(),
     );
     restore_terminal(&mut terminal)?;
-    if let Some(final_cwd) = result? {
-        write_cwd_file_if_requested(options.cwd_file.as_deref(), &final_cwd)?;
+    let app_exit = result?;
+    if let Some(final_cwd) = app_exit.final_cwd {
+        write_cwd_file_if_requested(cwd_file.as_deref(), &final_cwd)?;
     }
-    Ok(())
+    match app_exit.chooser {
+        Some(ChooserExit::Confirmed(paths)) => {
+            write_chooser_file_if_requested(chooser_file.as_deref(), &paths)?;
+            Ok(RunOutcome::Success)
+        }
+        Some(ChooserExit::Cancelled) => Ok(RunOutcome::Cancelled),
+        None => Ok(RunOutcome::Success),
+    }
 }
 
 fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
@@ -315,16 +348,66 @@ fn write_cwd_file(cwd_file: &Path, final_cwd: &Path) -> Result<()> {
     Ok(())
 }
 
+fn write_chooser_file_if_requested(chooser_file: Option<&Path>, paths: &[PathBuf]) -> Result<()> {
+    let Some(chooser_file) = chooser_file else {
+        return Ok(());
+    };
+
+    write_chooser_file(chooser_file, paths)
+}
+
+fn write_chooser_file(chooser_file: &Path, paths: &[PathBuf]) -> Result<()> {
+    let bytes = chooser_output_bytes(paths);
+    if chooser_file_is_stdout(chooser_file) {
+        let mut stdout = io::stdout().lock();
+        stdout.write_all(&bytes)?;
+        stdout.flush()?;
+    } else {
+        std_fs::write(chooser_file, bytes)?;
+    }
+    Ok(())
+}
+
+fn chooser_file_is_stdout(chooser_file: &Path) -> bool {
+    chooser_file == Path::new("-")
+}
+
+#[cfg(unix)]
+fn chooser_output_bytes(paths: &[PathBuf]) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+
+    let mut bytes = Vec::new();
+    for path in paths {
+        bytes.extend_from_slice(path.as_os_str().as_bytes());
+        bytes.push(b'\n');
+    }
+    bytes
+}
+
+#[cfg(not(unix))]
+fn chooser_output_bytes(paths: &[PathBuf]) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for path in paths {
+        bytes.extend_from_slice(path.to_string_lossy().as_bytes());
+        bytes.push(b'\n');
+    }
+    bytes
+}
+
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     cwd: Option<PathBuf>,
     start_focus: Option<PathBuf>,
     reveal_hidden_start_focus: bool,
-) -> Result<Option<PathBuf>> {
+    chooser_enabled: bool,
+) -> Result<AppExit> {
     let mut app = match cwd {
         Some(cwd) => App::new_at_startup(cwd, start_focus, reveal_hidden_start_focus)?,
         None => App::new()?,
     };
+    if chooser_enabled {
+        app.enable_chooser_mode();
+    }
 
     // Enable terminal image previews. Detection handles the current policy:
     // Kitty, Ghostty, Warp, WezTerm, iTerm2, and Konsole auto-enable supported
@@ -553,6 +636,7 @@ fn run_app(
     let final_cwd = app
         .should_change_directory_on_quit
         .then(|| app.navigation.cwd.clone());
+    let chooser = app.take_chooser_exit();
     app.queue_forced_iterm_preview_erase();
     let mut overlay_bytes = app.clear_preview_overlay()?;
     overlay_bytes.extend(app.iterm_pre_draw_erase());
@@ -560,7 +644,7 @@ fn run_app(
         terminal.backend_mut().write_all(&overlay_bytes)?;
         terminal.backend_mut().flush()?;
     }
-    Ok(final_cwd)
+    Ok(AppExit { final_cwd, chooser })
 }
 
 fn draw_terminal_frame(
@@ -788,6 +872,53 @@ mod tests {
         let bytes = fs::read(&cwd_file).expect("cwd file should be readable");
         assert!(!bytes.ends_with(b"\n"));
         assert_eq!(String::from_utf8_lossy(&bytes), final_cwd.to_string_lossy());
+
+        fs::remove_dir_all(root).expect("temp directory should be removed");
+    }
+
+    #[test]
+    fn chooser_file_is_not_written_when_absent() {
+        crate::write_chooser_file_if_requested(None, &[PathBuf::from("/tmp/example")])
+            .expect("absent chooser file should be a no-op");
+    }
+
+    #[test]
+    fn chooser_file_hyphen_targets_stdout() {
+        assert!(crate::chooser_file_is_stdout(Path::new("-")));
+        assert!(!crate::chooser_file_is_stdout(Path::new("./-")));
+        assert!(!crate::chooser_file_is_stdout(Path::new("/dev/stdout")));
+    }
+
+    #[test]
+    fn chooser_file_writes_paths_with_trailing_newline() {
+        let root = temp_path("chooser-file");
+        fs::create_dir_all(&root).expect("temp directory should be created");
+        let chooser_file = root.join("selection");
+        let alpha = root.join("alpha.txt");
+        let beta = root.join("beta.txt");
+
+        crate::write_chooser_file_if_requested(Some(&chooser_file), &[alpha.clone(), beta.clone()])
+            .expect("chooser file should be written");
+
+        let bytes = fs::read(&chooser_file).expect("chooser file should be readable");
+        let expected = format!("{}\n{}\n", alpha.to_string_lossy(), beta.to_string_lossy());
+        assert_eq!(String::from_utf8_lossy(&bytes), expected);
+
+        fs::remove_dir_all(root).expect("temp directory should be removed");
+    }
+
+    #[test]
+    fn chooser_file_truncates_on_empty_confirmation() {
+        let root = temp_path("chooser-empty");
+        fs::create_dir_all(&root).expect("temp directory should be created");
+        let chooser_file = root.join("selection");
+        fs::write(&chooser_file, "stale\n").expect("chooser file should be primed");
+
+        crate::write_chooser_file_if_requested(Some(&chooser_file), &[])
+            .expect("empty chooser confirmation should be written");
+
+        let bytes = fs::read(&chooser_file).expect("chooser file should be readable");
+        assert!(bytes.is_empty());
 
         fs::remove_dir_all(root).expect("temp directory should be removed");
     }

@@ -13,6 +13,12 @@ mod restore;
 mod search;
 mod trash;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum HelpMode {
+    Normal,
+    Chooser,
+}
+
 pub(super) fn render_trash_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -106,10 +112,16 @@ pub(super) fn render_search_overlay(
 pub(super) fn render_help(
     frame: &mut Frame<'_>,
     area: Rect,
+    app: &App,
     state: &mut FrameState,
     palette: Palette,
 ) {
-    help::render_help(frame, area, state, palette);
+    let mode = if app.chooser_mode {
+        HelpMode::Chooser
+    } else {
+        HelpMode::Normal
+    };
+    help::render_help(frame, area, mode, state, palette);
 }
 
 fn compute_scroll_top(cursor_line: usize, visible: usize) -> usize {

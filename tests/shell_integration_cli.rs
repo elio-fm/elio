@@ -1156,6 +1156,38 @@ fn cwd_file_equals_requires_value() {
 }
 
 #[test]
+fn chooser_file_requires_value() {
+    let output = elio()
+        .arg("--chooser-file")
+        .output()
+        .expect("failed to run elio --chooser-file");
+
+    assert_failure("elio --chooser-file", &output);
+    assert_no_stdout("elio --chooser-file", &output);
+    assert_stderr_contains(
+        "elio --chooser-file",
+        &output,
+        "error: expected a file path after '--chooser-file'",
+    );
+}
+
+#[test]
+fn chooser_file_equals_requires_value() {
+    let output = elio()
+        .arg("--chooser-file=")
+        .output()
+        .expect("failed to run elio --chooser-file=");
+
+    assert_failure("elio --chooser-file=", &output);
+    assert_no_stdout("elio --chooser-file=", &output);
+    assert_stderr_contains(
+        "elio --chooser-file=",
+        &output,
+        "error: expected a file path after '--chooser-file'",
+    );
+}
+
+#[test]
 fn duplicate_cwd_file_is_rejected() {
     let first = temp_path("cwd-first");
     let second = temp_path("cwd-second");
@@ -1173,6 +1205,46 @@ fn duplicate_cwd_file_is_rejected() {
         "elio with duplicate --cwd-file",
         &output,
         "error: '--cwd-file' cannot be used more than once",
+    );
+}
+
+#[test]
+fn duplicate_chooser_file_is_rejected() {
+    let first = temp_path("chooser-first");
+    let second = temp_path("chooser-second");
+    let output = elio()
+        .arg("--chooser-file")
+        .arg(&first)
+        .arg("--chooser-file")
+        .arg(&second)
+        .output()
+        .expect("failed to run elio with duplicate --chooser-file");
+
+    assert_failure("elio with duplicate --chooser-file", &output);
+    assert_no_stdout("elio with duplicate --chooser-file", &output);
+    assert_stderr_contains(
+        "elio with duplicate --chooser-file",
+        &output,
+        "error: '--chooser-file' cannot be used more than once",
+    );
+}
+
+#[test]
+fn duplicate_chooser_file_equals_is_rejected() {
+    let first = temp_path("chooser-first");
+    let second = temp_path("chooser-second");
+    let output = elio()
+        .arg(format!("--chooser-file={}", first.display()))
+        .arg(format!("--chooser-file={}", second.display()))
+        .output()
+        .expect("failed to run elio with duplicate --chooser-file");
+
+    assert_failure("elio with duplicate --chooser-file=", &output);
+    assert_no_stdout("elio with duplicate --chooser-file=", &output);
+    assert_stderr_contains(
+        "elio with duplicate --chooser-file=",
+        &output,
+        "error: '--chooser-file' cannot be used more than once",
     );
 }
 

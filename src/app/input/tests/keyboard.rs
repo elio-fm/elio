@@ -135,6 +135,158 @@ fn q_sets_should_quit() {
 }
 
 #[test]
+fn chooser_enter_confirms_hovered_entry() {
+    let root = temp_path("chooser-enter-hovered");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let file_path = root.join("note.txt");
+    fs::write(&file_path, "hello").expect("failed to write temp file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.enable_chooser_mode();
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .expect("enter should confirm chooser selection");
+
+    assert!(app.should_quit);
+    assert!(app.should_change_directory_on_quit);
+    assert_eq!(
+        app.chooser_exit.as_ref(),
+        Some(&ChooserExit::Confirmed(vec![file_path]))
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn chooser_enter_confirms_sorted_selection() {
+    let root = temp_path("chooser-enter-selection");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let alpha = root.join("alpha.txt");
+    let beta = root.join("beta.txt");
+    let gamma = root.join("gamma.txt");
+    fs::write(&alpha, "alpha").expect("failed to write alpha");
+    fs::write(&beta, "beta").expect("failed to write beta");
+    fs::write(&gamma, "gamma").expect("failed to write gamma");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.selected_paths.insert(gamma.clone());
+    app.navigation.selected_paths.insert(alpha.clone());
+    let beta_index = app
+        .navigation
+        .entries
+        .iter()
+        .position(|entry| entry.path == beta)
+        .expect("beta should be visible");
+    app.select_index(beta_index);
+    app.enable_chooser_mode();
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .expect("enter should confirm selected chooser paths");
+
+    assert_eq!(
+        app.chooser_exit.as_ref(),
+        Some(&ChooserExit::Confirmed(vec![alpha, gamma]))
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn chooser_quit_cancels_without_cd() {
+    let root = temp_path("chooser-cancel");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.enable_chooser_mode();
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('q'))))
+        .expect("q should cancel chooser mode");
+
+    assert!(app.should_quit);
+    assert!(!app.should_change_directory_on_quit);
+    assert_eq!(app.chooser_exit.as_ref(), Some(&ChooserExit::Cancelled));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn chooser_esc_keeps_normal_selection_clear_behavior() {
+    let root = temp_path("chooser-esc-selection");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let file_path = root.join("note.txt");
+    fs::write(&file_path, "hello").expect("failed to write temp file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.selected_paths.insert(file_path);
+    app.enable_chooser_mode();
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Esc)))
+        .expect("esc should keep normal selection behavior");
+
+    assert!(!app.should_quit);
+    assert!(app.should_change_directory_on_quit);
+    assert_eq!(app.chooser_exit, None);
+    assert!(app.navigation.selected_paths.is_empty());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn chooser_right_enters_directory_instead_of_confirming() {
+    let root = temp_path("chooser-right-directory");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let nested = root.join("nested");
+    fs::create_dir_all(&nested).expect("failed to create nested directory");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.view_mode = ViewMode::List;
+    app.select_index(0);
+    app.enable_chooser_mode();
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Right)))
+        .expect("right should enter the selected directory");
+    wait_for_directory_load(&mut app);
+
+    assert_eq!(app.navigation.cwd, nested);
+    assert!(!app.should_quit);
+    assert_eq!(app.chooser_exit, None);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn chooser_open_or_enter_action_keeps_normal_behavior() {
+    let root = temp_path("chooser-open-or-enter-directory");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let nested = root.join("nested");
+    fs::create_dir_all(&nested).expect("failed to create nested directory");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.view_mode = ViewMode::List;
+    app.select_index(0);
+    app.enable_chooser_mode();
+
+    app.dispatch_action(Action::OpenOrEnter)
+        .expect("open_or_enter should keep normal behavior in chooser mode");
+    wait_for_directory_load(&mut app);
+
+    assert_eq!(app.navigation.cwd, nested);
+    assert!(!app.should_quit);
+    assert_eq!(app.chooser_exit, None);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn modified_plain_shortcut_does_not_trigger_plain_action() {
     let root = temp_path("modified-plain-shortcut");
     fs::create_dir_all(&root).expect("failed to create temp root");

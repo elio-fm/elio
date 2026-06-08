@@ -1286,6 +1286,59 @@ fn help_overlay_keeps_controls_readable_and_drops_auto_reload_row() {
 }
 
 #[test]
+fn chooser_help_overlay_uses_chooser_actions_without_changing_esc() {
+    let root = temp_path("chooser-help-overlay");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.enable_chooser_mode();
+    app.overlays.help = true;
+    let mut terminal = Terminal::new(TestBackend::new(100, 40)).expect("terminal should init");
+
+    draw_ui(&mut terminal, &mut app);
+    let rendered = buffer_text(terminal.backend().buffer());
+
+    assert!(
+        rendered.contains("Chooser controls"),
+        "expected chooser help title, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("confirm selection"),
+        "expected chooser help to list choose action, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("cancel chooser"),
+        "expected chooser help to relabel quit as cancellation, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("Esc"),
+        "expected chooser help to keep normal Esc behavior visible, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("clear selection"),
+        "expected chooser help to keep Esc as clear selection, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("copy path details"),
+        "expected chooser help to keep copy path visible, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("cut"),
+        "expected chooser help to keep cut visible, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("paste"),
+        "expected chooser help to keep paste visible, got: {rendered:?}"
+    );
+    assert!(
+        !rendered.contains("quit without cd"),
+        "chooser help should not describe quit_without_cd as normal quit, got: {rendered:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn entries_and_preview_panels_keep_top_border_segments() {
     let root = temp_path("panel-top-borders");
     fs::create_dir_all(&root).expect("failed to create temp root");

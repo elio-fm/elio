@@ -28,9 +28,9 @@ use std::{
 };
 
 pub use self::state::App;
-pub(crate) use self::state::PendingTerminalTask;
 #[cfg(test)]
 pub use self::state::PreviewMetricsSnapshot;
+pub(crate) use self::state::{ChooserExit, PendingTerminalTask};
 pub(crate) use crate::core::FileClass;
 pub(crate) use crate::fs::{
     format_item_count, format_size, format_size_parts, format_time_ago, rect_contains,

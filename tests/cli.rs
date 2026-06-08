@@ -34,6 +34,7 @@ fn help_prints_usage() {
     assert!(stdout.contains(
         "[PATH]               Start in a directory, or focus a file in its parent directory"
     ));
+    assert!(stdout.contains("--chooser-file FILE  Write chosen paths to FILE, or stdout with '-'"));
     assert!(stdout.contains("--cwd-file FILE  Write the final current directory to FILE on exit"));
     assert!(stdout.contains("-h, --help           Print help"));
     assert!(stdout.contains("-V, --version        Print version"));
@@ -65,6 +66,20 @@ fn mistyped_version_flag_exits_with_suggestion() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("error: unexpected argument '--v' found"));
     assert!(stderr.contains("tip: a similar argument exists: '--version'"));
+}
+
+#[test]
+fn mistyped_chooser_file_flag_exits_with_suggestion() {
+    let output = elio()
+        .arg("--chooser")
+        .output()
+        .expect("failed to run elio --chooser");
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("error: unexpected argument '--chooser' found"));
+    assert!(stderr.contains("tip: a similar argument exists: '--chooser-file'"));
 }
 
 #[test]

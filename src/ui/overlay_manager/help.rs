@@ -1,5 +1,6 @@
+use super::HelpMode;
 use crate::app::FrameState;
-use crate::config::KeyBindings;
+use crate::config::{KeyBindings, KeyList};
 use crate::ui::{helpers, theme::Palette};
 use ratatui::{
     Frame,
@@ -13,51 +14,65 @@ use unicode_width::UnicodeWidthStr;
 pub(super) fn render_help(
     frame: &mut Frame<'_>,
     area: Rect,
+    mode: HelpMode,
     state: &mut FrameState,
     palette: Palette,
 ) {
     let kb = crate::config::keys();
+    let keys = HelpKeys::new(kb, mode);
 
-    let navigation_entries = navigation_entries(kb);
-    let search_entries = vec![
-        e(&kb.zoxide.to_string(), "zoxide history"),
-        e(&kb.search_folders.to_string(), "search folders"),
-        e(&kb.search_files.to_string(), "search files"),
+    let navigation_entries = navigation_entries(&keys);
+    let search_entries = entries([
+        keys.action(&kb.zoxide, "zoxide history"),
+        keys.action(&kb.search_folders, "search folders"),
+        keys.action(&kb.search_files, "search files"),
         e("Ctrl+←→", "move by word"),
         e("Ctrl+Backspace", "delete previous word"),
         e("Ctrl+Del", "delete next word"),
         e("Ctrl+W / Alt+D", "fallback word delete"),
-    ];
-    let clipboard_entries = clipboard_entries(kb);
-    let rename_key = kb.rename.to_string();
-    let restore_key = format!("{} (in trash)", kb.restore_from_trash);
-    let files_entries = vec![
-        e(&kb.create.to_string(), "create file or folder"),
+    ]);
+    let clipboard_entries = clipboard_entries(&keys);
+    let files_entries = entries([
+        keys.action(&kb.create, "create file or folder"),
         e("Alt/Shift+Enter", "add line in create prompt"),
-        e(&kb.trash.to_string(), "trash (delete if in trash)"),
-        e(&kb.delete_permanently.to_string(), "delete permanently"),
-        e(&rename_key, "rename (bulk if selection)"),
-        e(&restore_key, "restore from trash"),
-        e(&kb.shell.to_string(), "open shell here"),
-        e(&kb.open.to_string(), "open with default app"),
-        e(&kb.open_with.to_string(), "open with"),
-    ];
-    let view_entries = vec![
-        e(&kb.toggle_view.to_string(), "toggle grid / list"),
+        keys.action(&kb.trash, "trash (delete if in trash)"),
+        keys.action(&kb.delete_permanently, "delete permanently"),
+        keys.action(&kb.rename, "rename (bulk if selection)"),
+        keys.action_with_suffix(&kb.restore_from_trash, " (in trash)", "restore from trash"),
+        keys.action(&kb.shell, "open shell here"),
+        keys.action(&kb.open, "open with default app"),
+        keys.action(&kb.open_with, "open with"),
+    ]);
+    let quit_action = if mode.is_chooser() {
+        "cancel chooser"
+    } else {
+        "quit"
+    };
+    let quit_without_cd_action = if mode.is_chooser() {
+        "cancel chooser"
+    } else {
+        "quit without cd"
+    };
+    let view_entries = entries([
+        keys.action(&kb.toggle_view, "toggle grid / list"),
         e("+ / -", "grid zoom in / out"),
-        e(&kb.toggle_hidden.to_string(), "toggle dotfiles"),
-        e(&kb.sort.to_string(), "cycle sort"),
-        e(&kb.quit.to_string(), "quit"),
-        e(&kb.quit_without_cd.to_string(), "quit without cd"),
-    ];
-    let preview_vertical_key =
-        format_preview_scroll_key(&kb.scroll_preview_up, &kb.scroll_preview_down);
-    let preview_horizontal_key =
-        format_preview_scroll_key(&kb.scroll_preview_left, &kb.scroll_preview_right);
-    let preview_entries = vec![
-        e(&preview_vertical_key, "step page or scroll"),
-        e(&preview_horizontal_key, "scroll left / right"),
-    ];
+        keys.action(&kb.toggle_hidden, "toggle dotfiles"),
+        keys.action(&kb.sort, "cycle sort"),
+        keys.action(&kb.quit, quit_action),
+        keys.action(&kb.quit_without_cd, quit_without_cd_action),
+    ]);
+    let preview_entries = entries([
+        keys.preview_action(
+            &kb.scroll_preview_up,
+            &kb.scroll_preview_down,
+            "step page or scroll",
+        ),
+        keys.preview_action(
+            &kb.scroll_preview_left,
+            &kb.scroll_preview_right,
+            "scroll left / right",
+        ),
+    ]);
     let mouse_entries = vec![
         e("Click", "select item"),
         e("Double-click", "open item"),
@@ -97,7 +112,7 @@ pub(super) fn render_help(
         },
     ];
 
-    let popup = helpers::centered_rect(area, 90, 33);
+    let popup = helpers::centered_rect(area, 90, 35);
     state.help_panel = Some(popup);
     frame.render_widget(Clear, popup);
     frame.render_widget(
@@ -111,7 +126,7 @@ pub(super) fn render_help(
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
-                    " Keyboard and mouse controls ",
+                    mode.title(),
                     Style::default()
                         .fg(palette.accent_text)
                         .add_modifier(Modifier::BOLD),
@@ -203,37 +218,128 @@ pub(super) fn render_help(
     );
 }
 
-fn navigation_entries(kb: &KeyBindings) -> Vec<HelpEntry> {
-    let parent_key = format_key_pair(&kb.nav_left, &kb.go_parent);
-    let page_key = format_key_pair(&kb.page_up, &kb.page_down);
-    let place_key = format_key_pair(&kb.cycle_places_next, &kb.cycle_places_previous);
-    let history_key = format_key_pair(&kb.history_back, &kb.history_forward);
+impl HelpMode {
+    fn is_chooser(self) -> bool {
+        matches!(self, Self::Chooser)
+    }
 
-    vec![
-        e(&kb.nav_up.to_string(), "move up"),
-        e(&kb.nav_down.to_string(), "move down"),
-        e(&parent_key, "parent folder"),
-        e(&kb.nav_right.to_string(), "enter folder"),
-        e(&kb.open_or_enter.to_string(), "enter folder / open"),
-        e(&kb.go_to.to_string(), "go-to menu"),
-        e(&kb.jump_first.to_string(), "first item"),
-        e(&kb.jump_last.to_string(), "last item"),
-        e(&page_key, "page up / down"),
-        e(&place_key, "cycle places"),
-        e(&history_key, "back / forward"),
-    ]
+    fn title(self) -> &'static str {
+        match self {
+            Self::Normal => " Keyboard and mouse controls ",
+            Self::Chooser => " Chooser controls ",
+        }
+    }
 }
 
-fn clipboard_entries(kb: &KeyBindings) -> Vec<HelpEntry> {
-    vec![
-        e(&kb.toggle_selection.to_string(), "toggle selection"),
-        e(&kb.select_all.to_string(), "select all"),
+struct HelpKeys<'a> {
+    kb: &'a KeyBindings,
+    mode: HelpMode,
+}
+
+impl<'a> HelpKeys<'a> {
+    fn new(kb: &'a KeyBindings, mode: HelpMode) -> Self {
+        Self { kb, mode }
+    }
+
+    fn action(&self, keys: &KeyList, action: &'static str) -> HelpEntry {
+        self.entry(self.key(keys), action)
+    }
+
+    fn action_with_suffix(
+        &self,
+        keys: &KeyList,
+        suffix: &'static str,
+        action: &'static str,
+    ) -> HelpEntry {
+        let mut key = self.key(keys);
+        if !key.is_empty() {
+            key.push_str(suffix);
+        }
+        self.entry(key, action)
+    }
+
+    fn pair_action(&self, first: &KeyList, second: &KeyList, action: &'static str) -> HelpEntry {
+        self.entry(self.pair(first, second), action)
+    }
+
+    fn preview_action(&self, low: &KeyList, high: &KeyList, action: &'static str) -> HelpEntry {
+        self.entry(self.preview_pair(low, high), action)
+    }
+
+    fn key(&self, keys: &KeyList) -> String {
+        self.effective_keys(keys).to_string()
+    }
+
+    fn pair(&self, first: &KeyList, second: &KeyList) -> String {
+        format_key_pair(&self.effective_keys(first), &self.effective_keys(second))
+    }
+
+    fn preview_pair(&self, low: &KeyList, high: &KeyList) -> String {
+        let low = self.effective_keys(low);
+        let high = self.effective_keys(high);
+        if self.mode.is_chooser() {
+            let low_label = low.to_string();
+            let high_label = high.to_string();
+            match (low_label.is_empty(), high_label.is_empty()) {
+                (true, true) => return String::new(),
+                (true, false) => return high_label,
+                (false, true) => return low_label,
+                (false, false) => {}
+            }
+        }
+        format_preview_scroll_key(&low, &high)
+    }
+
+    fn effective_keys(&self, keys: &KeyList) -> KeyList {
+        if self.mode.is_chooser() {
+            keys.without(&self.kb.choose)
+        } else {
+            keys.clone()
+        }
+    }
+
+    fn entry(&self, key: String, action: &'static str) -> HelpEntry {
+        entry(key, action)
+    }
+}
+
+fn navigation_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
+    let kb = keys.kb;
+    entries([
+        keys.action(&kb.nav_up, "move up"),
+        keys.action(&kb.nav_down, "move down"),
+        keys.pair_action(&kb.nav_left, &kb.go_parent, "parent folder"),
+        keys.action(&kb.nav_right, "enter folder"),
+        keys.action(&kb.open_or_enter, "enter folder / open"),
+        keys.action(&kb.go_to, "go-to menu"),
+        keys.action(&kb.jump_first, "first item"),
+        keys.action(&kb.jump_last, "last item"),
+        keys.pair_action(&kb.page_up, &kb.page_down, "page up / down"),
+        keys.pair_action(
+            &kb.cycle_places_next,
+            &kb.cycle_places_previous,
+            "cycle places",
+        ),
+        keys.pair_action(&kb.history_back, &kb.history_forward, "back / forward"),
+    ])
+}
+
+fn clipboard_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
+    let kb = keys.kb;
+    let mut entries = Vec::new();
+    if keys.mode.is_chooser() {
+        entries.push(e(&kb.choose.to_string(), "confirm selection"));
+    }
+    entries.extend([
+        keys.action(&kb.toggle_selection, "toggle selection"),
+        keys.action(&kb.select_all, "select all"),
         e("Esc", "clear selection"),
-        e(&kb.yank.to_string(), "yank (copy)"),
-        e(&kb.copy_path.to_string(), "copy path details"),
-        e(&kb.cut.to_string(), "cut"),
-        e(&kb.paste.to_string(), "paste"),
-    ]
+        keys.action(&kb.yank, "yank (copy)"),
+        keys.action(&kb.copy_path, "copy path details"),
+        keys.action(&kb.cut, "cut"),
+        keys.action(&kb.paste, "paste"),
+    ]);
+    entries
 }
 
 fn format_key_pair(first: &crate::config::KeyList, second: &crate::config::KeyList) -> String {
@@ -266,10 +372,15 @@ struct HelpEntry {
 /// Convenience constructor — accepts anything that converts to a `String` for
 /// the key so call sites can pass `&str`, `String`, or `&String` uniformly.
 fn e(key: &str, action: &'static str) -> HelpEntry {
-    HelpEntry {
-        key: key.to_string(),
-        action,
-    }
+    entry(key.to_string(), action)
+}
+
+fn entry(key: String, action: &'static str) -> HelpEntry {
+    HelpEntry { key, action }
+}
+
+fn entries(items: impl IntoIterator<Item = HelpEntry>) -> Vec<HelpEntry> {
+    items.into_iter().collect()
 }
 
 struct HelpSection {
@@ -403,11 +514,24 @@ mod tests {
             .clone()
     }
 
+    fn entry_keys(entries: &[HelpEntry], action: &str) -> Vec<String> {
+        entries
+            .iter()
+            .filter(|entry| entry.action == action)
+            .map(|entry| entry.key.clone())
+            .collect()
+    }
+
+    fn has_action(entries: &[HelpEntry], action: &str) -> bool {
+        entries.iter().any(|entry| entry.action == action)
+    }
+
     #[test]
     fn help_uses_configurable_browser_control_defaults() {
         let kb = KeyBindings::default();
-        let navigation = navigation_entries(&kb);
-        let clipboard = clipboard_entries(&kb);
+        let keys = HelpKeys::new(&kb, HelpMode::Normal);
+        let navigation = navigation_entries(&keys);
+        let clipboard = clipboard_entries(&keys);
 
         assert_eq!(entry_key(&navigation, "go-to menu"), "g");
         assert_eq!(entry_key(&navigation, "first item"), "Home");
@@ -420,6 +544,10 @@ mod tests {
         assert_eq!(entry_key(&navigation, "back / forward"), "Alt+← / Alt+→");
         assert_eq!(entry_key(&clipboard, "toggle selection"), "Space");
         assert_eq!(entry_key(&clipboard, "select all"), "Ctrl+A");
+        assert!(
+            !has_action(&clipboard, "confirm selection"),
+            "normal help should not show chooser-only actions"
+        );
     }
 
     #[test]
@@ -439,8 +567,9 @@ history_back = "alt+h"
 history_forward = "alt+l"
 "#,
         );
-        let navigation = navigation_entries(&kb);
-        let clipboard = clipboard_entries(&kb);
+        let keys = HelpKeys::new(&kb, HelpMode::Normal);
+        let navigation = navigation_entries(&keys);
+        let clipboard = clipboard_entries(&keys);
 
         assert_eq!(entry_key(&navigation, "go-to menu"), "u");
         assert_eq!(entry_key(&navigation, "first item"), "1");
@@ -450,5 +579,100 @@ history_forward = "alt+l"
         assert_eq!(entry_key(&navigation, "back / forward"), "Alt+H / Alt+L");
         assert_eq!(entry_key(&clipboard, "toggle selection"), "t");
         assert_eq!(entry_key(&clipboard, "select all"), "A");
+    }
+
+    #[test]
+    fn chooser_help_adds_choose_and_relabels_quit() {
+        let kb = KeyBindings::default();
+        let keys = HelpKeys::new(&kb, HelpMode::Chooser);
+        let clipboard = clipboard_entries(&keys);
+        let view_entries = entries([
+            keys.action(&kb.quit, "cancel chooser"),
+            keys.action(&kb.quit_without_cd, "cancel chooser"),
+        ]);
+
+        assert_eq!(entry_key(&clipboard, "confirm selection"), "Enter");
+        assert_eq!(entry_key(&view_entries, "cancel chooser"), "q");
+        assert!(
+            !has_action(&view_entries, "quit"),
+            "chooser help should describe quit keys as chooser cancellation"
+        );
+    }
+
+    #[test]
+    fn chooser_help_removes_choose_key_from_normal_action_labels() {
+        let kb = KeyBindings::from_toml_str(
+            r#"[keys]
+nav_right = []
+open_or_enter = ["enter", "l", "right"]
+"#,
+        );
+
+        let keys = HelpKeys::new(&kb, HelpMode::Chooser);
+        let navigation = navigation_entries(&keys);
+        let clipboard = clipboard_entries(&keys);
+
+        assert_eq!(entry_key(&clipboard, "confirm selection"), "Enter");
+        assert_eq!(entry_key(&navigation, "enter folder / open"), "l/→");
+    }
+
+    #[test]
+    fn chooser_help_gives_choose_precedence_over_quit() {
+        let kb = KeyBindings::from_toml_str(
+            r#"[keys]
+choose = "q"
+"#,
+        );
+        let keys = HelpKeys::new(&kb, HelpMode::Chooser);
+        let clipboard = clipboard_entries(&keys);
+        let view_entries = entries([
+            keys.action(&kb.quit, "cancel chooser"),
+            keys.action(&kb.quit_without_cd, "cancel chooser"),
+        ]);
+
+        assert_eq!(entry_key(&clipboard, "confirm selection"), "q");
+        assert_eq!(
+            entry_keys(&view_entries, "cancel chooser"),
+            vec![String::new(), "Q".to_string()]
+        );
+    }
+
+    #[test]
+    fn preview_scroll_help_drops_empty_sides() {
+        let kb = KeyBindings::from_toml_str(
+            r#"[keys]
+choose = "K"
+"#,
+        );
+        let keys = HelpKeys::new(&kb, HelpMode::Chooser);
+
+        assert_eq!(
+            keys.preview_pair(&kb.scroll_preview_up, &kb.scroll_preview_down),
+            "[ / J/]"
+        );
+
+        let kb = KeyBindings::from_toml_str(
+            r#"[keys]
+choose = ["K", "["]
+"#,
+        );
+        let keys = HelpKeys::new(&kb, HelpMode::Chooser);
+
+        assert_eq!(
+            keys.preview_pair(&kb.scroll_preview_up, &kb.scroll_preview_down),
+            "J/]"
+        );
+
+        let kb = KeyBindings::from_toml_str(
+            r#"[keys]
+choose = ["K", "[", "J", "]"]
+"#,
+        );
+        let keys = HelpKeys::new(&kb, HelpMode::Chooser);
+
+        assert_eq!(
+            keys.preview_pair(&kb.scroll_preview_up, &kb.scroll_preview_down),
+            ""
+        );
     }
 }
