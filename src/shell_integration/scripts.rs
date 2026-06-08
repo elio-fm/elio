@@ -50,7 +50,16 @@ fn posix_init_script(executable: &str) -> String {
             ;;
     esac
 
-    local tmp cwd status_code
+    local arg tmp cwd status_code
+    for arg in "$@"; do
+        case "$arg" in
+            --chooser-file|--chooser-file=*)
+                {executable} "$@"
+                return $?
+                ;;
+        esac
+    done
+
     tmp="$(mktemp -t "elio-cwd.XXXXXX")" || return
     {executable} --cwd-file "$tmp" "$@"
     status_code=$?
@@ -80,6 +89,14 @@ fn fish_init_script(executable: &str) -> String {
             return $status
     end
 
+    for arg in $argv
+        switch "$arg"
+            case --chooser-file '--chooser-file=*'
+                {executable} $argv
+                return $status
+        end
+    end
+
     set -l tmp (mktemp -t "elio-cwd.XXXXXX")
     or return
 
@@ -105,6 +122,23 @@ end
 fn nu_init_script(executable: &str) -> String {
     format!(
         r#"def --env --wrapped elio [...args] {{
+  let has_chooser_file = ($args | any {{|arg|
+    let value = ($arg | into string)
+    ($value == '--chooser-file') or ($value | str starts-with '--chooser-file=')
+  }})
+
+  if $has_chooser_file {{
+    let status_code = (
+      try {{
+        run-external {executable} ...$args
+        $env.LAST_EXIT_CODE
+      }} catch {{|e| ($e.exit_code? | default 127) }}
+    )
+
+    $env.LAST_EXIT_CODE = $status_code
+    return
+  }}
+
   if (($args | length) > 0) and (
     (($args.0 | into string) == 'shell') or
     (($args.0 | into string) | str starts-with '-')

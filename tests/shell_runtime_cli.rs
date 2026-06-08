@@ -230,6 +230,18 @@ cd {}
 elio empty
 printf 'empty_cwd=%s empty_code=%s\n' "$PWD" "$?"
 
+cd {}
+elio --chooser-file /tmp/elio-choice child
+printf 'chooser_flag_first_cwd=%s chooser_flag_first_code=%s\n' "$PWD" "$?"
+
+cd {}
+elio child --chooser-file /tmp/elio-choice
+printf 'chooser_cwd=%s chooser_code=%s\n' "$PWD" "$?"
+
+cd {}
+elio child --chooser-file=/tmp/elio-choice
+printf 'chooser_equals_cwd=%s chooser_equals_code=%s\n' "$PWD" "$?"
+
 elio --help
 printf 'help_code=%s\n' "$?"
 
@@ -237,6 +249,9 @@ elio shell status
 printf 'shell_code=%s\n' "$?"
 "#,
         shell_quote(init_script),
+        shell_quote(start_dir),
+        shell_quote(start_dir),
+        shell_quote(start_dir),
         shell_quote(start_dir),
         shell_quote(start_dir),
         shell_quote(start_dir),
@@ -256,6 +271,18 @@ cd {}
 elio empty
 printf 'empty_cwd=%s empty_code=%s\n' "$PWD" "$status"
 
+cd {}
+elio --chooser-file /tmp/elio-choice child
+printf 'chooser_flag_first_cwd=%s chooser_flag_first_code=%s\n' "$PWD" "$status"
+
+cd {}
+elio child --chooser-file /tmp/elio-choice
+printf 'chooser_cwd=%s chooser_code=%s\n' "$PWD" "$status"
+
+cd {}
+elio child --chooser-file=/tmp/elio-choice
+printf 'chooser_equals_cwd=%s chooser_equals_code=%s\n' "$PWD" "$status"
+
 elio --help
 printf 'help_code=%s\n' "$status"
 
@@ -263,6 +290,9 @@ elio shell status
 printf 'shell_code=%s\n' "$status"
 "#,
         shell_quote(init_script),
+        shell_quote(start_dir),
+        shell_quote(start_dir),
+        shell_quote(start_dir),
         shell_quote(start_dir),
         shell_quote(start_dir),
         shell_quote(start_dir),
@@ -283,6 +313,18 @@ cd {}
 elio empty
 print $"empty_cwd=($env.PWD) empty_code=($env.LAST_EXIT_CODE)"
 
+cd {}
+elio --chooser-file /tmp/elio-choice child
+print $"chooser_flag_first_cwd=($env.PWD) chooser_flag_first_code=($env.LAST_EXIT_CODE)"
+
+cd {}
+elio child --chooser-file /tmp/elio-choice
+print $"chooser_cwd=($env.PWD) chooser_code=($env.LAST_EXIT_CODE)"
+
+cd {}
+elio child --chooser-file=/tmp/elio-choice
+print $"chooser_equals_cwd=($env.PWD) chooser_equals_code=($env.LAST_EXIT_CODE)"
+
 elio --help
 print $"help_code=($env.LAST_EXIT_CODE)"
 
@@ -294,6 +336,9 @@ print $"shell_pipeline_code=($env.LAST_EXIT_CODE)"
 print $"shell_pipeline=(open --raw {})"
 "#,
         nu_quote(init_script),
+        nu_quote(start_dir),
+        nu_quote(start_dir),
+        nu_quote(start_dir),
         nu_quote(start_dir),
         nu_quote(start_dir),
         nu_quote(start_dir),
@@ -321,6 +366,27 @@ fn assert_runtime_output(output: std::process::Output, start_dir: &Path) {
     assert!(
         stdout.contains(&format!("empty_cwd={} empty_code=9", start_dir.display())),
         "empty cwd file should leave the shell in the original directory\nstdout:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(&format!(
+            "chooser_flag_first_cwd={} chooser_flag_first_code=5",
+            start_dir.display()
+        )),
+        "flag-first chooser calls should pass through without cwd integration\nstdout:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(&format!(
+            "chooser_cwd={} chooser_code=5",
+            start_dir.display()
+        )),
+        "path-first chooser calls should pass through without cwd integration\nstdout:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(&format!(
+            "chooser_equals_cwd={} chooser_equals_code=5",
+            start_dir.display()
+        )),
+        "path-first chooser= calls should pass through without cwd integration\nstdout:\n{stdout}"
     );
     let has_nu_pipeline_checks = stdout.contains("shell_pipeline_code=");
     if !has_nu_pipeline_checks {

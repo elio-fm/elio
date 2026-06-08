@@ -74,6 +74,7 @@ fn shell_init_fish_prints_sourceable_function() {
     assert!(stdout.contains("function elio"));
     assert!(stdout.contains("switch \"$argv[1]\""));
     assert!(stdout.contains("case shell '-*'"));
+    assert!(stdout.contains("case --chooser-file '--chooser-file=*'"));
     assert!(stdout.contains(env!("CARGO_BIN_EXE_elio")));
     assert!(stdout.contains("$argv"));
     assert!(stdout.contains("--cwd-file \"$tmp\" $argv"));
@@ -95,9 +96,10 @@ fn shell_init_bash_prints_function() {
     assert!(stdout.contains("elio() {"));
     assert!(stdout.contains("case \"${1-}\" in"));
     assert!(stdout.contains("shell|-*)"));
+    assert!(stdout.contains("--chooser-file|--chooser-file=*)"));
     assert!(stdout.contains(env!("CARGO_BIN_EXE_elio")));
     assert!(stdout.contains("\"$@\""));
-    assert!(stdout.contains("local tmp cwd status_code"));
+    assert!(stdout.contains("local arg tmp cwd status_code"));
     assert!(stdout.contains("--cwd-file \"$tmp\" \"$@\""));
     assert!(stdout.contains("status_code=$?"));
     assert!(!stdout.contains("command elio --cwd-file"));
@@ -118,7 +120,8 @@ fn shell_init_zsh_prints_function() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("elio() {"));
     assert!(stdout.contains(env!("CARGO_BIN_EXE_elio")));
-    assert!(stdout.contains("local tmp cwd status_code"));
+    assert!(stdout.contains("--chooser-file|--chooser-file=*)"));
+    assert!(stdout.contains("local arg tmp cwd status_code"));
     assert!(stdout.contains("--cwd-file \"$tmp\" \"$@\""));
     assert!(stdout.contains("status_code=$?"));
     assert!(!stdout.contains("command elio --cwd-file"));
@@ -139,6 +142,18 @@ fn shell_init_nu_prints_sourceable_command() {
     assert!(stdout.contains("def --env --wrapped elio [...args]"));
     assert!(stdout.contains(&nu_literal(env!("CARGO_BIN_EXE_elio"))));
     assert!(stdout.contains("run-external"));
+    assert!(stdout.contains("let has_chooser_file = ($args | any"));
+    assert!(stdout.contains("$has_chooser_file"));
+    assert!(stdout.contains("if $has_chooser_file {"));
+    assert!(
+        stdout
+            .find("if $has_chooser_file {")
+            .expect("chooser branch should exist")
+            < stdout
+                .find("| complete")
+                .expect("complete branch should exist"),
+        "chooser mode must run before the captured Nu pass-through branch"
+    );
     assert!(stdout.contains("--cwd-file"));
     assert!(stdout.contains("$env.LAST_EXIT_CODE = $status_code"));
     assert!(!stdout.contains("command elio"));

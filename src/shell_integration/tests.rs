@@ -93,8 +93,9 @@ fn posix_init_script_passes_cli_commands_through() {
 
     assert!(script.contains("case \"${1-}\" in"));
     assert!(script.contains("shell|-*)"));
+    assert!(script.contains("--chooser-file|--chooser-file=*)"));
     assert!(script.contains("command elio \"$@\""));
-    assert!(script.contains("local tmp cwd status_code"));
+    assert!(script.contains("local arg tmp cwd status_code"));
     assert!(script.contains("command elio --cwd-file \"$tmp\" \"$@\""));
     assert!(script.contains("status_code=$?"));
     assert!(script.contains("return \"$status_code\""));
@@ -107,6 +108,7 @@ fn fish_init_script_passes_cli_commands_through() {
 
     assert!(script.contains("switch \"$argv[1]\""));
     assert!(script.contains("case shell '-*'"));
+    assert!(script.contains("case --chooser-file '--chooser-file=*'"));
     assert!(script.contains("command elio $argv"));
     assert!(script.contains("command elio --cwd-file \"$tmp\" $argv"));
     assert!(script.contains("cd \"$cwd\"; or return $status"));
@@ -117,6 +119,10 @@ fn nu_init_script_passes_cli_commands_through_without_posix_syntax() {
     let script = init_script(Shell::Nu, r#""elio""#);
 
     assert!(script.contains("def --env --wrapped elio [...args]"));
+    assert!(script.contains("let has_chooser_file = ($args | any"));
+    assert!(script.contains("$has_chooser_file"));
+    assert!(script.contains("if $has_chooser_file {"));
+    assert!(script.contains("run-external \"elio\" ...$args\n        $env.LAST_EXIT_CODE"));
     assert!(script.contains("run-external \"elio\" ...$args"));
     assert!(script.contains("mktemp -t \"elio-cwd.XXXXXX\""));
     assert!(script.contains("let command_args = ([\"--cwd-file\", $tmp] ++ $args)"));
@@ -128,6 +134,15 @@ fn nu_init_script_passes_cli_commands_through_without_posix_syntax() {
     assert!(!script.contains("case \"${1-}\""));
     assert!(!script.contains("command elio"));
     assert!(!script.contains("return $status_code"));
+    assert!(
+        script
+            .find("if $has_chooser_file {")
+            .expect("chooser branch should exist")
+            < script
+                .find("| complete")
+                .expect("complete branch should exist"),
+        "chooser mode must run before the captured pass-through branch"
+    );
 }
 
 #[test]
