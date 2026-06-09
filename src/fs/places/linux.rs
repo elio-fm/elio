@@ -1,4 +1,4 @@
-use super::resolution::{path_identity_key, sidebar_item};
+use super::resolution::normalize_absolute_path;
 use crate::core::{SidebarItem, SidebarItemKind};
 use std::{
     collections::{HashMap, HashSet},
@@ -69,11 +69,17 @@ fn linux_device_items_from_mounts(
             continue;
         }
 
-        items.push(sidebar_item(
+        // Identity comes from lexical normalization, never fs::canonicalize:
+        // canonicalizing a mount point stats it, and a stat on an autofs
+        // trigger or a dead network share parks the calling thread (the main
+        // event loop — this runs on every sidebar refresh) in uninterruptible
+        // sleep until the share answers.
+        items.push(SidebarItem::new(
             SidebarItemKind::Device { removable },
             linux_mount_title(mount, labels),
             if removable { "󰕓" } else { "󰋊" },
             mount.mount_point.clone(),
+            normalize_absolute_path(&mount.mount_point),
         ));
     }
 
@@ -92,12 +98,16 @@ fn linux_mount_should_appear(
     pinned_paths: &HashSet<PathBuf>,
     removable: bool,
 ) -> bool {
-    if pinned_paths.contains(&path_identity_key(&mount.mount_point))
-        || mount.mount_point == Path::new("/")
-    {
+    // Path-syscall-free filters only. Statting a mount point here (e.g. via
+    // fs::canonicalize) forces autofs triggers to mount and blocks on dead
+    // network shares, freezing the event loop for as long as the kernel waits.
+    if mount.mount_point == Path::new("/") {
         return false;
     }
     if linux_system_mount_type(&mount.fstype) || linux_hidden_mount_path(&mount.mount_point) {
+        return false;
+    }
+    if pinned_paths.contains(&normalize_absolute_path(&mount.mount_point)) {
         return false;
     }
     linux_user_visible_mount_path(&mount.mount_point, home)

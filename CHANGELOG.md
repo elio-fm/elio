@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed multi-second freezes while the terminal drained large output such as image previews — frame output now goes through a background writer thread — and removed a blocking cursor query that could stall startup, resizes, and returns from zoxide, shells, and Open With for up to two seconds each.
 - Fixed a separate two-second stall on every return from zoxide, shells, and Open With when the terminal swallowed the keyboard-enhancement reply; the capability is now probed once per session.
 - Fixed multi-second freezes when resizing the terminal with an image or PDF preview visible (for example tiling window manager animations): the preview now repaints once after the resize settles instead of retransmitting the full image on every resize step.
+- Fixed startup and periodic freezes when autofs or network mounts were slow or asleep: building the sidebar device list no longer touches mount points, so a sleeping NAS can no longer stall the UI.
 
 ## [1.8.0] - 2026-06-06
 
