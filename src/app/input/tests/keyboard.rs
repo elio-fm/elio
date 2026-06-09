@@ -102,6 +102,52 @@ fn app_in_empty_dir_with_offscreen_file(label: &str) -> (PathBuf, PathBuf, App) 
 }
 
 #[test]
+fn minus_zooms_grid_when_no_yanked_clipboard() {
+    let root = temp_path("grid-minus-zoom-no-yank");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.view_mode = ViewMode::Grid;
+    app.navigation.zoom_level = 1;
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('-'))))
+        .expect("minus should zoom out without a yanked clipboard");
+
+    assert_eq!(app.navigation.zoom_level, 0);
+    assert_eq!(app.status_message(), "Grid zoom set to 0");
+
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn minus_links_yanked_paths_in_grid_view() {
+    let root = temp_path("grid-minus-link-yank");
+    let source_dir = root.join("source");
+    let dest_dir = root.join("dest");
+    fs::create_dir_all(&source_dir).expect("failed to create source dir");
+    fs::create_dir_all(&dest_dir).expect("failed to create dest dir");
+    let source = source_dir.join("note.txt");
+    fs::write(&source, "note").expect("failed to write source file");
+
+    let mut app = App::new_at(source_dir.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.yank();
+    app.navigation.cwd = dest_dir.clone();
+    app.navigation.view_mode = ViewMode::Grid;
+    app.navigation.zoom_level = 1;
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('-'))))
+        .expect("minus should link with a yanked clipboard");
+
+    assert_eq!(fs::read_link(dest_dir.join("note.txt")).unwrap(), source);
+    assert_eq!(app.navigation.zoom_level, 1);
+    assert_eq!(app.status_message(), "Created symlink \"note.txt\"");
+
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn f2_renames_outside_trash_but_not_inside_trash() {
     let root = temp_path("f2-rename-not-restore");
     fs::create_dir_all(&root).expect("failed to create temp root");

@@ -20,7 +20,7 @@ Snappy, batteries-included terminal file manager with rich previews, inline imag
 - **Quick actions** — Go-to, Open With, and copy-to-clipboard
 - **Trash management** — trash, restore, or permanently delete files
 - **Keyboard and mouse navigation** — browse comfortably either way
-- **Grid and list views** — switch with `v`, zoom the grid with `+` / `-`
+- **Grid and list views** — switch with `v`, zoom the grid with `Ctrl++` / `Ctrl+-`
 - **Fuzzy search** — find folders and files quickly
 - **Zoxide jumps** — jump to frequent directories from your zoxide history
 - **Shell integration** — install cd-on-exit wrappers for bash, zsh, fish, and Nushell
@@ -302,7 +302,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | Key | Action |
 |---|---|
 | `v` `*` | Toggle grid / list view |
-| `+` / `-` | Grid zoom in / out |
+| `Ctrl++` / `Ctrl+-` | Grid zoom in / out |
 | `.` `*` | Show / hide dotfiles |
 | `s` `*` | Cycle sort (Name → Modified → Size) |
 
@@ -323,6 +323,8 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | `y` `*` | Yank (copy) |
 | `x` `*` | Cut |
 | `p` `*` | Paste |
+| `-` `*` | Create absolute symlink from yanked items |
+| `_` `*` | Create relative symlink from yanked items |
 | `c` `*` | Copy path details to clipboard |
 
 ### Mouse

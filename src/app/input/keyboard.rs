@@ -132,6 +132,11 @@ impl App {
             crate::config::keys().action_for_key_in_context(key, self.key_context())
         };
 
+        if should_use_grid_zoom_for_symlink_key(self, key, configured_action) {
+            self.adjust_zoom(-1);
+            return Ok(());
+        }
+
         if self.input.wheel_profile == WheelProfile::HighFrequency
             && should_handle_high_frequency_horizontal_key(key, configured_action)
         {
@@ -195,6 +200,8 @@ impl App {
             Action::Yank => self.yank(),
             Action::Cut => self.cut(),
             Action::Paste => self.paste()?,
+            Action::SymlinkAbsolute => self.link_yanked(false)?,
+            Action::SymlinkRelative => self.link_yanked(true)?,
             Action::Trash => self.open_trash_prompt(),
             Action::DeletePermanently => self.open_delete_permanently_prompt(),
             Action::Create => self.open_create_prompt(),
@@ -365,6 +372,24 @@ fn should_handle_high_frequency_horizontal_key(
             (KeyCode::Left, Some(crate::config::Action::HistoryBack))
                 | (KeyCode::Right, Some(crate::config::Action::HistoryForward))
         )
+}
+
+fn should_use_grid_zoom_for_symlink_key(
+    app: &App,
+    key: KeyEvent,
+    configured_action: Option<crate::config::Action>,
+) -> bool {
+    app.navigation.view_mode == ViewMode::Grid
+        && matches!(key.code, KeyCode::Char('-') | KeyCode::Char('_'))
+        && matches!(
+            configured_action,
+            Some(crate::config::Action::SymlinkAbsolute | crate::config::Action::SymlinkRelative)
+        )
+        && !app
+            .jobs
+            .clipboard
+            .as_ref()
+            .is_some_and(|clipboard| clipboard.op == ClipOp::Yank && !clipboard.paths.is_empty())
 }
 
 fn is_help_shortcut(key: KeyEvent) -> bool {

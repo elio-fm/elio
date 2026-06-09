@@ -78,7 +78,7 @@
 # In chooser mode (--chooser-file), choose takes priority over normal actions
 # that use the same key.
 #
-# Reserved bare keys: ? + = - _
+# Reserved bare keys: ? + =
 # Reserved shortcuts: Ctrl+C, Ctrl+Plus/Minus
 # Omit any key to keep the built-in default shown in the comment.
 #
@@ -92,6 +92,8 @@
 # yank                 = "y"
 # cut                  = "x"
 # paste                = "p"
+# symlink_absolute     = "-"
+# symlink_relative     = "_"
 # trash                = "d"
 # delete_permanently   = "D"   # Shift+D
 # create               = "a"

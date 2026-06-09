@@ -55,7 +55,7 @@ pub(super) fn render_help(
     };
     let view_entries = entries([
         keys.action(&kb.toggle_view, "toggle grid / list"),
-        e("+ / -", "grid zoom in / out"),
+        e("Ctrl++ / Ctrl+-", "grid zoom in / out"),
         keys.action(&kb.toggle_hidden, "toggle dotfiles"),
         keys.action(&kb.sort, "cycle sort"),
         keys.action(&kb.quit, quit_action),
@@ -85,8 +85,8 @@ pub(super) fn render_help(
             entries: navigation_entries,
         },
         HelpSection {
-            title: "Search",
-            entries: search_entries,
+            title: "Mouse",
+            entries: mouse_entries,
         },
         HelpSection {
             title: "Selection & Clipboard",
@@ -95,8 +95,8 @@ pub(super) fn render_help(
     ];
     let right_sections = vec![
         HelpSection {
-            title: "Mouse",
-            entries: mouse_entries,
+            title: "Search",
+            entries: search_entries,
         },
         HelpSection {
             title: "File Actions",
@@ -338,6 +338,8 @@ fn clipboard_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
         keys.action(&kb.copy_path, "copy path details"),
         keys.action(&kb.cut, "cut"),
         keys.action(&kb.paste, "paste"),
+        keys.action(&kb.symlink_absolute, "symlink absolute"),
+        keys.action(&kb.symlink_relative, "symlink relative"),
     ]);
     entries
 }

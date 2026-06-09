@@ -6,6 +6,8 @@ fn keys_default_bindings_are_sane() {
     assert_eq!(config.keys.yank, 'y');
     assert_eq!(config.keys.cut, 'x');
     assert_eq!(config.keys.paste, 'p');
+    assert_eq!(config.keys.symlink_absolute, '-');
+    assert_eq!(config.keys.symlink_relative, '_');
     assert_eq!(config.keys.delete_permanently, 'D');
     assert_eq!(config.keys.choose.to_string(), "Enter");
     assert_eq!(config.keys.quit, 'q');
@@ -42,6 +44,23 @@ open_with = "P"
 
     assert_eq!(config.keys.open_with, 'P');
     assert_eq!(config.keys.action_for('w'), None);
+}
+
+#[test]
+fn symlink_keys_can_be_overridden() {
+    let config = Config::from_str(
+        r#"
+[keys]
+symlink_absolute = "m"
+symlink_relative = "M"
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.action_for('m'), Some(Action::SymlinkAbsolute));
+    assert_eq!(config.keys.action_for('M'), Some(Action::SymlinkRelative));
+    assert_eq!(config.keys.action_for('-'), None);
+    assert_eq!(config.keys.action_for('_'), None);
 }
 
 #[test]

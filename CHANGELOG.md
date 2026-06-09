@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `--chooser-file FILE [PATH]` to run elio as a file chooser, writing the confirmed selection as absolute paths, one per line, to `FILE` or stdout with `-`; cancel exits silently with a nonzero status. ([#153])
 - Added persistent multi-path selection across directories, allowing chooser confirmation and bulk actions to use selected paths from multiple folders.
 - `elio <path>` now accepts file paths as well as directories, opening the parent directory and focusing the file entry, including hidden files, file symlinks, and broken symlinks.
+- Added configurable `symlink_absolute` (`-`) and `symlink_relative` (`_`) shortcuts for creating absolute or relative symlinks from yanked items in the current directory. ([#159])
 
 ### Changed
 
@@ -237,3 +238,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#140]: https://github.com/elio-fm/elio/issues/140
 [#141]: https://github.com/elio-fm/elio/issues/141
 [#153]: https://github.com/elio-fm/elio/issues/153
+[#159]: https://github.com/elio-fm/elio/issues/159
