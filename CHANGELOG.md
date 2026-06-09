@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Blocked nested selections and prevented pasting a folder into itself.
+- Fixed image previews silently disabled inside tmux when the tmux server was first started from Alacritty or Kitty; the live client terminal is now detected instead.
 
 ## [1.8.0] - 2026-06-06
 
