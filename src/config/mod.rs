@@ -17,6 +17,7 @@ pub(crate) use self::{
 };
 
 struct Config {
+    theme: Option<String>,
     ui: UiConfig,
     places: PlacesConfig,
     layout: LayoutConfig,
@@ -25,6 +26,7 @@ struct Config {
 
 #[derive(Deserialize, Default)]
 struct ConfigFile {
+    theme: Option<String>,
     ui: Option<ui::UiConfigOverride>,
     places: Option<places::PlacesConfigOverride>,
     layout: Option<layout::LayoutConfigOverride>,
@@ -51,9 +53,16 @@ pub(crate) fn keys() -> &'static KeyBindings {
     &loading::active_config().keys
 }
 
+/// The built-in theme selected by the top-level `theme` key in config.toml,
+/// if any.
+pub(crate) fn theme_name() -> Option<&'static str> {
+    loading::active_config().theme.as_deref()
+}
+
 impl Config {
     fn default_config() -> Self {
         Self {
+            theme: None,
             ui: UiConfig::default(),
             places: PlacesConfig::default(),
             layout: LayoutConfig::default(),
@@ -64,6 +73,7 @@ impl Config {
     fn from_str(config: &str) -> anyhow::Result<Self> {
         let parsed: ConfigFile = toml::from_str(config)?;
         let mut resolved = Self::default_config();
+        resolved.theme = parsed.theme;
         if let Some(ui) = parsed.ui {
             resolved.ui.apply_override(ui);
         }

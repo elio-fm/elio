@@ -1,6 +1,7 @@
 mod keys;
 mod layout;
 mod places;
+mod theme;
 mod ui;
 
 fn toml_string(value: &str) -> String {

@@ -94,6 +94,10 @@ enum RuleOverrideDef {
 }
 
 impl Theme {
+    /// Parses a user theme layered over the default theme. Production code
+    /// layers over [`Theme::selected_builtin_theme`] instead (loading.rs);
+    /// tests keep this shorthand for the no-`theme`-key behavior.
+    #[cfg(test)]
     pub(super) fn from_config_str(config: &str) -> anyhow::Result<Self> {
         Self::apply_config_on(Self::default_theme(), config)
     }

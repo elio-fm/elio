@@ -1,5 +1,11 @@
 # Copy to ~/.config/elio/config.toml to customize Elio's behavior.
 
+# Select a bundled theme by name. Available: default, amber-dusk, blush-light,
+# catppuccin-mocha, default-light, navi, neon-cherry, terminal-ansi,
+# transparent, tokyo-night. A theme.toml next to this file still layers on top.
+#
+# theme = "tokyo-night"
+
 # [ui]
 # show_top_bar = false
 # grid_zoom = 1    # starting zoom level for grid view: 0, 1, or 2 (clamped)

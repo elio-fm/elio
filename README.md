@@ -238,7 +238,15 @@ https://elio-fm.github.io/docs/configuration/
 
 ## Theming
 
-elio themes are TOML files layered on top of the built-in defaults, so you only need to set the keys you want to change.
+All bundled themes ship inside the binary and can be selected with the top-level `theme` key in `config.toml` — no files to copy:
+
+```toml
+theme = "tokyo-night"
+```
+
+Available names: `default`, `amber-dusk`, `blush-light`, `catppuccin-mocha`, `default-light`, `navi`, `neon-cherry`, `terminal-ansi`, `tokyo-night`, and `transparent`.
+
+For finer control, elio themes are TOML files layered on top of the selected built-in theme, so you only need to set the keys you want to change.
 
 | Platform | Theme file |
 |---|---|
@@ -246,9 +254,9 @@ elio themes are TOML files layered on top of the built-in defaults, so you only 
 | macOS | `~/Library/Application Support/elio/theme.toml` |
 | Windows | `%APPDATA%\elio\theme.toml` |
 
-See [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml) for the full default theme and [`examples/themes/`](examples/themes/) for ready-made themes.
+See [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml) for the full default theme and [`examples/themes/`](examples/themes/) for the bundled themes' sources.
 
-For transparent or terminal-palette setups, see [`examples/themes/transparent/theme.toml`](examples/themes/transparent/theme.toml) and [`examples/themes/terminal-ansi/theme.toml`](examples/themes/terminal-ansi/theme.toml).
+For transparent or terminal-palette setups, use `theme = "transparent"` or `theme = "terminal-ansi"` ([`transparent/theme.toml`](examples/themes/transparent/theme.toml), [`terminal-ansi/theme.toml`](examples/themes/terminal-ansi/theme.toml)).
 
 Theme docs:
 https://elio-fm.github.io/docs/themes/

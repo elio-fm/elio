@@ -40,20 +40,8 @@ const GENERIC_DEV_DIRECTORIES: &[&str] = &[
 ];
 
 fn alternate_example_theme_config(name: &str) -> &'static str {
-    match name {
-        "default-light" => include_str!("../../../../../examples/themes/default-light/theme.toml"),
-        "blush-light" => include_str!("../../../../../examples/themes/blush-light/theme.toml"),
-        "amber-dusk" => include_str!("../../../../../examples/themes/amber-dusk/theme.toml"),
-        "catppuccin-mocha" => {
-            include_str!("../../../../../examples/themes/catppuccin-mocha/theme.toml")
-        }
-        "tokyo-night" => include_str!("../../../../../examples/themes/tokyo-night/theme.toml"),
-        "navi" => include_str!("../../../../../examples/themes/navi/theme.toml"),
-        "neon-cherry" => include_str!("../../../../../examples/themes/neon-cherry/theme.toml"),
-        "terminal-ansi" => include_str!("../../../../../examples/themes/terminal-ansi/theme.toml"),
-        "transparent" => include_str!("../../../../../examples/themes/transparent/theme.toml"),
-        _ => panic!("unknown alternate example theme fixture: {name}"),
-    }
+    super::super::super::builtin_themes::builtin_theme_overrides(name)
+        .unwrap_or_else(|| panic!("unknown alternate example theme fixture: {name}"))
 }
 
 fn load_alternate_example_theme(name: &str) -> Theme {
@@ -331,4 +319,35 @@ fn alternate_example_themes_use_normal_folder_color_for_generic_dev_directories(
         let theme = load_alternate_example_theme(label);
         assert_uses_normal_folder_color_for_generic_dev_directories(&theme, label);
     }
+}
+
+#[test]
+fn selected_builtin_theme_defaults_to_the_default_theme() {
+    let theme = Theme::selected_builtin_theme(None);
+    assert_eq!(theme.palette.bg, rgb(0x05, 0x05, 0x05));
+}
+
+#[test]
+fn selected_builtin_theme_resolves_bundled_names() {
+    use ratatui::style::Color;
+
+    let transparent = Theme::selected_builtin_theme(Some("transparent"));
+    assert_eq!(transparent.palette.bg, Color::Reset);
+    assert_eq!(transparent.palette.panel, Color::Reset);
+    assert_eq!(transparent.preview.code.bg, Color::Reset);
+
+    let tokyo_night = Theme::selected_builtin_theme(Some("tokyo-night"));
+    assert_eq!(tokyo_night.palette.bg, rgb(0x1a, 0x1b, 0x26));
+}
+
+#[test]
+fn selected_builtin_theme_accepts_default_by_name() {
+    let theme = Theme::selected_builtin_theme(Some("default"));
+    assert_eq!(theme.palette.bg, rgb(0x05, 0x05, 0x05));
+}
+
+#[test]
+fn selected_builtin_theme_falls_back_to_default_for_unknown_names() {
+    let theme = Theme::selected_builtin_theme(Some("does-not-exist"));
+    assert_eq!(theme.palette.bg, rgb(0x05, 0x05, 0x05));
 }

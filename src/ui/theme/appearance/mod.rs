@@ -12,7 +12,9 @@ use self::{
     resolve::builtin_classify_browser_entry,
     types::{EntryClassCacheKey, ResolvedAppearance, Theme},
 };
-use super::builtin_themes::DEFAULT_THEME_TOML;
+use super::builtin_themes::{
+    DEFAULT_THEME_NAME, DEFAULT_THEME_TOML, available_theme_names, builtin_theme_overrides,
+};
 use crate::core::{Entry, EntryKind, FileClass};
 use std::{
     collections::{HashMap, VecDeque},
@@ -101,6 +103,27 @@ impl Theme {
         Self::apply_config_on(Self::base_theme(), DEFAULT_THEME_TOML).unwrap_or_else(|error| {
             eprintln!("elio: failed to load built-in default theme: {error}");
             Self::base_theme()
+        })
+    }
+
+    /// The built-in theme selected by the top-level `theme` key in config.toml
+    /// (the default theme when the key is absent). A user `theme.toml` layers
+    /// on top of whatever this returns.
+    pub(super) fn selected_builtin_theme(name: Option<&str>) -> Self {
+        let name = name.unwrap_or(DEFAULT_THEME_NAME);
+        if name == "default" {
+            return Self::default_theme();
+        }
+        let Some(overrides) = builtin_theme_overrides(name) else {
+            eprintln!(
+                "elio: unknown theme \"{name}\" in config.toml; available built-in themes: {}",
+                available_theme_names()
+            );
+            return Self::default_theme();
+        };
+        Self::apply_config_on(Self::default_theme(), overrides).unwrap_or_else(|error| {
+            eprintln!("elio: failed to load built-in theme \"{name}\": {error}");
+            Self::default_theme()
         })
     }
 }

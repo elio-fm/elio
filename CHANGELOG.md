@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a top-level `theme` key to `config.toml` that selects a bundled theme by name (`default`, `amber-dusk`, `blush-light`, `catppuccin-mocha`, `default-light`, `navi`, `neon-cherry`, `terminal-ansi`, `tokyo-night`, `transparent`); all bundled themes now ship inside the binary, and a user `theme.toml` still layers on top of the selection.
 - Added `--chooser-file FILE [PATH]` to run elio as a file chooser, writing the confirmed selection as absolute paths, one per line, to `FILE` or stdout with `-`; cancel exits silently with a nonzero status. ([#153])
 - Added persistent multi-path selection across directories, allowing chooser confirmation and bulk actions to use selected paths from multiple folders.
 - `elio <path>` now accepts file paths as well as directories, opening the parent directory and focusing the file entry, including hidden files, file symlinks, and broken symlinks.
