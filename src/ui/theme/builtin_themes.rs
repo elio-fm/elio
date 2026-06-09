@@ -3,8 +3,12 @@ pub(super) const DEFAULT_THEME_TOML: &str = include_str!(concat!(
     "/assets/themes/default/theme.toml"
 ));
 
-/// The built-in theme used when config.toml does not select one.
-pub(super) const DEFAULT_THEME_NAME: &str = "default";
+/// The built-in theme used when config.toml does not select one. The
+/// transparent theme keeps the default palette but inherits the terminal's
+/// own background, so elio matches whatever the terminal is themed to
+/// (including translucent backgrounds); `theme = "default"` restores the
+/// opaque look.
+pub(super) const DEFAULT_THEME_NAME: &str = "transparent";
 
 macro_rules! bundled_theme {
     ($name:literal) => {

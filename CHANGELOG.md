@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- elio now inherits the terminal background by default (the bundled `transparent` theme), so it matches the terminal's own theme, including translucent backgrounds. Set `theme = "default"` in `config.toml` to restore the previous opaque dark look.
 - Updated shell integration scripts to pass `--chooser-file` invocations directly to `elio`, so chooser mode does not change the parent shell directory. Re-run `elio shell install` after upgrading to refresh existing shell integration.
 
 ### Fixed

@@ -322,9 +322,18 @@ fn alternate_example_themes_use_normal_folder_color_for_generic_dev_directories(
 }
 
 #[test]
-fn selected_builtin_theme_defaults_to_the_default_theme() {
+fn selected_builtin_theme_defaults_to_the_transparent_theme() {
+    use ratatui::style::Color;
+
     let theme = Theme::selected_builtin_theme(None);
-    assert_eq!(theme.palette.bg, rgb(0x05, 0x05, 0x05));
+    assert_eq!(theme.palette.bg, Color::Reset);
+    assert_eq!(theme.palette.panel, Color::Reset);
+    assert_eq!(theme.palette.chrome, Color::Reset);
+    // Everything except the surfaces still matches the default palette.
+    assert_eq!(
+        theme.palette.text,
+        Theme::selected_builtin_theme(Some("default")).palette.text
+    );
 }
 
 #[test]

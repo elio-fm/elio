@@ -92,7 +92,7 @@ keyword = "#abcdef"
 }
 
 #[test]
-fn load_theme_from_disk_falls_back_to_default_theme_for_invalid_theme_file() {
+fn load_theme_from_disk_falls_back_to_selected_base_for_invalid_theme_file() {
     let (config_home, path, _guard) = write_theme_file(
         "load-theme-invalid",
         r##"
@@ -103,16 +103,13 @@ keyword = "#12"
     let _xdg = EnvVarGuard::set_path("XDG_CONFIG_HOME", &config_home);
 
     let theme = load_theme_from_disk();
-    let default_theme = Theme::default_theme();
+    let base_theme = Theme::selected_builtin_theme(None);
 
-    assert_eq!(theme.palette.bg, default_theme.palette.bg);
-    assert_eq!(
-        theme.preview.code.keyword,
-        default_theme.preview.code.keyword
-    );
+    assert_eq!(theme.palette.bg, base_theme.palette.bg);
+    assert_eq!(theme.preview.code.keyword, base_theme.preview.code.keyword);
     assert_eq!(
         theme.resolve(Path::new("Cargo.lock"), EntryKind::File).icon,
-        default_theme
+        base_theme
             .resolve(Path::new("Cargo.lock"), EntryKind::File)
             .icon,
     );

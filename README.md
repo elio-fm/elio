@@ -238,13 +238,13 @@ https://elio-fm.github.io/docs/configuration/
 
 ## Theming
 
-All bundled themes ship inside the binary and can be selected with the top-level `theme` key in `config.toml` — no files to copy:
+Out of the box elio inherits your terminal's background (the `transparent` theme), so it matches whatever your terminal is themed to — including translucent backgrounds. All bundled themes ship inside the binary and can be selected with the top-level `theme` key in `config.toml` — no files to copy:
 
 ```toml
 theme = "tokyo-night"
 ```
 
-Available names: `default`, `amber-dusk`, `blush-light`, `catppuccin-mocha`, `default-light`, `navi`, `neon-cherry`, `terminal-ansi`, `tokyo-night`, and `transparent`.
+Available names: `default`, `amber-dusk`, `blush-light`, `catppuccin-mocha`, `default-light`, `navi`, `neon-cherry`, `terminal-ansi`, `tokyo-night`, and `transparent`. To restore the previous opaque dark look, set `theme = "default"`; on light terminals, `default-light` or `blush-light` pair well.
 
 For finer control, elio themes are TOML files layered on top of the selected built-in theme, so you only need to set the keys you want to change.
 

@@ -3,6 +3,8 @@
 # Select a bundled theme by name. Available: default, amber-dusk, blush-light,
 # catppuccin-mocha, default-light, navi, neon-cherry, terminal-ansi,
 # transparent, tokyo-night. A theme.toml next to this file still layers on top.
+# Unset, elio uses "transparent", which inherits the terminal's background;
+# set "default" for the opaque dark look.
 #
 # theme = "tokyo-night"
 
