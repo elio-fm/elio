@@ -10,11 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added `--chooser-file FILE [PATH]` to run elio as a file chooser, writing the confirmed selection as absolute paths, one per line, to `FILE` or stdout with `-`; cancel exits silently with a nonzero status. ([#153])
+- Added persistent multi-path selection across directories, allowing chooser confirmation and bulk actions to use selected paths from multiple folders.
 - `elio <path>` now accepts file paths as well as directories, opening the parent directory and focusing the file entry, including hidden files, file symlinks, and broken symlinks.
 
 ### Changed
 
 - Updated shell integration scripts to pass `--chooser-file` invocations directly to `elio`, so chooser mode does not change the parent shell directory. Re-run `elio shell install` after upgrading to refresh existing shell integration.
+
+### Fixed
+
+- Blocked nested selections and prevented pasting a folder into itself.
 
 ## [1.8.0] - 2026-06-06
 
