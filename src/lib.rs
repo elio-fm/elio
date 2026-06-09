@@ -34,7 +34,7 @@ use std::{
     io::{self, ErrorKind, Write},
     path::{Path, PathBuf},
     process::Command,
-    sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError},
+    sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError},
     thread,
     time::{Duration, Instant},
 };
@@ -499,7 +499,12 @@ fn cleanup_terminal_state() -> io::Result<()> {
 }
 
 fn push_keyboard_enhancement_if_supported<W: Write>(writer: &mut W) -> io::Result<()> {
-    if !matches!(supports_keyboard_enhancement(), Ok(true)) {
+    // The probe writes a query to the terminal and blocks on the reply with a
+    // 2-second crossterm timeout. Support cannot change within a session, so
+    // probe once and reuse the answer — this runs again on every resume from
+    // zoxide/shell/Open With, where a swallowed reply read as a 2s freeze.
+    static SUPPORTED: OnceLock<bool> = OnceLock::new();
+    if !*SUPPORTED.get_or_init(|| matches!(supports_keyboard_enhancement(), Ok(true))) {
         return Ok(());
     }
 

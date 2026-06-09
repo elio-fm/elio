@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed image previews silently disabled inside tmux when the tmux server was first started from Alacritty or Kitty; the live client terminal is now detected instead.
 - Fixed the UI appearing frozen in visible-but-unfocused tmux panes, and staying frozen after the terminal dropped a focus event (e.g. returning from an app opened on Wayland/Hyprland).
 - Fixed multi-second freezes while the terminal drained large output such as image previews — frame output now goes through a background writer thread — and removed a blocking cursor query that could stall startup, resizes, and returns from zoxide, shells, and Open With for up to two seconds each.
+- Fixed a separate two-second stall on every return from zoxide, shells, and Open With when the terminal swallowed the keyboard-enhancement reply; the capability is now probed once per session.
 
 ## [1.8.0] - 2026-06-06
 
