@@ -695,6 +695,10 @@ fn run_app(
             dirty = true;
         }
 
+        if app.process_terminal_image_resize_settle_timer() {
+            dirty = true;
+        }
+
         if app.process_sidebar_refresh() {
             dirty = true;
         }
@@ -754,6 +758,7 @@ fn run_app(
             [
                 app.pending_pdf_preview_timer(),
                 app.pending_image_preview_timer(),
+                app.pending_terminal_image_resize_settle_timer(),
                 app.pending_preview_refresh_timer(),
                 app.pending_preview_prefetch_timer(),
                 app.pending_directory_stats_timer(),

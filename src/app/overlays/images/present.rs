@@ -33,6 +33,10 @@ impl App {
             preview_log("present_static_image_overlay: activation not ready → Waiting");
             return Ok(OverlayPresentState::Waiting);
         }
+        if self.terminal_image_resize_settling() {
+            preview_log("present_static_image_overlay: resize settling → Waiting");
+            return Ok(OverlayPresentState::Waiting);
+        }
 
         let prepared = match self.prepared_static_image_for_overlay(&request) {
             StaticImageOverlayPreparation::Ready(prepared) => prepared,
@@ -127,6 +131,10 @@ impl App {
         ));
         if !self.image_selection_activation_ready() {
             preview_log("present_preview_visual_overlay: activation not ready → Waiting");
+            return Ok(OverlayPresentState::Waiting);
+        }
+        if self.terminal_image_resize_settling() {
+            preview_log("present_preview_visual_overlay: resize settling → Waiting");
             return Ok(OverlayPresentState::Waiting);
         }
 

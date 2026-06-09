@@ -9,7 +9,12 @@ mod window;
 
 use anyhow::{Context, Result};
 use ratatui::{buffer::Buffer, layout::Rect};
-use std::{env, io::Write as _, path::Path};
+use std::{
+    env,
+    io::Write as _,
+    path::Path,
+    time::{Duration, Instant},
+};
 
 use crate::app::App;
 
@@ -35,6 +40,15 @@ pub(in crate::app) fn preview_log(msg: impl std::fmt::Display) {
         .and_then(|mut f| writeln!(f, "{msg}"));
 }
 
+/// How long terminal geometry must stay unchanged before image payloads are
+/// (re)transmitted. Tiling window managers resize the terminal in an animated
+/// burst of SIGWINCH steps; placing the image on every step queues a full
+/// multi-megabyte transmission per step into the tmux/terminal pipe, which the
+/// terminal then takes seconds to chew through while the UI looks frozen.
+/// tmux throttles pane resizes to roughly one per 250ms during a client resize
+/// storm, so the delay must exceed that or intermediate steps still place.
+const RESIZE_SETTLE_DELAY: Duration = Duration::from_millis(300);
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) struct TerminalImageState {
     pub(super) protocol: ImageProtocol,
@@ -44,6 +58,7 @@ pub(in crate::app) struct TerminalImageState {
     pending_resize_clear: bool,
     pending_iterm_popup_restore: bool,
     pending_sixel_repaint: bool,
+    resize_settled_at: Option<Instant>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -151,6 +166,7 @@ impl App {
 
     pub(crate) fn handle_terminal_image_resize(&mut self) {
         self.refresh_terminal_image_window_size();
+        self.arm_terminal_image_resize_settle();
         self.queue_terminal_image_resize_clear();
         self.handle_pdf_overlay_resize();
     }
@@ -159,9 +175,47 @@ impl App {
         let previous_window = self.preview.terminal_images.window;
         self.refresh_terminal_image_window_size();
         if self.preview.terminal_images.window != previous_window {
+            self.arm_terminal_image_resize_settle();
             self.queue_terminal_image_resize_clear();
             self.handle_pdf_overlay_resize();
         }
+    }
+
+    fn arm_terminal_image_resize_settle(&mut self) {
+        if self.preview.terminal_images.protocol == ImageProtocol::None {
+            return;
+        }
+        self.preview.terminal_images.resize_settled_at = Some(Instant::now() + RESIZE_SETTLE_DELAY);
+    }
+
+    /// True while a resize burst is still in flight; image/PDF overlay
+    /// placement is held (text renders normally) until geometry settles so a
+    /// storm of SIGWINCH steps doesn't queue one full payload per step.
+    pub(in crate::app) fn terminal_image_resize_settling(&self) -> bool {
+        self.preview
+            .terminal_images
+            .resize_settled_at
+            .is_some_and(|settled_at| Instant::now() < settled_at)
+    }
+
+    /// Clears the settle timer once it expires. Returns `true` exactly once
+    /// per resize burst so the caller can schedule the deferred placement draw.
+    pub(crate) fn process_terminal_image_resize_settle_timer(&mut self) -> bool {
+        let Some(settled_at) = self.preview.terminal_images.resize_settled_at else {
+            return false;
+        };
+        if Instant::now() < settled_at {
+            return false;
+        }
+        self.preview.terminal_images.resize_settled_at = None;
+        true
+    }
+
+    pub(crate) fn pending_terminal_image_resize_settle_timer(&self) -> Option<Duration> {
+        self.preview
+            .terminal_images
+            .resize_settled_at
+            .map(|settled_at| settled_at.saturating_duration_since(Instant::now()))
     }
 
     fn queue_terminal_image_resize_clear(&mut self) {
@@ -230,6 +284,13 @@ impl App {
     ) {
         self.preview.terminal_images.protocol = protocol;
         self.preview.terminal_images.identity = identity;
+    }
+
+    /// Jumps past the resize-settle window so tests can exercise the placement
+    /// that follows a resize without waiting out the real delay.
+    #[cfg(test)]
+    pub(in crate::app) fn expire_terminal_image_resize_settle_for_tests(&mut self) {
+        self.preview.terminal_images.resize_settled_at = None;
     }
 
     pub(in crate::app) fn cached_terminal_window(&self) -> Option<TerminalWindowSize> {

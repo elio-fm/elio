@@ -28,6 +28,10 @@ impl App {
             preview_log("present_pdf_overlay: activation not ready → Waiting");
             return Ok(OverlayPresentState::Waiting);
         }
+        if self.terminal_image_resize_settling() {
+            preview_log("present_pdf_overlay: resize settling → Waiting");
+            return Ok(OverlayPresentState::Waiting);
+        }
 
         let Some(requested_placement) = self.overlay_placement_for_request(&request) else {
             preview_log("present_pdf_overlay: no placement yet → probe + Waiting");
