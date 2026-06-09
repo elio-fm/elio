@@ -434,59 +434,70 @@ fn run_app(
             last_relative_time_refresh_at = Instant::now();
         }
 
-        if terminal_focused && app.process_background_jobs() {
+        // Background work and drawing run regardless of focus so a still-visible
+        // pane stays live. tmux delivers FocusLost to a pane the moment it stops
+        // being the active pane (verified: switching panes — not just windows —
+        // sends \e[O), and again when another GUI app steals the outer terminal's
+        // focus. In a tiled tmux layout that is most of the time, so gating these on
+        // focus made elio appear frozen — in-flight previews, directory loads, and
+        // filesystem changes never landed until focus returned. Drawing stays cheap
+        // when idle because it only runs when `dirty`, which is set solely by real
+        // state changes; an unfocused, idle pane sets nothing dirty and never draws.
+        // These all run together so the deferred-refresh coordination (see #64) that
+        // process_background_jobs shares with the directory timers cannot desync.
+        // Only the cosmetic per-second relative-time tick (above) and the poll
+        // cadence below stay focus-dependent.
+        if app.process_background_jobs() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_pdf_preview_timers() {
+        if app.process_pdf_preview_timers() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_pending_scroll() {
+        if app.process_pending_scroll() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_preview_refresh_timers() {
+        if app.process_preview_refresh_timers() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_preview_prefetch_timers() {
+        if app.process_preview_prefetch_timers() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_directory_stats_timer() {
+        if app.process_directory_stats_timer() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_directory_item_count_timer() {
+        if app.process_directory_item_count_timer() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_browser_wheel_timers() {
+        if app.process_browser_wheel_timers() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_image_preview_timers() {
+        if app.process_image_preview_timers() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_sidebar_refresh() {
+        if app.process_sidebar_refresh() {
             dirty = true;
         }
 
-        if terminal_focused {
-            match app.process_auto_reload() {
-                Ok(changed) => {
-                    dirty |= changed;
-                }
-                Err(error) => {
-                    app.report_runtime_error("Auto-reload failed", &error);
-                    dirty = true;
-                }
+        match app.process_auto_reload() {
+            Ok(changed) => {
+                dirty |= changed;
+            }
+            Err(error) => {
+                app.report_runtime_error("Auto-reload failed", &error);
+                dirty = true;
             }
         }
 
-        if dirty && terminal_focused {
+        if dirty {
             dirty = draw_terminal_frame(terminal, &mut app)?;
         }
 
@@ -565,8 +576,15 @@ fn run_app(
                     dirty = true;
                 } else if matches!(event, Event::Resize(_, _)) {
                     app.handle_terminal_image_resize();
-                    dirty |= terminal_focused;
+                    dirty = true;
                 } else {
+                    // Input doubles as an implicit FocusGained; see
+                    // event_implies_terminal_focus for why the real one can be dropped.
+                    if !terminal_focused && event_implies_terminal_focus(&event) {
+                        terminal_focused = true;
+                        app.handle_terminal_image_focus_gained();
+                        dirty = true;
+                    }
                     // Mouse move events only update the hover/target state — nothing
                     // visual changes, so they don't need a re-render. Skipping dirty here
                     // avoids the constant re-render storm that ?1003h (any-event tracking)
@@ -808,6 +826,15 @@ fn intersect_rect(a: Rect, b: Rect) -> Option<Rect> {
     })
 }
 
+/// Whether receiving `event` implies the terminal is focused. Key, mouse, and
+/// paste events can only originate from a focused terminal, so they double as an
+/// implicit FocusGained — the recovery path for terminals (notably on
+/// Wayland/Hyprland) that drop the real FocusGained after a spawned GUI app
+/// returns focus. Focus and resize events carry no such implication.
+fn event_implies_terminal_focus(event: &Event) -> bool {
+    matches!(event, Event::Key(_) | Event::Mouse(_) | Event::Paste(_))
+}
+
 fn event_poll_interval<I>(
     base_poll_interval: Duration,
     terminal_focused: bool,
@@ -833,6 +860,7 @@ mod tests {
     use crate::{
         ACTIVE_SCROLL_POLL_INTERVAL, IDLE_POLL_INTERVAL, collect_buffer_cells, event_poll_interval,
     };
+    use crossterm::event::Event;
     use ratatui::{
         buffer::Buffer,
         layout::Rect,
@@ -989,6 +1017,38 @@ mod tests {
         );
 
         assert!(interval <= delay);
+    }
+
+    #[test]
+    fn input_events_imply_terminal_focus() {
+        use crossterm::event::{
+            KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+        };
+
+        // Key, mouse, and paste events recover focus after a dropped FocusGained.
+        assert!(crate::event_implies_terminal_focus(&Event::Key(
+            KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)
+        )));
+        assert!(crate::event_implies_terminal_focus(&Event::Mouse(
+            MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 0,
+                row: 0,
+                modifiers: KeyModifiers::NONE,
+            }
+        )));
+        assert!(crate::event_implies_terminal_focus(&Event::Paste(
+            "text".to_string()
+        )));
+    }
+
+    #[test]
+    fn focus_and_resize_events_do_not_imply_terminal_focus() {
+        // Focus/resize events carry no focus implication and must not trip the
+        // recovery path (FocusLost in particular would be misread as focus).
+        assert!(!crate::event_implies_terminal_focus(&Event::FocusLost));
+        assert!(!crate::event_implies_terminal_focus(&Event::FocusGained));
+        assert!(!crate::event_implies_terminal_focus(&Event::Resize(80, 24)));
     }
 
     #[test]
