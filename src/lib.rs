@@ -34,6 +34,8 @@ use std::{
     io::{self, ErrorKind, Write},
     path::{Path, PathBuf},
     process::Command,
+    sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError},
+    thread,
     time::{Duration, Instant},
 };
 
@@ -103,9 +105,10 @@ fn run_with_startup_state(
     } = options;
     config::initialize();
     ui::theme::initialize();
-    let mut terminal = init_terminal()?;
+    let (mut terminal, drainer) = init_terminal()?;
     let result = run_app(
         &mut terminal,
+        &drainer,
         start_dir,
         start_focus,
         reveal_hidden_start_focus,
@@ -126,9 +129,177 @@ fn run_with_startup_state(
     }
 }
 
-fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
+/// The TUI terminal, backed by [`ThreadedWriter`] so frame output never blocks
+/// the event loop.
+type AppTerminal = Terminal<CrosstermBackend<ThreadedWriter>>;
+
+/// State shared between the event-loop side of [`ThreadedWriter`] and its
+/// background thread. `buf` accumulates flushed frames; the writer thread swaps
+/// it out and performs the blocking write outside the lock. `idle` is true while
+/// the writer thread is parked with nothing queued and nothing mid-write — the
+/// condition drain barriers wait for.
+struct WriterShared {
+    buf: Vec<u8>,
+    idle: bool,
+    dead: bool,
+    shutdown: bool,
+}
+
+struct WriterChannel {
+    state: Mutex<WriterShared>,
+    cond: Condvar,
+}
+
+impl WriterChannel {
+    fn lock(&self) -> MutexGuard<'_, WriterShared> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// A [`Write`] that hands each flushed frame to a background thread which
+/// performs the blocking write to stdout.
+///
+/// The TUI event loop must never block on terminal output. A single large frame
+/// — above all a multi-megabyte Kitty image payload — written synchronously
+/// stalls the entire loop (no input, no resize handling) for as long as the
+/// terminal/tmux takes to drain it. Through tmux that drain backs up whenever
+/// the outer terminal is busy (e.g. repainting after a resize), which froze the
+/// UI for seconds. Flushes append to a shared buffer under a mutex — never
+/// waiting on the terminal — so the loop stays responsive and the visible output
+/// catches up a beat later. The buffer is unbounded by design: frames are only
+/// produced on events/timers, so even a stalled terminal accumulates output far
+/// slower than memory matters, and bounding it would reintroduce the very
+/// backpressure stall this exists to remove.
+struct ThreadedWriter {
+    channel: Arc<WriterChannel>,
+    pending: Vec<u8>,
+}
+
+impl ThreadedWriter {
+    fn new() -> Self {
+        let channel = Arc::new(WriterChannel {
+            state: Mutex::new(WriterShared {
+                buf: Vec::new(),
+                idle: true,
+                dead: false,
+                shutdown: false,
+            }),
+            cond: Condvar::new(),
+        });
+        let writer_channel = Arc::clone(&channel);
+        thread::spawn(move || {
+            let mut out = io::stdout();
+            let mut batch = Vec::new();
+            loop {
+                {
+                    let mut state = writer_channel.lock();
+                    while state.buf.is_empty() && !state.shutdown {
+                        state.idle = true;
+                        writer_channel.cond.notify_all();
+                        state = writer_channel
+                            .cond
+                            .wait(state)
+                            .unwrap_or_else(PoisonError::into_inner);
+                    }
+                    if state.buf.is_empty() {
+                        state.idle = true;
+                        writer_channel.cond.notify_all();
+                        return;
+                    }
+                    state.idle = false;
+                    std::mem::swap(&mut state.buf, &mut batch);
+                }
+                if out.write_all(&batch).is_err() || out.flush().is_err() {
+                    let mut state = writer_channel.lock();
+                    state.dead = true;
+                    state.idle = true;
+                    state.buf.clear();
+                    writer_channel.cond.notify_all();
+                    return;
+                }
+                batch.clear();
+            }
+        });
+        Self {
+            channel,
+            pending: Vec::new(),
+        }
+    }
+
+    /// A cheap handle for waiting on the writer thread from elsewhere (the
+    /// suspend/resume paths) without reaching into the unstable backend writer
+    /// accessor.
+    fn drainer(&self) -> Drainer {
+        Drainer {
+            channel: Arc::clone(&self.channel),
+        }
+    }
+
+    /// Blocks until the writer thread has written everything queued so far. Used
+    /// on drop so no buffered output is lost at exit.
+    fn drain(&mut self) {
+        let _ = self.flush();
+        self.drainer().drain();
+    }
+}
+
+/// Blocks until the [`ThreadedWriter`] has flushed everything queued before it.
+/// Callers must flush the backend first so any per-frame buffered bytes are in
+/// the queue; this then waits for the writer thread to drain the queue. Used
+/// before handing the real terminal to a child process (suspend) and before the
+/// keyboard-enhancement probe (resume), which both need output fully on screen.
+struct Drainer {
+    channel: Arc<WriterChannel>,
+}
+
+impl Drainer {
+    fn drain(&self) {
+        let mut state = self.channel.lock();
+        while !(state.dead || state.buf.is_empty() && state.idle) {
+            state = self
+                .channel
+                .cond
+                .wait(state)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+    }
+}
+
+impl Write for ThreadedWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.pending.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+        let mut state = self.channel.lock();
+        if state.dead {
+            // The writer thread hit a write error; the process is tearing down
+            // and there is nothing useful to do with the bytes.
+            self.pending.clear();
+            return Ok(());
+        }
+        state.buf.append(&mut self.pending);
+        self.channel.cond.notify_all();
+        Ok(())
+    }
+}
+
+impl Drop for ThreadedWriter {
+    fn drop(&mut self) {
+        self.drain();
+        let mut state = self.channel.lock();
+        state.shutdown = true;
+        self.channel.cond.notify_all();
+    }
+}
+
+fn init_terminal() -> Result<(AppTerminal, Drainer)> {
     match try_init_terminal() {
-        Ok(terminal) => Ok(terminal),
+        Ok(pair) => Ok(pair),
         Err(error) => {
             let _ = cleanup_terminal_state();
             Err(error)
@@ -136,7 +307,7 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     }
 }
 
-fn try_init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
+fn try_init_terminal() -> Result<(AppTerminal, Drainer)> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(
@@ -163,17 +334,38 @@ fn try_init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     stdout.flush()?;
     push_keyboard_enhancement_if_supported(&mut stdout)?;
 
-    let backend = CrosstermBackend::new(stdout);
+    // The startup escapes above go straight to stdout (the backend doesn't exist
+    // yet and they're already flushed). From here on, all frame output flows
+    // through the background writer so the event loop never blocks on it.
+    let writer = ThreadedWriter::new();
+    let drainer = writer.drainer();
+    let backend = CrosstermBackend::new(writer);
     let mut terminal = Terminal::new(backend)?;
-    terminal.clear()?;
+    clear_for_full_repaint(&mut terminal)?;
     terminal.hide_cursor()?;
-    Ok(terminal)
+    Ok((terminal, drainer))
+}
+
+/// Clears the alternate screen and forces a full repaint on the next draw,
+/// without ratatui's [`Terminal::clear`]. On a Fullscreen viewport `clear`
+/// issues a blocking CSI 6n cursor-position query (to snapshot and restore the
+/// cursor) which, under tmux, can stall for up to crossterm's 2-second timeout
+/// whenever the terminal's report is delayed or swallowed — most visibly during
+/// a resize and on every return from zoxide / a shell / Open With, where it
+/// reads as a multi-second freeze. [`Terminal::resize`] performs the same
+/// clear-region(all) plus back-buffer reset for a Fullscreen viewport but never
+/// queries the cursor; elio repositions the cursor every frame, so the
+/// save/restore `clear` does is unnecessary.
+fn clear_for_full_repaint(terminal: &mut AppTerminal) -> io::Result<()> {
+    let size = terminal.size()?;
+    terminal.resize(Rect::new(0, 0, size.width, size.height))
 }
 
 /// Temporarily tears down the TUI so a blocking terminal app can use stdout.
 /// Call [`resume_terminal`] afterwards to restore the TUI.
 fn suspend_terminal(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    terminal: &mut AppTerminal,
+    drainer: &Drainer,
     leave_alternate: bool,
 ) -> Result<()> {
     let backend = terminal.backend_mut();
@@ -190,29 +382,40 @@ fn suspend_terminal(
     if leave_alternate {
         execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     } else {
-        terminal.clear()?;
+        clear_for_full_repaint(terminal)?;
     }
     disable_raw_mode()?;
     terminal.show_cursor()?;
+    // The child process is about to take over the real terminal; make sure every
+    // queued byte has actually been written before we hand it off.
+    let _ = terminal.backend_mut().flush();
+    drainer.drain();
     Ok(())
 }
 
 /// Restores the TUI after [`suspend_terminal`].  Forces a full redraw on the
 /// next render cycle so no stale content is left on screen.
-fn resume_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+fn resume_terminal(terminal: &mut AppTerminal, drainer: &Drainer) -> Result<()> {
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(
-        stdout,
-        EnterAlternateScreen,
-        event::EnableMouseCapture,
-        EnableFocusChange,
-    )?;
-    write!(stdout, "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h")?;
-    write!(stdout, "\x1b[>4;1m")?;
-    stdout.flush()?;
-    push_keyboard_enhancement_if_supported(&mut stdout)?;
-    terminal.clear()?;
+    {
+        // Route restore escapes through the backend so they stay ordered with
+        // any frame output, then drain before the keyboard-enhancement probe,
+        // which talks to the terminal directly (stdin/stdout) and must not race
+        // the background writer.
+        let backend = terminal.backend_mut();
+        execute!(
+            backend,
+            EnterAlternateScreen,
+            event::EnableMouseCapture,
+            EnableFocusChange,
+        )?;
+        write!(backend, "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h")?;
+        write!(backend, "\x1b[>4;1m")?;
+        backend.flush()?;
+    }
+    drainer.drain();
+    push_keyboard_enhancement_if_supported(terminal.backend_mut())?;
+    clear_for_full_repaint(terminal)?;
     terminal.hide_cursor()?;
     Ok(())
 }
@@ -256,7 +459,7 @@ fn apply_zoxide_query_result(app: &mut App, result: zoxide::QueryResult) {
     }
 }
 
-fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+fn restore_terminal(terminal: &mut AppTerminal) -> Result<()> {
     // Disable in reverse order and do it before leaving the alternate screen so the
     // terminal processes the escape sequences while still in the right mode.
     let backend = terminal.backend_mut();
@@ -273,6 +476,9 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
     )?;
     disable_raw_mode()?;
     terminal.show_cursor()?;
+    // Remaining queued bytes (these restore writes included) are flushed when the
+    // terminal — and with it the ThreadedWriter — is dropped right after run()
+    // returns; ThreadedWriter::drop drains the writer thread before exit.
     Ok(())
 }
 
@@ -395,7 +601,8 @@ fn chooser_output_bytes(paths: &[PathBuf]) -> Vec<u8> {
 }
 
 fn run_app(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    terminal: &mut AppTerminal,
+    drainer: &Drainer,
     cwd: Option<PathBuf>,
     start_focus: Option<PathBuf>,
     reveal_hidden_start_focus: bool,
@@ -616,15 +823,15 @@ fn run_app(
             if let Some(task) = app.pending_terminal_task.take() {
                 let zoxide_result = match task {
                     PendingTerminalTask::Command { program, args } => {
-                        suspend_terminal(terminal, true)?;
+                        suspend_terminal(terminal, drainer, true)?;
                         run_blocking_in_terminal(&program, &args);
-                        resume_terminal(terminal)?;
+                        resume_terminal(terminal, drainer)?;
                         None
                     }
                     PendingTerminalTask::Shell { cwd } => {
-                        suspend_terminal(terminal, true)?;
+                        suspend_terminal(terminal, drainer, true)?;
                         let shell_result = shell::run_in_current_terminal(&cwd);
-                        resume_terminal(terminal)?;
+                        resume_terminal(terminal, drainer)?;
                         match shell_result {
                             Ok(()) => refresh_after_shell(&mut app, &cwd),
                             Err(error) => app.set_status_message(error),
@@ -636,9 +843,9 @@ fn run_app(
                         if let Some(result) = zoxide::preflight(&cwd) {
                             Some(result)
                         } else {
-                            suspend_terminal(terminal, false)?;
+                            suspend_terminal(terminal, drainer, false)?;
                             let result = zoxide::run_query_in_terminal(&cwd);
-                            resume_terminal(terminal)?;
+                            resume_terminal(terminal, drainer)?;
                             Some(result)
                         }
                     }
@@ -665,15 +872,12 @@ fn run_app(
     Ok(AppExit { final_cwd, chooser })
 }
 
-fn draw_terminal_frame(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    app: &mut App,
-) -> Result<bool> {
+fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> Result<bool> {
     execute!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
 
     let draw_result = (|| -> Result<bool> {
         if app.take_pending_resize_clear() {
-            terminal.clear()?;
+            clear_for_full_repaint(terminal)?;
         }
 
         // Erase stale image cells before terminal.draw() so ratatui can
