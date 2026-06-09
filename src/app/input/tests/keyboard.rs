@@ -7,7 +7,9 @@ use super::helpers::{
 };
 use crate::config::Action;
 use std::{
-    fs, thread,
+    fs,
+    path::PathBuf,
+    thread,
     time::{Duration, Instant},
 };
 
@@ -44,6 +46,59 @@ fn fake_default_open_with_app(
         is_default: true,
         requires_terminal,
     }
+}
+
+fn app_with_offscreen_selected_dir(label: &str) -> (PathBuf, PathBuf, App) {
+    let root = temp_path(label);
+    let offscreen = root.join("offscreen");
+    let child = root.join("child");
+    fs::create_dir_all(&offscreen).expect("failed to create offscreen dir");
+    fs::create_dir_all(&child).expect("failed to create child dir");
+    fs::write(child.join("visible.txt"), "visible").expect("failed to write visible file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.selected_paths.insert(offscreen.clone());
+    app.set_dir(child).expect("entering child should succeed");
+    wait_for_directory_load(&mut app);
+
+    (root, offscreen, app)
+}
+
+fn app_with_trash_and_normal_selection(label: &str) -> (PathBuf, App) {
+    let root = temp_path(label);
+    let trash_root = root.join("trash");
+    let trashed = trash_root.join("trashed.txt");
+    let normal = root.join("normal.txt");
+    fs::create_dir_all(&trash_root).expect("failed to create trash root");
+    fs::write(&trashed, "trashed").expect("failed to write trashed file");
+    fs::write(&normal, "normal").expect("failed to write normal file");
+
+    let mut app = App::new_at(trash_root).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.in_trash = true;
+    app.navigation.selected_paths.insert(trashed);
+    app.navigation.selected_paths.insert(normal);
+
+    (root, app)
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn app_in_empty_dir_with_offscreen_file(label: &str) -> (PathBuf, PathBuf, App) {
+    let root = temp_path(label);
+    let empty = root.join("empty");
+    let file_path = root.join("note.txt");
+    fs::create_dir_all(&empty).expect("failed to create empty dir");
+    fs::write(&file_path, "hello").expect("failed to write temp file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.selected_paths.insert(file_path.clone());
+    app.set_dir(empty)
+        .expect("entering empty dir should succeed");
+    wait_for_directory_load(&mut app);
+
+    (root, file_path, app)
 }
 
 #[test]
@@ -194,6 +249,36 @@ fn chooser_enter_confirms_sorted_selection() {
     assert_eq!(
         app.chooser_exit.as_ref(),
         Some(&ChooserExit::Confirmed(vec![alpha, gamma]))
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn chooser_enter_confirms_selection_from_multiple_directories() {
+    let root = temp_path("chooser-enter-multi-directory-selection");
+    let child = root.join("child");
+    let alpha = root.join("alpha.txt");
+    let beta = child.join("beta.txt");
+    fs::create_dir_all(&child).expect("failed to create child dir");
+    fs::write(&alpha, "alpha").expect("failed to write alpha");
+    fs::write(&beta, "beta").expect("failed to write beta");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.selected_paths.insert(alpha.clone());
+    app.navigation.selected_paths.insert(beta.clone());
+    app.enable_chooser_mode();
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .expect("enter should confirm selected chooser paths");
+
+    assert_eq!(
+        app.chooser_exit.as_ref(),
+        Some(&ChooserExit::Confirmed(vec![alpha, beta]))
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -369,6 +454,99 @@ fn capital_d_permanent_delete_prompt_uses_selection() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
+#[test]
+fn trash_prompt_uses_selection_when_selection_is_offscreen() {
+    let (root, offscreen, mut app) =
+        app_with_offscreen_selected_dir("trash-offscreen-selection-shortcut");
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
+        .expect("d should open trash prompt");
+
+    assert!(app.trash_is_open());
+    assert_eq!(app.trash_title(), "Trash 1 selected folder?");
+    assert_eq!(app.trash_target_path_at(0), Some(offscreen.as_path()));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn trash_prompt_keeps_normal_selection_non_permanent_from_trash() {
+    let root = temp_path("trash-normal-selection-from-trash");
+    let trash_root = root.join("trash");
+    let normal = root.join("normal.txt");
+    fs::create_dir_all(&trash_root).expect("failed to create trash root");
+    fs::write(&normal, "normal").expect("failed to write normal file");
+
+    let mut app = App::new_at(trash_root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.in_trash = true;
+    app.navigation.selected_paths.insert(normal.clone());
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
+        .expect("d should open trash prompt");
+
+    assert!(app.trash_is_open());
+    assert_eq!(app.trash_title(), "Trash 1 selected file?");
+    assert_eq!(app.trash_target_path_at(0), Some(normal.as_path()));
+    assert_eq!(
+        app.trash_target_label_at(0),
+        Some(normal.display().to_string())
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn trash_prompt_permanently_deletes_trash_only_selection() {
+    let root = temp_path("trash-only-selection-from-trash");
+    let trashed = root.join("trashed.txt");
+    fs::create_dir_all(&root).expect("failed to create trash root");
+    fs::write(&trashed, "trashed").expect("failed to write trashed file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.in_trash = true;
+    app.navigation.selected_paths.insert(trashed.clone());
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
+        .expect("d should open permanent delete prompt");
+
+    assert!(app.trash_is_open());
+    assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
+    assert_eq!(app.trash_target_path_at(0), Some(trashed.as_path()));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn trash_prompt_refuses_mixed_trash_and_normal_selection() {
+    let (root, mut app) = app_with_trash_and_normal_selection("trash-mixed-selection");
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
+        .expect("d should reject mixed selection");
+
+    assert!(!app.trash_is_open());
+    assert_eq!(
+        app.status_message(),
+        "Selection mixes trash and normal files"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn permanent_delete_prompt_accepts_mixed_trash_and_normal_selection() {
+    let (root, mut app) = app_with_trash_and_normal_selection("delete-mixed-selection");
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('D'))))
+        .expect("D should open permanent delete prompt");
+
+    assert!(app.trash_is_open());
+    assert_eq!(app.trash_title(), "Delete permanently 2 files?");
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
 #[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 fn enter_opens_selected_file_with_system_opener() {
@@ -438,6 +616,64 @@ fn enter_queues_terminal_default_app_for_selected_file() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
 
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .expect("enter should queue terminal default app");
+
+    assert_eq!(
+        app.pending_terminal_task,
+        Some(PendingTerminalTask::Command {
+            program: "hx".to_string(),
+            args: vec![file_path.display().to_string()],
+        })
+    );
+    assert!(app.status.is_empty());
+    assert!(
+        !capture.exists(),
+        "system opener should not run for terminal default app"
+    );
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn enter_opens_selection_when_current_directory_is_empty() {
+    let (root, file_path, mut app) =
+        app_in_empty_dir_with_offscreen_file("enter-empty-dir-opens-selection");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+
+    assert!(app.selected_entry().is_none());
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .expect("enter should open offscreen selection");
+
+    let opened = read_open_capture(&capture);
+    assert_eq!(opened, file_path.display().to_string());
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn enter_queues_terminal_default_app_for_single_offscreen_selection() {
+    let (root, file_path, mut app) =
+        app_in_empty_dir_with_offscreen_file("enter-offscreen-terminal-default");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+    let _default_guard = DefaultOpenWithAppGuard::install(fake_default_open_with_app(
+        "Helix",
+        "hx",
+        vec![file_path.display().to_string()],
+        true,
+    ));
+
+    assert!(app.selected_entry().is_none());
     app.handle_event(Event::Key(KeyEvent::new(
         KeyCode::Enter,
         KeyModifiers::NONE,
@@ -549,6 +785,41 @@ fn open_action_opens_selected_entries_with_system_opener() {
     wait_for_directory_load(&mut app);
     app.navigation.selected_paths.insert(alpha.clone());
     app.navigation.selected_paths.insert(beta.clone());
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('o'))))
+        .expect("o should open selected entries");
+
+    let opened = read_open_capture(&capture);
+    let opened: Vec<_> = opened.lines().map(str::to_owned).collect();
+    assert_eq!(
+        opened,
+        vec![alpha.display().to_string(), beta.display().to_string()]
+    );
+    assert_eq!(app.status, "Opened 2 items");
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn open_action_opens_selected_entries_from_multiple_directories() {
+    let root = temp_path("open-action-opens-cross-directory-selection");
+    let child = root.join("child");
+    let alpha = root.join("alpha.txt");
+    let beta = child.join("beta.txt");
+    fs::create_dir_all(&child).expect("failed to create child dir");
+    fs::write(&alpha, "alpha").expect("failed to write alpha");
+    fs::write(&beta, "beta").expect("failed to write beta");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.navigation.selected_paths.insert(alpha.clone());
+    app.navigation.selected_paths.insert(beta.clone());
+    app.set_dir(child.clone())
+        .expect("entering child should succeed");
+    wait_for_directory_load(&mut app);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('o'))))
         .expect("o should open selected entries");

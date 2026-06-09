@@ -88,6 +88,15 @@ impl App {
             return Ok(());
         };
 
+        if paste_would_copy_directory_into_itself(&request) {
+            self.jobs.clipboard = Some(Clipboard {
+                paths: request.paths,
+                op: request.op,
+            });
+            self.status = "Cannot paste a folder into itself".to_string();
+            return Ok(());
+        }
+
         if self.jobs.paste_progress.is_some() {
             self.jobs.queued_pastes.push_back(request);
             let pending = self.jobs.queued_pastes.len();
@@ -162,6 +171,13 @@ impl App {
             }
         }
     }
+}
+
+fn paste_would_copy_directory_into_itself(request: &QueuedPaste) -> bool {
+    request
+        .paths
+        .iter()
+        .any(|path| path.is_dir() && request.dest_dir.starts_with(path))
 }
 
 #[cfg(test)]

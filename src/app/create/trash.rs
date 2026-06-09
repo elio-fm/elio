@@ -6,7 +6,7 @@ use super::super::{
 use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 impl App {
     pub(in crate::app) fn cwd_is_trash(&self) -> bool {
@@ -29,6 +29,12 @@ impl App {
             .is_some_and(|trash| path == trash)
     }
 
+    pub(in crate::app) fn path_is_inside_trash(path: &Path) -> bool {
+        crate::fs::home_dir()
+            .and_then(|home| crate::fs::trash_dir(&home))
+            .is_some_and(|trash| path.starts_with(&trash))
+    }
+
     pub(in crate::app) fn effective_show_hidden(&self) -> bool {
         self.navigation.show_hidden || self.navigation.in_trash
     }
@@ -41,15 +47,9 @@ impl App {
 impl App {
     pub(in crate::app::create) fn selected_trash_targets(&self) -> Vec<TrashTarget> {
         if !self.navigation.selected_paths.is_empty() {
-            self.navigation
-                .entries
-                .iter()
-                .filter(|entry| self.navigation.selected_paths.contains(&entry.path))
-                .map(|entry| TrashTarget {
-                    path: entry.path.clone(),
-                    name: entry.name.clone(),
-                    is_dir: entry.is_dir(),
-                })
+            self.selected_paths_sorted()
+                .into_iter()
+                .map(trash_target_from_path)
                 .collect()
         } else {
             self.selected_entry()
@@ -71,7 +71,13 @@ impl App {
             return;
         }
 
-        self.open_trash_prompt_for_targets(targets, self.cwd_is_trash());
+        match self.trash_target_scope(&targets) {
+            TrashTargetScope::Normal => self.open_trash_prompt_for_targets(targets, false),
+            TrashTargetScope::Trash => self.open_trash_prompt_for_targets(targets, true),
+            TrashTargetScope::Mixed => {
+                self.status = "Selection mixes trash and normal files".to_string();
+            }
+        }
     }
 
     pub(in crate::app) fn open_delete_permanently_prompt(&mut self) {
@@ -94,6 +100,26 @@ impl App {
             confirmed: true,
             permanent,
         });
+    }
+
+    fn trash_target_scope(&self, targets: &[TrashTarget]) -> TrashTargetScope {
+        let has_trash = targets
+            .iter()
+            .any(|target| self.trash_target_is_inside_trash(&target.path));
+        let has_normal = targets
+            .iter()
+            .any(|target| !self.trash_target_is_inside_trash(&target.path));
+
+        match (has_trash, has_normal) {
+            (true, true) => TrashTargetScope::Mixed,
+            (true, false) => TrashTargetScope::Trash,
+            _ => TrashTargetScope::Normal,
+        }
+    }
+
+    pub(in crate::app) fn trash_target_is_inside_trash(&self, path: &Path) -> bool {
+        Self::path_is_inside_trash(path)
+            || (self.navigation.in_trash && path.starts_with(&self.navigation.cwd))
     }
 
     pub fn trash_is_open(&self) -> bool {
@@ -157,12 +183,26 @@ impl App {
         self.trash_target_count().min(8)
     }
 
-    pub fn trash_target_name_at(&self, index: usize) -> Option<&str> {
-        self.overlays
+    pub fn trash_target_label_at(&self, index: usize) -> Option<String> {
+        let target = self
+            .overlays
             .trash
             .as_ref()
-            .and_then(|t| t.targets.get(index))
-            .map(|target| target.name.as_str())
+            .and_then(|t| t.targets.get(index))?;
+
+        if self.trash_targets_need_path_labels() {
+            Some(target.path.display().to_string())
+        } else {
+            Some(target.name.clone())
+        }
+    }
+
+    fn trash_targets_need_path_labels(&self) -> bool {
+        self.overlays.trash.as_ref().is_some_and(|t| {
+            t.targets
+                .iter()
+                .any(|target| target.path.parent() != Some(self.navigation.cwd.as_path()))
+        })
     }
 
     pub fn trash_target_path_at(&self, index: usize) -> Option<&std::path::Path> {
@@ -297,6 +337,9 @@ impl App {
             return Ok(());
         }
         self.navigation.selected_paths.clear();
+        let target_paths: Vec<PathBuf> =
+            t.targets.iter().map(|target| target.path.clone()).collect();
+        let source_cwd = self.queue_directory_escape_for_paths(&target_paths)?;
 
         // Compute which entry to land on after deletion: first surviving entry
         // at or after the current cursor, falling back to the last surviving
@@ -327,7 +370,7 @@ impl App {
             permanent: t.permanent,
             next_selection,
         });
-        self.jobs.trash_source_cwd = Some(self.navigation.cwd.clone());
+        self.jobs.trash_source_cwd = Some(source_cwd.clone());
 
         // Best-effort cross-device detection: if the source appears to be on a
         // different device than the home data dir (where the trash usually lives),
@@ -347,6 +390,22 @@ impl App {
 
         Ok(())
     }
+}
+
+fn trash_target_from_path(path: PathBuf) -> TrashTarget {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(str::to_owned)
+        .unwrap_or_else(|| path.display().to_string());
+    let is_dir = path.is_dir();
+    TrashTarget { path, name, is_dir }
+}
+
+enum TrashTargetScope {
+    Normal,
+    Trash,
+    Mixed,
 }
 
 /// Returns `true` when the first trash target appears to be on a different

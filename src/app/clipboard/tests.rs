@@ -242,6 +242,67 @@ fn cut_and_paste_moves_file_to_destination() {
     fs::remove_dir_all(&dst_dir).unwrap();
 }
 
+#[test]
+fn yank_allows_selected_parent_of_current_directory() {
+    let root = temp_path("yank-parent-selection");
+    let parent = root.join("parent");
+    fs::create_dir_all(&parent).unwrap();
+
+    let mut app = App::new_at(root.clone()).unwrap();
+    app.navigation.selected_paths.insert(parent.clone());
+    app.navigation.cwd = parent.clone();
+
+    app.yank();
+
+    assert_eq!(app.status_message(), "Yanked 1 item");
+    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Yank)));
+    assert!(app.navigation.selected_paths.is_empty());
+
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn cut_allows_selected_parent_of_current_directory() {
+    let root = temp_path("cut-parent-selection");
+    let parent = root.join("parent");
+    fs::create_dir_all(&parent).unwrap();
+
+    let mut app = App::new_at(root.clone()).unwrap();
+    app.navigation.selected_paths.insert(parent.clone());
+    app.navigation.cwd = parent.clone();
+
+    app.cut();
+
+    assert_eq!(app.status_message(), "Cut 1 item");
+    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Cut)));
+    assert!(app.navigation.selected_paths.is_empty());
+
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn paste_refuses_folder_into_itself() {
+    let root = temp_path("paste-folder-into-self");
+    let source = root.join("source");
+    let child = source.join("child");
+    fs::create_dir_all(&child).unwrap();
+
+    let mut app = App::new_at(child.clone()).unwrap();
+    app.jobs.clipboard = Some(super::super::state::Clipboard {
+        paths: vec![source.clone()],
+        op: ClipOp::Yank,
+    });
+
+    app.paste().unwrap();
+
+    assert_eq!(app.status_message(), "Cannot paste a folder into itself");
+    assert!(app.paste_progress().is_none());
+    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Yank)));
+    assert!(!child.join("source").exists());
+
+    fs::remove_dir_all(&root).unwrap();
+}
+
 // ── progress state machine ────────────────────────────────────────────────────
 
 #[test]

@@ -225,6 +225,14 @@ fn run_paste(
 
         let dest = unique_dest(&request.dest_dir, file_name);
 
+        if source_contains_destination(src, &dest) {
+            errors.push(format!("\"{}\" cannot be pasted into itself", file_name));
+            if !send_paste_progress(result_tx, request.token, completed, &mut last_progress_at) {
+                break;
+            }
+            continue;
+        }
+
         let ok = match request.op {
             ClipOp::Yank => match copy_recursive(src, &dest) {
                 Ok(()) => true,
@@ -341,6 +349,9 @@ fn format_copy_name(stem: &str, ext: Option<&str>, suffix: Option<u32>) -> Strin
 
 /// Recursively copy `src` to `dest`.
 fn copy_recursive(src: &Path, dest: &Path) -> anyhow::Result<()> {
+    if source_contains_destination(src, dest) {
+        anyhow::bail!("Cannot paste a folder into itself");
+    }
     if src.is_dir() {
         fs::create_dir_all(dest)
             .map_err(|e| anyhow::anyhow!("Cannot create directory \"{}\": {e}", dest.display()))?;
@@ -361,6 +372,10 @@ fn copy_recursive(src: &Path, dest: &Path) -> anyhow::Result<()> {
         })?;
     }
     Ok(())
+}
+
+fn source_contains_destination(src: &Path, dest: &Path) -> bool {
+    src.is_dir() && dest.starts_with(src)
 }
 
 #[cfg(test)]
@@ -422,5 +437,50 @@ mod tests {
         assert_eq!(unique_dest(&dir, "aur_1.txt"), dir.join("aur_1_1.txt"));
 
         fs::remove_dir_all(&dir).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn copy_recursive_refuses_directory_into_itself() {
+        let root = temp_path("copy-into-self");
+        let source = root.join("source");
+        let dest = source.join("source");
+        fs::create_dir_all(&source).expect("failed to create source dir");
+        fs::write(source.join("file.txt"), "data").expect("failed to write source file");
+
+        let error = copy_recursive(&source, &dest).expect_err("copy should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("Cannot paste a folder into itself"),
+            "unexpected error: {error}"
+        );
+        assert!(!dest.exists());
+
+        fs::remove_dir_all(&root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn source_contains_destination_only_blocks_directory_descendants() {
+        let root = temp_path("source-dest-check");
+        let source_dir = root.join("source");
+        let source_file = root.join("file.txt");
+        fs::create_dir_all(&source_dir).expect("failed to create source dir");
+        fs::write(&source_file, "data").expect("failed to write source file");
+
+        assert!(source_contains_destination(
+            &source_dir,
+            &source_dir.join("child")
+        ));
+        assert!(!source_contains_destination(
+            &source_dir,
+            &root.join("source_copy")
+        ));
+        assert!(!source_contains_destination(
+            &source_file,
+            &source_file.join("child")
+        ));
+
+        fs::remove_dir_all(&root).expect("failed to remove temp root");
     }
 }

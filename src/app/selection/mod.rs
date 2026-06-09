@@ -10,26 +10,63 @@ impl App {
         self.navigation.selected_paths.len()
     }
 
+    pub(in crate::app) fn selected_paths_sorted(&self) -> Vec<PathBuf> {
+        let mut paths: Vec<PathBuf> = self.navigation.selected_paths.iter().cloned().collect();
+        paths.sort();
+        paths
+    }
+
+    pub(in crate::app) fn current_directory_escape_for_paths(
+        &self,
+        paths: &[PathBuf],
+    ) -> Option<PathBuf> {
+        paths
+            .iter()
+            .filter(|path| self.navigation.cwd == **path || self.navigation.cwd.starts_with(path))
+            .filter_map(|path| path.parent().map(Path::to_path_buf))
+            .min_by_key(|path| path.components().count())
+    }
+
     pub(in crate::app) fn toggle_selection(&mut self) {
         let Some(entry) = self.selected_entry() else {
             return;
         };
         let path = entry.path.clone();
-        if !self.navigation.selected_paths.remove(&path) {
-            self.navigation.selected_paths.insert(path);
+        if self.navigation.selected_paths.remove(&path) {
+            if self.navigation.view_mode == ViewMode::List {
+                self.move_vertical(1);
+            }
+            return;
         }
+
+        if self.has_selection_nesting_conflict(&path) {
+            self.status = "Cannot select nested paths".to_string();
+            return;
+        }
+
+        self.navigation.selected_paths.insert(path);
         if self.navigation.view_mode == ViewMode::List {
             self.move_vertical(1);
         }
     }
 
     pub(in crate::app) fn select_all(&mut self) {
-        self.navigation.selected_paths = self
+        let mut blocked = false;
+        for path in self
             .navigation
             .entries
             .iter()
-            .map(|e| e.path.clone())
-            .collect();
+            .map(|entry| entry.path.clone())
+        {
+            if self.has_selection_nesting_conflict(&path) {
+                blocked = true;
+                continue;
+            }
+            self.navigation.selected_paths.insert(path);
+        }
+        if blocked {
+            self.status = "Cannot select nested paths".to_string();
+        }
     }
 
     pub(in crate::app) fn clear_selection(&mut self) {
@@ -71,8 +108,7 @@ impl App {
         }
 
         let mut paths: Vec<PathBuf> = self
-            .navigation
-            .selected_paths
+            .selected_paths_sorted()
             .iter()
             .map(|path| self.absolute_chooser_path(path))
             .collect();
@@ -87,5 +123,11 @@ impl App {
         } else {
             self.navigation.cwd.join(path)
         }
+    }
+
+    fn has_selection_nesting_conflict(&self, path: &Path) -> bool {
+        self.navigation.selected_paths.iter().any(|selected| {
+            selected != path && (selected.starts_with(path) || path.starts_with(selected))
+        })
     }
 }

@@ -6,6 +6,7 @@ use super::super::{
 use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use std::path::PathBuf;
 
 impl App {
     pub(in crate::app) fn open_restore_prompt(&mut self) {
@@ -16,6 +17,26 @@ impl App {
 
         if targets.is_empty() {
             return;
+        }
+
+        if !self.navigation.selected_paths.is_empty() {
+            let has_trash = targets
+                .iter()
+                .any(|target| self.trash_target_is_inside_trash(&target.path));
+            let has_normal = targets
+                .iter()
+                .any(|target| !self.trash_target_is_inside_trash(&target.path));
+            match (has_trash, has_normal) {
+                (true, true) => {
+                    self.status = "Selection mixes trash and normal files".to_string();
+                    return;
+                }
+                (false, true) => {
+                    self.status = "Cannot restore normal files".to_string();
+                    return;
+                }
+                _ => {}
+            }
         }
 
         self.overlays.help = false;
@@ -221,6 +242,9 @@ impl App {
             return Ok(());
         }
         self.navigation.selected_paths.clear();
+        let target_paths: Vec<PathBuf> =
+            r.targets.iter().map(|target| target.path.clone()).collect();
+        let source_cwd = self.queue_directory_escape_for_paths(&target_paths)?;
 
         let restored_paths: std::collections::HashSet<_> =
             r.targets.iter().map(|t| &t.path).collect();
@@ -247,7 +271,7 @@ impl App {
             total: r.targets.len(),
             next_selection,
         });
-        self.jobs.restore_source_cwd = Some(self.navigation.cwd.clone());
+        self.jobs.restore_source_cwd = Some(source_cwd.clone());
 
         self.jobs.scheduler.submit_restore(RestoreRequest {
             token,

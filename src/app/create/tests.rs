@@ -1,10 +1,53 @@
 use super::super::{App, state::DirectoryLoadCompletion};
 use super::rename;
+#[cfg(all(unix, not(target_os = "macos")))]
+use std::{
+    env,
+    ffi::OsString,
+    sync::{Mutex, OnceLock},
+};
 use std::{
     fs,
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+struct EnvVarGuard {
+    key: &'static str,
+    original: Option<OsString>,
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+impl EnvVarGuard {
+    fn set_path(key: &'static str, value: &Path) -> Self {
+        let original = env::var_os(key);
+        unsafe {
+            env::set_var(key, value);
+        }
+        Self { key, original }
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match self.original.as_ref() {
+            Some(value) => unsafe {
+                env::set_var(self.key, value);
+            },
+            None => unsafe {
+                env::remove_var(self.key);
+            },
+        }
+    }
+}
 
 /// Drive background jobs until both the trash worker and the subsequent
 /// directory reload have both completed.  Checking only `trash_progress`
@@ -283,6 +326,159 @@ fn confirm_bulk_rename_reports_duplicate_destination_names() {
 }
 
 #[test]
+fn bulk_rename_uses_selection_from_multiple_directories() {
+    let root = temp_path("bulk-rename-cross-directory-selection");
+    let child = root.join("child");
+    let alpha = root.join("alpha.txt");
+    let beta = child.join("beta.txt");
+    fs::create_dir_all(&child).expect("failed to create child dir");
+    fs::write(&alpha, "alpha").expect("failed to write alpha");
+    fs::write(&beta, "beta").expect("failed to write beta");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.selected_paths.insert(alpha.clone());
+    app.navigation.selected_paths.insert(beta.clone());
+    app.open_bulk_rename_prompt();
+
+    let overlay = app
+        .overlays
+        .bulk_rename
+        .as_mut()
+        .expect("bulk rename overlay should be open");
+    assert_eq!(overlay.new_names, vec!["alpha.txt", "beta.txt"]);
+    overlay.new_names = vec![
+        "alpha-renamed.txt".to_string(),
+        "beta-renamed.txt".to_string(),
+    ];
+
+    app.confirm_bulk_rename()
+        .expect("bulk rename should succeed");
+
+    assert!(!alpha.exists());
+    assert!(!beta.exists());
+    assert!(root.join("alpha-renamed.txt").is_file());
+    assert!(child.join("beta-renamed.txt").is_file());
+    assert!(app.navigation.selected_paths.is_empty());
+
+    let (status, reselect_path) = take_pending_status(&mut app);
+    assert_eq!(status, "Renamed 2 items");
+    assert_eq!(reselect_path, Some(child.join("beta-renamed.txt")));
+
+    app.navigation.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn bulk_rename_allows_same_new_name_in_different_directories() {
+    let root = temp_path("bulk-rename-same-name-different-dirs");
+    let left = root.join("left");
+    let right = root.join("right");
+    let left_file = left.join("old.txt");
+    let right_file = right.join("old.txt");
+    fs::create_dir_all(&left).expect("failed to create left dir");
+    fs::create_dir_all(&right).expect("failed to create right dir");
+    fs::write(&left_file, "left").expect("failed to write left file");
+    fs::write(&right_file, "right").expect("failed to write right file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.selected_paths.insert(left_file);
+    app.navigation.selected_paths.insert(right_file);
+    app.open_bulk_rename_prompt();
+
+    let overlay = app
+        .overlays
+        .bulk_rename
+        .as_mut()
+        .expect("bulk rename overlay should be open");
+    overlay.new_names = vec!["new.txt".to_string(), "new.txt".to_string()];
+
+    app.confirm_bulk_rename()
+        .expect("bulk rename should succeed");
+
+    assert!(app.overlays.bulk_rename.is_none());
+    assert!(left.join("new.txt").is_file());
+    assert!(right.join("new.txt").is_file());
+
+    app.navigation.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn bulk_rename_refuses_selection_containing_trash_item() {
+    let _env_guard = env_lock()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let root = temp_path("bulk-rename-refuses-trash-selection");
+    let data_home = root.join("data");
+    let trash_files = data_home.join("Trash/files");
+    let normal_dir = root.join("normal");
+    let normal = normal_dir.join("normal.txt");
+    let trashed = trash_files.join("trashed.txt");
+    fs::create_dir_all(&trash_files).expect("failed to create trash files dir");
+    fs::create_dir_all(&normal_dir).expect("failed to create normal dir");
+    fs::write(&normal, "normal").expect("failed to write normal file");
+    fs::write(&trashed, "trashed").expect("failed to write trashed file");
+
+    let _xdg_data_home = EnvVarGuard::set_path("XDG_DATA_HOME", &data_home);
+
+    let mut app = App::new_at(normal_dir.clone()).expect("failed to create app");
+    app.navigation.selected_paths.insert(normal);
+    app.navigation.selected_paths.insert(trashed);
+    app.open_bulk_rename_prompt();
+
+    assert!(!app.bulk_rename_is_open());
+    assert_eq!(app.status_message(), "Cannot rename items from Trash");
+
+    app.navigation.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn bulk_rename_selected_parent_of_current_directory_reloads_parent() {
+    let root = temp_path("bulk-rename-parent-selection");
+    let parent = root.join("parent");
+    let child_file = parent.join("child.txt");
+    fs::create_dir_all(&parent).expect("failed to create parent dir");
+    fs::write(&child_file, "child").expect("failed to write child file");
+
+    let mut app = App::new_at(parent.clone()).expect("failed to create app");
+    app.navigation.selected_paths.insert(parent.clone());
+    app.open_bulk_rename_prompt();
+
+    assert!(app.bulk_rename_is_open());
+    assert_eq!(app.bulk_rename_item_count(), 1);
+
+    let overlay = app
+        .overlays
+        .bulk_rename
+        .as_mut()
+        .expect("bulk rename overlay should be open");
+    overlay.new_names[0] = "renamed".to_string();
+
+    app.confirm_bulk_rename()
+        .expect("bulk rename should succeed");
+
+    let load = app
+        .navigation
+        .directory_runtime
+        .pending_load
+        .as_ref()
+        .expect("rename should queue a directory reload");
+    assert_eq!(load.target_cwd, root);
+    assert_eq!(load.reselect_path, Some(root.join("renamed")));
+    assert!(!parent.exists());
+    assert!(root.join("renamed/child.txt").is_file());
+
+    app.navigation.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn confirm_trash_permanently_deletes_selected_items_inside_trash() {
     let root = temp_path("trash-permanent");
     fs::create_dir_all(&root).expect("failed to create temp root");
@@ -332,6 +528,35 @@ fn confirm_delete_permanently_removes_selected_items_outside_trash() {
 
     assert!(!root.join("gone.txt").exists());
     assert_eq!(app.status_message(), "Permanently deleted \"gone.txt\"");
+
+    app.navigation.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn confirm_delete_selected_parent_of_current_directory_moves_to_parent() {
+    let root = temp_path("delete-parent-of-current");
+    let parent = root.join("parent");
+    let child = parent.join("child");
+    fs::create_dir_all(&child).expect("failed to create child dir");
+    fs::write(child.join("file.txt"), "child").expect("failed to write child file");
+
+    let mut app = App::new_at(child.clone()).expect("failed to create app");
+    app.navigation.selected_paths.insert(parent.clone());
+    app.open_delete_permanently_prompt();
+
+    assert_eq!(app.trash_title(), "Delete permanently 1 selected folder?");
+    app.confirm_trash().expect("delete should succeed");
+
+    assert!(app.overlays.trash.is_none());
+    assert!(app.navigation.selected_paths.is_empty());
+
+    wait_for_trash_and_reload(&mut app);
+
+    assert_eq!(app.navigation.cwd, root);
+    assert!(!parent.exists());
+    assert_eq!(app.status_message(), "Permanently deleted \"parent\"");
 
     app.navigation.directory_runtime.watch = None;
     drop(app);
@@ -721,6 +946,80 @@ fn confirm_restore_bulk_restores_multiple_files_and_reports_count() {
     assert!(!trash_files.join("alpha.txt").exists());
     assert!(!trash_files.join("beta.txt").exists());
     assert_eq!(app.status_message(), "Restored 2 items");
+
+    app.navigation.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn restore_refuses_normal_selection_from_trash() {
+    let root = temp_path("restore-normal-selection");
+    let trash_files = root.join("Trash/files");
+    let normal = root.join("normal.txt");
+    fs::create_dir_all(&trash_files).expect("failed to create trash files dir");
+    fs::write(&normal, "normal").expect("failed to write normal file");
+
+    let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
+    app.navigation.in_trash = true;
+    app.navigation.selected_paths.insert(normal);
+    app.open_restore_prompt();
+
+    assert!(!app.restore_is_open());
+    assert_eq!(app.status_message(), "Cannot restore normal files");
+
+    app.navigation.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn restore_refuses_mixed_trash_and_normal_selection() {
+    let root = temp_path("restore-mixed-selection");
+    let trash_files = root.join("Trash/files");
+    let trashed = trash_files.join("trashed.txt");
+    let normal = root.join("normal.txt");
+    fs::create_dir_all(&trash_files).expect("failed to create trash files dir");
+    fs::write(&trashed, "trashed").expect("failed to write trashed file");
+    fs::write(&normal, "normal").expect("failed to write normal file");
+
+    let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
+    app.navigation.in_trash = true;
+    app.navigation.selected_paths.insert(trashed);
+    app.navigation.selected_paths.insert(normal);
+    app.open_restore_prompt();
+
+    assert!(!app.restore_is_open());
+    assert_eq!(
+        app.status_message(),
+        "Selection mixes trash and normal files"
+    );
+
+    app.navigation.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn restore_allows_selected_parent_of_current_directory() {
+    let root = temp_path("restore-parent-selection");
+    let trash_files = root.join("Trash/files");
+    let parent = trash_files.join("parent");
+    let child_file = parent.join("child.txt");
+    fs::create_dir_all(&parent).expect("failed to create parent dir");
+    fs::write(&child_file, "child").expect("failed to write child file");
+
+    let mut app = App::new_at(parent.clone()).expect("failed to create app");
+    app.navigation.in_trash = true;
+    app.navigation.selected_paths.insert(parent);
+    app.open_restore_prompt();
+
+    assert!(app.restore_is_open());
+    assert_eq!(app.restore_title(), "Restore 1 selected folder?");
+    assert_eq!(
+        app.restore_target_path_at(0),
+        Some(trash_files.join("parent").as_path())
+    );
 
     app.navigation.directory_runtime.watch = None;
     drop(app);

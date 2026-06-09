@@ -112,6 +112,31 @@ impl App {
         })
     }
 
+    pub(in crate::app) fn queue_directory_escape_for_paths(
+        &mut self,
+        paths: &[PathBuf],
+    ) -> Result<PathBuf> {
+        let target_cwd = self
+            .current_directory_escape_for_paths(paths)
+            .unwrap_or_else(|| self.navigation.cwd.clone());
+
+        if target_cwd != self.navigation.cwd {
+            self.queue_directory_load(PendingDirectoryLoad {
+                token: 0,
+                target_cwd: target_cwd.clone(),
+                previous_cwd: self.navigation.cwd.clone(),
+                previous_selected_path: self.selected_entry().map(|entry| entry.path.clone()),
+                previous_selection_name: None,
+                reselect_path: None,
+                history_mode: DirectoryHistoryMode::None,
+                refresh_search: false,
+                completion: DirectoryLoadCompletion::Keep,
+            })?;
+        }
+
+        Ok(target_cwd)
+    }
+
     pub(in crate::app) fn apply_directory_snapshot(
         &mut self,
         load: PendingDirectoryLoad,
@@ -166,7 +191,6 @@ impl App {
         self.clear_wheel_scroll();
 
         if cwd_changed {
-            self.navigation.selected_paths.clear();
             self.reset_directory_watch();
         }
 

@@ -323,8 +323,8 @@ impl App {
                             .as_ref()
                             .map(|l| l.target_cwd.as_path());
                         let nav_to_source = nav_target == Some(source_cwd.as_path());
-                        if source_cwd == self.navigation.cwd
-                            && (nav_target.is_none() || nav_to_source)
+                        if nav_to_source
+                            || (source_cwd == self.navigation.cwd && nav_target.is_none())
                         {
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,
@@ -370,8 +370,8 @@ impl App {
                             .as_ref()
                             .map(|l| l.target_cwd.as_path());
                         let nav_to_source = nav_target == Some(source_cwd.as_path());
-                        if source_cwd == self.navigation.cwd
-                            && (nav_target.is_none() || nav_to_source)
+                        if nav_to_source
+                            || (source_cwd == self.navigation.cwd && nav_target.is_none())
                         {
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,

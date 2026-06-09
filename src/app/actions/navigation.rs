@@ -408,7 +408,6 @@ impl App {
         #[cfg(all(unix, not(target_os = "macos")))]
         if self
             .single_file_open_target_entry()
-            .cloned()
             .is_some_and(|entry| self.queue_terminal_default_open_if_needed(&entry))
         {
             return Ok(());
@@ -471,36 +470,43 @@ impl App {
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
-    fn single_file_open_target_entry(&self) -> Option<&Entry> {
-        if self.navigation.selected_paths.len() > 1 {
-            return None;
-        }
-
-        if let Some(path) = self.navigation.selected_paths.iter().next() {
+    fn single_file_open_target_entry(&self) -> Option<Entry> {
+        if self.navigation.selected_paths.len() == 1 {
+            let path = self.navigation.selected_paths.iter().next()?;
             return self
                 .navigation
                 .entries
                 .iter()
                 .find(|entry| &entry.path == path)
-                .filter(|entry| !entry.is_dir());
+                .filter(|entry| !entry.is_dir())
+                .cloned()
+                .or_else(|| entry_from_existing_file(path));
         }
 
-        self.selected_entry().filter(|entry| !entry.is_dir())
+        if !self.navigation.selected_paths.is_empty() {
+            return None;
+        }
+
+        self.selected_entry()
+            .filter(|entry| !entry.is_dir())
+            .cloned()
     }
 
     fn open_in_system_targets(&self) -> Vec<PathBuf> {
         if !self.navigation.selected_paths.is_empty() {
-            return self
-                .navigation
-                .entries
-                .iter()
-                .filter(|entry| self.navigation.selected_paths.contains(&entry.path))
-                .map(|entry| entry.path.clone())
-                .collect();
+            return self.selected_paths_sorted();
         }
 
         self.selected_entry()
             .map(|entry| vec![entry.path.clone()])
             .unwrap_or_default()
     }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn entry_from_existing_file(path: &Path) -> Option<Entry> {
+    let name = path.file_name()?.to_string_lossy().into_owned();
+    crate::fs::entry_from_path(path.to_path_buf(), name)
+        .ok()
+        .filter(|entry| !entry.is_dir())
 }

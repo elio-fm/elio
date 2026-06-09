@@ -64,7 +64,7 @@ pub(super) fn render_trash_overlay(
 
     for row_offset in 0..visible {
         let item_index = scroll + row_offset;
-        let Some(name) = app.trash_target_name_at(item_index) else {
+        let Some(label) = app.trash_target_label_at(item_index) else {
             break;
         };
         let is_dir = app.trash_target_is_dir_at(item_index);
@@ -102,7 +102,7 @@ pub(super) fn render_trash_overlay(
                 ),
                 Span::raw(" "),
                 Span::styled(
-                    helpers::clamp_label(name, name_width),
+                    helpers::clamp_label(&label, name_width),
                     Style::default().fg(palette.muted),
                 ),
             ]))

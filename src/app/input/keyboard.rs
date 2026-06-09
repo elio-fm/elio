@@ -341,18 +341,17 @@ impl App {
     }
 
     pub(in crate::app) fn open_selected(&mut self) -> Result<()> {
-        if !self.navigation.selected_paths.is_empty() {
-            return self.dispatch_action(crate::config::Action::Open);
-        }
-
         let Some(entry) = self.selected_entry() else {
+            if !self.navigation.selected_paths.is_empty() {
+                return self.dispatch_action(crate::config::Action::Open);
+            }
             return Ok(());
         };
         if entry.is_dir() {
-            self.set_dir(entry.path.clone())
-        } else {
-            self.dispatch_action(crate::config::Action::Open)
+            return self.set_dir(entry.path.clone());
         }
+
+        self.dispatch_action(crate::config::Action::Open)
     }
 }
 
