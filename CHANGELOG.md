@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed image previews inside tmux when stale Alacritty/Kitty markers from the tmux server environment hid the active supported terminal.
 - Fixed several terminal/UI freeze cases around large image-preview output, focus changes, keyboard enhancement probing, and slow autofs/network mounts.
 - Fixed image and PDF preview redraws during resize bursts, with resize settling tuned separately for tmux and non-tmux terminals.
+- Fixed the active sidebar item highlight in the terminal ANSI and transparent example themes.
 
 ## [1.8.0] - 2026-06-06
 

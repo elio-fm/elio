@@ -9,7 +9,7 @@ surface = "none"
 elevated = "none"
 button_bg = "none"
 button_disabled_bg = "none"
-sidebar_active = "none"
+sidebar_active = "#1a2a43"
 accent_soft = "none"
 path_bg = "none"
 
