@@ -99,6 +99,7 @@ fn iterm_modal_pdf_resize_requeues_render_after_display_state_clear() {
     app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
 
     app.handle_terminal_image_resize();
+    app.expire_terminal_image_resize_settle_for_tests();
     configure_iterm_image_support(&mut app);
     assert!(
         app.take_pending_resize_clear(),

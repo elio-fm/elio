@@ -630,6 +630,7 @@ fn iterm_modal_repaints_image_when_preview_pane_reappears() {
 
     app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
     app.handle_terminal_image_resize();
+    app.expire_terminal_image_resize_settle_for_tests();
     configure_iterm_image_support(&mut app);
     assert!(
         app.take_pending_resize_clear(),
@@ -686,6 +687,52 @@ fn iterm_modal_repaints_image_when_preview_pane_reappears() {
     assert!(repaint.contains("\x1b]1337;File=inline=1;"));
     assert!(app.static_image_overlay_displayed());
     assert!(app.displayed_static_image_matches_active());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn resize_settle_holds_image_placement_until_window_expires() {
+    let (mut app, root) = build_displayed_iterm_inline_image_app("resize-settle-hold");
+
+    app.handle_terminal_image_resize();
+    configure_iterm_image_support(&mut app);
+    assert!(
+        !app.process_terminal_image_resize_settle_timer(),
+        "settle timer should still be pending immediately after a resize"
+    );
+    assert!(app.pending_terminal_image_resize_settle_timer().is_some());
+    assert!(app.take_pending_resize_clear());
+
+    let held = app
+        .present_preview_overlay()
+        .expect("present during resize settle should not fail");
+    assert!(
+        held.is_empty(),
+        "no image payload should be transmitted while a resize burst is settling"
+    );
+    assert!(!app.static_image_overlay_displayed());
+
+    app.expire_terminal_image_resize_settle_for_tests();
+    let placed = String::from_utf8(
+        app.present_preview_overlay()
+            .expect("present after settle should not fail"),
+    )
+    .expect("placement output should be valid utf8");
+    assert!(placed.contains("\x1b]1337;File=inline=1;"));
+    assert!(app.static_image_overlay_displayed());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn resize_settle_does_not_arm_without_image_protocol() {
+    let root = temp_root("resize-settle-no-protocol");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+
+    app.handle_terminal_image_resize();
+    assert!(app.pending_terminal_image_resize_settle_timer().is_none());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

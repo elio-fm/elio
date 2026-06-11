@@ -34,6 +34,8 @@ use std::{
     io::{self, ErrorKind, Write},
     path::{Path, PathBuf},
     process::Command,
+    sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError},
+    thread,
     time::{Duration, Instant},
 };
 
@@ -103,9 +105,10 @@ fn run_with_startup_state(
     } = options;
     config::initialize();
     ui::theme::initialize();
-    let mut terminal = init_terminal()?;
+    let (mut terminal, drainer) = init_terminal()?;
     let result = run_app(
         &mut terminal,
+        &drainer,
         start_dir,
         start_focus,
         reveal_hidden_start_focus,
@@ -126,9 +129,177 @@ fn run_with_startup_state(
     }
 }
 
-fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
+/// The TUI terminal, backed by [`ThreadedWriter`] so frame output never blocks
+/// the event loop.
+type AppTerminal = Terminal<CrosstermBackend<ThreadedWriter>>;
+
+/// State shared between the event-loop side of [`ThreadedWriter`] and its
+/// background thread. `buf` accumulates flushed frames; the writer thread swaps
+/// it out and performs the blocking write outside the lock. `idle` is true while
+/// the writer thread is parked with nothing queued and nothing mid-write — the
+/// condition drain barriers wait for.
+struct WriterShared {
+    buf: Vec<u8>,
+    idle: bool,
+    dead: bool,
+    shutdown: bool,
+}
+
+struct WriterChannel {
+    state: Mutex<WriterShared>,
+    cond: Condvar,
+}
+
+impl WriterChannel {
+    fn lock(&self) -> MutexGuard<'_, WriterShared> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// A [`Write`] that hands each flushed frame to a background thread which
+/// performs the blocking write to stdout.
+///
+/// The TUI event loop must never block on terminal output. A single large frame
+/// — above all a multi-megabyte Kitty image payload — written synchronously
+/// stalls the entire loop (no input, no resize handling) for as long as the
+/// terminal/tmux takes to drain it. Through tmux that drain backs up whenever
+/// the outer terminal is busy (e.g. repainting after a resize), which froze the
+/// UI for seconds. Flushes append to a shared buffer under a mutex — never
+/// waiting on the terminal — so the loop stays responsive and the visible output
+/// catches up a beat later. The buffer is unbounded by design: frames are only
+/// produced on events/timers, so even a stalled terminal accumulates output far
+/// slower than memory matters, and bounding it would reintroduce the very
+/// backpressure stall this exists to remove.
+struct ThreadedWriter {
+    channel: Arc<WriterChannel>,
+    pending: Vec<u8>,
+}
+
+impl ThreadedWriter {
+    fn new() -> Self {
+        let channel = Arc::new(WriterChannel {
+            state: Mutex::new(WriterShared {
+                buf: Vec::new(),
+                idle: true,
+                dead: false,
+                shutdown: false,
+            }),
+            cond: Condvar::new(),
+        });
+        let writer_channel = Arc::clone(&channel);
+        thread::spawn(move || {
+            let mut out = io::stdout();
+            let mut batch = Vec::new();
+            loop {
+                {
+                    let mut state = writer_channel.lock();
+                    while state.buf.is_empty() && !state.shutdown {
+                        state.idle = true;
+                        writer_channel.cond.notify_all();
+                        state = writer_channel
+                            .cond
+                            .wait(state)
+                            .unwrap_or_else(PoisonError::into_inner);
+                    }
+                    if state.buf.is_empty() {
+                        state.idle = true;
+                        writer_channel.cond.notify_all();
+                        return;
+                    }
+                    state.idle = false;
+                    std::mem::swap(&mut state.buf, &mut batch);
+                }
+                if out.write_all(&batch).is_err() || out.flush().is_err() {
+                    let mut state = writer_channel.lock();
+                    state.dead = true;
+                    state.idle = true;
+                    state.buf.clear();
+                    writer_channel.cond.notify_all();
+                    return;
+                }
+                batch.clear();
+            }
+        });
+        Self {
+            channel,
+            pending: Vec::new(),
+        }
+    }
+
+    /// A cheap handle for waiting on the writer thread from elsewhere (the
+    /// suspend/resume paths) without reaching into the unstable backend writer
+    /// accessor.
+    fn drainer(&self) -> Drainer {
+        Drainer {
+            channel: Arc::clone(&self.channel),
+        }
+    }
+
+    /// Blocks until the writer thread has written everything queued so far. Used
+    /// on drop so no buffered output is lost at exit.
+    fn drain(&mut self) {
+        let _ = self.flush();
+        self.drainer().drain();
+    }
+}
+
+/// Blocks until the [`ThreadedWriter`] has flushed everything queued before it.
+/// Callers must flush the backend first so any per-frame buffered bytes are in
+/// the queue; this then waits for the writer thread to drain the queue. Used
+/// before handing the real terminal to a child process (suspend) and before the
+/// keyboard-enhancement probe (resume), which both need output fully on screen.
+struct Drainer {
+    channel: Arc<WriterChannel>,
+}
+
+impl Drainer {
+    fn drain(&self) {
+        let mut state = self.channel.lock();
+        while !(state.dead || state.buf.is_empty() && state.idle) {
+            state = self
+                .channel
+                .cond
+                .wait(state)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+    }
+}
+
+impl Write for ThreadedWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.pending.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+        let mut state = self.channel.lock();
+        if state.dead {
+            // The writer thread hit a write error; the process is tearing down
+            // and there is nothing useful to do with the bytes.
+            self.pending.clear();
+            return Ok(());
+        }
+        state.buf.append(&mut self.pending);
+        self.channel.cond.notify_all();
+        Ok(())
+    }
+}
+
+impl Drop for ThreadedWriter {
+    fn drop(&mut self) {
+        self.drain();
+        let mut state = self.channel.lock();
+        state.shutdown = true;
+        self.channel.cond.notify_all();
+    }
+}
+
+fn init_terminal() -> Result<(AppTerminal, Drainer)> {
     match try_init_terminal() {
-        Ok(terminal) => Ok(terminal),
+        Ok(pair) => Ok(pair),
         Err(error) => {
             let _ = cleanup_terminal_state();
             Err(error)
@@ -136,7 +307,7 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     }
 }
 
-fn try_init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
+fn try_init_terminal() -> Result<(AppTerminal, Drainer)> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(
@@ -163,17 +334,38 @@ fn try_init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     stdout.flush()?;
     push_keyboard_enhancement_if_supported(&mut stdout)?;
 
-    let backend = CrosstermBackend::new(stdout);
+    // The startup escapes above go straight to stdout (the backend doesn't exist
+    // yet and they're already flushed). From here on, all frame output flows
+    // through the background writer so the event loop never blocks on it.
+    let writer = ThreadedWriter::new();
+    let drainer = writer.drainer();
+    let backend = CrosstermBackend::new(writer);
     let mut terminal = Terminal::new(backend)?;
-    terminal.clear()?;
+    clear_for_full_repaint(&mut terminal)?;
     terminal.hide_cursor()?;
-    Ok(terminal)
+    Ok((terminal, drainer))
+}
+
+/// Clears the alternate screen and forces a full repaint on the next draw,
+/// without ratatui's [`Terminal::clear`]. On a Fullscreen viewport `clear`
+/// issues a blocking CSI 6n cursor-position query (to snapshot and restore the
+/// cursor) which, under tmux, can stall for up to crossterm's 2-second timeout
+/// whenever the terminal's report is delayed or swallowed — most visibly during
+/// a resize and on every return from zoxide / a shell / Open With, where it
+/// reads as a multi-second freeze. [`Terminal::resize`] performs the same
+/// clear-region(all) plus back-buffer reset for a Fullscreen viewport but never
+/// queries the cursor; elio repositions the cursor every frame, so the
+/// save/restore `clear` does is unnecessary.
+fn clear_for_full_repaint(terminal: &mut AppTerminal) -> io::Result<()> {
+    let size = terminal.size()?;
+    terminal.resize(Rect::new(0, 0, size.width, size.height))
 }
 
 /// Temporarily tears down the TUI so a blocking terminal app can use stdout.
 /// Call [`resume_terminal`] afterwards to restore the TUI.
 fn suspend_terminal(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    terminal: &mut AppTerminal,
+    drainer: &Drainer,
     leave_alternate: bool,
 ) -> Result<()> {
     let backend = terminal.backend_mut();
@@ -190,29 +382,40 @@ fn suspend_terminal(
     if leave_alternate {
         execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     } else {
-        terminal.clear()?;
+        clear_for_full_repaint(terminal)?;
     }
     disable_raw_mode()?;
     terminal.show_cursor()?;
+    // The child process is about to take over the real terminal; make sure every
+    // queued byte has actually been written before we hand it off.
+    let _ = terminal.backend_mut().flush();
+    drainer.drain();
     Ok(())
 }
 
 /// Restores the TUI after [`suspend_terminal`].  Forces a full redraw on the
 /// next render cycle so no stale content is left on screen.
-fn resume_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+fn resume_terminal(terminal: &mut AppTerminal, drainer: &Drainer) -> Result<()> {
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(
-        stdout,
-        EnterAlternateScreen,
-        event::EnableMouseCapture,
-        EnableFocusChange,
-    )?;
-    write!(stdout, "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h")?;
-    write!(stdout, "\x1b[>4;1m")?;
-    stdout.flush()?;
-    push_keyboard_enhancement_if_supported(&mut stdout)?;
-    terminal.clear()?;
+    {
+        // Route restore escapes through the backend so they stay ordered with
+        // any frame output, then drain before the keyboard-enhancement probe,
+        // which talks to the terminal directly (stdin/stdout) and must not race
+        // the background writer.
+        let backend = terminal.backend_mut();
+        execute!(
+            backend,
+            EnterAlternateScreen,
+            event::EnableMouseCapture,
+            EnableFocusChange,
+        )?;
+        write!(backend, "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h")?;
+        write!(backend, "\x1b[>4;1m")?;
+        backend.flush()?;
+    }
+    drainer.drain();
+    push_keyboard_enhancement_if_supported(terminal.backend_mut())?;
+    clear_for_full_repaint(terminal)?;
     terminal.hide_cursor()?;
     Ok(())
 }
@@ -256,7 +459,7 @@ fn apply_zoxide_query_result(app: &mut App, result: zoxide::QueryResult) {
     }
 }
 
-fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+fn restore_terminal(terminal: &mut AppTerminal) -> Result<()> {
     // Disable in reverse order and do it before leaving the alternate screen so the
     // terminal processes the escape sequences while still in the right mode.
     let backend = terminal.backend_mut();
@@ -273,6 +476,9 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
     )?;
     disable_raw_mode()?;
     terminal.show_cursor()?;
+    // Remaining queued bytes (these restore writes included) are flushed when the
+    // terminal — and with it the ThreadedWriter — is dropped right after run()
+    // returns; ThreadedWriter::drop drains the writer thread before exit.
     Ok(())
 }
 
@@ -293,7 +499,12 @@ fn cleanup_terminal_state() -> io::Result<()> {
 }
 
 fn push_keyboard_enhancement_if_supported<W: Write>(writer: &mut W) -> io::Result<()> {
-    if !matches!(supports_keyboard_enhancement(), Ok(true)) {
+    // The probe writes a query to the terminal and blocks on the reply with a
+    // 2-second crossterm timeout. Support cannot change within a session, so
+    // probe once and reuse the answer — this runs again on every resume from
+    // zoxide/shell/Open With, where a swallowed reply read as a 2s freeze.
+    static SUPPORTED: OnceLock<bool> = OnceLock::new();
+    if !*SUPPORTED.get_or_init(|| matches!(supports_keyboard_enhancement(), Ok(true))) {
         return Ok(());
     }
 
@@ -395,7 +606,8 @@ fn chooser_output_bytes(paths: &[PathBuf]) -> Vec<u8> {
 }
 
 fn run_app(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    terminal: &mut AppTerminal,
+    drainer: &Drainer,
     cwd: Option<PathBuf>,
     start_focus: Option<PathBuf>,
     reveal_hidden_start_focus: bool,
@@ -434,59 +646,74 @@ fn run_app(
             last_relative_time_refresh_at = Instant::now();
         }
 
-        if terminal_focused && app.process_background_jobs() {
+        // Background work and drawing run regardless of focus so a still-visible
+        // pane stays live. tmux delivers FocusLost to a pane the moment it stops
+        // being the active pane (verified: switching panes — not just windows —
+        // sends \e[O), and again when another GUI app steals the outer terminal's
+        // focus. In a tiled tmux layout that is most of the time, so gating these on
+        // focus made elio appear frozen — in-flight previews, directory loads, and
+        // filesystem changes never landed until focus returned. Drawing stays cheap
+        // when idle because it only runs when `dirty`, which is set solely by real
+        // state changes; an unfocused, idle pane sets nothing dirty and never draws.
+        // These all run together so the deferred-refresh coordination (see #64) that
+        // process_background_jobs shares with the directory timers cannot desync.
+        // Only the cosmetic per-second relative-time tick (above) and the poll
+        // cadence below stay focus-dependent.
+        if app.process_background_jobs() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_pdf_preview_timers() {
+        if app.process_pdf_preview_timers() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_pending_scroll() {
+        if app.process_pending_scroll() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_preview_refresh_timers() {
+        if app.process_preview_refresh_timers() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_preview_prefetch_timers() {
+        if app.process_preview_prefetch_timers() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_directory_stats_timer() {
+        if app.process_directory_stats_timer() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_directory_item_count_timer() {
+        if app.process_directory_item_count_timer() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_browser_wheel_timers() {
+        if app.process_browser_wheel_timers() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_image_preview_timers() {
+        if app.process_image_preview_timers() {
             dirty = true;
         }
 
-        if terminal_focused && app.process_sidebar_refresh() {
+        if app.process_terminal_image_resize_settle_timer() {
             dirty = true;
         }
 
-        if terminal_focused {
-            match app.process_auto_reload() {
-                Ok(changed) => {
-                    dirty |= changed;
-                }
-                Err(error) => {
-                    app.report_runtime_error("Auto-reload failed", &error);
-                    dirty = true;
-                }
+        if app.process_sidebar_refresh() {
+            dirty = true;
+        }
+
+        match app.process_auto_reload() {
+            Ok(changed) => {
+                dirty |= changed;
+            }
+            Err(error) => {
+                app.report_runtime_error("Auto-reload failed", &error);
+                dirty = true;
             }
         }
 
-        if dirty && terminal_focused {
+        if dirty {
             dirty = draw_terminal_frame(terminal, &mut app)?;
         }
 
@@ -531,6 +758,7 @@ fn run_app(
             [
                 app.pending_pdf_preview_timer(),
                 app.pending_image_preview_timer(),
+                app.pending_terminal_image_resize_settle_timer(),
                 app.pending_preview_refresh_timer(),
                 app.pending_preview_prefetch_timer(),
                 app.pending_directory_stats_timer(),
@@ -565,8 +793,15 @@ fn run_app(
                     dirty = true;
                 } else if matches!(event, Event::Resize(_, _)) {
                     app.handle_terminal_image_resize();
-                    dirty |= terminal_focused;
+                    dirty = true;
                 } else {
+                    // Input doubles as an implicit FocusGained; see
+                    // event_implies_terminal_focus for why the real one can be dropped.
+                    if !terminal_focused && event_implies_terminal_focus(&event) {
+                        terminal_focused = true;
+                        app.handle_terminal_image_focus_gained();
+                        dirty = true;
+                    }
                     // Mouse move events only update the hover/target state — nothing
                     // visual changes, so they don't need a re-render. Skipping dirty here
                     // avoids the constant re-render storm that ?1003h (any-event tracking)
@@ -598,15 +833,15 @@ fn run_app(
             if let Some(task) = app.pending_terminal_task.take() {
                 let zoxide_result = match task {
                     PendingTerminalTask::Command { program, args } => {
-                        suspend_terminal(terminal, true)?;
+                        suspend_terminal(terminal, drainer, true)?;
                         run_blocking_in_terminal(&program, &args);
-                        resume_terminal(terminal)?;
+                        resume_terminal(terminal, drainer)?;
                         None
                     }
                     PendingTerminalTask::Shell { cwd } => {
-                        suspend_terminal(terminal, true)?;
+                        suspend_terminal(terminal, drainer, true)?;
                         let shell_result = shell::run_in_current_terminal(&cwd);
-                        resume_terminal(terminal)?;
+                        resume_terminal(terminal, drainer)?;
                         match shell_result {
                             Ok(()) => refresh_after_shell(&mut app, &cwd),
                             Err(error) => app.set_status_message(error),
@@ -618,9 +853,9 @@ fn run_app(
                         if let Some(result) = zoxide::preflight(&cwd) {
                             Some(result)
                         } else {
-                            suspend_terminal(terminal, false)?;
+                            suspend_terminal(terminal, drainer, false)?;
                             let result = zoxide::run_query_in_terminal(&cwd);
-                            resume_terminal(terminal)?;
+                            resume_terminal(terminal, drainer)?;
                             Some(result)
                         }
                     }
@@ -647,15 +882,12 @@ fn run_app(
     Ok(AppExit { final_cwd, chooser })
 }
 
-fn draw_terminal_frame(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    app: &mut App,
-) -> Result<bool> {
+fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> Result<bool> {
     execute!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
 
     let draw_result = (|| -> Result<bool> {
         if app.take_pending_resize_clear() {
-            terminal.clear()?;
+            clear_for_full_repaint(terminal)?;
         }
 
         // Erase stale image cells before terminal.draw() so ratatui can
@@ -808,6 +1040,15 @@ fn intersect_rect(a: Rect, b: Rect) -> Option<Rect> {
     })
 }
 
+/// Whether receiving `event` implies the terminal is focused. Key, mouse, and
+/// paste events can only originate from a focused terminal, so they double as an
+/// implicit FocusGained — the recovery path for terminals (notably on
+/// Wayland/Hyprland) that drop the real FocusGained after a spawned GUI app
+/// returns focus. Focus and resize events carry no such implication.
+fn event_implies_terminal_focus(event: &Event) -> bool {
+    matches!(event, Event::Key(_) | Event::Mouse(_) | Event::Paste(_))
+}
+
 fn event_poll_interval<I>(
     base_poll_interval: Duration,
     terminal_focused: bool,
@@ -833,6 +1074,7 @@ mod tests {
     use crate::{
         ACTIVE_SCROLL_POLL_INTERVAL, IDLE_POLL_INTERVAL, collect_buffer_cells, event_poll_interval,
     };
+    use crossterm::event::Event;
     use ratatui::{
         buffer::Buffer,
         layout::Rect,
@@ -989,6 +1231,38 @@ mod tests {
         );
 
         assert!(interval <= delay);
+    }
+
+    #[test]
+    fn input_events_imply_terminal_focus() {
+        use crossterm::event::{
+            KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+        };
+
+        // Key, mouse, and paste events recover focus after a dropped FocusGained.
+        assert!(crate::event_implies_terminal_focus(&Event::Key(
+            KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)
+        )));
+        assert!(crate::event_implies_terminal_focus(&Event::Mouse(
+            MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 0,
+                row: 0,
+                modifiers: KeyModifiers::NONE,
+            }
+        )));
+        assert!(crate::event_implies_terminal_focus(&Event::Paste(
+            "text".to_string()
+        )));
+    }
+
+    #[test]
+    fn focus_and_resize_events_do_not_imply_terminal_focus() {
+        // Focus/resize events carry no focus implication and must not trip the
+        // recovery path (FocusLost in particular would be misread as focus).
+        assert!(!crate::event_implies_terminal_focus(&Event::FocusLost));
+        assert!(!crate::event_implies_terminal_focus(&Event::FocusGained));
+        assert!(!crate::event_implies_terminal_focus(&Event::Resize(80, 24)));
     }
 
     #[test]

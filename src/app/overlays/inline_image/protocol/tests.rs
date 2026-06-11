@@ -846,6 +846,87 @@ fn detect_terminal_identity_keeps_live_client_kitty_over_stale_session_warp() {
 }
 
 #[test]
+fn detect_terminal_identity_recovers_ghostty_when_stale_alacritty_marker_leaks() {
+    // tmux server first launched from Alacritty leaks ALACRITTY_SOCKET into every
+    // pane; a later Ghostty client must still be detected as Ghostty so image
+    // previews work. Regression for images silently disabled in tmux+Ghostty.
+    let id = detect_terminal_identity_with(
+        |name| match name {
+            "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+            "TERM" => Some("tmux-256color".to_string()),
+            "TERM_PROGRAM" => Some("tmux".to_string()),
+            "ALACRITTY_SOCKET" => Some("/run/user/1000/Alacritty-wayland-1.sock".to_string()),
+            _ => None,
+        },
+        || Some("xterm-ghostty".to_string()),
+        no_tmux_env_lookup,
+        no_tmux_env_lookup,
+    );
+    assert_eq!(id, TerminalIdentity::Ghostty);
+}
+
+#[test]
+fn detect_terminal_identity_recovers_kitty_when_stale_alacritty_marker_leaks() {
+    // The recovery must also be correct when the live client really is Kitty
+    // (not just the no-op "keep Alacritty" case).
+    let id = detect_terminal_identity_with(
+        |name| match name {
+            "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+            "TERM" => Some("tmux-256color".to_string()),
+            "TERM_PROGRAM" => Some("tmux".to_string()),
+            "ALACRITTY_SOCKET" => Some("/run/user/1000/Alacritty-wayland-1.sock".to_string()),
+            _ => None,
+        },
+        || Some("xterm-kitty".to_string()),
+        no_tmux_env_lookup,
+        no_tmux_env_lookup,
+    );
+    assert_eq!(id, TerminalIdentity::Kitty);
+}
+
+#[test]
+fn detect_terminal_identity_keeps_alacritty_in_tmux_when_client_is_really_alacritty() {
+    // Real Alacritty inside tmux exposes no graphics-capable client signal, so
+    // the leaked-marker recovery must fall back to the (correct) Alacritty guess
+    // rather than mislabel it.
+    let id = detect_terminal_identity_with(
+        |name| match name {
+            "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+            "TERM" => Some("tmux-256color".to_string()),
+            "TERM_PROGRAM" => Some("tmux".to_string()),
+            "ALACRITTY_SOCKET" => Some("/run/user/1000/Alacritty-wayland-1.sock".to_string()),
+            _ => None,
+        },
+        || Some("alacritty".to_string()),
+        no_tmux_env_lookup,
+        no_tmux_env_lookup,
+    );
+    assert_eq!(id, TerminalIdentity::Alacritty);
+}
+
+#[test]
+fn detect_terminal_identity_alacritty_marker_kept_outside_tmux() {
+    // Outside tmux the marker is authoritative and tmux helpers must not run.
+    use std::cell::Cell;
+
+    let client_calls = Cell::new(0u32);
+    let id = detect_terminal_identity_with(
+        |name| match name {
+            "ALACRITTY_SOCKET" => Some("/run/user/1000/Alacritty-wayland-1.sock".to_string()),
+            _ => None,
+        },
+        || {
+            client_calls.set(client_calls.get() + 1);
+            Some("xterm-ghostty".to_string())
+        },
+        no_tmux_env_lookup,
+        no_tmux_env_lookup,
+    );
+    assert_eq!(id, TerminalIdentity::Alacritty);
+    assert_eq!(client_calls.get(), 0);
+}
+
+#[test]
 fn parse_show_environment_line_handles_set_unset_and_empty() {
     assert_eq!(
         parse_show_environment_line("KITTY_WINDOW_ID=42\n", "KITTY_WINDOW_ID"),

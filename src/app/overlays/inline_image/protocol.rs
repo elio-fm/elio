@@ -15,12 +15,17 @@ pub(in crate::app) fn detect_terminal_identity() -> TerminalIdentity {
 }
 
 /// Inner detection logic with injectable lookups so tests can drive the tmux
-/// fallback without spawning tmux. Direct process env usually wins; the one
-/// exception is a Kitty identity inside tmux, where a stale `KITTY_WINDOW_ID`
-/// can leak from another attached terminal. In tmux, recover supported
-/// identities by consulting (in order) the live tmux client `TERM`, the live
-/// tmux client environment, the tmux session env, and the tmux server global
-/// env.
+/// fallback without spawning tmux. Direct process env usually wins, with one
+/// exception: identities that, inside tmux, can only have come from an
+/// *inherited marker* env var — `KITTY_WINDOW_ID` (Kitty) and `ALACRITTY_SOCKET`
+/// (Alacritty). tmux passes the environment the *server* was started in to every
+/// pane, so a server first launched from Kitty or Alacritty mislabels a later
+/// Ghostty/Foot/… client (for Alacritty this silently disables image previews,
+/// since Alacritty supports none). When such a marker identity is seen inside
+/// tmux the live attached client is authoritative, so we consult (in order) the
+/// live tmux client `TERM`, the live tmux client environment, the tmux session
+/// env, and the tmux server global env, keeping the marker identity only if none
+/// of those resolve a terminal.
 fn detect_terminal_identity_with(
     env_lookup: impl Fn(&str) -> Option<String>,
     tmux_client_term: impl Fn() -> Option<String>,
@@ -28,20 +33,21 @@ fn detect_terminal_identity_with(
     tmux_env_lookup: impl Fn(&str) -> Option<String>,
 ) -> TerminalIdentity {
     let identity = classify_from_env(&env_lookup);
-    if identity != TerminalIdentity::Other {
-        if identity == TerminalIdentity::Kitty
-            && let Some(tmux_identity) = recover_direct_graphics_identity_from_tmux(
-                &env_lookup,
-                &tmux_client_term,
-                &tmux_client_env_lookup,
-                &tmux_env_lookup,
-            )
-        {
-            return tmux_identity;
-        }
+    let in_tmux = env_lookup("TMUX").is_some();
+
+    // Inside tmux, `TERM`/`TERM_PROGRAM` are masked to tmux's own values, so a
+    // Kitty or Alacritty identity here must have come from a leaked marker var
+    // and cannot be trusted — defer it to the live client below. Any other
+    // direct identity (e.g. a forwarded `TERM_PROGRAM=ghostty`) is authoritative.
+    let marker_identity_in_tmux = in_tmux
+        && matches!(
+            identity,
+            TerminalIdentity::Kitty | TerminalIdentity::Alacritty
+        );
+    if identity != TerminalIdentity::Other && !marker_identity_in_tmux {
         return identity;
     }
-    if env_lookup("TMUX").is_none() {
+    if !in_tmux {
         return identity;
     }
 
@@ -59,7 +65,10 @@ fn detect_terminal_identity_with(
         return id;
     }
 
-    TerminalIdentity::Other
+    // No authoritative tmux signal: keep whatever the direct env produced
+    // (`Other`, or a genuine Kitty/Alacritty that the client simply didn't
+    // confirm — e.g. real Alacritty, which exposes no graphics-capable client).
+    identity
 }
 
 fn classify_from_env(env_lookup: &impl Fn(&str) -> Option<String>) -> TerminalIdentity {
@@ -164,51 +173,6 @@ fn classify_supported_tmux_env(
             || env_lookup("KONSOLE_DBUS_WINDOW").is_some(),
         env_lookup("WT_SESSION").is_some(),
     )
-}
-
-fn recover_direct_graphics_identity_from_tmux(
-    env_lookup: &impl Fn(&str) -> Option<String>,
-    tmux_client_term: &impl Fn() -> Option<String>,
-    tmux_client_env_lookup: &impl Fn(&str) -> Option<String>,
-    tmux_env_lookup: &impl Fn(&str) -> Option<String>,
-) -> Option<TerminalIdentity> {
-    env_lookup("TMUX")?;
-    let term = env_lookup("TERM").unwrap_or_default().to_ascii_lowercase();
-    let term_program = env_lookup("TERM_PROGRAM")
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if !term.contains("tmux") && term_program != "tmux" {
-        return None;
-    }
-
-    // If tmux can identify a client directly, use that to correct stale
-    // markers inherited by the tmux pane. Kitty returns None because the direct
-    // environment already selected the same identity.
-    if let Some(client_term) = tmux_client_term()
-        && let Some(client_identity) = classify_tmux_client_termname(&client_term)
-    {
-        return if client_identity == TerminalIdentity::Kitty {
-            None
-        } else {
-            Some(client_identity)
-        };
-    }
-
-    if let Some(client_identity) = classify_supported_tmux_env(tmux_client_env_lookup) {
-        return if client_identity == TerminalIdentity::Kitty {
-            None
-        } else {
-            Some(client_identity)
-        };
-    }
-
-    if let Some(session_identity) = classify_supported_tmux_env(tmux_env_lookup)
-        && session_identity != TerminalIdentity::Kitty
-    {
-        return Some(session_identity);
-    }
-
-    None
 }
 
 fn real_env_lookup(name: &str) -> Option<String> {

@@ -262,7 +262,7 @@ pub(super) fn path_identity_key(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| normalize_absolute_path(path))
 }
 
-fn normalize_absolute_path(path: &Path) -> PathBuf {
+pub(super) fn normalize_absolute_path(path: &Path) -> PathBuf {
     use std::path::Component;
 
     let mut normalized = PathBuf::new();
