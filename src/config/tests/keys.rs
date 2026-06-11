@@ -2,13 +2,23 @@ use super::super::*;
 
 #[test]
 fn keys_default_bindings_are_sane() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
     let config = Config::default_config();
     assert_eq!(config.keys.yank, 'y');
     assert_eq!(config.keys.cut, 'x');
     assert_eq!(config.keys.paste, 'p');
     assert_eq!(config.keys.symlink_absolute, '-');
     assert_eq!(config.keys.symlink_relative, '_');
-    assert_eq!(config.keys.delete_permanently, 'D');
+    assert_eq!(config.keys.trash.to_string(), "d/Del");
+    assert_eq!(config.keys.action_for('d'), Some(Action::Trash));
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)),
+        Some(Action::Trash)
+    );
+    assert_eq!(config.keys.delete_permanently.to_string(), "D/Shift+Del");
     assert_eq!(config.keys.choose.to_string(), "Enter");
     assert_eq!(config.keys.quit, 'q');
     assert_eq!(config.keys.quit_without_cd, 'Q');
@@ -216,6 +226,35 @@ nav_left = "ctrl+alt+up"
             KeyModifiers::CONTROL | KeyModifiers::ALT
         )),
         Some(Action::NavLeft)
+    );
+}
+
+#[test]
+fn delete_named_key_supports_plain_and_shift_bindings() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+trash = ["d", "del"]
+delete_permanently = ["D", "shift+delete"]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.trash.to_string(), "d/Del");
+    assert_eq!(config.keys.delete_permanently.to_string(), "D/Shift+Del");
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)),
+        Some(Action::Trash)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::SHIFT)),
+        Some(Action::DeletePermanently)
     );
 }
 
@@ -548,7 +587,7 @@ yank = "d"
     )
     .expect("config should parse");
     assert_eq!(config.keys.yank, 'y');
-    assert_eq!(config.keys.trash, 'd');
+    assert_eq!(config.keys.trash.to_string(), "d/Del");
 }
 
 #[test]

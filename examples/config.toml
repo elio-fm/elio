@@ -61,8 +61,8 @@
 #
 # Keys may be one-character strings, named keys, or modifier bindings.
 # Supported named keys: "left", "right", "up", "down", "enter", "space",
-# "tab", "backtab", "shift+tab", "backspace", "pageup", "pagedown", "home",
-# "end", "f1".."f12".
+# "tab", "backtab", "shift+tab", "backspace", "delete", "del", "pageup",
+# "pagedown", "home", "end", "f1".."f12".
 # Named keys and modifiers are case-insensitive: "F2", "PageUp", "Ctrl+O".
 #
 # Examples: open_with = ["O", "w"], open = "ctrl+o", nav_right = "shift+right".
@@ -94,8 +94,8 @@
 # paste                = "p"
 # symlink_absolute     = "-"
 # symlink_relative     = "_"
-# trash                = "d"
-# delete_permanently   = "D"   # Shift+D
+# trash                = ["d", "del"]
+# delete_permanently   = ["D", "shift+del"]
 # create               = "a"
 # rename               = ["r", "F2"]
 # restore_from_trash   = "r"

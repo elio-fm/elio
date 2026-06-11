@@ -68,6 +68,7 @@ pub(crate) enum NamedKey {
     Tab,
     BackTab,
     Backspace,
+    Delete,
     PageUp,
     PageDown,
     Home,
@@ -89,6 +90,7 @@ impl NamedKey {
             "tab" => Some(Self::Tab),
             "backtab" => Some(Self::BackTab),
             "backspace" => Some(Self::Backspace),
+            "delete" | "del" => Some(Self::Delete),
             "pageup" => Some(Self::PageUp),
             "pagedown" => Some(Self::PageDown),
             "home" => Some(Self::Home),
@@ -113,6 +115,7 @@ impl NamedKey {
             | (Self::Tab, KeyCode::Tab)
             | (Self::BackTab, KeyCode::BackTab)
             | (Self::Backspace, KeyCode::Backspace)
+            | (Self::Delete, KeyCode::Delete)
             | (Self::PageUp, KeyCode::PageUp)
             | (Self::PageDown, KeyCode::PageDown)
             | (Self::Home, KeyCode::Home)
@@ -135,6 +138,7 @@ impl std::fmt::Display for NamedKey {
             Self::Tab => "Tab",
             Self::BackTab => "Shift+Tab",
             Self::Backspace => "Backspace",
+            Self::Delete => "Del",
             Self::PageUp => "PageUp",
             Self::PageDown => "PageDown",
             Self::Home => "Home",
@@ -254,6 +258,16 @@ impl KeySpec {
             code: KeyCodeSpec::Named(named),
             modifiers: KeyModifierSpec {
                 alt: true,
+                ..KeyModifierSpec::NONE
+            },
+        }
+    }
+
+    fn shift_named(named: NamedKey) -> Self {
+        Self {
+            code: KeyCodeSpec::Named(named),
+            modifiers: KeyModifierSpec {
+                shift: true,
                 ..KeyModifierSpec::NONE
             },
         }
@@ -385,7 +399,8 @@ impl PartialEq<char> for KeyList {
 /// Empty lists unbind the action (`open = []`).
 /// Character bindings must be one character; named bindings currently support
 /// `left`, `right`, `up`, `down`, `enter`, `space`, `tab`, `backtab`,
-/// `shift+tab`, `backspace`, `pageup`, `pagedown`, `home`, `end`, and `f1`..`f12`.
+/// `shift+tab`, `backspace`, `delete`, `del`, `pageup`, `pagedown`, `home`,
+/// `end`, and `f1`..`f12`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct KeyBindings {
     pub choose: KeyList,
@@ -458,8 +473,11 @@ impl Default for KeyBindings {
             paste: KeyList::one('p'),
             symlink_absolute: KeyList::one('-'),
             symlink_relative: KeyList::one('_'),
-            trash: KeyList::one('d'),
-            delete_permanently: KeyList::one('D'),
+            trash: KeyList(vec![KeySpec::char('d'), KeySpec::named(NamedKey::Delete)]),
+            delete_permanently: KeyList(vec![
+                KeySpec::char('D'),
+                KeySpec::shift_named(NamedKey::Delete),
+            ]),
             create: KeyList::one('a'),
             rename: KeyList(vec![
                 KeySpec::char('r'),
