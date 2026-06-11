@@ -45,9 +45,11 @@ pub(in crate::app) fn preview_log(msg: impl std::fmt::Display) {
 /// burst of SIGWINCH steps; placing the image on every step queues a full
 /// multi-megabyte transmission per step into the tmux/terminal pipe, which the
 /// terminal then takes seconds to chew through while the UI looks frozen.
-/// tmux throttles pane resizes to roughly one per 250ms during a client resize
-/// storm, so the delay must exceed that or intermediate steps still place.
-const RESIZE_SETTLE_DELAY: Duration = Duration::from_millis(300);
+/// Inside tmux the delay must exceed tmux's pane-resize throttle of roughly
+/// one per 250ms, or intermediate steps still place; outside tmux resize
+/// events arrive unthrottled, so a much shorter settle suffices.
+const TMUX_RESIZE_SETTLE_DELAY: Duration = Duration::from_millis(300);
+const RESIZE_SETTLE_DELAY: Duration = Duration::from_millis(100);
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) struct TerminalImageState {
@@ -185,7 +187,12 @@ impl App {
         if self.preview.terminal_images.protocol == ImageProtocol::None {
             return;
         }
-        self.preview.terminal_images.resize_settled_at = Some(Instant::now() + RESIZE_SETTLE_DELAY);
+        let delay = if tmux::inside_tmux() {
+            TMUX_RESIZE_SETTLE_DELAY
+        } else {
+            RESIZE_SETTLE_DELAY
+        };
+        self.preview.terminal_images.resize_settled_at = Some(Instant::now() + delay);
     }
 
     /// True while a resize burst is still in flight; image/PDF overlay
