@@ -22,12 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Blocked nested selections and prevented pasting a folder into itself.
-- Fixed image previews silently disabled inside tmux when the tmux server was first started from Alacritty or Kitty; the live client terminal is now detected instead.
-- Fixed the UI appearing frozen in visible-but-unfocused tmux panes, and staying frozen after the terminal dropped a focus event (e.g. returning from an app opened on Wayland/Hyprland).
-- Fixed multi-second freezes while the terminal drained large output such as image previews — frame output now goes through a background writer thread — and removed a blocking cursor query that could stall startup, resizes, and returns from zoxide, shells, and Open With for up to two seconds each.
-- Fixed a separate two-second stall on every return from zoxide, shells, and Open With when the terminal swallowed the keyboard-enhancement reply; the capability is now probed once per session.
-- Fixed multi-second freezes when resizing the terminal with an image or PDF preview visible (for example tiling window manager animations): the preview now repaints once after the resize settles instead of retransmitting the full image on every resize step.
-- Fixed startup and periodic freezes when autofs or network mounts were slow or asleep: building the sidebar device list no longer touches mount points, so a sleeping NAS can no longer stall the UI.
+- Fixed image previews inside tmux when stale Alacritty/Kitty markers from the tmux server environment hid the active supported terminal.
+- Fixed several terminal/UI freeze cases around large image-preview output, focus changes, keyboard enhancement probing, and slow autofs/network mounts.
+- Fixed image and PDF preview redraws during resize bursts, with resize settling tuned separately for tmux and non-tmux terminals.
 
 ## [1.8.0] - 2026-06-06
 
