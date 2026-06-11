@@ -369,6 +369,83 @@ pub(super) struct DirectoryViewMemory {
 }
 
 #[derive(Clone, Debug, Default)]
+pub(in crate::app) struct SelectedPaths {
+    inner: HashSet<PathBuf>,
+    ancestor_counts: HashMap<PathBuf, usize>,
+}
+
+impl SelectedPaths {
+    pub(in crate::app) fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub(in crate::app) fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub(in crate::app) fn contains(&self, path: &std::path::Path) -> bool {
+        self.inner.contains(path)
+    }
+
+    pub(in crate::app) fn iter(&self) -> impl Iterator<Item = &PathBuf> {
+        self.inner.iter()
+    }
+
+    pub(in crate::app) fn clear(&mut self) {
+        self.inner.clear();
+        self.ancestor_counts.clear();
+    }
+
+    pub(in crate::app) fn insert(&mut self, path: PathBuf) -> bool {
+        if self.has_nesting_conflict(&path) {
+            return false;
+        }
+        if !self.inner.insert(path.clone()) {
+            return false;
+        }
+        self.add_ancestors(&path);
+        true
+    }
+
+    pub(in crate::app) fn remove(&mut self, path: &std::path::Path) -> bool {
+        if !self.inner.remove(path) {
+            return false;
+        }
+        self.remove_ancestors(path);
+        true
+    }
+
+    pub(in crate::app) fn has_nesting_conflict(&self, path: &std::path::Path) -> bool {
+        self.ancestor_counts.contains_key(path)
+            || path
+                .ancestors()
+                .skip(1)
+                .any(|ancestor| self.inner.contains(ancestor))
+    }
+
+    fn add_ancestors(&mut self, path: &std::path::Path) {
+        for ancestor in path.ancestors().skip(1) {
+            *self
+                .ancestor_counts
+                .entry(ancestor.to_path_buf())
+                .or_default() += 1;
+        }
+    }
+
+    fn remove_ancestors(&mut self, path: &std::path::Path) {
+        for ancestor in path.ancestors().skip(1) {
+            let Some(count) = self.ancestor_counts.get_mut(ancestor) else {
+                continue;
+            };
+            *count -= 1;
+            if *count == 0 {
+                self.ancestor_counts.remove(ancestor);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 pub(super) struct MediaPreviewState {
     pub(super) ffprobe_available: Option<bool>,
     pub(super) ffmpeg_available: Option<bool>,
@@ -502,7 +579,7 @@ pub(crate) struct NavigationState {
     /// Set in apply_directory_snapshot so it's only true once the load completes.
     pub(in crate::app) in_trash: bool,
     pub(in crate::app) navigation_history: NavigationHistory,
-    pub(in crate::app) selected_paths: HashSet<PathBuf>,
+    pub(in crate::app) selected_paths: SelectedPaths,
     pub(in crate::app) directory_item_count_cache: HashMap<DirectoryItemCountKey, Option<usize>>,
     pub(in crate::app) directory_item_count_order: VecDeque<DirectoryItemCountKey>,
     pub(in crate::app) directory_count_viewport: Option<DirectoryCountViewport>,
@@ -644,7 +721,7 @@ impl App {
                 show_hidden: crate::config::ui().show_hidden || reveal_hidden_start_focus,
                 in_trash: false,
                 navigation_history: NavigationHistory::default(),
-                selected_paths: HashSet::new(),
+                selected_paths: SelectedPaths::default(),
                 directory_item_count_cache: HashMap::new(),
                 directory_item_count_order: VecDeque::new(),
                 directory_count_viewport: None,
