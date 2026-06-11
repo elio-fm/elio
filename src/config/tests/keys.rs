@@ -230,6 +230,108 @@ nav_left = "ctrl+alt+up"
 }
 
 #[test]
+fn caps_lock_character_events_match_uppercase_bindings() {
+    use crossterm::event::KeyModifiers;
+
+    let key_bindings = KeyBindings::default();
+
+    assert_eq!(
+        key_bindings.action_for_key(caps_lock_char('o', KeyModifiers::NONE)),
+        Some(Action::OpenWith)
+    );
+}
+
+#[test]
+fn caps_lock_with_shift_character_events_match_lowercase_bindings() {
+    use crossterm::event::KeyModifiers;
+
+    let key_bindings = KeyBindings::default();
+
+    assert_eq!(
+        key_bindings.action_for_key(caps_lock_char('o', KeyModifiers::SHIFT)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(caps_lock_char('O', KeyModifiers::SHIFT)),
+        Some(Action::Open)
+    );
+}
+
+#[test]
+fn caps_lock_character_events_use_unicode_case_mapping() {
+    use crossterm::event::KeyModifiers;
+
+    let config = Config::from_str(
+        r#"
+[keys]
+open = "ñ"
+open_with = "Ñ"
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(caps_lock_char('ñ', KeyModifiers::NONE)),
+        Some(Action::OpenWith)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(caps_lock_char('ñ', KeyModifiers::SHIFT)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(caps_lock_char('Ñ', KeyModifiers::SHIFT)),
+        Some(Action::Open)
+    );
+}
+
+#[test]
+fn caps_lock_does_not_change_ctrl_alt_character_matching() {
+    use crossterm::event::KeyModifiers;
+
+    let config = Config::from_str(
+        r#"
+[keys]
+open = "ctrl+o"
+open_with = "alt+o"
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(caps_lock_char('o', KeyModifiers::CONTROL)),
+        Some(Action::Open)
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(caps_lock_char('o', KeyModifiers::ALT)),
+        Some(Action::OpenWith)
+    );
+}
+
+fn caps_lock_char(
+    c: char,
+    modifiers: crossterm::event::KeyModifiers,
+) -> crossterm::event::KeyEvent {
+    use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState};
+
+    KeyEvent::new_with_kind_and_state(
+        KeyCode::Char(c),
+        modifiers,
+        KeyEventKind::Press,
+        KeyEventState::CAPS_LOCK,
+    )
+}
+
+#[test]
 fn delete_named_key_supports_plain_and_shift_bindings() {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 

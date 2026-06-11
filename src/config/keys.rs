@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventState, KeyModifiers};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -295,12 +295,20 @@ impl KeySpec {
 
 fn normalize_key_event(key: KeyEvent) -> (KeyCode, KeyModifierSpec) {
     let mut modifiers = KeyModifierSpec::from_event(key.modifiers);
+    let caps_lock = key.state.contains(KeyEventState::CAPS_LOCK);
     let code = match key.code {
         KeyCode::Char(c) if modifiers.ctrl || modifiers.alt => {
             modifiers.shift = false;
             KeyCode::Char(c.to_ascii_lowercase())
         }
-        KeyCode::Char(c) => {
+        KeyCode::Char(mut c) => {
+            if caps_lock {
+                c = if modifiers.shift {
+                    single_case_mapping(c.to_lowercase()).unwrap_or(c)
+                } else {
+                    single_case_mapping(c.to_uppercase()).unwrap_or(c)
+                };
+            }
             modifiers.shift = false;
             KeyCode::Char(c)
         }
@@ -311,6 +319,11 @@ fn normalize_key_event(key: KeyEvent) -> (KeyCode, KeyModifierSpec) {
         code => code,
     };
     (code, modifiers)
+}
+
+fn single_case_mapping(mut mapping: impl Iterator<Item = char>) -> Option<char> {
+    let mapped = mapping.next()?;
+    mapping.next().is_none().then_some(mapped)
 }
 
 impl std::fmt::Display for KeySpec {
