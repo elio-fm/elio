@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed image and PDF preview redraws during resize bursts, with resize settling tuned separately for tmux and non-tmux terminals.
 - Fixed the active sidebar item highlight in the terminal ANSI and transparent example themes.
 - Fixed UI freezes when selecting all items in very large folders.
+- Fixed Linux/BSD Open With behavior for text-like files by reporting missing handlers accurately, showing which app is used for direct single-app launches, and offering a terminal editor from `$VISUAL` or `$EDITOR` when it is available but not discovered through the desktop app list.
 
 ## [1.8.0] - 2026-06-06
 
