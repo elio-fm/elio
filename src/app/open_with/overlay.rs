@@ -147,7 +147,7 @@ impl App {
                     self.status.clear();
                 } else {
                     match launch_app(&app) {
-                        Ok(()) => self.status.clear(),
+                        Ok(()) => self.status = format!("Opened with {}", app.display_name),
                         Err(_) => self.status = format!("Failed to open with {}", app.display_name),
                     }
                 }

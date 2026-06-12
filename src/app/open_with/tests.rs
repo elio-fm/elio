@@ -95,9 +95,9 @@ fn single_discovered_app_launches_without_opening_overlay() {
         app.overlays.open_with.is_none(),
         "overlay must remain closed"
     );
-    assert!(
-        app.status.is_empty(),
-        "successful launch should clear status"
+    assert_eq!(
+        app.status, "Opened with Fake App",
+        "successful direct launch should name the app"
     );
 
     fs::remove_dir_all(root).ok();
