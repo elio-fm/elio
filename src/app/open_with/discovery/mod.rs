@@ -1,5 +1,7 @@
 #[cfg(all(unix, not(target_os = "macos")))]
 mod desktop_file;
+#[cfg(all(unix, not(target_os = "macos")))]
+mod editor;
 mod exec;
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -101,12 +103,15 @@ fn discover_xdg(path: &Path, display_name: Option<&str>) -> Vec<OpenWithApp> {
 
     // Primary: gio handles MIME inheritance (e.g. text/markdown → text/plain),
     // aliases, and added/removed associations from mimeapps.list.
-    if let Some(apps) = gio::discover_via_gio(&mime_type, path, &canceled)
+    let mut apps = if let Some(apps) = gio::discover_via_gio(&mime_type, path, &canceled)
         && !apps.is_empty()
     {
-        return apps;
-    }
+        apps
+    } else {
+        // Fallback: manual desktop-file scan with exact MIME match.
+        scan::discover_via_desktop_scan(&mime_type, path)
+    };
 
-    // Fallback: manual desktop-file scan with exact MIME match.
-    scan::discover_via_desktop_scan(&mime_type, path)
+    editor::append_editor_fallback(&mut apps, path);
+    apps
 }
