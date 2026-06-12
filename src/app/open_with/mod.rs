@@ -20,6 +20,8 @@ use crate::{
 #[cfg(all(test, unix, not(target_os = "macos")))]
 thread_local! {
     static TEST_DEFAULT_OPEN_WITH_APP: RefCell<Option<OpenWithApp>> = const { RefCell::new(None) };
+    static TEST_OPEN_WITH_APPS_FOUND: RefCell<Option<bool>> = const { RefCell::new(None) };
+    static TEST_EDITOR_FALLBACK_APP: RefCell<Option<OpenWithApp>> = const { RefCell::new(None) };
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -31,7 +33,7 @@ pub(in crate::app) fn default_open_with_app_for_entry(entry: &Entry) -> Option<O
     }
 
     #[cfg(not(test))]
-    discovery::discover_open_with_apps_for_entry(entry)
+    discovery::discover_desktop_apps_for_entry(entry)
         .into_iter()
         .find(|app| app.is_default)
 }
@@ -41,17 +43,41 @@ pub(in crate::app) fn set_default_open_with_app_for_test(app: Option<OpenWithApp
     TEST_DEFAULT_OPEN_WITH_APP.with(|slot| *slot.borrow_mut() = app);
 }
 
+#[cfg(all(test, unix, not(target_os = "macos")))]
+pub(in crate::app) fn set_open_with_apps_found_for_test(found: Option<bool>) {
+    TEST_OPEN_WITH_APPS_FOUND.with(|slot| *slot.borrow_mut() = found);
+}
+
+#[cfg(all(test, unix, not(target_os = "macos")))]
+pub(in crate::app) fn set_editor_fallback_app_for_test(app: Option<OpenWithApp>) {
+    TEST_EDITOR_FALLBACK_APP.with(|slot| *slot.borrow_mut() = app);
+}
+
 #[cfg(all(unix, not(target_os = "macos")))]
 pub(in crate::app) fn open_with_apps_found_for_entry(entry: &Entry) -> bool {
     #[cfg(test)]
     {
         let _ = entry;
-        true
+        TEST_OPEN_WITH_APPS_FOUND.with(|slot| slot.borrow().unwrap_or(true))
     }
 
     #[cfg(not(test))]
     {
-        !discovery::discover_open_with_apps_for_entry(entry).is_empty()
+        !discovery::discover_desktop_apps_for_entry(entry).is_empty()
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(in crate::app) fn editor_fallback_app_for_entry(entry: &Entry) -> Option<OpenWithApp> {
+    #[cfg(test)]
+    {
+        let _ = entry;
+        TEST_EDITOR_FALLBACK_APP.with(|slot| slot.borrow().clone())
+    }
+
+    #[cfg(not(test))]
+    {
+        discovery::editor_fallback_app_for_entry(entry)
     }
 }
 

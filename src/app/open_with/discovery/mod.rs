@@ -21,23 +21,41 @@ use crate::core::Entry;
 // ── public entry point ────────────────────────────────────────────────────────
 
 pub(super) fn discover_open_with_apps_for_entry(entry: &Entry) -> Vec<OpenWithApp> {
-    discover_open_with_apps_inner(&entry.path, Some(entry.name.as_str()))
+    discover_open_with_apps_inner(&entry.path, Some(entry.name.as_str()), true)
 }
 
-fn discover_open_with_apps_inner(path: &Path, display_name: Option<&str>) -> Vec<OpenWithApp> {
+#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg_attr(test, allow(dead_code))]
+pub(super) fn discover_desktop_apps_for_entry(entry: &Entry) -> Vec<OpenWithApp> {
+    discover_open_with_apps_inner(&entry.path, Some(entry.name.as_str()), false)
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg_attr(test, allow(dead_code))]
+pub(super) fn editor_fallback_app_for_entry(entry: &Entry) -> Option<OpenWithApp> {
+    editor::editor_fallback_for_path(&entry.path)
+}
+
+fn discover_open_with_apps_inner(
+    path: &Path,
+    display_name: Option<&str>,
+    include_editor_fallback: bool,
+) -> Vec<OpenWithApp> {
     #[cfg(target_os = "macos")]
     {
         let _ = display_name;
+        let _ = include_editor_fallback;
         macos::discover_via_nsworkspace(path)
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        discover_xdg(path, display_name)
+        discover_xdg(path, display_name, include_editor_fallback)
     }
     #[cfg(not(any(target_os = "macos", all(unix, not(target_os = "macos")))))]
     {
         let _ = path;
         let _ = display_name;
+        let _ = include_editor_fallback;
         vec![]
     }
 }
@@ -89,7 +107,11 @@ pub(super) fn current_desktops() -> Vec<String> {
 // ── XDG discovery (Linux / BSD) ───────────────────────────────────────────────
 
 #[cfg(all(unix, not(target_os = "macos")))]
-fn discover_xdg(path: &Path, display_name: Option<&str>) -> Vec<OpenWithApp> {
+fn discover_xdg(
+    path: &Path,
+    display_name: Option<&str>,
+    include_editor_fallback: bool,
+) -> Vec<OpenWithApp> {
     use std::time::{Duration, Instant};
 
     // 3-second budget for subprocess fallbacks; pure-Rust MIME lookup is
@@ -103,15 +125,16 @@ fn discover_xdg(path: &Path, display_name: Option<&str>) -> Vec<OpenWithApp> {
 
     // Primary: gio handles MIME inheritance (e.g. text/markdown → text/plain),
     // aliases, and added/removed associations from mimeapps.list.
-    let mut apps = if let Some(apps) = gio::discover_via_gio(&mime_type, path, &canceled)
-        && !apps.is_empty()
-    {
-        apps
-    } else {
-        // Fallback: manual desktop-file scan with exact MIME match.
-        scan::discover_via_desktop_scan(&mime_type, path)
+    let mut apps = match gio::discover_via_gio(&mime_type, path, &canceled) {
+        Some(apps) if !apps.is_empty() => apps,
+        _ => {
+            // Fallback: manual desktop-file scan with exact MIME match.
+            scan::discover_via_desktop_scan(&mime_type, path)
+        }
     };
 
-    editor::append_editor_fallback(&mut apps, path);
+    if include_editor_fallback {
+        editor::append_editor_fallback(&mut apps, path);
+    }
     apps
 }

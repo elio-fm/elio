@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed image and PDF preview redraws during resize bursts, with resize settling tuned separately for tmux and non-tmux terminals.
 - Fixed the active sidebar item highlight in the terminal ANSI and transparent example themes.
 - Fixed UI freezes when selecting all items in very large folders.
-- Fixed Linux/BSD Open With behavior for text-like files by reporting missing handlers accurately, showing which app is used for direct single-app launches, and offering a terminal editor from `$VISUAL` or `$EDITOR` when it is available but not discovered through the desktop app list.
+- Fixed Linux/BSD Open With (`O`) behavior by reporting missing handlers accurately, showing the app used for direct single-app launches, and offering `$VISUAL` or `$EDITOR` in the current terminal for text/code files when the editor is not registered as a desktop app; `o` / `Enter` uses the same editor fallback only when no desktop handler is available. ([#168])
 
 ## [1.8.0] - 2026-06-06
 
@@ -248,3 +248,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#153]: https://github.com/elio-fm/elio/issues/153
 [#159]: https://github.com/elio-fm/elio/issues/159
 [#162]: https://github.com/elio-fm/elio/issues/162
+[#168]: https://github.com/elio-fm/elio/issues/168

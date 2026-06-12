@@ -32,6 +32,42 @@ impl Drop for DefaultOpenWithAppGuard {
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
+struct OpenWithAppsFoundGuard;
+
+#[cfg(all(unix, not(target_os = "macos")))]
+impl OpenWithAppsFoundGuard {
+    fn install(found: bool) -> Self {
+        crate::app::open_with::set_open_with_apps_found_for_test(Some(found));
+        Self
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+impl Drop for OpenWithAppsFoundGuard {
+    fn drop(&mut self) {
+        crate::app::open_with::set_open_with_apps_found_for_test(None);
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+struct EditorFallbackAppGuard;
+
+#[cfg(all(unix, not(target_os = "macos")))]
+impl EditorFallbackAppGuard {
+    fn install(app: crate::app::state::OpenWithApp) -> Self {
+        crate::app::open_with::set_editor_fallback_app_for_test(Some(app));
+        Self
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+impl Drop for EditorFallbackAppGuard {
+    fn drop(&mut self) {
+        crate::app::open_with::set_editor_fallback_app_for_test(None);
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
 fn fake_default_open_with_app(
     display_name: &str,
     program: &str,
@@ -768,6 +804,45 @@ fn open_action_keeps_system_opener_for_gui_default_app() {
     assert_eq!(opened, file_path.display().to_string());
     assert_eq!(app.pending_terminal_task, None);
     assert_eq!(app.status, format!("Opened {}", file_path.display()));
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn open_action_uses_editor_fallback_when_no_desktop_app_exists() {
+    let root = temp_path("open-editor-fallback-no-desktop");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let file_path = root.join("main.rs");
+    fs::write(&file_path, "fn main() {}\n").expect("failed to write temp file");
+    let capture = root.join("capture.txt");
+    let _capture_guard = OpenInSystemCaptureGuard::install(capture.clone());
+    let _found_guard = OpenWithAppsFoundGuard::install(false);
+    let _editor_guard = EditorFallbackAppGuard::install(fake_default_open_with_app(
+        "Helix ($VISUAL)",
+        "hx",
+        vec![file_path.display().to_string()],
+        true,
+    ));
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('o'))))
+        .expect("o should use editor fallback when no desktop app exists");
+
+    assert_eq!(
+        app.pending_terminal_task,
+        Some(PendingTerminalTask::Command {
+            program: "hx".to_string(),
+            args: vec![file_path.display().to_string()],
+        })
+    );
+    assert!(app.status.is_empty());
+    assert!(
+        !capture.exists(),
+        "system opener should not run when editor fallback is available"
+    );
 
     fs::remove_dir_all(root).ok();
 }

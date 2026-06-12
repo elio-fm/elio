@@ -7,26 +7,31 @@ use super::super::super::state::OpenWithApp;
 use super::exec::tokenize_exec;
 
 pub(super) fn append_editor_fallback(apps: &mut Vec<OpenWithApp>, path: &Path) {
-    if !super::super::path_is_text_like(path) {
-        return;
-    }
-
-    let Some(path_str) = path.to_str() else {
+    let Some(app) = editor_fallback_for_path(path) else {
         return;
     };
+    if !duplicates_discovered_app(&app, apps) {
+        apps.push(app);
+    }
+}
+
+pub(super) fn editor_fallback_for_path(path: &Path) -> Option<OpenWithApp> {
+    if !super::super::path_is_text_like(path) {
+        return None;
+    }
+
+    let path_str = path.to_str()?;
 
     for var in ["VISUAL", "EDITOR"] {
         let Some(value) = env::var_os(var).and_then(|value| value.into_string().ok()) else {
             continue;
         };
-        let Some(app) = editor_app_from_command(var, &value, path_str) else {
-            continue;
-        };
-        if !duplicates_discovered_app(&app, apps) {
-            apps.push(app);
+        if let Some(app) = editor_app_from_command(var, &value, path_str) {
+            return Some(app);
         }
-        break;
     }
+
+    None
 }
 
 fn editor_app_from_command(var: &str, command: &str, path_str: &str) -> Option<OpenWithApp> {
