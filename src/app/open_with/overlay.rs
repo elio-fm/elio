@@ -4,11 +4,14 @@ use super::super::{
     App,
     state::{OpenWithApp, OpenWithOverlay, OpenWithRow, PendingTerminalTask},
 };
-use crate::fs::{detached_open_command, open_in_system};
+use crate::fs::detached_open_command;
+#[cfg(any(test, target_os = "macos", not(unix)))]
+use crate::fs::open_in_system;
 use anyhow::Result;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum FallbackOpenOutcome {
+    #[cfg_attr(all(unix, not(target_os = "macos"), not(test)), allow(dead_code))]
     DefaultApp,
     #[cfg(target_os = "macos")]
     TextEditor,
@@ -131,6 +134,7 @@ impl App {
                 Ok(FallbackOpenOutcome::TextEditor) => {
                     self.status = "No apps found, opened in text editor".to_string();
                 }
+                Err(e) if e == "No apps found" => self.status = e,
                 Err(e) => self.status = format!("Failed to open: {e}"),
             },
             1 => {
@@ -202,8 +206,16 @@ fn open_with_fallback(path: &Path) -> std::result::Result<FallbackOpenOutcome, S
         if super::path_is_text_like(path) {
             return open_in_text_editor(path).map(|()| FallbackOpenOutcome::TextEditor);
         }
+        return open_in_system(path).map(|()| FallbackOpenOutcome::DefaultApp);
     }
 
+    #[cfg(all(unix, not(target_os = "macos"), not(test)))]
+    {
+        let _ = path;
+        Err("No apps found".to_string())
+    }
+
+    #[cfg(any(not(unix), test))]
     open_in_system(path).map(|()| FallbackOpenOutcome::DefaultApp)
 }
 

@@ -41,6 +41,20 @@ pub(in crate::app) fn set_default_open_with_app_for_test(app: Option<OpenWithApp
     TEST_DEFAULT_OPEN_WITH_APP.with(|slot| *slot.borrow_mut() = app);
 }
 
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(in crate::app) fn open_with_apps_found_for_entry(entry: &Entry) -> bool {
+    #[cfg(test)]
+    {
+        let _ = entry;
+        true
+    }
+
+    #[cfg(not(test))]
+    {
+        !discovery::discover_open_with_apps_for_entry(entry).is_empty()
+    }
+}
+
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(super) fn path_is_text_like(path: &Path) -> bool {
     let facts = inspect_path(path, EntryKind::File);
