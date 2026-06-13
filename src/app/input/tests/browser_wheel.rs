@@ -1,6 +1,23 @@
 use super::super::*;
 use super::helpers::temp_path;
-use std::{fs, thread, time::Duration};
+use std::{
+    fs, thread,
+    time::{Duration, Instant},
+};
+
+fn wait_for_selected_directory_count(app: &mut App) {
+    for _ in 0..100 {
+        let _ = app.process_background_jobs();
+        if app
+            .selected_entry()
+            .is_some_and(|entry| app.directory_item_count_label(entry).is_some())
+        {
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for selected directory count");
+}
 
 #[test]
 fn wheel_burst_smoothing_coalesces_dense_input() {
@@ -292,6 +309,146 @@ fn browser_wheel_preserves_preview_when_selection_does_not_change() {
     assert_eq!(app.navigation.scroll_row, 0);
     assert_eq!(app.navigation.selected, 0);
     assert_eq!(app.preview.state.token, initial_preview_token);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn high_frequency_browser_wheel_keeps_visible_directory_counts_live_during_burst() {
+    let root = temp_path("wheel-directory-count-live");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    for index in 0..3 {
+        let dir = root.join(format!("dir-{index}"));
+        fs::create_dir_all(&dir).expect("failed to create child directory");
+        fs::write(dir.join("child.txt"), "child").expect("failed to write child file");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.view_mode = ViewMode::List;
+    app.input.wheel_profile = WheelProfile::HighFrequency;
+    app.select_index(0);
+    let frame_state = FrameState {
+        entries_panel: Some(Rect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 8,
+        }),
+        metrics: ViewMetrics {
+            cols: 1,
+            rows_visible: 1,
+        },
+        ..FrameState::default()
+    };
+    app.set_frame_state(frame_state.clone());
+
+    app.handle_event(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: 1,
+        row: 1,
+        modifiers: KeyModifiers::NONE,
+    }))
+    .expect("scroll down should be handled");
+    assert!(app.browser_wheel_burst_active());
+    app.set_frame_state(frame_state);
+
+    thread::sleep(DIRECTORY_ITEM_COUNT_IDLE_DELAY + Duration::from_millis(10));
+    assert!(app.browser_wheel_burst_active());
+    let _ = app.process_directory_item_count_timer();
+    wait_for_selected_directory_count(&mut app);
+
+    let selected = app.selected_entry().expect("selection should exist");
+    assert_eq!(selected.name, "dir-1");
+    assert_eq!(
+        app.directory_item_count_label(selected).as_deref(),
+        Some("1 item")
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn directory_count_timer_uses_latest_viewport_without_debouncing_every_scroll_step() {
+    let root = temp_path("directory-count-throttle-latest");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    for index in 0..3 {
+        let dir = root.join(format!("dir-{index}"));
+        fs::create_dir_all(&dir).expect("failed to create child directory");
+        fs::write(dir.join("child.txt"), "child").expect("failed to write child file");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.view_mode = ViewMode::List;
+    let frame_state = FrameState {
+        entries_panel: Some(Rect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 8,
+        }),
+        metrics: ViewMetrics {
+            cols: 1,
+            rows_visible: 1,
+        },
+        ..FrameState::default()
+    };
+    app.select_index(0);
+    app.set_frame_state(frame_state.clone());
+
+    thread::sleep(DIRECTORY_ITEM_COUNT_IDLE_DELAY / 2);
+    app.select_index(1);
+    app.set_frame_state(frame_state);
+    thread::sleep(DIRECTORY_ITEM_COUNT_IDLE_DELAY / 2 + Duration::from_millis(10));
+
+    let _ = app.process_directory_item_count_timer();
+    wait_for_selected_directory_count(&mut app);
+
+    let selected = app.selected_entry().expect("selection should exist");
+    assert_eq!(selected.name, "dir-1");
+    assert_eq!(
+        app.directory_item_count_label(selected).as_deref(),
+        Some("1 item")
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn directory_count_timer_is_not_blocked_by_deferred_preview_refresh() {
+    let root = temp_path("directory-count-preview-deferred");
+    let dir = root.join("dir");
+    fs::create_dir_all(&dir).expect("failed to create child directory");
+    fs::write(dir.join("child.txt"), "child").expect("failed to write child file");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.navigation.view_mode = ViewMode::List;
+    app.select_index(0);
+    app.set_frame_state(FrameState {
+        entries_panel: Some(Rect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 8,
+        }),
+        metrics: ViewMetrics {
+            cols: 1,
+            rows_visible: 1,
+        },
+        ..FrameState::default()
+    });
+    app.preview.state.deferred_refresh_at =
+        Some(Instant::now() + HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY);
+
+    thread::sleep(DIRECTORY_ITEM_COUNT_IDLE_DELAY + Duration::from_millis(10));
+    let _ = app.process_directory_item_count_timer();
+    wait_for_selected_directory_count(&mut app);
+
+    let selected = app.selected_entry().expect("selection should exist");
+    assert_eq!(
+        app.directory_item_count_label(selected).as_deref(),
+        Some("1 item")
+    );
+    assert!(app.preview.state.deferred_refresh_at.is_some());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

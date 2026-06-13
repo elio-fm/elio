@@ -54,18 +54,16 @@ impl App {
             return;
         }
         self.navigation.directory_count_viewport = Some(viewport);
-        self.navigation.directory_item_count_ready_at =
-            Some(Instant::now() + DIRECTORY_ITEM_COUNT_IDLE_DELAY);
+        self.navigation
+            .directory_item_count_ready_at
+            .get_or_insert_with(|| Instant::now() + DIRECTORY_ITEM_COUNT_IDLE_DELAY);
     }
 
     pub(crate) fn process_directory_item_count_timer(&mut self) -> bool {
         let Some(deadline) = self.navigation.directory_item_count_ready_at else {
             return false;
         };
-        if Instant::now() < deadline
-            || self.browser_wheel_burst_active()
-            || self.preview.state.deferred_refresh_at.is_some()
-        {
+        if Instant::now() < deadline {
             return false;
         }
 

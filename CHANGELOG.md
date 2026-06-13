@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed the active sidebar item highlight in the terminal ANSI and transparent example themes.
 - Fixed UI freezes when selecting all items in very large folders.
 - Fixed Linux/BSD Open With (`O`) behavior by reporting missing handlers accurately, showing the app used for direct single-app launches, and offering `$VISUAL` or `$EDITOR` in the current terminal for text/code files when the editor is not registered as a desktop app; `o` / `Enter` uses the same editor fallback only when no desktop handler is available. ([#168])
+- Fixed folder item counts lagging behind during fast mouse-wheel navigation.
 
 ## [1.8.0] - 2026-06-06
 
