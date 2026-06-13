@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Updated shell integration scripts to pass `--chooser-file` invocations directly to `elio`, so chooser mode does not change the parent shell directory. Re-run `elio shell install` after upgrading to refresh existing shell integration.
+- Improved the Open With menu with keyboard navigation, scrolling, and an overflow scrollbar for long app lists.
 
 ### Fixed
 

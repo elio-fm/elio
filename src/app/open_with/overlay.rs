@@ -54,7 +54,15 @@ impl App {
             .open_with
             .as_ref()
             .and_then(|overlay| overlay.rows.get(index))
-            .map(|row| row.shortcut)
+            .and_then(|row| row.shortcut)
+    }
+
+    pub fn open_with_selected_index(&self) -> usize {
+        self.overlays
+            .open_with
+            .as_ref()
+            .map(|overlay| overlay.selected)
+            .unwrap_or(0)
     }
 }
 
@@ -154,19 +162,48 @@ impl App {
             }
             _ => {
                 self.overlays.help = false;
-                self.overlays.open_with = Some(build_open_with_overlay(apps));
+                self.overlays.open_with = Some(build_open_with_overlay(
+                    apps,
+                    &crate::config::keys().open_with_reserved_shortcuts(),
+                ));
                 self.status.clear();
             }
         }
     }
+
+    pub(in crate::app) fn move_open_with_selection(&mut self, delta: isize) {
+        let Some(overlay) = self.overlays.open_with.as_mut() else {
+            return;
+        };
+        if overlay.rows.is_empty() {
+            overlay.selected = 0;
+            return;
+        }
+
+        let max = overlay.rows.len().saturating_sub(1) as isize;
+        overlay.selected = (overlay.selected as isize + delta).clamp(0, max) as usize;
+    }
+
+    pub(in crate::app) fn confirm_selected_open_with_row(&mut self) -> Result<()> {
+        let Some(index) = self
+            .overlays
+            .open_with
+            .as_ref()
+            .map(|overlay| overlay.selected)
+        else {
+            return Ok(());
+        };
+
+        self.confirm_open_with_index(index)
+    }
 }
 
-fn build_open_with_overlay(apps: Vec<OpenWithApp>) -> OpenWithOverlay {
+fn build_open_with_overlay(apps: Vec<OpenWithApp>, reserved_shortcuts: &[char]) -> OpenWithOverlay {
+    let mut shortcuts = open_with_shortcuts(reserved_shortcuts);
     let rows = apps
         .into_iter()
-        .enumerate()
-        .filter_map(|(index, app)| {
-            let shortcut = assign_shortcut(index)?;
+        .map(|app| {
+            let shortcut = shortcuts.next();
             let mut label = app.display_name.clone();
             if app.requires_terminal {
                 label.push_str(" (terminal)");
@@ -174,30 +211,27 @@ fn build_open_with_overlay(apps: Vec<OpenWithApp>) -> OpenWithOverlay {
             if app.is_default {
                 label.push_str(" (default)");
             }
-            Some(OpenWithRow {
+            OpenWithRow {
                 shortcut,
                 label,
                 app,
-            })
+            }
         })
         .collect();
 
     OpenWithOverlay {
         title: "Open With".to_string(),
         rows,
+        selected: 0,
     }
 }
 
-/// Assigns a keyboard shortcut for the row at `index`.
-/// Slots 0–8 → `'1'`–`'9'`, slots 9–34 → `'a'`–`'z'`.
-fn assign_shortcut(index: usize) -> Option<char> {
-    if index < 9 {
-        char::from_digit((index + 1) as u32, 10)
-    } else if index < 9 + 26 {
-        Some((b'a' + (index - 9) as u8) as char)
-    } else {
-        None
-    }
+const OPEN_WITH_SHORTCUTS: &str = "123456789abcdefghijklmnopqrstuvwxyz";
+
+fn open_with_shortcuts(reserved: &[char]) -> impl Iterator<Item = char> + '_ {
+    OPEN_WITH_SHORTCUTS
+        .chars()
+        .filter(move |shortcut| !reserved.contains(shortcut))
 }
 
 fn open_with_fallback(path: &Path) -> std::result::Result<FallbackOpenOutcome, String> {
@@ -251,21 +285,40 @@ impl App {
         args: Vec<String>,
         requires_terminal: bool,
     ) {
+        self.inject_open_with_rows_for_test(vec![(
+            display_name.to_string(),
+            program.to_string(),
+            args,
+            requires_terminal,
+        )]);
+    }
+
+    pub(crate) fn inject_open_with_rows_for_test(
+        &mut self,
+        rows: Vec<(String, String, Vec<String>, bool)>,
+    ) {
         use super::super::state::{OpenWithApp, OpenWithOverlay, OpenWithRow};
         self.overlays.open_with = Some(OpenWithOverlay {
             title: "Open With".to_string(),
-            rows: vec![OpenWithRow {
-                shortcut: '1',
-                label: display_name.to_string(),
-                app: OpenWithApp {
-                    display_name: display_name.to_string(),
-                    desktop_id: None,
-                    program: program.to_string(),
-                    args,
-                    is_default: false,
-                    requires_terminal,
-                },
-            }],
+            rows: rows
+                .into_iter()
+                .enumerate()
+                .map(
+                    |(index, (display_name, program, args, requires_terminal))| OpenWithRow {
+                        shortcut: char::from_digit((index + 1) as u32, 10),
+                        label: display_name.clone(),
+                        app: OpenWithApp {
+                            display_name,
+                            desktop_id: None,
+                            program,
+                            args,
+                            is_default: false,
+                            requires_terminal,
+                        },
+                    },
+                )
+                .collect(),
+            selected: 0,
         });
     }
 }

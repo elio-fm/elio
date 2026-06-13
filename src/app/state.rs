@@ -253,7 +253,7 @@ pub(super) struct OpenWithApp {
 
 #[derive(Clone, Debug)]
 pub(super) struct OpenWithRow {
-    pub(super) shortcut: char,
+    pub(super) shortcut: Option<char>,
     pub(super) label: String,
     pub(super) app: OpenWithApp,
 }
@@ -262,6 +262,7 @@ pub(super) struct OpenWithRow {
 pub(super) struct OpenWithOverlay {
     pub(super) title: String,
     pub(super) rows: Vec<OpenWithRow>,
+    pub(super) selected: usize,
 }
 
 #[derive(Clone, Debug)]

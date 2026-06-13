@@ -1198,6 +1198,25 @@ open_with = "w"
 }
 
 #[test]
+fn open_with_reserved_shortcuts_follow_custom_menu_controls() {
+    let config = Config::from_str(
+        r#"
+[keys]
+nav_down = "n"
+nav_up = "m"
+nav_right = []
+open_or_enter = ["enter", "l", "right"]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(
+        config.keys.open_with_reserved_shortcuts(),
+        vec!['n', 'm', 'l']
+    );
+}
+
+#[test]
 fn open_or_enter_defaults_to_enter() {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
