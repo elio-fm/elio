@@ -352,7 +352,7 @@ fn high_frequency_browser_wheel_keeps_visible_directory_counts_live_during_burst
     assert!(app.browser_wheel_burst_active());
     app.set_frame_state(frame_state);
 
-    thread::sleep(DIRECTORY_ITEM_COUNT_IDLE_DELAY + Duration::from_millis(10));
+    app.navigation.directory_item_count_ready_at = Some(Instant::now());
     assert!(app.browser_wheel_burst_active());
     let _ = app.process_directory_item_count_timer();
     wait_for_selected_directory_count(&mut app);
