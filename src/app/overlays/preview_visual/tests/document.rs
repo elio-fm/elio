@@ -697,6 +697,7 @@ fn resize_settle_holds_image_placement_until_window_expires() {
 
     app.handle_terminal_image_resize();
     configure_iterm_image_support(&mut app);
+    app.defer_terminal_image_resize_settle_for_tests();
     assert!(
         !app.process_terminal_image_resize_settle_timer(),
         "settle timer should still be pending immediately after a resize"

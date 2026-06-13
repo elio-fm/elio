@@ -293,6 +293,14 @@ impl App {
         self.preview.terminal_images.identity = identity;
     }
 
+    /// Pushes the resize-settle deadline far enough into the future that tests
+    /// can assert pending-settle behavior without depending on scheduler timing.
+    #[cfg(test)]
+    pub(in crate::app) fn defer_terminal_image_resize_settle_for_tests(&mut self) {
+        self.preview.terminal_images.resize_settled_at =
+            Some(Instant::now() + Duration::from_secs(60));
+    }
+
     /// Jumps past the resize-settle window so tests can exercise the placement
     /// that follows a resize without waiting out the real delay.
     #[cfg(test)]
