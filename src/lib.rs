@@ -114,7 +114,7 @@ fn run_with_startup_state(
         reveal_hidden_start_focus,
         chooser_file.is_some(),
     );
-    restore_terminal(&mut terminal)?;
+    restore_terminal(&mut terminal, &drainer)?;
     let app_exit = result?;
     if let Some(final_cwd) = app_exit.final_cwd {
         write_cwd_file_if_requested(cwd_file.as_deref(), &final_cwd)?;
@@ -459,7 +459,7 @@ fn apply_zoxide_query_result(app: &mut App, result: zoxide::QueryResult) {
     }
 }
 
-fn restore_terminal(terminal: &mut AppTerminal) -> Result<()> {
+fn restore_terminal(terminal: &mut AppTerminal, drainer: &Drainer) -> Result<()> {
     // Disable in reverse order and do it before leaving the alternate screen so the
     // terminal processes the escape sequences while still in the right mode.
     let backend = terminal.backend_mut();
@@ -476,9 +476,8 @@ fn restore_terminal(terminal: &mut AppTerminal) -> Result<()> {
     )?;
     disable_raw_mode()?;
     terminal.show_cursor()?;
-    // Remaining queued bytes (these restore writes included) are flushed when the
-    // terminal — and with it the ThreadedWriter — is dropped right after run()
-    // returns; ThreadedWriter::drop drains the writer thread before exit.
+    terminal.backend_mut().flush()?;
+    drainer.drain();
     Ok(())
 }
 
