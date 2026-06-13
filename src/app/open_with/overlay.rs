@@ -249,7 +249,7 @@ fn open_with_fallback(path: &Path) -> std::result::Result<FallbackOpenOutcome, S
         Err("No apps found".to_string())
     }
 
-    #[cfg(any(not(unix), test))]
+    #[cfg(all(any(not(unix), test), not(target_os = "macos")))]
     open_in_system(path).map(|()| FallbackOpenOutcome::DefaultApp)
 }
 
