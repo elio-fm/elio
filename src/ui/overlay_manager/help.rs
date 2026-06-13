@@ -75,7 +75,14 @@ pub(super) fn render_help(
     ]);
     let mouse_entries = vec![
         e("Click", "select item"),
-        e("Double-click", "open item"),
+        e(
+            "Double-click",
+            if mode.is_chooser() {
+                "confirm clicked item"
+            } else {
+                "open item"
+            },
+        ),
         e("Wheel", "scroll"),
         e("Shift+Wheel", "scroll sideways"),
     ];

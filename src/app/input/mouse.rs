@@ -106,7 +106,11 @@ impl App {
                     };
                     self.select_index(hit.index);
                     if self.is_double_click(&path) {
-                        self.open_entry_at_index(hit.index)?;
+                        if self.chooser_mode {
+                            self.confirm_chooser_path(&path);
+                        } else {
+                            self.open_entry_at_index(hit.index)?;
+                        }
                     }
                     self.input.last_click = Some(ClickState {
                         path,

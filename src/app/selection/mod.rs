@@ -90,6 +90,16 @@ impl App {
         self.should_quit = true;
     }
 
+    pub(in crate::app) fn confirm_chooser_path(&mut self, path: &Path) {
+        if !self.chooser_mode {
+            return;
+        }
+        self.chooser_exit = Some(ChooserExit::Confirmed(vec![
+            self.absolute_chooser_path(path),
+        ]));
+        self.should_quit = true;
+    }
+
     pub(in crate::app) fn cancel_chooser(&mut self) {
         if !self.chooser_mode {
             return;
