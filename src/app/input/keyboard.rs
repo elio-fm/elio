@@ -294,7 +294,7 @@ impl App {
         Ok(())
     }
 
-    fn key_context(&self) -> crate::config::KeyContext {
+    pub(in crate::app) fn key_context(&self) -> crate::config::KeyContext {
         if self.navigation.in_trash || self.cwd_is_inside_trash_subfolder() {
             crate::config::KeyContext::Trash
         } else {

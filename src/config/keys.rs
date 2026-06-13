@@ -385,6 +385,12 @@ impl KeyList {
             _ => None,
         }
     }
+
+    pub(crate) fn single_chars(&self) -> impl Iterator<Item = char> + '_ {
+        self.0
+            .iter()
+            .filter_map(|spec| spec.single_char().map(|ch| ch.to_ascii_lowercase()))
+    }
 }
 
 impl std::fmt::Display for KeyList {
@@ -641,6 +647,14 @@ impl KeyBindings {
         }
         self.action_for_key_in_context(key, context)
             .map(ChooserKeyAction::Normal)
+    }
+
+    pub(crate) fn open_with_reserved_shortcuts(&self) -> Vec<char> {
+        self.nav_down
+            .single_chars()
+            .chain(self.nav_up.single_chars())
+            .chain(self.open_or_enter.single_chars())
+            .collect()
     }
 
     fn bindings(&self) -> [(&KeyList, Action); 43] {

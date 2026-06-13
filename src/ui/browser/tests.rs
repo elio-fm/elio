@@ -987,6 +987,62 @@ fn open_with_overlay_renders_expected_hits() {
 }
 
 #[test]
+fn open_with_overlay_draws_scrollbar_only_when_rows_overflow() {
+    let root = temp_path("open-with-overlay-scrollbar");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("document.txt"), "hello\n").expect("failed to write temp file");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    let mut terminal = Terminal::new(TestBackend::new(90, 12)).expect("terminal should init");
+
+    app.inject_open_with_for_test("Text Editor", "/usr/bin/true", vec![], false);
+    let state = draw_ui(&mut terminal, &mut app);
+    let panel = state
+        .open_with_panel
+        .expect("open-with panel should render");
+    let inner = helpers::inner_with_padding(panel);
+    let right_column = (inner.y..inner.y + inner.height)
+        .map(|y| terminal.backend().buffer()[(inner.x + inner.width - 1, y)].symbol())
+        .collect::<String>();
+    assert!(
+        !right_column.contains('┃'),
+        "single-row open-with overlay should not draw a scrollbar"
+    );
+
+    app.inject_open_with_rows_for_test(
+        (0..20)
+            .map(|index| {
+                (
+                    format!("App {index}"),
+                    "/usr/bin/true".to_string(),
+                    Vec::new(),
+                    false,
+                )
+            })
+            .collect(),
+    );
+    let state = draw_ui(&mut terminal, &mut app);
+    let panel = state
+        .open_with_panel
+        .expect("open-with panel should render");
+    let inner = helpers::inner_with_padding(panel);
+    let right_column = (inner.y..inner.y + inner.height)
+        .map(|y| terminal.backend().buffer()[(inner.x + inner.width - 1, y)].symbol())
+        .collect::<String>();
+
+    assert!(
+        right_column.contains('┃'),
+        "overflowing open-with overlay should draw a scrollbar thumb"
+    );
+    assert!(
+        right_column.contains('│'),
+        "overflowing open-with overlay should draw a scrollbar track"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn trash_overlay_tabs_focus_between_confirm_and_cancel_buttons() {
     let root = temp_path("trash-overlay-focus");
     fs::create_dir_all(&root).expect("failed to create temp root");
