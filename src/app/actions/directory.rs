@@ -336,7 +336,6 @@ impl App {
             self.remembered_view_for(&normalized)
                 .and_then(|view| view.selected_path)
         });
-        self.status = format!("Opening {}", crate::path_display::user_facing(&normalized));
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
             target_cwd: normalized,
