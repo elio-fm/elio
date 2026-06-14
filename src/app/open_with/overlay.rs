@@ -74,10 +74,6 @@ impl App {
             self.status = "Nothing selected".to_string();
             return;
         };
-        if entry.is_dir() {
-            self.status = "Open With is for files".to_string();
-            return;
-        }
         let entry = entry.clone();
         let path = entry.path.clone();
 
