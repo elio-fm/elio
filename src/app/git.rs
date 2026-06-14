@@ -13,7 +13,7 @@ impl App {
         self.git.dirty
     }
 
-    pub(in crate::app) fn refresh_git_branch(&mut self) {
+    pub(crate) fn refresh_git_branch(&mut self) {
         let cwd = self.navigation.cwd.clone();
         let cwd_changed = self.git.cwd != cwd;
         self.git.cwd = cwd.clone();

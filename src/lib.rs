@@ -619,6 +619,7 @@ fn run_app(
     if chooser_enabled {
         app.enable_chooser_mode();
     }
+    app.refresh_git_branch();
 
     // Enable terminal image previews. Detection handles the current policy:
     // Kitty, Ghostty, Warp, WezTerm, iTerm2, and Konsole auto-enable supported

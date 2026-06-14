@@ -852,7 +852,6 @@ impl App {
         app.remember_current_directory_view();
         app.refresh_preview();
         app.reset_directory_watch();
-        app.refresh_git_branch();
         Ok(app)
     }
 
