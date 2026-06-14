@@ -63,7 +63,7 @@ fn double_click_opens_clicked_file_not_multi_selection() {
     let opened = read_open_capture(&capture);
     let opened: Vec<_> = opened.lines().map(str::to_owned).collect();
     assert_eq!(opened, vec![beta.display().to_string()]);
-    assert_eq!(app.status, format!("Opened {}", beta.display()));
+    assert_eq!(app.status, "Opened beta.txt");
 
     fs::remove_dir_all(root).ok();
 }

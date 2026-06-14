@@ -487,7 +487,7 @@ impl App {
         }
 
         self.status = match (total, opened, last_error) {
-            (1, 1, _) => format!("Opened {}", targets[0].display()),
+            (1, 1, _) => format!("Opened {}", open_status_name(&targets[0])),
             (_, opened, None) => format!("Opened {opened} items"),
             (1, 0, Some(error)) => error,
             (_, 0, Some(error)) => format!("Failed to open {total} items: {error}"),
@@ -530,6 +530,12 @@ impl App {
             .map(|entry| vec![entry.path.clone()])
             .unwrap_or_default()
     }
+}
+
+fn open_status_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| crate::path_display::user_facing(path))
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]

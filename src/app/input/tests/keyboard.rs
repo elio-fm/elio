@@ -803,7 +803,7 @@ fn open_action_keeps_system_opener_for_gui_default_app() {
     let opened = read_open_capture(&capture);
     assert_eq!(opened, file_path.display().to_string());
     assert_eq!(app.pending_terminal_task, None);
-    assert_eq!(app.status, format!("Opened {}", file_path.display()));
+    assert_eq!(app.status, "Opened note.txt");
 
     fs::remove_dir_all(root).ok();
 }
