@@ -128,6 +128,20 @@ pub(in crate::app) struct DirectoryStatsRequest {
 }
 
 #[derive(Debug)]
+pub(in crate::app) struct GitStatusBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) branch: Option<String>,
+    pub(in crate::app) dirty: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct GitStatusRequest {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+}
+
+#[derive(Debug)]
 pub(in crate::app) struct PreviewLineCountBuild {
     pub(in crate::app) path: PathBuf,
     pub(in crate::app) size: u64,
@@ -298,6 +312,7 @@ pub(in crate::app) enum JobResult {
     DirectoryFingerprint(DirectoryFingerprintBuild),
     DirectoryItemCount(DirectoryItemCountBuild),
     DirectoryStats(DirectoryStatsBuild),
+    GitStatus(GitStatusBuild),
     PreviewLineCount(PreviewLineCountBuild),
     ImagePrepare(ImagePrepareBuild),
     PdfProbe(PdfProbeBuild),

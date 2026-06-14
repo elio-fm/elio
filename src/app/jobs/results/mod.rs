@@ -46,7 +46,7 @@ impl App {
     }
 
     pub fn process_background_jobs(&mut self) -> bool {
-        let mut dirty = self.process_git_branch_results();
+        let mut dirty = false;
         let started_at = Instant::now();
         let mut processed = 0usize;
 
@@ -129,6 +129,9 @@ impl App {
                         &build.path,
                         build.result,
                     );
+                }
+                JobResult::GitStatus(build) => {
+                    dirty |= self.apply_git_status_result(build);
                 }
                 JobResult::PreviewLineCount(build) => {
                     dirty |= self.apply_preview_line_count_result(

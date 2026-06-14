@@ -8,6 +8,7 @@ fn background_job_processing_yields_after_a_burst_of_results() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
+    wait_for_background_idle(&mut app);
 
     for index in 0..20 {
         app.jobs

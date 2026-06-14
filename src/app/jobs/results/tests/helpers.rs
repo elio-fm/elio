@@ -342,6 +342,17 @@ pub(super) fn wait_for_directory_load(app: &mut App) {
     panic!("timed out waiting for directory load");
 }
 
+pub(super) fn wait_for_background_idle(app: &mut App) {
+    for _ in 0..200 {
+        let _ = app.process_background_jobs();
+        if !app.has_pending_background_work() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for background work to finish");
+}
+
 pub(super) fn write_docx_fixture(path: &Path) {
     write_zip_entries(
         path,

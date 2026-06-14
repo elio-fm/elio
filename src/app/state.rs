@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     env,
     path::PathBuf,
-    sync::{Arc, mpsc},
+    sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
 
@@ -676,20 +676,11 @@ pub(crate) enum ChooserExit {
     Cancelled,
 }
 
-pub(in crate::app) struct GitBranchProbe {
-    pub(in crate::app) token: u64,
-    pub(in crate::app) cwd: PathBuf,
-    pub(in crate::app) branch: Option<String>,
-    pub(in crate::app) dirty: bool,
-}
-
 pub(in crate::app) struct GitRuntime {
     pub(in crate::app) token: u64,
     pub(in crate::app) cwd: PathBuf,
     pub(in crate::app) branch: Option<String>,
     pub(in crate::app) dirty: bool,
-    pub(in crate::app) result_tx: mpsc::Sender<GitBranchProbe>,
-    pub(in crate::app) result_rx: mpsc::Receiver<GitBranchProbe>,
 }
 
 pub struct App {
@@ -726,7 +717,6 @@ impl App {
     ) -> Result<Self> {
         let scheduler = JobScheduler::new();
         let (directory_watch_tx, directory_watch_rx) = std::sync::mpsc::channel();
-        let (git_result_tx, git_result_rx) = mpsc::channel();
         let mut app = Self {
             navigation: NavigationState {
                 cwd,
@@ -830,8 +820,6 @@ impl App {
                 cwd: PathBuf::new(),
                 branch: None,
                 dirty: false,
-                result_tx: git_result_tx,
-                result_rx: git_result_rx,
             },
             status: String::new(),
             should_quit: false,

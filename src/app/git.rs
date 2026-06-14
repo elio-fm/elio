@@ -1,5 +1,8 @@
-use super::{App, GitBranchProbe};
-use std::{path::Path, process::Command, thread};
+use super::{
+    App,
+    jobs::{GitStatusBuild, GitStatusRequest},
+};
+use std::{path::Path, process::Command};
 
 impl App {
     pub(crate) fn git_branch(&self) -> Option<&str> {
@@ -20,30 +23,18 @@ impl App {
         }
         self.git.token = self.git.token.wrapping_add(1);
         let token = self.git.token;
-        let result_tx = self.git.result_tx.clone();
-        thread::spawn(move || {
-            let (branch, dirty) = current_status(&cwd);
-            let _ = result_tx.send(GitBranchProbe {
-                token,
-                cwd,
-                branch,
-                dirty,
-            });
-        });
+        self.jobs
+            .scheduler
+            .submit_git_status(GitStatusRequest { token, cwd });
     }
 
-    pub(in crate::app) fn process_git_branch_results(&mut self) -> bool {
-        let mut dirty = false;
-        while let Ok(result) = self.git.result_rx.try_recv() {
-            if result.token != self.git.token || result.cwd != self.git.cwd {
-                continue;
-            }
-            if self.git.branch != result.branch || self.git.dirty != result.dirty {
-                self.git.branch = result.branch;
-                self.git.dirty = result.dirty;
-                dirty = true;
-            }
+    pub(in crate::app) fn apply_git_status_result(&mut self, result: GitStatusBuild) -> bool {
+        if result.token != self.git.token || result.cwd != self.git.cwd {
+            return false;
         }
+        let dirty = self.git.branch != result.branch || self.git.dirty != result.dirty;
+        self.git.branch = result.branch;
+        self.git.dirty = result.dirty;
         dirty
     }
 
@@ -58,7 +49,7 @@ impl App {
     }
 }
 
-fn current_status(cwd: &Path) -> (Option<String>, bool) {
+pub(in crate::app) fn current_status(cwd: &Path) -> (Option<String>, bool) {
     if git_command(cwd, ["rev-parse", "--is-inside-work-tree"])
         .is_none_or(|output| output.trim() != "true")
     {
@@ -114,6 +105,15 @@ mod tests {
         std::env::temp_dir().join(format!("elio-git-{label}-{unique}"))
     }
 
+    fn git_available() -> bool {
+        Command::new("git")
+            .arg("--version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    }
+
     fn git(root: &PathBuf, args: &[&str]) {
         let status = Command::new("git")
             .arg("-C")
@@ -128,6 +128,11 @@ mod tests {
 
     #[test]
     fn current_status_marks_untracked_files_dirty() {
+        if !git_available() {
+            eprintln!("skipping git dirty-status integration test because git is unavailable");
+            return;
+        }
+
         let root = temp_path("dirty");
         fs::create_dir_all(&root).expect("failed to create temp dir");
 

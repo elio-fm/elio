@@ -7,7 +7,7 @@ use super::{
     pool::{preview::PreviewPool, search::SearchPool},
     tasks::{
         directory::DirectoryPool, directory_fingerprint::DirectoryFingerprintPool,
-        directory_stats::DirectoryStatsPool, image::ImagePreparePool,
+        directory_stats::DirectoryStatsPool, git_status::GitStatusPool, image::ImagePreparePool,
         item_count::DirectoryItemCountPool, line_count::PreviewLineCountPool, paste::PastePool,
         pdf_probe::PdfProbePool, pdf_render::PdfRenderPool, restore::RestorePool, trash::TrashPool,
     },
@@ -28,6 +28,7 @@ pub(in crate::app) struct JobScheduler {
     restore: RestorePool,
     directory_item_count: DirectoryItemCountPool,
     directory_stats: DirectoryStatsPool,
+    git_status: GitStatusPool,
     preview_line_count: PreviewLineCountPool,
     image_prepare: ImagePreparePool,
     pdf_probe: PdfProbePool,
@@ -70,6 +71,7 @@ impl JobScheduler {
                 config.directory_stats_worker_count(),
                 result_tx.clone(),
             ),
+            git_status: GitStatusPool::new(result_tx.clone()),
             preview_line_count: PreviewLineCountPool::new(
                 config.preview_line_count_worker_count,
                 config.preview_line_count_queue_limit,
@@ -136,6 +138,10 @@ impl JobScheduler {
 
     pub(in crate::app) fn cancel_directory_stats(&self) {
         self.directory_stats.cancel_all();
+    }
+
+    pub(in crate::app) fn submit_git_status(&self, request: GitStatusRequest) -> bool {
+        self.git_status.submit(request)
     }
 
     pub(in crate::app) fn submit_preview_line_count(
@@ -261,6 +267,7 @@ impl JobScheduler {
             || self.restore.has_pending_work()
             || self.directory_item_count.has_pending_work()
             || self.directory_stats.has_pending_work()
+            || self.git_status.has_pending_work()
             || self.preview_line_count.has_pending_work()
             || self.image_prepare.has_pending_work()
             || self.pdf_probe.has_pending_work()
