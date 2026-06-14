@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     env,
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, mpsc},
     time::{Duration, Instant, SystemTime},
 };
 
@@ -676,12 +676,29 @@ pub(crate) enum ChooserExit {
     Cancelled,
 }
 
+pub(in crate::app) struct GitBranchProbe {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) branch: Option<String>,
+    pub(in crate::app) dirty: bool,
+}
+
+pub(in crate::app) struct GitRuntime {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) branch: Option<String>,
+    pub(in crate::app) dirty: bool,
+    pub(in crate::app) result_tx: mpsc::Sender<GitBranchProbe>,
+    pub(in crate::app) result_rx: mpsc::Receiver<GitBranchProbe>,
+}
+
 pub struct App {
     pub(crate) navigation: NavigationState,
     pub(in crate::app) preview: PreviewRuntime,
     pub(crate) overlays: OverlayState,
     pub(in crate::app) jobs: JobRuntime,
     pub(in crate::app) input: InputRuntime,
+    pub(in crate::app) git: GitRuntime,
     pub(in crate::app) status: String,
     pub(crate) should_quit: bool,
     pub(crate) should_change_directory_on_quit: bool,
@@ -709,6 +726,7 @@ impl App {
     ) -> Result<Self> {
         let scheduler = JobScheduler::new();
         let (directory_watch_tx, directory_watch_rx) = std::sync::mpsc::channel();
+        let (git_result_tx, git_result_rx) = mpsc::channel();
         let mut app = Self {
             navigation: NavigationState {
                 cwd,
@@ -807,6 +825,14 @@ impl App {
                 // Initialize to far past so the first keypress is always Immediate.
                 last_key_nav_at: Instant::now() - Duration::from_secs(1),
             },
+            git: GitRuntime {
+                token: 0,
+                cwd: PathBuf::new(),
+                branch: None,
+                dirty: false,
+                result_tx: git_result_tx,
+                result_rx: git_result_rx,
+            },
             status: String::new(),
             should_quit: false,
             should_change_directory_on_quit: true,
@@ -838,6 +864,7 @@ impl App {
         app.remember_current_directory_view();
         app.refresh_preview();
         app.reset_directory_watch();
+        app.refresh_git_branch();
         Ok(app)
     }
 

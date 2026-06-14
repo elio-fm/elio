@@ -193,6 +193,7 @@ impl App {
         if cwd_changed {
             self.reset_directory_watch();
         }
+        self.refresh_git_branch();
 
         match load.history_mode {
             DirectoryHistoryMode::None => {}

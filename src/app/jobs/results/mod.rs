@@ -46,7 +46,7 @@ impl App {
     }
 
     pub fn process_background_jobs(&mut self) -> bool {
-        let mut dirty = false;
+        let mut dirty = self.process_git_branch_results();
         let started_at = Instant::now();
         let mut processed = 0usize;
 

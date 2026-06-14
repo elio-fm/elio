@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added highlighted previews and icons for LaTeX, TeX, and BibTeX files (`.tex`, `.ltx`, `.sty`, `.cls`, `.bib`).
+- Show the current git branch in the footer while browsing repositories, with a `*` marker for local changes. ([#157])
 - Made Open With work on directories too, using the same app picker and system directory handlers. ([#157])
 - Added `--chooser-file FILE [PATH]` to run elio as a file chooser, writing the confirmed selection as absolute paths, one per line, to `FILE` or stdout with `-`; cancel exits silently with a nonzero status. ([#153])
 - Added persistent multi-path selection across directories, allowing chooser confirmation and bulk actions to use selected paths from multiple folders.

@@ -3,6 +3,7 @@ mod clipboard;
 mod constants;
 mod create;
 mod directory_counts;
+mod git;
 mod input;
 mod jobs;
 mod open_with;

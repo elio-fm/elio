@@ -112,6 +112,7 @@ pub(super) fn render_toolbar(
 const STATUS_MIN_LEFT_WIDTH: u16 = 24;
 const STATUS_IDLE_RIGHT_WIDTH: u16 = 34;
 const STATUS_RIGHT_PADDING: usize = 2;
+const GIT_BRANCH_MAX_WIDTH: usize = 24;
 
 pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palette: Palette) {
     helpers::fill_area(frame, area, palette.chrome, palette.text);
@@ -226,13 +227,38 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
             spans.push(Span::raw("  "));
         }
 
-        let summary_width = sections[0].width.saturating_sub(chips_width) as usize;
+        let git_label = app.git_branch().map(|branch| {
+            let branch = helpers::truncate_middle(branch, GIT_BRANCH_MAX_WIDTH);
+            if app.git_dirty() {
+                format!(" {branch} *")
+            } else {
+                format!(" {branch}")
+            }
+        });
+        let git_width = git_label
+            .as_deref()
+            .map(|label| helpers::display_width(" │ ") + helpers::display_width(label))
+            .unwrap_or(0) as u16;
+
+        let summary_width = sections[0]
+            .width
+            .saturating_sub(chips_width)
+            .saturating_sub(git_width) as usize;
         spans.push(Span::styled(
             helpers::truncate_middle(&app.selection_summary(), summary_width),
             Style::default()
                 .fg(palette.text)
                 .add_modifier(Modifier::BOLD),
         ));
+        if let Some(label) = git_label {
+            spans.push(Span::styled(" │ ", Style::default().fg(palette.muted)));
+            spans.push(Span::styled(
+                label,
+                Style::default()
+                    .fg(palette.muted)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
 
         Line::from(spans)
     };
@@ -313,6 +339,61 @@ mod tests {
     #[test]
     fn idle_hint_stays_unchanged() {
         assert_eq!(status_idle_hint(), "f folders  ^F files  ? help");
+    }
+
+    #[test]
+    fn git_branch_renders_after_position_summary() {
+        let root = temp_path("git-chip");
+        fs::create_dir_all(&root).expect("failed to create temp dir");
+        fs::write(root.join("logo.png"), "png").expect("failed to write file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.set_git_branch_for_test(Some("main"));
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(' '))))
+            .expect("selection shortcut should succeed");
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 1)).expect("terminal should init");
+        terminal
+            .draw(|frame| render_status(frame, frame.area(), &app, theme::palette()))
+            .expect("status should render");
+
+        let rendered = row_text(terminal.backend().buffer(), 0);
+        assert!(
+            rendered.contains(" 1 selected   1/1  logo.png │  main"),
+            "status row should place git branch after position summary, got: {rendered:?}"
+        );
+
+        app.set_frame_state(FrameState::default());
+        drop(app);
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn dirty_git_branch_renders_star_suffix() {
+        let root = temp_path("dirty-git-chip");
+        fs::create_dir_all(&root).expect("failed to create temp dir");
+        fs::write(root.join("logo.png"), "png").expect("failed to write file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.set_git_branch_for_test(Some("main"));
+        app.set_git_dirty_for_test(true);
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(' '))))
+            .expect("selection shortcut should succeed");
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 1)).expect("terminal should init");
+        terminal
+            .draw(|frame| render_status(frame, frame.area(), &app, theme::palette()))
+            .expect("status should render");
+
+        let rendered = row_text(terminal.backend().buffer(), 0);
+        assert!(
+            rendered.contains(" 1 selected   1/1  logo.png │  main *"),
+            "status row should mark dirty git branches, got: {rendered:?}"
+        );
+
+        app.set_frame_state(FrameState::default());
+        drop(app);
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
     }
 
     #[test]
