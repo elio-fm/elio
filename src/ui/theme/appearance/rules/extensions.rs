@@ -1,7 +1,7 @@
 use super::super::types::RuleOverride;
 use super::shared::{
-    rgb, rule_class, rule_document_file, rule_ebook_file, rule_presentation_file,
-    rule_spreadsheet_file,
+    rgb, rule_bibtex_file, rule_class, rule_document_file, rule_ebook_file, rule_presentation_file,
+    rule_spreadsheet_file, rule_tex_file,
 };
 use crate::core::FileClass;
 use std::collections::HashMap;
@@ -538,6 +538,11 @@ pub(super) fn default_extension_rules() -> HashMap<String, RuleOverride> {
             },
         ),
         ("rst".to_string(), rule_class(FileClass::Document)),
+        ("tex".to_string(), rule_tex_file()),
+        ("ltx".to_string(), rule_tex_file()),
+        ("sty".to_string(), rule_tex_file()),
+        ("cls".to_string(), rule_tex_file()),
+        ("bib".to_string(), rule_bibtex_file()),
         (
             "lock".to_string(),
             RuleOverride {

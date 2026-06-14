@@ -80,6 +80,14 @@ fn extension_lookup_returns_canonical_language_ids() {
         language_for_extension("qml").map(|language| language.canonical_id),
         Some("qml")
     );
+    assert_eq!(
+        language_for_extension("tex").map(|language| language.canonical_id),
+        Some("latex")
+    );
+    assert_eq!(
+        language_for_extension("bib").map(|language| language.canonical_id),
+        Some("bibtex")
+    );
 }
 
 #[test]
