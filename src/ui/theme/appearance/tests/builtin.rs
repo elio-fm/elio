@@ -384,6 +384,18 @@ fn word_processing_documents_get_blue_document_icons() {
     assert_eq!(text.icon, "");
     assert_eq!(text.color, rgb(174, 184, 199));
 
+    for path in ["paper.tex", "notes.ltx", "layout.sty", "report.cls"] {
+        let tex = theme.resolve(Path::new(path), EntryKind::File);
+        assert_eq!(tex.class, FileClass::Document, "{path}");
+        assert_eq!(tex.icon, "", "{path}");
+        assert_eq!(tex.color, rgb(61, 97, 23), "{path}");
+    }
+
+    let bib = theme.resolve(Path::new("references.bib"), EntryKind::File);
+    assert_eq!(bib.class, FileClass::Document);
+    assert_eq!(bib.icon, "󱉟");
+    assert_eq!(bib.color, rgb(203, 203, 65));
+
     let epub = theme.resolve(Path::new("novel.epub"), EntryKind::File);
     assert_eq!(epub.class, FileClass::Document);
     assert_eq!(epub.icon, "󱗖");

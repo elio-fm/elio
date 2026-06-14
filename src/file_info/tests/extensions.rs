@@ -376,6 +376,24 @@ fn lua_files_use_syntax_highlighting() {
 }
 
 #[test]
+fn tex_family_files_use_syntax_highlighting() {
+    let cases = [
+        ("paper.tex", "latex", "LaTeX document"),
+        ("notes.ltx", "latex", "LaTeX document"),
+        ("references.bib", "bibtex", "BibTeX bibliography"),
+        ("layout.sty", "tex", "TeX/LaTeX style file"),
+        ("report.cls", "tex", "TeX/LaTeX class file"),
+    ];
+
+    for (path, syntax, label) in cases {
+        let facts = inspect_path(Path::new(path), EntryKind::File);
+        assert_eq!(facts.builtin_class, FileClass::Document, "{path}");
+        assert_eq!(facts.specific_type_label, Some(label), "{path}");
+        assert_code_spec(facts.preview, Some(syntax), CodeBackend::Syntect);
+    }
+}
+
+#[test]
 fn svg_keeps_image_identity_while_using_markup_preview() {
     let facts = inspect_path(Path::new("icon.svg"), EntryKind::File);
 

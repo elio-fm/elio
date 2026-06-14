@@ -512,6 +512,31 @@ class = "document"
 icon = ""
 color = "#aeb8c7"
 
+[extensions.tex]
+class = "document"
+icon = ""
+color = "#3d6117"
+
+[extensions.ltx]
+class = "document"
+icon = ""
+color = "#3d6117"
+
+[extensions.sty]
+class = "document"
+icon = ""
+color = "#3d6117"
+
+[extensions.cls]
+class = "document"
+icon = ""
+color = "#3d6117"
+
+[extensions.bib]
+class = "document"
+icon = "󱉟"
+color = "#cbcb41"
+
 [extensions.sql]
 class = "data"
 icon = ""

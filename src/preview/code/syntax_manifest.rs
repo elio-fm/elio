@@ -78,6 +78,21 @@ pub(crate) const CURATED_SYNTAXES: &[CuratedSyntax] = &[
         source: SyntaxSource::BundledDefault,
     },
     CuratedSyntax {
+        canonical_id: "latex",
+        lookup_token: "tex",
+        source: SyntaxSource::BundledDefault,
+    },
+    CuratedSyntax {
+        canonical_id: "bibtex",
+        lookup_token: "bib",
+        source: SyntaxSource::BundledDefault,
+    },
+    CuratedSyntax {
+        canonical_id: "tex",
+        lookup_token: "sty",
+        source: SyntaxSource::BundledDefault,
+    },
+    CuratedSyntax {
         canonical_id: "dockerfile",
         lookup_token: "dockerfile",
         source: SyntaxSource::Vendored,

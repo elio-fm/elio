@@ -109,6 +109,16 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             }),
             preview: preview_for_extension(ext),
         },
+        "tex" | "ltx" | "bib" | "sty" | "cls" => FileFacts {
+            builtin_class: FileClass::Document,
+            specific_type_label: Some(match ext {
+                "bib" => "BibTeX bibliography",
+                "sty" => "TeX/LaTeX style file",
+                "cls" => "TeX/LaTeX class file",
+                _ => "LaTeX document",
+            }),
+            preview: preview_for_extension(ext),
+        },
         "nix" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("Nix expression"),

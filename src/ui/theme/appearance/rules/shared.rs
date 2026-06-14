@@ -41,6 +41,22 @@ pub(super) fn rule_presentation_file() -> RuleOverride {
     }
 }
 
+pub(super) fn rule_tex_file() -> RuleOverride {
+    RuleOverride {
+        class: Some(FileClass::Document),
+        icon: Some("".to_string()),
+        color: Some(rgb(61, 97, 23)),
+    }
+}
+
+pub(super) fn rule_bibtex_file() -> RuleOverride {
+    RuleOverride {
+        class: Some(FileClass::Document),
+        icon: Some("󱉟".to_string()),
+        color: Some(rgb(203, 203, 65)),
+    }
+}
+
 pub(in crate::ui::theme::appearance) fn normalize_key(value: &str) -> String {
     value.trim().to_ascii_lowercase()
 }
