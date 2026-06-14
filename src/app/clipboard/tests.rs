@@ -254,7 +254,7 @@ fn yank_allows_selected_parent_of_current_directory() {
 
     app.yank();
 
-    assert_eq!(app.status_message(), "Yanked 1 item");
+    assert_eq!(app.status_message(), "");
     assert_eq!(app.clipboard_info(), Some((1, ClipOp::Yank)));
     assert!(app.navigation.selected_paths.is_empty());
 
@@ -273,7 +273,7 @@ fn cut_allows_selected_parent_of_current_directory() {
 
     app.cut();
 
-    assert_eq!(app.status_message(), "Cut 1 item");
+    assert_eq!(app.status_message(), "");
     assert_eq!(app.clipboard_info(), Some((1, ClipOp::Cut)));
     assert!(app.navigation.selected_paths.is_empty());
 

@@ -43,17 +43,12 @@ impl App {
         if paths.is_empty() {
             return;
         }
-        let count = paths.len();
         self.jobs.clipboard = Some(Clipboard {
             paths,
             op: ClipOp::Yank,
         });
         self.navigation.selected_paths.clear();
-        self.status = if count == 1 {
-            "Yanked 1 item".to_string()
-        } else {
-            format!("Yanked {count} items")
-        };
+        self.status.clear();
     }
 
     /// Cut-mark the current selection or the focused entry.
@@ -62,17 +57,12 @@ impl App {
         if paths.is_empty() {
             return;
         }
-        let count = paths.len();
         self.jobs.clipboard = Some(Clipboard {
             paths,
             op: ClipOp::Cut,
         });
         self.navigation.selected_paths.clear();
-        self.status = if count == 1 {
-            "Cut 1 item".to_string()
-        } else {
-            format!("Cut {count} items")
-        };
+        self.status.clear();
     }
 
     /// Paste the clipboard contents into the current directory (async with

@@ -33,6 +33,7 @@ impl App {
         };
         let path = entry.path.clone();
         if self.navigation.selected_paths.remove(&path) {
+            self.status.clear();
             if self.navigation.view_mode == ViewMode::List {
                 self.move_vertical(1);
             }
@@ -45,6 +46,7 @@ impl App {
         }
 
         self.navigation.selected_paths.insert(path);
+        self.status.clear();
         if self.navigation.view_mode == ViewMode::List {
             self.move_vertical(1);
         }
@@ -66,11 +68,16 @@ impl App {
         }
         if blocked {
             self.status = "Cannot select nested paths".to_string();
+        } else {
+            self.status.clear();
         }
     }
 
     pub(in crate::app) fn clear_selection(&mut self) {
-        self.navigation.selected_paths.clear();
+        if !self.navigation.selected_paths.is_empty() {
+            self.navigation.selected_paths.clear();
+            self.status.clear();
+        }
     }
 
     pub(crate) fn enable_chooser_mode(&mut self) {
