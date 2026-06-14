@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed UI freezes when selecting all items in very large folders.
 - Fixed Linux/BSD Open With (`O`) behavior by reporting missing handlers accurately, showing the app used for direct single-app launches, and offering `$VISUAL` or `$EDITOR` in the current terminal for text/code files when the editor is not registered as a desktop app; `o` / `Enter` uses the same editor fallback only when no desktop handler is available. ([#168])
 - Fixed folder item counts lagging behind during fast mouse-wheel navigation.
+- Improved status bar behavior in narrow terminals by prioritizing focused item context, shortening open-file messages, and removing redundant idle hints. ([#174])
 
 ## [1.8.0] - 2026-06-06
 
@@ -255,3 +256,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#159]: https://github.com/elio-fm/elio/issues/159
 [#162]: https://github.com/elio-fm/elio/issues/162
 [#168]: https://github.com/elio-fm/elio/issues/168
+[#174]: https://github.com/elio-fm/elio/issues/174
