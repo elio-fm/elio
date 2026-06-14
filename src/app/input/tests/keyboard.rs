@@ -1724,7 +1724,7 @@ fn capital_o_opens_open_with_overlay_for_selected_file() {
 }
 
 #[test]
-fn capital_o_on_directory_sets_status_without_opening_overlay() {
+fn capital_o_on_directory_uses_open_with_instead_of_file_only_error() {
     let root = temp_path("open-with-overlay-dir");
     let child = root.join("subdir");
     fs::create_dir_all(&child).expect("failed to create child dir");
@@ -1736,11 +1736,10 @@ fn capital_o_on_directory_sets_status_without_opening_overlay() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('O'))))
         .expect("O on a directory should not fail");
 
-    assert!(
-        app.overlays.open_with.is_none(),
-        "overlay should not open for a directory"
+    assert_ne!(
+        app.status, "Open With is for files",
+        "directories should use Open With instead of the old file-only error"
     );
-    assert_eq!(app.status, "Open With is for files");
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

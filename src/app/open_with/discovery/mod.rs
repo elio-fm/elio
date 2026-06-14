@@ -49,7 +49,11 @@ fn discover_open_with_apps_inner(
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        discover_xdg(path, display_name, include_editor_fallback)
+        if path.is_dir() {
+            discover_xdg_for_mime("inode/directory", path, true, false)
+        } else {
+            discover_xdg(path, display_name, include_editor_fallback)
+        }
     }
     #[cfg(not(any(target_os = "macos", all(unix, not(target_os = "macos")))))]
     {
@@ -123,18 +127,33 @@ fn discover_xdg(
         return vec![];
     };
 
+    discover_xdg_for_mime(&mime_type, path, include_editor_fallback, true)
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn discover_xdg_for_mime(
+    mime_type: &str,
+    path: &Path,
+    include_env_editor_fallback: bool,
+    require_text_like_editor: bool,
+) -> Vec<OpenWithApp> {
+    use std::time::{Duration, Instant};
+
+    let deadline = Instant::now() + Duration::from_millis(3000);
+    let canceled = || Instant::now() > deadline;
+
     // Primary: gio handles MIME inheritance (e.g. text/markdown → text/plain),
     // aliases, and added/removed associations from mimeapps.list.
-    let mut apps = match gio::discover_via_gio(&mime_type, path, &canceled) {
+    let mut apps = match gio::discover_via_gio(mime_type, path, &canceled) {
         Some(apps) if !apps.is_empty() => apps,
         _ => {
             // Fallback: manual desktop-file scan with exact MIME match.
-            scan::discover_via_desktop_scan(&mime_type, path)
+            scan::discover_via_desktop_scan(mime_type, path)
         }
     };
 
-    if include_editor_fallback {
-        editor::append_editor_fallback(&mut apps, path);
+    if include_env_editor_fallback {
+        editor::append_editor_fallback(&mut apps, path, require_text_like_editor);
     }
     apps
 }

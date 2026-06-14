@@ -6,12 +6,22 @@ use std::{
 use super::super::super::state::OpenWithApp;
 use super::exec::tokenize_exec;
 
-pub(super) fn append_editor_fallback(apps: &mut Vec<OpenWithApp>, path: &Path) {
-    let Some(app) = editor_fallback_for_path(path) else {
+pub(super) fn append_editor_fallback(
+    apps: &mut Vec<OpenWithApp>,
+    path: &Path,
+    require_text_like: bool,
+) {
+    if require_text_like && !super::super::path_is_text_like(path) {
         return;
-    };
-    if !duplicates_discovered_app(&app, apps) {
-        apps.push(app);
+    }
+
+    for var in ["VISUAL", "EDITOR"] {
+        let Some(app) = editor_app_for_path(var, path) else {
+            continue;
+        };
+        if !duplicates_discovered_app(&app, apps) {
+            apps.push(app);
+        }
     }
 }
 
@@ -20,13 +30,8 @@ pub(super) fn editor_fallback_for_path(path: &Path) -> Option<OpenWithApp> {
         return None;
     }
 
-    let path_str = path.to_str()?;
-
     for var in ["VISUAL", "EDITOR"] {
-        let Some(value) = env::var_os(var).and_then(|value| value.into_string().ok()) else {
-            continue;
-        };
-        if let Some(app) = editor_app_from_command(var, &value, path_str) {
+        if let Some(app) = editor_app_for_path(var, path) {
             return Some(app);
         }
     }
@@ -34,7 +39,13 @@ pub(super) fn editor_fallback_for_path(path: &Path) -> Option<OpenWithApp> {
     None
 }
 
-fn editor_app_from_command(var: &str, command: &str, path_str: &str) -> Option<OpenWithApp> {
+pub(super) fn editor_app_for_path(var: &'static str, path: &Path) -> Option<OpenWithApp> {
+    let value = env::var_os(var).and_then(|value| value.into_string().ok())?;
+    editor_app_from_command(var, &value, path)
+}
+
+fn editor_app_from_command(var: &str, command: &str, path: &Path) -> Option<OpenWithApp> {
+    let path_str = path.to_str()?;
     let mut tokens = tokenize_exec(command);
     if tokens.is_empty() {
         return None;
@@ -76,7 +87,7 @@ fn program_key(program: &str) -> Option<String> {
         .map(|name| name.to_ascii_lowercase())
 }
 
-fn resolve_executable(program: &str) -> Option<PathBuf> {
+pub(super) fn resolve_executable(program: &str) -> Option<PathBuf> {
     if program.is_empty() {
         return None;
     }
@@ -218,7 +229,7 @@ mod tests {
             is_default: true,
             requires_terminal: false,
         }];
-        append_editor_fallback(&mut apps, &file);
+        append_editor_fallback(&mut apps, &file, true);
         let _ = fs::remove_dir_all(&root);
 
         assert_eq!(apps.len(), 2);
@@ -251,7 +262,7 @@ mod tests {
             is_default: true,
             requires_terminal: true,
         }];
-        append_editor_fallback(&mut apps, &file);
+        append_editor_fallback(&mut apps, &file, true);
         let _ = fs::remove_dir_all(&root);
 
         assert_eq!(apps.len(), 1);
