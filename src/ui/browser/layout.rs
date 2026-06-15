@@ -9,12 +9,19 @@ use crate::{
 use ratatui::{Frame, layout::Rect};
 
 const LEGACY_WIDE_SIDEBAR_WIDTH: u16 = 20;
-const LEGACY_NARROW_SIDEBAR_WIDTH: u16 = 22;
-const LEGACY_HORIZONTAL_SIDEBAR_MIN_WIDTH: u16 = 18;
-const LEGACY_HORIZONTAL_ENTRIES_MIN_WIDTH: u16 = 26;
-const LEGACY_HORIZONTAL_PREVIEW_MIN_WIDTH: u16 = 22;
+const LEGACY_NARROW_SIDEBAR_WIDTH: u16 = 10;
+const LEGACY_MIN_CONTENT_WIDTH_WITH_SIDEBAR: u16 = 16;
+const LEGACY_HORIZONTAL_ENTRIES_MIN_WIDTH: u16 = 18;
+const LEGACY_HORIZONTAL_PREVIEW_MIN_WIDTH: u16 = 14;
+const LEGACY_HORIZONTAL_CONTENT_MIN_WIDTH: u16 =
+    LEGACY_HORIZONTAL_ENTRIES_MIN_WIDTH.saturating_add(LEGACY_HORIZONTAL_PREVIEW_MIN_WIDTH);
+const LEGACY_HORIZONTAL_SIDEBAR_SHRINK_START_WIDTH: u16 = 104;
+const LEGACY_HORIZONTAL_SIDEBAR_SHRINK_STEP: u16 = 4;
+const LEGACY_STACKED_PREFERRED_MAX_WIDTH: u16 = 54;
 const LEGACY_STACKED_ENTRIES_WEIGHT: u16 = 54;
 const LEGACY_STACKED_PREVIEW_WEIGHT: u16 = 46;
+const LEGACY_STACKED_ENTRIES_MIN_HEIGHT: u16 = 12;
+const LEGACY_STACKED_PREVIEW_MIN_HEIGHT: u16 = 12;
 const CUSTOM_SIDEBAR_MIN_WIDTH: u16 = 16;
 const CUSTOM_ENTRIES_MIN_WIDTH: u16 = 28;
 const CUSTOM_PREVIEW_MIN_WIDTH: u16 = 24;
@@ -69,6 +76,13 @@ pub(super) fn resolve_body_layout(area: Rect, pane_weights: Option<PaneWeights>)
 }
 
 fn legacy_body_layout(area: Rect) -> BodyLayout {
+    let preferred_stacked = (area.width <= LEGACY_STACKED_PREFERRED_MAX_WIDTH)
+        .then(|| legacy_stacked_body_layout(area))
+        .flatten();
+    if let Some(layout) = preferred_stacked {
+        return layout;
+    }
+
     if let Some(layout) = legacy_horizontal_body_layout(area) {
         return layout;
     }
@@ -77,15 +91,20 @@ fn legacy_body_layout(area: Rect) -> BodyLayout {
         return layout;
     }
 
+    if let Some(layout) = legacy_best_effort_stacked_body_layout(area) {
+        return layout;
+    }
+
     legacy_sidebar_and_entries_layout(area)
 }
 
 fn legacy_horizontal_body_layout(area: Rect) -> Option<BodyLayout> {
-    let (sidebar, content) = split_sidebar_and_content(
+    let (sidebar, content) = split_sidebar_and_content_with_comfort(
         area,
         LEGACY_WIDE_SIDEBAR_WIDTH,
-        LEGACY_HORIZONTAL_SIDEBAR_MIN_WIDTH,
-        LEGACY_HORIZONTAL_ENTRIES_MIN_WIDTH.saturating_add(LEGACY_HORIZONTAL_PREVIEW_MIN_WIDTH),
+        LEGACY_NARROW_SIDEBAR_WIDTH,
+        LEGACY_HORIZONTAL_CONTENT_MIN_WIDTH,
+        LEGACY_HORIZONTAL_SIDEBAR_SHRINK_START_WIDTH,
     )?;
     let widths = allocate_weighted_lengths(content.width, vec![54, 46]);
     if widths.len() != 2
@@ -122,11 +141,54 @@ fn legacy_stacked_body_layout(area: Rect) -> Option<BodyLayout> {
         LEGACY_NARROW_SIDEBAR_WIDTH,
         CUSTOM_ENTRIES_MIN_WIDTH.max(CUSTOM_PREVIEW_MIN_WIDTH),
     )?;
-    let (entries, preview) = split_stacked_content_weighted(
+    let (entries, preview) = split_stacked_content_weighted_with_mins(
         content,
         LEGACY_STACKED_ENTRIES_WEIGHT,
         LEGACY_STACKED_PREVIEW_WEIGHT,
+        LEGACY_STACKED_ENTRIES_MIN_HEIGHT,
+        LEGACY_STACKED_PREVIEW_MIN_HEIGHT,
     )?;
+
+    Some(BodyLayout {
+        sidebar: non_empty(sidebar),
+        entries: non_empty(entries),
+        preview: non_empty(preview),
+    })
+}
+
+fn legacy_best_effort_stacked_body_layout(area: Rect) -> Option<BodyLayout> {
+    let (sidebar, content) =
+        if area.width >= LEGACY_NARROW_SIDEBAR_WIDTH + LEGACY_MIN_CONTENT_WIDTH_WITH_SIDEBAR {
+            split_sidebar_and_content(
+                area,
+                LEGACY_NARROW_SIDEBAR_WIDTH,
+                LEGACY_NARROW_SIDEBAR_WIDTH,
+                LEGACY_MIN_CONTENT_WIDTH_WITH_SIDEBAR,
+            )?
+        } else {
+            (Rect::default(), area)
+        };
+    if content.height < 2 || content.width < 2 {
+        return None;
+    }
+
+    let heights = allocate_weighted_lengths(
+        content.height,
+        vec![LEGACY_STACKED_ENTRIES_WEIGHT, LEGACY_STACKED_PREVIEW_WEIGHT],
+    );
+    let [entries_height, preview_height]: [u16; 2] = heights.try_into().ok()?;
+    let entries = Rect {
+        x: content.x,
+        y: content.y,
+        width: content.width,
+        height: entries_height,
+    };
+    let preview = Rect {
+        x: content.x,
+        y: content.y.saturating_add(entries_height),
+        width: content.width,
+        height: preview_height,
+    };
 
     Some(BodyLayout {
         sidebar: non_empty(sidebar),
@@ -139,7 +201,7 @@ fn legacy_sidebar_and_entries_layout(area: Rect) -> BodyLayout {
     if let Some((sidebar, entries)) = split_sidebar_and_content(
         area,
         LEGACY_NARROW_SIDEBAR_WIDTH,
-        CUSTOM_SIDEBAR_MIN_WIDTH,
+        LEGACY_NARROW_SIDEBAR_WIDTH,
         CUSTOM_ENTRIES_MIN_WIDTH,
     ) {
         return BodyLayout {
@@ -182,7 +244,10 @@ fn custom_body_layout(area: Rect, weights: PaneWeights) -> BodyLayout {
         return layout;
     }
 
-    if show_preview && let Some(layout) = stacked_body_layout_with_mins(area, weights) {
+    let stacked = show_preview
+        .then(|| stacked_body_layout_with_mins(area, weights))
+        .flatten();
+    if let Some(layout) = stacked {
         return layout;
     }
 
@@ -300,13 +365,35 @@ fn split_sidebar_and_content(
     minimum_sidebar_width: u16,
     minimum_content_width: u16,
 ) -> Option<(Rect, Rect)> {
+    split_sidebar_and_content_with_comfort(
+        area,
+        preferred_sidebar_width,
+        minimum_sidebar_width,
+        minimum_content_width,
+        minimum_content_width,
+    )
+}
+
+fn split_sidebar_and_content_with_comfort(
+    area: Rect,
+    preferred_sidebar_width: u16,
+    minimum_sidebar_width: u16,
+    minimum_content_width: u16,
+    sidebar_shrink_start_width: u16,
+) -> Option<(Rect, Rect)> {
     if area.width < minimum_sidebar_width.saturating_add(minimum_content_width) {
         return None;
     }
 
+    let shrink = sidebar_shrink_start_width
+        .saturating_sub(area.width)
+        .saturating_add(LEGACY_HORIZONTAL_SIDEBAR_SHRINK_STEP.saturating_sub(1))
+        .checked_div(LEGACY_HORIZONTAL_SIDEBAR_SHRINK_STEP)
+        .unwrap_or(0);
     let sidebar_width = preferred_sidebar_width
-        .min(area.width.saturating_sub(minimum_content_width))
-        .max(minimum_sidebar_width);
+        .saturating_sub(shrink)
+        .max(minimum_sidebar_width)
+        .min(area.width.saturating_sub(minimum_content_width));
     let content_width = area.width.saturating_sub(sidebar_width);
 
     let sidebar = Rect {
@@ -330,13 +417,26 @@ fn split_stacked_content_weighted(
     entries_weight: u16,
     preview_weight: u16,
 ) -> Option<(Rect, Rect)> {
+    split_stacked_content_weighted_with_mins(
+        area,
+        entries_weight,
+        preview_weight,
+        CUSTOM_STACKED_ENTRIES_MIN_HEIGHT,
+        CUSTOM_STACKED_PREVIEW_MIN_HEIGHT,
+    )
+}
+
+fn split_stacked_content_weighted_with_mins(
+    area: Rect,
+    entries_weight: u16,
+    preview_weight: u16,
+    entries_min_height: u16,
+    preview_min_height: u16,
+) -> Option<(Rect, Rect)> {
     let heights = allocate_weighted_lengths_with_mins(
         area.height,
         vec![entries_weight, preview_weight],
-        vec![
-            CUSTOM_STACKED_ENTRIES_MIN_HEIGHT,
-            CUSTOM_STACKED_PREVIEW_MIN_HEIGHT,
-        ],
+        vec![entries_min_height, preview_min_height],
     )?;
     let [entries_height, preview_height]: [u16; 2] = heights.try_into().ok()?;
 

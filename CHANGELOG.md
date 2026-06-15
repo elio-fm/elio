@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated shell integration scripts to pass `--chooser-file` invocations directly to `elio`, so chooser mode does not change the parent shell directory. Re-run `elio shell install` after upgrading to refresh existing shell integration.
 - Improved the Open With menu with keyboard navigation, scrolling, and an overflow scrollbar for long app lists.
+- Improved narrow browser pane resizing so Places gives up space sooner, preview remains useful longer, and stacked preview layouts behave more consistently.
 
 ### Fixed
 

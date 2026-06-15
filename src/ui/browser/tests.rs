@@ -220,53 +220,7 @@ fn list_view_ignores_grid_zoom_levels() {
 }
 
 #[test]
-fn narrow_browser_layout_stacks_preview_below_entries() {
-    let layout = resolve_body_layout(
-        Rect {
-            x: 0,
-            y: 0,
-            width: 65,
-            height: 20,
-        },
-        None,
-    );
-
-    let sidebar = layout.sidebar.expect("sidebar should be visible");
-    let entries = layout.entries.expect("entries should be visible");
-    let preview = layout.preview.expect("preview should be visible");
-
-    assert_eq!(sidebar.width, 22);
-    assert_eq!(entries.x, preview.x);
-    assert_eq!(entries.width, preview.width);
-    assert_eq!(entries.height, 11);
-    assert_eq!(preview.height, 9);
-}
-
-#[test]
-fn narrow_tall_browser_layout_gives_preview_more_vertical_space() {
-    let layout = resolve_body_layout(
-        Rect {
-            x: 0,
-            y: 0,
-            width: 65,
-            height: 60,
-        },
-        None,
-    );
-
-    let sidebar = layout.sidebar.expect("sidebar should be visible");
-    let entries = layout.entries.expect("entries should be visible");
-    let preview = layout.preview.expect("preview should be visible");
-
-    assert_eq!(sidebar.width, 22);
-    assert_eq!(entries.x, preview.x);
-    assert_eq!(entries.width, preview.width);
-    assert_eq!(entries.height, 33);
-    assert_eq!(preview.height, 27);
-}
-
-#[test]
-fn wide_browser_layout_uses_the_narrower_default_sidebar_width() {
+fn wide_browser_layout_uses_default_sidebar_width() {
     let layout = resolve_body_layout(
         Rect {
             x: 0,
@@ -286,24 +240,79 @@ fn wide_browser_layout_uses_the_narrower_default_sidebar_width() {
 }
 
 #[test]
-fn narrow_browser_layout_drops_preview_when_height_is_too_limited() {
-    let layout = resolve_body_layout(
-        Rect {
-            x: 0,
-            y: 0,
-            width: 65,
-            height: 14,
-        },
-        None,
-    );
+fn narrowing_horizontal_browser_layout_starts_shrinking_sidebar_early() {
+    for (width, expected_sidebar_width) in [
+        (104, 20),
+        (100, 19),
+        (96, 18),
+        (88, 16),
+        (80, 14),
+        (72, 12),
+        (64, 10),
+        (56, 10),
+        (46, 10),
+    ] {
+        let layout = resolve_body_layout(
+            Rect {
+                x: 0,
+                y: 0,
+                width,
+                height: 20,
+            },
+            None,
+        );
 
-    let sidebar = layout.sidebar.expect("sidebar should be visible");
-    let entries = layout.entries.expect("entries should be visible");
+        assert_eq!(
+            layout.sidebar.expect("sidebar should be visible").width,
+            expected_sidebar_width
+        );
+    }
+}
 
-    assert!(sidebar.width >= 16);
-    assert_eq!(layout.preview, None);
-    assert_eq!(entries.y, 0);
-    assert_eq!(entries.height, 14);
+#[test]
+fn narrow_legacy_layout_keeps_preview_without_starving_files() {
+    for (width, height, expect_sidebar, expect_stacked) in [
+        (54, 24, true, true),
+        (45, 24, true, true),
+        (39, 28, true, true),
+        (46, 20, true, false),
+        (45, 23, true, false),
+        (20, 18, false, true),
+    ] {
+        let layout = resolve_body_layout(
+            Rect {
+                x: 0,
+                y: 0,
+                width,
+                height,
+            },
+            None,
+        );
+
+        let entries = layout.entries.expect("entries should be visible");
+        let preview = layout.preview.expect("preview should be visible");
+        assert_eq!(layout.sidebar.is_some(), expect_sidebar, "width {width}");
+        if let Some(sidebar) = layout.sidebar {
+            assert_eq!(sidebar.width, 10, "width {width}");
+        }
+        if expect_stacked {
+            assert_eq!(entries.x, preview.x, "width {width} should stay stacked");
+            assert!(
+                preview.y > entries.y,
+                "width {width} should keep preview below files"
+            );
+            assert_eq!(entries.width, preview.width);
+        } else {
+            assert_eq!(
+                entries.y, preview.y,
+                "width {width} should remain horizontal"
+            );
+            assert_eq!(
+                layout.sidebar.map_or(0, |sidebar| sidebar.width) + entries.width + preview.width,
+                width
+            );
+        }
+    }
 }
 
 #[test]
@@ -1441,7 +1450,7 @@ fn preview_header_detail_uses_compact_labels_before_final_clamp() {
     fs::write(root.join("report.txt"), contents).expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    let mut terminal = Terminal::new(TestBackend::new(60, 24)).expect("terminal should init");
+    let mut terminal = Terminal::new(TestBackend::new(64, 28)).expect("terminal should init");
     wait_for_background_preview(&mut app);
 
     let state = draw_ui(&mut terminal, &mut app);
@@ -1454,10 +1463,7 @@ fn preview_header_detail_uses_compact_labels_before_final_clamp() {
         header_row.contains("Text"),
         "expected preview header row to contain the section label, got: {header_row:?}"
     );
-    let expected_line_coverage = format!(
-        "{} / {total_lines} lines shown",
-        default_code_preview_line_limit()
-    );
+    let expected_line_coverage = format!("{} / {total_lines}", default_code_preview_line_limit());
     assert!(
         header_row.contains(&expected_line_coverage),
         "expected preview header row to show semantic line coverage, got: {header_row:?}"
