@@ -34,6 +34,7 @@ pub(super) fn render_help(
     let clipboard_entries = clipboard_entries(&keys);
     let files_entries = entries([
         keys.action(&kb.create, "create file or folder"),
+        e("/… or …/", "folder in create prompt"),
         e("Alt/Shift+Enter", "add line in create prompt"),
         keys.action(&kb.trash, "trash (delete if in trash)"),
         keys.action(&kb.delete_permanently, "delete permanently"),
@@ -148,32 +149,8 @@ pub(super) fn render_help(
     let inner = helpers::inner_with_padding(popup);
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Min(8),
-            Constraint::Length(1),
-        ])
+        .constraints([Constraint::Min(8), Constraint::Length(1)])
         .split(inner);
-
-    frame.render_widget(
-        Paragraph::new(vec![Line::from(vec![
-            helpers::chip_span("navigate", palette.accent_soft, palette.accent_text, true),
-            Span::raw(" "),
-            helpers::chip_span("search", palette.accent_soft, palette.accent_text, true),
-            Span::raw(" "),
-            helpers::chip_span("selection", palette.accent_soft, palette.accent_text, true),
-            Span::raw(" "),
-            helpers::chip_span("mouse", palette.accent_soft, palette.accent_text, true),
-            Span::raw(" "),
-            helpers::chip_span("actions", palette.accent_soft, palette.accent_text, true),
-            Span::raw(" "),
-            helpers::chip_span("preview", palette.accent_soft, palette.accent_text, true),
-            Span::raw(" "),
-            helpers::chip_span("view", palette.accent_soft, palette.accent_text, true),
-        ])])
-        .style(Style::default().bg(palette.chrome_alt).fg(palette.text)),
-        rows[0],
-    );
 
     let cols = Layout::default()
         .direction(Direction::Horizontal)
@@ -182,7 +159,7 @@ pub(super) fn render_help(
             Constraint::Length(3),
             Constraint::Length(46),
         ])
-        .split(rows[1]);
+        .split(rows[0]);
 
     frame.render_widget(
         Paragraph::new(help_column_lines(cols[0].width, &left_sections, palette))
@@ -221,7 +198,7 @@ pub(super) fn render_help(
         ]))
         .alignment(Alignment::Right)
         .style(Style::default().bg(palette.chrome_alt).fg(palette.muted)),
-        rows[2],
+        rows[1],
     );
 }
 

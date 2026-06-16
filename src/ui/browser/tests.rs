@@ -1312,6 +1312,10 @@ fn help_overlay_keeps_controls_readable_and_drops_auto_reload_row() {
         "expected help overlay to list the zoxide shortcut, got: {rendered:?}"
     );
     assert!(
+        rendered.contains("/… or …/") && rendered.contains("folder in create prompt"),
+        "expected help overlay to show the create prompt folder-name hint, got: {rendered:?}"
+    );
+    assert!(
         rendered.contains("Alt/Shift+Enter"),
         "expected help overlay to show the current create prompt newline hint, got: {rendered:?}"
     );
