@@ -6,7 +6,7 @@ use crate::ui::{
 };
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
+    layout::{Constraint, Direction, Layout, Margin, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Clear, Paragraph},
@@ -22,7 +22,7 @@ pub(super) fn render_create_overlay(
     let line_count = app.create_line_count().max(1);
     let visible_lines = line_count.min(8) as u16;
     let popup_width = area.width.saturating_sub(8).clamp(36, 64);
-    let popup_height = visible_lines + 6;
+    let popup_height = visible_lines + 5;
     let popup = helpers::centered_rect(area, popup_width, popup_height);
     state.create_panel = Some(popup);
 
@@ -39,41 +39,14 @@ pub(super) fn render_create_overlay(
     let inner = helpers::inner_with_padding(popup);
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Length(visible_lines + 2),
-            Constraint::Length(1),
-        ])
+        .constraints([Constraint::Length(visible_lines + 2), Constraint::Length(1)])
         .split(inner);
-
-    let header_cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Min(1), Constraint::Length(18)])
-        .split(rows[0]);
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("󰜄", Style::default().fg(palette.accent)),
-            Span::raw("  "),
-            Span::styled("/ → folder", Style::default().fg(palette.muted)),
-        ]))
-        .style(Style::default().bg(palette.chrome_alt)),
-        header_cols[0],
-    );
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("Alt+Enter", Style::default().fg(palette.text)),
-            Span::styled(" new line", Style::default().fg(palette.muted)),
-        ]))
-        .alignment(Alignment::Right)
-        .style(Style::default().bg(palette.chrome_alt)),
-        header_cols[1],
-    );
 
     frame.render_widget(
         helpers::rounded_block(palette.path_bg, palette.border),
-        rows[1],
+        rows[0],
     );
-    let list_area = rows[1].inner(Margin {
+    let list_area = rows[0].inner(Margin {
         horizontal: 1,
         vertical: 1,
     });
@@ -212,11 +185,11 @@ pub(super) fn render_create_overlay(
     if let Some(error) = app.create_line_error(cursor_line) {
         frame.render_widget(
             Paragraph::new(Line::from(vec![Span::styled(
-                helpers::clamp_label(error, rows[2].width.saturating_sub(2) as usize),
+                helpers::clamp_label(error, rows[1].width.saturating_sub(2) as usize),
                 Style::default().fg(palette.accent),
             )]))
             .style(Style::default().bg(palette.chrome_alt).fg(palette.text)),
-            rows[2],
+            rows[1],
         );
     }
 }
