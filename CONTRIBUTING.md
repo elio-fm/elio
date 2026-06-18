@@ -33,14 +33,15 @@ A brief overview of the repository layout:
 ├── examples/                   # Example config and theme files
 ├── packaging/                  # Distribution packaging files
 ├── src/
-│   ├── app/                    # Runtime coordination, state, jobs, and user actions
+│   ├── app/                    # Application state, jobs, and user actions
 │   ├── config/                 # Config and theme loading/parsing
 │   ├── core/                   # Shared model types used across layers
 │   ├── file_info/              # File classification and metadata discovery
 │   ├── fs/                     # Filesystem access and path-level operations
 │   ├── preview/                # Preview construction and preview-specific tests
+│   ├── runtime/                # App runner, terminal lifecycle, drawing, and session output
 │   ├── ui/                     # Terminal rendering, layout, theming, and interaction
-│   ├── lib.rs                  # Library entry and application runtime wiring
+│   ├── lib.rs                  # Public library API entrypoints
 │   └── main.rs                 # Binary entrypoint
 ├── tests/
 │   └── architecture_guardrails.rs  # Enforced dependency-boundary checks
