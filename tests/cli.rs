@@ -137,7 +137,7 @@ fn more_than_one_path_is_rejected() {
     fs::remove_dir_all(second).expect("second temp directory should be removed");
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 fn chooser_stdout_pipe_receives_only_selection() {
     use std::{
