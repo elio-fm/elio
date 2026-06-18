@@ -51,7 +51,17 @@ fn write_chooser_file(chooser_file: &Path, paths: &[PathBuf]) -> Result<()> {
 }
 
 fn chooser_file_is_stdout(chooser_file: &Path) -> bool {
-    chooser_file == Path::new("-")
+    chooser_file == Path::new("-") || chooser_file_is_dev_stdout(chooser_file)
+}
+
+#[cfg(unix)]
+fn chooser_file_is_dev_stdout(chooser_file: &Path) -> bool {
+    chooser_file == Path::new("/dev/stdout")
+}
+
+#[cfg(not(unix))]
+fn chooser_file_is_dev_stdout(_chooser_file: &Path) -> bool {
+    false
 }
 
 #[cfg(unix)]
@@ -126,10 +136,13 @@ mod tests {
     }
 
     #[test]
-    fn chooser_file_hyphen_targets_stdout() {
+    fn chooser_file_hyphen_and_dev_stdout_target_stdout() {
         assert!(chooser_file_is_stdout(Path::new("-")));
-        assert!(!chooser_file_is_stdout(Path::new("./-")));
+        #[cfg(unix)]
+        assert!(chooser_file_is_stdout(Path::new("/dev/stdout")));
+        #[cfg(not(unix))]
         assert!(!chooser_file_is_stdout(Path::new("/dev/stdout")));
+        assert!(!chooser_file_is_stdout(Path::new("./-")));
     }
 
     #[test]

@@ -12,8 +12,10 @@ use crossterm::{
     },
 };
 use ratatui::{Terminal, backend::CrosstermBackend, layout::Rect};
+#[cfg(unix)]
+use std::fs::OpenOptions;
 use std::{
-    io::{self, ErrorKind, Write},
+    io::{self, ErrorKind, IsTerminal, Write},
     sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError},
     thread,
 };
@@ -65,7 +67,7 @@ pub(super) struct ThreadedWriter {
 }
 
 impl ThreadedWriter {
-    fn new() -> Self {
+    fn new(output: Box<dyn Write + Send>) -> Self {
         let channel = Arc::new(WriterChannel {
             state: Mutex::new(WriterShared {
                 buf: Vec::new(),
@@ -77,7 +79,7 @@ impl ThreadedWriter {
         });
         let writer_channel = Arc::clone(&channel);
         thread::spawn(move || {
-            let mut out = io::stdout();
+            let mut out = output;
             let mut batch = Vec::new();
             loop {
                 {
@@ -198,9 +200,9 @@ pub(super) fn init_terminal() -> Result<(AppTerminal, Drainer)> {
 
 fn try_init_terminal() -> Result<(AppTerminal, Drainer)> {
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
+    let (mut terminal_output, frame_output) = terminal_output_handles()?;
     execute!(
-        stdout,
+        terminal_output,
         EnterAlternateScreen,
         event::EnableMouseCapture,
         EnableFocusChange
@@ -213,26 +215,39 @@ fn try_init_terminal() -> Result<(AppTerminal, Drainer)> {
     //   1002 = button-event tracking (drag with button held)
     //   1003 = any-event tracking (all motion, needed for hover-based scroll routing)
     //   1006 = SGR extended coordinates (required for columns > 223)
-    write!(stdout, "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h")?;
+    write!(
+        terminal_output,
+        "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h"
+    )?;
 
     // Ask the terminal to forward Shift+mouse to the app instead of using it for text
     // selection. Ghostty and some xterm-compatible terminals honor XTSHIFTESCAPE.
     // Terminals that don't support it ignore this silently.
-    write!(stdout, "\x1b[>4;1m")?;
+    write!(terminal_output, "\x1b[>4;1m")?;
 
-    stdout.flush()?;
-    push_keyboard_enhancement_if_supported(&mut stdout)?;
+    terminal_output.flush()?;
+    push_keyboard_enhancement_if_supported(&mut terminal_output)?;
 
-    // The startup escapes above go straight to stdout (the backend doesn't exist
-    // yet and they're already flushed). From here on, all frame output flows
-    // through the background writer so the event loop never blocks on it.
-    let writer = ThreadedWriter::new();
+    // Startup escapes go to the controlling terminal, not stdout, so chooser
+    // output can remain machine-readable when stdout is piped.
+    let writer = ThreadedWriter::new(frame_output);
     let drainer = writer.drainer();
     let backend = CrosstermBackend::new(writer);
     let mut terminal = Terminal::new(backend)?;
     clear_for_full_repaint(&mut terminal)?;
     terminal.hide_cursor()?;
     Ok((terminal, drainer))
+}
+
+#[cfg(unix)]
+fn terminal_output_handles() -> io::Result<(Box<dyn Write + Send>, Box<dyn Write + Send>)> {
+    let tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
+    Ok((Box::new(tty.try_clone()?), Box::new(tty)))
+}
+
+#[cfg(not(unix))]
+fn terminal_output_handles() -> io::Result<(Box<dyn Write + Send>, Box<dyn Write + Send>)> {
+    Ok((Box::new(io::stdout()), Box::new(io::stdout())))
 }
 
 /// Clears the alternate screen and forces a full repaint on the next draw,
@@ -332,22 +347,33 @@ pub(super) fn restore_terminal(terminal: &mut AppTerminal, drainer: &Drainer) ->
 }
 
 fn cleanup_terminal_state() -> io::Result<()> {
-    let mut stdout = io::stdout();
-    let _ = write!(stdout, "\x1b[>4;0m");
-    let _ = write!(stdout, "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l");
-    let _ = stdout.flush();
-    let _ = execute!(
-        stdout,
-        event::DisableMouseCapture,
-        DisableFocusChange,
-        SetCursorStyle::DefaultUserShape,
-        LeaveAlternateScreen,
-    );
+    if let Ok((mut terminal_output, _)) = terminal_output_handles() {
+        let _ = write!(terminal_output, "\x1b[>4;0m");
+        let _ = write!(
+            terminal_output,
+            "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l"
+        );
+        let _ = terminal_output.flush();
+        let _ = execute!(
+            terminal_output,
+            event::DisableMouseCapture,
+            DisableFocusChange,
+            SetCursorStyle::DefaultUserShape,
+            LeaveAlternateScreen,
+        );
+    }
     disable_raw_mode()?;
     Ok(())
 }
 
 fn push_keyboard_enhancement_if_supported<W: Write>(writer: &mut W) -> io::Result<()> {
+    // The capability probe talks through crossterm's default stdout handle. When
+    // stdout is piped for chooser output, skip the optional enhancement so the
+    // probe cannot contaminate the machine-readable stream.
+    if !io::stdout().is_terminal() {
+        return Ok(());
+    }
+
     // The probe writes a query to the terminal and blocks on the reply with a
     // 2-second crossterm timeout. Support cannot change within a session, so
     // probe once and reuse the answer — this runs again on every resume from

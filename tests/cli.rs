@@ -136,3 +136,120 @@ fn more_than_one_path_is_rejected() {
     fs::remove_dir_all(first).expect("first temp directory should be removed");
     fs::remove_dir_all(second).expect("second temp directory should be removed");
 }
+
+#[cfg(unix)]
+#[test]
+fn chooser_stdout_pipe_receives_only_selection() {
+    use std::{
+        fs::File,
+        io::{Read, Write},
+        os::{fd::FromRawFd, unix::process::CommandExt},
+        process::Stdio,
+        thread,
+        time::{Duration, Instant},
+    };
+
+    let root = temp_path("chooser-stdout-pipe");
+    fs::create_dir_all(&root).expect("temp directory should be created");
+    let selected = root.join("picked.txt");
+    fs::write(&selected, "picked").expect("selected file should be written");
+
+    let mut master = 0;
+    let mut slave = 0;
+    let mut stdout_pipe = [0; 2];
+    unsafe {
+        assert_eq!(
+            libc::openpty(
+                &mut master,
+                &mut slave,
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                std::ptr::null()
+            ),
+            0
+        );
+        assert_eq!(libc::pipe(stdout_pipe.as_mut_ptr()), 0);
+    }
+
+    let tty_for_child = unsafe { libc::dup(slave) };
+    assert!(tty_for_child >= 0);
+
+    let slave_file = unsafe { File::from_raw_fd(slave) };
+    let stdout_writer = unsafe { File::from_raw_fd(stdout_pipe[1]) };
+    let mut stdout_reader = unsafe { File::from_raw_fd(stdout_pipe[0]) };
+    let mut tty_master = unsafe { File::from_raw_fd(master) };
+
+    let mut command = elio();
+    command
+        .arg("--chooser-file")
+        .arg("-")
+        .arg(&root)
+        .env("TERM", "xterm-256color")
+        .stdin(Stdio::from(slave_file))
+        .stdout(Stdio::from(stdout_writer))
+        .stderr(Stdio::null());
+
+    unsafe {
+        command.pre_exec(move || {
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            if libc::ioctl(tty_for_child, libc::TIOCSCTTY, 0) == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            libc::close(tty_for_child);
+            Ok(())
+        });
+    }
+
+    let mut child = command.spawn().expect("elio should spawn under a pty");
+    unsafe {
+        libc::close(tty_for_child);
+    }
+    thread::sleep(Duration::from_millis(500));
+    tty_master
+        .write_all(b"\r")
+        .expect("enter key should be sent to pty");
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while child
+        .try_wait()
+        .expect("child status should be readable")
+        .is_none()
+    {
+        if Instant::now() > deadline {
+            child.kill().expect("hung child should be killed");
+            panic!("elio did not exit after chooser confirmation");
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+
+    unsafe {
+        let flags = libc::fcntl(stdout_pipe[0], libc::F_GETFL);
+        assert!(flags >= 0);
+        assert_eq!(
+            libc::fcntl(stdout_pipe[0], libc::F_SETFL, flags | libc::O_NONBLOCK),
+            0
+        );
+    }
+
+    let mut stdout = Vec::new();
+    loop {
+        let mut chunk = [0; 1024];
+        match stdout_reader.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(count) => stdout.extend_from_slice(&chunk[..count]),
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
+            Err(error) => panic!("chooser stdout should be readable: {error}"),
+        }
+    }
+
+    let expected = format!("{}\n", selected.display());
+    assert_eq!(String::from_utf8_lossy(&stdout), expected);
+    assert!(
+        !stdout.contains(&0x1b),
+        "stdout contained terminal escape bytes"
+    );
+
+    fs::remove_dir_all(root).expect("temp directory should be removed");
+}
