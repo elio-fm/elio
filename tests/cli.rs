@@ -163,8 +163,8 @@ fn chooser_stdout_pipe_receives_only_selection() {
                 &mut master,
                 &mut slave,
                 std::ptr::null_mut(),
-                std::ptr::null(),
-                std::ptr::null()
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
             ),
             0
         );
@@ -194,7 +194,7 @@ fn chooser_stdout_pipe_receives_only_selection() {
             if libc::setsid() == -1 {
                 return Err(std::io::Error::last_os_error());
             }
-            if libc::ioctl(tty_for_child, libc::TIOCSCTTY, 0) == -1 {
+            if libc::ioctl(tty_for_child, libc::TIOCSCTTY as libc::c_ulong, 0) == -1 {
                 return Err(std::io::Error::last_os_error());
             }
             libc::close(tty_for_child);
