@@ -23,6 +23,28 @@ pub(super) fn temp_path(label: &str) -> PathBuf {
     path.canonicalize().unwrap_or(path)
 }
 
+pub(super) fn cleanup_app_temp_root(mut app: App, root: PathBuf) {
+    app.navigation.directory_runtime.watch = None;
+    drop(app);
+    remove_temp_root(root);
+}
+
+fn remove_temp_root(root: PathBuf) {
+    for attempt in 0..10 {
+        match fs::remove_dir_all(&root) {
+            Ok(()) => return,
+            Err(error)
+                if cfg!(windows)
+                    && attempt < 9
+                    && matches!(error.raw_os_error(), Some(5 | 32 | 145)) =>
+            {
+                thread::sleep(Duration::from_millis(25));
+            }
+            Err(error) => panic!("failed to remove temp root {root:?}: {error}"),
+        }
+    }
+}
+
 pub(super) fn wait_for_directory_load(app: &mut App) {
     for _ in 0..100 {
         let _ = app.process_background_jobs();
