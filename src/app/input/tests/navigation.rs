@@ -1,5 +1,5 @@
 use super::super::*;
-use super::helpers::{temp_path, wait_for_directory_load};
+use super::helpers::{cleanup_app_temp_root, temp_path, wait_for_directory_load};
 use std::{fs, path::PathBuf};
 
 fn app_in_child_with_parent_selection(label: &str) -> (PathBuf, PathBuf, PathBuf, App) {
@@ -30,7 +30,7 @@ fn assert_clear_selection_after_directory_change(label: &str, key: KeyEvent) {
 
     assert_eq!(app.selection_count(), 0);
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 fn folder_with_child_file(label: &str) -> (PathBuf, PathBuf, PathBuf) {
@@ -66,7 +66,7 @@ fn right_arrow_does_not_open_selected_file_in_list_view() {
     );
     assert_eq!(app.status_message(), "");
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn right_arrow_enters_selected_directory_in_list_view() {
 
     assert_eq!(app.navigation.cwd, child);
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn right_arrow_enters_focused_directory_even_when_selection_exists() {
     assert_eq!(app.navigation.cwd, child);
     assert!(app.navigation.selected_paths.contains(&file));
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -131,7 +131,7 @@ fn selection_persists_after_entering_and_leaving_directory() {
     assert_eq!(app.navigation.cwd, root);
     assert!(app.navigation.selected_paths.contains(&selected));
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn select_all_extends_cross_directory_selection() {
     assert!(app.navigation.selected_paths.contains(&gamma));
     assert_eq!(app.selection_count(), 3);
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -214,7 +214,7 @@ fn selecting_child_inside_selected_folder_is_blocked() {
         Some(child.as_path())
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -243,7 +243,7 @@ fn selecting_folder_containing_selected_child_is_blocked() {
     assert!(!app.navigation.selected_paths.contains(&folder));
     assert_eq!(app.selection_count(), 1);
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -275,7 +275,7 @@ fn select_all_skips_entries_inside_selected_folder() {
     assert!(!app.navigation.selected_paths.contains(&beta));
     assert_eq!(app.selection_count(), 1);
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -311,7 +311,7 @@ fn enter_uses_focused_entry_when_selection_is_offscreen() {
     assert_eq!(app.navigation.cwd, grandchild);
     assert!(app.navigation.selected_paths.contains(&selected));
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -343,7 +343,7 @@ fn enter_uses_focused_directory_when_selection_is_visible() {
     assert_eq!(app.navigation.cwd, child);
     assert!(app.navigation.selected_paths.contains(&selected));
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -371,7 +371,7 @@ fn left_arrow_in_list_view_reselects_previous_directory_in_parent() {
         Some(child.as_path())
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -398,7 +398,7 @@ fn go_back_reselects_previous_directory_in_parent() {
         Some(child.as_path())
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -422,7 +422,7 @@ fn go_forward_reselects_previous_directory_in_parent() {
     assert_eq!(app.navigation.cwd, child);
     assert!(app.selected_entry().is_none());
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -460,7 +460,7 @@ fn go_forward_restores_last_selected_entry_in_directory() {
         Some(beta.as_path())
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -498,7 +498,7 @@ fn reopening_directory_restores_last_selected_entry() {
         Some(beta.as_path())
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -538,7 +538,7 @@ fn reopening_directory_restores_scroll_position() {
     assert_eq!(app.navigation.selected, 6);
     assert_eq!(app.navigation.scroll_row, 4);
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -579,7 +579,7 @@ fn reopening_parent_restores_last_selected_child_directory() {
         Some(regueiro.as_path())
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -624,5 +624,5 @@ fn reopening_parent_restores_scroll_position() {
     assert_eq!(app.navigation.selected, 6);
     assert_eq!(app.navigation.scroll_row, 4);
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
