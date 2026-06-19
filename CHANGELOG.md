@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Made Go To entries configurable, allowing built-ins to be changed and custom entries to be added. ([#166])
+
 ### Fixed
 
 - Fixed `--chooser-file -` and `/dev/stdout` output when piped to tools such as `sed` or `awk`, keeping terminal UI escape sequences out of machine-readable chooser output. ([#186])
@@ -264,6 +268,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#157]: https://github.com/elio-fm/elio/issues/157
 [#159]: https://github.com/elio-fm/elio/issues/159
 [#162]: https://github.com/elio-fm/elio/issues/162
+[#166]: https://github.com/elio-fm/elio/issues/166
 [#168]: https://github.com/elio-fm/elio/issues/168
 [#174]: https://github.com/elio-fm/elio/issues/174
 [#186]: https://github.com/elio-fm/elio/issues/186

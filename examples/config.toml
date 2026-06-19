@@ -35,6 +35,27 @@
 #   "trash",
 # ]
 #
+# Customize the Go To menu. `entries` controls the items in order.
+# Omit [goto] entirely to keep the default Go To menu.
+#
+# Built-in names: top, downloads, home, config, trash
+# Entry forms:
+# - "downloads"
+# - { builtin = "downloads", key = "D" }
+# - { title = "tmp", path = "/tmp", key = "T" }
+#
+# Duplicate keys are skipped after the first matching entry.
+#
+# [goto]
+# entries = [
+#   "top",
+#   { builtin = "downloads", key = "D" },
+#   "home",
+#   "config",
+#   "trash",
+#   { title = "tmp", path = "/tmp", key = "T" },
+# ]
+#
 # Optional pane weights for the browser body. Values are relative: in
 # side-by-side layouts they control horizontal width, and when Preview stacks
 # below Files they control the Files / Preview vertical split.

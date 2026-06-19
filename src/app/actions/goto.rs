@@ -2,7 +2,10 @@ use super::super::{
     App, SidebarItemKind,
     state::{GoToDestination, GoToOverlay, GoToOverlayRow},
 };
-use crate::fs::{rect_contains, trash_dir};
+use crate::{
+    config::{BuiltinGoto, GotoEntrySpec},
+    fs::{rect_contains, trash_dir},
+};
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::PathBuf;
@@ -63,16 +66,13 @@ impl App {
             KeyCode::Esc => {
                 self.overlays.goto = None;
             }
-            KeyCode::Char(ch)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                if let Some(index) = self.goto_row_index_for_shortcut(ch) {
+            _ => {
+                if let Some(index) = crate::config::normalized_plain_key_char(key)
+                    .and_then(|ch| self.goto_row_index_for_shortcut(ch))
+                {
                     self.confirm_goto_index(index)?;
                 }
             }
-            _ => {}
         }
 
         Ok(())
@@ -106,13 +106,10 @@ impl App {
     }
 
     fn goto_row_index_for_shortcut(&self, ch: char) -> Option<usize> {
-        let needle = ch.to_ascii_lowercase();
-        self.overlays.goto.as_ref().and_then(|overlay| {
-            overlay
-                .rows
-                .iter()
-                .position(|row| row.shortcut.to_ascii_lowercase() == needle)
-        })
+        self.overlays
+            .goto
+            .as_ref()
+            .and_then(|overlay| overlay.rows.iter().position(|row| row.shortcut == ch))
     }
 
     fn confirm_goto_index(&mut self, index: usize) -> Result<()> {
@@ -144,24 +141,54 @@ impl App {
 }
 
 fn build_goto_overlay(app: &App) -> GoToOverlay {
-    let rows = vec![
-        build_goto_row('g', "top", GoToDestination::Top),
-        build_goto_row(
-            'd',
+    let rows = crate::config::goto()
+        .entries
+        .iter()
+        .map(|entry| build_configured_goto_row(app, entry))
+        .collect();
+
+    GoToOverlay {
+        title: "Go to".to_string(),
+        rows,
+    }
+}
+
+fn build_configured_goto_row(app: &App, entry: &GotoEntrySpec) -> GoToOverlayRow {
+    match entry {
+        GotoEntrySpec::Builtin { destination, key } => {
+            let (label, destination) = builtin_goto_destination(app, *destination);
+            build_goto_row(*key, label, destination)
+        }
+        GotoEntrySpec::Custom { title, path, key } => {
+            let destination = if path.exists() {
+                GoToDestination::Path(path.clone())
+            } else {
+                GoToDestination::Missing(format!("{title} not available"))
+            };
+            build_goto_row(*key, title, destination)
+        }
+    }
+}
+
+fn builtin_goto_destination(
+    app: &App,
+    destination: BuiltinGoto,
+) -> (&'static str, GoToDestination) {
+    match destination {
+        BuiltinGoto::Top => ("top", GoToDestination::Top),
+        BuiltinGoto::Downloads => (
             "downloads",
             downloads_destination(app)
                 .map(GoToDestination::Path)
                 .unwrap_or_else(|| GoToDestination::Missing("Downloads not available".to_string())),
         ),
-        build_goto_row(
-            'h',
+        BuiltinGoto::Home => (
             "home",
             crate::fs::home_dir()
                 .map(GoToDestination::Path)
                 .unwrap_or_else(|| GoToDestination::Missing("Home not available".to_string())),
         ),
-        build_goto_row(
-            'c',
+        BuiltinGoto::Config => (
             config_label(),
             config_directory()
                 .map(GoToDestination::Path)
@@ -169,18 +196,12 @@ fn build_goto_overlay(app: &App) -> GoToOverlay {
                     GoToDestination::Missing(format!("{} not available", config_label()))
                 }),
         ),
-        build_goto_row(
-            't',
+        BuiltinGoto::Trash => (
             "trash",
             trash_destination(app)
                 .map(GoToDestination::Path)
                 .unwrap_or_else(|| GoToDestination::Missing("Trash not available".to_string())),
         ),
-    ];
-
-    GoToOverlay {
-        title: "Go to".to_string(),
-        rows,
     }
 }
 
@@ -231,4 +252,56 @@ fn trash_destination(app: &App) -> Option<PathBuf> {
         .find(|item| item.kind == SidebarItemKind::Trash)
         .map(|item| item.path.clone())
         .or_else(|| crate::fs::home_dir().and_then(|home| trash_dir(&home)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyEventKind, KeyEventState};
+    use std::{fs, time::SystemTime};
+
+    #[test]
+    fn goto_shortcuts_respect_caps_lock_normalization() {
+        let root = temp_dir("goto-caps-lock-root");
+        fs::create_dir_all(&root).expect("failed to create temp dir");
+        for name in ["a.txt", "b.txt"] {
+            fs::write(root.join(name), name).expect("failed to write temp file");
+        }
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.jump_last();
+        app.overlays.goto = Some(GoToOverlay {
+            title: "Go to".to_string(),
+            rows: vec![GoToOverlayRow {
+                shortcut: 'W',
+                label: "top".to_string(),
+                destination: GoToDestination::Top,
+            }],
+        });
+
+        app.handle_goto_key(caps_lock_char('w', KeyModifiers::NONE))
+            .expect("caps-lock W shortcut should activate");
+
+        assert_eq!(app.navigation.selected, 0);
+        assert!(app.overlays.goto.is_none());
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    fn caps_lock_char(c: char, modifiers: KeyModifiers) -> KeyEvent {
+        KeyEvent::new_with_kind_and_state(
+            KeyCode::Char(c),
+            modifiers,
+            KeyEventKind::Press,
+            KeyEventState::CAPS_LOCK,
+        )
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("elio-{name}-{unique}"))
+    }
 }

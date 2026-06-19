@@ -1,3 +1,4 @@
+mod goto;
 mod keys;
 mod layout;
 mod places;

@@ -226,6 +226,14 @@ pub(crate) struct KeySpec {
     pub(super) modifiers: KeyModifierSpec,
 }
 
+pub(crate) fn normalized_plain_key_char(key: KeyEvent) -> Option<char> {
+    let (code, modifiers) = normalize_key_event(key);
+    match (code, modifiers.is_empty()) {
+        (KeyCode::Char(ch), true) => Some(ch),
+        _ => None,
+    }
+}
+
 impl KeySpec {
     pub(super) fn char(c: char) -> Self {
         Self {

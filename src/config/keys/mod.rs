@@ -3,7 +3,9 @@ mod model;
 mod parse;
 mod validate;
 
-pub(crate) use self::model::{Action, ChooserKeyAction, KeyBindings, KeyContext, KeyList};
+pub(crate) use self::model::{
+    Action, ChooserKeyAction, KeyBindings, KeyContext, KeyList, normalized_plain_key_char,
+};
 pub(super) use self::parse::KeysConfigOverride;
 use self::validate::resolve_key_overrides;
 use crossterm::event::KeyEvent;

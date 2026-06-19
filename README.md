@@ -269,7 +269,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | `h` / `←` / `Backspace` `*` | Go to parent directory |
 | `l` / `→` `*` | Enter folder |
 | `Enter` `*` | Enter folder / open file or selection |
-| `g` `*` | Go-to menu (`g` top, `d` downloads, `h` home, `c` config folder, `t` trash) |
+| `g` `*` | Go To menu (`g` top, `d` downloads, `h` home, `c` config folder, `t` trash; configurable in `[goto]`) |
 | `Home` `*` | Jump to first item |
 | `G` / `End` `*` | Jump to last item |
 | `PageUp` / `PageDown` `*` | Page up / down |

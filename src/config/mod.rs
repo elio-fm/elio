@@ -1,3 +1,4 @@
+mod goto;
 mod keys;
 mod layout;
 mod loading;
@@ -9,7 +10,8 @@ mod ui;
 use serde::Deserialize;
 
 pub(crate) use self::{
-    keys::{Action, ChooserKeyAction, KeyBindings, KeyContext, KeyList},
+    goto::{BuiltinGoto, GotoConfig, GotoEntrySpec},
+    keys::{Action, ChooserKeyAction, KeyBindings, KeyContext, KeyList, normalized_plain_key_char},
     layout::{LayoutConfig, PaneWeights},
     loading::config_dir,
     places::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},
@@ -18,6 +20,7 @@ pub(crate) use self::{
 
 struct Config {
     ui: UiConfig,
+    goto: GotoConfig,
     places: PlacesConfig,
     layout: LayoutConfig,
     keys: KeyBindings,
@@ -26,6 +29,7 @@ struct Config {
 #[derive(Deserialize, Default)]
 struct ConfigFile {
     ui: Option<ui::UiConfigOverride>,
+    goto: Option<goto::GotoConfigOverride>,
     places: Option<places::PlacesConfigOverride>,
     layout: Option<layout::LayoutConfigOverride>,
     keys: Option<keys::KeysConfigOverride>,
@@ -37,6 +41,10 @@ pub(crate) fn initialize() {
 
 pub(crate) fn ui() -> UiConfig {
     loading::active_config().ui
+}
+
+pub(crate) fn goto() -> &'static GotoConfig {
+    &loading::active_config().goto
 }
 
 pub(crate) fn places() -> &'static PlacesConfig {
@@ -55,6 +63,7 @@ impl Config {
     fn default_config() -> Self {
         Self {
             ui: UiConfig::default(),
+            goto: GotoConfig::default(),
             places: PlacesConfig::default(),
             layout: LayoutConfig::default(),
             keys: KeyBindings::default(),
@@ -66,6 +75,9 @@ impl Config {
         let mut resolved = Self::default_config();
         if let Some(ui) = parsed.ui {
             resolved.ui.apply_override(ui);
+        }
+        if let Some(goto) = parsed.goto {
+            resolved.goto = GotoConfig::from_override(goto, &resolved.goto);
         }
         if let Some(places) = parsed.places {
             resolved.places = PlacesConfig::from_override(places, &resolved.places);
