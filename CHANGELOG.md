@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Made Go To entries configurable, allowing built-ins to be changed and custom entries to be added. ([#166])
 
+### Changed
+
+- Places now switches to an icon-only rail in narrow windows before labels become overly truncated. ([#184])
+
 ### Fixed
 
 - Fixed `--chooser-file -` and `/dev/stdout` output when piped to tools such as `sed` or `awk`, keeping terminal UI escape sequences out of machine-readable chooser output. ([#186])
@@ -273,5 +277,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#166]: https://github.com/elio-fm/elio/issues/166
 [#168]: https://github.com/elio-fm/elio/issues/168
 [#174]: https://github.com/elio-fm/elio/issues/174
+[#184]: https://github.com/elio-fm/elio/issues/184
 [#186]: https://github.com/elio-fm/elio/issues/186
 [#195]: https://github.com/elio-fm/elio/issues/195
