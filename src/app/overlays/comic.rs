@@ -422,6 +422,7 @@ impl App {
             .contains_key(&PreviewCacheKey {
                 path: path.to_path_buf(),
                 variant: preview::PreviewRequestOptions::ComicPage(page),
+                ffmpeg_available: false,
                 code_line_limit: preview::default_code_preview_line_limit(),
                 code_render_limit: preview::default_code_preview_line_limit(),
             })

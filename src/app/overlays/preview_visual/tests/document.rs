@@ -307,13 +307,18 @@ fn large_inline_cover_uses_more_height_without_hiding_details() {
 }
 
 #[test]
-fn iterm_inline_page_image_clear_area_covers_preview_body_without_header() {
+fn iterm_inline_page_image_clear_area_stays_inside_media_area() {
     let root = temp_root("iterm-inline-clear-area");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let page = root.join("page.png");
     write_test_raster_image(&page, ImageFormat::Png, 900, 1400);
     let page_size = fs::metadata(&page)
         .expect("page image metadata should exist")
+        .len();
+    let next_page = root.join("next-page.png");
+    write_test_raster_image(&next_page, ImageFormat::Png, 1200, 800);
+    let next_page_size = fs::metadata(&next_page)
+        .expect("next page image metadata should exist")
         .len();
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
@@ -356,9 +361,24 @@ fn iterm_inline_page_image_clear_area_covers_preview_body_without_header() {
             x: 2,
             y: 3,
             width: 48,
-            height: 20,
+            height: 12,
         })
     );
+
+    app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
+        .with_preview_visual(PreviewVisual {
+            kind: PreviewVisualKind::PageImage,
+            layout: PreviewVisualLayout::Inline,
+            path: next_page,
+            size: next_page_size,
+            modified: None,
+        });
+    assert!(!app.displayed_static_image_matches_active());
+    app.queue_forced_iterm_preview_erase();
+    let erase =
+        String::from_utf8(app.iterm_pre_draw_erase()).expect("iTerm erase should be valid utf8");
+    assert!(erase.contains("\x1b[4;3H"));
+    assert!(!erase.contains("\x1b[16;3H"));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

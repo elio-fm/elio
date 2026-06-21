@@ -183,6 +183,7 @@ fn stale_preview_results_are_counted_in_metrics() {
             variant: preview::PreviewRequestOptions::Default,
             code_line_limit: 0,
             code_render_limit: 0,
+            ffmpeg_available: false,
             result: preview::PreviewContent::new(
                 preview::PreviewKind::Text,
                 vec![ratatui::text::Line::from("stale preview")],

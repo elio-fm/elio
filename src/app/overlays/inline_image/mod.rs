@@ -132,6 +132,7 @@ pub(in crate::app) struct RenderedImageDimensions {
 
 impl App {
     pub(crate) fn enable_terminal_image_previews(&mut self) {
+        let was_available = self.terminal_image_overlay_available();
         let identity = detect_terminal_identity();
         let image_previews_override = env::var_os("ELIO_IMAGE_PREVIEWS").is_some();
         let protocol = select_image_protocol(identity, image_previews_override);
@@ -164,6 +165,23 @@ impl App {
             self.preview.terminal_images.window
         ));
         self.sync_pdf_preview_selection();
+        if !was_available && self.terminal_image_overlay_available() {
+            self.refresh_current_media_preview_after_image_support_enabled();
+        }
+    }
+
+    pub(in crate::app) fn refresh_current_media_preview_after_image_support_enabled(&mut self) {
+        if !self.terminal_image_overlay_available()
+            || self.preview.state.content.preview_visual.is_some()
+            || !matches!(
+                self.preview.state.content.kind,
+                crate::preview::PreviewKind::Audio | crate::preview::PreviewKind::Video
+            )
+        {
+            return;
+        }
+
+        self.refresh_preview();
     }
 
     pub(crate) fn handle_terminal_image_resize(&mut self) {
@@ -417,15 +435,25 @@ impl App {
         }
         let mut expanded_areas = Vec::with_capacity(areas.len());
         for area in areas {
+            let (expand_right, expand_bottom) = if self.displayed_static_image_mode()
+                == Some(crate::app::overlays::images::StaticImageOverlayMode::Inline)
+            {
+                (0, 0)
+            } else if self.preview.terminal_images.identity == TerminalIdentity::WindowsTerminal
+                && self.preview.terminal_images.protocol == ImageProtocol::Sixel
+            {
+                (1, 1)
+            } else {
+                (0, 2)
+            };
             geometry::push_unique_rect(
                 &mut expanded_areas,
-                if self.preview.terminal_images.identity == TerminalIdentity::WindowsTerminal
-                    && self.preview.terminal_images.protocol == ImageProtocol::Sixel
-                {
-                    iterm::expand_raster_erase_area(&self.input.frame_state, area, 1, 1)
-                } else {
-                    iterm::expand_raster_erase_area(&self.input.frame_state, area, 0, 2)
-                },
+                iterm::expand_raster_erase_area(
+                    &self.input.frame_state,
+                    area,
+                    expand_right,
+                    expand_bottom,
+                ),
             );
         }
         expanded_areas

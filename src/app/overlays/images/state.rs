@@ -212,6 +212,14 @@ impl App {
             .map(|displayed| displayed.clear_area)
     }
 
+    pub(in crate::app) fn displayed_static_image_mode(&self) -> Option<StaticImageOverlayMode> {
+        self.preview
+            .image
+            .displayed
+            .as_ref()
+            .map(|displayed| displayed.mode)
+    }
+
     pub(in crate::app) fn clear_displayed_static_image(&mut self) {
         self.preview.image.displayed = None;
         self.preview.image.displayed_excluded.clear();

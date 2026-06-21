@@ -50,6 +50,7 @@ pub(in crate::app::jobs) struct PreviewJobKey {
     pub(in crate::app::jobs) size: u64,
     pub(in crate::app::jobs) modified: Option<SystemTime>,
     pub(in crate::app::jobs) variant: PreviewRequestOptions,
+    pub(in crate::app::jobs) ffmpeg_available: bool,
     pub(in crate::app::jobs) code_line_limit: usize,
     /// Included so that an initial partial render and its extension job are
     /// treated as distinct keys and not deduplicated against each other.
@@ -106,6 +107,7 @@ impl PreviewPool {
                             variant: request.variant,
                             code_line_limit: request.code_line_limit,
                             code_render_limit: request.code_render_limit,
+                            ffmpeg_available: request.ffmpeg_available,
                             result,
                         })))
                         .is_err()
@@ -307,6 +309,7 @@ impl PreviewJobKey {
             size: request.entry.size,
             modified: request.entry.modified,
             variant: request.variant.clone(),
+            ffmpeg_available: request.ffmpeg_available,
             code_line_limit: request.code_line_limit,
             code_render_limit: request.code_render_limit,
         }

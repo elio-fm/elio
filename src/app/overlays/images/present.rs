@@ -230,12 +230,7 @@ impl App {
     fn static_image_clear_area(&self, request: &StaticImageOverlayRequest) -> Rect {
         if self.preview.terminal_images.protocol.is_raster() {
             if request.mode == StaticImageOverlayMode::Inline {
-                return self
-                    .input
-                    .frame_state
-                    .preview_body_area
-                    .or_else(|| self.preview_body_area())
-                    .unwrap_or(request.area);
+                return request.area;
             }
             return self
                 .input
@@ -244,18 +239,6 @@ impl App {
                 .unwrap_or(request.area);
         }
         request.area
-    }
-
-    fn preview_body_area(&self) -> Option<Rect> {
-        match (
-            self.input.frame_state.preview_media_area,
-            self.input.frame_state.preview_content_area,
-        ) {
-            (Some(media), Some(content)) => Some(union_rect(media, content)),
-            (Some(media), None) => Some(media),
-            (None, Some(content)) => Some(content),
-            (None, None) => None,
-        }
     }
 
     fn static_image_display_area(
@@ -314,20 +297,5 @@ impl App {
             inline_payload,
             Some(window_size),
         )
-    }
-}
-
-fn union_rect(a: Rect, b: Rect) -> Rect {
-    let left = a.x.min(b.x);
-    let top = a.y.min(b.y);
-    let right = a.x.saturating_add(a.width).max(b.x.saturating_add(b.width));
-    let bottom =
-        a.y.saturating_add(a.height)
-            .max(b.y.saturating_add(b.height));
-    Rect {
-        x: left,
-        y: top,
-        width: right.saturating_sub(left),
-        height: bottom.saturating_sub(top),
     }
 }

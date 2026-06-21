@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed `--chooser-file -` and `/dev/stdout` output when piped to tools such as `sed` or `awk`, keeping terminal UI escape sequences out of machine-readable chooser output. ([#186])
+- Fixed video thumbnails not appearing for the first file when starting elio inside a video folder. ([#195])
+- Fixed inline video preview redraws that could leave only partial metadata visible after navigating between videos.
 
 ## [1.9.0] - 2026-06-17
 
@@ -272,3 +274,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#168]: https://github.com/elio-fm/elio/issues/168
 [#174]: https://github.com/elio-fm/elio/issues/174
 [#186]: https://github.com/elio-fm/elio/issues/186
+[#195]: https://github.com/elio-fm/elio/issues/195

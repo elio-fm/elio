@@ -10,6 +10,7 @@ use super::*;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::overlays::inline_image::{ImageProtocol, TerminalIdentity};
     use crate::preview::{
         PreviewContent, PreviewKind, PreviewRequestOptions, default_code_preview_line_limit,
     };
@@ -233,6 +234,84 @@ mod tests {
 
         assert!(request.ffprobe_available);
         assert!(!request.ffmpeg_available);
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn enabling_image_support_refreshes_startup_video_preview_for_thumbnail() {
+        let root = temp_path("startup-video-image-support");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("clip.mp4");
+        fs::write(&path, b"video").expect("failed to write video fixture");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.set_media_ffprobe_available_for_tests(true);
+        app.set_media_ffmpeg_available_for_tests(true);
+        assert_eq!(app.preview.state.content.kind, PreviewKind::Video);
+        assert!(app.preview.state.content.preview_visual.is_none());
+        let before = app.scheduler_metrics();
+
+        app.set_terminal_image_protocol_for_tests(
+            ImageProtocol::KittyGraphics,
+            TerminalIdentity::Kitty,
+        );
+        app.refresh_current_media_preview_after_image_support_enabled();
+
+        let after = app.scheduler_metrics();
+        assert_eq!(
+            after.preview_jobs_submitted_high,
+            before.preview_jobs_submitted_high + 1
+        );
+        assert!(matches!(
+            app.preview.state.load_state,
+            Some(PreviewLoadState::Placeholder(ref loading_path)) if loading_path == &path
+        ));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    fn cached_startup_video_without_ffmpeg_is_not_reused_after_image_support() {
+        let root = temp_path("startup-video-cache-mode");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let path = root.join("clip.mp4");
+        fs::write(&path, b"video").expect("failed to write video fixture");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        let entry = app
+            .selected_entry()
+            .cloned()
+            .expect("video entry should be selected");
+        let variant = app.current_preview_request_options();
+        let stale_without_thumbnail = PreviewContent::new(PreviewKind::Video, Vec::new());
+        app.cache_preview_result_with_limits(
+            &entry,
+            &variant,
+            default_code_preview_line_limit(),
+            default_code_preview_line_limit(),
+            false,
+            &stale_without_thumbnail,
+        );
+        app.set_media_ffprobe_available_for_tests(true);
+        app.set_media_ffmpeg_available_for_tests(true);
+        app.set_terminal_image_protocol_for_tests(
+            ImageProtocol::KittyGraphics,
+            TerminalIdentity::Kitty,
+        );
+        let before = app.scheduler_metrics();
+
+        app.refresh_preview();
+
+        let after = app.scheduler_metrics();
+        assert_eq!(
+            after.preview_jobs_submitted_high,
+            before.preview_jobs_submitted_high + 1
+        );
+        assert!(matches!(
+            app.preview.state.load_state,
+            Some(PreviewLoadState::Placeholder(ref loading_path)) if loading_path == &path
+        ));
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

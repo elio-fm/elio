@@ -10,11 +10,13 @@ impl App {
         variant: &PreviewRequestOptions,
     ) -> Option<PreviewContent> {
         let code_line_limit = self.preview_code_line_limit_for_entry(entry);
+        let ffmpeg_available = self.preview_cache_ffmpeg_available_for_entry(entry);
 
         // Try the complete render first.
         let complete_key = PreviewCacheKey {
             path: entry.path.clone(),
             variant: variant.clone(),
+            ffmpeg_available,
             code_line_limit,
             code_render_limit: code_line_limit,
         };
@@ -29,6 +31,7 @@ impl App {
         let partial_key = PreviewCacheKey {
             path: entry.path.clone(),
             variant: variant.clone(),
+            ffmpeg_available,
             code_line_limit,
             code_render_limit: 0, // placeholder — will search by prefix below
         };
@@ -40,6 +43,7 @@ impl App {
             .find(|(key, cached)| {
                 key.path == entry.path
                     && key.variant == *variant
+                    && key.ffmpeg_available == ffmpeg_available
                     && key.code_line_limit == code_line_limit
                     && cached.size == entry.size
                     && cached.modified == entry.modified
@@ -53,11 +57,13 @@ impl App {
         variant: &PreviewRequestOptions,
     ) -> Option<PreviewContent> {
         let code_line_limit = self.preview_code_line_limit_for_entry(entry);
+        let ffmpeg_available = self.preview_cache_ffmpeg_available_for_entry(entry);
 
         // Try the complete render first (prefer it even when stale).
         let complete_key = PreviewCacheKey {
             path: entry.path.clone(),
             variant: variant.clone(),
+            ffmpeg_available,
             code_line_limit,
             code_render_limit: code_line_limit,
         };
@@ -73,6 +79,7 @@ impl App {
             .find(|(key, _)| {
                 key.path == entry.path
                     && key.variant == *variant
+                    && key.ffmpeg_available == ffmpeg_available
                     && key.code_line_limit == code_line_limit
             })
             .map(|(_, cached)| cached.preview.clone())
@@ -91,6 +98,7 @@ impl App {
             variant,
             code_line_limit,
             code_line_limit,
+            self.preview_cache_ffmpeg_available_for_entry(entry),
             preview,
         );
     }
@@ -111,6 +119,7 @@ impl App {
             variant,
             code_line_limit,
             code_render_limit,
+            self.preview_cache_ffmpeg_available_for_entry(entry),
             preview,
         );
     }
@@ -121,11 +130,13 @@ impl App {
         variant: &PreviewRequestOptions,
         code_line_limit: usize,
         code_render_limit: usize,
+        ffmpeg_available: bool,
         preview: &PreviewContent,
     ) {
         let key = PreviewCacheKey {
             path: entry.path.clone(),
             variant: variant.clone(),
+            ffmpeg_available: ffmpeg_available && preview_cache_entry_uses_ffmpeg(entry),
             code_line_limit,
             code_render_limit,
         };
@@ -187,4 +198,17 @@ impl App {
             .keys()
             .any(|key| key.path == path)
     }
+
+    pub(in crate::app) fn preview_cache_ffmpeg_available_for_entry(&self, entry: &Entry) -> bool {
+        preview_cache_entry_uses_ffmpeg(entry)
+            && self.terminal_image_overlay_available()
+            && self.preview.media.ffmpeg_available != Some(false)
+    }
+}
+
+fn preview_cache_entry_uses_ffmpeg(entry: &Entry) -> bool {
+    matches!(
+        crate::file_info::inspect_entry_cached(entry).builtin_class,
+        FileClass::Audio | FileClass::Video
+    )
 }

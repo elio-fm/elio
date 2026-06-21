@@ -37,6 +37,7 @@ fn preview_job_key(path: &str, size: u64) -> PreviewJobKey {
         size,
         modified: None,
         variant: PreviewRequestOptions::Default,
+        ffmpeg_available: false,
         code_line_limit: default_code_preview_line_limit(),
         code_render_limit: default_code_preview_line_limit(),
     }

@@ -401,6 +401,7 @@ impl App {
                         &build.variant,
                         build.code_line_limit,
                         build.code_render_limit,
+                        build.ffmpeg_available,
                         &build.result,
                     );
                     let build_is_comic = build.result.kind == preview::PreviewKind::Comic;

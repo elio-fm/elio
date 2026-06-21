@@ -286,6 +286,7 @@ pub(super) struct CachedPreview {
 pub(super) struct PreviewCacheKey {
     pub(super) path: PathBuf,
     pub(super) variant: preview::PreviewRequestOptions,
+    pub(super) ffmpeg_available: bool,
     pub(super) code_line_limit: usize,
     /// The render limit used for this cache entry. Partial (incremental)
     /// renders have `code_render_limit < code_line_limit`; complete renders

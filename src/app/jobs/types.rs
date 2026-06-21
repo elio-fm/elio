@@ -236,6 +236,7 @@ pub(in crate::app) struct PreviewBuild {
     /// The actual line limit used for this render pass. May be less than
     /// `code_line_limit` for initial incremental renders.
     pub(in crate::app) code_render_limit: usize,
+    pub(in crate::app) ffmpeg_available: bool,
     pub(in crate::app) result: preview::PreviewContent,
 }
 
