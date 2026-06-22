@@ -18,7 +18,7 @@ Snappy, batteries-included terminal file manager with rich previews, inline imag
 - **Inline images** — rendered directly in supported terminals
 - **Customizable Places and devices** — pinned folders plus auto-detected drives and mounts
 - **Quick actions** — Go-to, Open With, and copy-to-clipboard
-- **Git integration** — branch indicator plus a `Ctrl+G` menu to view `status`, `log`, and `diff` without leaving elio
+- **Git integration** — branch indicator, per-file status markers in the listing, plus a `Ctrl+G` menu to view `status`, `log`, and `diff` without leaving elio
 - **Trash management** — trash, restore, or permanently delete files
 - **Keyboard and mouse navigation** — browse comfortably either way
 - **Grid and list views** — switch with `v`, zoom the grid with `Ctrl++` / `Ctrl+-`

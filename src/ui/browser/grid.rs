@@ -112,6 +112,11 @@ fn render_tile(
     } = tile_state;
     let appearance = theme::resolve_browser_entry(entry);
     let icon_color = appearance.color;
+    let git_status = if app.git_is_active() {
+        app.git_entry_status(entry)
+    } else {
+        None
+    };
     let background = palette.surface;
     let content_bg = if selected {
         theme::mix_color(palette.selected_bg, icon_color, 22)
@@ -150,28 +155,40 @@ fn render_tile(
         Block::default().style(Style::default().bg(band_bg).fg(band_fg)),
         band,
     );
+    let mut band_spans = vec![
+        Span::styled(
+            appearance.icon,
+            Style::default().fg(band_icon).add_modifier(
+                Modifier::BOLD
+                    | if spec.emphasize_icon {
+                        Modifier::ITALIC
+                    } else {
+                        Modifier::empty()
+                    },
+            ),
+        ),
+        Span::raw(" "),
+    ];
+    let name_reserve = if git_status.is_some() { 7 } else { 5 };
+    if let Some(status) = git_status {
+        let (badge, color) = theme::git_status_badge(status);
+        band_spans.push(Span::styled(
+            badge.to_string(),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ));
+        band_spans.push(Span::raw(" "));
+    }
+    band_spans.push(Span::styled(
+        helpers::clamp_label(
+            &entry.name,
+            band.width.saturating_sub(name_reserve) as usize,
+        ),
+        Style::default()
+            .fg(band_name_fg)
+            .add_modifier(Modifier::BOLD),
+    ));
     frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(
-                appearance.icon,
-                Style::default().fg(band_icon).add_modifier(
-                    Modifier::BOLD
-                        | if spec.emphasize_icon {
-                            Modifier::ITALIC
-                        } else {
-                            Modifier::empty()
-                        },
-                ),
-            ),
-            Span::raw(" "),
-            Span::styled(
-                helpers::clamp_label(&entry.name, band.width.saturating_sub(5) as usize),
-                Style::default()
-                    .fg(band_name_fg)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]))
-        .style(Style::default().bg(band_bg).fg(band_fg)),
+        Paragraph::new(Line::from(band_spans)).style(Style::default().bg(band_bg).fg(band_fg)),
         band.inner(Margin {
             horizontal: 1,
             vertical: 0,

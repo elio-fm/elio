@@ -160,9 +160,10 @@ pub(crate) fn remove_restore_origins(trash_names: &[&str]) {
         Err(_) => return,
     };
     if remove_from_origins_map(&mut map, trash_names)
-        && let Ok(json) = serde_json::to_vec_pretty(&map) {
-            let _ = fs::write(&path, json);
-        }
+        && let Ok(json) = serde_json::to_vec_pretty(&map)
+    {
+        let _ = fs::write(&path, json);
+    }
 }
 
 /// Core map-mutation logic for [`remove_restore_origins`]: removes each name
@@ -184,16 +185,17 @@ fn remove_from_origins_map(
         // and try again.
         let p = Path::new(name);
         if let Some(stem) = p.file_stem().and_then(|s| s.to_str())
-            && let Some(base_stem) = strip_macos_collision_suffix(stem) {
-                let ext = p.extension().and_then(|e| e.to_str());
-                let base_name = match ext {
-                    Some(e) => format!("{base_stem}.{e}"),
-                    None => base_stem.to_owned(),
-                };
-                if map.remove(&base_name).is_some() {
-                    changed = true;
-                }
+            && let Some(base_stem) = strip_macos_collision_suffix(stem)
+        {
+            let ext = p.extension().and_then(|e| e.to_str());
+            let base_name = match ext {
+                Some(e) => format!("{base_stem}.{e}"),
+                None => base_stem.to_owned(),
+            };
+            if map.remove(&base_name).is_some() {
+                changed = true;
             }
+        }
     }
     changed
 }

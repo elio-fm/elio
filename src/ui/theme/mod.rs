@@ -25,6 +25,21 @@ pub(super) fn mix_color(base: Color, tint: Color, tint_weight: u8) -> Color {
     }
 }
 
+/// Badge character and color for a file's git status, shown next to its name
+/// in the browser. Colors mirror the diff highlighting in git previews.
+pub(super) fn git_status_badge(status: crate::app::GitFileStatus) -> (char, Color) {
+    use crate::app::GitFileStatus;
+    let color = match status {
+        GitFileStatus::Added => Color::Green,
+        GitFileStatus::Modified => Color::Yellow,
+        GitFileStatus::Deleted => Color::Red,
+        GitFileStatus::Untracked => Color::Cyan,
+        GitFileStatus::Renamed => Color::Magenta,
+        GitFileStatus::Conflicted => Color::LightRed,
+    };
+    (status.badge(), color)
+}
+
 pub(super) fn entry_color(entry: &Entry, palette: Palette) -> Color {
     let _ = palette;
     resolve_entry(entry).color

@@ -3,12 +3,74 @@ use super::{
     jobs::{GitCommandBuild, GitCommandRequest, GitStatusBuild, GitStatusRequest},
     state::GitView,
 };
+use crate::core::Entry;
 use crate::preview::{PreviewContent, PreviewKind};
 use ratatui::{
     style::{Color, Style},
     text::Line,
 };
-use std::{path::Path, process::Command};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+/// Working-tree status of a single path, derived from `git status --porcelain`.
+/// Collapses git's two-axis (index/worktree) codes into one badge per entry.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum GitFileStatus {
+    Untracked,
+    Modified,
+    Added,
+    Deleted,
+    Renamed,
+    Conflicted,
+}
+
+impl GitFileStatus {
+    /// Single-letter badge shown next to the file name.
+    pub(crate) fn badge(self) -> char {
+        match self {
+            Self::Untracked => '?',
+            Self::Modified => 'M',
+            Self::Added => 'A',
+            Self::Deleted => 'D',
+            Self::Renamed => 'R',
+            Self::Conflicted => 'U',
+        }
+    }
+
+    /// Maps a porcelain `XY` code to a single status, preferring the most
+    /// significant axis. Returns `None` for ignored or unrecognized entries.
+    fn from_porcelain(code: &str) -> Option<Self> {
+        let mut chars = code.chars();
+        let x = chars.next()?;
+        let y = chars.next().unwrap_or(' ');
+
+        if x == '?' || y == '?' {
+            return Some(Self::Untracked);
+        }
+        if x == '!' || y == '!' {
+            return None;
+        }
+        if x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D') {
+            return Some(Self::Conflicted);
+        }
+        if x == 'R' || y == 'R' || x == 'C' || y == 'C' {
+            return Some(Self::Renamed);
+        }
+        if x == 'A' {
+            return Some(Self::Added);
+        }
+        if x == 'D' || y == 'D' {
+            return Some(Self::Deleted);
+        }
+        if matches!(x, 'M' | 'T') || matches!(y, 'M' | 'T') {
+            return Some(Self::Modified);
+        }
+        None
+    }
+}
 
 /// A read-only git command the user can run from the git menu. The output is
 /// captured off-thread and shown in the preview pane; nothing here mutates the
@@ -65,12 +127,40 @@ impl App {
         if cwd_changed {
             self.git.branch = None;
             self.git.dirty = false;
+            self.git.statuses.clear();
         }
         self.git.token = self.git.token.wrapping_add(1);
         let token = self.git.token;
         self.jobs
             .scheduler
             .submit_git_status(GitStatusRequest { token, cwd });
+    }
+
+    /// Git working-tree status for an entry, if any. Directories report
+    /// `Modified` when they contain changed paths but are not themselves a
+    /// tracked change (fully untracked directories match by path directly).
+    pub(crate) fn git_entry_status(&self, entry: &Entry) -> Option<GitFileStatus> {
+        if self.git.statuses.is_empty() {
+            return None;
+        }
+        if let Some(&status) = self.git.statuses.get(&entry.path) {
+            return Some(status);
+        }
+        if entry.is_dir()
+            && self
+                .git
+                .statuses
+                .keys()
+                .any(|path| path.starts_with(&entry.path))
+        {
+            return Some(GitFileStatus::Modified);
+        }
+        None
+    }
+
+    /// Whether the current directory is inside a git repository.
+    pub(crate) fn git_is_active(&self) -> bool {
+        self.git.branch.is_some()
     }
 
     /// Title of the git output currently shown in the preview pane, if any.
@@ -125,10 +215,13 @@ impl App {
         if result.token != self.git.token || result.cwd != self.git.cwd {
             return false;
         }
-        let dirty = self.git.branch != result.branch || self.git.dirty != result.dirty;
+        let changed = self.git.branch != result.branch
+            || self.git.dirty != result.dirty
+            || self.git.statuses != result.statuses;
         self.git.branch = result.branch;
         self.git.dirty = result.dirty;
-        dirty
+        self.git.statuses = result.statuses;
+        changed
     }
 
     #[cfg(test)]
@@ -142,23 +235,60 @@ impl App {
     }
 }
 
-pub(in crate::app) fn current_status(cwd: &Path) -> (Option<String>, bool) {
+pub(in crate::app) fn current_status(
+    cwd: &Path,
+) -> (Option<String>, HashMap<PathBuf, GitFileStatus>) {
     if git_command(cwd, ["rev-parse", "--is-inside-work-tree"])
         .is_none_or(|output| output.trim() != "true")
     {
-        return (None, false);
+        return (None, HashMap::new());
     }
 
     let branch = git_command(cwd, ["branch", "--show-current"])
         .and_then(non_empty_trimmed)
         .or_else(|| git_command(cwd, ["rev-parse", "--short", "HEAD"]).and_then(non_empty_trimmed));
-    let dirty = git_command(
-        cwd,
-        ["status", "--porcelain=v1", "--untracked-files=normal"],
-    )
-    .is_some_and(|output| !output.trim().is_empty());
 
-    (branch, dirty)
+    let toplevel = git_command(cwd, ["rev-parse", "--show-toplevel"])
+        .and_then(non_empty_trimmed)
+        .map(PathBuf::from);
+    let statuses = git_command(
+        cwd,
+        ["status", "--porcelain=v1", "-z", "--untracked-files=normal"],
+    )
+    .map(|output| parse_porcelain(&output, toplevel.as_deref()))
+    .unwrap_or_default();
+
+    (branch, statuses)
+}
+
+/// Parses NUL-delimited `git status --porcelain=v1 -z` output into a map of
+/// absolute path → status. Rename/copy records carry an extra trailing field
+/// (the source path) which is consumed and ignored.
+fn parse_porcelain(output: &str, toplevel: Option<&Path>) -> HashMap<PathBuf, GitFileStatus> {
+    let mut statuses = HashMap::new();
+    let mut fields = output.split('\0');
+    while let Some(record) = fields.next() {
+        if record.len() < 4 {
+            continue;
+        }
+        let code = &record[..2];
+        let path = &record[3..];
+        let is_rename =
+            matches!(code.as_bytes()[0], b'R' | b'C') || matches!(code.as_bytes()[1], b'R' | b'C');
+        if is_rename {
+            // The source path follows as its own NUL-delimited field.
+            let _ = fields.next();
+        }
+        let Some(status) = GitFileStatus::from_porcelain(code) else {
+            continue;
+        };
+        let absolute = match toplevel {
+            Some(root) => root.join(path),
+            None => PathBuf::from(path),
+        };
+        statuses.insert(absolute, status);
+    }
+    statuses
 }
 
 /// Runs a read-only git command in `cwd` and returns its captured output and
@@ -258,12 +388,15 @@ fn non_empty_trimmed(output: String) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{App, GitCommand, current_status, diff_line_style, git_output_lines};
+    use super::{
+        App, GitCommand, GitFileStatus, current_status, diff_line_style, git_output_lines,
+        parse_porcelain,
+    };
     use crate::app::jobs::GitCommandBuild;
     use ratatui::{style::Color, text::Line};
     use std::{
         fs,
-        path::PathBuf,
+        path::{Path, PathBuf},
         process::{Command, Stdio},
         time::{SystemTime, UNIX_EPOCH},
     };
@@ -273,6 +406,14 @@ mod tests {
             .iter()
             .map(|span| span.content.as_ref())
             .collect()
+    }
+
+    fn test_directory(path: PathBuf) -> crate::core::Entry {
+        crate::core::Entry {
+            path,
+            kind: crate::core::EntryKind::Directory,
+            ..Default::default()
+        }
     }
 
     fn temp_path(label: &str) -> PathBuf {
@@ -313,6 +454,10 @@ mod tests {
 
         let root = temp_path("dirty");
         fs::create_dir_all(&root).expect("failed to create temp dir");
+        // Canonicalize to match `git rev-parse --show-toplevel`, which resolves
+        // symlinks (e.g. macOS /var -> /private/var). In real usage elio's cwd
+        // comes from `env::current_dir()` (getcwd), which is already canonical.
+        let root = fs::canonicalize(&root).expect("failed to canonicalize temp dir");
 
         git(&root, &["init", "-b", "main"]);
         fs::write(root.join("tracked.txt"), "tracked").expect("failed to write tracked file");
@@ -330,10 +475,93 @@ mod tests {
             ],
         );
 
-        assert_eq!(current_status(&root), (Some("main".to_string()), false));
+        let (branch, statuses) = current_status(&root);
+        assert_eq!(branch, Some("main".to_string()));
+        assert!(statuses.is_empty(), "clean tree should report no statuses");
 
         fs::write(root.join("untracked.txt"), "dirty").expect("failed to write dirty file");
-        assert_eq!(current_status(&root), (Some("main".to_string()), true));
+        let (branch, statuses) = current_status(&root);
+        assert_eq!(branch, Some("main".to_string()));
+        assert_eq!(
+            statuses.get(&root.join("untracked.txt")),
+            Some(&GitFileStatus::Untracked),
+            "untracked file should be reported, got: {statuses:?}"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn porcelain_classifies_codes() {
+        assert_eq!(
+            GitFileStatus::from_porcelain("??"),
+            Some(GitFileStatus::Untracked)
+        );
+        assert_eq!(
+            GitFileStatus::from_porcelain(" M"),
+            Some(GitFileStatus::Modified)
+        );
+        assert_eq!(
+            GitFileStatus::from_porcelain("M "),
+            Some(GitFileStatus::Modified)
+        );
+        assert_eq!(
+            GitFileStatus::from_porcelain("A "),
+            Some(GitFileStatus::Added)
+        );
+        assert_eq!(
+            GitFileStatus::from_porcelain(" D"),
+            Some(GitFileStatus::Deleted)
+        );
+        assert_eq!(
+            GitFileStatus::from_porcelain("R "),
+            Some(GitFileStatus::Renamed)
+        );
+        assert_eq!(
+            GitFileStatus::from_porcelain("UU"),
+            Some(GitFileStatus::Conflicted)
+        );
+        assert_eq!(GitFileStatus::from_porcelain("!!"), None);
+    }
+
+    #[test]
+    fn parse_porcelain_builds_absolute_paths_and_skips_rename_source() {
+        let root = Path::new("/repo");
+        // " M file.txt\0R  old.txt\0new.txt\0?? extra/\0"
+        let output = " M file.txt\0R  new.txt\0old.txt\0?? extra/\0";
+        let map = parse_porcelain(output, Some(root));
+
+        assert_eq!(
+            map.get(&root.join("file.txt")),
+            Some(&GitFileStatus::Modified)
+        );
+        assert_eq!(
+            map.get(&root.join("new.txt")),
+            Some(&GitFileStatus::Renamed)
+        );
+        assert_eq!(
+            map.get(&root.join("extra")),
+            Some(&GitFileStatus::Untracked)
+        );
+        // The rename source must not leak in as its own entry.
+        assert!(!map.contains_key(&root.join("old.txt")));
+    }
+
+    #[test]
+    fn directory_entries_aggregate_nested_changes() {
+        let root = temp_path("dir-aggregate");
+        fs::create_dir_all(root.join("src")).expect("failed to create temp dir");
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.set_git_branch_for_test(Some("main"));
+        app.git
+            .statuses
+            .insert(root.join("src/main.rs"), GitFileStatus::Modified);
+
+        let dir = test_directory(root.join("src"));
+        assert_eq!(app.git_entry_status(&dir), Some(GitFileStatus::Modified));
+
+        let unrelated = test_directory(root.join("docs"));
+        assert_eq!(app.git_entry_status(&unrelated), None);
 
         fs::remove_dir_all(root).expect("failed to remove temp dir");
     }

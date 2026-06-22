@@ -5,7 +5,7 @@ use crate::app::{ClipOp, SearchScope};
 use crate::core::{Entry, SortMode};
 use crate::fs::search::{SearchIndex, SearchIndexBatch};
 use crate::{preview, preview::PreviewWorkClass};
-use std::{path::PathBuf, sync::Arc, time::SystemTime};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::SystemTime};
 
 /// Parameters needed by the background image-prepare job to pre-encode a
 /// Sixel DCS stream alongside the rendered PNG.  Bundled as an `Option` so
@@ -133,6 +133,7 @@ pub(in crate::app) struct GitStatusBuild {
     pub(in crate::app) cwd: PathBuf,
     pub(in crate::app) branch: Option<String>,
     pub(in crate::app) dirty: bool,
+    pub(in crate::app) statuses: HashMap<PathBuf, crate::app::git::GitFileStatus>,
 }
 
 #[derive(Clone, Debug)]

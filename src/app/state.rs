@@ -696,6 +696,9 @@ pub(in crate::app) struct GitRuntime {
     pub(in crate::app) cwd: PathBuf,
     pub(in crate::app) branch: Option<String>,
     pub(in crate::app) dirty: bool,
+    /// Per-path working-tree status for files in the repository, keyed by
+    /// absolute path. Populated by the background git-status job.
+    pub(in crate::app) statuses: HashMap<PathBuf, crate::app::git::GitFileStatus>,
     /// Distinguishes the latest user-triggered git command from stale results.
     pub(in crate::app) command_token: u64,
     /// When `Some`, the preview pane is displaying captured git command output
@@ -848,6 +851,7 @@ impl App {
                 cwd: PathBuf::new(),
                 branch: None,
                 dirty: false,
+                statuses: HashMap::new(),
                 command_token: 0,
                 view: None,
             },

@@ -55,9 +55,10 @@ pub(super) fn mounted_device_items(
             continue;
         }
         if let Some(root_dev) = root_dev
-            && fs::metadata(&path).is_ok_and(|metadata| metadata.dev() == root_dev) {
-                continue;
-            }
+            && fs::metadata(&path).is_ok_and(|metadata| metadata.dev() == root_dev)
+        {
+            continue;
+        }
         if !path.is_dir() {
             continue;
         }

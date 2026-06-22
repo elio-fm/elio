@@ -33,7 +33,8 @@ impl GitStatusPool {
         let worker_shared = Arc::clone(&shared);
         let worker = thread::spawn(move || {
             while let Some(request) = GitStatusShared::pop(&worker_shared) {
-                let (branch, dirty) = crate::app::git::current_status(&request.cwd);
+                let (branch, statuses) = crate::app::git::current_status(&request.cwd);
+                let dirty = !statuses.is_empty();
                 GitStatusShared::finish(&worker_shared);
                 if result_tx
                     .send(JobResult::GitStatus(GitStatusBuild {
@@ -41,6 +42,7 @@ impl GitStatusPool {
                         cwd: request.cwd,
                         branch,
                         dirty,
+                        statuses,
                     }))
                     .is_err()
                 {

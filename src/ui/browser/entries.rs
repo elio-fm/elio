@@ -122,6 +122,16 @@ pub(super) fn render_compact_list_row(
 
     let multi_selected = app.is_selected(&entry.path);
     let clip_op = app.clipboard_op_for(&entry.path);
+    // Reserve a fixed 2-column git slot (badge letter + gap) for every row when
+    // inside a repository, so file names stay aligned whether or not a given
+    // file has changes.
+    let git_active = app.git_is_active();
+    let git_status = if git_active {
+        app.git_entry_status(entry)
+    } else {
+        None
+    };
+    let git_reserved = if git_active { 2u16 } else { 0 };
     // All mark states take priority over the cursor colour for the bar — the
     // cursor position is already communicated by the row background.
     let marker_color = if clip_op == Some(ClipOp::Yank) {
@@ -150,7 +160,10 @@ pub(super) fn render_compact_list_row(
         Style::default().fg(palette.text)
     };
     let muted_style = Style::default().fg(palette.muted);
-    let available_width = row_width.saturating_sub(COMPACT_PREFIX_WIDTH as u16).max(1) as usize;
+    let available_width = row_width
+        .saturating_sub(COMPACT_PREFIX_WIDTH as u16)
+        .saturating_sub(git_reserved)
+        .max(1) as usize;
     let min_name_width = available_width.min(COMPACT_NAME_MIN_WIDTH);
     let symlink_target = symlink_target_label(entry);
     let show_inline_symlink_target =
@@ -226,6 +239,19 @@ pub(super) fn render_compact_list_row(
         Span::styled(icon.to_string(), icon_style),
         Span::raw(" "),
     ];
+    if git_active {
+        match git_status {
+            Some(status) => {
+                let (badge, color) = theme::git_status_badge(status);
+                spans.push(Span::styled(
+                    badge.to_string(),
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                ));
+                spans.push(Span::raw(" "));
+            }
+            None => spans.push(Span::raw("  ")),
+        }
+    }
     spans.extend(compact_entry_name_spans(
         entry,
         name_width,

@@ -28,6 +28,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+pub(crate) use self::git::GitFileStatus;
 pub use self::state::App;
 #[cfg(test)]
 pub use self::state::PreviewMetricsSnapshot;
