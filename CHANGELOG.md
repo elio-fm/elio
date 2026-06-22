@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a git menu (`Ctrl+G`) for working with the current repository without leaving elio: view `status`, `log`, and `diff` in the preview pane; stage/unstage the focused file; commit with an in-app message prompt; fetch, pull, and push; and switch branches from a filterable picker. Remote operations work with non-interactive credentials (SSH agent or credential helper).
+- Added per-file git status markers (`M`/`A`/`D`/`?`/`R`/`U`) next to entries in the list and grid views while browsing a repository.
 - Made Go To entries configurable, allowing built-ins to be changed and custom entries to be added. ([#166])
 
 ### Fixed
