@@ -1,0 +1,235 @@
+use super::super::{
+    App,
+    git::GitCommand,
+    state::{GitMenuOverlay, GitMenuOverlayRow},
+};
+use crate::fs::rect_contains;
+use anyhow::Result;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+impl App {
+    pub fn git_menu_is_open(&self) -> bool {
+        self.overlays.git_menu.is_some()
+    }
+
+    pub fn git_menu_title(&self) -> &str {
+        self.overlays
+            .git_menu
+            .as_ref()
+            .map(|overlay| overlay.title.as_str())
+            .unwrap_or("")
+    }
+
+    pub fn git_menu_row_count(&self) -> usize {
+        self.overlays
+            .git_menu
+            .as_ref()
+            .map(|overlay| overlay.rows.len())
+            .unwrap_or(0)
+    }
+
+    pub fn git_menu_row_label(&self, index: usize) -> &str {
+        self.overlays
+            .git_menu
+            .as_ref()
+            .and_then(|overlay| overlay.rows.get(index))
+            .map(|row| row.label.as_str())
+            .unwrap_or("")
+    }
+
+    pub fn git_menu_row_shortcut(&self, index: usize) -> Option<char> {
+        self.overlays
+            .git_menu
+            .as_ref()
+            .and_then(|overlay| overlay.rows.get(index))
+            .map(|row| row.shortcut)
+    }
+}
+
+impl App {
+    pub(in crate::app) fn open_git_menu_overlay(&mut self) {
+        if self.git_branch().is_none() {
+            self.status = "Not a git repository".to_string();
+            return;
+        }
+        self.overlays.help = false;
+        self.overlays.git_menu = Some(build_git_menu_overlay());
+        self.status.clear();
+    }
+
+    pub(in crate::app) fn handle_git_menu_key(&mut self, key: KeyEvent) -> Result<()> {
+        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
+            self.overlays.git_menu = None;
+            return Ok(());
+        }
+
+        match key.code {
+            KeyCode::Esc => {
+                self.overlays.git_menu = None;
+            }
+            _ => {
+                if let Some(index) = crate::config::normalized_plain_key_char(key)
+                    .and_then(|ch| self.git_menu_row_index_for_shortcut(ch))
+                {
+                    self.confirm_git_menu_index(index);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(in crate::app) fn handle_git_menu_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+        if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
+            let inside = self
+                .input
+                .frame_state
+                .git_menu_panel
+                .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+            if !inside {
+                self.overlays.git_menu = None;
+                return Ok(());
+            }
+
+            if let Some(hit) = self
+                .input
+                .frame_state
+                .git_menu_hits
+                .iter()
+                .find(|hit| rect_contains(hit.rect, mouse.column, mouse.row))
+                .cloned()
+            {
+                self.confirm_git_menu_index(hit.index);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn git_menu_row_index_for_shortcut(&self, ch: char) -> Option<usize> {
+        self.overlays
+            .git_menu
+            .as_ref()
+            .and_then(|overlay| overlay.rows.iter().position(|row| row.shortcut == ch))
+    }
+
+    fn confirm_git_menu_index(&mut self, index: usize) {
+        let Some(command) = self
+            .overlays
+            .git_menu
+            .as_ref()
+            .and_then(|overlay| overlay.rows.get(index).map(|row| row.command))
+        else {
+            return;
+        };
+        self.overlays.git_menu = None;
+        self.run_git_command(command);
+    }
+}
+
+fn build_git_menu_overlay() -> GitMenuOverlay {
+    let rows = vec![
+        git_menu_row('s', "status", GitCommand::Status),
+        git_menu_row('l', "log", GitCommand::Log),
+        git_menu_row('d', "diff", GitCommand::Diff),
+    ];
+
+    GitMenuOverlay {
+        title: "Git".to_string(),
+        rows,
+    }
+}
+
+fn git_menu_row(shortcut: char, label: &str, command: GitCommand) -> GitMenuOverlayRow {
+    GitMenuOverlayRow {
+        shortcut,
+        label: label.to_string(),
+        command,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{fs, path::PathBuf, time::SystemTime};
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("elio-{name}-{unique}"))
+    }
+
+    fn app_in_repo(name: &str) -> (App, PathBuf) {
+        let root = temp_dir(name);
+        fs::create_dir_all(&root).expect("failed to create temp dir");
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.set_git_branch_for_test(Some("main"));
+        (app, root)
+    }
+
+    fn plain_key(ch: char) -> KeyEvent {
+        KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn opens_with_status_log_diff_commands() {
+        let (mut app, root) = app_in_repo("git-menu-open");
+
+        app.open_git_menu_overlay();
+
+        assert!(app.git_menu_is_open());
+        assert_eq!(app.git_menu_row_count(), 3);
+        assert_eq!(app.git_menu_row_shortcut(0), Some('s'));
+        assert_eq!(app.git_menu_row_label(0), "status");
+        assert_eq!(app.git_menu_row_shortcut(1), Some('l'));
+        assert_eq!(app.git_menu_row_shortcut(2), Some('d'));
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn does_not_open_outside_a_repo() {
+        let root = temp_dir("git-menu-no-repo");
+        fs::create_dir_all(&root).expect("failed to create temp dir");
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+        app.open_git_menu_overlay();
+
+        assert!(!app.git_menu_is_open());
+        assert_eq!(app.status, "Not a git repository");
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn selecting_a_command_closes_the_menu_and_submits() {
+        let (mut app, root) = app_in_repo("git-menu-select");
+        app.open_git_menu_overlay();
+        let before = app.git.command_token;
+
+        app.handle_git_menu_key(plain_key('s'))
+            .expect("status shortcut should be handled");
+
+        assert!(!app.git_menu_is_open());
+        assert_eq!(app.git.command_token, before.wrapping_add(1));
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn escape_closes_the_menu_without_submitting() {
+        let (mut app, root) = app_in_repo("git-menu-escape");
+        app.open_git_menu_overlay();
+        let before = app.git.command_token;
+
+        app.handle_git_menu_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+            .expect("escape should be handled");
+
+        assert!(!app.git_menu_is_open());
+        assert_eq!(app.git.command_token, before);
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+}

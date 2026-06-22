@@ -14,11 +14,12 @@ use self::sync::{lock_unpoison, wait_unpoison};
 pub(super) use self::types::{
     DirectoryBuild, DirectoryFingerprintBuild, DirectoryFingerprintRequest,
     DirectoryItemCountBuild, DirectoryItemCountRequest, DirectoryRequest, DirectoryStatsBuild,
-    DirectoryStatsRequest, GitStatusBuild, GitStatusRequest, ImageJobPriority, ImagePrepareBuild,
-    ImagePrepareRequest, JobResult, PasteBuild, PasteRequest, PdfJobPriority, PdfProbeBuild,
-    PdfProbeRequest, PdfRenderBuild, PdfRenderRequest, PreviewBuild, PreviewLineCountBuild,
-    PreviewLineCountRequest, PreviewPriority, PreviewRequest, RestoreBuild, RestoreRequest,
-    SearchBatchBuild, SearchBuild, SearchRequest, SixelPrepareConfig, TrashBuild, TrashRequest,
+    DirectoryStatsRequest, GitCommandBuild, GitCommandRequest, GitStatusBuild, GitStatusRequest,
+    ImageJobPriority, ImagePrepareBuild, ImagePrepareRequest, JobResult, PasteBuild, PasteRequest,
+    PdfJobPriority, PdfProbeBuild, PdfProbeRequest, PdfRenderBuild, PdfRenderRequest, PreviewBuild,
+    PreviewLineCountBuild, PreviewLineCountRequest, PreviewPriority, PreviewRequest, RestoreBuild,
+    RestoreRequest, SearchBatchBuild, SearchBuild, SearchRequest, SixelPrepareConfig, TrashBuild,
+    TrashRequest,
 };
 use self::{config::SchedulerConfig, metrics::SchedulerMetrics};
 #[cfg(test)]

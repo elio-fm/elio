@@ -303,6 +303,12 @@ pub(super) fn resolve_key_overrides(
             override_value: overrides.scroll_preview_down,
             default: defaults.scroll_preview_down.clone(),
         },
+        RawBinding {
+            name: "git_menu",
+            action: Action::GitMenu,
+            override_value: overrides.git_menu,
+            default: defaults.git_menu.clone(),
+        },
     ];
 
     // Step 1: parse each override independently, falling back to default on
@@ -380,6 +386,7 @@ pub(super) fn resolve_key_overrides(
         open_with: resolved(18),
         open_or_enter: resolved(19),
         go_to: resolved(20),
+        git_menu: resolved(43),
         toggle_selection: resolved(21),
         cycle_places_next: resolved(22),
         cycle_places_previous: resolved(23),

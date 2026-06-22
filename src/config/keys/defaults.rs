@@ -31,6 +31,7 @@ impl Default for KeyBindings {
             open_with: KeyList::one('O'),
             open_or_enter: KeyList(vec![KeySpec::named(NamedKey::Enter)]),
             go_to: KeyList::one('g'),
+            git_menu: KeyList(vec![KeySpec::ctrl_char('g')]),
             toggle_selection: KeyList(vec![KeySpec::named(NamedKey::Space)]),
             cycle_places_next: KeyList(vec![KeySpec::named(NamedKey::Tab)]),
             cycle_places_previous: KeyList(vec![KeySpec::named(NamedKey::BackTab)]),

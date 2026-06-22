@@ -1,4 +1,5 @@
 mod directory;
+mod git_menu;
 mod goto;
 mod navigation;
 mod preview;

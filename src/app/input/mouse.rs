@@ -26,6 +26,10 @@ impl App {
             return self.handle_goto_mouse(mouse);
         }
 
+        if self.overlays.git_menu.is_some() {
+            return self.handle_git_menu_mouse(mouse);
+        }
+
         if self.overlays.copy.is_some() {
             return self.handle_copy_mouse(mouse);
         }

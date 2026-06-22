@@ -104,6 +104,9 @@ impl App {
     }
 
     pub(in crate::app) fn refresh_preview(&mut self) {
+        // Rebuilding the file preview always leaves the transient git-output
+        // view: any selection change or explicit dismissal flows through here.
+        self.git.view = None;
         self.preview.state.deferred_refresh_at = None;
         self.preview.state.prefetch_ready_at = None;
         // Reset incremental state on every selection refresh.

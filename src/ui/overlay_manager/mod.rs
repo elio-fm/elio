@@ -5,6 +5,7 @@ use ratatui::{Frame, layout::Rect};
 mod bulk_rename;
 mod copy;
 mod create;
+mod git_menu;
 mod goto;
 mod help;
 mod open_with;
@@ -97,6 +98,16 @@ pub(super) fn render_goto_overlay(
     palette: Palette,
 ) {
     goto::render_goto_overlay(frame, area, app, state, palette);
+}
+
+pub(super) fn render_git_menu_overlay(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    state: &mut FrameState,
+    palette: Palette,
+) {
+    git_menu::render_git_menu_overlay(frame, area, app, state, palette);
 }
 
 pub(super) fn render_search_overlay(

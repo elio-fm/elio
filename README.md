@@ -18,6 +18,7 @@ Snappy, batteries-included terminal file manager with rich previews, inline imag
 - **Inline images** — rendered directly in supported terminals
 - **Customizable Places and devices** — pinned folders plus auto-detected drives and mounts
 - **Quick actions** — Go-to, Open With, and copy-to-clipboard
+- **Git integration** — branch indicator plus a `Ctrl+G` menu to view `status`, `log`, and `diff` without leaving elio
 - **Trash management** — trash, restore, or permanently delete files
 - **Keyboard and mouse navigation** — browse comfortably either way
 - **Grid and list views** — switch with `v`, zoom the grid with `Ctrl++` / `Ctrl+-`
@@ -291,6 +292,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | `o` `*` | Open focused item or selection with the system default application |
 | `O` `*` | Open With chooser |
 | `!` `*` | Open shell in current folder |
+| `Ctrl+G` `*` | Git menu — run `status` / `log` / `diff` in the Preview pane |
 | `a` `*` | Create file or folder |
 | `d` / `Del` `*` | Trash; permanently delete if already in trash |
 | `D` / `Shift+Del` `*` | Delete permanently |

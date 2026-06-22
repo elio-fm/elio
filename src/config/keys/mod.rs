@@ -62,7 +62,7 @@ impl KeyBindings {
             .collect()
     }
 
-    fn bindings(&self) -> [(&KeyList, Action); 43] {
+    fn bindings(&self) -> [(&KeyList, Action); 44] {
         [
             (&self.quit, Action::Quit),
             (&self.quit_without_cd, Action::QuitWithoutCd),
@@ -85,6 +85,7 @@ impl KeyBindings {
             (&self.open_with, Action::OpenWith),
             (&self.open_or_enter, Action::OpenOrEnter),
             (&self.go_to, Action::GoTo),
+            (&self.git_menu, Action::GitMenu),
             (&self.toggle_selection, Action::ToggleSelection),
             (&self.cycle_places_next, Action::CyclePlacesNext),
             (&self.cycle_places_previous, Action::CyclePlacesPrevious),

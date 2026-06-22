@@ -20,7 +20,18 @@ pub(super) fn render_preview(
 ) {
     state.preview_panel = Some(area);
 
-    let title_line = if let Some(entry) = app.selected_entry() {
+    let title_line = if let Some(git_title) = app.git_view_title() {
+        Line::from(vec![
+            Span::raw(" "),
+            Span::styled(
+                helpers::clamp_label(git_title, area.width.saturating_sub(6) as usize),
+                Style::default()
+                    .fg(palette.accent_text)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" "),
+        ])
+    } else if let Some(entry) = app.selected_entry() {
         Line::from(vec![
             Span::styled(
                 format!(" {} ", theme::entry_symbol(entry)),
@@ -57,7 +68,7 @@ pub(super) fn render_preview(
     let inner = helpers::inner_with_padding(area);
     helpers::fill_area(frame, inner, palette.panel, palette.text);
 
-    if app.selected_entry().is_none() {
+    if app.selected_entry().is_none() && !app.git_view_is_active() {
         helpers::render_empty_state(frame, inner, "Nothing selected", palette);
         return;
     }

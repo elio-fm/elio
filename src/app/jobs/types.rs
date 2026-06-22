@@ -142,6 +142,22 @@ pub(in crate::app) struct GitStatusRequest {
 }
 
 #[derive(Debug)]
+pub(in crate::app) struct GitCommandBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) command: crate::app::git::GitCommand,
+    pub(in crate::app) output: String,
+    pub(in crate::app) success: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct GitCommandRequest {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) command: crate::app::git::GitCommand,
+}
+
+#[derive(Debug)]
 pub(in crate::app) struct PreviewLineCountBuild {
     pub(in crate::app) path: PathBuf,
     pub(in crate::app) size: u64,
@@ -314,6 +330,7 @@ pub(in crate::app) enum JobResult {
     DirectoryItemCount(DirectoryItemCountBuild),
     DirectoryStats(DirectoryStatsBuild),
     GitStatus(GitStatusBuild),
+    GitCommand(GitCommandBuild),
     PreviewLineCount(PreviewLineCountBuild),
     ImagePrepare(ImagePrepareBuild),
     PdfProbe(PdfProbeBuild),

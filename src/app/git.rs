@@ -1,8 +1,53 @@
 use super::{
     App,
-    jobs::{GitStatusBuild, GitStatusRequest},
+    jobs::{GitCommandBuild, GitCommandRequest, GitStatusBuild, GitStatusRequest},
+    state::GitView,
+};
+use crate::preview::{PreviewContent, PreviewKind};
+use ratatui::{
+    style::{Color, Style},
+    text::Line,
 };
 use std::{path::Path, process::Command};
+
+/// A read-only git command the user can run from the git menu. The output is
+/// captured off-thread and shown in the preview pane; nothing here mutates the
+/// repository, so it is always safe to run without leaving the TUI.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum GitCommand {
+    Status,
+    Log,
+    Diff,
+}
+
+impl GitCommand {
+    pub(in crate::app) fn args(self) -> &'static [&'static str] {
+        match self {
+            // `-c color.ui=never` keeps ANSI escapes out of the captured text
+            // since git would otherwise color when it detects this is not a tty
+            // in some configurations.
+            Self::Status => &["-c", "color.ui=never", "status"],
+            Self::Log => &[
+                "-c",
+                "color.ui=never",
+                "log",
+                "--max-count=200",
+                "--graph",
+                "--oneline",
+                "--decorate",
+            ],
+            Self::Diff => &["-c", "color.ui=never", "diff"],
+        }
+    }
+
+    pub(in crate::app) fn title(self) -> &'static str {
+        match self {
+            Self::Status => "git status",
+            Self::Log => "git log",
+            Self::Diff => "git diff",
+        }
+    }
+}
 
 impl App {
     pub(crate) fn git_branch(&self) -> Option<&str> {
@@ -26,6 +71,54 @@ impl App {
         self.jobs
             .scheduler
             .submit_git_status(GitStatusRequest { token, cwd });
+    }
+
+    /// Title of the git output currently shown in the preview pane, if any.
+    pub(crate) fn git_view_title(&self) -> Option<&str> {
+        self.git.view.as_ref().map(|view| view.title.as_str())
+    }
+
+    pub(crate) fn git_view_is_active(&self) -> bool {
+        self.git.view.is_some()
+    }
+
+    /// Submits a read-only git command to run off-thread. The captured output
+    /// replaces the preview pane once the result arrives.
+    pub(in crate::app) fn run_git_command(&mut self, command: GitCommand) {
+        let cwd = self.navigation.cwd.clone();
+        if self.git_branch().is_none() {
+            self.status = "Not a git repository".to_string();
+            return;
+        }
+        self.git.command_token = self.git.command_token.wrapping_add(1);
+        let token = self.git.command_token;
+        self.status.clear();
+        self.jobs.scheduler.submit_git_command(GitCommandRequest {
+            token,
+            cwd,
+            command,
+        });
+    }
+
+    pub(in crate::app) fn apply_git_command_result(&mut self, result: GitCommandBuild) -> bool {
+        if result.token != self.git.command_token || result.cwd != self.navigation.cwd {
+            return false;
+        }
+
+        let lines = git_output_lines(result.command, &result.output, result.success);
+        // Bump the preview token so any in-flight file preview result for the
+        // focused entry is treated as stale and does not overwrite git output.
+        self.preview.state.token = self.preview.state.token.wrapping_add(1);
+        self.preview.state.deferred_refresh_at = None;
+        self.preview.state.prefetch_ready_at = None;
+        self.preview.state.load_state = None;
+        self.preview.state.scroll = 0;
+        self.preview.state.horizontal_scroll = 0;
+        self.preview.state.content = PreviewContent::new(PreviewKind::Code, lines);
+        self.git.view = Some(GitView {
+            title: result.command.title().to_string(),
+        });
+        true
     }
 
     pub(in crate::app) fn apply_git_status_result(&mut self, result: GitStatusBuild) -> bool {
@@ -68,6 +161,82 @@ pub(in crate::app) fn current_status(cwd: &Path) -> (Option<String>, bool) {
     (branch, dirty)
 }
 
+/// Runs a read-only git command in `cwd` and returns its captured output and
+/// whether it exited successfully. On failure stderr is preferred so the user
+/// sees the actual git error message.
+pub(in crate::app) fn run_command(cwd: &Path, command: GitCommand) -> (String, bool) {
+    let output = Command::new("git")
+        .arg("--no-optional-locks")
+        .arg("-C")
+        .arg(cwd)
+        .args(command.args())
+        .output();
+
+    match output {
+        Ok(output) => {
+            let success = output.status.success();
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let text = if success {
+                if stdout.trim().is_empty() && !stderr.trim().is_empty() {
+                    stderr.into_owned()
+                } else {
+                    stdout.into_owned()
+                }
+            } else if stderr.trim().is_empty() {
+                stdout.into_owned()
+            } else {
+                stderr.into_owned()
+            };
+            (text, success)
+        }
+        Err(error) => (format!("Failed to run git: {error}"), false),
+    }
+}
+
+/// Builds styled preview lines from captured git output. `diff` output gets
+/// light +/- coloring; other commands render as plain text. An empty
+/// successful result shows a friendly placeholder instead of a blank pane.
+fn git_output_lines(command: GitCommand, output: &str, success: bool) -> Vec<Line<'static>> {
+    let trimmed = output.trim_end_matches(['\n', '\r']);
+    if success && trimmed.trim().is_empty() {
+        let message = match command {
+            GitCommand::Diff => "No changes",
+            GitCommand::Log => "No commits yet",
+            GitCommand::Status => "Working tree clean",
+        };
+        return vec![Line::from(message.to_string())];
+    }
+
+    let color_diff = matches!(command, GitCommand::Diff);
+    trimmed
+        .split('\n')
+        .map(|line| {
+            let text = line.trim_end_matches('\r').to_string();
+            let style = if color_diff {
+                diff_line_style(&text)
+            } else {
+                Style::default()
+            };
+            Line::styled(text, style)
+        })
+        .collect()
+}
+
+fn diff_line_style(line: &str) -> Style {
+    if line.starts_with("@@") {
+        Style::default().fg(Color::Cyan)
+    } else if line.starts_with("+++") || line.starts_with("---") {
+        Style::default().fg(Color::Yellow)
+    } else if line.starts_with('+') {
+        Style::default().fg(Color::Green)
+    } else if line.starts_with('-') {
+        Style::default().fg(Color::Red)
+    } else {
+        Style::default()
+    }
+}
+
 fn git_command<const N: usize>(cwd: &Path, args: [&str; N]) -> Option<String> {
     let output = Command::new("git")
         .arg("--no-optional-locks")
@@ -89,13 +258,22 @@ fn non_empty_trimmed(output: String) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::current_status;
+    use super::{App, GitCommand, current_status, diff_line_style, git_output_lines};
+    use crate::app::jobs::GitCommandBuild;
+    use ratatui::{style::Color, text::Line};
     use std::{
         fs,
         path::PathBuf,
         process::{Command, Stdio},
         time::{SystemTime, UNIX_EPOCH},
     };
+
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect()
+    }
 
     fn temp_path(label: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -156,6 +334,121 @@ mod tests {
 
         fs::write(root.join("untracked.txt"), "dirty").expect("failed to write dirty file");
         assert_eq!(current_status(&root), (Some("main".to_string()), true));
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn empty_successful_output_shows_placeholder() {
+        let lines = git_output_lines(GitCommand::Diff, "", true);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(line_text(&lines[0]), "No changes");
+    }
+
+    #[test]
+    fn output_is_split_into_lines() {
+        let lines = git_output_lines(
+            GitCommand::Status,
+            "On branch main\nnothing to commit\n",
+            true,
+        );
+        assert_eq!(lines.len(), 2);
+        assert_eq!(line_text(&lines[0]), "On branch main");
+        assert_eq!(line_text(&lines[1]), "nothing to commit");
+    }
+
+    #[test]
+    fn diff_lines_are_colored() {
+        assert_eq!(diff_line_style("+added").fg, Some(Color::Green));
+        assert_eq!(diff_line_style("-removed").fg, Some(Color::Red));
+        assert_eq!(diff_line_style("@@ -1 +1 @@").fg, Some(Color::Cyan));
+        assert_eq!(diff_line_style(" context").fg, None);
+    }
+
+    #[test]
+    fn failed_output_prefers_stderr_and_is_not_colored_for_status() {
+        // Failure output is shown verbatim regardless of command.
+        let lines = git_output_lines(GitCommand::Status, "fatal: not a git repository", false);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(line_text(&lines[0]), "fatal: not a git repository");
+        assert_eq!(lines[0].spans[0].style.fg, None);
+    }
+
+    #[test]
+    fn apply_git_command_result_populates_preview_and_view() {
+        let root = temp_path("apply-result");
+        fs::create_dir_all(&root).expect("failed to create temp dir");
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.set_git_branch_for_test(Some("main"));
+
+        app.run_git_command(GitCommand::Status);
+        let token = app.git.command_token;
+        let build = GitCommandBuild {
+            token,
+            cwd: app.navigation.cwd.clone(),
+            command: GitCommand::Status,
+            output: "On branch main\n".to_string(),
+            success: true,
+        };
+
+        assert!(app.apply_git_command_result(build));
+        assert!(app.git_view_is_active());
+        assert_eq!(app.git_view_title(), Some("git status"));
+        assert_eq!(app.preview_scroll_offset(), 0);
+        assert!(
+            app.preview_lines()
+                .iter()
+                .any(|line| line_text(line) == "On branch main"),
+            "preview should contain the git output"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn stale_git_command_result_is_ignored() {
+        let root = temp_path("apply-stale");
+        fs::create_dir_all(&root).expect("failed to create temp dir");
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.set_git_branch_for_test(Some("main"));
+
+        app.run_git_command(GitCommand::Status);
+        let stale_token = app.git.command_token.wrapping_add(1);
+        let build = GitCommandBuild {
+            token: stale_token,
+            cwd: app.navigation.cwd.clone(),
+            command: GitCommand::Status,
+            output: "stale".to_string(),
+            success: true,
+        };
+
+        assert!(!app.apply_git_command_result(build));
+        assert!(!app.git_view_is_active());
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn refresh_preview_clears_git_view() {
+        let root = temp_path("clear-view");
+        fs::create_dir_all(&root).expect("failed to create temp dir");
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.set_git_branch_for_test(Some("main"));
+
+        app.run_git_command(GitCommand::Status);
+        let token = app.git.command_token;
+        let build = GitCommandBuild {
+            token,
+            cwd: app.navigation.cwd.clone(),
+            command: GitCommand::Status,
+            output: "On branch main".to_string(),
+            success: true,
+        };
+        assert!(app.apply_git_command_result(build));
+        assert!(app.git_view_is_active());
+
+        app.refresh_preview();
+        assert!(!app.git_view_is_active());
 
         fs::remove_dir_all(root).expect("failed to remove temp dir");
     }

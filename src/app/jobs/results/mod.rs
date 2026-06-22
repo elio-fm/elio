@@ -133,6 +133,9 @@ impl App {
                 JobResult::GitStatus(build) => {
                     dirty |= self.apply_git_status_result(build);
                 }
+                JobResult::GitCommand(build) => {
+                    dirty |= self.apply_git_command_result(build);
+                }
                 JobResult::PreviewLineCount(build) => {
                     dirty |= self.apply_preview_line_count_result(
                         &build.path,

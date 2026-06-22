@@ -43,6 +43,7 @@ pub(super) fn render_help(
         keys.action(&kb.shell, "open shell here"),
         keys.action(&kb.open, "open with default app"),
         keys.action(&kb.open_with, "open with"),
+        keys.action(&kb.git_menu, "git menu"),
     ]);
     let quit_action = if mode.is_chooser() {
         "cancel chooser"

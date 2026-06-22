@@ -47,6 +47,10 @@ impl App {
             return self.handle_goto_key(key);
         }
 
+        if self.overlays.git_menu.is_some() {
+            return self.handle_git_menu_key(key);
+        }
+
         if self.overlays.copy.is_some() {
             return self.handle_copy_key(key);
         }
@@ -149,7 +153,9 @@ impl App {
 
         match key.code {
             KeyCode::Esc => {
-                if let Some(prog) = &self.jobs.trash_progress {
+                if self.git_view_is_active() {
+                    self.refresh_preview();
+                } else if let Some(prog) = &self.jobs.trash_progress {
                     self.jobs.scheduler.cancel_trash(self.jobs.trash_token);
                     if prog.permanent {
                         self.jobs.trash_progress = None;
@@ -240,6 +246,7 @@ impl App {
             Action::OpenWith => self.open_open_with_overlay(),
             Action::OpenOrEnter => self.open_selected()?,
             Action::GoTo => self.open_goto_overlay(),
+            Action::GitMenu => self.open_git_menu_overlay(),
             Action::ToggleSelection => self.toggle_selection(),
             Action::CyclePlacesNext => self.step_sidebar_place(1)?,
             Action::CyclePlacesPrevious => self.step_sidebar_place(-1)?,

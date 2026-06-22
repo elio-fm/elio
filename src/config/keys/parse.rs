@@ -34,6 +34,7 @@ pub(in crate::config) struct KeysConfigOverride {
     pub(super) open_with: Option<KeyConfigOverride>,
     pub(super) open_or_enter: Option<KeyConfigOverride>,
     pub(super) go_to: Option<KeyConfigOverride>,
+    pub(super) git_menu: Option<KeyConfigOverride>,
     pub(super) toggle_selection: Option<KeyConfigOverride>,
     pub(super) cycle_places_next: Option<KeyConfigOverride>,
     pub(super) cycle_places_previous: Option<KeyConfigOverride>,

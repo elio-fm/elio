@@ -130,6 +130,7 @@
 # open_or_enter        = "enter"
 # choose               = "enter"  # confirm chooser selection
 # go_to                = "g"
+# git_menu             = "ctrl+g"  # run git status / log / diff in the preview pane
 # toggle_selection     = "space"
 # cycle_places_next    = "tab"
 # cycle_places_previous = "backtab"

@@ -238,6 +238,19 @@ pub(super) struct GoToOverlay {
 }
 
 #[derive(Clone, Debug)]
+pub(super) struct GitMenuOverlayRow {
+    pub(super) shortcut: char,
+    pub(super) label: String,
+    pub(super) command: crate::app::git::GitCommand,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct GitMenuOverlay {
+    pub(super) title: String,
+    pub(super) rows: Vec<GitMenuOverlayRow>,
+}
+
+#[derive(Clone, Debug)]
 pub(super) struct OpenWithApp {
     pub(super) display_name: String,
     // Reserved for a future "set as default" action; not yet read at launch time.
@@ -609,6 +622,7 @@ pub(crate) struct OverlayState {
     pub(in crate::app) rename: Option<RenameOverlay>,
     pub(in crate::app) bulk_rename: Option<BulkRenameOverlay>,
     pub(in crate::app) goto: Option<GoToOverlay>,
+    pub(in crate::app) git_menu: Option<GitMenuOverlay>,
     pub(in crate::app) copy: Option<CopyOverlay>,
     pub(in crate::app) open_with: Option<OpenWithOverlay>,
     pub(in crate::app) search: Option<SearchOverlay>,
@@ -682,6 +696,19 @@ pub(in crate::app) struct GitRuntime {
     pub(in crate::app) cwd: PathBuf,
     pub(in crate::app) branch: Option<String>,
     pub(in crate::app) dirty: bool,
+    /// Distinguishes the latest user-triggered git command from stale results.
+    pub(in crate::app) command_token: u64,
+    /// When `Some`, the preview pane is displaying captured git command output
+    /// instead of the focused file's preview. Cleared by `refresh_preview`.
+    pub(in crate::app) view: Option<GitView>,
+}
+
+/// Metadata for git command output shown in the preview pane. The rendered
+/// lines themselves live in `preview.state.content` so the existing preview
+/// scroll, wrap, and scrollbar machinery handles them for free.
+#[derive(Clone, Debug)]
+pub(in crate::app) struct GitView {
+    pub(in crate::app) title: String,
 }
 
 pub struct App {
@@ -821,6 +848,8 @@ impl App {
                 cwd: PathBuf::new(),
                 branch: None,
                 dirty: false,
+                command_token: 0,
+                view: None,
             },
             status: String::new(),
             should_quit: false,

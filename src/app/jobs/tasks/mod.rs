@@ -3,6 +3,7 @@ pub(super) use super::*;
 pub(super) mod directory;
 pub(super) mod directory_fingerprint;
 pub(super) mod directory_stats;
+pub(super) mod git_command;
 pub(super) mod git_status;
 pub(super) mod image;
 pub(super) mod item_count;
