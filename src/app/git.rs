@@ -111,6 +111,25 @@ impl GitCommand {
     }
 }
 
+/// A git operation submitted to the background pool. Either a read-only view
+/// command (output → preview pane) or a working-tree mutation on a specific
+/// path (refreshes the per-file markers when it completes).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::app) enum GitCommandKind {
+    View(GitCommand),
+    Stage(PathBuf),
+    Unstage(PathBuf),
+}
+
+/// A choice in the git menu. Resolved to a [`GitCommandKind`] at confirm time;
+/// mutations bind to whichever entry is focused then.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum GitMenuAction {
+    View(GitCommand),
+    Stage,
+    Unstage,
+}
+
 impl App {
     pub(crate) fn git_branch(&self) -> Option<&str> {
         self.git.branch.as_deref()
@@ -172,22 +191,39 @@ impl App {
         self.git.view.is_some()
     }
 
-    /// Submits a read-only git command to run off-thread. The captured output
-    /// replaces the preview pane once the result arrives.
+    /// Submits a read-only git view command to run off-thread. The captured
+    /// output replaces the preview pane once the result arrives.
     pub(in crate::app) fn run_git_command(&mut self, command: GitCommand) {
-        let cwd = self.navigation.cwd.clone();
+        self.submit_git_kind(GitCommandKind::View(command));
+    }
+
+    /// Stages (or unstages) the focused entry. No-op with a status message when
+    /// nothing is focused. Markers refresh once the mutation completes.
+    pub(in crate::app) fn run_git_stage(&mut self, unstage: bool) {
+        let Some(path) = self.selected_entry().map(|entry| entry.path.clone()) else {
+            self.status = "No file selected".to_string();
+            return;
+        };
+        let kind = if unstage {
+            GitCommandKind::Unstage(path)
+        } else {
+            GitCommandKind::Stage(path)
+        };
+        self.submit_git_kind(kind);
+    }
+
+    fn submit_git_kind(&mut self, kind: GitCommandKind) {
         if self.git_branch().is_none() {
             self.status = "Not a git repository".to_string();
             return;
         }
+        let cwd = self.navigation.cwd.clone();
         self.git.command_token = self.git.command_token.wrapping_add(1);
         let token = self.git.command_token;
         self.status.clear();
-        self.jobs.scheduler.submit_git_command(GitCommandRequest {
-            token,
-            cwd,
-            command,
-        });
+        self.jobs
+            .scheduler
+            .submit_git_command(GitCommandRequest { token, cwd, kind });
     }
 
     pub(in crate::app) fn apply_git_command_result(&mut self, result: GitCommandBuild) -> bool {
@@ -195,19 +231,43 @@ impl App {
             return false;
         }
 
-        let lines = git_output_lines(result.command, &result.output, result.success);
-        // Bump the preview token so any in-flight file preview result for the
-        // focused entry is treated as stale and does not overwrite git output.
-        self.preview.state.token = self.preview.state.token.wrapping_add(1);
-        self.preview.state.deferred_refresh_at = None;
-        self.preview.state.prefetch_ready_at = None;
-        self.preview.state.load_state = None;
-        self.preview.state.scroll = 0;
-        self.preview.state.horizontal_scroll = 0;
-        self.preview.state.content = PreviewContent::new(PreviewKind::Code, lines);
-        self.git.view = Some(GitView {
-            title: result.command.title().to_string(),
-        });
+        match &result.kind {
+            GitCommandKind::View(command) => {
+                let lines = git_output_lines(*command, &result.output, result.success);
+                // Bump the preview token so any in-flight file preview result for
+                // the focused entry is treated as stale and does not overwrite the
+                // git output.
+                self.preview.state.token = self.preview.state.token.wrapping_add(1);
+                self.preview.state.deferred_refresh_at = None;
+                self.preview.state.prefetch_ready_at = None;
+                self.preview.state.load_state = None;
+                self.preview.state.scroll = 0;
+                self.preview.state.horizontal_scroll = 0;
+                self.preview.state.content = PreviewContent::new(PreviewKind::Code, lines);
+                self.git.view = Some(GitView {
+                    title: command.title().to_string(),
+                });
+            }
+            GitCommandKind::Stage(path) | GitCommandKind::Unstage(path) => {
+                let verb = if matches!(result.kind, GitCommandKind::Unstage(_)) {
+                    "Unstaged"
+                } else {
+                    "Staged"
+                };
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                self.status = if result.success {
+                    format!("{verb} {name}")
+                } else {
+                    git_error_message(&result.output)
+                };
+                // Re-run the status probe so the per-file markers reflect the
+                // new index state.
+                self.refresh_git_branch();
+            }
+        }
         true
     }
 
@@ -294,13 +354,23 @@ fn parse_porcelain(output: &str, toplevel: Option<&Path>) -> HashMap<PathBuf, Gi
 /// Runs a read-only git command in `cwd` and returns its captured output and
 /// whether it exited successfully. On failure stderr is preferred so the user
 /// sees the actual git error message.
-pub(in crate::app) fn run_command(cwd: &Path, command: GitCommand) -> (String, bool) {
-    let output = Command::new("git")
-        .arg("--no-optional-locks")
-        .arg("-C")
-        .arg(cwd)
-        .args(command.args())
-        .output();
+pub(in crate::app) fn run_command(cwd: &Path, kind: &GitCommandKind) -> (String, bool) {
+    let mut command = Command::new("git");
+    command.arg("--no-optional-locks").arg("-C").arg(cwd);
+    match kind {
+        GitCommandKind::View(view) => {
+            command.args(view.args());
+        }
+        // `--` guards against paths that look like options; the path is passed
+        // as an OsStr so non-UTF-8 names work.
+        GitCommandKind::Stage(path) => {
+            command.arg("add").arg("--").arg(path);
+        }
+        GitCommandKind::Unstage(path) => {
+            command.arg("restore").arg("--staged").arg("--").arg(path);
+        }
+    }
+    let output = command.output();
 
     match output {
         Ok(output) => {
@@ -351,6 +421,17 @@ fn git_output_lines(command: GitCommand, output: &str, success: bool) -> Vec<Lin
             Line::styled(text, style)
         })
         .collect()
+}
+
+/// First meaningful line of git's output, for one-line status reporting after
+/// a failed mutation. Falls back to a generic message when output is empty.
+fn git_error_message(output: &str) -> String {
+    output
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "git command failed".to_string())
 }
 
 fn diff_line_style(line: &str) -> Style {
@@ -614,7 +695,7 @@ mod tests {
         let build = GitCommandBuild {
             token,
             cwd: app.navigation.cwd.clone(),
-            command: GitCommand::Status,
+            kind: crate::app::git::GitCommandKind::View(GitCommand::Status),
             output: "On branch main\n".to_string(),
             success: true,
         };
@@ -645,7 +726,7 @@ mod tests {
         let build = GitCommandBuild {
             token: stale_token,
             cwd: app.navigation.cwd.clone(),
-            command: GitCommand::Status,
+            kind: crate::app::git::GitCommandKind::View(GitCommand::Status),
             output: "stale".to_string(),
             success: true,
         };
@@ -668,7 +749,7 @@ mod tests {
         let build = GitCommandBuild {
             token,
             cwd: app.navigation.cwd.clone(),
-            command: GitCommand::Status,
+            kind: crate::app::git::GitCommandKind::View(GitCommand::Status),
             output: "On branch main".to_string(),
             success: true,
         };

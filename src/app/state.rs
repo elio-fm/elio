@@ -241,7 +241,7 @@ pub(super) struct GoToOverlay {
 pub(super) struct GitMenuOverlayRow {
     pub(super) shortcut: char,
     pub(super) label: String,
-    pub(super) command: crate::app::git::GitCommand,
+    pub(super) action: crate::app::git::GitMenuAction,
 }
 
 #[derive(Clone, Debug)]

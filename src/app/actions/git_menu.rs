@@ -1,6 +1,6 @@
 use super::super::{
     App,
-    git::GitCommand,
+    git::{GitCommand, GitMenuAction},
     state::{GitMenuOverlay, GitMenuOverlayRow},
 };
 use crate::fs::rect_contains;
@@ -114,24 +114,30 @@ impl App {
     }
 
     fn confirm_git_menu_index(&mut self, index: usize) {
-        let Some(command) = self
+        let Some(action) = self
             .overlays
             .git_menu
             .as_ref()
-            .and_then(|overlay| overlay.rows.get(index).map(|row| row.command))
+            .and_then(|overlay| overlay.rows.get(index).map(|row| row.action))
         else {
             return;
         };
         self.overlays.git_menu = None;
-        self.run_git_command(command);
+        match action {
+            GitMenuAction::View(command) => self.run_git_command(command),
+            GitMenuAction::Stage => self.run_git_stage(false),
+            GitMenuAction::Unstage => self.run_git_stage(true),
+        }
     }
 }
 
 fn build_git_menu_overlay() -> GitMenuOverlay {
     let rows = vec![
-        git_menu_row('s', "status", GitCommand::Status),
-        git_menu_row('l', "log", GitCommand::Log),
-        git_menu_row('d', "diff", GitCommand::Diff),
+        git_menu_row('s', "status", GitMenuAction::View(GitCommand::Status)),
+        git_menu_row('l', "log", GitMenuAction::View(GitCommand::Log)),
+        git_menu_row('d', "diff", GitMenuAction::View(GitCommand::Diff)),
+        git_menu_row('a', "stage file", GitMenuAction::Stage),
+        git_menu_row('u', "unstage file", GitMenuAction::Unstage),
     ];
 
     GitMenuOverlay {
@@ -140,11 +146,11 @@ fn build_git_menu_overlay() -> GitMenuOverlay {
     }
 }
 
-fn git_menu_row(shortcut: char, label: &str, command: GitCommand) -> GitMenuOverlayRow {
+fn git_menu_row(shortcut: char, label: &str, action: GitMenuAction) -> GitMenuOverlayRow {
     GitMenuOverlayRow {
         shortcut,
         label: label.to_string(),
-        command,
+        action,
     }
 }
 
@@ -174,17 +180,21 @@ mod tests {
     }
 
     #[test]
-    fn opens_with_status_log_diff_commands() {
+    fn opens_with_view_and_stage_commands() {
         let (mut app, root) = app_in_repo("git-menu-open");
 
         app.open_git_menu_overlay();
 
         assert!(app.git_menu_is_open());
-        assert_eq!(app.git_menu_row_count(), 3);
+        assert_eq!(app.git_menu_row_count(), 5);
         assert_eq!(app.git_menu_row_shortcut(0), Some('s'));
         assert_eq!(app.git_menu_row_label(0), "status");
         assert_eq!(app.git_menu_row_shortcut(1), Some('l'));
         assert_eq!(app.git_menu_row_shortcut(2), Some('d'));
+        assert_eq!(app.git_menu_row_shortcut(3), Some('a'));
+        assert_eq!(app.git_menu_row_label(3), "stage file");
+        assert_eq!(app.git_menu_row_shortcut(4), Some('u'));
+        assert_eq!(app.git_menu_row_label(4), "unstage file");
 
         fs::remove_dir_all(root).expect("failed to remove temp dir");
     }
@@ -214,6 +224,41 @@ mod tests {
 
         assert!(!app.git_menu_is_open());
         assert_eq!(app.git.command_token, before.wrapping_add(1));
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn staging_a_focused_file_submits() {
+        let root = temp_dir("git-menu-stage");
+        fs::create_dir_all(&root).expect("failed to create temp dir");
+        fs::write(root.join("a.txt"), "x").expect("failed to write file");
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.set_git_branch_for_test(Some("main"));
+        app.open_git_menu_overlay();
+        let before = app.git.command_token;
+
+        app.handle_git_menu_key(plain_key('a'))
+            .expect("stage shortcut should be handled");
+
+        assert!(!app.git_menu_is_open());
+        assert_eq!(app.git.command_token, before.wrapping_add(1));
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn staging_with_no_selection_reports_and_does_not_submit() {
+        let (mut app, root) = app_in_repo("git-menu-stage-empty");
+        app.open_git_menu_overlay();
+        let before = app.git.command_token;
+
+        app.handle_git_menu_key(plain_key('a'))
+            .expect("stage shortcut should be handled");
+
+        assert!(!app.git_menu_is_open());
+        assert_eq!(app.git.command_token, before);
+        assert_eq!(app.status, "No file selected");
 
         fs::remove_dir_all(root).expect("failed to remove temp dir");
     }

@@ -38,13 +38,13 @@ impl GitCommandPool {
         let worker_shared = Arc::clone(&shared);
         let worker = thread::spawn(move || {
             while let Some(request) = GitCommandShared::pop(&worker_shared) {
-                let (output, success) = crate::app::git::run_command(&request.cwd, request.command);
+                let (output, success) = crate::app::git::run_command(&request.cwd, &request.kind);
                 GitCommandShared::finish(&worker_shared);
                 if result_tx
                     .send(JobResult::GitCommand(GitCommandBuild {
                         token: request.token,
                         cwd: request.cwd,
-                        command: request.command,
+                        kind: request.kind,
                         output,
                         success,
                     }))

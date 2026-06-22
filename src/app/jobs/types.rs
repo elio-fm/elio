@@ -146,7 +146,7 @@ pub(in crate::app) struct GitStatusRequest {
 pub(in crate::app) struct GitCommandBuild {
     pub(in crate::app) token: u64,
     pub(in crate::app) cwd: PathBuf,
-    pub(in crate::app) command: crate::app::git::GitCommand,
+    pub(in crate::app) kind: crate::app::git::GitCommandKind,
     pub(in crate::app) output: String,
     pub(in crate::app) success: bool,
 }
@@ -155,7 +155,7 @@ pub(in crate::app) struct GitCommandBuild {
 pub(in crate::app) struct GitCommandRequest {
     pub(in crate::app) token: u64,
     pub(in crate::app) cwd: PathBuf,
-    pub(in crate::app) command: crate::app::git::GitCommand,
+    pub(in crate::app) kind: crate::app::git::GitCommandKind,
 }
 
 #[derive(Debug)]
