@@ -236,7 +236,7 @@ fn open_with_fallback(path: &Path) -> std::result::Result<FallbackOpenOutcome, S
         if super::path_is_text_like(path) {
             return open_in_text_editor(path).map(|()| FallbackOpenOutcome::TextEditor);
         }
-        return open_in_system(path).map(|()| FallbackOpenOutcome::DefaultApp);
+        open_in_system(path).map(|()| FallbackOpenOutcome::DefaultApp)
     }
 
     #[cfg(all(unix, not(target_os = "macos"), not(test)))]

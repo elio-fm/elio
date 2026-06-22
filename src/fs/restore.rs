@@ -159,11 +159,10 @@ pub(crate) fn remove_restore_origins(trash_names: &[&str]) {
         Ok(m) => m,
         Err(_) => return,
     };
-    if remove_from_origins_map(&mut map, trash_names) {
-        if let Ok(json) = serde_json::to_vec_pretty(&map) {
+    if remove_from_origins_map(&mut map, trash_names)
+        && let Ok(json) = serde_json::to_vec_pretty(&map) {
             let _ = fs::write(&path, json);
         }
-    }
 }
 
 /// Core map-mutation logic for [`remove_restore_origins`]: removes each name
@@ -184,8 +183,8 @@ fn remove_from_origins_map(
         // "foo.txt") but appears in trash as "foo 2.txt".  Strip the suffix
         // and try again.
         let p = Path::new(name);
-        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-            if let Some(base_stem) = strip_macos_collision_suffix(stem) {
+        if let Some(stem) = p.file_stem().and_then(|s| s.to_str())
+            && let Some(base_stem) = strip_macos_collision_suffix(stem) {
                 let ext = p.extension().and_then(|e| e.to_str());
                 let base_name = match ext {
                     Some(e) => format!("{base_stem}.{e}"),
@@ -195,7 +194,6 @@ fn remove_from_origins_map(
                     changed = true;
                 }
             }
-        }
     }
     changed
 }
@@ -222,7 +220,7 @@ fn load_restore_origin(trash_name: &str) -> Option<PathBuf> {
         Some(e) => format!("{base_stem}.{e}"),
         None => base_stem.to_owned(),
     };
-    map.get(&base_name).map(|s| PathBuf::from(s))
+    map.get(&base_name).map(PathBuf::from)
 }
 
 /// Strips a macOS collision suffix (` 2`, ` 3`, …) from a file stem.
@@ -600,7 +598,7 @@ impl<'a> DsStoreCursor<'a> {
 /// Returns `None` if the byte count is odd or the data is not valid UTF-16.
 #[cfg(target_os = "macos")]
 fn decode_utf16be(bytes: &[u8]) -> Option<String> {
-    if bytes.len() % 2 != 0 {
+    if !bytes.len().is_multiple_of(2) {
         return None;
     }
     let units: Vec<u16> = bytes
