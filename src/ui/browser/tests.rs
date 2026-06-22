@@ -248,9 +248,10 @@ fn narrowing_horizontal_browser_layout_starts_shrinking_sidebar_early() {
         (88, 16),
         (80, 14),
         (72, 12),
-        (64, 10),
-        (56, 10),
-        (46, 10),
+        (68, 11),
+        (64, 5),
+        (56, 5),
+        (46, 5),
     ] {
         let layout = resolve_body_layout(
             Rect {
@@ -293,7 +294,7 @@ fn narrow_legacy_layout_keeps_preview_without_starving_files() {
         let preview = layout.preview.expect("preview should be visible");
         assert_eq!(layout.sidebar.is_some(), expect_sidebar, "width {width}");
         if let Some(sidebar) = layout.sidebar {
-            assert_eq!(sidebar.width, 10, "width {width}");
+            assert_eq!(sidebar.width, 5, "width {width}");
         }
         if expect_stacked {
             assert_eq!(entries.x, preview.x, "width {width} should stay stacked");
@@ -560,6 +561,48 @@ fn sidebar_clamps_long_labels_when_width_is_tight() {
         rendered.contains("Downloa…"),
         "expected the narrow sidebar to clamp long labels, got: {rendered:?}"
     );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn sidebar_uses_icons_only_at_icon_width() {
+    let root = temp_path("sidebar-icon-only");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.navigation.sidebar = vec![
+        SidebarRow::Section { title: "Devices" },
+        SidebarRow::Item(SidebarItem::new(
+            SidebarItemKind::Downloads,
+            "Downloads Directory",
+            "D",
+            root.clone(),
+            root.clone(),
+        )),
+    ];
+
+    let mut terminal = Terminal::new(TestBackend::new(5, 5)).expect("terminal should init");
+    let mut frame_state = FrameState::default();
+    terminal
+        .draw(|frame| {
+            render_sidebar(
+                frame,
+                frame.area(),
+                &app,
+                &mut frame_state,
+                theme::palette(),
+            );
+        })
+        .expect("sidebar should render");
+
+    let rendered = buffer_text(terminal.backend().buffer());
+    assert!(rendered.contains("D"));
+    assert!(!rendered.contains("Places"));
+    assert!(!rendered.contains("Devices"));
+    assert!(!rendered.contains("Down"));
+    assert_eq!(frame_state.sidebar_hits.len(), 1);
+    assert_eq!(frame_state.sidebar_hits[0].path, root);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

@@ -9,7 +9,8 @@ use crate::{
 use ratatui::{Frame, layout::Rect};
 
 const LEGACY_WIDE_SIDEBAR_WIDTH: u16 = 20;
-const LEGACY_NARROW_SIDEBAR_WIDTH: u16 = 10;
+const LEGACY_LABEL_SIDEBAR_MIN_WIDTH: u16 = 11;
+const LEGACY_ICON_ONLY_SIDEBAR_WIDTH: u16 = 5;
 const LEGACY_MIN_CONTENT_WIDTH_WITH_SIDEBAR: u16 = 16;
 const LEGACY_HORIZONTAL_ENTRIES_MIN_WIDTH: u16 = 18;
 const LEGACY_HORIZONTAL_PREVIEW_MIN_WIDTH: u16 = 14;
@@ -102,7 +103,7 @@ fn legacy_horizontal_body_layout(area: Rect) -> Option<BodyLayout> {
     let (sidebar, content) = split_sidebar_and_content_with_comfort(
         area,
         LEGACY_WIDE_SIDEBAR_WIDTH,
-        LEGACY_NARROW_SIDEBAR_WIDTH,
+        LEGACY_ICON_ONLY_SIDEBAR_WIDTH,
         LEGACY_HORIZONTAL_CONTENT_MIN_WIDTH,
         LEGACY_HORIZONTAL_SIDEBAR_SHRINK_START_WIDTH,
     )?;
@@ -137,8 +138,8 @@ fn legacy_horizontal_body_layout(area: Rect) -> Option<BodyLayout> {
 fn legacy_stacked_body_layout(area: Rect) -> Option<BodyLayout> {
     let (sidebar, content) = split_sidebar_and_content(
         area,
-        LEGACY_NARROW_SIDEBAR_WIDTH,
-        LEGACY_NARROW_SIDEBAR_WIDTH,
+        LEGACY_ICON_ONLY_SIDEBAR_WIDTH,
+        LEGACY_ICON_ONLY_SIDEBAR_WIDTH,
         CUSTOM_ENTRIES_MIN_WIDTH.max(CUSTOM_PREVIEW_MIN_WIDTH),
     )?;
     let (entries, preview) = split_stacked_content_weighted_with_mins(
@@ -158,11 +159,11 @@ fn legacy_stacked_body_layout(area: Rect) -> Option<BodyLayout> {
 
 fn legacy_best_effort_stacked_body_layout(area: Rect) -> Option<BodyLayout> {
     let (sidebar, content) =
-        if area.width >= LEGACY_NARROW_SIDEBAR_WIDTH + LEGACY_MIN_CONTENT_WIDTH_WITH_SIDEBAR {
+        if area.width >= LEGACY_ICON_ONLY_SIDEBAR_WIDTH + LEGACY_MIN_CONTENT_WIDTH_WITH_SIDEBAR {
             split_sidebar_and_content(
                 area,
-                LEGACY_NARROW_SIDEBAR_WIDTH,
-                LEGACY_NARROW_SIDEBAR_WIDTH,
+                LEGACY_ICON_ONLY_SIDEBAR_WIDTH,
+                LEGACY_ICON_ONLY_SIDEBAR_WIDTH,
                 LEGACY_MIN_CONTENT_WIDTH_WITH_SIDEBAR,
             )?
         } else {
@@ -200,8 +201,8 @@ fn legacy_best_effort_stacked_body_layout(area: Rect) -> Option<BodyLayout> {
 fn legacy_sidebar_and_entries_layout(area: Rect) -> BodyLayout {
     if let Some((sidebar, entries)) = split_sidebar_and_content(
         area,
-        LEGACY_NARROW_SIDEBAR_WIDTH,
-        LEGACY_NARROW_SIDEBAR_WIDTH,
+        LEGACY_ICON_ONLY_SIDEBAR_WIDTH,
+        LEGACY_ICON_ONLY_SIDEBAR_WIDTH,
         CUSTOM_ENTRIES_MIN_WIDTH,
     ) {
         return BodyLayout {
@@ -394,6 +395,11 @@ fn split_sidebar_and_content_with_comfort(
         .saturating_sub(shrink)
         .max(minimum_sidebar_width)
         .min(area.width.saturating_sub(minimum_content_width));
+    let sidebar_width = if sidebar_width < LEGACY_LABEL_SIDEBAR_MIN_WIDTH {
+        minimum_sidebar_width
+    } else {
+        sidebar_width
+    };
     let content_width = area.width.saturating_sub(sidebar_width);
 
     let sidebar = Rect {
