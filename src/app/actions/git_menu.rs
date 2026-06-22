@@ -1,6 +1,6 @@
 use super::super::{
     App,
-    git::{GitCommand, GitMenuAction},
+    git::{GitCommand, GitMenuAction, GitRemote},
     state::{GitMenuOverlay, GitMenuOverlayRow},
 };
 use crate::fs::rect_contains;
@@ -128,6 +128,7 @@ impl App {
             GitMenuAction::Stage => self.run_git_stage(false),
             GitMenuAction::Unstage => self.run_git_stage(true),
             GitMenuAction::Commit => self.open_commit_prompt(),
+            GitMenuAction::Remote(remote) => self.run_git_remote(remote),
         }
     }
 }
@@ -140,6 +141,9 @@ fn build_git_menu_overlay() -> GitMenuOverlay {
         git_menu_row('a', "stage file", GitMenuAction::Stage),
         git_menu_row('u', "unstage file", GitMenuAction::Unstage),
         git_menu_row('c', "commit", GitMenuAction::Commit),
+        git_menu_row('f', "fetch", GitMenuAction::Remote(GitRemote::Fetch)),
+        git_menu_row('p', "pull", GitMenuAction::Remote(GitRemote::Pull)),
+        git_menu_row('P', "push", GitMenuAction::Remote(GitRemote::Push)),
     ];
 
     GitMenuOverlay {
@@ -188,7 +192,7 @@ mod tests {
         app.open_git_menu_overlay();
 
         assert!(app.git_menu_is_open());
-        assert_eq!(app.git_menu_row_count(), 6);
+        assert_eq!(app.git_menu_row_count(), 9);
         assert_eq!(app.git_menu_row_shortcut(0), Some('s'));
         assert_eq!(app.git_menu_row_label(0), "status");
         assert_eq!(app.git_menu_row_shortcut(1), Some('l'));
@@ -199,6 +203,27 @@ mod tests {
         assert_eq!(app.git_menu_row_label(4), "unstage file");
         assert_eq!(app.git_menu_row_shortcut(5), Some('c'));
         assert_eq!(app.git_menu_row_label(5), "commit");
+        assert_eq!(app.git_menu_row_shortcut(6), Some('f'));
+        assert_eq!(app.git_menu_row_label(6), "fetch");
+        assert_eq!(app.git_menu_row_shortcut(7), Some('p'));
+        assert_eq!(app.git_menu_row_label(7), "pull");
+        assert_eq!(app.git_menu_row_shortcut(8), Some('P'));
+        assert_eq!(app.git_menu_row_label(8), "push");
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn fetch_entry_submits_a_remote_command() {
+        let (mut app, root) = app_in_repo("git-menu-fetch");
+        app.open_git_menu_overlay();
+        let before = app.git.command_token;
+
+        app.handle_git_menu_key(plain_key('f'))
+            .expect("fetch shortcut should be handled");
+
+        assert!(!app.git_menu_is_open());
+        assert_eq!(app.git.command_token, before.wrapping_add(1));
 
         fs::remove_dir_all(root).expect("failed to remove temp dir");
     }

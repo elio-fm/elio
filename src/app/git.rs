@@ -111,15 +111,52 @@ impl GitCommand {
     }
 }
 
+/// A remote-syncing git command run from the menu. Output is shown in the
+/// preview pane (so the user sees the fetch/merge/push result) and markers are
+/// refreshed afterwards; `pull` also reloads the directory listing.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum GitRemote {
+    Pull,
+    Push,
+    Fetch,
+}
+
+impl GitRemote {
+    fn args(self) -> &'static [&'static str] {
+        match self {
+            // `--no-edit` keeps a merge from blocking on $EDITOR, which we
+            // cannot drive from the captured-output model.
+            Self::Pull => &["-c", "color.ui=never", "pull", "--no-edit"],
+            Self::Push => &["-c", "color.ui=never", "push"],
+            Self::Fetch => &["-c", "color.ui=never", "fetch", "--all", "--prune"],
+        }
+    }
+
+    fn title(self) -> &'static str {
+        match self {
+            Self::Pull => "git pull",
+            Self::Push => "git push",
+            Self::Fetch => "git fetch",
+        }
+    }
+
+    /// Whether the command can change tracked files and thus needs a directory
+    /// reload (only `pull` updates the working tree).
+    fn reloads_worktree(self) -> bool {
+        matches!(self, Self::Pull)
+    }
+}
+
 /// A git operation submitted to the background pool. Either a read-only view
-/// command (output → preview pane) or a working-tree mutation on a specific
-/// path (refreshes the per-file markers when it completes).
+/// command (output → preview pane), a working-tree mutation on a specific path,
+/// a commit, or a remote sync.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) enum GitCommandKind {
     View(GitCommand),
     Stage(PathBuf),
     Unstage(PathBuf),
     Commit(String),
+    Remote(GitRemote),
 }
 
 /// A choice in the git menu. Resolved to a [`GitCommandKind`] at confirm time
@@ -131,6 +168,7 @@ pub(in crate::app) enum GitMenuAction {
     Stage,
     Unstage,
     Commit,
+    Remote(GitRemote),
 }
 
 impl App {
@@ -221,6 +259,12 @@ impl App {
         self.submit_git_kind(GitCommandKind::Commit(message));
     }
 
+    /// Runs a remote sync (pull/push/fetch). Output is shown in the preview
+    /// pane and markers refresh once it completes.
+    pub(in crate::app) fn run_git_remote(&mut self, remote: GitRemote) {
+        self.submit_git_kind(GitCommandKind::Remote(remote));
+    }
+
     fn submit_git_kind(&mut self, kind: GitCommandKind) {
         if self.git_branch().is_none() {
             self.status = "Not a git repository".to_string();
@@ -243,19 +287,18 @@ impl App {
         match &result.kind {
             GitCommandKind::View(command) => {
                 let lines = git_output_lines(*command, &result.output, result.success);
-                // Bump the preview token so any in-flight file preview result for
-                // the focused entry is treated as stale and does not overwrite the
-                // git output.
-                self.preview.state.token = self.preview.state.token.wrapping_add(1);
-                self.preview.state.deferred_refresh_at = None;
-                self.preview.state.prefetch_ready_at = None;
-                self.preview.state.load_state = None;
-                self.preview.state.scroll = 0;
-                self.preview.state.horizontal_scroll = 0;
-                self.preview.state.content = PreviewContent::new(PreviewKind::Code, lines);
-                self.git.view = Some(GitView {
-                    title: command.title().to_string(),
-                });
+                self.show_git_output(command.title(), lines);
+            }
+            GitCommandKind::Remote(remote) => {
+                let lines = output_to_lines(&result.output, result.success, "Done", false);
+                self.show_git_output(remote.title(), lines);
+                // A pull can change tracked files; reload the listing.
+                if remote.reloads_worktree()
+                    && let Err(error) = self.reload()
+                {
+                    self.report_runtime_error("Reload after git pull failed", &error);
+                }
+                self.refresh_git_branch();
             }
             GitCommandKind::Stage(path) | GitCommandKind::Unstage(path) => {
                 let verb = if matches!(result.kind, GitCommandKind::Unstage(_)) {
@@ -286,6 +329,22 @@ impl App {
             }
         }
         true
+    }
+
+    /// Shows captured git output in the preview pane under `title`. Bumps the
+    /// preview token so any in-flight file preview is treated as stale and does
+    /// not overwrite the git output.
+    fn show_git_output(&mut self, title: &str, lines: Vec<Line<'static>>) {
+        self.preview.state.token = self.preview.state.token.wrapping_add(1);
+        self.preview.state.deferred_refresh_at = None;
+        self.preview.state.prefetch_ready_at = None;
+        self.preview.state.load_state = None;
+        self.preview.state.scroll = 0;
+        self.preview.state.horizontal_scroll = 0;
+        self.preview.state.content = PreviewContent::new(PreviewKind::Code, lines);
+        self.git.view = Some(GitView {
+            title: title.to_string(),
+        });
     }
 
     pub(in crate::app) fn apply_git_status_result(&mut self, result: GitStatusBuild) -> bool {
@@ -389,6 +448,9 @@ pub(in crate::app) fn run_command(cwd: &Path, kind: &GitCommandKind) -> (String,
         GitCommandKind::Commit(message) => {
             command.arg("commit").arg("-m").arg(message);
         }
+        GitCommandKind::Remote(remote) => {
+            command.args(remote.args());
+        }
     }
     let output = command.output();
 
@@ -418,17 +480,33 @@ pub(in crate::app) fn run_command(cwd: &Path, kind: &GitCommandKind) -> (String,
 /// light +/- coloring; other commands render as plain text. An empty
 /// successful result shows a friendly placeholder instead of a blank pane.
 fn git_output_lines(command: GitCommand, output: &str, success: bool) -> Vec<Line<'static>> {
+    let empty_message = match command {
+        GitCommand::Diff => "No changes",
+        GitCommand::Log => "No commits yet",
+        GitCommand::Status => "Working tree clean",
+    };
+    output_to_lines(
+        output,
+        success,
+        empty_message,
+        matches!(command, GitCommand::Diff),
+    )
+}
+
+/// Shared captured-output → styled-lines conversion. `empty_message` is shown
+/// when a successful command produced no output; `color_diff` enables the +/-
+/// highlighting used for diffs.
+fn output_to_lines(
+    output: &str,
+    success: bool,
+    empty_message: &str,
+    color_diff: bool,
+) -> Vec<Line<'static>> {
     let trimmed = output.trim_end_matches(['\n', '\r']);
     if success && trimmed.trim().is_empty() {
-        let message = match command {
-            GitCommand::Diff => "No changes",
-            GitCommand::Log => "No commits yet",
-            GitCommand::Status => "Working tree clean",
-        };
-        return vec![Line::from(message.to_string())];
+        return vec![Line::from(empty_message.to_string())];
     }
 
-    let color_diff = matches!(command, GitCommand::Diff);
     trimmed
         .split('\n')
         .map(|line| {

@@ -18,7 +18,7 @@ Snappy, batteries-included terminal file manager with rich previews, inline imag
 - **Inline images** — rendered directly in supported terminals
 - **Customizable Places and devices** — pinned folders plus auto-detected drives and mounts
 - **Quick actions** — Go-to, Open With, and copy-to-clipboard
-- **Git integration** — branch indicator, per-file status markers in the listing, plus a `Ctrl+G` menu to view `status`/`log`/`diff`, stage/unstage the focused file, and commit — all without leaving elio
+- **Git integration** — branch indicator, per-file status markers in the listing, plus a `Ctrl+G` menu to view `status`/`log`/`diff`, stage/unstage the focused file, commit, and fetch/pull/push — all without leaving elio
 - **Trash management** — trash, restore, or permanently delete files
 - **Keyboard and mouse navigation** — browse comfortably either way
 - **Grid and list views** — switch with `v`, zoom the grid with `Ctrl++` / `Ctrl+-`
@@ -292,7 +292,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | `o` `*` | Open focused item or selection with the system default application |
 | `O` `*` | Open With chooser |
 | `!` `*` | Open shell in current folder |
-| `Ctrl+G` `*` | Git menu — `status`/`log`/`diff` in the Preview pane; `a`/`u` stage/unstage the focused file; `c` commit |
+| `Ctrl+G` `*` | Git menu — `status`/`log`/`diff` in the Preview pane; `a`/`u` stage/unstage the focused file; `c` commit; `f`/`p`/`P` fetch/pull/push |
 | `a` `*` | Create file or folder |
 | `d` / `Del` `*` | Trash; permanently delete if already in trash |
 | `D` / `Shift+Del` `*` | Delete permanently |
