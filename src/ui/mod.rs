@@ -29,6 +29,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     state.restore_cancel_btn = None;
     state.create_panel = None;
     state.rename_panel = None;
+    state.commit_panel = None;
     state.create_list_area = None;
     state.create_scroll_top = 0;
     state.bulk_rename_list_area = None;
@@ -100,6 +101,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
         overlay_manager::render_goto_overlay(frame, area, app, state, palette);
     } else if app.git_menu_is_open() {
         overlay_manager::render_git_menu_overlay(frame, area, app, state, palette);
+    } else if app.commit_is_open() {
+        overlay_manager::render_commit_overlay(frame, area, app, state, palette);
     } else if app.copy_is_open() {
         overlay_manager::render_copy_overlay(frame, area, app, state, palette);
     } else if app.open_with_is_open() {

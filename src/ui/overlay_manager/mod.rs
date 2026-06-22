@@ -3,6 +3,7 @@ use crate::ui::theme::Palette;
 use ratatui::{Frame, layout::Rect};
 
 mod bulk_rename;
+mod commit;
 mod copy;
 mod create;
 mod git_menu;
@@ -108,6 +109,16 @@ pub(super) fn render_git_menu_overlay(
     palette: Palette,
 ) {
     git_menu::render_git_menu_overlay(frame, area, app, state, palette);
+}
+
+pub(super) fn render_commit_overlay(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    state: &mut FrameState,
+    palette: Palette,
+) {
+    commit::render_commit_overlay(frame, area, app, state, palette);
 }
 
 pub(super) fn render_search_overlay(

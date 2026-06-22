@@ -51,6 +51,10 @@ impl App {
             return self.handle_git_menu_key(key);
         }
 
+        if self.overlays.commit.is_some() {
+            return self.handle_commit_key(key);
+        }
+
         if self.overlays.copy.is_some() {
             return self.handle_copy_key(key);
         }

@@ -153,6 +153,14 @@ pub(super) struct RenameOverlay {
     pub(super) error: Option<String>,
 }
 
+/// Single-line prompt for a git commit message.
+pub(super) struct CommitOverlay {
+    pub(super) branch: Option<String>,
+    pub(super) input: String,
+    pub(super) cursor_col: usize,
+    pub(super) error: Option<String>,
+}
+
 pub(super) struct BulkRenameItem {
     pub(super) path: PathBuf,
     pub(super) original_name: String,
@@ -623,6 +631,7 @@ pub(crate) struct OverlayState {
     pub(in crate::app) bulk_rename: Option<BulkRenameOverlay>,
     pub(in crate::app) goto: Option<GoToOverlay>,
     pub(in crate::app) git_menu: Option<GitMenuOverlay>,
+    pub(in crate::app) commit: Option<CommitOverlay>,
     pub(in crate::app) copy: Option<CopyOverlay>,
     pub(in crate::app) open_with: Option<OpenWithOverlay>,
     pub(in crate::app) search: Option<SearchOverlay>,

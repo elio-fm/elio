@@ -127,6 +127,7 @@ impl App {
             GitMenuAction::View(command) => self.run_git_command(command),
             GitMenuAction::Stage => self.run_git_stage(false),
             GitMenuAction::Unstage => self.run_git_stage(true),
+            GitMenuAction::Commit => self.open_commit_prompt(),
         }
     }
 }
@@ -138,6 +139,7 @@ fn build_git_menu_overlay() -> GitMenuOverlay {
         git_menu_row('d', "diff", GitMenuAction::View(GitCommand::Diff)),
         git_menu_row('a', "stage file", GitMenuAction::Stage),
         git_menu_row('u', "unstage file", GitMenuAction::Unstage),
+        git_menu_row('c', "commit", GitMenuAction::Commit),
     ];
 
     GitMenuOverlay {
@@ -186,7 +188,7 @@ mod tests {
         app.open_git_menu_overlay();
 
         assert!(app.git_menu_is_open());
-        assert_eq!(app.git_menu_row_count(), 5);
+        assert_eq!(app.git_menu_row_count(), 6);
         assert_eq!(app.git_menu_row_shortcut(0), Some('s'));
         assert_eq!(app.git_menu_row_label(0), "status");
         assert_eq!(app.git_menu_row_shortcut(1), Some('l'));
@@ -195,6 +197,22 @@ mod tests {
         assert_eq!(app.git_menu_row_label(3), "stage file");
         assert_eq!(app.git_menu_row_shortcut(4), Some('u'));
         assert_eq!(app.git_menu_row_label(4), "unstage file");
+        assert_eq!(app.git_menu_row_shortcut(5), Some('c'));
+        assert_eq!(app.git_menu_row_label(5), "commit");
+
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn commit_entry_opens_the_commit_prompt() {
+        let (mut app, root) = app_in_repo("git-menu-commit");
+        app.open_git_menu_overlay();
+
+        app.handle_git_menu_key(plain_key('c'))
+            .expect("commit shortcut should be handled");
+
+        assert!(!app.git_menu_is_open());
+        assert!(app.commit_is_open());
 
         fs::remove_dir_all(root).expect("failed to remove temp dir");
     }

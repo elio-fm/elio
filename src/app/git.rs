@@ -119,15 +119,18 @@ pub(in crate::app) enum GitCommandKind {
     View(GitCommand),
     Stage(PathBuf),
     Unstage(PathBuf),
+    Commit(String),
 }
 
-/// A choice in the git menu. Resolved to a [`GitCommandKind`] at confirm time;
-/// mutations bind to whichever entry is focused then.
+/// A choice in the git menu. Resolved to a [`GitCommandKind`] at confirm time
+/// (or, for [`Self::Commit`], opens the message prompt); mutations bind to
+/// whichever entry is focused then.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum GitMenuAction {
     View(GitCommand),
     Stage,
     Unstage,
+    Commit,
 }
 
 impl App {
@@ -212,6 +215,12 @@ impl App {
         self.submit_git_kind(kind);
     }
 
+    /// Commits the staged changes with `message`. Markers and status refresh
+    /// once the commit completes.
+    pub(in crate::app) fn run_git_commit(&mut self, message: String) {
+        self.submit_git_kind(GitCommandKind::Commit(message));
+    }
+
     fn submit_git_kind(&mut self, kind: GitCommandKind) {
         if self.git_branch().is_none() {
             self.status = "Not a git repository".to_string();
@@ -265,6 +274,14 @@ impl App {
                 };
                 // Re-run the status probe so the per-file markers reflect the
                 // new index state.
+                self.refresh_git_branch();
+            }
+            GitCommandKind::Commit(_) => {
+                self.status = if result.success {
+                    git_commit_summary(&result.output)
+                } else {
+                    git_error_message(&result.output)
+                };
                 self.refresh_git_branch();
             }
         }
@@ -369,6 +386,9 @@ pub(in crate::app) fn run_command(cwd: &Path, kind: &GitCommandKind) -> (String,
         GitCommandKind::Unstage(path) => {
             command.arg("restore").arg("--staged").arg("--").arg(path);
         }
+        GitCommandKind::Commit(message) => {
+            command.arg("commit").arg("-m").arg(message);
+        }
     }
     let output = command.output();
 
@@ -421,6 +441,17 @@ fn git_output_lines(command: GitCommand, output: &str, success: bool) -> Vec<Lin
             Line::styled(text, style)
         })
         .collect()
+}
+
+/// One-line summary of a successful commit. Git prints `[branch hash] subject`
+/// as its first line, which already reads well in the status bar.
+fn git_commit_summary(output: &str) -> String {
+    output
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(|line| format!("Committed {line}"))
+        .unwrap_or_else(|| "Committed".to_string())
 }
 
 /// First meaningful line of git's output, for one-line status reporting after
