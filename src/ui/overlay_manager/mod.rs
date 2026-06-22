@@ -2,6 +2,7 @@ use crate::app::{App, FrameState};
 use crate::ui::theme::Palette;
 use ratatui::{Frame, layout::Rect};
 
+mod branch;
 mod bulk_rename;
 mod commit;
 mod copy;
@@ -119,6 +120,16 @@ pub(super) fn render_commit_overlay(
     palette: Palette,
 ) {
     commit::render_commit_overlay(frame, area, app, state, palette);
+}
+
+pub(super) fn render_branch_overlay(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    state: &mut FrameState,
+    palette: Palette,
+) {
+    branch::render_branch_overlay(frame, area, app, state, palette);
 }
 
 pub(super) fn render_search_overlay(

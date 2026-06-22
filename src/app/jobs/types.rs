@@ -134,6 +134,7 @@ pub(in crate::app) struct GitStatusBuild {
     pub(in crate::app) branch: Option<String>,
     pub(in crate::app) dirty: bool,
     pub(in crate::app) statuses: HashMap<PathBuf, crate::app::git::GitFileStatus>,
+    pub(in crate::app) branches: Vec<String>,
 }
 
 #[derive(Clone, Debug)]

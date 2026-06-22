@@ -1,4 +1,5 @@
 mod directory;
+mod git_branch;
 mod git_commit;
 mod git_menu;
 mod goto;

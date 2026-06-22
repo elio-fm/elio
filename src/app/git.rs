@@ -157,6 +157,7 @@ pub(in crate::app) enum GitCommandKind {
     Unstage(PathBuf),
     Commit(String),
     Remote(GitRemote),
+    Checkout(String),
 }
 
 /// A choice in the git menu. Resolved to a [`GitCommandKind`] at confirm time
@@ -169,6 +170,7 @@ pub(in crate::app) enum GitMenuAction {
     Unstage,
     Commit,
     Remote(GitRemote),
+    Branch,
 }
 
 impl App {
@@ -188,6 +190,7 @@ impl App {
             self.git.branch = None;
             self.git.dirty = false;
             self.git.statuses.clear();
+            self.git.branches.clear();
         }
         self.git.token = self.git.token.wrapping_add(1);
         let token = self.git.token;
@@ -265,6 +268,12 @@ impl App {
         self.submit_git_kind(GitCommandKind::Remote(remote));
     }
 
+    /// Checks out `branch`. Reloads the listing and refreshes markers since the
+    /// working tree can change.
+    pub(in crate::app) fn run_git_checkout(&mut self, branch: String) {
+        self.submit_git_kind(GitCommandKind::Checkout(branch));
+    }
+
     fn submit_git_kind(&mut self, kind: GitCommandKind) {
         if self.git_branch().is_none() {
             self.status = "Not a git repository".to_string();
@@ -327,6 +336,19 @@ impl App {
                 };
                 self.refresh_git_branch();
             }
+            GitCommandKind::Checkout(branch) => {
+                self.status = if result.success {
+                    format!("Switched to {branch}")
+                } else {
+                    git_error_message(&result.output)
+                };
+                if result.success
+                    && let Err(error) = self.reload()
+                {
+                    self.report_runtime_error("Reload after git checkout failed", &error);
+                }
+                self.refresh_git_branch();
+            }
         }
         true
     }
@@ -353,10 +375,12 @@ impl App {
         }
         let changed = self.git.branch != result.branch
             || self.git.dirty != result.dirty
-            || self.git.statuses != result.statuses;
+            || self.git.statuses != result.statuses
+            || self.git.branches != result.branches;
         self.git.branch = result.branch;
         self.git.dirty = result.dirty;
         self.git.statuses = result.statuses;
+        self.git.branches = result.branches;
         changed
     }
 
@@ -366,18 +390,30 @@ impl App {
     }
 
     #[cfg(test)]
+    pub(crate) fn set_git_branches_for_test(&mut self, branches: &[&str]) {
+        self.git.branches = branches.iter().map(|b| b.to_string()).collect();
+    }
+
+    #[cfg(test)]
     pub(crate) fn set_git_dirty_for_test(&mut self, dirty: bool) {
         self.git.dirty = dirty;
     }
 }
 
-pub(in crate::app) fn current_status(
-    cwd: &Path,
-) -> (Option<String>, HashMap<PathBuf, GitFileStatus>) {
+/// Snapshot of the git state for a directory, produced off-thread.
+#[derive(Debug, Default)]
+pub(in crate::app) struct GitStatusScan {
+    pub(in crate::app) branch: Option<String>,
+    pub(in crate::app) statuses: HashMap<PathBuf, GitFileStatus>,
+    /// Local branch names (short form), for the branch picker.
+    pub(in crate::app) branches: Vec<String>,
+}
+
+pub(in crate::app) fn current_status(cwd: &Path) -> GitStatusScan {
     if git_command(cwd, ["rev-parse", "--is-inside-work-tree"])
         .is_none_or(|output| output.trim() != "true")
     {
-        return (None, HashMap::new());
+        return GitStatusScan::default();
     }
 
     let branch = git_command(cwd, ["branch", "--show-current"])
@@ -394,7 +430,22 @@ pub(in crate::app) fn current_status(
     .map(|output| parse_porcelain(&output, toplevel.as_deref()))
     .unwrap_or_default();
 
-    (branch, statuses)
+    let branches = git_command(cwd, ["branch", "--format=%(refname:short)"])
+        .map(|output| {
+            output
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    GitStatusScan {
+        branch,
+        statuses,
+        branches,
+    }
 }
 
 /// Parses NUL-delimited `git status --porcelain=v1 -z` output into a map of
@@ -450,6 +501,9 @@ pub(in crate::app) fn run_command(cwd: &Path, kind: &GitCommandKind) -> (String,
         }
         GitCommandKind::Remote(remote) => {
             command.args(remote.args());
+        }
+        GitCommandKind::Checkout(branch) => {
+            command.arg("checkout").arg(branch);
         }
     }
     let output = command.output();
@@ -665,17 +719,22 @@ mod tests {
             ],
         );
 
-        let (branch, statuses) = current_status(&root);
-        assert_eq!(branch, Some("main".to_string()));
-        assert!(statuses.is_empty(), "clean tree should report no statuses");
+        let scan = current_status(&root);
+        assert_eq!(scan.branch, Some("main".to_string()));
+        assert!(
+            scan.statuses.is_empty(),
+            "clean tree should report no statuses"
+        );
+        assert_eq!(scan.branches, vec!["main".to_string()]);
 
         fs::write(root.join("untracked.txt"), "dirty").expect("failed to write dirty file");
-        let (branch, statuses) = current_status(&root);
-        assert_eq!(branch, Some("main".to_string()));
+        let scan = current_status(&root);
+        assert_eq!(scan.branch, Some("main".to_string()));
         assert_eq!(
-            statuses.get(&root.join("untracked.txt")),
+            scan.statuses.get(&root.join("untracked.txt")),
             Some(&GitFileStatus::Untracked),
-            "untracked file should be reported, got: {statuses:?}"
+            "untracked file should be reported, got: {:?}",
+            scan.statuses
         );
 
         fs::remove_dir_all(root).expect("failed to remove temp dir");

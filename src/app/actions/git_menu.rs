@@ -129,6 +129,7 @@ impl App {
             GitMenuAction::Unstage => self.run_git_stage(true),
             GitMenuAction::Commit => self.open_commit_prompt(),
             GitMenuAction::Remote(remote) => self.run_git_remote(remote),
+            GitMenuAction::Branch => self.open_branch_picker(),
         }
     }
 }
@@ -144,6 +145,7 @@ fn build_git_menu_overlay() -> GitMenuOverlay {
         git_menu_row('f', "fetch", GitMenuAction::Remote(GitRemote::Fetch)),
         git_menu_row('p', "pull", GitMenuAction::Remote(GitRemote::Pull)),
         git_menu_row('P', "push", GitMenuAction::Remote(GitRemote::Push)),
+        git_menu_row('b', "switch branch", GitMenuAction::Branch),
     ];
 
     GitMenuOverlay {
@@ -192,7 +194,7 @@ mod tests {
         app.open_git_menu_overlay();
 
         assert!(app.git_menu_is_open());
-        assert_eq!(app.git_menu_row_count(), 9);
+        assert_eq!(app.git_menu_row_count(), 10);
         assert_eq!(app.git_menu_row_shortcut(0), Some('s'));
         assert_eq!(app.git_menu_row_label(0), "status");
         assert_eq!(app.git_menu_row_shortcut(1), Some('l'));
@@ -209,6 +211,8 @@ mod tests {
         assert_eq!(app.git_menu_row_label(7), "pull");
         assert_eq!(app.git_menu_row_shortcut(8), Some('P'));
         assert_eq!(app.git_menu_row_label(8), "push");
+        assert_eq!(app.git_menu_row_shortcut(9), Some('b'));
+        assert_eq!(app.git_menu_row_label(9), "switch branch");
 
         fs::remove_dir_all(root).expect("failed to remove temp dir");
     }

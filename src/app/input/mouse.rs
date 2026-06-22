@@ -34,6 +34,10 @@ impl App {
             return self.handle_commit_mouse(mouse);
         }
 
+        if self.overlays.branch_picker.is_some() {
+            return self.handle_branch_picker_mouse(mouse);
+        }
+
         if self.overlays.copy.is_some() {
             return self.handle_copy_mouse(mouse);
         }

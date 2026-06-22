@@ -161,6 +161,20 @@ pub(super) struct CommitOverlay {
     pub(super) error: Option<String>,
 }
 
+/// Filterable picker for switching git branches.
+pub(super) struct BranchPickerOverlay {
+    pub(super) query: String,
+    pub(super) query_cursor: usize,
+    /// All local branches, snapshotted when the picker opened.
+    pub(super) branches: Vec<String>,
+    /// The currently checked-out branch, marked in the list.
+    pub(super) current: Option<String>,
+    /// Indices into `branches` that match the query, in display order.
+    pub(super) matches: Vec<usize>,
+    /// Selected position within `matches`.
+    pub(super) selected: usize,
+}
+
 pub(super) struct BulkRenameItem {
     pub(super) path: PathBuf,
     pub(super) original_name: String,
@@ -632,6 +646,7 @@ pub(crate) struct OverlayState {
     pub(in crate::app) goto: Option<GoToOverlay>,
     pub(in crate::app) git_menu: Option<GitMenuOverlay>,
     pub(in crate::app) commit: Option<CommitOverlay>,
+    pub(in crate::app) branch_picker: Option<BranchPickerOverlay>,
     pub(in crate::app) copy: Option<CopyOverlay>,
     pub(in crate::app) open_with: Option<OpenWithOverlay>,
     pub(in crate::app) search: Option<SearchOverlay>,
@@ -708,6 +723,8 @@ pub(in crate::app) struct GitRuntime {
     /// Per-path working-tree status for files in the repository, keyed by
     /// absolute path. Populated by the background git-status job.
     pub(in crate::app) statuses: HashMap<PathBuf, crate::app::git::GitFileStatus>,
+    /// Local branch names, for the branch picker. Populated by the git-status job.
+    pub(in crate::app) branches: Vec<String>,
     /// Distinguishes the latest user-triggered git command from stale results.
     pub(in crate::app) command_token: u64,
     /// When `Some`, the preview pane is displaying captured git command output
@@ -861,6 +878,7 @@ impl App {
                 branch: None,
                 dirty: false,
                 statuses: HashMap::new(),
+                branches: Vec::new(),
                 command_token: 0,
                 view: None,
             },

@@ -19,6 +19,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     state.search_hits.clear();
     state.goto_hits.clear();
     state.git_menu_hits.clear();
+    state.branch_hits.clear();
     state.copy_hits.clear();
     state.open_with_hits.clear();
     state.trash_panel = None;
@@ -36,6 +37,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     state.bulk_rename_scroll_top = 0;
     state.goto_panel = None;
     state.git_menu_panel = None;
+    state.branch_panel = None;
     state.copy_panel = None;
     state.open_with_panel = None;
     state.search_panel = None;
@@ -103,6 +105,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
         overlay_manager::render_git_menu_overlay(frame, area, app, state, palette);
     } else if app.commit_is_open() {
         overlay_manager::render_commit_overlay(frame, area, app, state, palette);
+    } else if app.branch_picker_is_open() {
+        overlay_manager::render_branch_overlay(frame, area, app, state, palette);
     } else if app.copy_is_open() {
         overlay_manager::render_copy_overlay(frame, area, app, state, palette);
     } else if app.open_with_is_open() {

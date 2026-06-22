@@ -55,6 +55,10 @@ impl App {
             return self.handle_commit_key(key);
         }
 
+        if self.overlays.branch_picker.is_some() {
+            return self.handle_branch_picker_key(key);
+        }
+
         if self.overlays.copy.is_some() {
             return self.handle_copy_key(key);
         }
