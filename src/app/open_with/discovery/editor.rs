@@ -19,7 +19,11 @@ pub(super) fn append_editor_fallback(
         let Some(app) = editor_app_for_path(var, path) else {
             continue;
         };
-        if !duplicates_discovered_app(&app, apps) {
+        if let Some(existing) = matching_discovered_app_mut(&app, apps) {
+            if !is_env_editor_label(&existing.display_name) {
+                existing.display_name = app.display_name;
+            }
+        } else {
             apps.push(app);
         }
     }
@@ -74,10 +78,17 @@ fn editor_app_from_command(var: &str, command: &str, path: &Path) -> Option<Open
     })
 }
 
-fn duplicates_discovered_app(editor: &OpenWithApp, apps: &[OpenWithApp]) -> bool {
+fn matching_discovered_app_mut<'a>(
+    editor: &OpenWithApp,
+    apps: &'a mut [OpenWithApp],
+) -> Option<&'a mut OpenWithApp> {
     let editor_program = program_key(&editor.program);
-    apps.iter()
-        .any(|app| program_key(&app.program) == editor_program)
+    apps.iter_mut()
+        .find(|app| program_key(&app.program) == editor_program)
+}
+
+fn is_env_editor_label(display_name: &str) -> bool {
+    display_name.contains("($VISUAL)") || display_name.contains("($EDITOR)")
 }
 
 fn program_key(program: &str) -> Option<String> {
@@ -266,5 +277,36 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
 
         assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].display_name, "hx ($EDITOR)");
+    }
+
+    #[test]
+    fn editor_fallback_keeps_visual_label_when_editor_matches_visual() {
+        let _lock = env_lock().lock().expect("lock env");
+        let root = temp_dir("visual-before-editor");
+        fs::create_dir_all(&root).expect("create root");
+        let bin = root.join("bin");
+        fs::create_dir_all(&bin).expect("create bin");
+        write_executable(&bin.join("nvim"));
+        let file = root.join("note.txt");
+        fs::write(&file, "hello\n").expect("write text file");
+
+        let _path = EnvGuard::set("PATH", &bin);
+        let _visual = EnvGuard::set("VISUAL", "nvim");
+        let _editor = EnvGuard::set("EDITOR", "nvim");
+
+        let mut apps = vec![OpenWithApp {
+            display_name: "Neovim".to_string(),
+            desktop_id: Some("nvim.desktop".to_string()),
+            program: bin.join("nvim").display().to_string(),
+            args: vec![file.display().to_string()],
+            is_default: false,
+            requires_terminal: true,
+        }];
+        append_editor_fallback(&mut apps, &file, true);
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].display_name, "Neovim ($VISUAL)");
     }
 }

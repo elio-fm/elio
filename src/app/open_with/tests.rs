@@ -160,6 +160,29 @@ fn single_terminal_app_queues_pending_command_without_overlay() {
 }
 
 #[test]
+fn env_editor_label_does_not_repeat_terminal_suffix() {
+    let root = temp_dir_path("env-editor-label-root");
+    fs::create_dir_all(&root).expect("create temp root");
+    let path = root.join("file.txt");
+    fs::write(&path, "hello").expect("write temp file");
+
+    let mut app = App::new_at(root.clone()).expect("create app");
+    app.handle_discovered_open_with_apps(
+        &path,
+        vec![
+            fake_terminal_app("Neovim ($VISUAL)"),
+            fake_open_with_app("Gedit"),
+        ],
+        |_| unreachable!(),
+        |_| unreachable!(),
+    );
+
+    assert_eq!(app.open_with_row_label(0), "Neovim ($VISUAL)");
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
 fn confirm_terminal_app_from_overlay_queues_pending_command() {
     let root = temp_dir_path("terminal-overlay-root");
     fs::create_dir_all(&root).expect("create temp root");

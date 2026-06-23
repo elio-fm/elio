@@ -201,7 +201,7 @@ fn build_open_with_overlay(apps: Vec<OpenWithApp>, reserved_shortcuts: &[char]) 
         .map(|app| {
             let shortcut = shortcuts.next();
             let mut label = app.display_name.clone();
-            if app.requires_terminal {
+            if app.requires_terminal && !is_env_editor_label(&label) {
                 label.push_str(" (terminal)");
             }
             if app.is_default {
@@ -228,6 +228,10 @@ fn open_with_shortcuts(reserved: &[char]) -> impl Iterator<Item = char> + '_ {
     OPEN_WITH_SHORTCUTS
         .chars()
         .filter(move |shortcut| !reserved.contains(shortcut))
+}
+
+fn is_env_editor_label(display_name: &str) -> bool {
+    display_name.contains("($VISUAL)") || display_name.contains("($EDITOR)")
 }
 
 fn open_with_fallback(path: &Path) -> std::result::Result<FallbackOpenOutcome, String> {

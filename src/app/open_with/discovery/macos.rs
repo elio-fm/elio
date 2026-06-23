@@ -240,7 +240,7 @@ fn discover_terminal_editor_apps(path_str: &str) -> Vec<OpenWithApp> {
         let Some(value) = env::var_os(var).and_then(|value| value.into_string().ok()) else {
             continue;
         };
-        let Some(app) = terminal_editor_app_from_command(&value, path_str) else {
+        let Some(app) = terminal_editor_app_from_command(var, &value, path_str) else {
             continue;
         };
         let key = app.display_name.to_ascii_lowercase();
@@ -455,7 +455,11 @@ fn open_with_app_identity_key(app: &OpenWithApp) -> String {
     )
 }
 
-fn terminal_editor_app_from_command(command: &str, path_str: &str) -> Option<OpenWithApp> {
+fn terminal_editor_app_from_command(
+    var: &str,
+    command: &str,
+    path_str: &str,
+) -> Option<OpenWithApp> {
     let mut tokens = tokenize_exec(command);
     if tokens.is_empty() {
         return None;
@@ -474,7 +478,7 @@ fn terminal_editor_app_from_command(command: &str, path_str: &str) -> Option<Ope
 
     tokens.push(path_str.to_string());
     Some(OpenWithApp {
-        display_name: display_name.to_string(),
+        display_name: format!("{display_name} (${var})"),
         desktop_id: None,
         program,
         args: tokens,
