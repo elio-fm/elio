@@ -15,17 +15,12 @@ pub(super) fn append_editor_fallback(
         return;
     }
 
+    let mut insert_index = env_editor_insert_index(apps);
     for var in ["VISUAL", "EDITOR"] {
         let Some(app) = editor_app_for_path(var, path) else {
             continue;
         };
-        if let Some(existing) = matching_discovered_app_mut(&app, apps) {
-            if !is_env_editor_label(&existing.display_name) {
-                existing.display_name = app.display_name;
-            }
-        } else {
-            apps.push(app);
-        }
+        insert_index = promote_env_editor_app(apps, app, insert_index);
     }
 }
 
@@ -78,13 +73,44 @@ fn editor_app_from_command(var: &str, command: &str, path: &Path) -> Option<Open
     })
 }
 
-fn matching_discovered_app_mut<'a>(
-    editor: &OpenWithApp,
-    apps: &'a mut [OpenWithApp],
-) -> Option<&'a mut OpenWithApp> {
+fn promote_env_editor_app(
+    apps: &mut Vec<OpenWithApp>,
+    app: OpenWithApp,
+    insert_index: usize,
+) -> usize {
+    let Some(position) = matching_discovered_app_index(&app, apps) else {
+        let index = insert_index.min(apps.len());
+        apps.insert(index, app);
+        return index + 1;
+    };
+
+    if apps[position].is_default || is_env_editor_label(&apps[position].display_name) {
+        if !is_env_editor_label(&apps[position].display_name) {
+            apps[position].display_name = app.display_name;
+        }
+        return insert_index;
+    }
+
+    let mut existing = apps.remove(position);
+    existing.display_name = app.display_name;
+    let index = if position < insert_index {
+        insert_index.saturating_sub(1)
+    } else {
+        insert_index
+    }
+    .min(apps.len());
+    apps.insert(index, existing);
+    index + 1
+}
+
+fn env_editor_insert_index(apps: &[OpenWithApp]) -> usize {
+    apps.iter().take_while(|app| app.is_default).count()
+}
+
+fn matching_discovered_app_index(editor: &OpenWithApp, apps: &[OpenWithApp]) -> Option<usize> {
     let editor_program = program_key(&editor.program);
-    apps.iter_mut()
-        .find(|app| program_key(&app.program) == editor_program)
+    apps.iter()
+        .position(|app| program_key(&app.program) == editor_program)
 }
 
 fn is_env_editor_label(display_name: &str) -> bool {
@@ -232,22 +258,34 @@ mod tests {
         let _visual = EnvGuard::remove("VISUAL");
         let _editor = EnvGuard::set("EDITOR", "hx");
 
-        let mut apps = vec![OpenWithApp {
-            display_name: "Text Editor".to_string(),
-            desktop_id: Some("org.gnome.gedit.desktop".to_string()),
-            program: "gedit".to_string(),
-            args: vec![file.display().to_string()],
-            is_default: true,
-            requires_terminal: false,
-        }];
+        let mut apps = vec![
+            OpenWithApp {
+                display_name: "Text Editor".to_string(),
+                desktop_id: Some("org.gnome.gedit.desktop".to_string()),
+                program: "gedit".to_string(),
+                args: vec![file.display().to_string()],
+                is_default: true,
+                requires_terminal: false,
+            },
+            OpenWithApp {
+                display_name: "Other App".to_string(),
+                desktop_id: Some("other.desktop".to_string()),
+                program: "other-app".to_string(),
+                args: vec![file.display().to_string()],
+                is_default: false,
+                requires_terminal: false,
+            },
+        ];
         append_editor_fallback(&mut apps, &file, true);
         let _ = fs::remove_dir_all(&root);
 
-        assert_eq!(apps.len(), 2);
+        assert_eq!(apps.len(), 3);
+        assert_eq!(apps[0].display_name, "Text Editor");
         assert_eq!(apps[1].display_name, "hx ($EDITOR)");
         assert_eq!(apps[1].program, "hx");
         assert_eq!(apps[1].args, vec![file.display().to_string()]);
         assert!(apps[1].requires_terminal);
+        assert_eq!(apps[2].display_name, "Other App");
     }
 
     #[test]

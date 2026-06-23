@@ -243,14 +243,14 @@ fn discover_terminal_editor_apps(path_str: &str) -> Vec<OpenWithApp> {
         let Some(app) = terminal_editor_app_from_command(var, &value, path_str) else {
             continue;
         };
-        let key = app.display_name.to_ascii_lowercase();
+        let key = terminal_editor_key(&app.program);
         if seen_editors.insert(key) {
             result.push(app);
         }
     }
 
     for &(program, display_name) in COMMON_TERMINAL_EDITORS {
-        if !seen_editors.insert(display_name.to_ascii_lowercase()) {
+        if !seen_editors.insert(terminal_editor_key(program)) {
             continue;
         }
         if !command_exists(program) {
@@ -431,6 +431,7 @@ fn sort_open_with_apps(apps: &mut [OpenWithApp]) {
     apps.sort_unstable_by(|a, b| {
         b.is_default
             .cmp(&a.is_default)
+            .then_with(|| is_env_editor_app(b).cmp(&is_env_editor_app(a)))
             .then_with(|| a.requires_terminal.cmp(&b.requires_terminal))
             .then_with(|| {
                 a.display_name
@@ -438,6 +439,18 @@ fn sort_open_with_apps(apps: &mut [OpenWithApp]) {
                     .cmp(&b.display_name.to_ascii_lowercase())
             })
     });
+}
+
+fn is_env_editor_app(app: &OpenWithApp) -> bool {
+    app.display_name.contains("($VISUAL)") || app.display_name.contains("($EDITOR)")
+}
+
+fn terminal_editor_key(program: &str) -> String {
+    Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(program)
+        .to_ascii_lowercase()
 }
 
 fn open_with_app_identity_key(app: &OpenWithApp) -> String {

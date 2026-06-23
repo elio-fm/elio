@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Places now switches to an icon-only rail in narrow windows before labels become overly truncated. ([#184])
+- Changed Open With to keep `$VISUAL` and `$EDITOR` labels on matching MIME-associated editors and place them directly below the system default association. ([#199])
 
 ### Fixed
 
@@ -280,3 +281,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#184]: https://github.com/elio-fm/elio/issues/184
 [#186]: https://github.com/elio-fm/elio/issues/186
 [#195]: https://github.com/elio-fm/elio/issues/195
+[#199]: https://github.com/elio-fm/elio/issues/199
