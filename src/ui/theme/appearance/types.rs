@@ -23,6 +23,7 @@ pub(crate) struct Palette {
     pub selection_bar: Color,
     pub yank_bar: Color,
     pub cut_bar: Color,
+    pub progress_bar: Color,
     pub grid_selection_band: Color,
     pub grid_yank_band: Color,
     pub grid_cut_band: Color,

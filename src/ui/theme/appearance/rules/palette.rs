@@ -22,6 +22,7 @@ pub(super) fn default_palette() -> Palette {
         selection_bar: rgb(255, 178, 86),
         yank_bar: rgb(87, 201, 87),
         cut_bar: rgb(224, 90, 90),
+        progress_bar: rgb(65, 160, 220),
         grid_selection_band: rgb(52, 40, 18),
         grid_yank_band: rgb(18, 44, 20),
         grid_cut_band: rgb(48, 20, 20),

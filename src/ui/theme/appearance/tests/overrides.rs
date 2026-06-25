@@ -320,18 +320,21 @@ color = "ansi-cyan"
 }
 
 #[test]
-fn chip_text_defaults_to_dark_contrast_color_and_is_overridable() {
+fn chip_colors_default_to_semantic_contrast_and_are_overridable() {
     let default_theme = Theme::default_theme();
     assert_eq!(default_theme.palette.chip_text, rgb(0x0c, 0x0c, 0x0c));
+    assert_eq!(default_theme.palette.progress_bar, rgb(0x41, 0xa0, 0xdc));
 
     let custom = Theme::from_config_str(
         r##"
 [palette]
 chip_text = "#ffffff"
+progress_bar = "#123456"
 "##,
     )
     .expect("theme should parse");
     assert_eq!(custom.palette.chip_text, rgb(0xff, 0xff, 0xff));
+    assert_eq!(custom.palette.progress_bar, rgb(0x12, 0x34, 0x56));
 }
 
 #[test]

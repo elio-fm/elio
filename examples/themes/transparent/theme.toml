@@ -11,6 +11,7 @@ button_bg = "none"
 button_disabled_bg = "none"
 sidebar_active = "#1a2a43"
 accent_soft = "none"
+progress_bar = "#41a0dc"
 path_bg = "none"
 
 [preview.code]

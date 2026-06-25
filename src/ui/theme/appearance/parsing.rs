@@ -38,6 +38,7 @@ struct PaletteOverride {
     selection_bar: Option<String>,
     yank_bar: Option<String>,
     cut_bar: Option<String>,
+    progress_bar: Option<String>,
     grid_selection_band: Option<String>,
     grid_yank_band: Option<String>,
     grid_cut_band: Option<String>,
@@ -203,6 +204,7 @@ fn apply_palette_overrides(
     apply_palette_color(&mut palette.selection_bar, overrides.selection_bar)?;
     apply_palette_color(&mut palette.yank_bar, overrides.yank_bar)?;
     apply_palette_color(&mut palette.cut_bar, overrides.cut_bar)?;
+    apply_palette_color(&mut palette.progress_bar, overrides.progress_bar)?;
     apply_palette_color(
         &mut palette.grid_selection_band,
         overrides.grid_selection_band,
