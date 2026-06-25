@@ -9,6 +9,7 @@ impl Default for KeyBindings {
             yank: KeyList::one('y'),
             cut: KeyList::one('x'),
             paste: KeyList::one('p'),
+            extract_archive: KeyList::one('e'),
             symlink_absolute: KeyList::one('-'),
             symlink_relative: KeyList::one('_'),
             trash: KeyList(vec![KeySpec::char('d'), KeySpec::named(NamedKey::Delete)]),

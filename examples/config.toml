@@ -113,6 +113,7 @@
 # yank                 = "y"
 # cut                  = "x"
 # paste                = "p"
+# extract_archive      = "e"
 # symlink_absolute     = "-"
 # symlink_relative     = "_"
 # trash                = ["d", "del"]

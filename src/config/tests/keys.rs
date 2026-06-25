@@ -8,6 +8,7 @@ fn keys_default_bindings_are_sane() {
     assert_eq!(config.keys.yank, 'y');
     assert_eq!(config.keys.cut, 'x');
     assert_eq!(config.keys.paste, 'p');
+    assert_eq!(config.keys.extract_archive, 'e');
     assert_eq!(config.keys.symlink_absolute, '-');
     assert_eq!(config.keys.symlink_relative, '_');
     assert_eq!(config.keys.trash.to_string(), "d/Del");
@@ -86,6 +87,7 @@ fn keys_accept_array_overrides() {
     let config = Config::from_str(
         r#"
 [keys]
+extract_archive = []
 open = ["o", "e"]
 open_with = ["O"]
 "#,
@@ -128,6 +130,7 @@ fn keys_rejects_duplicate_inside_array_and_uses_default() {
     let config = Config::from_str(
         r#"
 [keys]
+extract_archive = []
 open = ["e", "e"]
 "#,
     )
@@ -141,6 +144,7 @@ fn keys_rejects_invalid_array_member_and_uses_default() {
     let config = Config::from_str(
         r#"
 [keys]
+extract_archive = []
 open = ["e", "space"]
 "#,
     )
@@ -168,6 +172,7 @@ fn key_display_joins_multiple_bindings() {
     let config = Config::from_str(
         r#"
 [keys]
+extract_archive = []
 open = ["o", "e"]
 "#,
     )
@@ -406,6 +411,7 @@ fn modified_and_plain_bindings_do_not_collide() {
     let config = Config::from_str(
         r#"
 [keys]
+extract_archive = []
 nav_right = []
 open = "e"
 search_folders = "ctrl+e"
@@ -886,6 +892,7 @@ fn contextual_rename_and_restore_bindings_can_overlap() {
     let config = Config::from_str(
         r#"
 [keys]
+extract_archive = []
 rename = "e"
 restore_from_trash = "e"
 "#,
@@ -986,6 +993,7 @@ fn action_for_returns_correct_action_for_default_bindings() {
     assert_eq!(key_bindings.action_for('y'), Some(Action::Yank));
     assert_eq!(key_bindings.action_for('x'), Some(Action::Cut));
     assert_eq!(key_bindings.action_for('p'), Some(Action::Paste));
+    assert_eq!(key_bindings.action_for('e'), Some(Action::ExtractArchive));
     assert_eq!(
         key_bindings.action_for('D'),
         Some(Action::DeletePermanently)

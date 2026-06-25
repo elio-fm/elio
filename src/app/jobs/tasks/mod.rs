@@ -1,5 +1,6 @@
 pub(super) use super::*;
 
+pub(super) mod archive_extract;
 pub(super) mod directory;
 pub(super) mod directory_fingerprint;
 pub(super) mod directory_stats;

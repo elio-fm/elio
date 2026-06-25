@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added native archive extraction for focused `.zip`, `.tar`, `.tar.gz`, and `.tgz` files, with a configurable `extract_archive` (`e`) shortcut, background progress, cancellation, and unique sibling destination folders. ([#90])
 - Added a `progress_bar` theme palette color for active background operation chips, used by archive extraction progress.
 - Made Go To entries configurable, allowing built-ins to be changed and custom entries to be added. ([#166])
 
@@ -251,6 +252,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#199]: https://github.com/elio-fm/elio/issues/199
+[#195]: https://github.com/elio-fm/elio/issues/195
+[#186]: https://github.com/elio-fm/elio/issues/186
+[#184]: https://github.com/elio-fm/elio/issues/184
+[#174]: https://github.com/elio-fm/elio/issues/174
+[#168]: https://github.com/elio-fm/elio/issues/168
+[#166]: https://github.com/elio-fm/elio/issues/166
+[#162]: https://github.com/elio-fm/elio/issues/162
+[#159]: https://github.com/elio-fm/elio/issues/159
+[#157]: https://github.com/elio-fm/elio/issues/157
+[#153]: https://github.com/elio-fm/elio/issues/153
+[#141]: https://github.com/elio-fm/elio/issues/141
+[#140]: https://github.com/elio-fm/elio/issues/140
+[#138]: https://github.com/elio-fm/elio/pull/138
+[#134]: https://github.com/elio-fm/elio/issues/134
+[#129]: https://github.com/elio-fm/elio/issues/129
+[#125]: https://github.com/elio-fm/elio/issues/125
+[#121]: https://github.com/elio-fm/elio/issues/121
+[#112]: https://github.com/elio-fm/elio/issues/112
+[#111]: https://github.com/elio-fm/elio/issues/111
+[#109]: https://github.com/elio-fm/elio/issues/109
+[#103]: https://github.com/elio-fm/elio/issues/103
+[#90]: https://github.com/elio-fm/elio/issues/90
 [#86]: https://github.com/elio-fm/elio/issues/86
 [#84]: https://github.com/elio-fm/elio/issues/84
 [#79]: https://github.com/elio-fm/elio/issues/79
@@ -258,28 +282,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#75]: https://github.com/elio-fm/elio/issues/75
 [#74]: https://github.com/elio-fm/elio/pull/74
 [#70]: https://github.com/elio-fm/elio/issues/70
+[#69]: https://github.com/elio-fm/elio/issues/69
 [#67]: https://github.com/elio-fm/elio/issues/67
 [#66]: https://github.com/elio-fm/elio/pull/66
-[#69]: https://github.com/elio-fm/elio/issues/69
-[#103]: https://github.com/elio-fm/elio/issues/103
-[#109]: https://github.com/elio-fm/elio/issues/109
-[#111]: https://github.com/elio-fm/elio/issues/111
-[#112]: https://github.com/elio-fm/elio/issues/112
-[#121]: https://github.com/elio-fm/elio/issues/121
-[#125]: https://github.com/elio-fm/elio/issues/125
-[#129]: https://github.com/elio-fm/elio/issues/129
-[#134]: https://github.com/elio-fm/elio/issues/134
-[#138]: https://github.com/elio-fm/elio/pull/138
-[#140]: https://github.com/elio-fm/elio/issues/140
-[#141]: https://github.com/elio-fm/elio/issues/141
-[#153]: https://github.com/elio-fm/elio/issues/153
-[#157]: https://github.com/elio-fm/elio/issues/157
-[#159]: https://github.com/elio-fm/elio/issues/159
-[#162]: https://github.com/elio-fm/elio/issues/162
-[#166]: https://github.com/elio-fm/elio/issues/166
-[#168]: https://github.com/elio-fm/elio/issues/168
-[#174]: https://github.com/elio-fm/elio/issues/174
-[#184]: https://github.com/elio-fm/elio/issues/184
-[#186]: https://github.com/elio-fm/elio/issues/186
-[#195]: https://github.com/elio-fm/elio/issues/195
-[#199]: https://github.com/elio-fm/elio/issues/199

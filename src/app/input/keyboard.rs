@@ -91,6 +91,11 @@ impl App {
             } else if self.jobs.restore_progress.is_some() {
                 self.jobs.scheduler.cancel_restore(self.jobs.restore_token);
                 self.jobs.restore_progress = None;
+            } else if self.jobs.archive_extract_progress.is_some() {
+                self.jobs
+                    .scheduler
+                    .cancel_archive_extract(self.jobs.archive_extract_token);
+                self.jobs.archive_extract_progress = None;
             } else if self.jobs.paste_progress.is_some() {
                 self.jobs.scheduler.cancel_paste(self.jobs.paste_token);
                 self.jobs.paste_progress = None;
@@ -157,6 +162,11 @@ impl App {
                 } else if self.jobs.restore_progress.is_some() {
                     self.jobs.scheduler.cancel_restore(self.jobs.restore_token);
                     self.jobs.restore_progress = None;
+                } else if self.jobs.archive_extract_progress.is_some() {
+                    self.jobs
+                        .scheduler
+                        .cancel_archive_extract(self.jobs.archive_extract_token);
+                    self.jobs.archive_extract_progress = None;
                 } else if self.jobs.paste_progress.is_some() {
                     self.jobs.scheduler.cancel_paste(self.jobs.paste_token);
                     self.jobs.paste_progress = None;
@@ -200,6 +210,7 @@ impl App {
             Action::Yank => self.yank(),
             Action::Cut => self.cut(),
             Action::Paste => self.paste()?,
+            Action::ExtractArchive => self.extract_focused_archive()?,
             Action::SymlinkAbsolute => self.link_yanked(false)?,
             Action::SymlinkRelative => self.link_yanked(true)?,
             Action::Trash => self.open_trash_prompt(),

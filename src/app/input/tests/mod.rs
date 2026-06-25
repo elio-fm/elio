@@ -1,3 +1,4 @@
+mod archive;
 mod browser_wheel;
 mod errors;
 mod helpers;

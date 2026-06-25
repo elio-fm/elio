@@ -86,6 +86,12 @@ pub(super) struct Clipboard {
 }
 
 #[derive(Clone, Debug)]
+pub(super) struct ArchiveExtractProgress {
+    pub(super) completed: usize,
+    pub(super) total: Option<usize>,
+}
+
+#[derive(Clone, Debug)]
 pub(super) struct PasteProgress {
     pub(super) completed: usize,
     pub(super) total: usize,
@@ -623,6 +629,9 @@ pub(in crate::app) struct JobRuntime {
     pub(in crate::app) search_cache: Option<SearchCache>,
     pub(in crate::app) scheduler: JobScheduler,
     pub(in crate::app) clipboard: Option<Clipboard>,
+    pub(in crate::app) archive_extract_token: u64,
+    pub(in crate::app) archive_extract_progress: Option<ArchiveExtractProgress>,
+    pub(in crate::app) archive_extract_source_cwd: Option<PathBuf>,
     pub(in crate::app) paste_token: u64,
     pub(in crate::app) paste_progress: Option<PasteProgress>,
     pub(in crate::app) queued_pastes: VecDeque<QueuedPaste>,
@@ -786,6 +795,9 @@ impl App {
                 search_cache: None,
                 scheduler,
                 clipboard: None,
+                archive_extract_token: 0,
+                archive_extract_progress: None,
+                archive_extract_source_cwd: None,
                 paste_token: 0,
                 paste_progress: None,
                 queued_pastes: VecDeque::new(),

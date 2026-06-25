@@ -39,6 +39,7 @@ pub(super) fn render_help(
         keys.action(&kb.trash, "trash (delete if in trash)"),
         keys.action(&kb.delete_permanently, "delete permanently"),
         keys.action(&kb.rename, "rename (bulk if selection)"),
+        keys.action(&kb.extract_archive, "extract archive"),
         keys.action_with_suffix(&kb.restore_from_trash, " (in trash)", "restore from trash"),
         keys.action(&kb.shell, "open shell here"),
         keys.action(&kb.open, "open with default app"),
@@ -120,7 +121,7 @@ pub(super) fn render_help(
         },
     ];
 
-    let popup = helpers::centered_rect(area, 90, 35);
+    let popup = helpers::centered_rect(area, 90, 36);
     state.help_panel = Some(popup);
     frame.render_widget(Clear, popup);
     frame.render_widget(

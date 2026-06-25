@@ -1,3 +1,4 @@
+mod archive;
 mod directory;
 mod goto;
 mod navigation;

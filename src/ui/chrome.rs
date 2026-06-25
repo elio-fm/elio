@@ -131,6 +131,7 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
     let clip = app.clipboard_info();
     let sel_count = app.selection_count();
     let paste_prog = app.paste_progress();
+    let archive_prog = app.archive_extract_progress();
     let queued_pastes = app.queued_paste_count();
     let trash_prog = app.trash_progress();
     let restore_prog = app.restore_progress();
@@ -191,6 +192,20 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
                 label,
                 Style::default()
                     .bg(color)
+                    .fg(palette.chip_text)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::raw("  "));
+        } else if let Some((completed, total)) = archive_prog {
+            let label = match total {
+                Some(total) => format!(" Extracting {completed}/{total} "),
+                None => " Extracting… ".to_string(),
+            };
+            chips_width += label.len() as u16 + 2;
+            spans.push(Span::styled(
+                label,
+                Style::default()
+                    .bg(palette.progress_bar)
                     .fg(palette.chip_text)
                     .add_modifier(Modifier::BOLD),
             ));
