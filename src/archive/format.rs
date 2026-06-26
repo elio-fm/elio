@@ -10,7 +10,16 @@ pub(crate) enum ExtractFormat {
     TarZstd,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ExtractBackend {
+    NativeZip,
+    NativeTar(ExtractFormat),
+}
+
 impl ExtractFormat {
+    pub(crate) const SUPPORTED_MESSAGE: &'static str =
+        "Extraction supports ZIP, TAR, TAR.GZ, TAR.XZ, TAR.BZ2, and TAR.ZST";
+
     pub(crate) fn detect(path: &Path) -> Option<Self> {
         let name = path
             .file_name()
@@ -59,6 +68,26 @@ impl ExtractFormat {
         } else {
             trimmed.to_string()
         })
+    }
+
+    pub(crate) fn backend(self) -> ExtractBackend {
+        match self {
+            Self::Zip => ExtractBackend::NativeZip,
+            Self::Tar | Self::TarGzip | Self::TarXz | Self::TarBzip2 | Self::TarZstd => {
+                ExtractBackend::NativeTar(self)
+            }
+        }
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Zip => "ZIP",
+            Self::Tar => "TAR",
+            Self::TarGzip => "TAR.GZ",
+            Self::TarXz => "TAR.XZ",
+            Self::TarBzip2 => "TAR.BZ2",
+            Self::TarZstd => "TAR.ZST",
+        }
     }
 }
 
@@ -137,6 +166,31 @@ mod tests {
         assert_eq!(
             ExtractFormat::detect(Path::new("app.tzst")),
             Some(ExtractFormat::TarZstd)
+        );
+    }
+
+    #[test]
+    fn maps_formats_to_native_backends() {
+        assert_eq!(ExtractFormat::Zip.backend(), ExtractBackend::NativeZip);
+        assert_eq!(
+            ExtractFormat::Tar.backend(),
+            ExtractBackend::NativeTar(ExtractFormat::Tar)
+        );
+        assert_eq!(
+            ExtractFormat::TarGzip.backend(),
+            ExtractBackend::NativeTar(ExtractFormat::TarGzip)
+        );
+        assert_eq!(
+            ExtractFormat::TarXz.backend(),
+            ExtractBackend::NativeTar(ExtractFormat::TarXz)
+        );
+        assert_eq!(
+            ExtractFormat::TarBzip2.backend(),
+            ExtractBackend::NativeTar(ExtractFormat::TarBzip2)
+        );
+        assert_eq!(
+            ExtractFormat::TarZstd.backend(),
+            ExtractBackend::NativeTar(ExtractFormat::TarZstd)
         );
     }
 
