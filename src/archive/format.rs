@@ -5,6 +5,9 @@ pub(crate) enum ExtractFormat {
     Zip,
     Tar,
     TarGzip,
+    TarXz,
+    TarBzip2,
+    TarZstd,
 }
 
 impl ExtractFormat {
@@ -15,6 +18,15 @@ impl ExtractFormat {
             .to_ascii_lowercase();
         if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
             return Some(Self::TarGzip);
+        }
+        if name.ends_with(".tar.xz") || name.ends_with(".txz") {
+            return Some(Self::TarXz);
+        }
+        if name.ends_with(".tar.bz2") || name.ends_with(".tbz2") || name.ends_with(".tbz") {
+            return Some(Self::TarBzip2);
+        }
+        if name.ends_with(".tar.zst") || name.ends_with(".tzst") {
+            return Some(Self::TarZstd);
         }
         match path
             .extension()
@@ -31,16 +43,16 @@ impl ExtractFormat {
     pub(crate) fn stem_for_destination(path: &Path) -> Option<String> {
         let name = path.file_name()?.to_string_lossy();
         let lower = name.to_ascii_lowercase();
-        let stem = if lower.ends_with(".tar.gz") {
-            &name[..name.len().saturating_sub(7)]
-        } else if lower.ends_with(".tgz") {
-            &name[..name.len().saturating_sub(4)]
-        } else if lower.ends_with(".zip") || lower.ends_with(".tar") {
-            let cut = name.rfind('.')?;
-            &name[..cut]
-        } else {
-            return None;
-        };
+        let stem = [
+            ".tar.bz2", ".tar.zst", ".tar.gz", ".tar.xz", ".tbz2", ".tzst", ".tgz", ".txz", ".tbz",
+            ".zip", ".tar",
+        ]
+        .iter()
+        .find_map(|suffix| {
+            lower
+                .ends_with(suffix)
+                .then(|| &name[..name.len() - suffix.len()])
+        })?;
         let trimmed = stem.trim();
         Some(if trimmed.is_empty() {
             "archive".to_string()
@@ -98,7 +110,34 @@ mod tests {
             ExtractFormat::detect(Path::new("app.tgz")),
             Some(ExtractFormat::TarGzip)
         );
-        assert_eq!(ExtractFormat::detect(Path::new("app.tar.xz")), None);
+        assert_eq!(
+            ExtractFormat::detect(Path::new("app.tar.xz")),
+            Some(ExtractFormat::TarXz)
+        );
+        assert_eq!(
+            ExtractFormat::detect(Path::new("app.txz")),
+            Some(ExtractFormat::TarXz)
+        );
+        assert_eq!(
+            ExtractFormat::detect(Path::new("app.tar.bz2")),
+            Some(ExtractFormat::TarBzip2)
+        );
+        assert_eq!(
+            ExtractFormat::detect(Path::new("app.tbz2")),
+            Some(ExtractFormat::TarBzip2)
+        );
+        assert_eq!(
+            ExtractFormat::detect(Path::new("app.tbz")),
+            Some(ExtractFormat::TarBzip2)
+        );
+        assert_eq!(
+            ExtractFormat::detect(Path::new("app.tar.zst")),
+            Some(ExtractFormat::TarZstd)
+        );
+        assert_eq!(
+            ExtractFormat::detect(Path::new("app.tzst")),
+            Some(ExtractFormat::TarZstd)
+        );
     }
 
     #[test]
@@ -117,6 +156,34 @@ mod tests {
         );
         assert_eq!(
             ExtractFormat::stem_for_destination(Path::new("app.tgz")).as_deref(),
+            Some("app")
+        );
+        assert_eq!(
+            ExtractFormat::stem_for_destination(Path::new("app.tar.xz")).as_deref(),
+            Some("app")
+        );
+        assert_eq!(
+            ExtractFormat::stem_for_destination(Path::new("app.txz")).as_deref(),
+            Some("app")
+        );
+        assert_eq!(
+            ExtractFormat::stem_for_destination(Path::new("app.tar.bz2")).as_deref(),
+            Some("app")
+        );
+        assert_eq!(
+            ExtractFormat::stem_for_destination(Path::new("app.tbz2")).as_deref(),
+            Some("app")
+        );
+        assert_eq!(
+            ExtractFormat::stem_for_destination(Path::new("app.tbz")).as_deref(),
+            Some("app")
+        );
+        assert_eq!(
+            ExtractFormat::stem_for_destination(Path::new("app.tar.zst")).as_deref(),
+            Some("app")
+        );
+        assert_eq!(
+            ExtractFormat::stem_for_destination(Path::new("app.tzst")).as_deref(),
             Some("app")
         );
     }

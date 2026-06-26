@@ -37,6 +37,9 @@ unicode-width = "0.2"
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
 trash = "5.2.5"
 rusqlite = { version = "0.40", features = ["bundled"] }
+xz2 = { version = "0.1.7", features = ["static"] }
+bzip2 = "0.6.1"
+zstd = { version = "0.13.3", default-features = false }
 
 [build-dependencies]
 syntect = { version = "5.2", default-features = false, features = ["default-syntaxes", "yaml-load", "regex-onig"] }

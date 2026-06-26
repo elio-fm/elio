@@ -1,11 +1,14 @@
 use super::format::{ExtractFormat, unique_destination};
 use anyhow::{Context, Result, anyhow, bail};
+use bzip2::read::BzDecoder;
 use flate2::read::GzDecoder;
 use std::{
     fs::{self, File},
     io::{self, Read},
     path::{Component, Path, PathBuf},
 };
+use xz2::read::XzDecoder;
+use zstd::stream::read::Decoder as ZstdDecoder;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ExtractPlan {
@@ -28,8 +31,9 @@ pub(crate) struct ExtractSummary {
 }
 
 pub(crate) fn plan_extract(path: &Path) -> Result<ExtractPlan> {
-    let format = ExtractFormat::detect(path)
-        .ok_or_else(|| anyhow!("Extraction supports ZIP, TAR, and TAR.GZ"))?;
+    let format = ExtractFormat::detect(path).ok_or_else(|| {
+        anyhow!("Extraction supports ZIP, TAR, TAR.GZ, TAR.XZ, TAR.BZ2, and TAR.ZST")
+    })?;
     let parent = path
         .parent()
         .ok_or_else(|| anyhow!("Cannot determine archive parent directory"))?;
@@ -57,6 +61,9 @@ where
         ExtractFormat::Zip => extract_zip(plan, &mut progress, cancelled),
         ExtractFormat::Tar => extract_tar(plan, &mut progress, cancelled),
         ExtractFormat::TarGzip => extract_tar_gzip(plan, &mut progress, cancelled),
+        ExtractFormat::TarXz => extract_tar_xz(plan, &mut progress, cancelled),
+        ExtractFormat::TarBzip2 => extract_tar_bzip2(plan, &mut progress, cancelled),
+        ExtractFormat::TarZstd => extract_tar_zstd(plan, &mut progress, cancelled),
     }
 }
 
@@ -128,12 +135,7 @@ where
     F: FnMut(ExtractProgress),
     C: FnMut() -> bool,
 {
-    let count_file = File::open(&plan.archive_path)
-        .with_context(|| format!("Could not open {}", plan.archive_path.display()))?;
-    let total = count_tar_entries(count_file).context("Could not read TAR archive")?;
-    let file = File::open(&plan.archive_path)
-        .with_context(|| format!("Could not open {}", plan.archive_path.display()))?;
-    extract_tar_reader(plan, file, Some(total), progress, cancelled)
+    extract_tar_with(plan, "TAR", |file| Ok(file), progress, cancelled)
 }
 
 fn extract_tar_gzip<F, C>(
@@ -145,13 +147,83 @@ where
     F: FnMut(ExtractProgress),
     C: FnMut() -> bool,
 {
+    extract_tar_with(
+        plan,
+        "TAR.GZ",
+        |file| Ok(GzDecoder::new(file)),
+        progress,
+        cancelled,
+    )
+}
+
+fn extract_tar_xz<F, C>(
+    plan: &ExtractPlan,
+    progress: &mut F,
+    cancelled: C,
+) -> Result<ExtractSummary>
+where
+    F: FnMut(ExtractProgress),
+    C: FnMut() -> bool,
+{
+    extract_tar_with(
+        plan,
+        "TAR.XZ",
+        |file| Ok(XzDecoder::new(file)),
+        progress,
+        cancelled,
+    )
+}
+
+fn extract_tar_bzip2<F, C>(
+    plan: &ExtractPlan,
+    progress: &mut F,
+    cancelled: C,
+) -> Result<ExtractSummary>
+where
+    F: FnMut(ExtractProgress),
+    C: FnMut() -> bool,
+{
+    extract_tar_with(
+        plan,
+        "TAR.BZ2",
+        |file| Ok(BzDecoder::new(file)),
+        progress,
+        cancelled,
+    )
+}
+
+fn extract_tar_zstd<F, C>(
+    plan: &ExtractPlan,
+    progress: &mut F,
+    cancelled: C,
+) -> Result<ExtractSummary>
+where
+    F: FnMut(ExtractProgress),
+    C: FnMut() -> bool,
+{
+    extract_tar_with(plan, "TAR.ZST", ZstdDecoder::new, progress, cancelled)
+}
+
+fn extract_tar_with<R, D, F, C>(
+    plan: &ExtractPlan,
+    label: &str,
+    decoder: D,
+    progress: &mut F,
+    cancelled: C,
+) -> Result<ExtractSummary>
+where
+    R: Read,
+    D: Fn(File) -> Result<R, std::io::Error>,
+    F: FnMut(ExtractProgress),
+    C: FnMut() -> bool,
+{
     let count_file = File::open(&plan.archive_path)
         .with_context(|| format!("Could not open {}", plan.archive_path.display()))?;
-    let total =
-        count_tar_entries(GzDecoder::new(count_file)).context("Could not read TAR.GZ archive")?;
+    let total = count_tar_entries(decoder(count_file)?)
+        .with_context(|| format!("Could not read {label} archive"))?;
     let file = File::open(&plan.archive_path)
         .with_context(|| format!("Could not open {}", plan.archive_path.display()))?;
-    extract_tar_reader(plan, GzDecoder::new(file), Some(total), progress, cancelled)
+    extract_tar_reader(plan, decoder(file)?, Some(total), progress, cancelled)
 }
 
 fn count_tar_entries<R: Read>(reader: R) -> Result<usize> {
@@ -343,5 +415,103 @@ mod tests {
             "hello"
         );
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn extracts_tar_xz_archive() {
+        let root = temp_path("txz");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.tar.xz");
+        write_compressed_tar(&archive_path, |file| {
+            Ok(xz2::write::XzEncoder::new(file, 6))
+        });
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let summary = extract_archive(&plan, |_| {}, || false).unwrap();
+
+        assert_eq!(summary.completed, 2);
+        assert_eq!(
+            fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+            "hello"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn extracts_tar_bzip2_archive() {
+        let root = temp_path("tbz2");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.tar.bz2");
+        write_compressed_tar(&archive_path, |file| {
+            Ok(bzip2::write::BzEncoder::new(
+                file,
+                bzip2::Compression::default(),
+            ))
+        });
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let summary = extract_archive(&plan, |_| {}, || false).unwrap();
+
+        assert_eq!(summary.completed, 2);
+        assert_eq!(
+            fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+            "hello"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn extracts_tar_zstd_archive() {
+        let root = temp_path("tzst");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.tar.zst");
+        write_zstd_tar(&archive_path);
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let summary = extract_archive(&plan, |_| {}, || false).unwrap();
+
+        assert_eq!(summary.completed, 2);
+        assert_eq!(
+            fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+            "hello"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    fn write_compressed_tar<W, D>(archive_path: &Path, encoder: D)
+    where
+        W: Write,
+        D: FnOnce(File) -> std::result::Result<W, std::io::Error>,
+    {
+        let root = archive_path.parent().unwrap();
+        let source = root.join("source");
+        fs::create_dir_all(source.join("dir")).unwrap();
+        fs::write(source.join("dir/file.txt"), "hello").unwrap();
+
+        let file = File::create(archive_path).unwrap();
+        let writer = encoder(file).unwrap();
+        let mut tar = tar::Builder::new(writer);
+        tar.append_dir("dir", source.join("dir")).unwrap();
+        tar.append_path_with_name(source.join("dir/file.txt"), "dir/file.txt")
+            .unwrap();
+        tar.finish().unwrap();
+    }
+
+    fn write_zstd_tar(archive_path: &Path) {
+        let root = archive_path.parent().unwrap();
+        let source = root.join("source");
+        fs::create_dir_all(source.join("dir")).unwrap();
+        fs::write(source.join("dir/file.txt"), "hello").unwrap();
+
+        let mut tar_bytes = Vec::new();
+        {
+            let mut tar = tar::Builder::new(&mut tar_bytes);
+            tar.append_dir("dir", source.join("dir")).unwrap();
+            tar.append_path_with_name(source.join("dir/file.txt"), "dir/file.txt")
+                .unwrap();
+            tar.finish().unwrap();
+        }
+        let compressed = zstd::stream::encode_all(tar_bytes.as_slice(), 0).unwrap();
+        fs::write(archive_path, compressed).unwrap();
     }
 }

@@ -49,7 +49,7 @@ fn e_reports_unsupported_archive_format() {
 
     assert_eq!(
         app.status_message(),
-        "Extraction supports ZIP, TAR, and TAR.GZ"
+        "Extraction supports ZIP, TAR, TAR.GZ, TAR.XZ, TAR.BZ2, and TAR.ZST"
     );
     assert!(app.jobs.archive_extract_progress.is_none());
 
