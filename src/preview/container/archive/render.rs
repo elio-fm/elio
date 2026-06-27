@@ -5,9 +5,16 @@ use ratatui::text::Line;
 pub(super) fn render_archive_preview(config: ArchiveRenderConfig) -> PreviewContent {
     let palette = theme::palette();
     let mut lines = Vec::new();
-    let entries = expand_archive_entries(config.entries.unwrap_or_default());
-    let total_items = entries.len().max(config.total_entries_hint.unwrap_or(0));
-    let folder_count = entries.iter().filter(|entry| entry.is_dir).count();
+    let entries = config.entries.map(expand_archive_entries);
+    let total_items = entries
+        .as_ref()
+        .map(Vec::len)
+        .unwrap_or(0)
+        .max(config.total_entries_hint.unwrap_or(0));
+    let folder_count = entries
+        .as_ref()
+        .map(|entries| entries.iter().filter(|entry| entry.is_dir).count())
+        .unwrap_or(0);
     let file_count = total_items.saturating_sub(folder_count);
 
     let summary = vec![
@@ -48,47 +55,53 @@ pub(super) fn render_archive_preview(config: ArchiveRenderConfig) -> PreviewCont
     }
     lines.push(section_line("Contents", palette));
 
-    if entries.is_empty() {
-        lines.push(Line::from(if total_items == 0 {
-            config.empty_label.to_string()
-        } else {
-            config.unavailable_label.to_string()
-        }));
-    } else {
-        let mut root = ArchiveTreeNode::default();
-        for entry in &entries {
-            insert_archive_tree_entry(&mut root, entry);
+    match &entries {
+        None => {
+            lines.push(Line::from(config.unavailable_label.to_string()));
         }
-        let available_lines = PREVIEW_RENDER_LINE_LIMIT.saturating_sub(lines.len());
-        let mut remaining = available_lines;
-        if remaining == 0 {
-            tree_truncated = true;
-        } else {
-            let children = ordered_archive_children(&root.children);
-            render_archive_tree(
-                &children,
-                "",
-                &mut remaining,
-                &mut rendered_items,
-                &mut lines,
-                palette,
-            );
-            tree_truncated = rendered_items < entries.len();
+        Some(entries) if entries.is_empty() => {
+            lines.push(Line::from(if total_items == 0 {
+                config.empty_label.to_string()
+            } else {
+                config.unavailable_label.to_string()
+            }));
+        }
+        Some(entries) => {
+            let mut root = ArchiveTreeNode::default();
+            for entry in entries {
+                insert_archive_tree_entry(&mut root, entry);
+            }
+            let available_lines = PREVIEW_RENDER_LINE_LIMIT.saturating_sub(lines.len());
+            let mut remaining = available_lines;
+            if remaining == 0 {
+                tree_truncated = true;
+            } else {
+                let children = ordered_archive_children(&root.children);
+                render_archive_tree(
+                    &children,
+                    "",
+                    &mut remaining,
+                    &mut rendered_items,
+                    &mut lines,
+                    palette,
+                );
+                tree_truncated = rendered_items < entries.len();
+            }
         }
     }
 
+    let entry_count = entries.as_ref().map(Vec::len).unwrap_or(0);
     let mut notes = Vec::new();
     if config.scan_truncated {
         notes.push(format!(
             "scanned first {} of {} entries",
-            entries.len(),
-            total_items
+            entry_count, total_items
         ));
     }
     if tree_truncated {
         notes.push(format!(
             "showing first {} of {} entries",
-            rendered_items.max(entries.len().min(PREVIEW_RENDER_LINE_LIMIT)),
+            rendered_items.max(entry_count.min(PREVIEW_RENDER_LINE_LIMIT)),
             total_items
         ));
     }

@@ -260,6 +260,13 @@ pub(in crate::app) struct PreviewRequest {
 pub(in crate::app) struct ArchiveExtractRequest {
     pub(in crate::app) token: u64,
     pub(in crate::app) archive_path: PathBuf,
+    pub(in crate::app) password: Option<crate::archive::ArchivePassword>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum ArchivePasswordPrompt {
+    Required,
+    BadPassword,
 }
 
 #[derive(Debug)]
@@ -273,6 +280,8 @@ pub(in crate::app) struct ArchiveExtractBuild {
     pub(in crate::app) dest_dir: Option<PathBuf>,
     /// Populated only when `done = true`.
     pub(in crate::app) status: Option<String>,
+    /// Populated only when `done = true` and extraction needs password input.
+    pub(in crate::app) password_prompt: Option<ArchivePasswordPrompt>,
 }
 
 #[derive(Clone, Debug)]

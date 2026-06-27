@@ -31,6 +31,10 @@ impl App {
             return self.handle_restore_key(key);
         }
 
+        if self.overlays.archive_password.is_some() {
+            return self.handle_archive_password_key(key);
+        }
+
         if self.overlays.create.is_some() {
             return self.handle_create_key(key);
         }

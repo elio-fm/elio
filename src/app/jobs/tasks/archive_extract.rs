@@ -1,4 +1,5 @@
 use super::*;
+use crate::archive::ExtractError;
 use std::{
     sync::{
         Arc, Condvar, Mutex,
@@ -125,31 +126,35 @@ fn run_extract(
     let mut last_progress_at: Option<Instant> = None;
     let mut stopped_early = false;
 
-    let result = crate::archive::plan_extract(&request.archive_path).and_then(|plan| {
-        crate::archive::extract_archive(
-            &plan,
-            |progress| {
-                completed = progress.completed;
-                total = progress.total;
-                let _ = send_extract_progress(
-                    result_tx,
-                    request.token,
-                    completed,
-                    total,
-                    &mut last_progress_at,
-                );
-            },
-            || {
-                let stop = cancelled.load(Ordering::Relaxed)
-                    || cancel_token.load(Ordering::Relaxed) == request.token;
-                if stop {
-                    stopped_early = true;
-                }
-                stop
-            },
-        )
-    });
+    let result = crate::archive::plan_extract(&request.archive_path)
+        .map_err(ExtractError::from)
+        .and_then(|plan| {
+            crate::archive::extract_archive_with_password(
+                &plan,
+                request.password.as_ref(),
+                |progress| {
+                    completed = progress.completed;
+                    total = progress.total;
+                    let _ = send_extract_progress(
+                        result_tx,
+                        request.token,
+                        completed,
+                        total,
+                        &mut last_progress_at,
+                    );
+                },
+                || {
+                    let stop = cancelled.load(Ordering::Relaxed)
+                        || cancel_token.load(Ordering::Relaxed) == request.token;
+                    if stop {
+                        stopped_early = true;
+                    }
+                    stop
+                },
+            )
+        });
 
+    let mut password_prompt = None;
     let (dest_dir, status) = match result {
         Ok(summary) if stopped_early => {
             let noun = if summary.completed == 1 {
@@ -182,6 +187,14 @@ fn run_extract(
                 format!("Extracted {} {noun} to \"{name}\"", summary.completed),
             )
         }
+        Err(ExtractError::PasswordRequired) => {
+            password_prompt = Some(ArchivePasswordPrompt::Required);
+            (None, String::new())
+        }
+        Err(ExtractError::BadPassword) => {
+            password_prompt = Some(ArchivePasswordPrompt::BadPassword);
+            (None, String::new())
+        }
         Err(error) => {
             let name = request
                 .archive_path
@@ -198,7 +211,8 @@ fn run_extract(
         total,
         done: true,
         dest_dir,
-        status: Some(status),
+        status: (!status.is_empty()).then_some(status),
+        password_prompt,
     }));
 }
 
@@ -222,6 +236,7 @@ fn send_extract_progress(
             done: false,
             dest_dir: None,
             status: None,
+            password_prompt: None,
         }))
         .is_ok()
 }

@@ -3,7 +3,9 @@ use super::format::archive_format_name;
 use super::*;
 use bzip2::read::BzDecoder;
 use flate2::read::GzDecoder;
-use sevenz_rust2::{ArchiveReader as SevenZipArchiveReader, Password as SevenZipPassword};
+use sevenz_rust2::{
+    ArchiveReader as SevenZipArchiveReader, Error as SevenZipError, Password as SevenZipPassword,
+};
 use std::{
     fs::{self, File},
     io::Read,
@@ -62,6 +64,23 @@ pub(super) fn collect_preferred_archive_entries(
     }
 
     None
+}
+
+pub(super) fn seven_zip_listing_requires_password(
+    path: &Path,
+    canceled: &impl Fn() -> bool,
+) -> bool {
+    if canceled() {
+        return false;
+    }
+    let Ok(file) = File::open(path) else {
+        return false;
+    };
+    let error = SevenZipArchiveReader::new(file, SevenZipPassword::empty()).err();
+    matches!(
+        error,
+        Some(SevenZipError::PasswordRequired | SevenZipError::MaybeBadPassword(_))
+    ) && !canceled()
 }
 
 fn collect_seven_zip_listing(

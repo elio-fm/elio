@@ -9,13 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added native archive extraction for focused `.zip`, `.7z`, `.tar`, `.tar.gz`/`.tgz`, `.tar.xz`/`.txz`, `.tar.bz2`/`.tbz2`/`.tbz`, and `.tar.zst`/`.tzst` files, with a configurable `extract_archive` (`e`) shortcut, background progress, cancellation, and unique sibling destination folders. ([#90])
+- Added native archive extraction for focused `.zip`, `.7z`, `.tar`, `.tar.gz`/`.tgz`, `.tar.xz`/`.txz`, `.tar.bz2`/`.tbz2`/`.tbz`, and `.tar.zst`/`.tzst` files, with a configurable `extract_archive` (`e`) shortcut, background progress, cancellation, unique sibling destination folders, and password prompts for encrypted `.7z` archives. ([#90])
 - Added a `progress_bar` theme palette color for active background operation chips, used by archive extraction progress.
 - Made Go To entries configurable, allowing built-ins to be changed and custom entries to be added. ([#166])
 
 ### Changed
 
-- Prefer native archive listing for `.7z`, `.tar.xz`, `.tar.bz2`, and `.tar.zst` previews before falling back to external archive tools. ([#90])
+- Prefer native archive listing for `.7z`, `.tar.xz`, `.tar.bz2`, and `.tar.zst` previews before falling back to external archive tools, and keep encrypted `.7z` previews visible with a password-required notice. ([#90])
 - Places now switches to an icon-only rail in narrow windows before labels become overly truncated. ([#184])
 - Changed Open With to keep `$VISUAL` and `$EDITOR` labels on matching MIME-associated editors and place them directly below the system default association. ([#199])
 

@@ -105,6 +105,29 @@ pub(super) fn write_binary_zip_entries(path: &Path, entries: &[(&str, &[u8])]) {
     zip.finish().expect("failed to finish zip");
 }
 
+pub(super) fn write_encrypted_seven_zip_entries(
+    path: &Path,
+    password: &str,
+    entries: &[(&str, &[u8])],
+) {
+    let mut writer = sevenz_rust2::ArchiveWriter::create(path).expect("failed to create 7z");
+    writer.set_content_methods(vec![
+        sevenz_rust2::encoder_options::AesEncoderOptions::new(sevenz_rust2::Password::new(
+            password,
+        ))
+        .into(),
+        sevenz_rust2::encoder_options::Lzma2Options::default().into(),
+    ]);
+
+    for (name, contents) in entries {
+        writer
+            .push_archive_entry(sevenz_rust2::ArchiveEntry::new_file(name), Some(*contents))
+            .expect("failed to write 7z entry");
+    }
+
+    writer.finish().expect("failed to finish 7z");
+}
+
 pub(super) fn write_epub_fixture(path: &Path, sections: &[(&str, &str)]) {
     let file = File::create(path).expect("failed to create epub");
     let mut zip = ZipWriter::new(file);

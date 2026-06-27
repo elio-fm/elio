@@ -626,6 +626,9 @@ impl App {
         if let Some(r) = self.input.frame_state.restore_panel {
             rects.push(r);
         }
+        if let Some(r) = self.input.frame_state.archive_password_panel {
+            rects.push(r);
+        }
         if let Some(r) = self.input.frame_state.create_panel {
             rects.push(r);
         }
@@ -653,6 +656,7 @@ impl App {
     fn any_modal_overlay_open(&self) -> bool {
         self.overlays.trash.is_some()
             || self.overlays.restore.is_some()
+            || self.overlays.archive_password.is_some()
             || self.overlays.create.is_some()
             || self.overlays.rename.is_some()
             || self.overlays.bulk_rename.is_some()

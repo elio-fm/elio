@@ -21,7 +21,10 @@ use self::external::{
     collect_archive_listing_with_7z, fallback_single_file_archive_entry,
 };
 use self::format::{archive_default_label, archive_format_name, detect_archive_format};
-use self::internal::{collect_internal_archive_listing, collect_preferred_archive_entries};
+use self::internal::{
+    collect_internal_archive_listing, collect_preferred_archive_entries,
+    seven_zip_listing_requires_password,
+};
 use self::manifest::{ZipManifestMetadata, parse_zip_manifest, zip_manifest_sections};
 use self::render::{ArchiveRenderConfig, render_archive_preview};
 use super::*;
@@ -63,6 +66,25 @@ where
     }
     if let Some(preview) = build_internal_archive_preview(path, format, type_detail, canceled) {
         return Some(preview);
+    }
+    if matches!(format, ArchiveFormat::SevenZip)
+        && seven_zip_listing_requires_password(path, canceled)
+    {
+        let detail = type_detail.unwrap_or(archive_default_label(format));
+        return Some(render_archive_preview(ArchiveRenderConfig {
+            detail: detail.to_string(),
+            metadata: ArchiveMetadata {
+                format_label: Some(archive_format_name(format).to_string()),
+                physical_size: fs::metadata(path).ok().map(|metadata| metadata.len()),
+                ..ArchiveMetadata::default()
+            },
+            entries: None,
+            total_entries_hint: None,
+            empty_label: ARCHIVE_EMPTY_LABEL,
+            unavailable_label: "Archive contents require a password",
+            extra_sections: Vec::new(),
+            scan_truncated: false,
+        }));
     }
     build_external_archive_preview(path, format, type_detail, canceled)
 }

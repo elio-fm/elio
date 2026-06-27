@@ -366,6 +366,63 @@ fn zip_preview_renders_archive_details_and_tree() {
 }
 
 #[test]
+fn encrypted_seven_zip_preview_stays_responsive_with_password_notice() {
+    let root = temp_path("encrypted-7z-preview");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("secret.7z");
+    let mut writer = sevenz_rust2::ArchiveWriter::create(&path).expect("failed to create 7z");
+    writer.set_content_methods(vec![
+        sevenz_rust2::encoder_options::AesEncoderOptions::new(sevenz_rust2::Password::new(
+            "secret",
+        ))
+        .into(),
+        sevenz_rust2::encoder_options::Lzma2Options::default().into(),
+    ]);
+    writer
+        .push_archive_entry(
+            sevenz_rust2::ArchiveEntry::new_file("dir/file.txt"),
+            Some(&b"hello"[..]),
+        )
+        .expect("failed to write 7z entry");
+    writer.finish().expect("failed to finish 7z");
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+    assert_eq!(preview.kind, PreviewKind::Archive);
+    assert_eq!(preview.detail.as_deref(), Some("7z archive"));
+    assert!(line_texts.iter().any(|text| text == "Details"));
+    assert!(line_texts.iter().any(|text| text == "Contents"));
+    assert!(
+        line_texts
+            .iter()
+            .any(|text| text.contains("Archive contents require a password"))
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn corrupt_seven_zip_preview_does_not_claim_password_required() {
+    let root = temp_path("corrupt-7z-preview");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("broken.7z");
+    fs::write(&path, b"not a seven zip archive").expect("failed to write broken 7z");
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+    assert!(
+        line_texts
+            .iter()
+            .all(|text| !text.contains("require a password")),
+        "corrupt 7z must not be mislabeled as password-protected: {line_texts:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn rar_preview_uses_external_listing_when_available() {
     let root = temp_path("rar-preview");
     fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");

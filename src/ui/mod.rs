@@ -26,6 +26,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     state.restore_panel = None;
     state.restore_confirm_btn = None;
     state.restore_cancel_btn = None;
+    state.archive_password_panel = None;
     state.create_panel = None;
     state.rename_panel = None;
     state.create_list_area = None;
@@ -88,6 +89,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
         overlay_manager::render_trash_overlay(frame, area, app, state, palette);
     } else if app.restore_is_open() {
         overlay_manager::render_restore_overlay(frame, area, app, state, palette);
+    } else if app.archive_password_is_open() {
+        overlay_manager::render_archive_password_overlay(frame, area, app, state, palette);
     } else if app.create_is_open() {
         overlay_manager::render_create_overlay(frame, area, app, state, palette);
     } else if app.rename_is_open() {

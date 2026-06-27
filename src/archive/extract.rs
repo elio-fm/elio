@@ -2,8 +2,13 @@ use super::format::{ExtractBackend, ExtractFormat, unique_destination};
 use anyhow::{Context, Result, anyhow, bail};
 use bzip2::read::BzDecoder;
 use flate2::read::GzDecoder;
-use sevenz_rust2::{ArchiveEntry as SevenZipEntry, ArchiveReader, Password};
+use sevenz_rust2::{
+    ArchiveEntry as SevenZipEntry, ArchiveReader, Error as SevenZipError,
+    Password as SevenZipPassword,
+};
 use std::{
+    error::Error,
+    fmt::{self, Display},
     fs::{self, File},
     io::{self, Read},
     path::{Component, Path, PathBuf},
@@ -31,6 +36,61 @@ pub(crate) struct ExtractSummary {
     pub(crate) total: Option<usize>,
 }
 
+#[derive(Clone, Default, Eq, PartialEq)]
+pub(crate) struct ArchivePassword(String);
+
+impl ArchivePassword {
+    pub(crate) fn new(password: impl Into<String>) -> Self {
+        Self(password.into())
+    }
+
+    fn as_seven_zip_password(&self) -> SevenZipPassword {
+        SevenZipPassword::new(&self.0)
+    }
+}
+
+impl fmt::Debug for ArchivePassword {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ArchivePassword(<redacted>)")
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum ExtractError {
+    PasswordRequired,
+    BadPassword,
+    UnsupportedEncryption,
+    Other(anyhow::Error),
+}
+
+impl Display for ExtractError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PasswordRequired => f.write_str("archive requires a password"),
+            Self::BadPassword => f.write_str("wrong password"),
+            Self::UnsupportedEncryption => f.write_str("unsupported encrypted archive"),
+            Self::Other(error) => Display::fmt(error, f),
+        }
+    }
+}
+
+impl Error for ExtractError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Other(error) => error.source(),
+            _ => None,
+        }
+    }
+}
+
+impl From<anyhow::Error> for ExtractError {
+    fn from(error: anyhow::Error) -> Self {
+        Self::Other(error)
+    }
+}
+
+type ExtractResult<T> = std::result::Result<T, ExtractError>;
+
 pub(crate) fn plan_extract(path: &Path) -> Result<ExtractPlan> {
     let format =
         ExtractFormat::detect(path).ok_or_else(|| anyhow!(ExtractFormat::SUPPORTED_MESSAGE))?;
@@ -46,29 +106,113 @@ pub(crate) fn plan_extract(path: &Path) -> Result<ExtractPlan> {
     })
 }
 
-pub(crate) fn extract_archive<F, C>(
+pub(crate) fn extract_archive_with_password<F, C>(
     plan: &ExtractPlan,
+    password: Option<&ArchivePassword>,
     mut progress: F,
     cancelled: C,
-) -> Result<ExtractSummary>
+) -> ExtractResult<ExtractSummary>
 where
     F: FnMut(ExtractProgress),
     C: FnMut() -> bool,
 {
-    fs::create_dir(&plan.dest_dir)
-        .with_context(|| format!("Could not create {}", plan.dest_dir.display()))?;
+    preflight_extract(plan, password)?;
+
+    let staging_dir = staging_destination(&plan.dest_dir)?;
+    let extraction_plan = ExtractPlan {
+        archive_path: plan.archive_path.clone(),
+        dest_dir: staging_dir.clone(),
+        backend: plan.backend,
+    };
+    fs::create_dir(&staging_dir)
+        .with_context(|| format!("Could not create {}", staging_dir.display()))?;
+
+    let result = match extraction_plan.backend {
+        ExtractBackend::Zip => extract_zip(&extraction_plan, &mut progress, cancelled),
+        ExtractBackend::Tar(format) => {
+            extract_tar(format, &extraction_plan, &mut progress, cancelled)
+        }
+        ExtractBackend::SevenZip => {
+            extract_seven_zip(&extraction_plan, password, &mut progress, cancelled)
+        }
+    };
+    let summary = match result {
+        Ok(summary) => summary,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&staging_dir);
+            return Err(error);
+        }
+    };
+
+    let dest_dir = if plan.dest_dir.exists() {
+        let parent = plan
+            .dest_dir
+            .parent()
+            .ok_or_else(|| anyhow!("Cannot determine extraction parent"))?;
+        let name = plan
+            .dest_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| anyhow!("Cannot determine extraction folder name"))?;
+        unique_destination(parent, name)
+    } else {
+        plan.dest_dir.clone()
+    };
+    fs::rename(&staging_dir, &dest_dir).with_context(|| {
+        format!(
+            "Could not move {} to {}",
+            staging_dir.display(),
+            dest_dir.display()
+        )
+    })?;
+
+    Ok(ExtractSummary {
+        dest_dir,
+        completed: summary.completed,
+        total: summary.total,
+    })
+}
+
+fn preflight_extract(plan: &ExtractPlan, _password: Option<&ArchivePassword>) -> ExtractResult<()> {
     match plan.backend {
-        ExtractBackend::Zip => extract_zip(plan, &mut progress, cancelled),
-        ExtractBackend::Tar(format) => extract_tar(format, plan, &mut progress, cancelled),
-        ExtractBackend::SevenZip => extract_seven_zip(plan, &mut progress, cancelled),
+        ExtractBackend::Zip => preflight_zip(&plan.archive_path),
+        ExtractBackend::SevenZip | ExtractBackend::Tar(_) => Ok(()),
     }
+}
+
+fn preflight_zip(archive_path: &Path) -> ExtractResult<()> {
+    let file = File::open(archive_path)
+        .with_context(|| format!("Could not open {}", archive_path.display()))?;
+    let mut archive = zip::ZipArchive::new(file).context("Could not read ZIP archive")?;
+    let total = archive.len();
+    reject_encrypted_zip_entries(&mut archive, total)
+}
+
+fn staging_destination(dest_dir: &Path) -> Result<PathBuf> {
+    let parent = dest_dir
+        .parent()
+        .ok_or_else(|| anyhow!("Cannot determine extraction parent"))?;
+    let name = dest_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| anyhow!("Cannot determine extraction folder name"))?;
+    for attempt in 0..1000 {
+        let candidate = parent.join(format!(
+            ".{name}.elio-extracting-{}-{attempt}",
+            std::process::id()
+        ));
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    bail!("Could not reserve extraction workspace")
 }
 
 fn extract_zip<F, C>(
     plan: &ExtractPlan,
     progress: &mut F,
     mut cancelled: C,
-) -> Result<ExtractSummary>
+) -> ExtractResult<ExtractSummary>
 where
     F: FnMut(ExtractProgress),
     C: FnMut() -> bool,
@@ -77,6 +221,7 @@ where
         .with_context(|| format!("Could not open {}", plan.archive_path.display()))?;
     let mut archive = zip::ZipArchive::new(file).context("Could not read ZIP archive")?;
     let total = archive.len();
+    reject_encrypted_zip_entries(&mut archive, total)?;
     let mut completed = 0usize;
     progress(ExtractProgress {
         completed,
@@ -91,7 +236,7 @@ where
             .by_index(index)
             .context("Could not read ZIP entry")?;
         let Some(enclosed) = entry.enclosed_name() else {
-            bail!("Archive entry escapes the destination: {}", entry.name());
+            return Err(anyhow!("Archive entry escapes the destination: {}", entry.name()).into());
         };
         let out_path = checked_output_path(&plan.dest_dir, enclosed.as_ref())?;
         if entry.is_dir() {
@@ -127,12 +272,31 @@ where
     })
 }
 
+fn reject_encrypted_zip_entries<R: Read + io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    total: usize,
+) -> ExtractResult<()> {
+    for index in 0..total {
+        let entry = match archive.by_index(index) {
+            Ok(entry) => entry,
+            Err(error) if error.to_string().contains("Password required") => {
+                return Err(ExtractError::UnsupportedEncryption);
+            }
+            Err(error) => return Err(anyhow!(error).context("Could not read ZIP entry").into()),
+        };
+        if entry.encrypted() {
+            return Err(ExtractError::UnsupportedEncryption);
+        }
+    }
+    Ok(())
+}
+
 fn extract_tar<F, C>(
     format: ExtractFormat,
     plan: &ExtractPlan,
     progress: &mut F,
     cancelled: C,
-) -> Result<ExtractSummary>
+) -> ExtractResult<ExtractSummary>
 where
     F: FnMut(ExtractProgress),
     C: FnMut() -> bool,
@@ -171,17 +335,22 @@ where
 
 fn extract_seven_zip<F, C>(
     plan: &ExtractPlan,
+    password: Option<&ArchivePassword>,
     progress: &mut F,
     mut cancelled: C,
-) -> Result<ExtractSummary>
+) -> ExtractResult<ExtractSummary>
 where
     F: FnMut(ExtractProgress),
     C: FnMut() -> bool,
 {
     let file = File::open(&plan.archive_path)
         .with_context(|| format!("Could not open {}", plan.archive_path.display()))?;
-    let mut archive =
-        ArchiveReader::new(file, Password::empty()).context("Could not read 7z archive")?;
+    let password_provided = password.is_some();
+    let password = password
+        .map(ArchivePassword::as_seven_zip_password)
+        .unwrap_or_else(SevenZipPassword::empty);
+    let mut archive = ArchiveReader::new(file, password)
+        .map_err(|error| map_seven_zip_error(error, password_provided))?;
     let total = archive.archive().files.len();
     let mut completed = 0usize;
     let mut extract_error = None;
@@ -206,7 +375,7 @@ where
             });
             Ok(true)
         })
-        .context("Could not read 7z entries")?;
+        .map_err(|error| map_seven_zip_error(error, password_provided))?;
 
     if let Some(error) = extract_error {
         return Err(error);
@@ -222,7 +391,7 @@ fn extract_seven_zip_entry(
     plan: &ExtractPlan,
     entry: &SevenZipEntry,
     reader: &mut dyn Read,
-) -> Result<()> {
+) -> ExtractResult<()> {
     if entry.is_anti_item {
         return Ok(());
     }
@@ -250,7 +419,7 @@ fn extract_tar_with<R, D, F, C>(
     decoder: D,
     progress: &mut F,
     cancelled: C,
-) -> Result<ExtractSummary>
+) -> ExtractResult<ExtractSummary>
 where
     R: Read,
     D: Fn(File) -> Result<R, std::io::Error>,
@@ -259,11 +428,17 @@ where
 {
     let count_file = File::open(&plan.archive_path)
         .with_context(|| format!("Could not open {}", plan.archive_path.display()))?;
-    let total = count_tar_entries(decoder(count_file)?)
+    let total = count_tar_entries(decoder(count_file).context("Could not initialize TAR decoder")?)
         .with_context(|| format!("Could not read {} archive", format.label()))?;
     let file = File::open(&plan.archive_path)
         .with_context(|| format!("Could not open {}", plan.archive_path.display()))?;
-    extract_tar_reader(plan, decoder(file)?, Some(total), progress, cancelled)
+    extract_tar_reader(
+        plan,
+        decoder(file).context("Could not initialize TAR decoder")?,
+        Some(total),
+        progress,
+        cancelled,
+    )
 }
 
 fn count_tar_entries<R: Read>(reader: R) -> Result<usize> {
@@ -282,7 +457,7 @@ fn extract_tar_reader<R, F, C>(
     total: Option<usize>,
     progress: &mut F,
     mut cancelled: C,
-) -> Result<ExtractSummary>
+) -> ExtractResult<ExtractSummary>
 where
     R: Read,
     F: FnMut(ExtractProgress),
@@ -358,6 +533,23 @@ fn checked_output_name(dest_dir: &Path, entry_name: &str) -> Result<PathBuf> {
     checked_output_path(dest_dir, Path::new(&normalized))
 }
 
+fn map_seven_zip_error(error: SevenZipError, password_provided: bool) -> ExtractError {
+    match error {
+        SevenZipError::PasswordRequired => ExtractError::PasswordRequired,
+        SevenZipError::MaybeBadPassword(_) => ExtractError::BadPassword,
+        SevenZipError::ChecksumVerificationFailed if password_provided => ExtractError::BadPassword,
+        SevenZipError::UnsupportedCompressionMethod(method)
+            if method.to_ascii_lowercase().contains("aes") =>
+        {
+            ExtractError::UnsupportedEncryption
+        }
+        SevenZipError::Unsupported(message) if message.to_ascii_lowercase().contains("aes") => {
+            ExtractError::UnsupportedEncryption
+        }
+        error => ExtractError::Other(anyhow!("Could not read 7z archive: {error}")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -400,12 +592,41 @@ mod tests {
             zip.finish().unwrap();
         }
         let plan = plan_extract(&archive_path).unwrap();
-        let summary = extract_archive(&plan, |_| {}, || false).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
         assert_eq!(summary.completed, 2);
         assert_eq!(
             fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
             "hello"
         );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn encrypted_zip_fails_before_creating_destination() {
+        use zip::unstable::write::FileOptionsExt;
+
+        let root = temp_path("zip-encrypted");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.zip");
+        {
+            let file = File::create(&archive_path).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default()
+                .with_deprecated_encryption(b"secret")
+                .unwrap();
+            zip.start_file("file.txt", options).unwrap();
+            zip.write_all(b"hello").unwrap();
+            zip.finish().unwrap();
+        }
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let error = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap_err();
+
+        assert!(
+            matches!(error, ExtractError::UnsupportedEncryption),
+            "expected unsupported encryption, got {error:?}"
+        );
+        assert!(!plan.dest_dir.exists());
         let _ = fs::remove_dir_all(root);
     }
 
@@ -426,7 +647,7 @@ mod tests {
             tar.finish().unwrap();
         }
         let plan = plan_extract(&archive_path).unwrap();
-        let summary = extract_archive(&plan, |_| {}, || false).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
         assert_eq!(summary.completed, 2);
         assert_eq!(
             fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
@@ -453,7 +674,7 @@ mod tests {
             tar.finish().unwrap();
         }
         let plan = plan_extract(&archive_path).unwrap();
-        let summary = extract_archive(&plan, |_| {}, || false).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
         assert_eq!(summary.completed, 2);
         assert_eq!(
             fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
@@ -472,7 +693,7 @@ mod tests {
         });
 
         let plan = plan_extract(&archive_path).unwrap();
-        let summary = extract_archive(&plan, |_| {}, || false).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
 
         assert_eq!(summary.completed, 2);
         assert_eq!(
@@ -495,7 +716,7 @@ mod tests {
         });
 
         let plan = plan_extract(&archive_path).unwrap();
-        let summary = extract_archive(&plan, |_| {}, || false).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
 
         assert_eq!(summary.completed, 2);
         assert_eq!(
@@ -513,7 +734,7 @@ mod tests {
         write_zstd_tar(&archive_path);
 
         let plan = plan_extract(&archive_path).unwrap();
-        let summary = extract_archive(&plan, |_| {}, || false).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
 
         assert_eq!(summary.completed, 2);
         assert_eq!(
@@ -535,7 +756,9 @@ mod tests {
 
         let plan = plan_extract(&archive_path).unwrap();
         let mut progress = Vec::new();
-        let summary = extract_archive(&plan, |update| progress.push(update), || false).unwrap();
+        let summary =
+            extract_archive_with_password(&plan, None, |update| progress.push(update), || false)
+                .unwrap();
 
         assert_eq!(summary.completed, 2);
         assert_eq!(summary.total, Some(2));
@@ -553,6 +776,87 @@ mod tests {
     }
 
     #[test]
+    fn archive_password_debug_is_redacted() {
+        let rendered = format!("{:?}", ArchivePassword::new("secret"));
+
+        assert_eq!(rendered, "ArchivePassword(<redacted>)");
+        assert!(!rendered.contains("secret"));
+    }
+
+    #[test]
+    fn encrypted_seven_zip_requires_password() {
+        let root = temp_path("7z-encrypted-required");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.7z");
+        write_encrypted_seven_zip(
+            &archive_path,
+            "secret",
+            &[("dir", None), ("dir/file.txt", Some(b"hello"))],
+        );
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let error = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap_err();
+
+        assert!(matches!(error, ExtractError::PasswordRequired));
+        assert!(!plan.dest_dir.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn encrypted_seven_zip_rejects_wrong_password() {
+        let root = temp_path("7z-encrypted-wrong");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.7z");
+        write_encrypted_seven_zip(
+            &archive_path,
+            "secret",
+            &[("dir", None), ("dir/file.txt", Some(b"hello"))],
+        );
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let error = extract_archive_with_password(
+            &plan,
+            Some(&ArchivePassword::new("wrong")),
+            |_| {},
+            || false,
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, ExtractError::BadPassword));
+        assert!(!plan.dest_dir.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn encrypted_seven_zip_extracts_with_password() {
+        let root = temp_path("7z-encrypted-ok");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.7z");
+        write_encrypted_seven_zip(
+            &archive_path,
+            "secret",
+            &[("dir", None), ("dir/file.txt", Some(b"hello"))],
+        );
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let summary = extract_archive_with_password(
+            &plan,
+            Some(&ArchivePassword::new("secret")),
+            |_| {},
+            || false,
+        )
+        .unwrap();
+
+        assert_eq!(summary.completed, 2);
+        assert_eq!(summary.total, Some(2));
+        assert_eq!(
+            fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+            "hello"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn rejects_escaping_seven_zip_paths() {
         let root = temp_path("7z-slip");
         fs::create_dir_all(&root).unwrap();
@@ -560,7 +864,7 @@ mod tests {
         write_seven_zip(&archive_path, &[("../evil.txt", Some(b"bad"))]);
 
         let plan = plan_extract(&archive_path).unwrap();
-        let err = extract_archive(&plan, |_| {}, || false).unwrap_err();
+        let err = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap_err();
 
         assert!(err.to_string().contains("escapes the destination"));
         assert!(!root.join("evil.txt").exists());
@@ -606,6 +910,37 @@ mod tests {
 
     fn write_seven_zip(archive_path: &Path, entries: &[(&str, Option<&[u8]>)]) {
         let mut writer = sevenz_rust2::ArchiveWriter::create(archive_path).unwrap();
+        for (name, contents) in entries {
+            let entry = if contents.is_some() {
+                sevenz_rust2::ArchiveEntry::new_file(name)
+            } else {
+                sevenz_rust2::ArchiveEntry::new_directory(name)
+            };
+            match contents {
+                Some(contents) => {
+                    writer.push_archive_entry(entry, Some(*contents)).unwrap();
+                }
+                None => {
+                    writer.push_archive_entry::<&[u8]>(entry, None).unwrap();
+                }
+            }
+        }
+        writer.finish().unwrap();
+    }
+
+    fn write_encrypted_seven_zip(
+        archive_path: &Path,
+        password: &str,
+        entries: &[(&str, Option<&[u8]>)],
+    ) {
+        let mut writer = sevenz_rust2::ArchiveWriter::create(archive_path).unwrap();
+        writer.set_content_methods(vec![
+            sevenz_rust2::encoder_options::AesEncoderOptions::new(sevenz_rust2::Password::new(
+                password,
+            ))
+            .into(),
+            sevenz_rust2::encoder_options::Lzma2Options::default().into(),
+        ]);
         for (name, contents) in entries {
             let entry = if contents.is_some() {
                 sevenz_rust2::ArchiveEntry::new_file(name)

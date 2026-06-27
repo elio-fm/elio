@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    env,
+    env, fmt,
     path::PathBuf,
     sync::Arc,
     time::{Duration, Instant, SystemTime},
@@ -148,6 +148,25 @@ pub(super) struct RestoreOverlay {
     pub(super) targets: Vec<TrashTarget>,
     pub(super) scroll: usize,
     pub(super) confirmed: bool,
+}
+
+#[derive(Clone)]
+pub(super) struct ArchivePasswordOverlay {
+    pub(super) archive_path: PathBuf,
+    pub(super) input: String,
+    pub(super) cursor_col: usize,
+    pub(super) error: Option<String>,
+}
+
+impl fmt::Debug for ArchivePasswordOverlay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ArchivePasswordOverlay")
+            .field("archive_path", &self.archive_path)
+            .field("input", &"<redacted>")
+            .field("cursor_col", &self.cursor_col)
+            .field("error", &self.error)
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -611,6 +630,7 @@ pub(in crate::app) struct PreviewRuntime {
 pub(crate) struct OverlayState {
     pub(in crate::app) trash: Option<TrashOverlay>,
     pub(in crate::app) restore: Option<RestoreOverlay>,
+    pub(in crate::app) archive_password: Option<ArchivePasswordOverlay>,
     pub(in crate::app) create: Option<CreateOverlay>,
     pub(in crate::app) rename: Option<RenameOverlay>,
     pub(in crate::app) bulk_rename: Option<BulkRenameOverlay>,
@@ -632,6 +652,7 @@ pub(in crate::app) struct JobRuntime {
     pub(in crate::app) archive_extract_token: u64,
     pub(in crate::app) archive_extract_progress: Option<ArchiveExtractProgress>,
     pub(in crate::app) archive_extract_source_cwd: Option<PathBuf>,
+    pub(in crate::app) archive_extract_path: Option<PathBuf>,
     pub(in crate::app) paste_token: u64,
     pub(in crate::app) paste_progress: Option<PasteProgress>,
     pub(in crate::app) queued_pastes: VecDeque<QueuedPaste>,
@@ -798,6 +819,7 @@ impl App {
                 archive_extract_token: 0,
                 archive_extract_progress: None,
                 archive_extract_source_cwd: None,
+                archive_extract_path: None,
                 paste_token: 0,
                 paste_progress: None,
                 queued_pastes: VecDeque::new(),
