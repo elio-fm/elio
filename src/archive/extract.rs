@@ -2,6 +2,7 @@ use super::format::{ExtractBackend, ExtractFormat, unique_destination};
 use anyhow::{Context, Result, anyhow, bail};
 use bzip2::read::BzDecoder;
 use flate2::read::GzDecoder;
+use sevenz_rust2::{ArchiveEntry as SevenZipEntry, ArchiveReader, Password};
 use std::{
     fs::{self, File},
     io::{self, Read},
@@ -57,8 +58,9 @@ where
     fs::create_dir(&plan.dest_dir)
         .with_context(|| format!("Could not create {}", plan.dest_dir.display()))?;
     match plan.backend {
-        ExtractBackend::NativeZip => extract_zip(plan, &mut progress, cancelled),
-        ExtractBackend::NativeTar(format) => extract_tar(format, plan, &mut progress, cancelled),
+        ExtractBackend::Zip => extract_zip(plan, &mut progress, cancelled),
+        ExtractBackend::Tar(format) => extract_tar(format, plan, &mut progress, cancelled),
+        ExtractBackend::SevenZip => extract_seven_zip(plan, &mut progress, cancelled),
     }
 }
 
@@ -161,8 +163,85 @@ where
         ExtractFormat::TarZstd => {
             extract_tar_with(format, plan, ZstdDecoder::new, progress, cancelled)
         }
-        ExtractFormat::Zip => unreachable!("ZIP archives use the native ZIP backend"),
+        ExtractFormat::Zip | ExtractFormat::SevenZip => {
+            unreachable!("non-TAR archives use their own native backends")
+        }
     }
+}
+
+fn extract_seven_zip<F, C>(
+    plan: &ExtractPlan,
+    progress: &mut F,
+    mut cancelled: C,
+) -> Result<ExtractSummary>
+where
+    F: FnMut(ExtractProgress),
+    C: FnMut() -> bool,
+{
+    let file = File::open(&plan.archive_path)
+        .with_context(|| format!("Could not open {}", plan.archive_path.display()))?;
+    let mut archive =
+        ArchiveReader::new(file, Password::empty()).context("Could not read 7z archive")?;
+    let total = archive.archive().files.len();
+    let mut completed = 0usize;
+    let mut extract_error = None;
+
+    progress(ExtractProgress {
+        completed,
+        total: Some(total),
+    });
+    archive
+        .for_each_entries(|entry, reader| {
+            if cancelled() {
+                return Ok(false);
+            }
+            if let Err(error) = extract_seven_zip_entry(plan, entry, reader) {
+                extract_error = Some(error);
+                return Ok(false);
+            }
+            completed += 1;
+            progress(ExtractProgress {
+                completed,
+                total: Some(total),
+            });
+            Ok(true)
+        })
+        .context("Could not read 7z entries")?;
+
+    if let Some(error) = extract_error {
+        return Err(error);
+    }
+    Ok(ExtractSummary {
+        dest_dir: plan.dest_dir.clone(),
+        completed,
+        total: Some(total),
+    })
+}
+
+fn extract_seven_zip_entry(
+    plan: &ExtractPlan,
+    entry: &SevenZipEntry,
+    reader: &mut dyn Read,
+) -> Result<()> {
+    if entry.is_anti_item {
+        return Ok(());
+    }
+    let out_path = checked_output_name(&plan.dest_dir, &entry.name)?;
+    if entry.is_directory {
+        fs::create_dir_all(&out_path)
+            .with_context(|| format!("Could not create {}", out_path.display()))?;
+    } else {
+        if let Some(parent) = out_path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Could not create {}", parent.display()))?;
+        }
+        let mut out = File::create(&out_path)
+            .with_context(|| format!("Could not create {}", out_path.display()))?;
+        let mut limited = reader.take(entry.size);
+        io::copy(&mut limited, &mut out)
+            .with_context(|| format!("Could not write {}", out_path.display()))?;
+    }
+    Ok(())
 }
 
 fn extract_tar_with<R, D, F, C>(
@@ -272,6 +351,11 @@ fn checked_output_path(dest_dir: &Path, entry_path: &Path) -> Result<PathBuf> {
         );
     }
     Ok(out)
+}
+
+fn checked_output_name(dest_dir: &Path, entry_name: &str) -> Result<PathBuf> {
+    let normalized = entry_name.replace('\\', "/");
+    checked_output_path(dest_dir, Path::new(&normalized))
 }
 
 #[cfg(test)]
@@ -439,6 +523,50 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    #[test]
+    fn extracts_seven_zip_archive() {
+        let root = temp_path("7z");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.7z");
+        write_seven_zip(
+            &archive_path,
+            &[("dir", None), ("dir/file.txt", Some(b"hello"))],
+        );
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let mut progress = Vec::new();
+        let summary = extract_archive(&plan, |update| progress.push(update), || false).unwrap();
+
+        assert_eq!(summary.completed, 2);
+        assert_eq!(summary.total, Some(2));
+        assert_eq!(
+            progress
+                .last()
+                .map(|update| (update.completed, update.total)),
+            Some((2, Some(2)))
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+            "hello"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_escaping_seven_zip_paths() {
+        let root = temp_path("7z-slip");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.7z");
+        write_seven_zip(&archive_path, &[("../evil.txt", Some(b"bad"))]);
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let err = extract_archive(&plan, |_| {}, || false).unwrap_err();
+
+        assert!(err.to_string().contains("escapes the destination"));
+        assert!(!root.join("evil.txt").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
     fn write_compressed_tar<W, D>(archive_path: &Path, encoder: D)
     where
         W: Write,
@@ -474,5 +602,25 @@ mod tests {
         }
         let compressed = zstd::stream::encode_all(tar_bytes.as_slice(), 0).unwrap();
         fs::write(archive_path, compressed).unwrap();
+    }
+
+    fn write_seven_zip(archive_path: &Path, entries: &[(&str, Option<&[u8]>)]) {
+        let mut writer = sevenz_rust2::ArchiveWriter::create(archive_path).unwrap();
+        for (name, contents) in entries {
+            let entry = if contents.is_some() {
+                sevenz_rust2::ArchiveEntry::new_file(name)
+            } else {
+                sevenz_rust2::ArchiveEntry::new_directory(name)
+            };
+            match contents {
+                Some(contents) => {
+                    writer.push_archive_entry(entry, Some(*contents)).unwrap();
+                }
+                None => {
+                    writer.push_archive_entry::<&[u8]>(entry, None).unwrap();
+                }
+            }
+        }
+        writer.finish().unwrap();
     }
 }

@@ -8,17 +8,19 @@ pub(crate) enum ExtractFormat {
     TarXz,
     TarBzip2,
     TarZstd,
+    SevenZip,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ExtractBackend {
-    NativeZip,
-    NativeTar(ExtractFormat),
+    Zip,
+    Tar(ExtractFormat),
+    SevenZip,
 }
 
 impl ExtractFormat {
     pub(crate) const SUPPORTED_MESSAGE: &'static str =
-        "Extraction supports ZIP, TAR, TAR.GZ, TAR.XZ, TAR.BZ2, and TAR.ZST";
+        "Extraction supports ZIP, 7z, TAR, TAR.GZ, TAR.XZ, TAR.BZ2, and TAR.ZST";
 
     pub(crate) fn detect(path: &Path) -> Option<Self> {
         let name = path
@@ -44,6 +46,7 @@ impl ExtractFormat {
             .as_deref()
         {
             Some("zip") => Some(Self::Zip),
+            Some("7z") => Some(Self::SevenZip),
             Some("tar") => Some(Self::Tar),
             _ => None,
         }
@@ -54,7 +57,7 @@ impl ExtractFormat {
         let lower = name.to_ascii_lowercase();
         let stem = [
             ".tar.bz2", ".tar.zst", ".tar.gz", ".tar.xz", ".tbz2", ".tzst", ".tgz", ".txz", ".tbz",
-            ".zip", ".tar",
+            ".zip", ".7z", ".tar",
         ]
         .iter()
         .find_map(|suffix| {
@@ -72,9 +75,10 @@ impl ExtractFormat {
 
     pub(crate) fn backend(self) -> ExtractBackend {
         match self {
-            Self::Zip => ExtractBackend::NativeZip,
+            Self::Zip => ExtractBackend::Zip,
+            Self::SevenZip => ExtractBackend::SevenZip,
             Self::Tar | Self::TarGzip | Self::TarXz | Self::TarBzip2 | Self::TarZstd => {
-                ExtractBackend::NativeTar(self)
+                ExtractBackend::Tar(self)
             }
         }
     }
@@ -87,6 +91,7 @@ impl ExtractFormat {
             Self::TarXz => "TAR.XZ",
             Self::TarBzip2 => "TAR.BZ2",
             Self::TarZstd => "TAR.ZST",
+            Self::SevenZip => "7z",
         }
     }
 }
@@ -132,6 +137,10 @@ mod tests {
             Some(ExtractFormat::Tar)
         );
         assert_eq!(
+            ExtractFormat::detect(Path::new("app.7z")),
+            Some(ExtractFormat::SevenZip)
+        );
+        assert_eq!(
             ExtractFormat::detect(Path::new("app.tar.gz")),
             Some(ExtractFormat::TarGzip)
         );
@@ -171,27 +180,28 @@ mod tests {
 
     #[test]
     fn maps_formats_to_native_backends() {
-        assert_eq!(ExtractFormat::Zip.backend(), ExtractBackend::NativeZip);
+        assert_eq!(ExtractFormat::Zip.backend(), ExtractBackend::Zip);
         assert_eq!(
             ExtractFormat::Tar.backend(),
-            ExtractBackend::NativeTar(ExtractFormat::Tar)
+            ExtractBackend::Tar(ExtractFormat::Tar)
         );
         assert_eq!(
             ExtractFormat::TarGzip.backend(),
-            ExtractBackend::NativeTar(ExtractFormat::TarGzip)
+            ExtractBackend::Tar(ExtractFormat::TarGzip)
         );
         assert_eq!(
             ExtractFormat::TarXz.backend(),
-            ExtractBackend::NativeTar(ExtractFormat::TarXz)
+            ExtractBackend::Tar(ExtractFormat::TarXz)
         );
         assert_eq!(
             ExtractFormat::TarBzip2.backend(),
-            ExtractBackend::NativeTar(ExtractFormat::TarBzip2)
+            ExtractBackend::Tar(ExtractFormat::TarBzip2)
         );
         assert_eq!(
             ExtractFormat::TarZstd.backend(),
-            ExtractBackend::NativeTar(ExtractFormat::TarZstd)
+            ExtractBackend::Tar(ExtractFormat::TarZstd)
         );
+        assert_eq!(ExtractFormat::SevenZip.backend(), ExtractBackend::SevenZip);
     }
 
     #[test]
@@ -202,6 +212,10 @@ mod tests {
         );
         assert_eq!(
             ExtractFormat::stem_for_destination(Path::new("app.tar")).as_deref(),
+            Some("app")
+        );
+        assert_eq!(
+            ExtractFormat::stem_for_destination(Path::new("app.7z")).as_deref(),
             Some("app")
         );
         assert_eq!(

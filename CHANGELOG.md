@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added native archive extraction for focused `.zip`, `.tar`, `.tar.gz`/`.tgz`, `.tar.xz`/`.txz`, `.tar.bz2`/`.tbz2`/`.tbz`, and `.tar.zst`/`.tzst` files, with a configurable `extract_archive` (`e`) shortcut, background progress, cancellation, and unique sibling destination folders. ([#90])
+- Added native archive extraction for focused `.zip`, `.7z`, `.tar`, `.tar.gz`/`.tgz`, `.tar.xz`/`.txz`, `.tar.bz2`/`.tbz2`/`.tbz`, and `.tar.zst`/`.tzst` files, with a configurable `extract_archive` (`e`) shortcut, background progress, cancellation, and unique sibling destination folders. ([#90])
 - Added a `progress_bar` theme palette color for active background operation chips, used by archive extraction progress.
 - Made Go To entries configurable, allowing built-ins to be changed and custom entries to be added. ([#166])
 
