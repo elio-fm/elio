@@ -61,7 +61,7 @@ where
     if let Some(preview) = build_zip_archive_preview(path, format, type_detail, canceled) {
         return Some(preview);
     }
-    if let Some(preview) = build_tar_archive_preview(path, format, type_detail) {
+    if let Some(preview) = build_internal_archive_preview(path, format, type_detail, canceled) {
         return Some(preview);
     }
     build_external_archive_preview(path, format, type_detail, canceled)
@@ -162,13 +162,17 @@ where
     Some(preview)
 }
 
-fn build_tar_archive_preview(
+fn build_internal_archive_preview<F>(
     path: &Path,
     format: ArchiveFormat,
     type_detail: Option<&'static str>,
-) -> Option<PreviewContent> {
+    canceled: &F,
+) -> Option<PreviewContent>
+where
+    F: Fn() -> bool,
+{
     let (metadata, entries, total_entries, scan_truncated) =
-        collect_internal_archive_listing(path, format)?;
+        collect_internal_archive_listing(path, format, canceled)?;
     let detail = type_detail.unwrap_or(archive_default_label(format));
 
     Some(render_archive_preview(ArchiveRenderConfig {
@@ -192,9 +196,9 @@ fn build_external_archive_preview<F>(
 where
     F: Fn() -> bool,
 {
-    // Common ZIP and TAR previews are handled internally above. This path is for
-    // recovery and uncommon archive types, where 7z provides the broadest coverage
-    // and bsdtar remains a final generic fallback.
+    // Common ZIP, TAR, and 7z previews are handled internally above. This path
+    // is for recovery and uncommon archive types, where 7z provides the
+    // broadest coverage and bsdtar remains a final generic fallback.
     let detail = type_detail.unwrap_or(archive_default_label(format));
     if canceled() {
         return None;

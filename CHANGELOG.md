@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Prefer native archive listing for `.7z`, `.tar.xz`, `.tar.bz2`, and `.tar.zst` previews before falling back to external archive tools. ([#90])
 - Places now switches to an icon-only rail in narrow windows before labels become overly truncated. ([#184])
 - Changed Open With to keep `$VISUAL` and `$EDITOR` labels on matching MIME-associated editors and place them directly below the system default association. ([#199])
 
