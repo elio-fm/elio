@@ -11,6 +11,7 @@ use std::{
 
 const ARCHIVE_EXTERNAL_COMMAND_TIMEOUT: Duration = Duration::from_secs(2);
 const ARCHIVE_EXTERNAL_COMMAND_POLL: Duration = Duration::from_millis(20);
+const SEVEN_ZIP_PROGRAMS: &[&str] = &["7z", "7zz", "7za"];
 
 static ARCHIVE_OUTPUT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -87,8 +88,14 @@ pub(super) fn collect_archive_listing_with_7z<F>(
 where
     F: Fn() -> bool,
 {
-    let output = run_archive_listing_command("7z", &["l", "-slt"], path, canceled)?;
-    parse_7z_listing(&String::from_utf8_lossy(&output))
+    for &program in SEVEN_ZIP_PROGRAMS {
+        if let Some(listing) = run_archive_listing_command(program, &["l", "-slt"], path, canceled)
+            .and_then(|output| parse_7z_listing(&String::from_utf8_lossy(&output)))
+        {
+            return Some(listing);
+        }
+    }
+    None
 }
 
 fn run_archive_listing_command<F>(

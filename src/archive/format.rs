@@ -9,6 +9,7 @@ pub(crate) enum ExtractFormat {
     TarBzip2,
     TarZstd,
     SevenZip,
+    Rar,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -16,11 +17,12 @@ pub(crate) enum ExtractBackend {
     Zip,
     Tar(ExtractFormat),
     SevenZip,
+    ExternalSevenZip,
 }
 
 impl ExtractFormat {
     pub(crate) const SUPPORTED_MESSAGE: &'static str =
-        "Extraction supports ZIP, 7z, TAR, TAR.GZ, TAR.XZ, TAR.BZ2, and TAR.ZST";
+        "Extraction supports ZIP, 7z, RAR, TAR, TAR.GZ, TAR.XZ, TAR.BZ2, and TAR.ZST";
 
     pub(crate) fn detect(path: &Path) -> Option<Self> {
         let name = path
@@ -47,6 +49,7 @@ impl ExtractFormat {
         {
             Some("zip") => Some(Self::Zip),
             Some("7z") => Some(Self::SevenZip),
+            Some("rar") => Some(Self::Rar),
             Some("tar") => Some(Self::Tar),
             _ => None,
         }
@@ -57,7 +60,7 @@ impl ExtractFormat {
         let lower = name.to_ascii_lowercase();
         let stem = [
             ".tar.bz2", ".tar.zst", ".tar.gz", ".tar.xz", ".tbz2", ".tzst", ".tgz", ".txz", ".tbz",
-            ".zip", ".7z", ".tar",
+            ".zip", ".7z", ".rar", ".tar",
         ]
         .iter()
         .find_map(|suffix| {
@@ -77,6 +80,7 @@ impl ExtractFormat {
         match self {
             Self::Zip => ExtractBackend::Zip,
             Self::SevenZip => ExtractBackend::SevenZip,
+            Self::Rar => ExtractBackend::ExternalSevenZip,
             Self::Tar | Self::TarGzip | Self::TarXz | Self::TarBzip2 | Self::TarZstd => {
                 ExtractBackend::Tar(self)
             }
@@ -92,6 +96,7 @@ impl ExtractFormat {
             Self::TarBzip2 => "TAR.BZ2",
             Self::TarZstd => "TAR.ZST",
             Self::SevenZip => "7z",
+            Self::Rar => "RAR",
         }
     }
 }
@@ -139,6 +144,10 @@ mod tests {
         assert_eq!(
             ExtractFormat::detect(Path::new("app.7z")),
             Some(ExtractFormat::SevenZip)
+        );
+        assert_eq!(
+            ExtractFormat::detect(Path::new("app.rar")),
+            Some(ExtractFormat::Rar)
         );
         assert_eq!(
             ExtractFormat::detect(Path::new("app.tar.gz")),
@@ -202,6 +211,10 @@ mod tests {
             ExtractBackend::Tar(ExtractFormat::TarZstd)
         );
         assert_eq!(ExtractFormat::SevenZip.backend(), ExtractBackend::SevenZip);
+        assert_eq!(
+            ExtractFormat::Rar.backend(),
+            ExtractBackend::ExternalSevenZip
+        );
     }
 
     #[test]
@@ -216,6 +229,10 @@ mod tests {
         );
         assert_eq!(
             ExtractFormat::stem_for_destination(Path::new("app.7z")).as_deref(),
+            Some("app")
+        );
+        assert_eq!(
+            ExtractFormat::stem_for_destination(Path::new("app.rar")).as_deref(),
             Some("app")
         );
         assert_eq!(
