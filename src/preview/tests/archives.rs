@@ -396,7 +396,7 @@ fn encrypted_seven_zip_preview_stays_responsive_with_password_notice() {
     assert!(
         line_texts
             .iter()
-            .any(|text| text.contains("Archive contents require a password"))
+            .any(|text| text.contains("Password-protected"))
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -412,11 +412,72 @@ fn corrupt_seven_zip_preview_does_not_claim_password_required() {
     let preview = build_preview(&file_entry(path));
     let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
 
+    assert_eq!(preview.kind, PreviewKind::Archive);
+    assert_eq!(preview.detail.as_deref(), Some("7z archive"));
+    assert!(
+        line_texts.iter().any(|text| text.contains("Unavailable")),
+        "corrupt 7z should stay in archive preview: {line_texts:?}"
+    );
     assert!(
         line_texts
             .iter()
             .all(|text| !text.contains("require a password")),
         "corrupt 7z must not be mislabeled as password-protected: {line_texts:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn corrupt_zip_preview_stays_archive_when_contents_are_unavailable() {
+    let root = temp_path("corrupt-zip-preview");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("broken.zip");
+    fs::write(&path, b"not a zip archive").expect("failed to write broken zip");
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+    assert_eq!(preview.kind, PreviewKind::Archive);
+    assert_eq!(preview.detail.as_deref(), Some("ZIP archive"));
+    assert!(line_texts.iter().any(|text| text == "Details"));
+    assert!(line_texts.iter().any(|text| text == "Contents"));
+    assert!(
+        line_texts.iter().any(|text| text.contains("Unavailable")),
+        "known archive failures should not fall through to binary preview: {line_texts:?}"
+    );
+    assert!(
+        line_texts
+            .iter()
+            .all(|text| !text.contains("Binary or unsupported file")),
+        "known archive failures should not render binary fallback: {line_texts:?}"
+    );
+    assert_eq!(preview.status_note.as_deref(), None);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn unreadable_rar_preview_stays_archive_when_contents_are_unavailable() {
+    let root = temp_path("unreadable-rar-preview");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("broken.rar");
+    fs::write(&path, b"not a rar archive").expect("failed to write broken rar");
+
+    let preview = build_preview(&file_entry(path));
+    let line_texts: Vec<_> = preview.lines.iter().map(line_text).collect();
+
+    assert_eq!(preview.kind, PreviewKind::Archive);
+    assert_eq!(preview.detail.as_deref(), Some("RAR archive"));
+    assert!(
+        line_texts.iter().any(|text| text.contains("Unavailable")),
+        "unreadable RAR should stay in archive preview: {line_texts:?}"
+    );
+    assert!(
+        line_texts
+            .iter()
+            .all(|text| !text.contains("Binary or unsupported file")),
+        "unreadable RAR should not render binary fallback: {line_texts:?}"
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

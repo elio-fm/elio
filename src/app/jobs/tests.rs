@@ -380,6 +380,35 @@ fn high_priority_preview_cancels_active_stale_preview_work() {
 }
 
 #[test]
+fn high_priority_preview_drops_stale_pending_high_preview_work() {
+    let scheduler = JobScheduler::new_for_tests(0, 0, 4);
+
+    for (name, token) in [("stale.rar", 1), ("current.rar", 2)] {
+        assert!(scheduler.submit_preview(preview_request(
+            Entry {
+                path: PathBuf::from(name),
+                name: name.to_string(),
+                name_key: name.to_string(),
+                kind: EntryKind::File,
+                symlink: None,
+                size: token,
+                modified: None,
+                readonly: false,
+            },
+            token,
+            PreviewPriority::High,
+        )));
+    }
+
+    let snapshot = scheduler.snapshot();
+    assert_eq!(
+        snapshot.preview_pending_high,
+        vec![preview_job_key("current.rar", 2)]
+    );
+    assert!(snapshot.preview_pending_low.is_empty());
+}
+
+#[test]
 fn scheduler_reports_pending_work_when_jobs_are_queued() {
     let scheduler = JobScheduler::new_for_tests(0, 0, 2);
     assert!(!scheduler.has_pending_work());

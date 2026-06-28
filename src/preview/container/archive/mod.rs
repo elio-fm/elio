@@ -81,12 +81,19 @@ where
             entries: None,
             total_entries_hint: None,
             empty_label: ARCHIVE_EMPTY_LABEL,
-            unavailable_label: "Archive contents require a password",
+            unavailable_label: "Password-protected",
             extra_sections: Vec::new(),
             scan_truncated: false,
         }));
     }
-    build_external_archive_preview(path, format, type_detail, canceled)
+    if let Some(preview) = build_external_archive_preview(path, format, type_detail, canceled) {
+        return Some(preview);
+    }
+    if canceled() {
+        None
+    } else {
+        Some(build_unavailable_archive_preview(path, format, type_detail))
+    }
 }
 
 fn build_zip_archive_preview<F>(
@@ -225,7 +232,9 @@ where
     if canceled() {
         return None;
     }
-    if let Some(entries) = collect_preferred_archive_entries(path, format, canceled) {
+    if let Some(entries) = collect_preferred_archive_entries(path, format, canceled)
+        && !entries.is_empty()
+    {
         return Some(render_archive_preview(ArchiveRenderConfig {
             detail: detail.to_string(),
             metadata: ArchiveMetadata {
@@ -264,6 +273,7 @@ where
 
     if matches!(format, ArchiveFormat::Rar)
         && let Some(entries) = collect_archive_entries_with_unrar(path, canceled)
+        && !entries.is_empty()
     {
         return Some(render_archive_preview(ArchiveRenderConfig {
             detail: detail.to_string(),
@@ -285,6 +295,9 @@ where
         return None;
     }
     let entries = collect_archive_entries_with_bsdtar(path, canceled)?;
+    if entries.is_empty() {
+        return None;
+    }
 
     Some(render_archive_preview(ArchiveRenderConfig {
         detail: detail.to_string(),
@@ -299,6 +312,28 @@ where
         extra_sections: Vec::new(),
         scan_truncated: false,
     }))
+}
+
+fn build_unavailable_archive_preview(
+    path: &Path,
+    format: ArchiveFormat,
+    type_detail: Option<&'static str>,
+) -> PreviewContent {
+    let detail = type_detail.unwrap_or(archive_default_label(format));
+    render_archive_preview(ArchiveRenderConfig {
+        detail: detail.to_string(),
+        metadata: ArchiveMetadata {
+            format_label: Some(archive_format_name(format).to_string()),
+            physical_size: fs::metadata(path).ok().map(|metadata| metadata.len()),
+            ..ArchiveMetadata::default()
+        },
+        entries: None,
+        total_entries_hint: None,
+        empty_label: ARCHIVE_EMPTY_LABEL,
+        unavailable_label: "Unavailable",
+        extra_sections: Vec::new(),
+        scan_truncated: false,
+    })
 }
 
 #[cfg(test)]

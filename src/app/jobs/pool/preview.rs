@@ -141,6 +141,7 @@ impl PreviewPool {
                     lock_unpoison(&self.metrics).preview_promotions += 1;
                 }
                 let evicted = trim_preview_queue_for_high(&mut state);
+                discard_stale_pending_high_previews(&mut state, &key);
                 cancel_stale_active_previews(&state, &key);
                 state.queued_high_keys.insert(key);
                 state.pending_high.push_back(request);
@@ -399,6 +400,18 @@ fn preview_pending_len(state: &PreviewState) -> usize {
 
 fn preview_active_contains(state: &PreviewState, key: &PreviewJobKey) -> bool {
     state.active_jobs.iter().any(|job| job.key == *key)
+}
+
+fn discard_stale_pending_high_previews(state: &mut PreviewState, keep: &PreviewJobKey) {
+    state.pending_high.retain(|request| {
+        let key = PreviewJobKey::from_request(request);
+        if &key == keep {
+            true
+        } else {
+            state.queued_high_keys.remove(&key);
+            false
+        }
+    });
 }
 
 fn cancel_stale_active_previews(state: &PreviewState, keep: &PreviewJobKey) {

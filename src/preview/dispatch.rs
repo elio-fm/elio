@@ -205,7 +205,8 @@ where
     {
         return preview;
     }
-    if facts.builtin_class == FileClass::Archive {
+    if facts.builtin_class == FileClass::Archive && preview_spec.kind != file_info::PreviewKind::Iso
+    {
         if let Some(preview) = container::build_archive_preview(
             &entry.path,
             type_detail,

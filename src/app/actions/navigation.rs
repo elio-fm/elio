@@ -130,8 +130,14 @@ impl App {
             return preview_mode;
         };
         let variant = self.preview_request_options_for_entry(&entry);
-        let builtin_class = file_info::inspect_entry_cached(&entry).builtin_class;
-        let cold_heavy_preview = matches!(builtin_class, FileClass::Audio | FileClass::Video)
+        let facts = file_info::inspect_entry_cached(&entry);
+        let cold_navigation_heavy_preview =
+            matches!(facts.builtin_class, FileClass::Audio | FileClass::Video)
+                || matches!(
+                    facts.specific_type_label,
+                    Some("RAR archive" | "Comic RAR archive")
+                );
+        let cold_heavy_preview = cold_navigation_heavy_preview
             && preview_work_class(&entry, &variant) == PreviewWorkClass::Heavy
             && self.cached_preview_for(&entry, &variant).is_none();
         let sixel_static_image = self.sixel_static_image_preview_for_entry(&entry);
@@ -544,4 +550,51 @@ fn entry_from_existing_file(path: &Path) -> Option<Entry> {
     crate::fs::entry_from_path(path.to_path_buf(), name)
         .ok()
         .filter(|entry| !entry.is_dir())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn temp_path(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("elio-navigation-{label}-{unique}"))
+    }
+
+    #[test]
+    fn cold_rar_preview_navigation_defers_preview_job_until_idle() {
+        let root = temp_path("rar-deferred-preview");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        fs::write(root.join("a.txt"), "ready").expect("failed to write text fixture");
+        let rar = root.join("b.rar");
+        fs::write(&rar, b"not-a-real-rar").expect("failed to write rar fixture");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        let before = app.scheduler_metrics();
+        let rar_index = app
+            .navigation
+            .entries
+            .iter()
+            .position(|entry| entry.path == rar)
+            .expect("rar fixture should be visible");
+
+        app.set_selected(rar_index);
+        let after = app.scheduler_metrics();
+
+        assert!(app.preview.state.deferred_refresh_at.is_some());
+        assert_eq!(
+            after.preview_jobs_submitted_high, before.preview_jobs_submitted_high,
+            "cold RAR selection should wait for the deferred refresh instead of immediately queuing heavy preview work"
+        );
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
 }

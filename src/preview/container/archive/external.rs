@@ -108,6 +108,7 @@ where
     let mut child = Command::new(program)
         .args(args)
         .arg(path)
+        .stdin(Stdio::null())
         .stdout(Stdio::from(output_file))
         .stderr(Stdio::null())
         .spawn()
@@ -331,6 +332,24 @@ images/
         assert!(
             started_at.elapsed() < Duration::from_secs(1),
             "canceled archive command should not wait for the child process to finish"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn external_archive_command_does_not_inherit_stdin() {
+        let started_at = Instant::now();
+        let output = run_archive_listing_command(
+            "sh",
+            &["-c", "read ignored || exit 7", "sh"],
+            std::path::Path::new("ignored.rar"),
+            &|| false,
+        );
+
+        assert!(output.is_none());
+        assert!(
+            started_at.elapsed() < Duration::from_secs(1),
+            "archive commands must not block the UI waiting for interactive password input"
         );
     }
 
