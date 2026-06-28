@@ -201,7 +201,7 @@ fn run_extract(
                 .file_name()
                 .and_then(|name| name.to_str())
                 .unwrap_or("archive");
-            (None, format!("Could not extract \"{name}\": {error}"))
+            (None, format!("Cannot extract \"{name}\" — {error}"))
         }
     };
 
