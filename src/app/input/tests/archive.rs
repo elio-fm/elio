@@ -1,6 +1,7 @@
 use super::super::*;
 use super::helpers::{
-    temp_path, wait_for_directory_load, write_binary_zip_entries, write_encrypted_seven_zip_entries,
+    temp_path, wait_for_directory_load, write_binary_zip_entries,
+    write_encrypted_seven_zip_entries, write_encrypted_zip_entries,
 };
 use std::{fs, thread, time::Duration};
 
@@ -45,6 +46,62 @@ fn e_prompts_and_retries_encrypted_seven_zip_archive() {
     let password = archive_test_password(&root);
     let wrong_password = format!("{password}-wrong");
     write_encrypted_seven_zip_entries(&archive, &password, &[("dir/file.txt", b"hello")]);
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('e'))))
+        .expect("e should start archive extraction");
+    wait_for_archive_password_prompt(&mut app);
+
+    assert!(app.archive_password_is_open());
+    assert_eq!(app.archive_password_error(), None);
+    assert!(!root.join("sample").exists());
+
+    type_archive_password(&mut app, &wrong_password);
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
+        .expect("enter should submit wrong password");
+    wait_for_archive_password_prompt(&mut app);
+
+    assert!(app.archive_password_is_open());
+    assert_eq!(app.archive_password_error(), Some("Wrong password"));
+    assert_eq!(app.archive_password_input(), "");
+
+    type_archive_password(&mut app, &password);
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
+        .expect("enter should submit correct password");
+
+    let extracted_file = root.join("sample/dir/file.txt");
+    for _ in 0..200 {
+        let _ = app.process_background_jobs();
+        if extracted_file.exists()
+            && app.jobs.archive_extract_progress.is_none()
+            && !app.archive_password_is_open()
+        {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    wait_for_directory_load(&mut app);
+
+    assert_eq!(fs::read_to_string(&extracted_file).unwrap(), "hello");
+    assert_eq!(app.status_message(), "Extracted 1 item to \"sample\"");
+    assert_eq!(
+        app.selected_entry().map(|entry| entry.path.as_path()),
+        Some(root.join("sample").as_path())
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn e_prompts_and_retries_encrypted_zip_archive() {
+    let root = temp_path("extract-encrypted-zip-key");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let archive = root.join("sample.zip");
+    let password = archive_test_password(&root);
+    let wrong_password = format!("{password}-wrong");
+    write_encrypted_zip_entries(&archive, &password, &[("dir/file.txt", b"hello")]);
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);

@@ -34,7 +34,7 @@ yaml_serde = "0.10"
 toml = "1.1"
 toml_edit = "0.25"
 unicode-width = "0.2"
-zip = { version = "8.6", default-features = false, features = ["deflate"] }
+zip = { version = "8.6", default-features = false, features = ["aes-crypto", "deflate"] }
 trash = "5.2.5"
 rusqlite = { version = "0.40", features = ["bundled"] }
 xz2 = { version = "0.1.7", features = ["static"] }

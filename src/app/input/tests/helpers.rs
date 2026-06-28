@@ -105,6 +105,25 @@ pub(super) fn write_binary_zip_entries(path: &Path, entries: &[(&str, &[u8])]) {
     zip.finish().expect("failed to finish zip");
 }
 
+pub(super) fn write_encrypted_zip_entries(path: &Path, password: &str, entries: &[(&str, &[u8])]) {
+    use zip::unstable::write::FileOptionsExt;
+
+    let file = File::create(path).expect("failed to create zip");
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default()
+        .compression_method(CompressionMethod::Stored)
+        .with_deprecated_encryption(password.as_bytes())
+        .expect("failed to configure zip encryption");
+
+    for (name, contents) in entries {
+        zip.start_file(name, options)
+            .expect("failed to start zip entry");
+        zip.write_all(contents).expect("failed to write zip entry");
+    }
+
+    zip.finish().expect("failed to finish zip");
+}
+
 pub(super) fn write_encrypted_seven_zip_entries(
     path: &Path,
     password: &str,
