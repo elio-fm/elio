@@ -42,7 +42,9 @@ fn e_prompts_and_retries_encrypted_seven_zip_archive() {
     let root = temp_path("extract-encrypted-7z-key");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let archive = root.join("sample.7z");
-    write_encrypted_seven_zip_entries(&archive, "secret", &[("dir/file.txt", b"hello")]);
+    let password = archive_test_password(&root);
+    let wrong_password = format!("{password}-wrong");
+    write_encrypted_seven_zip_entries(&archive, &password, &[("dir/file.txt", b"hello")]);
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
@@ -55,7 +57,7 @@ fn e_prompts_and_retries_encrypted_seven_zip_archive() {
     assert_eq!(app.archive_password_error(), None);
     assert!(!root.join("sample").exists());
 
-    type_archive_password(&mut app, "wrong");
+    type_archive_password(&mut app, &wrong_password);
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
         .expect("enter should submit wrong password");
     wait_for_archive_password_prompt(&mut app);
@@ -64,7 +66,7 @@ fn e_prompts_and_retries_encrypted_seven_zip_archive() {
     assert_eq!(app.archive_password_error(), Some("Wrong password"));
     assert_eq!(app.archive_password_input(), "");
 
-    type_archive_password(&mut app, "secret");
+    type_archive_password(&mut app, &password);
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
         .expect("enter should submit correct password");
 
@@ -110,6 +112,13 @@ fn e_reports_unsupported_archive_format() {
     assert!(app.jobs.archive_extract_progress.is_none());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+fn archive_test_password(root: &std::path::Path) -> String {
+    root.file_name()
+        .expect("temp root should have a file name")
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn wait_for_archive_password_prompt(app: &mut App) {

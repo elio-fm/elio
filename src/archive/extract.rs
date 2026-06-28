@@ -566,6 +566,13 @@ mod tests {
         std::env::temp_dir().join(format!("elio-archive-extract-{label}-{unique}"))
     }
 
+    fn archive_test_password(root: &Path) -> String {
+        root.file_name()
+            .expect("temp root should have a file name")
+            .to_string_lossy()
+            .into_owned()
+    }
+
     #[test]
     fn rejects_escaping_paths() {
         let dest = Path::new("/tmp/out");
@@ -777,10 +784,11 @@ mod tests {
 
     #[test]
     fn archive_password_debug_is_redacted() {
-        let rendered = format!("{:?}", ArchivePassword::new("secret"));
+        let password = std::any::type_name::<ArchivePassword>();
+        let rendered = format!("{:?}", ArchivePassword::new(password));
 
         assert_eq!(rendered, "ArchivePassword(<redacted>)");
-        assert!(!rendered.contains("secret"));
+        assert!(!rendered.contains(password));
     }
 
     #[test]
@@ -788,9 +796,10 @@ mod tests {
         let root = temp_path("7z-encrypted-required");
         fs::create_dir_all(&root).unwrap();
         let archive_path = root.join("sample.7z");
+        let password = archive_test_password(&root);
         write_encrypted_seven_zip(
             &archive_path,
-            "secret",
+            &password,
             &[("dir", None), ("dir/file.txt", Some(b"hello"))],
         );
 
@@ -807,16 +816,18 @@ mod tests {
         let root = temp_path("7z-encrypted-wrong");
         fs::create_dir_all(&root).unwrap();
         let archive_path = root.join("sample.7z");
+        let password = archive_test_password(&root);
+        let wrong_password = format!("{password}-wrong");
         write_encrypted_seven_zip(
             &archive_path,
-            "secret",
+            &password,
             &[("dir", None), ("dir/file.txt", Some(b"hello"))],
         );
 
         let plan = plan_extract(&archive_path).unwrap();
         let error = extract_archive_with_password(
             &plan,
-            Some(&ArchivePassword::new("wrong")),
+            Some(&ArchivePassword::new(wrong_password)),
             |_| {},
             || false,
         )
@@ -832,16 +843,17 @@ mod tests {
         let root = temp_path("7z-encrypted-ok");
         fs::create_dir_all(&root).unwrap();
         let archive_path = root.join("sample.7z");
+        let password = archive_test_password(&root);
         write_encrypted_seven_zip(
             &archive_path,
-            "secret",
+            &password,
             &[("dir", None), ("dir/file.txt", Some(b"hello"))],
         );
 
         let plan = plan_extract(&archive_path).unwrap();
         let summary = extract_archive_with_password(
             &plan,
-            Some(&ArchivePassword::new("secret")),
+            Some(&ArchivePassword::new(password)),
             |_| {},
             || false,
         )
