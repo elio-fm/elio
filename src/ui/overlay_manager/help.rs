@@ -420,6 +420,7 @@ fn navigation_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
         keys.action(&kb.nav_right, "enter folder"),
         keys.action(&kb.open_or_enter, "enter folder / open"),
         keys.action(&kb.go_to, "go-to menu"),
+        keys.action(&kb.filter_directory, "filter current dir"),
         keys.action(&kb.jump_first, "first item"),
         keys.action(&kb.jump_last, "last item"),
         keys.pair_action(&kb.page_up, &kb.page_down, "page up / down"),

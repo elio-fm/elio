@@ -560,6 +560,13 @@ pub(super) struct PreviewState {
     pub(super) incremental_render_path: Option<std::path::PathBuf>,
 }
 
+#[derive(Clone, Debug, Default)]
+pub(in crate::app) struct LocalFilter {
+    pub(in crate::app) active: bool,
+    pub(in crate::app) query: String,
+    pub(in crate::app) cursor: usize,
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct PendingDirectoryLoad {
     pub(super) token: u64,
@@ -595,6 +602,8 @@ pub(super) struct DirectoryRuntime {
 pub(crate) struct NavigationState {
     pub(crate) cwd: PathBuf,
     pub(crate) entries: Vec<Entry>,
+    pub(in crate::app) unfiltered_entries: Vec<Entry>,
+    pub(in crate::app) local_filter: LocalFilter,
     pub(crate) sidebar: Vec<SidebarRow>,
     pub(crate) selected: usize,
     pub(crate) scroll_row: usize,
@@ -753,6 +762,8 @@ impl App {
             navigation: NavigationState {
                 cwd,
                 entries: Vec::new(),
+                unfiltered_entries: Vec::new(),
+                local_filter: LocalFilter::default(),
                 sidebar: Vec::new(),
                 selected: 0,
                 scroll_row: 0,
@@ -872,7 +883,8 @@ impl App {
         )?;
         app.navigation.sidebar = crate::fs::build_sidebar_rows();
         app.navigation.last_sidebar_refresh_at = Instant::now();
-        app.navigation.entries = snapshot.entries;
+        app.navigation.unfiltered_entries = snapshot.entries;
+        app.apply_local_filter_preserving_selection();
         app.navigation.directory_runtime.fingerprint = snapshot.fingerprint;
         if let Some(start_focus) = start_focus
             && let Some(index) = app

@@ -26,6 +26,7 @@ impl Default for KeyBindings {
             copy_path: KeyList::one('c'),
             search_folders: KeyList::one('f'),
             search_files: KeyList(vec![KeySpec::ctrl_char('f')]),
+            filter_directory: KeyList::one('/'),
             zoxide: KeyList::one('z'),
             shell: KeyList::one('!'),
             open: KeyList::one('o'),

@@ -6,6 +6,7 @@ mod directory_counts;
 mod git;
 mod input;
 mod jobs;
+mod local_filter;
 mod open_with;
 mod overlays;
 use crate::preview;

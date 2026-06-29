@@ -62,7 +62,7 @@ impl KeyBindings {
             .collect()
     }
 
-    fn bindings(&self) -> [(&KeyList, Action); 44] {
+    fn bindings(&self) -> [(&KeyList, Action); 45] {
         [
             (&self.quit, Action::Quit),
             (&self.quit_without_cd, Action::QuitWithoutCd),
@@ -80,6 +80,7 @@ impl KeyBindings {
             (&self.copy_path, Action::CopyPath),
             (&self.search_folders, Action::SearchFolders),
             (&self.search_files, Action::SearchFiles),
+            (&self.filter_directory, Action::FilterDirectory),
             (&self.zoxide, Action::Zoxide),
             (&self.shell, Action::Shell),
             (&self.open, Action::Open),

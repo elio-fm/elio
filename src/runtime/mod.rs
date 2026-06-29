@@ -224,6 +224,7 @@ fn run_app(
         }
 
         let wants_search_cursor = app.search_is_open()
+            || app.local_filter_is_editing()
             || app.create_is_open()
             || app.rename_is_open()
             || app.bulk_rename_is_open()

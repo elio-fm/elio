@@ -147,9 +147,13 @@ impl App {
         self.navigation.directory_runtime.pending_fingerprint_scan = None;
         let cwd_changed = load.target_cwd != self.navigation.cwd;
         let remembered_view = self.remembered_view_for(&load.target_cwd);
+        if cwd_changed {
+            self.clear_local_filter_for_directory_change();
+        }
         self.navigation.cwd = load.target_cwd.clone();
         self.navigation.in_trash = Self::path_is_trash(&self.navigation.cwd);
-        self.navigation.entries = snapshot.entries;
+        self.navigation.unfiltered_entries = snapshot.entries;
+        self.apply_local_filter();
         self.navigation.sidebar = crate::fs::build_sidebar_rows();
         self.navigation.last_sidebar_refresh_at = Instant::now();
         self.navigation.directory_runtime.fingerprint = snapshot.fingerprint;

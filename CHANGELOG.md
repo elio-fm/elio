@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added RAR extraction through the external 7-Zip backend (`7z`, `7zz`, or `7za`), including password prompts for encrypted RAR5 archives and staged extraction safety checks. ([#90])
 - Added a `progress_bar` theme palette color for active background operation chips, used by archive extraction progress.
 - Made Go To entries configurable, allowing built-ins to be changed and custom entries to be added. ([#166])
+- Added `/` to filter the current directory's entries. ([#201])
 
 ### Changed
 
@@ -256,6 +257,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#201]: https://github.com/elio-fm/elio/issues/201
 [#199]: https://github.com/elio-fm/elio/issues/199
 [#195]: https://github.com/elio-fm/elio/issues/195
 [#186]: https://github.com/elio-fm/elio/issues/186

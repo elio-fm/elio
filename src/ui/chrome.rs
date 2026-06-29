@@ -8,6 +8,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
+use unicode_width::UnicodeWidthChar;
 
 pub(super) fn render_toolbar(
     frame: &mut Frame<'_>,
@@ -112,6 +113,7 @@ pub(super) fn render_toolbar(
 const STATUS_MIN_LEFT_WIDTH: u16 = 24;
 const STATUS_RIGHT_PADDING: usize = 2;
 const GIT_BRANCH_MAX_WIDTH: usize = 24;
+const LOCAL_FILTER_INDICATOR_MAX_WIDTH: usize = 24;
 const FOOTER_MIN_NAME_WIDTH: usize = 6;
 const FOOTER_MIN_GIT_BRANCH_WIDTH: usize = 3;
 
@@ -128,6 +130,17 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
         .split(area);
 
     let right_text = helpers::clamp_label(status_message, sections[1].width as usize);
+    if app.local_filter_is_editing() {
+        render_local_filter_status(frame, sections[0], app, palette);
+        frame.render_widget(
+            Paragraph::new(right_text)
+                .alignment(Alignment::Right)
+                .style(Style::default().bg(palette.chrome).fg(palette.muted)),
+            sections[1],
+        );
+        return;
+    }
+
     let clip = app.clipboard_info();
     let sel_count = app.selection_count();
     let paste_prog = app.paste_progress();
@@ -226,6 +239,18 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
             spans.push(Span::raw("  "));
         }
 
+        if app.local_filter_has_query() {
+            let label = local_filter_indicator(app.local_filter_query());
+            chips_width += helpers::display_width(&label) as u16 + 2;
+            spans.push(Span::styled(
+                label,
+                Style::default()
+                    .fg(palette.muted)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::raw("  "));
+        }
+
         if sel_count > 0 {
             let chip = format!(" {sel_count} selected ");
             chips_width += chip.len() as u16 + 2;
@@ -285,6 +310,66 @@ pub(super) fn render_status(frame: &mut Frame<'_>, area: Rect, app: &App, palett
             .style(Style::default().bg(palette.chrome).fg(palette.muted)),
         sections[1],
     );
+}
+
+fn render_local_filter_status(frame: &mut Frame<'_>, area: Rect, app: &App, palette: Palette) {
+    if area.width == 0 {
+        return;
+    }
+
+    let query = app.local_filter_query();
+    let text = format!("/{query}");
+    let (rendered, hidden_width) = local_filter_visible_text(&text, area.width as usize);
+    frame.render_widget(
+        Paragraph::new(rendered).style(Style::default().bg(palette.chrome).fg(palette.text)),
+        area,
+    );
+
+    let cursor_offset = helpers::display_width("/").saturating_add(helpers::display_width(
+        &query
+            .chars()
+            .take(app.local_filter_cursor())
+            .collect::<String>(),
+    )) as u16;
+    let cursor_x = area
+        .x
+        .saturating_add(cursor_offset.saturating_sub(hidden_width as u16))
+        .min(area.x + area.width.saturating_sub(1));
+    frame.set_cursor_position((cursor_x, area.y));
+}
+
+fn local_filter_visible_text(text: &str, width: usize) -> (String, usize) {
+    let text_width = helpers::display_width(text);
+    if text_width <= width {
+        return (text.to_string(), 0);
+    }
+    if width <= 1 {
+        return ("…".to_string(), text_width.saturating_sub(1));
+    }
+
+    let suffix_width_limit = width - 1;
+    let mut suffix = Vec::new();
+    let mut suffix_width = 0usize;
+    for ch in text.chars().rev() {
+        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if suffix_width + char_width > suffix_width_limit {
+            break;
+        }
+        suffix.push(ch);
+        suffix_width += char_width;
+    }
+    let suffix = suffix.into_iter().rev().collect::<String>();
+    (
+        format!("…{suffix}"),
+        text_width.saturating_sub(suffix_width),
+    )
+}
+
+fn local_filter_indicator(query: &str) -> String {
+    format!(
+        "/{}",
+        helpers::truncate_middle(query, LOCAL_FILTER_INDICATOR_MAX_WIDTH.saturating_sub(1))
+    )
 }
 
 fn status_section_width(total_width: u16, status_message: &str) -> u16 {
@@ -443,6 +528,46 @@ mod tests {
         assert!(
             rendered.contains(" 1 selected   1/1  logo.png │  main *"),
             "status row should mark dirty git branches, got: {rendered:?}"
+        );
+
+        app.set_frame_state(FrameState::default());
+        drop(app);
+        fs::remove_dir_all(root).expect("failed to remove temp dir");
+    }
+
+    #[test]
+    fn local_filter_renders_as_left_footer_command_line() {
+        let root = temp_path("local-filter-footer");
+        fs::create_dir_all(&root).expect("failed to create temp dir");
+        fs::write(root.join("ubuntu.iso"), "iso").expect("failed to write file");
+
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('/'))))
+            .expect("filter shortcut should open filter");
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('u'))))
+            .expect("filter input should accept text");
+
+        let mut terminal = Terminal::new(TestBackend::new(40, 1)).expect("terminal should init");
+        terminal
+            .draw(|frame| render_status(frame, frame.area(), &app, theme::palette()))
+            .expect("status should render");
+
+        let rendered = row_text(terminal.backend().buffer(), 0);
+        assert!(
+            rendered.starts_with("/u"),
+            "filter should render on the left footer, got: {rendered:?}"
+        );
+        terminal.backend_mut().assert_cursor_position((2, 0));
+
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
+            .expect("enter should leave filter editing mode");
+        terminal
+            .draw(|frame| render_status(frame, frame.area(), &app, theme::palette()))
+            .expect("status should render");
+        let rendered = row_text(terminal.backend().buffer(), 0);
+        assert!(
+            rendered.starts_with("/u  "),
+            "inactive filter should keep a left footer indicator, got: {rendered:?}"
         );
 
         app.set_frame_state(FrameState::default());

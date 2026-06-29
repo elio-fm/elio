@@ -35,7 +35,12 @@ pub(super) fn render_list(
     };
 
     if app.navigation.entries.is_empty() {
-        helpers::render_empty_state(frame, content_area, "This folder is empty", palette);
+        let message = if app.local_filter_has_query() {
+            "No matches"
+        } else {
+            "This folder is empty"
+        };
+        helpers::render_empty_state(frame, content_area, message, palette);
         return;
     }
 

@@ -102,6 +102,10 @@ impl App {
             return self.handle_search_key(key);
         }
 
+        if self.local_filter_is_editing() {
+            return self.handle_local_filter_key(key);
+        }
+
         if self.should_debounce_navigation_key(key) {
             return Ok(());
         }
@@ -294,6 +298,7 @@ impl App {
             Action::CopyPath => self.open_copy_overlay(),
             Action::SearchFolders => self.open_search_with_status(SearchScope::Folders),
             Action::SearchFiles => self.open_search_with_status(SearchScope::Files),
+            Action::FilterDirectory => self.open_local_filter(),
             Action::Zoxide => {
                 self.pending_terminal_task = Some(PendingTerminalTask::Zoxide);
                 self.status.clear();
