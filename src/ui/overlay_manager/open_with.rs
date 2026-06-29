@@ -1,9 +1,10 @@
+use super::scrollbar::render_overlay_scrollbar;
 use crate::app::{App, FrameState, OpenWithHit};
 use crate::ui::{helpers, theme::Palette};
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
-    style::{Modifier, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
@@ -115,7 +116,7 @@ pub(super) fn render_open_with_overlay(
     }
 
     if let Some(scrollbar) = scrollbar_area {
-        render_open_with_scrollbar(
+        render_overlay_scrollbar(
             frame,
             scrollbar,
             row_count,
@@ -124,60 +125,6 @@ pub(super) fn render_open_with_overlay(
             palette,
         );
     }
-}
-
-fn render_open_with_scrollbar(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    total_rows: usize,
-    visible_rows: usize,
-    scroll_top: usize,
-    palette: Palette,
-) {
-    if area.height == 0 || total_rows <= visible_rows.max(1) {
-        return;
-    }
-
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled(
-                "│",
-                Style::default().fg(palette.border)
-            ));
-            area.height as usize
-        ])
-        .style(Style::default().bg(palette.chrome_alt)),
-        area,
-    );
-
-    let thumb_height = ((visible_rows.max(1) * area.height as usize) / total_rows)
-        .max(1)
-        .min(area.height as usize);
-    let max_scroll = total_rows.saturating_sub(visible_rows.max(1));
-    let thumb_max_top = area.height as usize - thumb_height;
-    let thumb_top = scroll_top
-        .checked_mul(thumb_max_top)
-        .and_then(|offset| offset.checked_div(max_scroll))
-        .unwrap_or(0);
-
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled(
-                "┃",
-                Style::default()
-                    .fg(palette.accent)
-                    .add_modifier(Modifier::BOLD),
-            ));
-            thumb_height
-        ])
-        .style(Style::default().bg(palette.chrome_alt)),
-        Rect {
-            x: area.x,
-            y: area.y + thumb_top as u16,
-            width: area.width,
-            height: thumb_height as u16,
-        },
-    );
 }
 
 fn open_with_scroll_top(selected: usize, row_count: usize, visible_rows: usize) -> usize {

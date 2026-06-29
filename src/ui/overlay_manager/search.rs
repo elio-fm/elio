@@ -1,3 +1,4 @@
+use super::scrollbar::render_overlay_scrollbar;
 use crate::app::{App, FrameState, SearchHit, SearchScope};
 use crate::ui::{
     helpers,
@@ -119,9 +120,24 @@ pub(super) fn render_search_overlay(
     );
     frame.set_cursor_position((cursor_x, query_area.y));
 
-    let results_area = rows[2];
     let row_height = 2u16;
-    let visible_rows = (results_area.height / row_height).max(1) as usize;
+    let visible_rows = (rows[2].height / row_height).max(1) as usize;
+    let needs_scrollbar = app.search_match_count() > visible_rows;
+    let (results_area, scrollbar_area) = if needs_scrollbar && rows[2].width >= 6 {
+        (
+            Rect {
+                width: rows[2].width.saturating_sub(1),
+                ..rows[2]
+            },
+            Some(Rect {
+                x: rows[2].x + rows[2].width.saturating_sub(1),
+                width: 1,
+                ..rows[2]
+            }),
+        )
+    } else {
+        (rows[2], None)
+    };
     state.search_rows_visible = visible_rows;
 
     let rows_data = app.search_rows(visible_rows);
@@ -235,6 +251,17 @@ pub(super) fn render_search_overlay(
                 index: row.index,
             });
         }
+    }
+
+    if let Some(scrollbar) = scrollbar_area {
+        render_overlay_scrollbar(
+            frame,
+            scrollbar,
+            app.search_match_count(),
+            visible_rows,
+            app.search_scroll_top(),
+            palette,
+        );
     }
 
     frame.render_widget(
