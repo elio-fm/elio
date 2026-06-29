@@ -1,5 +1,7 @@
 use super::*;
 
+const HELP_WHEEL_LINES: isize = 2;
+
 impl App {
     pub(in crate::app) fn handle_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if self.overlays.trash.is_some() {
@@ -43,9 +45,18 @@ impl App {
         }
 
         if self.overlays.help {
-            if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-                self.clear_wheel_scroll();
-                self.overlays.help = false;
+            match mouse.kind {
+                MouseEventKind::Down(MouseButton::Left) => {
+                    self.clear_wheel_scroll();
+                    self.overlays.help = false;
+                }
+                MouseEventKind::ScrollDown => {
+                    self.scroll_help_by(HELP_WHEEL_LINES);
+                }
+                MouseEventKind::ScrollUp => {
+                    self.scroll_help_by(-HELP_WHEEL_LINES);
+                }
+                _ => {}
             }
             return Ok(());
         }

@@ -132,7 +132,7 @@ pub(super) fn render_help(
     } else {
         HelpMode::Normal
     };
-    help::render_help(frame, area, mode, state, palette);
+    help::render_help(frame, area, mode, app.overlays.help_scroll, state, palette);
 }
 
 fn compute_scroll_top(cursor_line: usize, visible: usize) -> usize {

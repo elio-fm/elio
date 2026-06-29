@@ -15,6 +15,7 @@ pub(super) fn render_help(
     frame: &mut Frame<'_>,
     area: Rect,
     mode: HelpMode,
+    scroll_top: usize,
     state: &mut FrameState,
     palette: Palette,
 ) {
@@ -39,8 +40,8 @@ pub(super) fn render_help(
         keys.action(&kb.trash, "trash (delete if in trash)"),
         keys.action(&kb.delete_permanently, "delete permanently"),
         keys.action(&kb.rename, "rename (bulk if selection)"),
-        keys.action(&kb.extract_archive, "extract archive"),
         keys.action_with_suffix(&kb.restore_from_trash, " (in trash)", "restore from trash"),
+        keys.action(&kb.extract_archive, "extract archive"),
         keys.action(&kb.shell, "open shell here"),
         keys.action(&kb.open, "open with default app"),
         keys.action(&kb.open_with, "open with"),
@@ -88,7 +89,7 @@ pub(super) fn render_help(
         e("Wheel", "scroll"),
         e("Shift+Wheel", "scroll sideways"),
     ];
-    let left_sections = vec![
+    let sections = vec![
         HelpSection {
             title: "Navigate",
             entries: navigation_entries,
@@ -101,8 +102,6 @@ pub(super) fn render_help(
             title: "Selection & Clipboard",
             entries: clipboard_entries,
         },
-    ];
-    let right_sections = vec![
         HelpSection {
             title: "Search",
             entries: search_entries,
@@ -121,7 +120,17 @@ pub(super) fn render_help(
         },
     ];
 
-    let popup = helpers::centered_rect(area, 90, 36);
+    let popup_width = if area.width >= 92 {
+        90
+    } else {
+        area.width.saturating_sub(4).clamp(44, 90)
+    };
+    let popup_height = if area.height >= 38 {
+        36
+    } else {
+        area.height.saturating_sub(2).clamp(10, 36)
+    };
+    let popup = helpers::centered_rect(area, popup_width, popup_height);
     state.help_panel = Some(popup);
     frame.render_widget(Clear, popup);
     frame.render_widget(
@@ -147,12 +156,32 @@ pub(super) fn render_help(
             .border_style(Style::default().fg(palette.border)),
         popup,
     );
+
     let inner = helpers::inner_with_padding(popup);
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(8), Constraint::Length(1)])
+        .constraints([Constraint::Min(1), Constraint::Length(1)])
         .split(inner);
 
+    if rows[0].width >= 88 && rows[0].height >= 33 {
+        render_wide_help(frame, rows[0], rows[1], &sections, state, palette);
+    } else {
+        render_compact_help(
+            frame, rows[0], rows[1], &sections, scroll_top, state, palette,
+        );
+    }
+}
+
+fn render_wide_help(
+    frame: &mut Frame<'_>,
+    body: Rect,
+    footer: Rect,
+    sections: &[HelpSection],
+    state: &mut FrameState,
+    palette: Palette,
+) {
+    state.help_scroll_max = 0;
+    state.help_rows_visible = body.height as usize;
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -160,10 +189,10 @@ pub(super) fn render_help(
             Constraint::Length(3),
             Constraint::Length(46),
         ])
-        .split(rows[0]);
+        .split(body);
 
     frame.render_widget(
-        Paragraph::new(help_column_lines(cols[0].width, &left_sections, palette))
+        Paragraph::new(help_column_lines(cols[0].width, &sections[..3], palette))
             .style(Style::default().bg(palette.chrome_alt).fg(palette.text))
             .wrap(Wrap { trim: false }),
         cols[0],
@@ -180,12 +209,164 @@ pub(super) fn render_help(
     );
 
     frame.render_widget(
-        Paragraph::new(help_column_lines(cols[2].width, &right_sections, palette))
+        Paragraph::new(help_column_lines(cols[2].width, &sections[3..], palette))
             .style(Style::default().bg(palette.chrome_alt).fg(palette.text))
             .wrap(Wrap { trim: false }),
         cols[2],
     );
+    render_help_footer(frame, footer, palette);
+}
 
+fn render_compact_help(
+    frame: &mut Frame<'_>,
+    body: Rect,
+    footer: Rect,
+    sections: &[HelpSection],
+    scroll_top: usize,
+    state: &mut FrameState,
+    palette: Palette,
+) {
+    let visible = body.height as usize;
+    let mut content = body;
+    let mut lines = flowing_help_lines(content.width, sections, palette);
+    let mut total = lines.len();
+    let mut scrollbar = None;
+
+    if total > visible.max(1) && body.width >= 6 {
+        content.width = body.width.saturating_sub(1);
+        scrollbar = Some(Rect {
+            x: body.x + content.width,
+            y: body.y,
+            width: 1,
+            height: body.height,
+        });
+        lines = flowing_help_lines(content.width, sections, palette);
+        total = lines.len();
+    }
+
+    let max_scroll = total.saturating_sub(visible);
+    state.help_scroll_max = max_scroll;
+    state.help_rows_visible = visible;
+    let scroll_top = scroll_top.min(max_scroll);
+    frame.render_widget(
+        Paragraph::new(lines)
+            .style(Style::default().bg(palette.chrome_alt).fg(palette.text))
+            .scroll((scroll_top as u16, 0))
+            .wrap(Wrap { trim: false }),
+        content,
+    );
+    if let Some(area) = scrollbar {
+        render_help_scrollbar(frame, area, total, visible, scroll_top, palette);
+    }
+    render_help_footer(frame, footer, palette);
+}
+
+fn flowing_help_lines(
+    width: u16,
+    sections: &[HelpSection],
+    palette: Palette,
+) -> Vec<Line<'static>> {
+    if width >= 70 && sections.len() >= 4 {
+        return two_column_help_lines(width, &sections[..3], &sections[3..], palette);
+    }
+    help_column_lines(width, sections, palette)
+}
+
+fn two_column_help_lines(
+    width: u16,
+    left_sections: &[HelpSection],
+    right_sections: &[HelpSection],
+    palette: Palette,
+) -> Vec<Line<'static>> {
+    let gap_width = 3usize;
+    let left_width = ((width as usize).saturating_sub(gap_width)) / 2;
+    let right_width = (width as usize).saturating_sub(left_width + gap_width);
+    let left = help_column_lines(left_width as u16, left_sections, palette);
+    let right = help_column_lines(right_width as u16, right_sections, palette);
+    let rows = left.len().max(right.len());
+    let mut lines = Vec::with_capacity(rows);
+
+    for index in 0..rows {
+        let left_line = left.get(index).cloned().unwrap_or_default();
+        let right_line = right.get(index).cloned().unwrap_or_default();
+        let left_line_width = line_width(&left_line);
+        let mut spans = left_line.spans;
+        spans.push(Span::raw(
+            " ".repeat(left_width.saturating_sub(left_line_width) + gap_width),
+        ));
+        spans.extend(right_line.spans);
+        lines.push(Line::from(spans));
+    }
+
+    lines
+}
+
+fn line_width(line: &Line<'_>) -> usize {
+    line.spans
+        .iter()
+        .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
+        .sum()
+}
+
+fn render_help_scrollbar(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    total_rows: usize,
+    visible_rows: usize,
+    scroll_row: usize,
+    palette: Palette,
+) {
+    if area.height == 0 || total_rows <= visible_rows.max(1) {
+        frame.render_widget(
+            Paragraph::new(" ").style(Style::default().bg(palette.chrome_alt).fg(palette.border)),
+            area,
+        );
+        return;
+    }
+
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::from(Span::styled(
+                "│",
+                Style::default().fg(palette.border)
+            ));
+            area.height as usize
+        ])
+        .style(Style::default().bg(palette.chrome_alt)),
+        area,
+    );
+
+    let thumb_height = ((visible_rows.max(1) * area.height as usize) / total_rows)
+        .max(1)
+        .min(area.height as usize);
+    let max_scroll = total_rows.saturating_sub(visible_rows.max(1));
+    let thumb_max_top = area.height as usize - thumb_height;
+    let thumb_top = scroll_row
+        .checked_mul(thumb_max_top)
+        .and_then(|offset| offset.checked_div(max_scroll))
+        .unwrap_or(0);
+    let thumb = Rect {
+        x: area.x,
+        y: area.y + thumb_top as u16,
+        width: area.width,
+        height: thumb_height as u16,
+    };
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::from(Span::styled(
+                "┃",
+                Style::default()
+                    .fg(palette.accent)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            thumb.height as usize
+        ])
+        .style(Style::default().bg(palette.chrome_alt)),
+        thumb,
+    );
+}
+
+fn render_help_footer(frame: &mut Frame<'_>, area: Rect, palette: Palette) {
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
@@ -199,7 +380,7 @@ pub(super) fn render_help(
         ]))
         .alignment(Alignment::Right)
         .style(Style::default().bg(palette.chrome_alt).fg(palette.muted)),
-        rows[1],
+        area,
     );
 }
 
@@ -427,14 +608,14 @@ fn help_entry_lines(
         wrapped_action.push(String::new());
     }
 
-    let key_padding =
-        " ".repeat(key_width.saturating_sub(UnicodeWidthStr::width(entry.key.as_str())));
+    let key = helpers::clamp_label(&entry.key, key_width);
+    let key_padding = " ".repeat(key_width.saturating_sub(UnicodeWidthStr::width(key.as_str())));
     let continuation = " ".repeat(key_width + 2);
     let mut lines = Vec::with_capacity(wrapped_action.len());
 
     lines.push(Line::from(vec![
         Span::styled(
-            entry.key.clone(),
+            key,
             Style::default()
                 .fg(palette.accent_text)
                 .add_modifier(Modifier::BOLD),

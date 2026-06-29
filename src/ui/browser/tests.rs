@@ -1398,6 +1398,94 @@ fn help_overlay_keeps_controls_readable_and_drops_auto_reload_row() {
 }
 
 #[test]
+fn compact_help_overlay_scrolls_instead_of_truncating_small_terminals() {
+    let root = temp_path("compact-help-overlay");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.overlays.help = true;
+    let mut terminal = Terminal::new(TestBackend::new(60, 18)).expect("terminal should init");
+
+    let frame_state = draw_ui(&mut terminal, &mut app);
+    let rendered = buffer_text(terminal.backend().buffer());
+
+    assert!(
+        rendered.contains("Navigate"),
+        "compact help should start with the first section, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("? / Esc") && rendered.contains("close help"),
+        "compact help should keep the original footer, got: {rendered:?}"
+    );
+    assert!(
+        !rendered.contains("scroll") && !rendered.contains("PgUp/PgDn"),
+        "compact help should not add scrolling hints to the footer, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("┃"),
+        "scrollable compact help should draw a right-side scrollbar, got: {rendered:?}"
+    );
+    assert!(
+        frame_state.help_scroll_max > 0,
+        "compact help should publish its real scroll limit"
+    );
+    let max_scroll = frame_state.help_scroll_max;
+    let page_step = frame_state.help_rows_visible.saturating_sub(2).max(1);
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::End)))
+        .expect("End should jump to the bottom of help");
+    assert_eq!(
+        app.overlays.help_scroll, max_scroll,
+        "End should use the real scroll limit instead of an arbitrary sentinel"
+    );
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::PageUp)))
+        .expect("PageUp should move by a viewport-sized step");
+    assert_eq!(
+        app.overlays.help_scroll,
+        max_scroll.saturating_sub(page_step),
+        "PageUp should keep context instead of jumping by a fixed magic number"
+    );
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::End)))
+        .expect("End should return to the bottom of help");
+    draw_ui(&mut terminal, &mut app);
+    let rendered = buffer_text(terminal.backend().buffer());
+
+    assert!(
+        rendered.contains("View") && rendered.contains("toggle grid / list"),
+        "compact help should keep late sections reachable, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("?/Esc") || rendered.contains("? / Esc"),
+        "compact help should keep the close hint visible, got: {rendered:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn medium_help_overlay_uses_two_columns_before_scrolling() {
+    let root = temp_path("medium-help-overlay");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.overlays.help = true;
+    let mut terminal = Terminal::new(TestBackend::new(92, 37)).expect("terminal should init");
+
+    draw_ui(&mut terminal, &mut app);
+    let rendered = buffer_text(terminal.backend().buffer());
+
+    assert!(
+        rendered.contains("Navigate") && rendered.contains("File Actions"),
+        "medium help should use both sides instead of a sparse single column, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("create file or folder"),
+        "right-side actions should be visible before scrolling, got: {rendered:?}"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn chooser_help_overlay_uses_chooser_actions_without_changing_esc() {
     let root = temp_path("chooser-help-overlay");
     fs::create_dir_all(&root).expect("failed to create temp root");

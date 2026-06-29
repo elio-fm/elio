@@ -639,6 +639,7 @@ pub(crate) struct OverlayState {
     pub(in crate::app) open_with: Option<OpenWithOverlay>,
     pub(in crate::app) search: Option<SearchOverlay>,
     pub(crate) help: bool,
+    pub(crate) help_scroll: usize,
 }
 
 pub(in crate::app) struct JobRuntime {

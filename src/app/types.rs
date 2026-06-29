@@ -56,6 +56,8 @@ pub struct FrameState {
     pub open_with_panel: Option<Rect>,
     pub search_panel: Option<Rect>,
     pub help_panel: Option<Rect>,
+    pub help_scroll_max: usize,
+    pub help_rows_visible: usize,
     pub entries_panel: Option<Rect>,
     pub preview_panel: Option<Rect>,
     pub preview_body_area: Option<Rect>,

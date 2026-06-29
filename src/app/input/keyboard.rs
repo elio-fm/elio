@@ -1,5 +1,8 @@
 use super::*;
 
+const HELP_FALLBACK_SCROLL_MAX: usize = 64;
+const HELP_FALLBACK_PAGE_STEP: usize = 8;
+
 impl App {
     pub fn handle_event(&mut self, event: Event) -> Result<()> {
         let result = match event {
@@ -13,6 +16,42 @@ impl App {
         }
 
         Ok(())
+    }
+
+    fn help_scroll_max(&self) -> usize {
+        if self.input.frame_state.help_rows_visible == 0 {
+            HELP_FALLBACK_SCROLL_MAX
+        } else {
+            self.input.frame_state.help_scroll_max
+        }
+    }
+
+    fn help_page_step(&self) -> usize {
+        if self.input.frame_state.help_rows_visible == 0 {
+            HELP_FALLBACK_PAGE_STEP
+        } else {
+            self.input
+                .frame_state
+                .help_rows_visible
+                .saturating_sub(2)
+                .max(1)
+        }
+    }
+
+    pub(in crate::app) fn scroll_help_by(&mut self, delta: isize) {
+        let max_scroll = self.help_scroll_max();
+        if delta.is_negative() {
+            self.overlays.help_scroll = self
+                .overlays
+                .help_scroll
+                .saturating_sub(delta.unsigned_abs());
+        } else {
+            self.overlays.help_scroll = self
+                .overlays
+                .help_scroll
+                .saturating_add(delta as usize)
+                .min(max_scroll);
+        }
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
@@ -74,11 +113,24 @@ impl App {
                 self.overlays.help = false;
                 return Ok(());
             }
-            if key.code == KeyCode::Esc {
-                self.overlays.help = false;
-            }
-            if is_help_shortcut(key) {
-                self.overlays.help = false;
+            match key.code {
+                KeyCode::Esc => self.overlays.help = false,
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.scroll_help_by(-1);
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.scroll_help_by(1);
+                }
+                KeyCode::PageUp => {
+                    self.scroll_help_by(-(self.help_page_step() as isize));
+                }
+                KeyCode::PageDown => {
+                    self.scroll_help_by(self.help_page_step() as isize);
+                }
+                KeyCode::Home => self.overlays.help_scroll = 0,
+                KeyCode::End => self.overlays.help_scroll = self.help_scroll_max(),
+                _ if is_help_shortcut(key) => self.overlays.help = false,
+                _ => {}
             }
             return Ok(());
         }
@@ -182,6 +234,7 @@ impl App {
             }
             _ if is_help_shortcut(key) => {
                 self.clear_wheel_scroll();
+                self.overlays.help_scroll = 0;
                 self.overlays.help = true;
             }
             _ if configured_action.is_some() => {
