@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prefer native archive listing for `.7z`, `.tar.xz`, `.tar.bz2`, and `.tar.zst` previews before falling back to external archive tools, and keep encrypted `.7z` previews visible with a password-required notice. ([#90])
 - Places now switches to an icon-only rail in narrow windows before labels become overly truncated. ([#184])
 - Changed Open With to keep `$VISUAL` and `$EDITOR` labels on matching MIME-associated editors and place them directly below the system default association. ([#199])
-- Added a scrollbar to fuzzy search so long result lists show the current position and whether more matches are above or below.
+- Added a scrollbar to Fuzzy Find and made more room for results by removing footer hints.
 
 ### Fixed
 
