@@ -1192,8 +1192,24 @@ fn search_overlay_scrolls_selected_results_and_tracks_hit_rects() {
         x: inner.x,
         y: inner.y + 4,
         width: inner.width,
-        height: inner.height.saturating_sub(5),
+        height: inner.height.saturating_sub(4),
     };
+    let bottom_row = rect_row_text(
+        terminal.backend().buffer(),
+        Rect {
+            x: results_area.x,
+            y: results_area.y + results_area.height.saturating_sub(1),
+            width: results_area.width,
+            height: 1,
+        },
+        results_area.y + results_area.height.saturating_sub(1),
+    );
+    assert!(
+        !bottom_row.contains("Enter open")
+            && !bottom_row.contains("Esc close")
+            && !bottom_row.contains("move"),
+        "search results bottom row should not render generic key hints, got: {bottom_row:?}"
+    );
     let right_column = (results_area.y..results_area.y + results_area.height)
         .map(|y| terminal.backend().buffer()[(results_area.x + results_area.width - 1, y)].symbol())
         .collect::<String>();

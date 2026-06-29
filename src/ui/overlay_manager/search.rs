@@ -6,7 +6,7 @@ use crate::ui::{
 };
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
+    layout::{Constraint, Direction, Layout, Margin, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Clear, Paragraph},
@@ -38,7 +38,6 @@ pub(super) fn render_search_overlay(
             Constraint::Length(1),
             Constraint::Length(3),
             Constraint::Min(4),
-            Constraint::Length(1),
         ])
         .split(inner);
 
@@ -263,13 +262,6 @@ pub(super) fn render_search_overlay(
             palette,
         );
     }
-
-    frame.render_widget(
-        Paragraph::new("Enter open  Esc close  ↑↓ move")
-            .alignment(Alignment::Right)
-            .style(Style::default().bg(palette.chrome_alt).fg(palette.muted)),
-        rows[3],
-    );
 }
 
 fn render_query_line(
