@@ -1180,13 +1180,30 @@ fn search_overlay_scrolls_selected_results_and_tracks_hit_rects() {
     wait_for_search_index(&mut app);
 
     let initial_state = draw_ui(&mut terminal, &mut app);
-    assert!(
-        initial_state.search_panel.is_some(),
-        "search overlay should render a popup panel"
-    );
+    let search_panel = initial_state
+        .search_panel
+        .expect("search overlay should render a popup panel");
     assert!(
         initial_state.search_rows_visible > 0,
         "search overlay should expose the visible row budget through frame state"
+    );
+    let inner = helpers::inner_with_padding(search_panel);
+    let results_area = Rect {
+        x: inner.x,
+        y: inner.y + 4,
+        width: inner.width,
+        height: inner.height.saturating_sub(5),
+    };
+    let right_column = (results_area.y..results_area.y + results_area.height)
+        .map(|y| terminal.backend().buffer()[(results_area.x + results_area.width - 1, y)].symbol())
+        .collect::<String>();
+    assert!(
+        right_column.contains('┃'),
+        "overflowing search overlay should draw a scrollbar thumb"
+    );
+    assert!(
+        right_column.contains('│'),
+        "overflowing search overlay should draw a scrollbar track"
     );
 
     for _ in 0..8 {

@@ -1,4 +1,4 @@
-use super::HelpMode;
+use super::{HelpMode, scrollbar::render_overlay_scrollbar};
 use crate::app::FrameState;
 use crate::config::{KeyBindings, KeyList};
 use crate::ui::{helpers, theme::Palette};
@@ -256,7 +256,7 @@ fn render_compact_help(
         content,
     );
     if let Some(area) = scrollbar {
-        render_help_scrollbar(frame, area, total, visible, scroll_top, palette);
+        render_overlay_scrollbar(frame, area, total, visible, scroll_top, palette);
     }
     render_help_footer(frame, footer, palette);
 }
@@ -306,64 +306,6 @@ fn line_width(line: &Line<'_>) -> usize {
         .iter()
         .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
         .sum()
-}
-
-fn render_help_scrollbar(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    total_rows: usize,
-    visible_rows: usize,
-    scroll_row: usize,
-    palette: Palette,
-) {
-    if area.height == 0 || total_rows <= visible_rows.max(1) {
-        frame.render_widget(
-            Paragraph::new(" ").style(Style::default().bg(palette.chrome_alt).fg(palette.border)),
-            area,
-        );
-        return;
-    }
-
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled(
-                "│",
-                Style::default().fg(palette.border)
-            ));
-            area.height as usize
-        ])
-        .style(Style::default().bg(palette.chrome_alt)),
-        area,
-    );
-
-    let thumb_height = ((visible_rows.max(1) * area.height as usize) / total_rows)
-        .max(1)
-        .min(area.height as usize);
-    let max_scroll = total_rows.saturating_sub(visible_rows.max(1));
-    let thumb_max_top = area.height as usize - thumb_height;
-    let thumb_top = scroll_row
-        .checked_mul(thumb_max_top)
-        .and_then(|offset| offset.checked_div(max_scroll))
-        .unwrap_or(0);
-    let thumb = Rect {
-        x: area.x,
-        y: area.y + thumb_top as u16,
-        width: area.width,
-        height: thumb_height as u16,
-    };
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled(
-                "┃",
-                Style::default()
-                    .fg(palette.accent)
-                    .add_modifier(Modifier::BOLD),
-            ));
-            thumb.height as usize
-        ])
-        .style(Style::default().bg(palette.chrome_alt)),
-        thumb,
-    );
 }
 
 fn render_help_footer(frame: &mut Frame<'_>, area: Rect, palette: Palette) {

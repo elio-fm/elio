@@ -11,6 +11,7 @@ mod help;
 mod open_with;
 mod rename;
 mod restore;
+mod scrollbar;
 mod search;
 mod trash;
 

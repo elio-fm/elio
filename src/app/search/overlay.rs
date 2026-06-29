@@ -95,6 +95,14 @@ impl App {
             .collect()
     }
 
+    pub fn search_scroll_top(&self) -> usize {
+        self.overlays
+            .search
+            .as_ref()
+            .map(|search| search.scroll)
+            .unwrap_or(0)
+    }
+
     pub(in crate::app) fn open_fuzzy_finder(&mut self, scope: SearchScope) -> Result<()> {
         self.clear_wheel_scroll();
         self.overlays.help = false;
