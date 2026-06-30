@@ -270,6 +270,58 @@ pub(super) fn display_width(text: &str) -> usize {
     UnicodeWidthStr::width(text)
 }
 
+pub(super) fn input_window(input: &str, cursor_col: usize, width: u16) -> (String, u16) {
+    if width == 0 {
+        return (String::new(), 0);
+    }
+
+    let chars: Vec<char> = input.chars().collect();
+    let cursor_col = cursor_col.min(chars.len());
+    let max_before_cursor = width.saturating_sub(1) as usize;
+    let mut start = cursor_col;
+    let mut before_cursor_width = 0usize;
+
+    while start > 0 {
+        let candidate_start = start - 1;
+        let char_width = chars[candidate_start].width().unwrap_or(0);
+        let ellipsis_width = usize::from(candidate_start > 0);
+        if before_cursor_width + char_width + ellipsis_width > max_before_cursor {
+            break;
+        }
+        before_cursor_width += char_width;
+        start = candidate_start;
+    }
+
+    let mut visible = String::new();
+    let mut visible_width = 0usize;
+    let ellipsis_width = if start > 0 {
+        visible.push('…');
+        visible_width = 1;
+        1
+    } else {
+        0
+    };
+
+    for ch in chars.iter().skip(start) {
+        let char_width = ch.width().unwrap_or(0);
+        if visible_width + char_width > width as usize {
+            break;
+        }
+        visible.push(*ch);
+        visible_width += char_width;
+    }
+
+    let cursor_x = ellipsis_width
+        + chars[start..cursor_col]
+            .iter()
+            .map(|ch| ch.width().unwrap_or(0))
+            .sum::<usize>();
+    (
+        visible,
+        cursor_x.min(width.saturating_sub(1) as usize) as u16,
+    )
+}
+
 fn take_prefix_width(text: &str, max_width: usize) -> String {
     if max_width == 0 {
         return String::new();
@@ -321,5 +373,26 @@ pub(super) fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
         y: area.y + area.height.saturating_sub(height) / 2,
         width,
         height,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::input_window;
+
+    #[test]
+    fn long_input_keeps_a_cell_for_the_end_cursor() {
+        let (visible, cursor_x) = input_window("abcdefghijklmnopqrstuvwxyz", 26, 10);
+
+        assert_eq!(cursor_x, 9);
+        assert_eq!(visible, "…stuvwxyz");
+    }
+
+    #[test]
+    fn wide_chars_do_not_push_the_cursor_past_the_field() {
+        let (visible, cursor_x) = input_window("aaaaaaaa猫猫", 10, 8);
+
+        assert_eq!(cursor_x, 7);
+        assert_eq!(visible, "…aa猫猫");
     }
 }

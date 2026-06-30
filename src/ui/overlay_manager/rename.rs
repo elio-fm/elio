@@ -48,16 +48,6 @@ pub(super) fn render_rename_overlay(
 
     let input = app.rename_input();
     let cursor_col = app.rename_cursor_col();
-    let chars: Vec<char> = input.chars().collect();
-    let col = cursor_col.min(chars.len());
-    let available = input_area.width.saturating_sub(3) as usize;
-    let h_start = col.saturating_sub(available);
-
-    let mut visible_text: String = chars.iter().skip(h_start).take(available).collect();
-    if h_start > 0 && !visible_text.is_empty() {
-        visible_text.remove(0);
-        visible_text.insert(0, '…');
-    }
 
     let is_dir = app.rename_item_is_dir();
     let live_path = app.navigation.cwd.join(app.rename_input());
@@ -65,6 +55,9 @@ pub(super) fn render_rename_overlay(
         theme::path_symbol(&live_path, is_dir),
         theme::path_color(&live_path, is_dir, palette),
     );
+    let prefix_width = helpers::display_width(icon).saturating_add(2) as u16;
+    let text_width = input_area.width.saturating_sub(prefix_width);
+    let (visible_text, visible_cursor_col) = helpers::input_window(input, cursor_col, text_width);
 
     let line = if input.is_empty() {
         Line::from(vec![
@@ -95,8 +88,7 @@ pub(super) fn render_rename_overlay(
         input_area,
     );
 
-    let visible_cursor_col = col.saturating_sub(h_start);
-    let cursor_x = (input_area.x + 3 + visible_cursor_col as u16)
+    let cursor_x = (input_area.x + prefix_width + visible_cursor_col)
         .min(input_area.x + input_area.width.saturating_sub(1));
     frame.set_cursor_position((cursor_x, input_area.y));
 

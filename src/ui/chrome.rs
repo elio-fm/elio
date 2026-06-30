@@ -8,7 +8,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
-use unicode_width::UnicodeWidthChar;
 
 pub(super) fn render_toolbar(
     frame: &mut Frame<'_>,
@@ -319,50 +318,21 @@ fn render_local_filter_status(frame: &mut Frame<'_>, area: Rect, app: &App, pale
 
     let query = app.local_filter_query();
     let text = format!("/{query}");
-    let (rendered, hidden_width) = local_filter_visible_text(&text, area.width as usize);
+    let (rendered, cursor_offset) = helpers::input_window(
+        &text,
+        app.local_filter_cursor().saturating_add(1),
+        area.width,
+    );
     frame.render_widget(
         Paragraph::new(rendered).style(Style::default().bg(palette.chrome).fg(palette.text)),
         area,
     );
 
-    let cursor_offset = helpers::display_width("/").saturating_add(helpers::display_width(
-        &query
-            .chars()
-            .take(app.local_filter_cursor())
-            .collect::<String>(),
-    )) as u16;
     let cursor_x = area
         .x
-        .saturating_add(cursor_offset.saturating_sub(hidden_width as u16))
+        .saturating_add(cursor_offset)
         .min(area.x + area.width.saturating_sub(1));
     frame.set_cursor_position((cursor_x, area.y));
-}
-
-fn local_filter_visible_text(text: &str, width: usize) -> (String, usize) {
-    let text_width = helpers::display_width(text);
-    if text_width <= width {
-        return (text.to_string(), 0);
-    }
-    if width <= 1 {
-        return ("…".to_string(), text_width.saturating_sub(1));
-    }
-
-    let suffix_width_limit = width - 1;
-    let mut suffix = Vec::new();
-    let mut suffix_width = 0usize;
-    for ch in text.chars().rev() {
-        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
-        if suffix_width + char_width > suffix_width_limit {
-            break;
-        }
-        suffix.push(ch);
-        suffix_width += char_width;
-    }
-    let suffix = suffix.into_iter().rev().collect::<String>();
-    (
-        format!("…{suffix}"),
-        text_width.saturating_sub(suffix_width),
-    )
 }
 
 fn local_filter_indicator(query: &str) -> String {

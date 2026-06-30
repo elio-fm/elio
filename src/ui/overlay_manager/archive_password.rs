@@ -48,12 +48,9 @@ pub(super) fn render_archive_password_overlay(
 
     let input = app.archive_password_input();
     let cursor_col = app.archive_password_cursor_col();
-    let char_count = input.chars().count();
-    let col = cursor_col.min(char_count);
-    let available = input_area.width as usize;
-    let h_start = col.saturating_sub(available);
-    let visible_count = char_count.saturating_sub(h_start).min(available);
-    let visible_text = "*".repeat(visible_count);
+    let masked_input = "*".repeat(input.chars().count());
+    let (visible_text, visible_cursor_col) =
+        helpers::input_window(&masked_input, cursor_col, input_area.width);
 
     let line = if input.is_empty() {
         Line::from(Span::styled(
@@ -73,9 +70,8 @@ pub(super) fn render_archive_password_overlay(
         input_area,
     );
 
-    let visible_cursor_col = col.saturating_sub(h_start);
-    let cursor_x = (input_area.x + visible_cursor_col as u16)
-        .min(input_area.x + input_area.width.saturating_sub(1));
+    let cursor_x =
+        (input_area.x + visible_cursor_col).min(input_area.x + input_area.width.saturating_sub(1));
     frame.set_cursor_position((cursor_x, input_area.y));
 
     if let Some(error) = app.archive_password_error() {

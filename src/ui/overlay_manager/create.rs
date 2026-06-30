@@ -96,23 +96,13 @@ pub(super) fn render_create_overlay(
             )
         };
 
+        let prefix_width = helpers::display_width(icon).saturating_add(2) as u16;
         let text_width = list_area
             .width
-            .saturating_sub(3)
-            .saturating_sub(if show_scrollbar { 2 } else { 0 }) as usize;
-        let chars: Vec<char> = line_text.chars().collect();
-        let col = if is_cursor_line {
-            cursor_col.min(chars.len())
-        } else {
-            0
-        };
-        let h_start = col.saturating_sub(text_width);
-
-        let mut visible_text: String = chars.iter().skip(h_start).take(text_width).collect();
-        if h_start > 0 && !visible_text.is_empty() {
-            visible_text.remove(0);
-            visible_text.insert(0, '…');
-        }
+            .saturating_sub(prefix_width)
+            .saturating_sub(if show_scrollbar { 2 } else { 0 });
+        let col = if is_cursor_line { cursor_col } else { 0 };
+        let (visible_text, visible_col) = helpers::input_window(line_text, col, text_width);
 
         let text_style = if is_cursor_line {
             Style::default()
@@ -171,8 +161,7 @@ pub(super) fn render_create_overlay(
         }
 
         if is_cursor_line {
-            let visible_col = col.saturating_sub(h_start);
-            let cursor_x = row_rect.x + 3 + visible_col as u16;
+            let cursor_x = row_rect.x + prefix_width + visible_col;
             let cursor_x = cursor_x.min(row_rect.x + row_rect.width.saturating_sub(1));
             cursor_screen_pos = Some((cursor_x, row_rect.y));
         }

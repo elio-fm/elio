@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed video thumbnails not appearing for the first file when starting elio inside a video folder. ([#195])
 - Fixed inline video preview redraws that could leave only partial metadata visible after navigating between videos.
 - Fixed the Help overlay in small windows and with large terminal fonts so overflowing controls remain readable and scrollable.
+- Fixed editing very long names in rename, create, bulk rename, fuzzy find, and `/` filters.
 
 ## [1.9.0] - 2026-06-17
 

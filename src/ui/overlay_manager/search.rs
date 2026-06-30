@@ -271,25 +271,13 @@ fn render_query_line(
     origin_x: u16,
     palette: Palette,
 ) -> (Line<'static>, u16) {
-    let chars = query.chars().collect::<Vec<_>>();
-    let cursor = cursor.min(chars.len());
-    let available = width.saturating_sub(3) as usize;
-
-    let mut start = 0usize;
-    if cursor > available {
-        start = cursor - available;
-    }
-    let mut visible = chars.iter().skip(start).take(available).collect::<String>();
-    if start > 0 && !visible.is_empty() {
-        visible.remove(0);
-        visible.insert(0, '…');
-    }
-
-    let visible_chars = visible.chars().collect::<Vec<_>>();
-    let visible_cursor = cursor.saturating_sub(start).min(visible_chars.len());
+    let icon = "󰍉";
+    let prefix_width = helpers::display_width(icon).saturating_add(2) as u16;
+    let (visible, visible_cursor) =
+        helpers::input_window(query, cursor, width.saturating_sub(prefix_width));
 
     let mut spans = vec![
-        Span::styled("󰍉", Style::default().fg(palette.accent)),
+        Span::styled(icon, Style::default().fg(palette.accent)),
         Span::raw("  "),
     ];
     spans.push(Span::styled(
@@ -300,8 +288,8 @@ fn render_query_line(
     ));
 
     let cursor_x = origin_x
-        .saturating_add(3)
-        .saturating_add(visible_cursor as u16)
+        .saturating_add(prefix_width)
+        .saturating_add(visible_cursor)
         .min(origin_x.saturating_add(width.saturating_sub(1)));
     (Line::from(spans), cursor_x)
 }
