@@ -1,0 +1,73 @@
+name: macOS Artifact Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build"
+        required: true
+        default: "v1.10.0"
+      version:
+        description: "Version string for the artifact name"
+        required: true
+        default: "1.10.0"
+  pull_request:
+    paths:
+      - ".github/workflows/macos-artifact-test.yml"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-macos:
+    name: Build test macOS artifact
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.ref || 'v1.10.0' }}
+
+      - name: Install Rust 1.95.0
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --locked --release --target aarch64-apple-darwin
+
+      - name: Ad-hoc sign macOS binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="target/aarch64-apple-darwin/release/elio"
+          codesign --force --sign - "${bin}"
+          codesign --verify --strict --verbose=2 "${bin}"
+          "${bin}" --version
+
+      - name: Package macOS artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ github.event.inputs.version || '1.10.0' }}"
+          target="aarch64-apple-darwin"
+          bundle_dir="dist/elio-${version}-${target}"
+
+          mkdir -p "${bundle_dir}"
+          cp "target/${target}/release/elio" "${bundle_dir}/"
+          cp README.md LICENSE-MIT "${bundle_dir}/"
+          cd dist
+          COPYFILE_DISABLE=1 zip -r "elio-${version}-${target}.zip" "$(basename "${bundle_dir}")"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-asset-macos-test
+          path: dist/*.zip
