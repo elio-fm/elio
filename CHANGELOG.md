@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added ZIP archive creation for the focused item or current selection, with a configurable `create_archive` (`C`) shortcut, editable archive name, background progress, and cancellation. ([#215])
 
+### Changed
+
+- Made create and bulk rename overlays show more rows before scrolling, adapt better on short terminals, and use consistent scrollbar styling.
+
 ## [1.10.0] - 2026-06-30
 
 ### Added

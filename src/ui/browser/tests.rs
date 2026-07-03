@@ -806,12 +806,12 @@ fn create_overlay_scrolls_to_keep_the_active_line_visible() {
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('a'))))
         .expect("create overlay should open");
-    for index in 0..10 {
+    for index in 0..14 {
         for ch in format!("file-{index:02}.txt").chars() {
             app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(ch))))
                 .expect("typing create line should succeed");
         }
-        if index < 9 {
+        if index < 13 {
             app.handle_event(Event::Key(KeyEvent::new(
                 KeyCode::Char('j'),
                 KeyModifiers::CONTROL,
@@ -827,7 +827,7 @@ fn create_overlay_scrolls_to_keep_the_active_line_visible() {
 
     assert_eq!(
         state.create_scroll_top, 2,
-        "create overlay should scroll once the cursor moves past the eighth visible line"
+        "create overlay should scroll once the cursor moves past the twelfth visible line"
     );
     assert!(
         rect_row_text(terminal.backend().buffer(), list_area, list_area.y).contains("file-02.txt"),
@@ -841,7 +841,7 @@ fn create_overlay_scrolls_to_keep_the_active_line_visible() {
                 .y
                 .saturating_add(list_area.height.saturating_sub(1)),
         )
-        .contains("file-09.txt"),
+        .contains("file-13.txt"),
         "expected the active create line to remain visible at the bottom of the list"
     );
 
@@ -852,7 +852,7 @@ fn create_overlay_scrolls_to_keep_the_active_line_visible() {
 fn bulk_rename_overlay_scrolls_to_keep_the_active_row_visible() {
     let root = temp_path("bulk-rename-overlay-scroll");
     fs::create_dir_all(&root).expect("failed to create temp root");
-    for index in 0..10 {
+    for index in 0..14 {
         fs::write(root.join(format!("file-{index:02}.txt")), "content")
             .expect("failed to write test file");
     }
@@ -861,13 +861,13 @@ fn bulk_rename_overlay_scrolls_to_keep_the_active_row_visible() {
     app.navigation.view_mode = crate::app::ViewMode::List;
     let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
 
-    for _ in 0..10 {
+    for _ in 0..14 {
         app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(' '))))
             .expect("selection toggle should succeed");
     }
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('r'))))
         .expect("bulk rename overlay should open");
-    for _ in 0..9 {
+    for _ in 0..13 {
         app.handle_event(Event::Key(KeyEvent::from(KeyCode::Down)))
             .expect("bulk rename cursor movement should succeed");
     }
@@ -883,7 +883,7 @@ fn bulk_rename_overlay_scrolls_to_keep_the_active_row_visible() {
     );
     assert_eq!(
         state.bulk_rename_scroll_top, 2,
-        "bulk rename overlay should scroll once the active row moves past the eighth visible line"
+        "bulk rename overlay should scroll once the active row moves past the twelfth visible line"
     );
     assert!(
         rect_row_text(terminal.backend().buffer(), list_area, list_area.y).contains("file-02.txt"),
@@ -897,7 +897,7 @@ fn bulk_rename_overlay_scrolls_to_keep_the_active_row_visible() {
                 .y
                 .saturating_add(list_area.height.saturating_sub(1)),
         )
-        .contains("file-09.txt"),
+        .contains("file-13.txt"),
         "expected the active bulk rename row to remain visible at the bottom of the list"
     );
 

@@ -1,3 +1,4 @@
+use super::{edit_overlay_visible_rows, scrollbar::render_overlay_scrollbar_on_bg};
 use crate::app::{App, FrameState};
 use crate::ui::{
     helpers,
@@ -11,8 +12,6 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-const MAX_VISIBLE_CONTENTS: usize = 8;
-
 pub(super) fn render_archive_create_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -21,8 +20,8 @@ pub(super) fn render_archive_create_overlay(
     palette: Palette,
 ) {
     let item_count = app.archive_create_source_names().len();
-    let visible_lines = item_count.min(MAX_VISIBLE_CONTENTS) as u16;
     let has_error = app.archive_create_error().is_some();
+    let visible_lines = edit_overlay_visible_rows(area, item_count, 7 + u16::from(has_error));
     let popup_width = area.width.saturating_sub(8).clamp(40, 68);
     let popup_height = visible_lines + 7 + u16::from(has_error);
     let popup = helpers::centered_rect(area, popup_width, popup_height);
@@ -122,10 +121,15 @@ fn render_contents_list(
     state.archive_create_list_area = Some(list_area);
     let source_names = app.archive_create_source_names();
     let show_scrollbar = source_names.len() > visible_lines;
+    let scrollbar_area = show_scrollbar.then_some(Rect {
+        x: list_area.x + list_area.width.saturating_sub(1),
+        width: 1,
+        ..list_area
+    });
     let scroll_top = app.archive_create_source_scroll(visible_lines);
     let row_width = list_area
         .width
-        .saturating_sub(if show_scrollbar { 2 } else { 0 });
+        .saturating_sub(if show_scrollbar { 1 } else { 0 });
 
     for (row_offset, name) in source_names
         .iter()
@@ -162,26 +166,15 @@ fn render_contents_list(
         );
     }
 
-    if show_scrollbar {
-        let bar_x = list_area.x + list_area.width.saturating_sub(1);
-        let thumb_size = (visible_lines * visible_lines / source_names.len()).max(1);
-        let max_scroll = source_names.len().saturating_sub(visible_lines);
-        let thumb_top = if max_scroll == 0 || visible_lines <= thumb_size {
-            0
-        } else {
-            scroll_top * (visible_lines - thumb_size) / max_scroll
-        };
-        for row_offset in 0..visible_lines {
-            let in_thumb = row_offset >= thumb_top && row_offset < thumb_top + thumb_size;
-            let bar_char = if in_thumb { "▐" } else { " " };
-            let bar_color = if in_thumb {
-                palette.muted
-            } else {
-                palette.path_bg
-            };
-            frame.buffer_mut()[(bar_x, list_area.y + row_offset as u16)].set_symbol(bar_char);
-            frame.buffer_mut()[(bar_x, list_area.y + row_offset as u16)]
-                .set_style(Style::default().bg(palette.path_bg).fg(bar_color));
-        }
+    if let Some(scrollbar_area) = scrollbar_area {
+        render_overlay_scrollbar_on_bg(
+            frame,
+            scrollbar_area,
+            source_names.len(),
+            visible_lines,
+            scroll_top,
+            palette,
+            palette.path_bg,
+        );
     }
 }
