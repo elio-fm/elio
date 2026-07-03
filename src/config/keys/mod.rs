@@ -62,13 +62,14 @@ impl KeyBindings {
             .collect()
     }
 
-    fn bindings(&self) -> [(&KeyList, Action); 45] {
+    fn bindings(&self) -> [(&KeyList, Action); 46] {
         [
             (&self.quit, Action::Quit),
             (&self.quit_without_cd, Action::QuitWithoutCd),
             (&self.yank, Action::Yank),
             (&self.cut, Action::Cut),
             (&self.paste, Action::Paste),
+            (&self.create_archive, Action::CreateArchive),
             (&self.extract_archive, Action::ExtractArchive),
             (&self.symlink_absolute, Action::SymlinkAbsolute),
             (&self.symlink_relative, Action::SymlinkRelative),

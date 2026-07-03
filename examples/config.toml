@@ -114,6 +114,7 @@
 # cut                  = "x"
 # paste                = "p"
 # extract_archive      = "e"
+# create_archive       = "C"
 # symlink_absolute     = "-"
 # symlink_relative     = "_"
 # trash                = ["d", "del"]

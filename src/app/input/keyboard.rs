@@ -38,6 +38,14 @@ impl App {
         }
     }
 
+    fn has_active_cancelable_job(&self) -> bool {
+        self.jobs.trash_progress.is_some()
+            || self.jobs.restore_progress.is_some()
+            || self.jobs.archive_create_progress.is_some()
+            || self.jobs.archive_extract_progress.is_some()
+            || self.jobs.paste_progress.is_some()
+    }
+
     pub(in crate::app) fn scroll_help_by(&mut self, delta: isize) {
         let max_scroll = self.help_scroll_max();
         if delta.is_negative() {
@@ -62,12 +70,24 @@ impl App {
             return Ok(());
         }
 
+        if is_cancel_key(key)
+            && !self.navigation.selected_paths.is_empty()
+            && self.has_active_cancelable_job()
+        {
+            self.clear_selection();
+            return Ok(());
+        }
+
         if self.overlays.trash.is_some() {
             return self.handle_trash_key(key);
         }
 
         if self.overlays.restore.is_some() {
             return self.handle_restore_key(key);
+        }
+
+        if self.overlays.archive_create.is_some() {
+            return self.handle_archive_create_key(key);
         }
 
         if self.overlays.archive_password.is_some() {
@@ -151,6 +171,11 @@ impl App {
             } else if self.jobs.restore_progress.is_some() {
                 self.jobs.scheduler.cancel_restore(self.jobs.restore_token);
                 self.jobs.restore_progress = None;
+            } else if self.jobs.archive_create_progress.is_some() {
+                self.jobs
+                    .scheduler
+                    .cancel_archive_create(self.jobs.archive_create_token);
+                self.jobs.archive_create_progress = None;
             } else if self.jobs.archive_extract_progress.is_some() {
                 self.jobs
                     .scheduler
@@ -214,7 +239,9 @@ impl App {
 
         match key.code {
             KeyCode::Esc => {
-                if let Some(prog) = &self.jobs.trash_progress {
+                if !self.navigation.selected_paths.is_empty() {
+                    self.clear_selection();
+                } else if let Some(prog) = &self.jobs.trash_progress {
                     self.jobs.scheduler.cancel_trash(self.jobs.trash_token);
                     if prog.permanent {
                         self.jobs.trash_progress = None;
@@ -222,6 +249,11 @@ impl App {
                 } else if self.jobs.restore_progress.is_some() {
                     self.jobs.scheduler.cancel_restore(self.jobs.restore_token);
                     self.jobs.restore_progress = None;
+                } else if self.jobs.archive_create_progress.is_some() {
+                    self.jobs
+                        .scheduler
+                        .cancel_archive_create(self.jobs.archive_create_token);
+                    self.jobs.archive_create_progress = None;
                 } else if self.jobs.archive_extract_progress.is_some() {
                     self.jobs
                         .scheduler
@@ -271,6 +303,7 @@ impl App {
             Action::Yank => self.yank(),
             Action::Cut => self.cut(),
             Action::Paste => self.paste()?,
+            Action::CreateArchive => self.open_archive_create_prompt(),
             Action::ExtractArchive => self.extract_focused_archive()?,
             Action::SymlinkAbsolute => self.link_yanked(false)?,
             Action::SymlinkRelative => self.link_yanked(true)?,
@@ -460,6 +493,11 @@ fn should_use_grid_zoom_for_symlink_key(
             .clipboard
             .as_ref()
             .is_some_and(|clipboard| clipboard.op == ClipOp::Yank && !clipboard.paths.is_empty())
+}
+
+fn is_cancel_key(key: KeyEvent) -> bool {
+    matches!(key.code, KeyCode::Esc)
+        || key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c'))
 }
 
 fn is_help_shortcut(key: KeyEvent) -> bool {

@@ -228,6 +228,7 @@ fn run_app(
             || app.create_is_open()
             || app.rename_is_open()
             || app.bulk_rename_is_open()
+            || app.archive_create_is_open()
             || app.archive_password_is_open();
         if wants_search_cursor != search_cursor_active {
             if wants_search_cursor {

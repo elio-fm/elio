@@ -236,6 +236,49 @@ impl App {
                         }
                     }
                 }
+                JobResult::ArchiveCreate(build) => {
+                    if build.token != self.jobs.archive_create_token {
+                        continue;
+                    }
+                    if build.done {
+                        self.jobs.archive_create_progress = None;
+                        self.jobs.archive_create_path = None;
+                        let source_cwd = self
+                            .jobs
+                            .archive_create_source_cwd
+                            .take()
+                            .unwrap_or_else(|| self.navigation.cwd.clone());
+                        let status = build.status.unwrap_or_default();
+                        let nav_target = self
+                            .navigation
+                            .directory_runtime
+                            .pending_load
+                            .as_ref()
+                            .map(|load| load.target_cwd.as_path());
+                        let nav_to_source = nav_target == Some(source_cwd.as_path());
+                        if nav_to_source
+                            || (source_cwd == self.navigation.cwd && nav_target.is_none())
+                        {
+                            let _ = self.queue_directory_load(PendingDirectoryLoad {
+                                token: 0,
+                                target_cwd: source_cwd,
+                                previous_cwd: self.navigation.cwd.clone(),
+                                previous_selected_path: None,
+                                previous_selection_name: None,
+                                reselect_path: build.output_path,
+                                history_mode: DirectoryHistoryMode::None,
+                                refresh_search: false,
+                                completion: DirectoryLoadCompletion::Status(status),
+                            });
+                        } else {
+                            self.status = status;
+                        }
+                    } else if let Some(progress) = &mut self.jobs.archive_create_progress {
+                        progress.completed = build.completed;
+                        progress.total = build.total;
+                    }
+                    dirty = true;
+                }
                 JobResult::ArchiveExtract(build) => {
                     if build.token != self.jobs.archive_extract_token {
                         continue;

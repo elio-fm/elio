@@ -257,6 +257,27 @@ pub(in crate::app) struct PreviewRequest {
 }
 
 #[derive(Clone, Debug)]
+pub(in crate::app) struct ArchiveCreateRequest {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) cwd: PathBuf,
+    pub(in crate::app) sources: Vec<PathBuf>,
+    pub(in crate::app) output_name: String,
+}
+
+#[derive(Debug)]
+pub(in crate::app) struct ArchiveCreateBuild {
+    pub(in crate::app) token: u64,
+    pub(in crate::app) completed: usize,
+    pub(in crate::app) total: usize,
+    /// `true` on the final result; `false` on intermediate progress updates.
+    pub(in crate::app) done: bool,
+    /// Populated only when `done = true`.
+    pub(in crate::app) output_path: Option<PathBuf>,
+    /// Populated only when `done = true`.
+    pub(in crate::app) status: Option<String>,
+}
+
+#[derive(Clone, Debug)]
 pub(in crate::app) struct ArchiveExtractRequest {
     pub(in crate::app) token: u64,
     pub(in crate::app) archive_path: PathBuf,
@@ -349,6 +370,7 @@ pub(in crate::app) enum JobResult {
     SearchBatch(SearchBatchBuild),
     Search(SearchBuild),
     Preview(Box<PreviewBuild>),
+    ArchiveCreate(ArchiveCreateBuild),
     ArchiveExtract(ArchiveExtractBuild),
     Paste(PasteBuild),
     Trash(TrashBuild),

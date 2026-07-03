@@ -85,6 +85,11 @@ pub(super) struct Clipboard {
     pub(super) op: ClipOp,
 }
 
+pub(super) struct ArchiveCreateProgress {
+    pub(super) completed: usize,
+    pub(super) total: usize,
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct ArchiveExtractProgress {
     pub(super) completed: usize,
@@ -148,6 +153,15 @@ pub(super) struct RestoreOverlay {
     pub(super) targets: Vec<TrashTarget>,
     pub(super) scroll: usize,
     pub(super) confirmed: bool,
+}
+
+pub(super) struct ArchiveCreateOverlay {
+    pub(super) sources: Vec<PathBuf>,
+    pub(super) source_names: Vec<String>,
+    pub(super) source_scroll: usize,
+    pub(super) input: String,
+    pub(super) cursor_col: usize,
+    pub(super) error: Option<String>,
 }
 
 #[derive(Clone)]
@@ -639,6 +653,7 @@ pub(in crate::app) struct PreviewRuntime {
 pub(crate) struct OverlayState {
     pub(in crate::app) trash: Option<TrashOverlay>,
     pub(in crate::app) restore: Option<RestoreOverlay>,
+    pub(in crate::app) archive_create: Option<ArchiveCreateOverlay>,
     pub(in crate::app) archive_password: Option<ArchivePasswordOverlay>,
     pub(in crate::app) create: Option<CreateOverlay>,
     pub(in crate::app) rename: Option<RenameOverlay>,
@@ -659,6 +674,10 @@ pub(in crate::app) struct JobRuntime {
     pub(in crate::app) search_cache: Option<SearchCache>,
     pub(in crate::app) scheduler: JobScheduler,
     pub(in crate::app) clipboard: Option<Clipboard>,
+    pub(in crate::app) archive_create_token: u64,
+    pub(in crate::app) archive_create_progress: Option<ArchiveCreateProgress>,
+    pub(in crate::app) archive_create_source_cwd: Option<PathBuf>,
+    pub(in crate::app) archive_create_path: Option<PathBuf>,
     pub(in crate::app) archive_extract_token: u64,
     pub(in crate::app) archive_extract_progress: Option<ArchiveExtractProgress>,
     pub(in crate::app) archive_extract_source_cwd: Option<PathBuf>,
@@ -828,6 +847,10 @@ impl App {
                 search_cache: None,
                 scheduler,
                 clipboard: None,
+                archive_create_token: 0,
+                archive_create_progress: None,
+                archive_create_source_cwd: None,
+                archive_create_path: None,
                 archive_extract_token: 0,
                 archive_extract_progress: None,
                 archive_extract_source_cwd: None,

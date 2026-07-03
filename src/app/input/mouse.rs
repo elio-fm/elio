@@ -12,6 +12,10 @@ impl App {
             return self.handle_restore_mouse(mouse);
         }
 
+        if self.overlays.archive_create.is_some() {
+            return self.handle_archive_create_mouse(mouse);
+        }
+
         if self.overlays.archive_password.is_some() {
             return self.handle_archive_password_mouse(mouse);
         }

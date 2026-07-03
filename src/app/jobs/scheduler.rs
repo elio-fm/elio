@@ -6,11 +6,11 @@ use super::{
 use super::{
     pool::{preview::PreviewPool, search::SearchPool},
     tasks::{
-        archive_extract::ArchiveExtractPool, directory::DirectoryPool,
-        directory_fingerprint::DirectoryFingerprintPool, directory_stats::DirectoryStatsPool,
-        git_status::GitStatusPool, image::ImagePreparePool, item_count::DirectoryItemCountPool,
-        line_count::PreviewLineCountPool, paste::PastePool, pdf_probe::PdfProbePool,
-        pdf_render::PdfRenderPool, restore::RestorePool, trash::TrashPool,
+        archive_create::ArchiveCreatePool, archive_extract::ArchiveExtractPool,
+        directory::DirectoryPool, directory_fingerprint::DirectoryFingerprintPool,
+        directory_stats::DirectoryStatsPool, git_status::GitStatusPool, image::ImagePreparePool,
+        item_count::DirectoryItemCountPool, line_count::PreviewLineCountPool, paste::PastePool,
+        pdf_probe::PdfProbePool, pdf_render::PdfRenderPool, restore::RestorePool, trash::TrashPool,
     },
     *,
 };
@@ -24,6 +24,7 @@ use std::{
 pub(in crate::app) struct JobScheduler {
     directory: DirectoryPool,
     directory_fingerprint: DirectoryFingerprintPool,
+    archive_create: ArchiveCreatePool,
     archive_extract: ArchiveExtractPool,
     paste: PastePool,
     trash: TrashPool,
@@ -57,6 +58,7 @@ impl JobScheduler {
         let metrics = Arc::new(Mutex::new(SchedulerMetrics::default()));
         Self {
             directory: DirectoryPool::new(1, result_tx.clone(), Arc::clone(&metrics)),
+            archive_create: ArchiveCreatePool::new(result_tx.clone()),
             archive_extract: ArchiveExtractPool::new(result_tx.clone()),
             paste: PastePool::new(result_tx.clone()),
             trash: TrashPool::new(result_tx.clone()),
@@ -214,6 +216,14 @@ impl JobScheduler {
             .retain_pending(path, size, modified, keep_variants);
     }
 
+    pub(in crate::app) fn submit_archive_create(&self, request: ArchiveCreateRequest) -> bool {
+        self.archive_create.submit(request)
+    }
+
+    pub(in crate::app) fn cancel_archive_create(&self, token: u64) {
+        self.archive_create.cancel_create(token);
+    }
+
     pub(in crate::app) fn submit_archive_extract(&self, request: ArchiveExtractRequest) -> bool {
         self.archive_extract.submit(request)
     }
@@ -273,6 +283,7 @@ impl JobScheduler {
         !lock_unpoison(&self.buffered_results).is_empty()
             || self.directory.has_pending_work()
             || self.directory_fingerprint.has_pending_work()
+            || self.archive_create.has_pending_work()
             || self.archive_extract.has_pending_work()
             || self.paste.has_pending_work()
             || self.trash.has_pending_work()

@@ -18,6 +18,7 @@ pub(in crate::config) struct KeysConfigOverride {
     pub(super) yank: Option<KeyConfigOverride>,
     pub(super) cut: Option<KeyConfigOverride>,
     pub(super) paste: Option<KeyConfigOverride>,
+    pub(super) create_archive: Option<KeyConfigOverride>,
     pub(super) extract_archive: Option<KeyConfigOverride>,
     pub(super) symlink_absolute: Option<KeyConfigOverride>,
     pub(super) symlink_relative: Option<KeyConfigOverride>,

@@ -42,6 +42,7 @@ pub(super) fn render_help(
         keys.action(&kb.rename, "rename (bulk if selection)"),
         keys.action_with_suffix(&kb.restore_from_trash, " (in trash)", "restore from trash"),
         keys.action(&kb.extract_archive, "extract archive"),
+        keys.action(&kb.create_archive, "create archive"),
         keys.action(&kb.shell, "open shell here"),
         keys.action(&kb.open, "open with default app"),
         keys.action(&kb.open_with, "open with"),
@@ -125,11 +126,7 @@ pub(super) fn render_help(
     } else {
         area.width.saturating_sub(4).clamp(44, 90)
     };
-    let popup_height = if area.height >= 38 {
-        36
-    } else {
-        area.height.saturating_sub(2).clamp(10, 36)
-    };
+    let popup_height = area.height.saturating_sub(2).clamp(10, 37);
     let popup = helpers::centered_rect(area, popup_width, popup_height);
     state.help_panel = Some(popup);
     frame.render_widget(Clear, popup);

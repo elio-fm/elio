@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added ZIP archive creation for the focused item or current selection, with a configurable `create_archive` (`C`) shortcut, editable archive name, background progress, and cancellation. ([#215])
+
 ## [1.10.0] - 2026-06-30
 
 ### Added
@@ -261,6 +265,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#215]: https://github.com/elio-fm/elio/issues/215
 [#201]: https://github.com/elio-fm/elio/issues/201
 [#199]: https://github.com/elio-fm/elio/issues/199
 [#195]: https://github.com/elio-fm/elio/issues/195

@@ -2,6 +2,7 @@ use crate::app::{App, FrameState};
 use crate::ui::theme::Palette;
 use ratatui::{Frame, layout::Rect};
 
+mod archive_create;
 mod archive_password;
 mod bulk_rename;
 mod copy;
@@ -49,6 +50,16 @@ pub(super) fn render_create_overlay(
     palette: Palette,
 ) {
     create::render_create_overlay(frame, area, app, state, palette);
+}
+
+pub(super) fn render_archive_create_overlay(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    state: &mut FrameState,
+    palette: Palette,
+) {
+    archive_create::render_archive_create_overlay(frame, area, app, state, palette);
 }
 
 pub(super) fn render_archive_password_overlay(
