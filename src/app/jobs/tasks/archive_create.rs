@@ -125,10 +125,11 @@ fn run_create(
     let mut last_progress_at: Option<Instant> = None;
     let stopped_early = AtomicBool::new(false);
 
-    let result = crate::archive::plan_create_zip_archive(
+    let result = crate::archive::plan_create_archive(
         &request.cwd,
         request.sources.clone(),
         &request.output_name,
+        request.options.clone(),
     )
     .and_then(|plan| {
         crate::archive::create_zip_archive(
@@ -161,16 +162,19 @@ fn run_create(
             Some("Archive creation cancelled".to_string()),
         ),
         Ok(summary) => {
+            let protected = request.options.encryption.is_password_set();
             let name = summary
                 .output_path
                 .file_name()
                 .and_then(|name| name.to_str())
                 .unwrap_or("archive.zip")
                 .to_string();
-            (
-                Some(summary.output_path),
-                Some(format!("Created \"{name}\"")),
-            )
+            let status = if protected {
+                format!("Created protected \"{name}\"")
+            } else {
+                format!("Created \"{name}\"")
+            };
+            (Some(summary.output_path), Some(status))
         }
         Err(error) if stopped_early.load(Ordering::Relaxed) => (None, Some(error.to_string())),
         Err(error) => {

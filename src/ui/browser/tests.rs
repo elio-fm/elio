@@ -905,6 +905,37 @@ fn bulk_rename_overlay_scrolls_to_keep_the_active_row_visible() {
 }
 
 #[test]
+fn archive_create_overlay_adapts_contents_to_short_terminals() {
+    let root = temp_path("archive-create-short-terminal");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("source.txt"), "alpha").expect("failed to write source");
+
+    for (height, shows_contents) in [(8, false), (10, true)] {
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('C'))))
+            .expect("archive create overlay should open");
+        let mut terminal =
+            Terminal::new(TestBackend::new(94, height)).expect("terminal should init");
+
+        let state = draw_ui(&mut terminal, &mut app);
+        let panel = state
+            .archive_create_panel
+            .expect("archive create panel should render");
+
+        assert_eq!(
+            state.archive_create_list_area.is_some(),
+            shows_contents,
+            "contents visibility should track whether a complete row fits at height {height}"
+        );
+        if !shows_contents {
+            assert_eq!(panel.height, 6, "compact popup should not leave dead rows");
+        }
+    }
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn copy_overlay_renders_expected_labels_and_hit_rects() {
     let root = temp_path("copy-overlay-render");
     fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
