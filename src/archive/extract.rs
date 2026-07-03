@@ -48,6 +48,10 @@ impl ArchivePassword {
         Self(password.into())
     }
 
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+
     fn as_seven_zip_password(&self) -> SevenZipPassword {
         SevenZipPassword::new(&self.0)
     }

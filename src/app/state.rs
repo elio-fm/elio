@@ -155,18 +155,26 @@ pub(super) struct RestoreOverlay {
     pub(super) confirmed: bool,
 }
 
+#[derive(Debug)]
 pub(super) struct ArchiveCreateOverlay {
     pub(super) sources: Vec<PathBuf>,
     pub(super) source_names: Vec<String>,
     pub(super) source_scroll: usize,
     pub(super) input: String,
     pub(super) cursor_col: usize,
+    pub(super) options: crate::archive::CreateArchiveOptions,
     pub(super) error: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum ArchivePasswordPurpose {
+    Extract { archive_path: PathBuf },
+    Create,
 }
 
 #[derive(Clone)]
 pub(super) struct ArchivePasswordOverlay {
-    pub(super) archive_path: PathBuf,
+    pub(super) purpose: ArchivePasswordPurpose,
     pub(super) input: String,
     pub(super) cursor_col: usize,
     pub(super) visible: bool,
@@ -176,7 +184,7 @@ pub(super) struct ArchivePasswordOverlay {
 impl fmt::Debug for ArchivePasswordOverlay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ArchivePasswordOverlay")
-            .field("archive_path", &self.archive_path)
+            .field("purpose", &self.purpose)
             .field("input", &"<redacted>")
             .field("cursor_col", &self.cursor_col)
             .field("visible", &self.visible)

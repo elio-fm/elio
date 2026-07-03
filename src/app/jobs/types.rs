@@ -262,6 +262,7 @@ pub(in crate::app) struct ArchiveCreateRequest {
     pub(in crate::app) cwd: PathBuf,
     pub(in crate::app) sources: Vec<PathBuf>,
     pub(in crate::app) output_name: String,
+    pub(in crate::app) options: crate::archive::CreateArchiveOptions,
 }
 
 #[derive(Debug)]

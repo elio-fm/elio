@@ -20,11 +20,26 @@ pub(super) fn render_archive_create_overlay(
     palette: Palette,
 ) {
     let item_count = app.archive_create_source_names().len();
-    let has_error = app.archive_create_error().is_some();
-    let visible_lines = edit_overlay_visible_rows(area, item_count, 7 + u16::from(has_error));
+    let visible_lines = edit_overlay_visible_rows(area, item_count, 8);
     let popup_width = area.width.saturating_sub(8).clamp(40, 68);
-    let popup_height = visible_lines + 7 + u16::from(has_error);
-    let popup = helpers::centered_rect(area, popup_width, popup_height);
+    let max_height = (visible_lines + 8).min(area.height.max(4));
+    let inner_height = max_height.saturating_sub(2);
+    let footer_height = u16::from(inner_height >= 4);
+    let content_lines = inner_height
+        .saturating_sub(3 + footer_height + 2)
+        .min(visible_lines);
+    let content_height = if content_lines > 0 {
+        content_lines + 2
+    } else {
+        0
+    };
+    let popup_height = (3 + content_height + footer_height).saturating_add(2);
+    let popup = Rect {
+        x: area.x + area.width.saturating_sub(popup_width) / 2,
+        y: area.y + area.height.saturating_sub(popup_height) / 2,
+        width: popup_width.min(area.width),
+        height: popup_height,
+    };
     state.archive_create_panel = Some(popup);
 
     frame.render_widget(Clear, popup);
@@ -38,30 +53,56 @@ pub(super) fn render_archive_create_overlay(
     );
 
     let inner = helpers::inner_with_padding(popup);
-    let error_height = u16::from(has_error);
+
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),
-            Constraint::Length(error_height),
-            Constraint::Length(visible_lines + 2),
+            Constraint::Length(content_height),
+            Constraint::Length(footer_height),
         ])
         .split(inner);
 
     render_name_input(frame, rows[0], app, palette);
+    if content_lines > 0 {
+        render_contents_list(frame, rows[1], app, state, palette, content_lines as usize);
+    }
+    if footer_height > 0 {
+        render_protection_row(frame, rows[2], app, palette);
+    }
+}
 
+fn render_protection_row(frame: &mut Frame<'_>, area: Rect, app: &App, palette: Palette) {
     if let Some(error) = app.archive_create_error() {
         frame.render_widget(
             Paragraph::new(Line::from(vec![Span::styled(
-                helpers::clamp_label(error, rows[1].width.saturating_sub(2) as usize),
+                helpers::clamp_label(error, area.width as usize),
                 Style::default().fg(palette.accent),
             )]))
             .style(Style::default().bg(palette.chrome_alt).fg(palette.text)),
-            rows[1],
+            area,
         );
+        return;
     }
 
-    render_contents_list(frame, rows[2], app, state, palette, visible_lines as usize);
+    let label = app.archive_create_protection_label();
+    let hint = app.archive_create_protection_hint();
+    let hint_width = hint.chars().count() as u16;
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(0), Constraint::Length(hint_width)])
+        .split(area);
+
+    frame.render_widget(
+        Paragraph::new(label).style(Style::default().bg(palette.chrome_alt).fg(palette.text)),
+        columns[0],
+    );
+    if !hint.is_empty() {
+        frame.render_widget(
+            Paragraph::new(hint).style(Style::default().bg(palette.chrome_alt).fg(palette.muted)),
+            columns[1],
+        );
+    }
 }
 
 fn render_name_input(frame: &mut Frame<'_>, area: Rect, app: &App, palette: Palette) {

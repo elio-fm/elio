@@ -3,7 +3,7 @@ use super::helpers::{
     temp_path, wait_for_directory_load, write_binary_zip_entries,
     write_encrypted_seven_zip_entries, write_encrypted_zip_entries,
 };
-use std::{fs, thread, time::Duration};
+use std::{fs, io::Read, thread, time::Duration};
 
 #[test]
 fn e_extracts_focused_zip_archive() {
@@ -302,6 +302,106 @@ fn c_create_archive_clears_selection_when_started() {
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(archive.as_path())
     );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn archive_create_password_returns_to_create_overlay_before_creating() {
+    let root = temp_path("create-protected-zip");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let alpha = root.join("alpha.txt");
+    fs::write(&alpha, "alpha").expect("failed to write alpha");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('C'))))
+        .expect("C should open archive creation");
+    assert_eq!(app.archive_create_protection_label(), "");
+    assert_eq!(app.archive_create_protection_hint(), "Alt+P add password");
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('p'),
+        KeyModifiers::ALT,
+    )))
+    .expect("Alt+P should open password prompt");
+    assert!(app.archive_password_is_open());
+    assert_eq!(app.archive_password_title_prefix(), "New password for");
+
+    let password = archive_test_password(&root);
+    type_archive_password(&mut app, &password);
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
+        .expect("password Enter should return to create overlay");
+
+    assert!(!app.archive_password_is_open());
+    assert!(app.archive_create_is_open());
+    assert!(!root.join("alpha.zip").exists());
+    assert_eq!(app.archive_create_protection_label(), "Password set");
+    assert_eq!(
+        app.archive_create_protection_hint(),
+        "Alt+P change  Alt+R remove"
+    );
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
+        .expect("create Enter should start archive creation");
+
+    let archive = root.join("alpha.txt.zip");
+    for _ in 0..200 {
+        let _ = app.process_background_jobs();
+        if archive.exists() && app.jobs.archive_create_progress.is_none() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    wait_for_directory_load(&mut app);
+
+    assert_eq!(app.status_message(), "Created protected \"alpha.txt.zip\"");
+    let file = fs::File::open(&archive).expect("archive should exist");
+    let mut zip = zip::ZipArchive::new(file).expect("created archive should be a ZIP");
+    assert!(zip.by_name("alpha.txt").is_err());
+    let mut entry = zip
+        .by_name_decrypt("alpha.txt", password.as_bytes())
+        .expect("password should decrypt archived file");
+    let mut contents = String::new();
+    entry
+        .read_to_string(&mut contents)
+        .expect("encrypted entry should be readable");
+    assert_eq!(contents, "alpha");
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn archive_create_password_can_be_removed_before_creating() {
+    let root = temp_path("create-remove-password");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("alpha.txt"), "alpha").expect("failed to write alpha");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('C'))))
+        .expect("C should open archive creation");
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('p'),
+        KeyModifiers::ALT,
+    )))
+    .expect("Alt+P should open password prompt");
+    type_archive_password(&mut app, &archive_test_password(&root));
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
+        .expect("password Enter should return to create overlay");
+    assert_eq!(app.archive_create_protection_label(), "Password set");
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('r'),
+        KeyModifiers::ALT,
+    )))
+    .expect("Alt+R should remove password");
+
+    assert_eq!(app.archive_create_protection_label(), "");
+    assert_eq!(app.archive_create_protection_hint(), "Alt+P add password");
+    assert_eq!(app.status_message(), "Archive password removed");
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

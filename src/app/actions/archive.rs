@@ -3,7 +3,7 @@ use crate::app::text_edit::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
 };
-use crate::archive::ArchivePassword;
+use crate::archive::{ArchiveEncryption, ArchivePassword};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::PathBuf;
 
@@ -39,13 +39,47 @@ impl App {
         self.overlays.archive_password.is_some()
     }
 
-    pub fn archive_password_archive_name(&self) -> &str {
-        self.overlays
-            .archive_password
-            .as_ref()
-            .and_then(|overlay| overlay.archive_path.file_name())
-            .and_then(|name| name.to_str())
-            .unwrap_or("archive")
+    pub fn archive_password_archive_name(&self) -> String {
+        let Some(overlay) = &self.overlays.archive_password else {
+            return "archive".to_string();
+        };
+        match &overlay.purpose {
+            ArchivePasswordPurpose::Extract { archive_path } => archive_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("archive")
+                .to_string(),
+            ArchivePasswordPurpose::Create => self.archive_create_input().to_string(),
+        }
+    }
+
+    pub fn archive_password_title_prefix(&self) -> &'static str {
+        let Some(overlay) = &self.overlays.archive_password else {
+            return "Password for";
+        };
+        match overlay.purpose {
+            ArchivePasswordPurpose::Extract { .. } => "Password for",
+            ArchivePasswordPurpose::Create
+                if self
+                    .overlays
+                    .archive_create
+                    .as_ref()
+                    .is_some_and(|create| create.options.encryption.is_password_set()) =>
+            {
+                "Change password for"
+            }
+            ArchivePasswordPurpose::Create => "New password for",
+        }
+    }
+
+    pub fn archive_password_placeholder(&self) -> &'static str {
+        let Some(overlay) = &self.overlays.archive_password else {
+            return "password…";
+        };
+        match overlay.purpose {
+            ArchivePasswordPurpose::Extract { .. } => "password…",
+            ArchivePasswordPurpose::Create => "new password…",
+        }
     }
 
     pub fn archive_password_input(&self) -> &str {
@@ -85,7 +119,7 @@ impl App {
         self.overlays.open_with = None;
         self.overlays.search = None;
         self.overlays.archive_password = Some(ArchivePasswordOverlay {
-            archive_path,
+            purpose: ArchivePasswordPurpose::Extract { archive_path },
             input: String::new(),
             cursor_col: 0,
             visible: false,
@@ -288,9 +322,22 @@ impl App {
             return Ok(());
         }
 
-        let archive_path = overlay.archive_path.clone();
-        if self.start_archive_extract(archive_path, Some(ArchivePassword::new(password)))? {
-            self.overlays.archive_password = None;
+        match &overlay.purpose {
+            ArchivePasswordPurpose::Extract { archive_path } => {
+                let archive_path = archive_path.clone();
+                if self.start_archive_extract(archive_path, Some(ArchivePassword::new(password)))? {
+                    self.overlays.archive_password = None;
+                }
+            }
+            ArchivePasswordPurpose::Create => {
+                if let Some(overlay) = &mut self.overlays.archive_create {
+                    overlay.options.encryption =
+                        ArchiveEncryption::Password(ArchivePassword::new(password));
+                    overlay.error = None;
+                    self.status.clear();
+                }
+                self.overlays.archive_password = None;
+            }
         }
         Ok(())
     }

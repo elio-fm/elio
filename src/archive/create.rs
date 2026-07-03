@@ -1,3 +1,4 @@
+use super::extract::ArchivePassword;
 use anyhow::{Context, Result, anyhow, bail};
 use std::{
     collections::BTreeSet,
@@ -5,12 +6,66 @@ use std::{
     io,
     path::{Component, Path, PathBuf},
 };
-use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
+use zip::{AesMode, CompressionMethod, ZipWriter, write::FileOptions};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CreateArchiveFormat {
+    Zip,
+}
+
+impl CreateArchiveFormat {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Zip => "ZIP",
+        }
+    }
+
+    pub(crate) fn supports_encryption(self) -> bool {
+        match self {
+            Self::Zip => true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ArchiveEncryption {
+    None,
+    Password(ArchivePassword),
+}
+
+impl ArchiveEncryption {
+    pub(crate) fn is_password_set(&self) -> bool {
+        matches!(self, Self::Password(_))
+    }
+
+    fn password(&self) -> Option<&ArchivePassword> {
+        match self {
+            Self::None => None,
+            Self::Password(password) => Some(password),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct CreateArchiveOptions {
+    pub(crate) format: CreateArchiveFormat,
+    pub(crate) encryption: ArchiveEncryption,
+}
+
+impl Default for CreateArchiveOptions {
+    fn default() -> Self {
+        Self {
+            format: CreateArchiveFormat::Zip,
+            encryption: ArchiveEncryption::None,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct CreateArchivePlan {
     pub(crate) sources: Vec<PathBuf>,
     pub(crate) output_path: PathBuf,
+    pub(crate) options: CreateArchiveOptions,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -54,15 +109,31 @@ pub(crate) fn normalize_zip_output_name(input: &str) -> Result<String> {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn plan_create_zip_archive(
     cwd: &Path,
     sources: Vec<PathBuf>,
     output_name: &str,
 ) -> Result<CreateArchivePlan> {
+    plan_create_archive(cwd, sources, output_name, CreateArchiveOptions::default())
+}
+
+pub(crate) fn plan_create_archive(
+    cwd: &Path,
+    sources: Vec<PathBuf>,
+    output_name: &str,
+    options: CreateArchiveOptions,
+) -> Result<CreateArchivePlan> {
     if sources.is_empty() {
         bail!("Select items to archive");
     }
     let output_name = normalize_zip_output_name(output_name)?;
+    if options.encryption.is_password_set() && !options.format.supports_encryption() {
+        bail!(
+            "{} does not support password protection",
+            options.format.label()
+        );
+    }
     let output_path = cwd.join(output_name);
     if fs::symlink_metadata(&output_path).is_ok() {
         let name = output_path
@@ -95,6 +166,7 @@ pub(crate) fn plan_create_zip_archive(
     Ok(CreateArchivePlan {
         sources,
         output_path,
+        options,
     })
 }
 
@@ -123,21 +195,27 @@ where
         }
     };
 
-    let result = write_zip_archive(file, &plan.sources, total, &mut progress, cancelled).and_then(
-        |completed| {
-            fs::rename(&staging_path, &plan.output_path).with_context(|| {
-                format!(
-                    "Could not move {} to {}",
-                    staging_path.display(),
-                    plan.output_path.display()
-                )
-            })?;
-            Ok(CreateArchiveSummary {
-                output_path: plan.output_path.clone(),
-                completed,
-            })
-        },
-    );
+    let result = write_zip_archive(
+        file,
+        &plan.sources,
+        total,
+        plan.options.encryption.password(),
+        &mut progress,
+        cancelled,
+    )
+    .and_then(|completed| {
+        fs::rename(&staging_path, &plan.output_path).with_context(|| {
+            format!(
+                "Could not move {} to {}",
+                staging_path.display(),
+                plan.output_path.display()
+            )
+        })?;
+        Ok(CreateArchiveSummary {
+            output_path: plan.output_path.clone(),
+            completed,
+        })
+    });
 
     if result.is_err() {
         let _ = fs::remove_file(&staging_path);
@@ -150,6 +228,7 @@ fn write_zip_archive<F, C>(
     file: File,
     sources: &[PathBuf],
     total: usize,
+    password: Option<&ArchivePassword>,
     progress: &mut F,
     cancelled: C,
 ) -> Result<usize>
@@ -159,6 +238,7 @@ where
 {
     let mut writer = ZipWriter::new(file);
     let mut completed = 0usize;
+    let settings = ZipCreateSettings { total, password };
     let mut sorted_sources = sources.to_vec();
     sorted_sources.sort_by_key(|source| archive_name(source));
 
@@ -169,7 +249,7 @@ where
             &source,
             Path::new(&root_name),
             &mut completed,
-            total,
+            settings,
             progress,
             &cancelled,
         )?;
@@ -179,12 +259,18 @@ where
     Ok(completed)
 }
 
+#[derive(Clone, Copy)]
+struct ZipCreateSettings<'a> {
+    total: usize,
+    password: Option<&'a ArchivePassword>,
+}
+
 fn add_path_to_zip<F, C>(
     writer: &mut ZipWriter<File>,
     source: &Path,
     archive_path: &Path,
     completed: &mut usize,
-    total: usize,
+    settings: ZipCreateSettings<'_>,
     progress: &mut F,
     cancelled: &C,
 ) -> Result<()>
@@ -199,15 +285,15 @@ where
     let metadata = fs::symlink_metadata(source)
         .with_context(|| format!("Could not inspect {}", source.display()))?;
     if metadata.file_type().is_symlink() {
-        add_symlink(writer, source, archive_path, completed, total, progress)?;
+        add_symlink(writer, source, archive_path, completed, settings, progress)?;
         return Ok(());
     }
     if metadata.is_dir() {
-        add_directory(writer, archive_path, &metadata)?;
+        add_directory(writer, archive_path, &metadata, settings.password)?;
         *completed += 1;
         progress(CreateArchiveProgress {
             completed: *completed,
-            total,
+            total: settings.total,
         });
         let mut children = fs::read_dir(source)
             .with_context(|| format!("Could not read {}", source.display()))?
@@ -221,7 +307,7 @@ where
                 &child.path(),
                 &child_archive_path,
                 completed,
-                total,
+                settings,
                 progress,
                 cancelled,
             )?;
@@ -229,11 +315,11 @@ where
         return Ok(());
     }
     if metadata.is_file() {
-        add_file(writer, source, archive_path, &metadata)?;
+        add_file(writer, source, archive_path, &metadata, settings.password)?;
         *completed += 1;
         progress(CreateArchiveProgress {
             completed: *completed,
-            total,
+            total: settings.total,
         });
         return Ok(());
     }
@@ -250,10 +336,11 @@ fn add_file(
     source: &Path,
     archive_path: &Path,
     metadata: &fs::Metadata,
+    password: Option<&ArchivePassword>,
 ) -> Result<()> {
     let name = zip_entry_name(archive_path, false)?;
     writer
-        .start_file(name, file_options(metadata))
+        .start_file(name, file_options(metadata, password))
         .context("Could not write ZIP entry")?;
     let mut input =
         File::open(source).with_context(|| format!("Could not open {}", source.display()))?;
@@ -265,10 +352,11 @@ fn add_directory(
     writer: &mut ZipWriter<File>,
     archive_path: &Path,
     metadata: &fs::Metadata,
+    password: Option<&ArchivePassword>,
 ) -> Result<()> {
     let name = zip_entry_name(archive_path, true)?;
     writer
-        .add_directory(name, file_options(metadata))
+        .add_directory(name, file_options(metadata, password))
         .context("Could not write ZIP directory")?;
     Ok(())
 }
@@ -278,7 +366,7 @@ fn add_symlink<F>(
     source: &Path,
     archive_path: &Path,
     completed: &mut usize,
-    total: usize,
+    settings: ZipCreateSettings<'_>,
     progress: &mut F,
 ) -> Result<()>
 where
@@ -287,9 +375,12 @@ where
     let target = fs::read_link(source)
         .with_context(|| format!("Could not read symlink {}", source.display()))?;
     let name = zip_entry_name(archive_path, false)?;
-    let options = SimpleFileOptions::default()
-        .compression_method(CompressionMethod::Stored)
-        .unix_permissions(0o120777);
+    let options = apply_zip_encryption(
+        FileOptions::default()
+            .compression_method(CompressionMethod::Stored)
+            .unix_permissions(0o120777),
+        settings.password,
+    );
     writer
         .start_file(name, options)
         .context("Could not write ZIP symlink")?;
@@ -298,22 +389,38 @@ where
     *completed += 1;
     progress(CreateArchiveProgress {
         completed: *completed,
-        total,
+        total: settings.total,
     });
     Ok(())
 }
 
-fn file_options(metadata: &fs::Metadata) -> SimpleFileOptions {
-    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        options.unix_permissions(metadata.permissions().mode())
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = metadata;
-        options
+fn file_options<'a>(
+    metadata: &fs::Metadata,
+    password: Option<&'a ArchivePassword>,
+) -> FileOptions<'a, ()> {
+    let options = FileOptions::default().compression_method(CompressionMethod::Stored);
+    let options = {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            options.unix_permissions(metadata.permissions().mode())
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = metadata;
+            options
+        }
+    };
+    apply_zip_encryption(options, password)
+}
+
+fn apply_zip_encryption<'a>(
+    options: FileOptions<'a, ()>,
+    password: Option<&'a ArchivePassword>,
+) -> FileOptions<'a, ()> {
+    match password {
+        Some(password) => options.with_aes_encryption(AesMode::Aes256, password.as_str()),
+        None => options,
     }
 }
 

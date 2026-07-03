@@ -4,7 +4,7 @@ use crate::app::text_edit::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
 };
-use crate::archive::normalize_zip_output_name;
+use crate::archive::{ArchiveEncryption, CreateArchiveOptions, normalize_zip_output_name};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::PathBuf;
 
@@ -39,6 +39,32 @@ impl App {
             .archive_create
             .as_ref()
             .and_then(|overlay| overlay.error.as_deref())
+    }
+
+    pub fn archive_create_protection_label(&self) -> &'static str {
+        let Some(overlay) = &self.overlays.archive_create else {
+            return "";
+        };
+        if overlay.options.format.supports_encryption()
+            && overlay.options.encryption.is_password_set()
+        {
+            "Password set"
+        } else {
+            ""
+        }
+    }
+
+    pub fn archive_create_protection_hint(&self) -> &'static str {
+        let Some(overlay) = &self.overlays.archive_create else {
+            return "";
+        };
+        if !overlay.options.format.supports_encryption() {
+            ""
+        } else if overlay.options.encryption.is_password_set() {
+            "Alt+P change  Alt+R remove"
+        } else {
+            "Alt+P add password"
+        }
     }
 
     pub fn archive_create_source_names(&self) -> &[String] {
@@ -98,6 +124,7 @@ impl App {
             source_scroll: 0,
             cursor_col,
             input: default_name,
+            options: CreateArchiveOptions::default(),
             error: None,
         });
         self.status.clear();
@@ -132,6 +159,18 @@ impl App {
             KeyCode::Esc => self.overlays.archive_create = None,
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 self.confirm_archive_create()?
+            }
+            KeyCode::Char('p' | 'P')
+                if key.modifiers.contains(KeyModifiers::ALT)
+                    && !key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                self.open_archive_create_password_prompt();
+            }
+            KeyCode::Char('r' | 'R')
+                if key.modifiers.contains(KeyModifiers::ALT)
+                    && !key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                self.remove_archive_create_password();
             }
             KeyCode::PageUp if key.modifiers == KeyModifiers::NONE => {
                 self.scroll_archive_create_sources_by(-8, 8);
@@ -338,21 +377,28 @@ impl App {
             }
         };
         let sources = overlay.sources.clone();
-        if self.start_archive_create(sources, output_name)? {
+        let options = overlay.options.clone();
+        if self.start_archive_create(sources, output_name, options)? {
             self.overlays.archive_create = None;
         }
         Ok(())
     }
 
-    fn start_archive_create(&mut self, sources: Vec<PathBuf>, output_name: String) -> Result<bool> {
+    fn start_archive_create(
+        &mut self,
+        sources: Vec<PathBuf>,
+        output_name: String,
+        options: CreateArchiveOptions,
+    ) -> Result<bool> {
         if self.jobs.archive_create_progress.is_some() {
             self.status = "Archive creation already in progress".to_string();
             return Ok(false);
         }
-        if let Err(error) = crate::archive::plan_create_zip_archive(
+        if let Err(error) = crate::archive::plan_create_archive(
             &self.navigation.cwd,
             sources.clone(),
             &output_name,
+            options.clone(),
         ) {
             if let Some(overlay) = &mut self.overlays.archive_create {
                 overlay.error = Some(error.to_string());
@@ -380,6 +426,7 @@ impl App {
                 cwd: self.navigation.cwd.clone(),
                 sources,
                 output_name,
+                options,
             });
         if !submitted {
             self.jobs.archive_create_progress = None;
@@ -390,6 +437,43 @@ impl App {
         }
         self.clear_selection();
         Ok(true)
+    }
+
+    fn open_archive_create_password_prompt(&mut self) {
+        let Some(overlay) = &self.overlays.archive_create else {
+            return;
+        };
+        if !overlay.options.format.supports_encryption() {
+            if let Some(overlay) = &mut self.overlays.archive_create {
+                overlay.error = Some(format!(
+                    "{} does not support password protection",
+                    overlay.options.format.label()
+                ));
+            }
+            return;
+        }
+        let input = match &overlay.options.encryption {
+            ArchiveEncryption::Password(password) => password.as_str().to_string(),
+            ArchiveEncryption::None => String::new(),
+        };
+        let cursor_col = input.chars().count();
+        self.overlays.archive_password = Some(ArchivePasswordOverlay {
+            purpose: ArchivePasswordPurpose::Create,
+            input,
+            cursor_col,
+            visible: false,
+            error: None,
+        });
+    }
+
+    fn remove_archive_create_password(&mut self) {
+        if let Some(overlay) = &mut self.overlays.archive_create
+            && overlay.options.encryption.is_password_set()
+        {
+            overlay.options.encryption = ArchiveEncryption::None;
+            overlay.error = None;
+            self.status = "Archive password removed".to_string();
+        }
     }
 }
 

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added ZIP archive creation for the focused item or current selection, with a configurable `create_archive` (`C`) shortcut, editable archive name, background progress, and cancellation. ([#215])
+- Added ZIP archive creation for the focused item or current selection, with editable archive names, optional password protection, background progress, cancellation, and a configurable `create_archive` (`C`) shortcut. ([#215])
 - Added a show/hide control to encrypted archive password prompts.
 
 ### Changed

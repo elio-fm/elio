@@ -17,8 +17,9 @@ pub(super) fn render_archive_password_overlay(
 ) {
     let archive_name = app.archive_password_archive_name();
     let block_title = format!(
-        " Password for \"{}\" ",
-        helpers::clamp_label(archive_name, 30)
+        " {} \"{}\" ",
+        app.archive_password_title_prefix(),
+        helpers::clamp_label(&archive_name, 30)
     );
     let popup_width = area.width.saturating_sub(8).clamp(40, 64);
     let popup_height = if area.height >= 4 {
@@ -83,7 +84,7 @@ pub(super) fn render_archive_password_overlay(
 
     let line = if input.is_empty() {
         Line::from(Span::styled(
-            "password…",
+            app.archive_password_placeholder(),
             Style::default().fg(palette.muted),
         ))
     } else {
