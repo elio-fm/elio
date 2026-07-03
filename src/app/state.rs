@@ -169,6 +169,7 @@ pub(super) struct ArchivePasswordOverlay {
     pub(super) archive_path: PathBuf,
     pub(super) input: String,
     pub(super) cursor_col: usize,
+    pub(super) visible: bool,
     pub(super) error: Option<String>,
 }
 
@@ -178,6 +179,7 @@ impl fmt::Debug for ArchivePasswordOverlay {
             .field("archive_path", &self.archive_path)
             .field("input", &"<redacted>")
             .field("cursor_col", &self.cursor_col)
+            .field("visible", &self.visible)
             .field("error", &self.error)
             .finish()
     }

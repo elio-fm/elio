@@ -29,6 +29,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     state.archive_create_panel = None;
     state.archive_create_list_area = None;
     state.archive_password_panel = None;
+    state.archive_password_visibility_btn = None;
     state.create_panel = None;
     state.rename_panel = None;
     state.create_list_area = None;
