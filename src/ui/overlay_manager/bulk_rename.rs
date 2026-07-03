@@ -1,4 +1,6 @@
-use super::compute_scroll_top;
+use super::{
+    compute_scroll_top, edit_overlay_visible_rows, scrollbar::render_overlay_scrollbar_on_bg,
+};
 use crate::app::{App, FrameState};
 use crate::ui::{
     helpers,
@@ -20,7 +22,7 @@ pub(super) fn render_bulk_rename_overlay(
     palette: Palette,
 ) {
     let item_count = app.bulk_rename_item_count();
-    let visible_lines = item_count.min(8) as u16;
+    let visible_lines = edit_overlay_visible_rows(area, item_count, 5);
     let popup_width = area.width.saturating_sub(8).clamp(40, 68);
     let popup_height = visible_lines + 5;
     let popup = helpers::centered_rect(area, popup_width, popup_height);
@@ -59,17 +61,11 @@ pub(super) fn render_bulk_rename_overlay(
     state.bulk_rename_scroll_top = scroll_top;
 
     let show_scrollbar = item_count > visible_lines as usize;
-    let thumb_size = if show_scrollbar {
-        (visible_lines as usize * visible_lines as usize / item_count).max(1)
-    } else {
-        0
-    };
-    let max_scroll = item_count.saturating_sub(visible_lines as usize);
-    let thumb_pos = scroll_top
-        .checked_mul(visible_lines as usize - thumb_size)
-        .and_then(|offset| offset.checked_div(max_scroll))
-        .unwrap_or(0);
-    let bar_x = list_area.x + list_area.width.saturating_sub(1);
+    let scrollbar_area = show_scrollbar.then_some(Rect {
+        x: list_area.x + list_area.width.saturating_sub(1),
+        width: 1,
+        ..list_area
+    });
 
     let mut cursor_screen_pos: Option<(u16, u16)> = None;
 
@@ -93,7 +89,7 @@ pub(super) fn render_bulk_rename_overlay(
         let text_width = list_area
             .width
             .saturating_sub(prefix_width)
-            .saturating_sub(if show_scrollbar { 2 } else { 0 });
+            .saturating_sub(if show_scrollbar { 1 } else { 0 });
         let col = if is_cursor_line { cursor_col } else { 0 };
         let (visible_text, visible_col) = helpers::input_window(new_name, col, text_width);
 
@@ -107,7 +103,7 @@ pub(super) fn render_bulk_rename_overlay(
 
         let row_width = list_area
             .width
-            .saturating_sub(if show_scrollbar { 2 } else { 0 });
+            .saturating_sub(if show_scrollbar { 1 } else { 0 });
         let row_rect = Rect {
             x: list_area.x,
             y: list_area.y + row_offset as u16,
@@ -127,20 +123,6 @@ pub(super) fn render_bulk_rename_overlay(
             row_rect,
         );
 
-        if show_scrollbar {
-            let y = list_area.y + row_offset as u16;
-            let in_thumb = row_offset >= thumb_pos && row_offset < thumb_pos + thumb_size;
-            let bar_char = if in_thumb { "▐" } else { " " };
-            let bar_color = if in_thumb {
-                palette.muted
-            } else {
-                palette.path_bg
-            };
-            frame.buffer_mut()[(bar_x, y)].set_symbol(bar_char);
-            frame.buffer_mut()[(bar_x, y)]
-                .set_style(Style::default().bg(palette.path_bg).fg(bar_color));
-        }
-
         if is_cursor_line {
             let cursor_x = (row_rect.x + prefix_width + visible_col)
                 .min(row_rect.x + row_rect.width.saturating_sub(1));
@@ -150,6 +132,18 @@ pub(super) fn render_bulk_rename_overlay(
 
     if let Some((cx, cy)) = cursor_screen_pos {
         frame.set_cursor_position((cx, cy));
+    }
+
+    if let Some(scrollbar_area) = scrollbar_area {
+        render_overlay_scrollbar_on_bg(
+            frame,
+            scrollbar_area,
+            item_count,
+            visible_lines as usize,
+            scroll_top,
+            palette,
+            palette.path_bg,
+        );
     }
 
     if let Some(error) = app.bulk_rename_line_error(cursor_line) {

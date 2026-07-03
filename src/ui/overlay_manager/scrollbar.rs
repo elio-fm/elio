@@ -2,7 +2,7 @@ use crate::ui::theme::Palette;
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
 };
@@ -15,9 +15,29 @@ pub(super) fn render_overlay_scrollbar(
     scroll_row: usize,
     palette: Palette,
 ) {
+    render_overlay_scrollbar_on_bg(
+        frame,
+        area,
+        total_rows,
+        visible_rows,
+        scroll_row,
+        palette,
+        palette.chrome_alt,
+    );
+}
+
+pub(super) fn render_overlay_scrollbar_on_bg(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    total_rows: usize,
+    visible_rows: usize,
+    scroll_row: usize,
+    palette: Palette,
+    bg: Color,
+) {
     if area.height == 0 || total_rows <= visible_rows.max(1) {
         frame.render_widget(
-            Paragraph::new(" ").style(Style::default().bg(palette.chrome_alt).fg(palette.border)),
+            Paragraph::new(" ").style(Style::default().bg(bg).fg(palette.border)),
             area,
         );
         return;
@@ -31,7 +51,7 @@ pub(super) fn render_overlay_scrollbar(
             ));
             area.height as usize
         ])
-        .style(Style::default().bg(palette.chrome_alt)),
+        .style(Style::default().bg(bg)),
         area,
     );
 
@@ -55,7 +75,7 @@ pub(super) fn render_overlay_scrollbar(
             ));
             thumb_height
         ])
-        .style(Style::default().bg(palette.chrome_alt)),
+        .style(Style::default().bg(bg)),
         Rect {
             x: area.x,
             y: area.y + thumb_top as u16,

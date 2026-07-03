@@ -16,6 +16,8 @@ mod scrollbar;
 mod search;
 mod trash;
 
+const MAX_EDIT_OVERLAY_VISIBLE_ROWS: usize = 12;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum HelpMode {
     Normal,
@@ -152,5 +154,31 @@ fn compute_scroll_top(cursor_line: usize, visible: usize) -> usize {
         0
     } else {
         cursor_line - visible + 1
+    }
+}
+
+fn edit_overlay_visible_rows(area: Rect, row_count: usize, popup_chrome_height: u16) -> u16 {
+    let available_rows = area
+        .height
+        .saturating_sub(popup_chrome_height.saturating_add(2))
+        .max(1) as usize;
+    row_count
+        .clamp(1, MAX_EDIT_OVERLAY_VISIBLE_ROWS)
+        .min(available_rows) as u16
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn edit_overlay_visible_rows_caps_and_shrinks_to_terminal_height() {
+        let area = Rect::new(0, 0, 90, 24);
+        assert_eq!(edit_overlay_visible_rows(area, 40, 5), 12);
+
+        let short_area = Rect::new(0, 0, 90, 10);
+        assert_eq!(edit_overlay_visible_rows(short_area, 40, 5), 3);
+        assert_eq!(edit_overlay_visible_rows(short_area, 40, 7), 1);
+        assert_eq!(edit_overlay_visible_rows(short_area, 0, 5), 1);
     }
 }
