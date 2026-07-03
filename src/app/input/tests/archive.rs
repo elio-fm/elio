@@ -207,6 +207,38 @@ fn e_prompts_and_retries_encrypted_zip_archive() {
 }
 
 #[test]
+fn archive_password_visibility_can_be_toggled() {
+    let root = temp_path("archive-password-visibility");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let archive = root.join("sample.zip");
+    let password = archive_test_password(&root);
+    write_encrypted_zip_entries(&archive, &password, &[("file.txt", b"hello")]);
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('e'))))
+        .expect("e should start archive extraction");
+    wait_for_archive_password_prompt(&mut app);
+
+    assert!(!app.archive_password_is_visible());
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('v'),
+        KeyModifiers::ALT,
+    )))
+    .expect("visibility binding should be handled");
+    assert!(app.archive_password_is_visible());
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('v'),
+        KeyModifiers::ALT,
+    )))
+    .expect("visibility binding should toggle back");
+    assert!(!app.archive_password_is_visible());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn e_reports_unsupported_archive_format() {
     let root = temp_path("extract-unsupported-key");
     fs::create_dir_all(&root).expect("failed to create temp root");

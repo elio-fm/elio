@@ -47,6 +47,7 @@ pub struct FrameState {
     pub archive_create_panel: Option<Rect>,
     pub archive_create_list_area: Option<Rect>,
     pub archive_password_panel: Option<Rect>,
+    pub archive_password_visibility_btn: Option<Rect>,
     pub create_panel: Option<Rect>,
     pub rename_panel: Option<Rect>,
     pub create_list_area: Option<Rect>,

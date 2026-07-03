@@ -88,14 +88,33 @@ impl App {
             archive_path,
             input: String::new(),
             cursor_col: 0,
+            visible: false,
             error,
         });
         self.status.clear();
     }
 
+    pub fn archive_password_is_visible(&self) -> bool {
+        self.overlays
+            .archive_password
+            .as_ref()
+            .is_some_and(|overlay| overlay.visible)
+    }
+
+    pub(in crate::app) fn toggle_archive_password_visibility(&mut self) {
+        if let Some(overlay) = &mut self.overlays.archive_password {
+            overlay.visible = !overlay.visible;
+        }
+    }
+
     pub(in crate::app) fn handle_archive_password_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.overlays.archive_password = None;
+            return Ok(());
+        }
+
+        if key.modifiers == KeyModifiers::ALT && matches!(key.code, KeyCode::Char('v' | 'V')) {
+            self.toggle_archive_password_visibility();
             return Ok(());
         }
 
@@ -235,6 +254,16 @@ impl App {
         mouse: MouseEvent,
     ) -> Result<()> {
         if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
+            if self
+                .input
+                .frame_state
+                .archive_password_visibility_btn
+                .is_some_and(|btn| rect_contains(btn, mouse.column, mouse.row))
+            {
+                self.toggle_archive_password_visibility();
+                return Ok(());
+            }
+
             let inside = self
                 .input
                 .frame_state
