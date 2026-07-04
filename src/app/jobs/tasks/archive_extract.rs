@@ -182,9 +182,17 @@ fn run_extract(
             } else {
                 "items"
             };
+            let link_note = match summary.skipped_links {
+                0 => String::new(),
+                1 => " — skipped 1 unsafe link".to_string(),
+                count => format!(" — skipped {count} unsafe links"),
+            };
             (
                 Some(summary.dest_dir),
-                format!("Extracted {} {noun} to \"{name}\"", summary.completed),
+                format!(
+                    "Extracted {} {noun} to \"{name}\"{link_note}",
+                    summary.completed
+                ),
             )
         }
         Err(ExtractError::PasswordRequired) => {

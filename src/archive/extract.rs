@@ -38,6 +38,7 @@ pub(crate) struct ExtractSummary {
     pub(crate) dest_dir: PathBuf,
     pub(crate) completed: usize,
     pub(crate) total: Option<usize>,
+    pub(crate) skipped_links: usize,
 }
 
 #[derive(Clone, Default, Eq, PartialEq)]
@@ -191,6 +192,7 @@ where
         dest_dir,
         completed: summary.completed,
         total: summary.total,
+        skipped_links: summary.skipped_links,
     })
 }
 
@@ -250,6 +252,8 @@ where
     let mut archive = zip::ZipArchive::new(file).context("Could not read ZIP archive")?;
     let total = archive.len();
     let mut completed = 0usize;
+    let mut skipped_links = 0usize;
+    let mut symlinks = Vec::new();
     progress(ExtractProgress {
         completed,
         total: Some(total),
@@ -268,6 +272,23 @@ where
         if entry.is_dir() {
             fs::create_dir_all(&out_path)
                 .with_context(|| format!("Could not create {}", out_path.display()))?;
+        } else if is_zip_symlink(&entry) {
+            let mut target = String::new();
+            if let Err(error) = entry.read_to_string(&mut target) {
+                if password.is_some() && encrypted && is_zip_bad_password_io(&error) {
+                    return Err(ExtractError::BadPassword);
+                }
+                return Err(error).context("Could not read ZIP symlink target")?;
+            }
+            let target = PathBuf::from(target);
+            if safe_relative_link_target(&plan.dest_dir, &out_path, &target) {
+                symlinks.push(DeferredSymlink {
+                    path: out_path,
+                    target,
+                });
+            } else {
+                skipped_links += 1;
+            }
         } else {
             if let Some(parent) = out_path.parent() {
                 fs::create_dir_all(parent)
@@ -295,12 +316,20 @@ where
             total: Some(total),
         });
     }
+    skipped_links += extract_deferred_symlinks(&plan.dest_dir, symlinks)?;
 
     Ok(ExtractSummary {
         dest_dir: plan.dest_dir.clone(),
         completed,
         total: Some(total),
+        skipped_links,
     })
+}
+
+fn is_zip_symlink<R: Read>(entry: &zip::read::ZipFile<'_, R>) -> bool {
+    entry
+        .unix_mode()
+        .is_some_and(|mode| mode & 0o170000 == 0o120000)
 }
 
 fn zip_entry_by_index<'a, R: Read + io::Seek>(
@@ -428,6 +457,7 @@ where
         dest_dir: plan.dest_dir.clone(),
         completed,
         total: Some(total),
+        skipped_links: 0,
     })
 }
 
@@ -566,6 +596,7 @@ where
             dest_dir: plan.dest_dir.clone(),
             completed: 0,
             total,
+            skipped_links: 0,
         });
     }
 
@@ -584,6 +615,7 @@ where
         dest_dir: plan.dest_dir.clone(),
         completed,
         total,
+        skipped_links: 0,
     })
 }
 
@@ -818,6 +850,8 @@ where
 {
     let mut archive = tar::Archive::new(reader);
     let mut completed = 0usize;
+    let mut skipped_links = 0usize;
+    let mut symlinks = Vec::new();
     progress(ExtractProgress { completed, total });
     for entry in archive.entries().context("Could not read TAR entries")? {
         if cancelled() {
@@ -825,14 +859,26 @@ where
         }
         let mut entry = entry.context("Could not read TAR entry")?;
         let entry_type = entry.header().entry_type();
-        if entry_type.is_symlink() || entry_type.is_hard_link() {
-            completed += 1;
-            progress(ExtractProgress { completed, total });
-            continue;
-        }
         let path = entry.path().context("Could not read TAR entry path")?;
         let out_path = checked_output_path(&plan.dest_dir, path.as_ref())?;
-        if entry_type.is_dir() {
+        if entry_type.is_symlink() {
+            match entry
+                .link_name()
+                .context("Could not read TAR symlink target")?
+            {
+                Some(target)
+                    if safe_relative_link_target(&plan.dest_dir, &out_path, target.as_ref()) =>
+                {
+                    symlinks.push(DeferredSymlink {
+                        path: out_path,
+                        target: target.into_owned(),
+                    });
+                }
+                _ => skipped_links += 1,
+            }
+        } else if entry_type.is_hard_link() {
+            skipped_links += 1;
+        } else if entry_type.is_dir() {
             fs::create_dir_all(&out_path)
                 .with_context(|| format!("Could not create {}", out_path.display()))?;
         } else if entry_type.is_file() {
@@ -847,11 +893,99 @@ where
         completed += 1;
         progress(ExtractProgress { completed, total });
     }
+    skipped_links += extract_deferred_symlinks(&plan.dest_dir, symlinks)?;
     Ok(ExtractSummary {
         dest_dir: plan.dest_dir.clone(),
         completed,
         total,
+        skipped_links,
     })
+}
+
+struct DeferredSymlink {
+    path: PathBuf,
+    target: PathBuf,
+}
+
+fn safe_relative_link_target(dest_dir: &Path, link_path: &Path, target: &Path) -> bool {
+    if target.is_absolute() {
+        return false;
+    }
+    let Some(parent) = link_path.parent() else {
+        return false;
+    };
+    let Ok(parent) = parent.strip_prefix(dest_dir) else {
+        return false;
+    };
+    let mut resolved = parent.to_path_buf();
+    for component in target.components() {
+        match component {
+            Component::Normal(part) => resolved.push(part),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !resolved.pop() {
+                    return false;
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => return false,
+        }
+    }
+    !resolved.as_os_str().is_empty()
+}
+
+fn extract_deferred_symlinks(dest_dir: &Path, symlinks: Vec<DeferredSymlink>) -> Result<usize> {
+    let mut skipped = 0usize;
+    for link in symlinks {
+        if create_safe_symlink(dest_dir, &link).is_err() {
+            skipped += 1;
+        }
+    }
+    Ok(skipped)
+}
+
+#[cfg(unix)]
+fn create_safe_symlink(dest_dir: &Path, link: &DeferredSymlink) -> Result<()> {
+    use std::os::unix::fs::symlink;
+
+    let parent = link
+        .path
+        .parent()
+        .ok_or_else(|| anyhow!("Could not determine symlink parent"))?;
+    if parent_contains_symlink(dest_dir, parent)? || fs::symlink_metadata(&link.path).is_ok() {
+        bail!("Unsafe TAR symlink");
+    }
+    fs::create_dir_all(parent).with_context(|| format!("Could not create {}", parent.display()))?;
+    symlink(&link.target, &link.path)
+        .with_context(|| format!("Could not create symlink {}", link.path.display()))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn create_safe_symlink(_dest_dir: &Path, _link: &DeferredSymlink) -> Result<()> {
+    bail!("Archive symlinks are not supported on this platform")
+}
+
+fn parent_contains_symlink(dest_dir: &Path, parent: &Path) -> Result<bool> {
+    let relative = parent.strip_prefix(dest_dir).with_context(|| {
+        format!(
+            "Archive entry escapes the destination: {}",
+            parent.display()
+        )
+    })?;
+    let mut cursor = dest_dir.to_path_buf();
+    for component in relative.components() {
+        let Component::Normal(part) = component else {
+            continue;
+        };
+        cursor.push(part);
+        match fs::symlink_metadata(&cursor) {
+            Ok(metadata) if metadata.file_type().is_symlink() => return Ok(true),
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(false)
 }
 
 fn checked_output_path(dest_dir: &Path, entry_path: &Path) -> Result<PathBuf> {
@@ -993,6 +1127,64 @@ Size = 5
     }
 
     #[test]
+    #[cfg(unix)]
+    fn extracts_safe_zip_symlink() {
+        let root = temp_path("zip-safe-link");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.zip");
+        {
+            let file = File::create(&archive_path).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default();
+            zip.start_file("target.txt", options).unwrap();
+            zip.write_all(b"hello").unwrap();
+            let link_options = options.unix_permissions(0o777);
+            zip.add_symlink("link.txt", "target.txt", link_options)
+                .unwrap();
+            zip.finish().unwrap();
+        }
+        let plan = plan_extract(&archive_path).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+        assert_eq!(summary.completed, 2);
+        assert_eq!(summary.skipped_links, 0);
+        let link_path = root.join("sample/link.txt");
+        assert!(
+            fs::symlink_metadata(&link_path)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(fs::read_link(link_path).unwrap(), Path::new("target.txt"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn skips_unsafe_zip_symlinks() {
+        let root = temp_path("zip-unsafe-link");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.zip");
+        {
+            let file = File::create(&archive_path).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default();
+            let link_options = options.unix_permissions(0o777);
+            zip.add_symlink("absolute", "/etc/passwd", link_options)
+                .unwrap();
+            zip.add_symlink("escape", "../escape", link_options)
+                .unwrap();
+            zip.finish().unwrap();
+        }
+        let plan = plan_extract(&archive_path).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+        assert_eq!(summary.completed, 2);
+        assert_eq!(summary.skipped_links, 2);
+        assert!(!root.join("sample/absolute").exists());
+        assert!(!root.join("sample/escape").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn corrupt_zip_does_not_request_password() {
         let root = temp_path("zip-corrupt");
         fs::create_dir_all(&root).unwrap();
@@ -1126,6 +1318,107 @@ Size = 5
             fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
             "hello"
         );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn extracts_safe_tar_symlink() {
+        let root = temp_path("tar-safe-link");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.tar");
+        {
+            let file = File::create(&archive_path).unwrap();
+            let mut tar = tar::Builder::new(file);
+            fs::write(root.join("target.txt"), "hello").unwrap();
+            tar.append_path_with_name(root.join("target.txt"), "target.txt")
+                .unwrap();
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Symlink);
+            header.set_size(0);
+            tar.append_link(&mut header, "link.txt", "target.txt")
+                .unwrap();
+            tar.finish().unwrap();
+        }
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+
+        assert_eq!(summary.completed, 2);
+        assert_eq!(summary.skipped_links, 0);
+        assert_eq!(
+            fs::read_link(root.join("sample/link.txt")).unwrap(),
+            Path::new("target.txt")
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("sample/target.txt")).unwrap(),
+            "hello"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn skips_unsafe_tar_symlinks() {
+        let root = temp_path("tar-unsafe-link");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.tar");
+        {
+            let file = File::create(&archive_path).unwrap();
+            let mut tar = tar::Builder::new(file);
+            for (path, target) in [
+                ("absolute", "/tmp/outside"),
+                ("parent", "../outside"),
+                ("nested/parent", "../../outside"),
+            ] {
+                let mut header = tar::Header::new_gnu();
+                header.set_entry_type(tar::EntryType::Symlink);
+                header.set_size(0);
+                tar.append_link(&mut header, path, target).unwrap();
+            }
+            tar.finish().unwrap();
+        }
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+
+        assert_eq!(summary.completed, 3);
+        assert_eq!(summary.skipped_links, 3);
+        assert!(!root.join("sample/absolute").exists());
+        assert!(!root.join("sample/parent").exists());
+        assert!(!root.join("sample/nested/parent").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn tar_symlink_parent_does_not_redirect_later_entries() {
+        let root = temp_path("tar-link-parent");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.tar");
+        {
+            let file = File::create(&archive_path).unwrap();
+            let mut tar = tar::Builder::new(file);
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Symlink);
+            header.set_size(0);
+            tar.append_link(&mut header, "dir", "../outside").unwrap();
+            fs::write(root.join("file.txt"), "safe").unwrap();
+            tar.append_path_with_name(root.join("file.txt"), "dir/file.txt")
+                .unwrap();
+            tar.finish().unwrap();
+        }
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+
+        assert_eq!(summary.completed, 2);
+        assert_eq!(summary.skipped_links, 1);
+        assert_eq!(
+            fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+            "safe"
+        );
+        assert!(!root.join("outside/file.txt").exists());
         let _ = fs::remove_dir_all(root);
     }
 

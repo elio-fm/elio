@@ -270,8 +270,12 @@ where
         let root_name = archive_name(&source);
         add_path_to_zip(
             &mut writer,
-            &source,
-            Path::new(&root_name),
+            ZipEntryPaths {
+                source: &source,
+                archive_path: Path::new(&root_name),
+                root_source: &source,
+                root_archive_path: Path::new(&root_name),
+            },
             &mut completed,
             settings,
             progress,
@@ -372,62 +376,77 @@ where
     C: Fn() -> bool,
 {
     let mut builder = tar::Builder::new(writer);
-    let mut completed = 0usize;
+    let mut state = TarCreateState {
+        completed: 0,
+        total,
+        progress,
+        cancelled: &cancelled,
+        root_source: PathBuf::new(),
+        root_archive_path: PathBuf::new(),
+    };
     let mut sorted_sources = sources.to_vec();
     sorted_sources.sort_by_key(|source| archive_name(source));
 
     for source in sorted_sources {
         let root_name = archive_name(&source);
-        add_path_to_tar(
-            &mut builder,
-            &source,
-            Path::new(&root_name),
-            &mut completed,
-            total,
-            progress,
-            &cancelled,
-        )?;
+        state.root_source = source.clone();
+        state.root_archive_path = PathBuf::from(&root_name);
+        add_path_to_tar(&mut builder, &source, Path::new(&root_name), &mut state)?;
     }
 
     builder.finish().context("Could not finish TAR archive")?;
-    Ok(completed)
+    Ok(state.completed)
+}
+
+struct TarCreateState<'a, F, C> {
+    completed: usize,
+    total: usize,
+    progress: &'a mut F,
+    cancelled: &'a C,
+    root_source: PathBuf,
+    root_archive_path: PathBuf,
 }
 
 fn add_path_to_tar<W, F, C>(
     builder: &mut tar::Builder<W>,
     source: &Path,
     archive_path: &Path,
-    completed: &mut usize,
-    total: usize,
-    progress: &mut F,
-    cancelled: &C,
+    state: &mut TarCreateState<'_, F, C>,
 ) -> Result<()>
 where
     W: Write,
     F: FnMut(CreateArchiveProgress),
     C: Fn() -> bool,
 {
-    if cancelled() {
+    if (state.cancelled)() {
         bail!("Archive creation cancelled");
     }
 
     let metadata = fs::symlink_metadata(source)
         .with_context(|| format!("Could not inspect {}", source.display()))?;
     if metadata.file_type().is_symlink() {
-        let name = source
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("item");
-        bail!("TAR creation does not support symlinks: {name}");
+        add_symlink_to_tar(
+            builder,
+            source,
+            archive_path,
+            &state.root_source,
+            &state.root_archive_path,
+        )?;
+        state.completed += 1;
+        (state.progress)(CreateArchiveProgress {
+            completed: state.completed,
+            total: state.total,
+        });
+        return Ok(());
     }
     if metadata.is_dir() {
         builder
             .append_dir(archive_path, source)
             .context("Could not write TAR directory")?;
-        *completed += 1;
-        progress(CreateArchiveProgress {
-            completed: *completed,
-            total,
+        state.completed += 1;
+        (state.progress)(CreateArchiveProgress {
+            completed: state.completed,
+            total: state.total,
         });
         let mut children = fs::read_dir(source)
             .with_context(|| format!("Could not read {}", source.display()))?
@@ -436,15 +455,7 @@ where
         for child in children {
             let child_name = child.file_name();
             let child_archive_path = archive_path.join(child_name);
-            add_path_to_tar(
-                builder,
-                &child.path(),
-                &child_archive_path,
-                completed,
-                total,
-                progress,
-                cancelled,
-            )?;
+            add_path_to_tar(builder, &child.path(), &child_archive_path, state)?;
         }
         return Ok(());
     }
@@ -454,10 +465,10 @@ where
         builder
             .append_file(archive_path, &mut file)
             .context("Could not write TAR entry")?;
-        *completed += 1;
-        progress(CreateArchiveProgress {
-            completed: *completed,
-            total,
+        state.completed += 1;
+        (state.progress)(CreateArchiveProgress {
+            completed: state.completed,
+            total: state.total,
         });
         return Ok(());
     }
@@ -469,16 +480,93 @@ where
     bail!("Cannot archive {name}");
 }
 
+fn add_symlink_to_tar<W>(
+    builder: &mut tar::Builder<W>,
+    source: &Path,
+    archive_path: &Path,
+    root_source: &Path,
+    root_archive_path: &Path,
+) -> Result<()>
+where
+    W: Write,
+{
+    let target = fs::read_link(source)
+        .with_context(|| format!("Could not read symlink {}", source.display()))?;
+    let target = archived_symlink_target(archive_path, root_source, root_archive_path, &target);
+    let mut header = tar::Header::new_gnu();
+    header.set_entry_type(tar::EntryType::Symlink);
+    header.set_size(0);
+    builder
+        .append_link(&mut header, archive_path, &target)
+        .context("Could not write TAR symlink")?;
+    Ok(())
+}
+
+fn archived_symlink_target(
+    archive_path: &Path,
+    root_source: &Path,
+    root_archive_path: &Path,
+    target: &Path,
+) -> PathBuf {
+    if !target.is_absolute() {
+        return target.to_path_buf();
+    }
+    let Ok(internal_target) = target.strip_prefix(root_source) else {
+        return target.to_path_buf();
+    };
+    let archived_target = root_archive_path.join(internal_target);
+    let archive_parent = archive_path.parent().unwrap_or_else(|| Path::new(""));
+    relative_archive_path(archive_parent, &archived_target).unwrap_or_else(|| target.to_path_buf())
+}
+
+fn relative_archive_path(from_dir: &Path, to_path: &Path) -> Option<PathBuf> {
+    let from = from_dir.components().collect::<Vec<_>>();
+    let to = to_path.components().collect::<Vec<_>>();
+    if from
+        .iter()
+        .any(|component| !matches!(component, Component::Normal(_)))
+        || to
+            .iter()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return None;
+    }
+    let common = from
+        .iter()
+        .zip(&to)
+        .take_while(|(left, right)| left == right)
+        .count();
+    let mut relative = PathBuf::new();
+    for _ in common..from.len() {
+        relative.push("..");
+    }
+    for component in &to[common..] {
+        relative.push(component.as_os_str());
+    }
+    if relative.as_os_str().is_empty() {
+        Some(PathBuf::from("."))
+    } else {
+        Some(relative)
+    }
+}
+
 #[derive(Clone, Copy)]
 struct ZipCreateSettings<'a> {
     total: usize,
     password: Option<&'a ArchivePassword>,
 }
 
+#[derive(Clone, Copy)]
+struct ZipEntryPaths<'a> {
+    source: &'a Path,
+    archive_path: &'a Path,
+    root_source: &'a Path,
+    root_archive_path: &'a Path,
+}
+
 fn add_path_to_zip<F, C>(
     writer: &mut ZipWriter<File>,
-    source: &Path,
-    archive_path: &Path,
+    paths: ZipEntryPaths<'_>,
     completed: &mut usize,
     settings: ZipCreateSettings<'_>,
     progress: &mut F,
@@ -492,30 +580,35 @@ where
         bail!("Archive creation cancelled");
     }
 
-    let metadata = fs::symlink_metadata(source)
-        .with_context(|| format!("Could not inspect {}", source.display()))?;
+    let metadata = fs::symlink_metadata(paths.source)
+        .with_context(|| format!("Could not inspect {}", paths.source.display()))?;
     if metadata.file_type().is_symlink() {
-        add_symlink(writer, source, archive_path, completed, settings, progress)?;
+        add_symlink(writer, paths, completed, settings, progress)?;
         return Ok(());
     }
     if metadata.is_dir() {
-        add_directory(writer, archive_path, &metadata, settings.password)?;
+        add_directory(writer, paths.archive_path, &metadata, settings.password)?;
         *completed += 1;
         progress(CreateArchiveProgress {
             completed: *completed,
             total: settings.total,
         });
-        let mut children = fs::read_dir(source)
-            .with_context(|| format!("Could not read {}", source.display()))?
+        let mut children = fs::read_dir(paths.source)
+            .with_context(|| format!("Could not read {}", paths.source.display()))?
             .collect::<io::Result<Vec<_>>>()?;
         children.sort_by_key(|entry| entry.file_name());
         for child in children {
+            let child_path = child.path();
             let child_name = child.file_name();
-            let child_archive_path = archive_path.join(child_name);
+            let child_archive_path = paths.archive_path.join(child_name);
             add_path_to_zip(
                 writer,
-                &child.path(),
-                &child_archive_path,
+                ZipEntryPaths {
+                    source: &child_path,
+                    archive_path: &child_archive_path,
+                    root_source: paths.root_source,
+                    root_archive_path: paths.root_archive_path,
+                },
                 completed,
                 settings,
                 progress,
@@ -525,7 +618,13 @@ where
         return Ok(());
     }
     if metadata.is_file() {
-        add_file(writer, source, archive_path, &metadata, settings.password)?;
+        add_file(
+            writer,
+            paths.source,
+            paths.archive_path,
+            &metadata,
+            settings.password,
+        )?;
         *completed += 1;
         progress(CreateArchiveProgress {
             completed: *completed,
@@ -534,7 +633,8 @@ where
         return Ok(());
     }
 
-    let name = source
+    let name = paths
+        .source
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("item");
@@ -573,8 +673,7 @@ fn add_directory(
 
 fn add_symlink<F>(
     writer: &mut ZipWriter<File>,
-    source: &Path,
-    archive_path: &Path,
+    paths: ZipEntryPaths<'_>,
     completed: &mut usize,
     settings: ZipCreateSettings<'_>,
     progress: &mut F,
@@ -582,9 +681,15 @@ fn add_symlink<F>(
 where
     F: FnMut(CreateArchiveProgress),
 {
-    let target = fs::read_link(source)
-        .with_context(|| format!("Could not read symlink {}", source.display()))?;
-    let name = zip_entry_name(archive_path, false)?;
+    let target = fs::read_link(paths.source)
+        .with_context(|| format!("Could not read symlink {}", paths.source.display()))?;
+    let target = archived_symlink_target(
+        paths.archive_path,
+        paths.root_source,
+        paths.root_archive_path,
+        &target,
+    );
+    let name = zip_entry_name(paths.archive_path, false)?;
     let options = apply_zip_encryption(
         FileOptions::default()
             .compression_method(CompressionMethod::Stored)
@@ -592,10 +697,8 @@ where
         settings.password,
     );
     writer
-        .start_file(name, options)
+        .add_symlink(name, target.to_string_lossy(), options)
         .context("Could not write ZIP symlink")?;
-    let target = target.to_string_lossy();
-    io::copy(&mut target.as_bytes(), writer).context("Could not write ZIP symlink")?;
     *completed += 1;
     progress(CreateArchiveProgress {
         completed: *completed,
@@ -829,6 +932,124 @@ mod tests {
                 "src/nested/mod.rs"
             ]
         );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn creates_tar_with_symlink_entries() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("tar-symlink");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("target.txt"), "target").unwrap();
+        symlink("target.txt", root.join("link.txt")).unwrap();
+        symlink("missing.txt", root.join("broken.txt")).unwrap();
+
+        let plan = plan_create_archive(
+            &root,
+            vec![root.join("link.txt"), root.join("broken.txt")],
+            "archive.tar",
+            CreateArchiveOptions::default(),
+        )
+        .unwrap();
+        create_archive(&plan, |_| {}, || false).unwrap();
+
+        let file = File::open(root.join("archive.tar")).unwrap();
+        let mut archive = tar::Archive::new(file);
+        let mut entries = archive
+            .entries()
+            .unwrap()
+            .map(|entry| {
+                let entry = entry.unwrap();
+                (
+                    entry.path().unwrap().to_string_lossy().to_string(),
+                    entry.header().entry_type(),
+                    entry
+                        .link_name()
+                        .unwrap()
+                        .unwrap()
+                        .to_string_lossy()
+                        .to_string(),
+                )
+            })
+            .collect::<Vec<_>>();
+        entries.sort_by(|left, right| left.0.cmp(&right.0));
+        assert_eq!(
+            entries,
+            vec![
+                (
+                    "broken.txt".to_string(),
+                    tar::EntryType::Symlink,
+                    "missing.txt".to_string()
+                ),
+                (
+                    "link.txt".to_string(),
+                    tar::EntryType::Symlink,
+                    "target.txt".to_string()
+                )
+            ]
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn creates_tar_with_portable_internal_absolute_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("tar-absolute-internal-symlink");
+        let folder = root.join("folder");
+        fs::create_dir_all(folder.join("nested")).unwrap();
+        fs::write(folder.join("target.txt"), "target").unwrap();
+        symlink(folder.join("target.txt"), folder.join("nested/link.txt")).unwrap();
+
+        let plan = plan_create_archive(
+            &root,
+            vec![folder.clone()],
+            "archive.tar",
+            CreateArchiveOptions::default(),
+        )
+        .unwrap();
+        create_archive(&plan, |_| {}, || false).unwrap();
+
+        let file = File::open(root.join("archive.tar")).unwrap();
+        let mut archive = tar::Archive::new(file);
+        let link_target = archive
+            .entries()
+            .unwrap()
+            .map(|entry| entry.unwrap())
+            .find_map(|entry| {
+                (entry.path().unwrap().as_ref() == Path::new("folder/nested/link.txt"))
+                    .then(|| entry.link_name().unwrap().unwrap().into_owned())
+            })
+            .unwrap();
+        assert_eq!(link_target, Path::new("../target.txt"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn creates_zip_with_portable_internal_absolute_symlink() {
+        use std::io::Read;
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("zip-absolute-internal-symlink");
+        let folder = root.join("folder");
+        fs::create_dir_all(folder.join("nested")).unwrap();
+        fs::write(folder.join("target.txt"), "target").unwrap();
+        symlink(folder.join("target.txt"), folder.join("nested/link.txt")).unwrap();
+
+        let plan = plan_create_zip_archive(&root, vec![folder], "archive.zip").unwrap();
+        create_zip_archive(&plan, |_| {}, || false).unwrap();
+
+        let file = File::open(root.join("archive.zip")).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let mut entry = archive.by_name("folder/nested/link.txt").unwrap();
+        assert_eq!(entry.unix_mode().unwrap() & 0o170000, 0o120000);
+        let mut target = String::new();
+        entry.read_to_string(&mut target).unwrap();
+        assert_eq!(target, "../target.txt");
         let _ = fs::remove_dir_all(root);
     }
 
