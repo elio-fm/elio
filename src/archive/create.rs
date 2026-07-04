@@ -1,6 +1,7 @@
 use super::extract::ArchivePassword;
 use anyhow::{Context, Result, anyhow, bail};
-use flate2::{Compression, write::GzEncoder};
+use bzip2::{Compression as BzCompression, write::BzEncoder};
+use flate2::{Compression as GzCompression, write::GzEncoder};
 use std::{
     collections::BTreeSet,
     fs::{self, File},
@@ -14,13 +15,15 @@ pub(crate) enum CreateArchiveFormat {
     Zip,
     Tar,
     TarGzip,
+    TarXz,
+    TarBzip2,
 }
 
 impl CreateArchiveFormat {
     pub(crate) fn supports_encryption(self) -> bool {
         match self {
             Self::Zip => true,
-            Self::Tar | Self::TarGzip => false,
+            Self::Tar | Self::TarGzip | Self::TarXz | Self::TarBzip2 => false,
         }
     }
 
@@ -28,6 +31,11 @@ impl CreateArchiveFormat {
         let lower = name.to_ascii_lowercase();
         if lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
             Some(Self::TarGzip)
+        } else if lower.ends_with(".tar.xz") || lower.ends_with(".txz") {
+            Some(Self::TarXz)
+        } else if lower.ends_with(".tar.bz2") || lower.ends_with(".tbz2") || lower.ends_with(".tbz")
+        {
+            Some(Self::TarBzip2)
         } else if lower.ends_with(".tar") {
             Some(Self::Tar)
         } else if lower.ends_with(".zip") {
@@ -115,7 +123,7 @@ pub(crate) fn normalize_archive_output_name(input: &str) -> Result<(String, Crea
     } else if path.extension().is_none() {
         Ok((format!("{trimmed}.zip"), CreateArchiveFormat::Zip))
     } else {
-        bail!("Archive creation supports ZIP, TAR, and TAR.GZ");
+        bail!("Archive creation supports ZIP, TAR, TAR.GZ, TAR.XZ, and TAR.BZ2");
     }
 }
 
@@ -191,6 +199,8 @@ where
         CreateArchiveFormat::Zip => create_zip_archive(plan, progress, cancelled),
         CreateArchiveFormat::Tar => create_tar_archive(plan, progress, cancelled),
         CreateArchiveFormat::TarGzip => create_tar_gzip_archive(plan, progress, cancelled),
+        CreateArchiveFormat::TarXz => create_tar_xz_archive(plan, progress, cancelled),
+        CreateArchiveFormat::TarBzip2 => create_tar_bzip2_archive(plan, progress, cancelled),
     }
 }
 
@@ -311,9 +321,35 @@ where
     create_tar_with(plan, TarSink::Gzip, progress, cancelled)
 }
 
+fn create_tar_xz_archive<F, C>(
+    plan: &CreateArchivePlan,
+    progress: F,
+    cancelled: C,
+) -> Result<CreateArchiveSummary>
+where
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    create_tar_with(plan, TarSink::Xz, progress, cancelled)
+}
+
+fn create_tar_bzip2_archive<F, C>(
+    plan: &CreateArchivePlan,
+    progress: F,
+    cancelled: C,
+) -> Result<CreateArchiveSummary>
+where
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    create_tar_with(plan, TarSink::Bzip2, progress, cancelled)
+}
+
 enum TarSink {
     Plain,
     Gzip,
+    Xz,
+    Bzip2,
 }
 
 fn create_tar_with<F, C>(
@@ -336,10 +372,34 @@ where
     let file = File::create_new(&staging_path)
         .with_context(|| format!("Could not create {}", staging_path.display()))?;
     let result = match sink {
-        TarSink::Plain => write_tar_archive(file, &plan.sources, total, &mut progress, cancelled),
+        TarSink::Plain => write_tar_archive(file, &plan.sources, total, &mut progress, cancelled)
+            .map(|(completed, _)| completed),
         TarSink::Gzip => {
-            let encoder = GzEncoder::new(file, Compression::default());
-            write_tar_archive(encoder, &plan.sources, total, &mut progress, cancelled)
+            let encoder = GzEncoder::new(file, GzCompression::default());
+            let (completed, encoder) =
+                write_tar_archive(encoder, &plan.sources, total, &mut progress, cancelled)?;
+            encoder
+                .finish()
+                .context("Could not finish TAR.GZ archive")?;
+            Ok(completed)
+        }
+        TarSink::Xz => {
+            let encoder = xz2::write::XzEncoder::new(file, 6);
+            let (completed, encoder) =
+                write_tar_archive(encoder, &plan.sources, total, &mut progress, cancelled)?;
+            encoder
+                .finish()
+                .context("Could not finish TAR.XZ archive")?;
+            Ok(completed)
+        }
+        TarSink::Bzip2 => {
+            let encoder = BzEncoder::new(file, BzCompression::default());
+            let (completed, encoder) =
+                write_tar_archive(encoder, &plan.sources, total, &mut progress, cancelled)?;
+            encoder
+                .finish()
+                .context("Could not finish TAR.BZ2 archive")?;
+            Ok(completed)
         }
     }
     .and_then(|completed| {
@@ -369,7 +429,7 @@ fn write_tar_archive<W, F, C>(
     total: usize,
     progress: &mut F,
     cancelled: C,
-) -> Result<usize>
+) -> Result<(usize, W)>
 where
     W: Write,
     F: FnMut(CreateArchiveProgress),
@@ -395,7 +455,11 @@ where
     }
 
     builder.finish().context("Could not finish TAR archive")?;
-    Ok(state.completed)
+    let completed = state.completed;
+    let writer = builder
+        .into_inner()
+        .context("Could not finish TAR archive")?;
+    Ok((completed, writer))
 }
 
 struct TarCreateState<'a, F, C> {
@@ -849,10 +913,30 @@ mod tests {
             ("backup.tgz".to_string(), CreateArchiveFormat::TarGzip)
         );
         assert_eq!(
+            normalize_archive_output_name("backup.tar.xz").unwrap(),
+            ("backup.tar.xz".to_string(), CreateArchiveFormat::TarXz)
+        );
+        assert_eq!(
+            normalize_archive_output_name("backup.txz").unwrap(),
+            ("backup.txz".to_string(), CreateArchiveFormat::TarXz)
+        );
+        assert_eq!(
+            normalize_archive_output_name("backup.tar.bz2").unwrap(),
+            ("backup.tar.bz2".to_string(), CreateArchiveFormat::TarBzip2)
+        );
+        assert_eq!(
+            normalize_archive_output_name("backup.tbz2").unwrap(),
+            ("backup.tbz2".to_string(), CreateArchiveFormat::TarBzip2)
+        );
+        assert_eq!(
+            normalize_archive_output_name("backup.tbz").unwrap(),
+            ("backup.tbz".to_string(), CreateArchiveFormat::TarBzip2)
+        );
+        assert_eq!(
             normalize_archive_output_name("backup.7z")
                 .unwrap_err()
                 .to_string(),
-            "Archive creation supports ZIP, TAR, and TAR.GZ"
+            "Archive creation supports ZIP, TAR, TAR.GZ, TAR.XZ, and TAR.BZ2"
         );
         assert_eq!(
             normalize_archive_output_name("../backup.zip")
@@ -1071,13 +1155,61 @@ mod tests {
         let file = File::open(root.join("archive.tgz")).unwrap();
         let decoder = flate2::read::GzDecoder::new(file);
         let mut archive = tar::Archive::new(decoder);
+        assert_tar_readme(&mut archive);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn creates_tar_xz_archive() {
+        let root = temp_path("tar-xz");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("README.md"), "readme").unwrap();
+
+        let plan = plan_create_archive(
+            &root,
+            vec![root.join("README.md")],
+            "archive.txz",
+            CreateArchiveOptions::default(),
+        )
+        .unwrap();
+        create_archive(&plan, |_| {}, || false).unwrap();
+
+        let file = File::open(root.join("archive.txz")).unwrap();
+        let decoder = xz2::read::XzDecoder::new(file);
+        let mut archive = tar::Archive::new(decoder);
+        assert_tar_readme(&mut archive);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn creates_tar_bzip2_archive() {
+        let root = temp_path("tar-bzip2");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("README.md"), "readme").unwrap();
+
+        let plan = plan_create_archive(
+            &root,
+            vec![root.join("README.md")],
+            "archive.tbz2",
+            CreateArchiveOptions::default(),
+        )
+        .unwrap();
+        create_archive(&plan, |_| {}, || false).unwrap();
+
+        let file = File::open(root.join("archive.tbz2")).unwrap();
+        let decoder = bzip2::read::BzDecoder::new(file);
+        let mut archive = tar::Archive::new(decoder);
+        assert_tar_readme(&mut archive);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    fn assert_tar_readme<R: std::io::Read>(archive: &mut tar::Archive<R>) {
         let mut entry = archive.entries().unwrap().next().unwrap().unwrap();
         assert_eq!(entry.path().unwrap().to_string_lossy(), "README.md");
         let mut contents = String::new();
         use std::io::Read;
         entry.read_to_string(&mut contents).unwrap();
         assert_eq!(contents, "readme");
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
