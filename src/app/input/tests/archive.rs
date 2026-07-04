@@ -424,7 +424,10 @@ fn archive_create_unsupported_format_disables_password_prompt() {
         .expect("Alt+P should be handled");
 
         assert!(!app.archive_password_is_open());
-        assert_eq!(app.archive_create_error(), Some("Use ZIP for passwords"));
+        assert_eq!(
+            app.archive_create_error(),
+            Some("Use ZIP or 7Z for passwords")
+        );
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
     }

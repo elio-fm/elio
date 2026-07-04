@@ -488,7 +488,7 @@ impl App {
 
     fn show_archive_password_format_hint(&mut self) {
         if let Some(overlay) = &mut self.overlays.archive_create {
-            overlay.error = Some("Use ZIP for passwords".to_string());
+            overlay.error = Some("Use ZIP or 7Z for passwords".to_string());
         }
     }
 

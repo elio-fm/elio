@@ -2,6 +2,10 @@ use super::extract::ArchivePassword;
 use anyhow::{Context, Result, anyhow, bail};
 use bzip2::{Compression as BzCompression, write::BzEncoder};
 use flate2::{Compression as GzCompression, write::GzEncoder};
+use sevenz_rust2::{
+    ArchiveEntry as SevenZipEntry, ArchiveWriter, Password as SevenZipPassword,
+    encoder_options::{AesEncoderOptions, Lzma2Options},
+};
 use std::{
     collections::BTreeSet,
     fs::{self, File},
@@ -13,6 +17,7 @@ use zip::{AesMode, CompressionMethod, ZipWriter, write::FileOptions};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum CreateArchiveFormat {
     Zip,
+    SevenZip,
     Tar,
     TarGzip,
     TarXz,
@@ -22,7 +27,7 @@ pub(crate) enum CreateArchiveFormat {
 impl CreateArchiveFormat {
     pub(crate) fn supports_encryption(self) -> bool {
         match self {
-            Self::Zip => true,
+            Self::Zip | Self::SevenZip => true,
             Self::Tar | Self::TarGzip | Self::TarXz | Self::TarBzip2 => false,
         }
     }
@@ -40,6 +45,8 @@ impl CreateArchiveFormat {
             Some(Self::Tar)
         } else if lower.ends_with(".zip") {
             Some(Self::Zip)
+        } else if lower.ends_with(".7z") {
+            Some(Self::SevenZip)
         } else {
             None
         }
@@ -123,7 +130,7 @@ pub(crate) fn normalize_archive_output_name(input: &str) -> Result<(String, Crea
     } else if path.extension().is_none() {
         Ok((format!("{trimmed}.zip"), CreateArchiveFormat::Zip))
     } else {
-        bail!("Archive creation supports ZIP, TAR, TAR.GZ, TAR.XZ, and TAR.BZ2");
+        bail!("Supported: ZIP, 7Z, TAR, TAR.GZ, TAR.XZ, and TAR.BZ2");
     }
 }
 
@@ -197,6 +204,7 @@ where
 {
     match plan.options.format {
         CreateArchiveFormat::Zip => create_zip_archive(plan, progress, cancelled),
+        CreateArchiveFormat::SevenZip => create_seven_zip_archive(plan, progress, cancelled),
         CreateArchiveFormat::Tar => create_tar_archive(plan, progress, cancelled),
         CreateArchiveFormat::TarGzip => create_tar_gzip_archive(plan, progress, cancelled),
         CreateArchiveFormat::TarXz => create_tar_xz_archive(plan, progress, cancelled),
@@ -295,6 +303,155 @@ where
 
     writer.finish().context("Could not finish ZIP archive")?;
     Ok(completed)
+}
+
+fn create_seven_zip_archive<F, C>(
+    plan: &CreateArchivePlan,
+    mut progress: F,
+    cancelled: C,
+) -> Result<CreateArchiveSummary>
+where
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    let total = count_archive_items(&plan.sources)?;
+    progress(CreateArchiveProgress {
+        completed: 0,
+        total,
+    });
+
+    let staging_path = unique_staging_path(&plan.output_path)?;
+    let file = File::create_new(&staging_path)
+        .with_context(|| format!("Could not create {}", staging_path.display()))?;
+    let mut writer = ArchiveWriter::new(file).context("Could not start 7z archive")?;
+    if let Some(password) = plan.options.encryption.password() {
+        writer.set_content_methods(vec![
+            AesEncoderOptions::new(SevenZipPassword::new(password.as_str())).into(),
+            Lzma2Options::default().into(),
+        ]);
+    }
+
+    let result =
+        write_seven_zip_archive(&mut writer, &plan.sources, total, &mut progress, cancelled)
+            .and_then(|completed| {
+                writer.finish().context("Could not finish 7z archive")?;
+                fs::rename(&staging_path, &plan.output_path).with_context(|| {
+                    format!(
+                        "Could not move {} to {}",
+                        staging_path.display(),
+                        plan.output_path.display()
+                    )
+                })?;
+                Ok(CreateArchiveSummary {
+                    output_path: plan.output_path.clone(),
+                    completed,
+                })
+            });
+
+    if result.is_err() {
+        let _ = fs::remove_file(&staging_path);
+    }
+
+    result
+}
+
+fn write_seven_zip_archive<F, C>(
+    writer: &mut ArchiveWriter<File>,
+    sources: &[PathBuf],
+    total: usize,
+    progress: &mut F,
+    cancelled: C,
+) -> Result<usize>
+where
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    let mut completed = 0usize;
+    let mut sorted_sources = sources.to_vec();
+    sorted_sources.sort_by_key(|source| archive_name(source));
+
+    for source in sorted_sources {
+        let root_name = archive_name(&source);
+        add_path_to_seven_zip(
+            writer,
+            &source,
+            Path::new(&root_name),
+            &mut completed,
+            total,
+            progress,
+            &cancelled,
+        )?;
+    }
+
+    Ok(completed)
+}
+
+fn add_path_to_seven_zip<F, C>(
+    writer: &mut ArchiveWriter<File>,
+    source: &Path,
+    archive_path: &Path,
+    completed: &mut usize,
+    total: usize,
+    progress: &mut F,
+    cancelled: &C,
+) -> Result<()>
+where
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    if cancelled() {
+        return Ok(());
+    }
+    let metadata = fs::symlink_metadata(source)
+        .with_context(|| format!("Could not inspect {}", source.display()))?;
+    if metadata.file_type().is_symlink() {
+        bail!("7z creation does not support symlinks");
+    }
+    let name = seven_zip_entry_name(archive_path)?;
+    let entry = SevenZipEntry::from_path(source, name);
+    if metadata.is_dir() {
+        writer
+            .push_archive_entry::<&[u8]>(entry, None)
+            .context("Could not write 7z directory")?;
+        *completed += 1;
+        progress(CreateArchiveProgress {
+            completed: *completed,
+            total,
+        });
+
+        let mut children = fs::read_dir(source)
+            .with_context(|| format!("Could not read {}", source.display()))?
+            .collect::<io::Result<Vec<_>>>()?;
+        children.sort_by_key(|entry| entry.file_name());
+        for child in children {
+            let child_path = child.path();
+            add_path_to_seven_zip(
+                writer,
+                &child_path,
+                &archive_path.join(child.file_name()),
+                completed,
+                total,
+                progress,
+                cancelled,
+            )?;
+        }
+    } else {
+        let input =
+            File::open(source).with_context(|| format!("Could not open {}", source.display()))?;
+        writer
+            .push_archive_entry(entry, Some(input))
+            .context("Could not write 7z entry")?;
+        *completed += 1;
+        progress(CreateArchiveProgress {
+            completed: *completed,
+            total,
+        });
+    }
+    Ok(())
+}
+
+fn seven_zip_entry_name(path: &Path) -> Result<String> {
+    zip_entry_name(path, false)
 }
 
 fn create_tar_archive<F, C>(
@@ -933,10 +1090,14 @@ mod tests {
             ("backup.tbz".to_string(), CreateArchiveFormat::TarBzip2)
         );
         assert_eq!(
-            normalize_archive_output_name("backup.7z")
+            normalize_archive_output_name("backup.7z").unwrap(),
+            ("backup.7z".to_string(), CreateArchiveFormat::SevenZip)
+        );
+        assert_eq!(
+            normalize_archive_output_name("backup.z")
                 .unwrap_err()
                 .to_string(),
-            "Archive creation supports ZIP, TAR, TAR.GZ, TAR.XZ, and TAR.BZ2"
+            "Supported: ZIP, 7Z, TAR, TAR.GZ, TAR.XZ, and TAR.BZ2"
         );
         assert_eq!(
             normalize_archive_output_name("../backup.zip")
@@ -978,6 +1139,75 @@ mod tests {
                 "src/nested/mod.rs"
             ]
         );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn creates_seven_zip_with_top_level_names() {
+        let root = temp_path("seven-zip-top-level");
+        fs::create_dir_all(root.join("src/nested")).unwrap();
+        fs::write(root.join("src/lib.rs"), "lib").unwrap();
+        fs::write(root.join("src/nested/mod.rs"), "mod").unwrap();
+        fs::write(root.join("README.md"), "readme").unwrap();
+
+        let plan = plan_create_archive(
+            &root,
+            vec![root.join("README.md"), root.join("src")],
+            "archive.7z",
+            CreateArchiveOptions::default(),
+        )
+        .unwrap();
+        create_archive(&plan, |_| {}, || false).unwrap();
+
+        let file = File::open(root.join("archive.7z")).unwrap();
+        let mut archive =
+            sevenz_rust2::ArchiveReader::new(file, SevenZipPassword::empty()).unwrap();
+        let mut names = Vec::new();
+        archive
+            .for_each_entries(|entry, _reader| {
+                names.push(entry.name().to_string());
+                Ok(true)
+            })
+            .unwrap();
+        names.sort();
+        assert_eq!(
+            names,
+            vec![
+                "README.md",
+                "src",
+                "src/lib.rs",
+                "src/nested",
+                "src/nested/mod.rs"
+            ]
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn creates_encrypted_seven_zip() {
+        let root = temp_path("seven-zip-password");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("secret.txt"), "secret").unwrap();
+        let options = CreateArchiveOptions {
+            format: CreateArchiveFormat::SevenZip,
+            encryption: ArchiveEncryption::Password(ArchivePassword::new("pw")),
+        };
+        let plan = plan_create_archive(&root, vec![root.join("secret.txt")], "secret.7z", options)
+            .unwrap();
+        create_archive(&plan, |_| {}, || false).unwrap();
+
+        let file = File::open(root.join("secret.7z")).unwrap();
+        let mut archive =
+            sevenz_rust2::ArchiveReader::new(file, SevenZipPassword::new("pw")).unwrap();
+        let mut contents = String::new();
+        archive
+            .for_each_entries(|entry, reader| {
+                assert_eq!(entry.name(), "secret.txt");
+                reader.read_to_string(&mut contents).unwrap();
+                Ok(true)
+            })
+            .unwrap();
+        assert_eq!(contents, "secret");
         let _ = fs::remove_dir_all(root);
     }
 

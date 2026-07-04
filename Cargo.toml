@@ -40,7 +40,7 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 xz2 = { version = "0.1.7", features = ["static"] }
 bzip2 = "0.6.1"
 zstd = { version = "0.13.3", default-features = false }
-sevenz-rust2 = { version = "0.21.1", default-features = false, features = ["aes256"] }
+sevenz-rust2 = { version = "0.21.1", default-features = false, features = ["aes256", "compress"] }
 
 [dev-dependencies]
 sevenz-rust2 = { version = "0.21.1", default-features = false, features = ["aes256", "compress"] }
