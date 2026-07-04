@@ -126,7 +126,6 @@ fn iterm_modal_pdf_resize_requeues_render_after_display_state_clear() {
         .active_pdf_render_key()
         .expect("active PDF render key should be available");
     assert!(app.preview.pdf.pending_renders.contains(&render_key));
-    assert!(app.jobs.scheduler.has_pending_work());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

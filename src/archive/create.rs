@@ -1237,9 +1237,10 @@ mod tests {
         let root = temp_path("seven-zip-password");
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join("secret.txt"), "secret").unwrap();
+        let password = root.display().to_string();
         let options = CreateArchiveOptions {
             format: CreateArchiveFormat::SevenZip,
-            encryption: ArchiveEncryption::Password(ArchivePassword::new("pw")),
+            encryption: ArchiveEncryption::Password(ArchivePassword::new(&password)),
         };
         let plan = plan_create_archive(&root, vec![root.join("secret.txt")], "secret.7z", options)
             .unwrap();
@@ -1247,7 +1248,7 @@ mod tests {
 
         let file = File::open(root.join("secret.7z")).unwrap();
         let mut archive =
-            sevenz_rust2::ArchiveReader::new(file, SevenZipPassword::new("pw")).unwrap();
+            sevenz_rust2::ArchiveReader::new(file, SevenZipPassword::new(&password)).unwrap();
         let mut contents = String::new();
         archive
             .for_each_entries(|entry, reader| {
