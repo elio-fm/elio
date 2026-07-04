@@ -988,10 +988,12 @@ fn create_safe_symlink(dest_dir: &Path, link: &DeferredSymlink) -> Result<()> {
 }
 
 #[cfg(not(unix))]
-fn create_safe_symlink(_dest_dir: &Path, _link: &DeferredSymlink) -> Result<()> {
+fn create_safe_symlink(_dest_dir: &Path, link: &DeferredSymlink) -> Result<()> {
+    let _ = (&link.path, &link.target);
     bail!("Archive symlinks are not supported on this platform")
 }
 
+#[cfg(unix)]
 fn parent_contains_symlink(dest_dir: &Path, parent: &Path) -> Result<bool> {
     let relative = parent.strip_prefix(dest_dir).with_context(|| {
         format!(

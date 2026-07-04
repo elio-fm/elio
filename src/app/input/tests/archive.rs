@@ -1,6 +1,6 @@
 use super::super::*;
 use super::helpers::{
-    temp_path, wait_for_directory_load, write_binary_zip_entries,
+    cleanup_app_temp_root, temp_path, wait_for_directory_load, write_binary_zip_entries,
     write_encrypted_seven_zip_entries, write_encrypted_zip_entries,
 };
 use std::{fs, io::Read, thread, time::Duration};
@@ -35,7 +35,7 @@ fn e_extracts_focused_zip_archive() {
         Some(root.join("sample").as_path())
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn e_prompts_and_retries_encrypted_seven_zip_archive() {
         Some(root.join("sample").as_path())
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn e_prompts_and_retries_encrypted_rar_archive() {
         Some(root.join("sample").as_path())
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -203,7 +203,7 @@ fn e_prompts_and_retries_encrypted_zip_archive() {
         Some(root.join("sample").as_path())
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -235,7 +235,7 @@ fn archive_password_visibility_can_be_toggled() {
     .expect("visibility binding should toggle back");
     assert!(!app.archive_password_is_visible());
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -256,7 +256,7 @@ fn e_reports_unsupported_archive_format() {
     );
     assert!(app.jobs.archive_extract_progress.is_none());
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -303,7 +303,7 @@ fn c_create_archive_clears_selection_when_started() {
         Some(archive.as_path())
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -357,19 +357,21 @@ fn archive_create_password_returns_to_create_overlay_before_creating() {
     wait_for_directory_load(&mut app);
 
     assert_eq!(app.status_message(), "Created protected \"alpha.txt.zip\"");
-    let file = fs::File::open(&archive).expect("archive should exist");
-    let mut zip = zip::ZipArchive::new(file).expect("created archive should be a ZIP");
-    assert!(zip.by_name("alpha.txt").is_err());
-    let mut entry = zip
-        .by_name_decrypt("alpha.txt", password.as_bytes())
-        .expect("password should decrypt archived file");
-    let mut contents = String::new();
-    entry
-        .read_to_string(&mut contents)
-        .expect("encrypted entry should be readable");
-    assert_eq!(contents, "alpha");
+    {
+        let file = fs::File::open(&archive).expect("archive should exist");
+        let mut zip = zip::ZipArchive::new(file).expect("created archive should be a ZIP");
+        assert!(zip.by_name("alpha.txt").is_err());
+        let mut entry = zip
+            .by_name_decrypt("alpha.txt", password.as_bytes())
+            .expect("password should decrypt archived file");
+        let mut contents = String::new();
+        entry
+            .read_to_string(&mut contents)
+            .expect("encrypted entry should be readable");
+        assert_eq!(contents, "alpha");
+    }
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -403,7 +405,7 @@ fn archive_create_password_can_be_removed_before_creating() {
     assert_eq!(app.archive_create_protection_hint(), "Alt+P add password");
     assert_eq!(app.status_message(), "Archive password removed");
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -429,7 +431,7 @@ fn archive_create_unsupported_format_disables_password_prompt() {
             Some("Use ZIP or 7Z for passwords")
         );
 
-        fs::remove_dir_all(root).expect("failed to remove temp root");
+        cleanup_app_temp_root(app, root);
     }
 }
 
@@ -462,7 +464,7 @@ fn archive_create_tar_with_existing_password_shows_actionable_conflict() {
         "Switch format or remove"
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]
@@ -496,7 +498,7 @@ fn cancel_keys_clear_selection_before_cancelling_archive_creation() {
             "first cancel key should clear selection instead of cancelling archive creation"
         );
 
-        fs::remove_dir_all(root).expect("failed to remove temp root");
+        cleanup_app_temp_root(app, root);
     }
 }
 
@@ -556,7 +558,7 @@ fn archive_create_contents_list_scrolls_with_mouse_wheel() {
         0
     );
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 fn archive_create_app(label: &str) -> (std::path::PathBuf, App) {
