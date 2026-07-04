@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added ZIP, 7Z, TAR, TAR.GZ/TGZ, TAR.XZ/TXZ, and TAR.BZ2/TBZ2/TBZ archive creation for the focused item or current selection, with editable archive names, background progress, cancellation, and a configurable `create_archive` (`C`) shortcut. ([#215])
-- Added password protection for ZIP and 7Z archive creation. ([#215])
-- Added safe symlink preservation for ZIP, 7Z, and TAR archive creation and extraction.
+- Added `.zip`, `.7z`, `.tar`, `.tar.gz`/`.tgz`, `.tar.xz`/`.txz`, and `.tar.bz2`/`.tbz2`/`.tbz` archive creation for the focused item or current selection, with editable archive names, background progress, cancellation, and a configurable `create_archive` (`C`) shortcut. ([#215])
+- Added password protection for `.zip` and `.7z` archive creation. ([#215])
+- Added safe symlink preservation for `.zip`, `.7z`, and `.tar` archive creation and extraction.
 - Added a show/hide control to encrypted archive password prompts.
+- Added YAML frontmatter rendering to Markdown previews and recognized Quarto `.qmd` files as Markdown. ([#223])
 
 ### Changed
 
@@ -273,6 +274,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#223]: https://github.com/elio-fm/elio/issues/223
 [#215]: https://github.com/elio-fm/elio/issues/215
 [#201]: https://github.com/elio-fm/elio/issues/201
 [#199]: https://github.com/elio-fm/elio/issues/199

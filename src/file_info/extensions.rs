@@ -10,7 +10,7 @@ fn preview_for_extension(ext: &str) -> PreviewSpec {
 
 pub(super) fn inspect_extension(ext: &str) -> FileFacts {
     match ext {
-        "md" | "markdown" | "mdown" | "mkd" | "mdx" => FileFacts {
+        "md" | "markdown" | "mdown" | "mkd" | "mdx" | "qmd" => FileFacts {
             builtin_class: FileClass::Document,
             specific_type_label: None,
             preview: PreviewSpec::markdown(),

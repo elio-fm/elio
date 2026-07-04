@@ -78,6 +78,14 @@ fn html_and_css_files_use_code_preview_support() {
 }
 
 #[test]
+fn quarto_markdown_files_use_markdown_preview_support() {
+    let facts = inspect_path(Path::new("analysis.qmd"), EntryKind::File);
+
+    assert_eq!(facts.builtin_class, FileClass::Document);
+    assert_eq!(facts.preview.kind, PreviewKind::Markdown);
+}
+
+#[test]
 fn qml_files_use_code_preview_support() {
     let qml = inspect_path(Path::new("Main.qml"), EntryKind::File);
 

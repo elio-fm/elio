@@ -508,6 +508,11 @@ class = "document"
 icon = ""
 color = "#d3aa7c"
 
+[extensions.qmd]
+class = "document"
+icon = ""
+color = "#d3aa7c"
+
 [extensions.txt]
 class = "document"
 icon = ""

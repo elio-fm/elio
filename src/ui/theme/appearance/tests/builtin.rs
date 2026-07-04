@@ -131,6 +131,11 @@ fn default_theme_assigns_specific_icons_for_common_dev_paths() {
     assert_eq!(docs.icon, "󱧷");
     assert_eq!(docs.color, rgb(91, 168, 255));
 
+    let qmd = theme.resolve(Path::new("report.qmd"), EntryKind::File);
+    assert_eq!(qmd.class, FileClass::Document);
+    assert_eq!(qmd.icon, "");
+    assert_eq!(qmd.color, rgb(211, 170, 124));
+
     let bin = theme.resolve(Path::new("bin"), EntryKind::Directory);
     assert_eq!(bin.class, FileClass::Directory);
     assert_eq!(bin.icon, "󱁿");

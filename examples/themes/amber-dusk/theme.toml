@@ -405,6 +405,11 @@ class = "document"
 icon = ""
 color = "#c4a27a"
 
+[extensions.qmd]
+class = "document"
+icon = ""
+color = "#c4a27a"
+
 [extensions.pdf]
 class = "document"
 icon = "󰈙"

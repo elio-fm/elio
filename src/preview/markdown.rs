@@ -93,6 +93,17 @@ struct MarkdownRenderer {
 
 pub(super) fn render_markdown_preview(text: &str) -> Vec<Line<'static>> {
     let mut renderer = MarkdownRenderer::new(theme::palette());
+    let text = if let Some((frontmatter, body)) = split_yaml_frontmatter(text) {
+        renderer.render_code_block(CodeBlockContext {
+            language: "yaml".to_string(),
+            text: frontmatter.to_string(),
+        });
+        renderer.push_blank_line();
+        body
+    } else {
+        text
+    };
+
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TASKLISTS);
@@ -818,6 +829,30 @@ impl MarkdownRenderer {
     }
 }
 
+fn split_yaml_frontmatter(text: &str) -> Option<(&str, &str)> {
+    let mut lines = text.split_inclusive('\n');
+    let first = lines.next()?;
+    if first.trim_end_matches(['\r', '\n']) != "---" {
+        return None;
+    }
+
+    let content_start = first.len();
+    let mut offset = content_start;
+
+    for line in lines {
+        let line_start = offset;
+        offset += line.len();
+
+        let marker = line.trim_end_matches(['\r', '\n']).trim();
+        if marker == "---" || marker == "..." {
+            let frontmatter = text[content_start..line_start].trim_end_matches(['\r', '\n']);
+            return Some((frontmatter, &text[offset..]));
+        }
+    }
+
+    None
+}
+
 fn heading_style(level: HeadingLevel, palette: theme::Palette) -> Style {
     let color = match level {
         HeadingLevel::H1 => palette.accent_text,
@@ -978,4 +1013,42 @@ fn chars_to_spans(chars: &[(char, Style)]) -> Vec<Span<'static>> {
         spans.push(Span::styled(text, style));
     }
     spans
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn line_text(line: &Line<'static>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>()
+    }
+
+    #[test]
+    fn renders_yaml_frontmatter_as_code_before_body() {
+        let lines = render_markdown_preview(
+            "---\ntitle: Daily note\ntags:\n  - obsidian\n---\n# Notes\nBody text",
+        );
+        let text: Vec<String> = lines.iter().map(line_text).collect();
+
+        assert!(text.iter().any(|line| line.contains("yaml")));
+        assert!(text.iter().any(|line| line.contains("title")));
+        assert!(text.iter().any(|line| line.contains("obsidian")));
+        assert!(text.iter().any(|line| line.contains("Notes")));
+        assert!(!text.iter().any(|line| line.contains("────────────────")));
+    }
+
+    #[test]
+    fn only_treats_opening_delimited_block_as_frontmatter() {
+        assert!(split_yaml_frontmatter("# Notes\n---\ntitle: no\n---\n").is_none());
+        assert!(split_yaml_frontmatter("---\ntitle: no closing\n# Notes\n").is_none());
+
+        let Some((frontmatter, body)) = split_yaml_frontmatter("---\ntitle: ok\n...\nBody") else {
+            panic!("expected frontmatter");
+        };
+        assert_eq!(frontmatter, "title: ok");
+        assert_eq!(body, "Body");
+    }
 }
