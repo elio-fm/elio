@@ -9,10 +9,13 @@ use sevenz_rust2::{
 use std::{
     collections::BTreeSet,
     fs::{self, File},
-    io::{self, Write},
+    io::{self, Cursor, Write},
     path::{Component, Path, PathBuf},
 };
 use zip::{AesMode, CompressionMethod, ZipWriter, write::FileOptions};
+
+const SEVEN_ZIP_UNIX_ATTR_FLAG: u32 = 0x8000;
+const SEVEN_ZIP_FILE_ATTR: u32 = 0x20;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum CreateArchiveFormat {
@@ -366,46 +369,54 @@ where
     F: FnMut(CreateArchiveProgress),
     C: Fn() -> bool,
 {
-    let mut completed = 0usize;
+    let mut state = SevenZipCreateState {
+        completed: 0,
+        total,
+        progress,
+        cancelled,
+        root_source: PathBuf::new(),
+        root_archive_path: PathBuf::new(),
+    };
     let mut sorted_sources = sources.to_vec();
     sorted_sources.sort_by_key(|source| archive_name(source));
 
     for source in sorted_sources {
         let root_name = archive_name(&source);
-        add_path_to_seven_zip(
-            writer,
-            &source,
-            Path::new(&root_name),
-            &mut completed,
-            total,
-            progress,
-            &cancelled,
-        )?;
+        state.root_source = source.clone();
+        state.root_archive_path = PathBuf::from(&root_name);
+        add_path_to_seven_zip(writer, &source, Path::new(&root_name), &mut state)?;
     }
 
-    Ok(completed)
+    Ok(state.completed)
+}
+
+struct SevenZipCreateState<'a, F, C> {
+    completed: usize,
+    total: usize,
+    progress: &'a mut F,
+    cancelled: C,
+    root_source: PathBuf,
+    root_archive_path: PathBuf,
 }
 
 fn add_path_to_seven_zip<F, C>(
     writer: &mut ArchiveWriter<File>,
     source: &Path,
     archive_path: &Path,
-    completed: &mut usize,
-    total: usize,
-    progress: &mut F,
-    cancelled: &C,
+    state: &mut SevenZipCreateState<'_, F, C>,
 ) -> Result<()>
 where
     F: FnMut(CreateArchiveProgress),
     C: Fn() -> bool,
 {
-    if cancelled() {
+    if (state.cancelled)() {
         return Ok(());
     }
     let metadata = fs::symlink_metadata(source)
         .with_context(|| format!("Could not inspect {}", source.display()))?;
     if metadata.file_type().is_symlink() {
-        bail!("7z creation does not support symlinks");
+        add_symlink_to_seven_zip(writer, source, archive_path, state)?;
+        return Ok(());
     }
     let name = seven_zip_entry_name(archive_path)?;
     let entry = SevenZipEntry::from_path(source, name);
@@ -413,11 +424,7 @@ where
         writer
             .push_archive_entry::<&[u8]>(entry, None)
             .context("Could not write 7z directory")?;
-        *completed += 1;
-        progress(CreateArchiveProgress {
-            completed: *completed,
-            total,
-        });
+        complete_seven_zip_entry(state);
 
         let mut children = fs::read_dir(source)
             .with_context(|| format!("Could not read {}", source.display()))?
@@ -429,10 +436,7 @@ where
                 writer,
                 &child_path,
                 &archive_path.join(child.file_name()),
-                completed,
-                total,
-                progress,
-                cancelled,
+                state,
             )?;
         }
     } else {
@@ -441,13 +445,58 @@ where
         writer
             .push_archive_entry(entry, Some(input))
             .context("Could not write 7z entry")?;
-        *completed += 1;
-        progress(CreateArchiveProgress {
-            completed: *completed,
-            total,
-        });
+        complete_seven_zip_entry(state);
     }
     Ok(())
+}
+
+fn add_symlink_to_seven_zip<F, C>(
+    writer: &mut ArchiveWriter<File>,
+    source: &Path,
+    archive_path: &Path,
+    state: &mut SevenZipCreateState<'_, F, C>,
+) -> Result<()>
+where
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    let target = fs::read_link(source)
+        .with_context(|| format!("Could not read symlink {}", source.display()))?;
+    let target = archived_symlink_target(
+        archive_path,
+        &state.root_source,
+        &state.root_archive_path,
+        &target,
+    );
+    let contents = target.to_string_lossy().into_owned().into_bytes();
+    let entry = SevenZipEntry {
+        name: seven_zip_entry_name(archive_path)?,
+        has_stream: true,
+        size: contents.len() as u64,
+        has_windows_attributes: true,
+        windows_attributes: seven_zip_unix_attributes(0o120777),
+        ..Default::default()
+    };
+    writer
+        .push_archive_entry(entry, Some(Cursor::new(contents)))
+        .context("Could not write 7z symlink")?;
+    complete_seven_zip_entry(state);
+    Ok(())
+}
+
+fn complete_seven_zip_entry<F, C>(state: &mut SevenZipCreateState<'_, F, C>)
+where
+    F: FnMut(CreateArchiveProgress),
+{
+    state.completed += 1;
+    (state.progress)(CreateArchiveProgress {
+        completed: state.completed,
+        total: state.total,
+    });
+}
+
+fn seven_zip_unix_attributes(mode: u32) -> u32 {
+    (mode << 16) | SEVEN_ZIP_UNIX_ATTR_FLAG | SEVEN_ZIP_FILE_ATTR
 }
 
 fn seven_zip_entry_name(path: &Path) -> Result<String> {
@@ -1363,6 +1412,45 @@ mod tests {
         assert_eq!(entry.unix_mode().unwrap() & 0o170000, 0o120000);
         let mut target = String::new();
         entry.read_to_string(&mut target).unwrap();
+        assert_eq!(target, "../target.txt");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn creates_seven_zip_with_portable_internal_absolute_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_path("seven-zip-absolute-internal-symlink");
+        let folder = root.join("folder");
+        fs::create_dir_all(folder.join("nested")).unwrap();
+        fs::write(folder.join("target.txt"), "target").unwrap();
+        symlink(folder.join("target.txt"), folder.join("nested/link.txt")).unwrap();
+
+        let plan = plan_create_archive(
+            &root,
+            vec![folder],
+            "archive.7z",
+            CreateArchiveOptions::default(),
+        )
+        .unwrap();
+        create_archive(&plan, |_| {}, || false).unwrap();
+
+        let file = File::open(root.join("archive.7z")).unwrap();
+        let mut archive =
+            sevenz_rust2::ArchiveReader::new(file, SevenZipPassword::empty()).unwrap();
+        let mut target = String::new();
+        let mut attrs = 0;
+        archive
+            .for_each_entries(|entry, reader| {
+                if entry.name() == "folder/nested/link.txt" {
+                    attrs = entry.windows_attributes;
+                    reader.read_to_string(&mut target).unwrap();
+                }
+                Ok(true)
+            })
+            .unwrap();
+        assert_eq!((attrs >> 16) & 0o170000, 0o120000);
         assert_eq!(target, "../target.txt");
         let _ = fs::remove_dir_all(root);
     }

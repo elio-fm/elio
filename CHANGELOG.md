@@ -9,10 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added archive creation for the focused item or current selection, with editable archive names, background progress, cancellation, and a configurable `create_archive` (`C`) shortcut. ([#215])
-- Added ZIP password protection for archive creation. ([#215])
-- Added TAR, TAR.GZ/TGZ, TAR.XZ/TXZ, and TAR.BZ2/TBZ2/TBZ output formats for archive creation. ([#215])
-- Added safe symlink preservation for ZIP/TAR archive creation and extraction.
+- Added ZIP, 7Z, TAR, TAR.GZ/TGZ, TAR.XZ/TXZ, and TAR.BZ2/TBZ2/TBZ archive creation for the focused item or current selection, with editable archive names, background progress, cancellation, and a configurable `create_archive` (`C`) shortcut. ([#215])
+- Added password protection for ZIP and 7Z archive creation. ([#215])
+- Added safe symlink preservation for ZIP, 7Z, and TAR archive creation and extraction.
 - Added a show/hide control to encrypted archive password prompts.
 
 ### Changed

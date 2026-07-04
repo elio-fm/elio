@@ -426,6 +426,8 @@ where
         .map_err(|error| map_seven_zip_error(error, password_provided))?;
     let total = archive.archive().files.len();
     let mut completed = 0usize;
+    let mut skipped_links = 0usize;
+    let mut symlinks = Vec::new();
     let mut extract_error = None;
 
     progress(ExtractProgress {
@@ -437,7 +439,9 @@ where
             if cancelled() {
                 return Ok(false);
             }
-            if let Err(error) = extract_seven_zip_entry(plan, entry, reader) {
+            if let Err(error) =
+                extract_seven_zip_entry(plan, entry, reader, &mut symlinks, &mut skipped_links)
+            {
                 extract_error = Some(error);
                 return Ok(false);
             }
@@ -453,11 +457,13 @@ where
     if let Some(error) = extract_error {
         return Err(error);
     }
+    skipped_links +=
+        extract_deferred_symlinks(&plan.dest_dir, symlinks).map_err(ExtractError::Other)?;
     Ok(ExtractSummary {
         dest_dir: plan.dest_dir.clone(),
         completed,
         total: Some(total),
-        skipped_links: 0,
+        skipped_links,
     })
 }
 
@@ -465,6 +471,8 @@ fn extract_seven_zip_entry(
     plan: &ExtractPlan,
     entry: &SevenZipEntry,
     reader: &mut dyn Read,
+    symlinks: &mut Vec<DeferredSymlink>,
+    skipped_links: &mut usize,
 ) -> ExtractResult<()> {
     if entry.is_anti_item {
         return Ok(());
@@ -473,6 +481,21 @@ fn extract_seven_zip_entry(
     if entry.is_directory {
         fs::create_dir_all(&out_path)
             .with_context(|| format!("Could not create {}", out_path.display()))?;
+    } else if is_seven_zip_symlink(entry) {
+        let mut target = String::new();
+        reader
+            .take(entry.size)
+            .read_to_string(&mut target)
+            .context("Could not read 7z symlink target")?;
+        let target = PathBuf::from(target);
+        if safe_relative_link_target(&plan.dest_dir, &out_path, &target) {
+            symlinks.push(DeferredSymlink {
+                path: out_path,
+                target,
+            });
+        } else {
+            *skipped_links += 1;
+        }
     } else {
         if let Some(parent) = out_path.parent() {
             fs::create_dir_all(parent)
@@ -485,6 +508,10 @@ fn extract_seven_zip_entry(
             .with_context(|| format!("Could not write {}", out_path.display()))?;
     }
     Ok(())
+}
+
+fn is_seven_zip_symlink(entry: &SevenZipEntry) -> bool {
+    entry.has_windows_attributes && ((entry.windows_attributes >> 16) & 0o170000 == 0o120000)
 }
 
 const EXTERNAL_SEVEN_ZIP_PROGRAMS: &[&str] = &["7z", "7zz", "7za"];
@@ -1542,6 +1569,60 @@ Size = 5
     }
 
     #[test]
+    #[cfg(unix)]
+    fn extracts_safe_seven_zip_symlink() {
+        let root = temp_path("7z-safe-link");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.7z");
+        write_seven_zip_with_symlinks(
+            &archive_path,
+            &[
+                ("target.txt", Some(b"hello"), false),
+                ("link.txt", Some(b"target.txt"), true),
+            ],
+        );
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+
+        assert_eq!(summary.completed, 2);
+        assert_eq!(summary.skipped_links, 0);
+        let link_path = root.join("sample/link.txt");
+        assert!(
+            fs::symlink_metadata(&link_path)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(fs::read_link(link_path).unwrap(), Path::new("target.txt"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn skips_unsafe_seven_zip_symlinks() {
+        let root = temp_path("7z-unsafe-link");
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("sample.7z");
+        write_seven_zip_with_symlinks(
+            &archive_path,
+            &[
+                ("absolute", Some(b"/etc/passwd"), true),
+                ("escape", Some(b"../escape"), true),
+            ],
+        );
+
+        let plan = plan_extract(&archive_path).unwrap();
+        let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+
+        assert_eq!(summary.completed, 2);
+        assert_eq!(summary.skipped_links, 2);
+        assert!(!root.join("sample/absolute").exists());
+        assert!(!root.join("sample/escape").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn extracts_rar_with_external_seven_zip_fallback() {
         if !external_seven_zip_available() {
             return;
@@ -1852,13 +1933,27 @@ Size = 5
     }
 
     fn write_seven_zip(archive_path: &Path, entries: &[(&str, Option<&[u8]>)]) {
+        write_seven_zip_with_symlinks(
+            archive_path,
+            &entries
+                .iter()
+                .map(|(name, contents)| (*name, *contents, false))
+                .collect::<Vec<_>>(),
+        );
+    }
+
+    fn write_seven_zip_with_symlinks(archive_path: &Path, entries: &[(&str, Option<&[u8]>, bool)]) {
         let mut writer = sevenz_rust2::ArchiveWriter::create(archive_path).unwrap();
-        for (name, contents) in entries {
-            let entry = if contents.is_some() {
+        for (name, contents, symlink) in entries {
+            let mut entry = if contents.is_some() {
                 sevenz_rust2::ArchiveEntry::new_file(name)
             } else {
                 sevenz_rust2::ArchiveEntry::new_directory(name)
             };
+            if *symlink {
+                entry.has_windows_attributes = true;
+                entry.windows_attributes = (0o120777 << 16) | 0x8020;
+            }
             match contents {
                 Some(contents) => {
                     writer.push_archive_entry(entry, Some(*contents)).unwrap();
