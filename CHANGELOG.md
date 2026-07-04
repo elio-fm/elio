@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Made create and bulk rename overlays show more rows before scrolling, adapt better on short terminals, and use consistent scrollbar styling.
+- Dimmed help overlay key separators and removed the bottom close hint.
 
 ## [1.10.0] - 2026-06-30
 

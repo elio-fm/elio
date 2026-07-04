@@ -4,7 +4,7 @@ use crate::config::{KeyBindings, KeyList};
 use crate::ui::{helpers, theme::Palette};
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
@@ -126,7 +126,7 @@ pub(super) fn render_help(
     } else {
         area.width.saturating_sub(4).clamp(44, 90)
     };
-    let popup_height = area.height.saturating_sub(2).clamp(10, 37);
+    let popup_height = area.height.saturating_sub(3).clamp(9, 36);
     let popup = helpers::centered_rect(area, popup_width, popup_height);
     state.help_panel = Some(popup);
     frame.render_widget(Clear, popup);
@@ -155,24 +155,16 @@ pub(super) fn render_help(
     );
 
     let inner = helpers::inner_with_padding(popup);
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
-        .split(inner);
-
-    if rows[0].width >= 88 && rows[0].height >= 33 {
-        render_wide_help(frame, rows[0], rows[1], &sections, state, palette);
+    if inner.width >= 88 && inner.height >= 33 {
+        render_wide_help(frame, inner, &sections, state, palette);
     } else {
-        render_compact_help(
-            frame, rows[0], rows[1], &sections, scroll_top, state, palette,
-        );
+        render_compact_help(frame, inner, &sections, scroll_top, state, palette);
     }
 }
 
 fn render_wide_help(
     frame: &mut Frame<'_>,
     body: Rect,
-    footer: Rect,
     sections: &[HelpSection],
     state: &mut FrameState,
     palette: Palette,
@@ -211,13 +203,11 @@ fn render_wide_help(
             .wrap(Wrap { trim: false }),
         cols[2],
     );
-    render_help_footer(frame, footer, palette);
 }
 
 fn render_compact_help(
     frame: &mut Frame<'_>,
     body: Rect,
-    footer: Rect,
     sections: &[HelpSection],
     scroll_top: usize,
     state: &mut FrameState,
@@ -255,7 +245,6 @@ fn render_compact_help(
     if let Some(area) = scrollbar {
         render_overlay_scrollbar(frame, area, total, visible, scroll_top, palette);
     }
-    render_help_footer(frame, footer, palette);
 }
 
 fn flowing_help_lines(
@@ -303,24 +292,6 @@ fn line_width(line: &Line<'_>) -> usize {
         .iter()
         .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
         .sum()
-}
-
-fn render_help_footer(frame: &mut Frame<'_>, area: Rect, palette: Palette) {
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(
-                "? / Esc",
-                Style::default()
-                    .fg(palette.accent)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" "),
-            Span::styled("close help", Style::default().fg(palette.muted)),
-        ]))
-        .alignment(Alignment::Right)
-        .style(Style::default().bg(palette.chrome_alt).fg(palette.muted)),
-        area,
-    );
 }
 
 impl HelpMode {
