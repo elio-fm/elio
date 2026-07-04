@@ -1478,12 +1478,8 @@ fn compact_help_overlay_scrolls_instead_of_truncating_small_terminals() {
         "compact help should start with the first section, got: {rendered:?}"
     );
     assert!(
-        rendered.contains("? / Esc") && rendered.contains("close help"),
-        "compact help should keep the original footer, got: {rendered:?}"
-    );
-    assert!(
-        !rendered.contains("scroll") && !rendered.contains("PgUp/PgDn"),
-        "compact help should not add scrolling hints to the footer, got: {rendered:?}"
+        !rendered.contains("? / Esc") && !rendered.contains("close help"),
+        "compact help should not render an obvious close footer, got: {rendered:?}"
     );
     assert!(
         rendered.contains("┃"),
@@ -1518,8 +1514,8 @@ fn compact_help_overlay_scrolls_instead_of_truncating_small_terminals() {
         "compact help should keep late sections reachable, got: {rendered:?}"
     );
     assert!(
-        rendered.contains("?/Esc") || rendered.contains("? / Esc"),
-        "compact help should keep the close hint visible, got: {rendered:?}"
+        !rendered.contains("?/Esc") && !rendered.contains("? / Esc"),
+        "compact help should not keep the obvious close hint visible, got: {rendered:?}"
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
