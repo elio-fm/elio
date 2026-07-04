@@ -553,17 +553,29 @@ fn help_entry_lines(
     let continuation = " ".repeat(key_width + 2);
     let mut lines = Vec::with_capacity(wrapped_action.len());
 
-    lines.push(Line::from(vec![
-        Span::styled(
-            key,
-            Style::default()
-                .fg(palette.accent_text)
-                .add_modifier(Modifier::BOLD),
-        ),
+    let key_style = Style::default()
+        .fg(palette.accent_text)
+        .add_modifier(Modifier::BOLD);
+    let separator_style = Style::default().fg(palette.muted);
+    let key_len = key.chars().count();
+    let mut spans: Vec<_> = key
+        .chars()
+        .enumerate()
+        .map(|(i, ch)| {
+            let style = if ch == '/' && i > 0 && i + 1 < key_len {
+                separator_style
+            } else {
+                key_style
+            };
+            Span::styled(ch.to_string(), style)
+        })
+        .collect();
+    spans.extend([
         Span::raw(key_padding),
         Span::raw("  "),
         Span::styled(wrapped_action.remove(0), Style::default().fg(palette.muted)),
-    ]));
+    ]);
+    lines.push(Line::from(spans));
 
     for line in wrapped_action {
         lines.push(Line::from(vec![
