@@ -407,6 +407,62 @@ fn archive_create_password_can_be_removed_before_creating() {
 }
 
 #[test]
+fn archive_create_unsupported_format_disables_password_prompt() {
+    for (label, input) in [
+        ("create-tar-no-password", "alpha.tar"),
+        ("create-unknown-extension-no-password", "alpha.z"),
+    ] {
+        let (root, mut app) = archive_create_app(label);
+        open_archive_create_with_input(&mut app, input);
+
+        assert_eq!(app.archive_create_protection_label(), "");
+        assert_eq!(app.archive_create_protection_hint(), "");
+        app.handle_event(Event::Key(KeyEvent::new(
+            KeyCode::Char('p'),
+            KeyModifiers::ALT,
+        )))
+        .expect("Alt+P should be handled");
+
+        assert!(!app.archive_password_is_open());
+        assert_eq!(app.archive_create_error(), Some("Use ZIP for passwords"));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+}
+
+#[test]
+fn archive_create_tar_with_existing_password_shows_actionable_conflict() {
+    let (root, mut app) = archive_create_app("create-tar-password-conflict");
+    open_archive_create_with_input(&mut app, "alpha.txt.zip");
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('p'),
+        KeyModifiers::ALT,
+    )))
+    .expect("Alt+P should open password prompt");
+    type_archive_password(&mut app, &archive_test_password(&root));
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
+        .expect("password Enter should return to create overlay");
+    set_archive_create_input(&mut app, "alpha.tar");
+
+    assert_eq!(app.archive_create_protection_label(), "Password set");
+    assert_eq!(
+        app.archive_create_protection_hint(),
+        "Switch format or remove"
+    );
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
+        .expect("Enter should validate archive creation");
+    assert_eq!(app.archive_create_error(), None);
+    assert_eq!(app.archive_create_protection_label(), "Password set");
+    assert_eq!(
+        app.archive_create_protection_hint(),
+        "Switch format or remove"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn cancel_keys_clear_selection_before_cancelling_archive_creation() {
     for (label, key) in [
         ("esc", KeyEvent::from(KeyCode::Esc)),
@@ -498,6 +554,31 @@ fn archive_create_contents_list_scrolls_with_mouse_wheel() {
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+fn archive_create_app(label: &str) -> (std::path::PathBuf, App) {
+    let root = temp_path(label);
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("alpha.txt"), "alpha").expect("failed to write alpha");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    (root, app)
+}
+
+fn open_archive_create_with_input(app: &mut App, input: &str) {
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('C'))))
+        .expect("C should open archive creation");
+    set_archive_create_input(app, input);
+}
+
+fn set_archive_create_input(app: &mut App, input: &str) {
+    let overlay = app
+        .overlays
+        .archive_create
+        .as_mut()
+        .expect("archive create overlay should be open");
+    overlay.input = input.to_string();
+    overlay.cursor_col = overlay.input.chars().count();
 }
 
 fn archive_test_password(root: &std::path::Path) -> String {

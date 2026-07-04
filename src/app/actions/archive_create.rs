@@ -4,7 +4,9 @@ use crate::app::text_edit::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
 };
-use crate::archive::{ArchiveEncryption, CreateArchiveOptions, normalize_zip_output_name};
+use crate::archive::{
+    ArchiveEncryption, CreateArchiveFormat, CreateArchiveOptions, normalize_archive_output_name,
+};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::PathBuf;
 
@@ -45,9 +47,7 @@ impl App {
         let Some(overlay) = &self.overlays.archive_create else {
             return "";
         };
-        if overlay.options.format.supports_encryption()
-            && overlay.options.encryption.is_password_set()
-        {
+        if overlay.options.encryption.is_password_set() {
             "Password set"
         } else {
             ""
@@ -58,12 +58,21 @@ impl App {
         let Some(overlay) = &self.overlays.archive_create else {
             return "";
         };
-        if !overlay.options.format.supports_encryption() {
-            ""
-        } else if overlay.options.encryption.is_password_set() {
-            "Alt+P change  Alt+R remove"
-        } else {
-            "Alt+P add password"
+        match archive_create_effective_format(overlay) {
+            Some(format) if format.supports_encryption() => {
+                if overlay.options.encryption.is_password_set() {
+                    "Alt+P change  Alt+R remove"
+                } else {
+                    "Alt+P add password"
+                }
+            }
+            Some(_) | None => {
+                if overlay.options.encryption.is_password_set() {
+                    "Switch format or remove"
+                } else {
+                    ""
+                }
+            }
         }
     }
 
@@ -367,8 +376,8 @@ impl App {
         let Some(overlay) = &self.overlays.archive_create else {
             return Ok(());
         };
-        let output_name = match normalize_zip_output_name(&overlay.input) {
-            Ok(name) => name,
+        let (output_name, format) = match normalize_archive_output_name(&overlay.input) {
+            Ok(normalized) => normalized,
             Err(error) => {
                 if let Some(overlay) = &mut self.overlays.archive_create {
                     overlay.error = Some(error.to_string());
@@ -377,7 +386,14 @@ impl App {
             }
         };
         let sources = overlay.sources.clone();
-        let options = overlay.options.clone();
+        let mut options = overlay.options.clone();
+        options.format = format;
+        if options.encryption.is_password_set() && !options.format.supports_encryption() {
+            if let Some(overlay) = &mut self.overlays.archive_create {
+                overlay.error = None;
+            }
+            return Ok(());
+        }
         if self.start_archive_create(sources, output_name, options)? {
             self.overlays.archive_create = None;
         }
@@ -443,12 +459,16 @@ impl App {
         let Some(overlay) = &self.overlays.archive_create else {
             return;
         };
-        if !overlay.options.format.supports_encryption() {
-            if let Some(overlay) = &mut self.overlays.archive_create {
-                overlay.error = Some(format!(
-                    "{} does not support password protection",
-                    overlay.options.format.label()
-                ));
+        let password_set = overlay.options.encryption.is_password_set();
+        let Some(format) = archive_create_effective_format(overlay) else {
+            if !password_set {
+                self.show_archive_password_format_hint();
+            }
+            return;
+        };
+        if !format.supports_encryption() {
+            if !password_set {
+                self.show_archive_password_format_hint();
             }
             return;
         }
@@ -466,6 +486,12 @@ impl App {
         });
     }
 
+    fn show_archive_password_format_hint(&mut self) {
+        if let Some(overlay) = &mut self.overlays.archive_create {
+            overlay.error = Some("Use ZIP for passwords".to_string());
+        }
+    }
+
     fn remove_archive_create_password(&mut self) {
         if let Some(overlay) = &mut self.overlays.archive_create
             && overlay.options.encryption.is_password_set()
@@ -480,6 +506,12 @@ impl App {
 fn archive_create_default_cursor_col(name: &str) -> usize {
     let base = name.strip_suffix(".zip").unwrap_or(name);
     base.chars().count()
+}
+
+fn archive_create_effective_format(overlay: &ArchiveCreateOverlay) -> Option<CreateArchiveFormat> {
+    normalize_archive_output_name(&overlay.input)
+        .map(|(_, format)| format)
+        .ok()
 }
 
 fn archive_source_label(path: &std::path::Path) -> String {

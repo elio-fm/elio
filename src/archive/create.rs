@@ -1,9 +1,10 @@
 use super::extract::ArchivePassword;
 use anyhow::{Context, Result, anyhow, bail};
+use flate2::{Compression, write::GzEncoder};
 use std::{
     collections::BTreeSet,
     fs::{self, File},
-    io,
+    io::{self, Write},
     path::{Component, Path, PathBuf},
 };
 use zip::{AesMode, CompressionMethod, ZipWriter, write::FileOptions};
@@ -11,18 +12,28 @@ use zip::{AesMode, CompressionMethod, ZipWriter, write::FileOptions};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum CreateArchiveFormat {
     Zip,
+    Tar,
+    TarGzip,
 }
 
 impl CreateArchiveFormat {
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Self::Zip => "ZIP",
-        }
-    }
-
     pub(crate) fn supports_encryption(self) -> bool {
         match self {
             Self::Zip => true,
+            Self::Tar | Self::TarGzip => false,
+        }
+    }
+
+    fn detect_from_name(name: &str) -> Option<Self> {
+        let lower = name.to_ascii_lowercase();
+        if lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
+            Some(Self::TarGzip)
+        } else if lower.ends_with(".tar") {
+            Some(Self::Tar)
+        } else if lower.ends_with(".zip") {
+            Some(Self::Zip)
+        } else {
+            None
         }
     }
 }
@@ -80,7 +91,7 @@ pub(crate) struct CreateArchiveSummary {
     pub(crate) completed: usize,
 }
 
-pub(crate) fn normalize_zip_output_name(input: &str) -> Result<String> {
+pub(crate) fn normalize_archive_output_name(input: &str) -> Result<(String, CreateArchiveFormat)> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         bail!("Name cannot be empty");
@@ -99,13 +110,12 @@ pub(crate) fn normalize_zip_output_name(input: &str) -> Result<String> {
         bail!("Use a filename, not a path");
     }
 
-    let lower = trimmed.to_ascii_lowercase();
-    if lower.ends_with(".zip") {
-        Ok(trimmed.to_string())
+    if let Some(format) = CreateArchiveFormat::detect_from_name(trimmed) {
+        Ok((trimmed.to_string(), format))
     } else if path.extension().is_none() {
-        Ok(format!("{trimmed}.zip"))
+        Ok((format!("{trimmed}.zip"), CreateArchiveFormat::Zip))
     } else {
-        bail!("Archive creation supports ZIP");
+        bail!("Archive creation supports ZIP, TAR, and TAR.GZ");
     }
 }
 
@@ -122,17 +132,15 @@ pub(crate) fn plan_create_archive(
     cwd: &Path,
     sources: Vec<PathBuf>,
     output_name: &str,
-    options: CreateArchiveOptions,
+    mut options: CreateArchiveOptions,
 ) -> Result<CreateArchivePlan> {
     if sources.is_empty() {
         bail!("Select items to archive");
     }
-    let output_name = normalize_zip_output_name(output_name)?;
+    let (output_name, format) = normalize_archive_output_name(output_name)?;
+    options.format = format;
     if options.encryption.is_password_set() && !options.format.supports_encryption() {
-        bail!(
-            "{} does not support password protection",
-            options.format.label()
-        );
+        bail!("Password not supported for this format");
     }
     let output_path = cwd.join(output_name);
     if fs::symlink_metadata(&output_path).is_ok() {
@@ -168,6 +176,22 @@ pub(crate) fn plan_create_archive(
         output_path,
         options,
     })
+}
+
+pub(crate) fn create_archive<F, C>(
+    plan: &CreateArchivePlan,
+    progress: F,
+    cancelled: C,
+) -> Result<CreateArchiveSummary>
+where
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    match plan.options.format {
+        CreateArchiveFormat::Zip => create_zip_archive(plan, progress, cancelled),
+        CreateArchiveFormat::Tar => create_tar_archive(plan, progress, cancelled),
+        CreateArchiveFormat::TarGzip => create_tar_gzip_archive(plan, progress, cancelled),
+    }
 }
 
 pub(crate) fn create_zip_archive<F, C>(
@@ -257,6 +281,192 @@ where
 
     writer.finish().context("Could not finish ZIP archive")?;
     Ok(completed)
+}
+
+fn create_tar_archive<F, C>(
+    plan: &CreateArchivePlan,
+    progress: F,
+    cancelled: C,
+) -> Result<CreateArchiveSummary>
+where
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    create_tar_with(plan, TarSink::Plain, progress, cancelled)
+}
+
+fn create_tar_gzip_archive<F, C>(
+    plan: &CreateArchivePlan,
+    progress: F,
+    cancelled: C,
+) -> Result<CreateArchiveSummary>
+where
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    create_tar_with(plan, TarSink::Gzip, progress, cancelled)
+}
+
+enum TarSink {
+    Plain,
+    Gzip,
+}
+
+fn create_tar_with<F, C>(
+    plan: &CreateArchivePlan,
+    sink: TarSink,
+    mut progress: F,
+    cancelled: C,
+) -> Result<CreateArchiveSummary>
+where
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    let total = count_archive_items(&plan.sources)?;
+    progress(CreateArchiveProgress {
+        completed: 0,
+        total,
+    });
+
+    let staging_path = unique_staging_path(&plan.output_path)?;
+    let file = File::create_new(&staging_path)
+        .with_context(|| format!("Could not create {}", staging_path.display()))?;
+    let result = match sink {
+        TarSink::Plain => write_tar_archive(file, &plan.sources, total, &mut progress, cancelled),
+        TarSink::Gzip => {
+            let encoder = GzEncoder::new(file, Compression::default());
+            write_tar_archive(encoder, &plan.sources, total, &mut progress, cancelled)
+        }
+    }
+    .and_then(|completed| {
+        fs::rename(&staging_path, &plan.output_path).with_context(|| {
+            format!(
+                "Could not move {} to {}",
+                staging_path.display(),
+                plan.output_path.display()
+            )
+        })?;
+        Ok(CreateArchiveSummary {
+            output_path: plan.output_path.clone(),
+            completed,
+        })
+    });
+
+    if result.is_err() {
+        let _ = fs::remove_file(&staging_path);
+    }
+
+    result
+}
+
+fn write_tar_archive<W, F, C>(
+    writer: W,
+    sources: &[PathBuf],
+    total: usize,
+    progress: &mut F,
+    cancelled: C,
+) -> Result<usize>
+where
+    W: Write,
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    let mut builder = tar::Builder::new(writer);
+    let mut completed = 0usize;
+    let mut sorted_sources = sources.to_vec();
+    sorted_sources.sort_by_key(|source| archive_name(source));
+
+    for source in sorted_sources {
+        let root_name = archive_name(&source);
+        add_path_to_tar(
+            &mut builder,
+            &source,
+            Path::new(&root_name),
+            &mut completed,
+            total,
+            progress,
+            &cancelled,
+        )?;
+    }
+
+    builder.finish().context("Could not finish TAR archive")?;
+    Ok(completed)
+}
+
+fn add_path_to_tar<W, F, C>(
+    builder: &mut tar::Builder<W>,
+    source: &Path,
+    archive_path: &Path,
+    completed: &mut usize,
+    total: usize,
+    progress: &mut F,
+    cancelled: &C,
+) -> Result<()>
+where
+    W: Write,
+    F: FnMut(CreateArchiveProgress),
+    C: Fn() -> bool,
+{
+    if cancelled() {
+        bail!("Archive creation cancelled");
+    }
+
+    let metadata = fs::symlink_metadata(source)
+        .with_context(|| format!("Could not inspect {}", source.display()))?;
+    if metadata.file_type().is_symlink() {
+        let name = source
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("item");
+        bail!("TAR creation does not support symlinks: {name}");
+    }
+    if metadata.is_dir() {
+        builder
+            .append_dir(archive_path, source)
+            .context("Could not write TAR directory")?;
+        *completed += 1;
+        progress(CreateArchiveProgress {
+            completed: *completed,
+            total,
+        });
+        let mut children = fs::read_dir(source)
+            .with_context(|| format!("Could not read {}", source.display()))?
+            .collect::<io::Result<Vec<_>>>()?;
+        children.sort_by_key(|entry| entry.file_name());
+        for child in children {
+            let child_name = child.file_name();
+            let child_archive_path = archive_path.join(child_name);
+            add_path_to_tar(
+                builder,
+                &child.path(),
+                &child_archive_path,
+                completed,
+                total,
+                progress,
+                cancelled,
+            )?;
+        }
+        return Ok(());
+    }
+    if metadata.is_file() {
+        let mut file =
+            File::open(source).with_context(|| format!("Could not open {}", source.display()))?;
+        builder
+            .append_file(archive_path, &mut file)
+            .context("Could not write TAR entry")?;
+        *completed += 1;
+        progress(CreateArchiveProgress {
+            completed: *completed,
+            total,
+        });
+        return Ok(());
+    }
+
+    let name = source
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("item");
+    bail!("Cannot archive {name}");
 }
 
 #[derive(Clone, Copy)]
@@ -515,19 +725,34 @@ mod tests {
 
     #[test]
     fn normalizes_zip_names() {
-        assert_eq!(normalize_zip_output_name("backup").unwrap(), "backup.zip");
         assert_eq!(
-            normalize_zip_output_name("backup.zip").unwrap(),
-            "backup.zip"
+            normalize_archive_output_name("backup").unwrap(),
+            ("backup.zip".to_string(), CreateArchiveFormat::Zip)
         );
         assert_eq!(
-            normalize_zip_output_name("backup.7z")
+            normalize_archive_output_name("backup.zip").unwrap(),
+            ("backup.zip".to_string(), CreateArchiveFormat::Zip)
+        );
+        assert_eq!(
+            normalize_archive_output_name("backup.tar").unwrap(),
+            ("backup.tar".to_string(), CreateArchiveFormat::Tar)
+        );
+        assert_eq!(
+            normalize_archive_output_name("backup.tar.gz").unwrap(),
+            ("backup.tar.gz".to_string(), CreateArchiveFormat::TarGzip)
+        );
+        assert_eq!(
+            normalize_archive_output_name("backup.tgz").unwrap(),
+            ("backup.tgz".to_string(), CreateArchiveFormat::TarGzip)
+        );
+        assert_eq!(
+            normalize_archive_output_name("backup.7z")
                 .unwrap_err()
                 .to_string(),
-            "Archive creation supports ZIP"
+            "Archive creation supports ZIP, TAR, and TAR.GZ"
         );
         assert_eq!(
-            normalize_zip_output_name("../backup.zip")
+            normalize_archive_output_name("../backup.zip")
                 .unwrap_err()
                 .to_string(),
             "Use a filename, not a path"
@@ -567,6 +792,90 @@ mod tests {
             ]
         );
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn creates_tar_with_top_level_names() {
+        let root = temp_path("tar-top-level");
+        fs::create_dir_all(root.join("src/nested")).unwrap();
+        fs::write(root.join("src/lib.rs"), "lib").unwrap();
+        fs::write(root.join("src/nested/mod.rs"), "mod").unwrap();
+        fs::write(root.join("README.md"), "readme").unwrap();
+
+        let plan = plan_create_archive(
+            &root,
+            vec![root.join("README.md"), root.join("src")],
+            "archive.tar",
+            CreateArchiveOptions::default(),
+        )
+        .unwrap();
+        create_archive(&plan, |_| {}, || false).unwrap();
+
+        let file = File::open(root.join("archive.tar")).unwrap();
+        let mut archive = tar::Archive::new(file);
+        let mut names = archive
+            .entries()
+            .unwrap()
+            .map(|entry| entry.unwrap().path().unwrap().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(
+            names,
+            vec![
+                "README.md",
+                "src",
+                "src/lib.rs",
+                "src/nested",
+                "src/nested/mod.rs"
+            ]
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn creates_tar_gzip_archive() {
+        let root = temp_path("tar-gzip");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("README.md"), "readme").unwrap();
+
+        let plan = plan_create_archive(
+            &root,
+            vec![root.join("README.md")],
+            "archive.tgz",
+            CreateArchiveOptions::default(),
+        )
+        .unwrap();
+        create_archive(&plan, |_| {}, || false).unwrap();
+
+        let file = File::open(root.join("archive.tgz")).unwrap();
+        let decoder = flate2::read::GzDecoder::new(file);
+        let mut archive = tar::Archive::new(decoder);
+        let mut entry = archive.entries().unwrap().next().unwrap().unwrap();
+        assert_eq!(entry.path().unwrap().to_string_lossy(), "README.md");
+        let mut contents = String::new();
+        use std::io::Read;
+        entry.read_to_string(&mut contents).unwrap();
+        assert_eq!(contents, "readme");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_tar_passwords() {
+        let root = temp_path("tar-password");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("README.md"), "readme").unwrap();
+        let error = plan_create_archive(
+            &root,
+            vec![root.join("README.md")],
+            "archive.tar",
+            CreateArchiveOptions {
+                format: CreateArchiveFormat::Zip,
+                encryption: ArchiveEncryption::Password(ArchivePassword::new("secret")),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error.to_string(), "Password not supported for this format");
+        let _ = fs::remove_file(root.join("README.md"));
     }
 
     #[test]

@@ -132,7 +132,7 @@ fn run_create(
         request.options.clone(),
     )
     .and_then(|plan| {
-        crate::archive::create_zip_archive(
+        crate::archive::create_archive(
             &plan,
             |progress| {
                 completed = progress.completed;
