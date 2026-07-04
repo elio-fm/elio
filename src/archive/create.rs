@@ -864,13 +864,14 @@ mod tests {
         let root = temp_path("tar-password");
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join("README.md"), "readme").unwrap();
+        let password = root.file_name().unwrap().to_string_lossy().into_owned();
         let error = plan_create_archive(
             &root,
             vec![root.join("README.md")],
             "archive.tar",
             CreateArchiveOptions {
                 format: CreateArchiveFormat::Zip,
-                encryption: ArchiveEncryption::Password(ArchivePassword::new("secret")),
+                encryption: ArchiveEncryption::Password(ArchivePassword::new(&password)),
             },
         )
         .unwrap_err();
