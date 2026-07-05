@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use super::*;
 
 impl App {
@@ -48,14 +50,14 @@ impl App {
         self.drag_paths_for_candidate(&candidate)
     }
 
-    fn drag_paths_for_candidate(&self, candidate: &PathBuf) -> Vec<PathBuf> {
+    fn drag_paths_for_candidate(&self, candidate: &Path) -> Vec<PathBuf> {
         if !self.navigation.selected_paths.is_empty()
             && self.navigation.selected_paths.contains(candidate)
         {
             return self.selected_paths_sorted();
         }
 
-        vec![candidate.clone()]
+        vec![candidate.to_path_buf()]
     }
 
     fn entry_path_at(&self, column: u16, row: u16) -> Option<PathBuf> {

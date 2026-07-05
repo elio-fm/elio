@@ -209,6 +209,82 @@ fn yank_and_paste_copies_file_to_destination() {
     fs::remove_dir_all(&dst_dir).unwrap();
 }
 
+// ── external drop path ────────────────────────────────────────────────────────
+
+#[test]
+fn external_drop_copy_copies_file_to_current_directory() {
+    let src_dir = temp_path("drop-copy-src");
+    let dst_dir = temp_path("drop-copy-dst");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst_dir).unwrap();
+    let source = src_dir.join("copy_me.txt");
+    fs::write(&source, "payload").unwrap();
+
+    let mut app = App::new_at(dst_dir.clone()).unwrap();
+    assert!(
+        app.drop_external_paths(vec![source.clone()], ClipOp::Yank)
+            .unwrap()
+    );
+    wait_for_paste_and_reload(&mut app);
+
+    assert_eq!(
+        fs::read_to_string(dst_dir.join("copy_me.txt")).unwrap(),
+        "payload"
+    );
+    assert!(source.exists(), "copy drop should keep the source file");
+    assert_eq!(app.status_message(), "Copied 1 item");
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst_dir).unwrap();
+}
+
+#[test]
+fn external_drop_move_moves_file_to_current_directory() {
+    let src_dir = temp_path("drop-move-src");
+    let dst_dir = temp_path("drop-move-dst");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst_dir).unwrap();
+    let source = src_dir.join("move_me.txt");
+    fs::write(&source, "payload").unwrap();
+
+    let mut app = App::new_at(dst_dir.clone()).unwrap();
+    assert!(
+        app.drop_external_paths(vec![source.clone()], ClipOp::Cut)
+            .unwrap()
+    );
+    wait_for_paste_and_reload(&mut app);
+
+    assert_eq!(
+        fs::read_to_string(dst_dir.join("move_me.txt")).unwrap(),
+        "payload"
+    );
+    assert!(!source.exists(), "move drop should remove the source file");
+    assert_eq!(app.status_message(), "Moved 1 item");
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst_dir).unwrap();
+}
+
+#[test]
+fn external_drop_move_same_directory_is_clean_noop() {
+    let root = temp_path("drop-move-same-dir");
+    fs::create_dir_all(&root).unwrap();
+    let source = root.join("already_here.txt");
+    fs::write(&source, "payload").unwrap();
+
+    let mut app = App::new_at(root.clone()).unwrap();
+    assert!(
+        !app.drop_external_paths(vec![source.clone()], ClipOp::Cut)
+            .unwrap()
+    );
+
+    assert_eq!(fs::read_to_string(&source).unwrap(), "payload");
+    assert!(!root.join("already_here_1.txt").exists());
+    assert_eq!(app.status_message(), "Already here");
+
+    fs::remove_dir_all(&root).unwrap();
+}
+
 // ── cut / move path ───────────────────────────────────────────────────────────
 
 #[test]

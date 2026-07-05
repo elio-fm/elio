@@ -14,7 +14,7 @@ use self::{
 };
 use crate::{
     RunOptions, RunOutcome,
-    app::{App, ChooserExit, PendingTerminalTask},
+    app::{App, ChooserExit, ClipOp, PendingTerminalTask},
     config, path_display, shell, ui, zoxide,
 };
 use anyhow::Result;
@@ -53,6 +53,25 @@ impl PendingDragOut {
     fn reset(&mut self) {
         self.active = false;
         self.uri_list.clear();
+    }
+}
+
+#[derive(Debug, Default)]
+struct PendingDropIn {
+    op: Option<ClipOp>,
+}
+
+impl PendingDropIn {
+    fn set(&mut self, op: ClipOp) {
+        self.op = Some(op);
+    }
+
+    fn take(&mut self) -> Option<ClipOp> {
+        self.op.take()
+    }
+
+    fn reset(&mut self) {
+        self.op = None;
     }
 }
 
@@ -173,6 +192,7 @@ fn run_app(
     let mut terminal_focused = true;
     let mut last_relative_time_refresh_at = Instant::now();
     let mut pending_drag_out = PendingDragOut::default();
+    let mut pending_drop_in = PendingDropIn::default();
 
     loop {
         if app.should_quit {
@@ -333,8 +353,13 @@ fn run_app(
                     &mut next_input,
                     &mut batched_events,
                 )?;
-                let Some(event) =
-                    handle_runtime_input(terminal, &mut app, input, &mut pending_drag_out)?
+                let Some(event) = handle_runtime_input(
+                    terminal,
+                    &mut app,
+                    input,
+                    &mut pending_drag_out,
+                    &mut pending_drop_in,
+                )?
                 else {
                     dirty = true;
                     next_input = try_read_runtime_input(&input_reader)?;
@@ -545,11 +570,12 @@ fn handle_runtime_input(
     app: &mut App,
     input: RuntimeInputEvent,
     pending_drag_out: &mut PendingDragOut,
+    pending_drop_in: &mut PendingDropIn,
 ) -> Result<Option<Event>> {
     match input {
         RuntimeInputEvent::Terminal(event) => Ok(Some(event)),
         RuntimeInputEvent::KittyDnd(event) => {
-            handle_kitty_dnd_event(terminal, app, event, pending_drag_out)?;
+            handle_kitty_dnd_event(terminal, app, event, pending_drag_out, pending_drop_in)?;
             Ok(None)
         }
     }
@@ -560,44 +586,60 @@ fn handle_kitty_dnd_event(
     app: &mut App,
     event: kitty_dnd::KittyDndEvent,
     pending_drag_out: &mut PendingDragOut,
+    pending_drop_in: &mut PendingDropIn,
 ) -> Result<()> {
     match event {
         kitty_dnd::KittyDndEvent::DropOffer {
             mime_index,
+            operation,
             final_drop,
         } => {
+            let chosen_op = choose_drop_op(operation);
             let sequence = if pending_drag_out.active && final_drop {
                 pending_drag_out.reset();
+                pending_drop_in.reset();
                 app.clear_drag_state();
                 format!(
                     "{}{}",
-                    kitty_dnd::finish_drop_sequence(false),
+                    kitty_dnd::finish_drop_sequence(kitty_dnd::DropFinish::Reject),
                     kitty_dnd::cancel_drag_sequence()
                 )
             } else if pending_drag_out.active {
+                pending_drop_in.reset();
                 kitty_dnd::reject_drop_sequence().to_string()
             } else if final_drop {
+                pending_drop_in.set(chosen_op);
                 kitty_dnd::request_drop_data_sequence(mime_index)
             } else {
-                kitty_dnd::accept_drop_sequence()
+                pending_drop_in.set(chosen_op);
+                kitty_dnd::accept_drop_sequence(drop_op_to_dnd_operation(chosen_op))
             };
             terminal.backend_mut().write_all(sequence.as_bytes())?;
             terminal.backend_mut().flush()?;
         }
-        kitty_dnd::KittyDndEvent::DropData { paths, .. } => {
+        kitty_dnd::KittyDndEvent::DropData {
+            paths,
+            unsupported_schemes,
+            ..
+        } => {
             let was_own_drag = pending_drag_out.active;
-            let success = !was_own_drag && !paths.is_empty();
-            if success {
-                app.drop_external_paths(paths)?;
-            } else if was_own_drag {
+            let op = pending_drop_in.take();
+            let mut finish = kitty_dnd::DropFinish::Reject;
+            if was_own_drag {
                 pending_drag_out.reset();
                 app.clear_drag_state();
+            } else if !unsupported_schemes.is_empty() {
+                app.set_status_message(unsupported_drop_scheme_status(&unsupported_schemes));
+            } else if let Some(op) = op {
+                if app.drop_external_paths(paths, op)? {
+                    finish = clip_op_to_drop_finish(op);
+                }
             } else {
-                app.set_status_message("Drop contains no local files");
+                app.set_status_message("Drop was not negotiated");
             }
             terminal
                 .backend_mut()
-                .write_all(kitty_dnd::finish_drop_sequence(success).as_bytes())?;
+                .write_all(kitty_dnd::finish_drop_sequence(finish).as_bytes())?;
             if was_own_drag {
                 terminal
                     .backend_mut()
@@ -615,9 +657,9 @@ fn handle_kitty_dnd_event(
                 pending_drag_out.reset();
                 app.clear_drag_state();
             }
-            terminal
-                .backend_mut()
-                .write_all(kitty_dnd::finish_drop_sequence(false).as_bytes())?;
+            terminal.backend_mut().write_all(
+                kitty_dnd::finish_drop_sequence(kitty_dnd::DropFinish::Reject).as_bytes(),
+            )?;
             if was_own_drag {
                 terminal
                     .backend_mut()
@@ -629,8 +671,9 @@ fn handle_kitty_dnd_event(
             terminal.backend_mut().flush()?;
         }
         kitty_dnd::KittyDndEvent::DropUnsupported { final_drop } => {
+            pending_drop_in.reset();
             let sequence = if final_drop {
-                kitty_dnd::finish_drop_sequence(false)
+                kitty_dnd::finish_drop_sequence(kitty_dnd::DropFinish::Reject)
             } else {
                 kitty_dnd::reject_drop_sequence()
             };
@@ -654,7 +697,7 @@ fn handle_kitty_dnd_event(
             }
 
             let label = drag_icon_label(&paths);
-            let mut sequence = kitty_dnd::agree_drag_either_sequence();
+            let mut sequence = kitty_dnd::agree_drag_sequence(kitty_dnd::DndOperation::Either);
             sequence.push_str(&kitty_dnd::present_drag_data_sequence(0, &uri_list));
             sequence.push_str(&kitty_dnd::present_drag_icon_sequence(&label));
             sequence.push_str(kitty_dnd::start_drag_sequence());
@@ -690,6 +733,35 @@ fn handle_kitty_dnd_event(
         }
     }
     Ok(())
+}
+
+fn unsupported_drop_scheme_status(schemes: &[String]) -> String {
+    match schemes {
+        [] => "Drop contains no local files".to_string(),
+        [scheme] => format!("Unsupported drop URI scheme: {scheme}"),
+        schemes => format!("Unsupported drop URI schemes: {}", schemes.join(", ")),
+    }
+}
+
+fn choose_drop_op(operation: kitty_dnd::DndOperation) -> ClipOp {
+    match operation {
+        kitty_dnd::DndOperation::Copy => ClipOp::Yank,
+        kitty_dnd::DndOperation::Move | kitty_dnd::DndOperation::Either => ClipOp::Cut,
+    }
+}
+
+fn drop_op_to_dnd_operation(op: ClipOp) -> kitty_dnd::DndOperation {
+    match op {
+        ClipOp::Yank => kitty_dnd::DndOperation::Copy,
+        ClipOp::Cut => kitty_dnd::DndOperation::Move,
+    }
+}
+
+fn clip_op_to_drop_finish(op: ClipOp) -> kitty_dnd::DropFinish {
+    match op {
+        ClipOp::Yank => kitty_dnd::DropFinish::Copy,
+        ClipOp::Cut => kitty_dnd::DropFinish::Move,
+    }
 }
 
 fn drag_icon_label(paths: &[PathBuf]) -> String {
@@ -737,7 +809,7 @@ where
 mod tests {
     use super::{
         ACTIVE_SCROLL_POLL_INTERVAL, IDLE_POLL_INTERVAL, drag_icon_label,
-        event_implies_terminal_focus, event_poll_interval,
+        event_implies_terminal_focus, event_poll_interval, unsupported_drop_scheme_status,
     };
     use crossterm::event::Event;
     use std::{path::PathBuf, time::Duration};
@@ -797,6 +869,18 @@ mod tests {
         assert!(!event_implies_terminal_focus(&Event::FocusLost));
         assert!(!event_implies_terminal_focus(&Event::FocusGained));
         assert!(!event_implies_terminal_focus(&Event::Resize(80, 24)));
+    }
+
+    #[test]
+    fn unsupported_drop_scheme_status_names_one_or_many_schemes() {
+        assert_eq!(
+            unsupported_drop_scheme_status(&["trash".to_string()]),
+            "Unsupported drop URI scheme: trash"
+        );
+        assert_eq!(
+            unsupported_drop_scheme_status(&["trash".to_string(), "smb".to_string()]),
+            "Unsupported drop URI schemes: trash, smb"
+        );
     }
 
     #[test]

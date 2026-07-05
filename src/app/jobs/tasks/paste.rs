@@ -55,7 +55,7 @@ impl PastePool {
         let worker = thread::spawn(move || {
             while let Some(request) = PasteShared::pop(&shared_worker) {
                 PasteShared::set_active(&shared_worker, true);
-                let (completed, errors, stopped_early, destination_paths) = run_paste(
+                let (completed, already_here, errors, stopped_early, destination_paths) = run_paste(
                     &request,
                     &result_tx,
                     &shared_worker.cancelled,
@@ -63,12 +63,9 @@ impl PastePool {
                 );
                 PasteShared::set_active(&shared_worker, false);
 
-                let verb = match request.origin {
-                    crate::app::state::PasteOrigin::Drop => "Dropped",
-                    crate::app::state::PasteOrigin::Clipboard => match request.op {
-                        ClipOp::Yank => "Copied",
-                        ClipOp::Cut => "Moved",
-                    },
+                let verb = match request.op {
+                    ClipOp::Yank => "Copied",
+                    ClipOp::Cut => "Moved",
                 };
                 let status = if stopped_early {
                     match completed {
@@ -77,10 +74,16 @@ impl PastePool {
                         n => format!("Paste cancelled — {verb} {n} items"),
                     }
                 } else if errors.is_empty() {
-                    match completed {
-                        0 => "Nothing was pasted".to_string(),
-                        1 => format!("{verb} 1 item"),
-                        n => format!("{verb} {n} items"),
+                    match (completed, already_here) {
+                        (0, 0) => "Nothing was pasted".to_string(),
+                        (0, 1) => "Already here".to_string(),
+                        (0, n) => format!("{n} items already here"),
+                        (1, 0) => format!("{verb} 1 item"),
+                        (n, 0) => format!("{verb} {n} items"),
+                        (1, 1) => format!("{verb} 1 item; 1 already here"),
+                        (1, n) => format!("{verb} 1 item; {n} already here"),
+                        (n, 1) => format!("{verb} {n} items; 1 already here"),
+                        (n, skipped) => format!("{verb} {n} items; {skipped} already here"),
                     }
                 } else if completed == 0 {
                     if errors.len() == 1 {
@@ -175,7 +178,7 @@ impl PasteShared {
 
 /// Execute the paste operation, sending throttled intermediate progress
 /// results through `result_tx`. Returns completed count, errors, cancellation
-/// state, and destination paths actually written.
+/// state, skipped same-location moves, and destination paths actually written.
 ///
 /// `stopped_early` is `true` if the loop was cut short by a cancel flag rather
 /// than running to completion.
@@ -184,8 +187,9 @@ fn run_paste(
     result_tx: &mpsc::Sender<JobResult>,
     cancelled: &AtomicBool,
     cancel_token: &AtomicU64,
-) -> (usize, Vec<String>, bool, Vec<PathBuf>) {
+) -> (usize, usize, Vec<String>, bool, Vec<PathBuf>) {
     let mut completed = 0usize;
+    let mut already_here = 0usize;
     let mut destination_paths = Vec::new();
     let mut errors: Vec<String> = Vec::new();
     let mut stopped_early = false;
@@ -216,12 +220,11 @@ fn run_paste(
             continue;
         }
 
-        // For cut: same-dir same-name is a no-op.
+        // For cut: same-dir same-name is a no-op, not a move.
         if request.op == ClipOp::Cut {
             let natural = request.dest_dir.join(file_name);
             if natural == *src {
-                completed += 1;
-                destination_paths.push(natural);
+                already_here += 1;
                 if !send_paste_progress(result_tx, request.token, completed, &mut last_progress_at)
                 {
                     break;
@@ -294,7 +297,13 @@ fn run_paste(
         }
     }
 
-    (completed, errors, stopped_early, destination_paths)
+    (
+        completed,
+        already_here,
+        errors,
+        stopped_early,
+        destination_paths,
+    )
 }
 
 /// Send a throttled intermediate progress result for the paste worker.

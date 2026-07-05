@@ -5,18 +5,20 @@ use base64::{
     engine::general_purpose::{STANDARD, STANDARD_NO_PAD},
 };
 
-use super::protocol::URI_LIST_MIME;
+use super::protocol::{DndOperation, URI_LIST_MIME};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::runtime) enum KittyDndEvent {
     DropOffer {
         mime_index: u8,
+        operation: DndOperation,
         final_drop: bool,
     },
     DropLeave,
     DropData {
         mime_index: u8,
         paths: Vec<PathBuf>,
+        unsupported_schemes: Vec<String>,
     },
     DropDataError {
         mime_index: Option<u8>,
@@ -34,7 +36,7 @@ pub(in crate::runtime) enum KittyDndEvent {
         mime_index: u8,
     },
     DragActionChanged {
-        operation: u8,
+        operation: DndOperation,
     },
     DragDropped,
     DragDataRequested {
@@ -113,33 +115,21 @@ fn event_from_parts(fields: DndFields, payload: &[u8]) -> Option<KittyDndEvent> 
             if fields.x == Some(-1) && fields.y == Some(-1) {
                 return Some(KittyDndEvent::DropLeave);
             }
-            offered_uri_list(payload).map_or(
-                Some(KittyDndEvent::DropUnsupported { final_drop: false }),
-                |mime_index| {
-                    Some(KittyDndEvent::DropOffer {
-                        mime_index,
-                        final_drop: false,
-                    })
-                },
-            )
+            drop_offer_from_parts(fields.op, payload, false)
         }
-        b'M' => offered_uri_list(payload).map_or(
-            Some(KittyDndEvent::DropUnsupported { final_drop: true }),
-            |mime_index| {
-                Some(KittyDndEvent::DropOffer {
-                    mime_index,
-                    final_drop: true,
-                })
-            },
-        ),
+        b'M' => drop_offer_from_parts(fields.op, payload, true),
         b'r' => {
             let mime_index = fields.x.and_then(|x| u8::try_from(x).ok())?;
             if payload.is_empty() && fields.more == Some(false) {
                 return None;
             }
             let data = decode_base64(payload)?;
-            let paths = parse_uri_list(&String::from_utf8(data).ok()?);
-            Some(KittyDndEvent::DropData { mime_index, paths })
+            let payload = parse_uri_list(&String::from_utf8(data).ok()?);
+            Some(KittyDndEvent::DropData {
+                mime_index,
+                paths: payload.paths,
+                unsupported_schemes: payload.unsupported_schemes,
+            })
         }
         b'R' => Some(KittyDndEvent::DropDataError {
             mime_index: fields.x.and_then(|x| u8::try_from(x).ok()),
@@ -153,7 +143,7 @@ fn event_from_parts(fields: DndFields, payload: &[u8]) -> Option<KittyDndEvent> 
             mime_index: fields.y.and_then(|y| u8::try_from(y).ok())?,
         }),
         b'e' if fields.x == Some(2) => Some(KittyDndEvent::DragActionChanged {
-            operation: fields.op.and_then(|op| u8::try_from(op).ok())?,
+            operation: fields.op.and_then(DndOperation::from_protocol)?,
         }),
         b'e' if fields.x == Some(3) => Some(KittyDndEvent::DragDropped),
         b'e' if fields.x == Some(4) => Some(KittyDndEvent::DragEnded {
@@ -183,6 +173,24 @@ fn decode_base64(payload: &[u8]) -> Option<Vec<u8>> {
         .ok()
 }
 
+fn drop_offer_from_parts(
+    operation: Option<i32>,
+    payload: &[u8],
+    final_drop: bool,
+) -> Option<KittyDndEvent> {
+    let operation = operation.and_then(DndOperation::from_protocol)?;
+    offered_uri_list(payload).map_or(
+        Some(KittyDndEvent::DropUnsupported { final_drop }),
+        |mime_index| {
+            Some(KittyDndEvent::DropOffer {
+                mime_index,
+                operation,
+                final_drop,
+            })
+        },
+    )
+}
+
 fn offered_uri_list(payload: &[u8]) -> Option<u8> {
     let text = std::str::from_utf8(payload).ok()?;
     text.split_whitespace()
@@ -191,12 +199,37 @@ fn offered_uri_list(payload: &[u8]) -> Option<u8> {
         .and_then(|idx| u8::try_from(idx + 1).ok())
 }
 
-fn parse_uri_list(text: &str) -> Vec<PathBuf> {
-    text.lines()
+#[derive(Debug, Default, Eq, PartialEq)]
+struct ParsedUriList {
+    paths: Vec<PathBuf>,
+    unsupported_schemes: Vec<String>,
+}
+
+fn parse_uri_list(text: &str) -> ParsedUriList {
+    let mut parsed = ParsedUriList::default();
+    for uri in text
+        .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        .filter_map(file_uri_to_path)
-        .collect()
+    {
+        if let Some(path) = file_uri_to_path(uri) {
+            parsed.paths.push(path);
+            continue;
+        }
+        let scheme = uri
+            .split_once(':')
+            .map(|(scheme, _)| scheme)
+            .filter(|scheme| !scheme.is_empty())
+            .unwrap_or("unknown");
+        if !parsed
+            .unsupported_schemes
+            .iter()
+            .any(|known| known == scheme)
+        {
+            parsed.unsupported_schemes.push(scheme.to_string());
+        }
+    }
+    parsed
 }
 
 fn file_uri_to_path(uri: &str) -> Option<PathBuf> {
@@ -292,6 +325,7 @@ mod tests {
             parse_osc72(b"\x1b]72;t=M:x=12:y=5:o=1;text/plain text/uri-list\x1b\\"),
             Some(KittyDndEvent::DropOffer {
                 mime_index: 2,
+                operation: DndOperation::Copy,
                 final_drop: true,
             })
         );
@@ -300,12 +334,65 @@ mod tests {
     #[test]
     fn parses_unsupported_drop_offer_with_phase() {
         assert_eq!(
-            parse_osc72(b"\x1b]72;t=m:x=12:y=5;text/plain\x1b\\"),
+            parse_osc72(b"\x1b]72;t=m:x=12:y=5:o=1;text/plain\x1b\\"),
             Some(KittyDndEvent::DropUnsupported { final_drop: false })
         );
         assert_eq!(
-            parse_osc72(b"\x1b]72;t=M:x=12:y=5;text/plain\x1b\\"),
+            parse_osc72(b"\x1b]72;t=M:x=12:y=5:o=2;text/plain\x1b\\"),
             Some(KittyDndEvent::DropUnsupported { final_drop: true })
+        );
+    }
+
+    #[test]
+    fn parses_drop_offer_operation() {
+        assert_eq!(
+            parse_osc72(b"\x1b]72;t=m:x=12:y=5:o=2;text/uri-list\x1b\\"),
+            Some(KittyDndEvent::DropOffer {
+                mime_index: 1,
+                operation: DndOperation::Move,
+                final_drop: false,
+            })
+        );
+        assert_eq!(
+            parse_osc72(b"\x1b]72;t=m:x=12:y=5:o=3;text/uri-list\x1b\\"),
+            Some(KittyDndEvent::DropOffer {
+                mime_index: 1,
+                operation: DndOperation::Either,
+                final_drop: false,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_drop_offer_without_valid_operation() {
+        assert_eq!(
+            parse_osc72(b"\x1b]72;t=m:x=12:y=5;text/uri-list\x1b\\"),
+            None
+        );
+        assert_eq!(
+            parse_osc72(b"\x1b]72;t=m:x=12:y=5:o=9;text/uri-list\x1b\\"),
+            None
+        );
+    }
+
+    #[test]
+    fn reports_unsupported_uri_schemes_in_drop_data() {
+        let data =
+            STANDARD_NO_PAD.encode("trash:///foo\nsmb://server/share/file\nfile:///tmp/a.txt");
+        let sequence = format!("\x1b]72;t=r:x=1;{data}\x1b\\");
+        let mut state = Osc72State::default();
+        assert_eq!(
+            parse_osc72_with_state(sequence.as_bytes(), &mut state),
+            None
+        );
+
+        assert_eq!(
+            parse_osc72_with_state(b"\x1b]72;t=r:x=1:m=0;\x1b\\", &mut state),
+            Some(KittyDndEvent::DropData {
+                mime_index: 1,
+                paths: vec![PathBuf::from("/tmp/a.txt")],
+                unsupported_schemes: vec!["trash".to_string(), "smb".to_string()],
+            })
         );
     }
 
@@ -335,6 +422,7 @@ mod tests {
             Some(KittyDndEvent::DropData {
                 mime_index: 1,
                 paths: vec![PathBuf::from("/tmp/a b.txt")],
+                unsupported_schemes: vec!["file".to_string()],
             })
         );
     }
@@ -355,7 +443,9 @@ mod tests {
         );
         assert_eq!(
             parse_osc72(b"\x1b]72;t=e:x=2:o=1\x1b\\"),
-            Some(KittyDndEvent::DragActionChanged { operation: 1 })
+            Some(KittyDndEvent::DragActionChanged {
+                operation: DndOperation::Copy,
+            })
         );
         assert_eq!(
             parse_osc72(b"\x1b]72;t=e:x=3\x1b\\"),
@@ -404,6 +494,7 @@ mod tests {
             Some(KittyDndEvent::DropData {
                 mime_index: 1,
                 paths: vec![PathBuf::from("/tmp/a.txt")],
+                unsupported_schemes: Vec::new(),
             })
         );
     }
@@ -428,6 +519,7 @@ mod tests {
             Some(KittyDndEvent::DropData {
                 mime_index: 1,
                 paths: vec![PathBuf::from("/tmp/a.txt")],
+                unsupported_schemes: Vec::new(),
             })
         );
     }

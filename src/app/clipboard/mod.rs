@@ -103,22 +103,32 @@ impl App {
         Ok(())
     }
 
-    pub(crate) fn drop_external_paths(&mut self, paths: Vec<PathBuf>) -> Result<()> {
+    pub(crate) fn drop_external_paths(&mut self, paths: Vec<PathBuf>, op: ClipOp) -> Result<bool> {
         let paths: Vec<PathBuf> = paths.into_iter().filter(|path| path.exists()).collect();
         if paths.is_empty() {
             self.status = "Drop contains no local files".to_string();
-            return Ok(());
+            return Ok(false);
+        }
+        if op == ClipOp::Cut
+            && paths.iter().any(|path| {
+                path.file_name()
+                    .map(|file_name| self.navigation.cwd.join(file_name) == *path)
+                    .unwrap_or(false)
+            })
+        {
+            self.status = "Already here".to_string();
+            return Ok(false);
         }
 
         let request = QueuedPaste {
             dest_dir: self.navigation.cwd.clone(),
             paths,
-            op: ClipOp::Yank,
+            op,
             origin: PasteOrigin::Drop,
         };
         if paste_would_copy_directory_into_itself(&request) {
             self.status = "Cannot drop a folder into itself".to_string();
-            return Ok(());
+            return Ok(false);
         }
         if self.jobs.paste_progress.is_some() {
             self.jobs.queued_pastes.push_back(request);
@@ -132,7 +142,7 @@ impl App {
             self.start_paste_request(request);
             self.status = "Dropping files…".to_string();
         }
-        Ok(())
+        Ok(true)
     }
 
     pub(super) fn clear_queued_pastes(&mut self) -> usize {
@@ -178,7 +188,6 @@ impl App {
             dest_dir: request.dest_dir,
             paths: request.paths,
             op: request.op,
-            origin: request.origin,
         });
     }
 

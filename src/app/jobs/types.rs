@@ -312,7 +312,6 @@ pub(in crate::app) struct PasteRequest {
     pub(in crate::app) dest_dir: PathBuf,
     pub(in crate::app) paths: Vec<PathBuf>,
     pub(in crate::app) op: ClipOp,
-    pub(in crate::app) origin: crate::app::state::PasteOrigin,
 }
 
 #[derive(Debug)]

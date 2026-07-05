@@ -5,6 +5,39 @@ use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
 pub(super) const URI_LIST_MIME: &str = "text/uri-list";
 const DRAG_PAYLOAD_CHUNK_SIZE: usize = 4096;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::runtime) enum DndOperation {
+    Copy,
+    Move,
+    Either,
+}
+
+impl DndOperation {
+    pub(super) fn from_protocol(value: i32) -> Option<Self> {
+        match value {
+            1 => Some(Self::Copy),
+            2 => Some(Self::Move),
+            3 => Some(Self::Either),
+            _ => None,
+        }
+    }
+
+    fn protocol_value(self) -> u8 {
+        match self {
+            Self::Copy => 1,
+            Self::Move => 2,
+            Self::Either => 3,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::runtime) enum DropFinish {
+    Copy,
+    Move,
+    Reject,
+}
+
 /// Enable the local Kitty DND slice elio currently supports: accepting file URI
 /// drops and offering local file URI drags.
 pub(in crate::runtime) fn startup_sequence(machine_id: Option<&str>) -> String {
@@ -28,8 +61,15 @@ fn enable_drag_sequence(machine_id: &str) -> String {
     format!("\x1b]72;t=o:x=1;{machine_id}\x1b\\")
 }
 
-pub(in crate::runtime) fn accept_drop_sequence() -> String {
-    format!("\x1b]72;t=m:o=1;{URI_LIST_MIME}\x1b\\")
+pub(in crate::runtime) fn accept_drop_sequence(operation: DndOperation) -> String {
+    let operation = match operation {
+        DndOperation::Copy | DndOperation::Either => DndOperation::Copy,
+        DndOperation::Move => DndOperation::Move,
+    };
+    format!(
+        "\x1b]72;t=m:o={};{URI_LIST_MIME}\x1b\\",
+        operation.protocol_value()
+    )
 }
 
 pub(in crate::runtime) fn reject_drop_sequence() -> &'static str {
@@ -40,16 +80,19 @@ pub(in crate::runtime) fn request_drop_data_sequence(mime_index: u8) -> String {
     format!("\x1b]72;t=r:x={mime_index}\x1b\\")
 }
 
-pub(in crate::runtime) fn finish_drop_sequence(success: bool) -> &'static str {
-    if success {
-        "\x1b]72;t=r:o=1\x1b\\"
-    } else {
-        "\x1b]72;t=r:o=0\x1b\\"
+pub(in crate::runtime) fn finish_drop_sequence(finish: DropFinish) -> &'static str {
+    match finish {
+        DropFinish::Copy => "\x1b]72;t=r:o=1\x1b\\",
+        DropFinish::Move => "\x1b]72;t=r:o=2\x1b\\",
+        DropFinish::Reject => "\x1b]72;t=r:o=0\x1b\\",
     }
 }
 
-pub(in crate::runtime) fn agree_drag_either_sequence() -> String {
-    format!("\x1b]72;t=o:o=3;{URI_LIST_MIME}\x1b\\")
+pub(in crate::runtime) fn agree_drag_sequence(operation: DndOperation) -> String {
+    format!(
+        "\x1b]72;t=o:o={};{URI_LIST_MIME}\x1b\\",
+        operation.protocol_value()
+    )
 }
 
 pub(in crate::runtime) fn start_drag_sequence() -> &'static str {
@@ -73,8 +116,7 @@ pub(in crate::runtime) fn cancel_drag_sequence() -> &'static str {
 }
 
 pub(in crate::runtime) fn present_drag_icon_sequence(label: &str) -> String {
-    // Match Yazi's simple text icon payload: no image format, tiny logical size,
-    // transparent icon payload accepted by Kitty's DND protocol.
+    // Present a compact text icon payload accepted by Kitty's DND protocol.
     present_drag_payload_sequence("t=p:x=-1:y=0:X=6:Y=4:o=0", label.as_bytes(), false)
 }
 
@@ -162,19 +204,45 @@ mod tests {
     #[test]
     fn drop_reply_sequences_match_protocol_shape() {
         assert_eq!(
-            accept_drop_sequence(),
+            accept_drop_sequence(DndOperation::Copy),
+            "\x1b]72;t=m:o=1;text/uri-list\x1b\\"
+        );
+        assert_eq!(
+            accept_drop_sequence(DndOperation::Move),
+            "\x1b]72;t=m:o=2;text/uri-list\x1b\\"
+        );
+        assert_eq!(
+            accept_drop_sequence(DndOperation::Either),
             "\x1b]72;t=m:o=1;text/uri-list\x1b\\"
         );
         assert_eq!(reject_drop_sequence(), "\x1b]72;t=m:o=0\x1b\\");
         assert_eq!(request_drop_data_sequence(2), "\x1b]72;t=r:x=2\x1b\\");
-        assert_eq!(finish_drop_sequence(true), "\x1b]72;t=r:o=1\x1b\\");
-        assert_eq!(finish_drop_sequence(false), "\x1b]72;t=r:o=0\x1b\\");
+        assert_eq!(
+            finish_drop_sequence(DropFinish::Copy),
+            "\x1b]72;t=r:o=1\x1b\\"
+        );
+        assert_eq!(
+            finish_drop_sequence(DropFinish::Move),
+            "\x1b]72;t=r:o=2\x1b\\"
+        );
+        assert_eq!(
+            finish_drop_sequence(DropFinish::Reject),
+            "\x1b]72;t=r:o=0\x1b\\"
+        );
     }
 
     #[test]
-    fn drag_reply_sequences_match_yazi_shape() {
+    fn drag_reply_sequences_match_protocol_shape() {
         assert_eq!(
-            agree_drag_either_sequence(),
+            agree_drag_sequence(DndOperation::Copy),
+            "\x1b]72;t=o:o=1;text/uri-list\x1b\\"
+        );
+        assert_eq!(
+            agree_drag_sequence(DndOperation::Move),
+            "\x1b]72;t=o:o=2;text/uri-list\x1b\\"
+        );
+        assert_eq!(
+            agree_drag_sequence(DndOperation::Either),
             "\x1b]72;t=o:o=3;text/uri-list\x1b\\"
         );
         assert_eq!(start_drag_sequence(), "\x1b]72;t=P:x=-1\x1b\\");
@@ -222,7 +290,7 @@ mod tests {
     }
 
     #[test]
-    fn present_drag_icon_matches_yazi_text_icon_shape_without_finish_marker() {
+    fn present_drag_icon_uses_text_payload_without_finish_marker() {
         assert_eq!(
             present_drag_icon_sequence("1 selected file(s)"),
             "\x1b]72;t=p:x=-1:y=0:X=6:Y=4:o=0:m=0;MSBzZWxlY3RlZCBmaWxlKHMp\x1b\\"

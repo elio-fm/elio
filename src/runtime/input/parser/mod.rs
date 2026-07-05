@@ -42,17 +42,18 @@ pub(super) fn parse_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::kitty_dnd::KittyDndEvent;
+    use crate::runtime::kitty_dnd::{DndOperation, KittyDndEvent};
 
     #[test]
     fn routes_kitty_dnd_osc72_before_crossterm_compat() {
         let mut parser = Parser::default();
-        let mut buffer = b"\x1b]72;t=M:x=1:y=2;text/uri-list\x1b\\".to_vec();
+        let mut buffer = b"\x1b]72;t=M:x=1:y=2:o=1;text/uri-list\x1b\\".to_vec();
 
         assert_eq!(
             parse_event(&mut parser, &mut buffer, false).unwrap(),
             Some(RuntimeInputEvent::KittyDnd(KittyDndEvent::DropOffer {
                 mime_index: 1,
+                operation: DndOperation::Copy,
                 final_drop: true,
             }))
         );
@@ -85,6 +86,7 @@ mod tests {
             Some(RuntimeInputEvent::KittyDnd(KittyDndEvent::DropData {
                 mime_index: 1,
                 paths: vec![std::path::PathBuf::from("/tmp/a.txt")],
+                unsupported_schemes: Vec::new(),
             }))
         );
     }
