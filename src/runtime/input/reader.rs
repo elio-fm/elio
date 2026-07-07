@@ -1,42 +1,63 @@
+use std::io;
+
+#[cfg(unix)]
+use std::sync::mpsc;
+
+#[cfg(unix)]
+use std::time::Duration;
+
+#[cfg(unix)]
 use std::{
     fs::OpenOptions,
-    io::{self, Read},
+    io::Read,
     os::fd::AsRawFd,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
-        mpsc::{self, Receiver, TryRecvError},
+        mpsc::{Receiver, TryRecvError},
     },
     thread,
-    time::Duration,
 };
 
+#[cfg(unix)]
 use crossterm::{event::Event, terminal};
 
+#[cfg(unix)]
 use super::{RuntimeInputEvent, parser};
 
+#[cfg(unix)]
 const RESIZE_POLL_INTERVAL: Duration = Duration::from_millis(16);
 
 pub(in crate::runtime) enum RuntimeInputReader {
     Crossterm,
+    #[cfg(unix)]
     Custom(CustomInputReader),
 }
 
 impl RuntimeInputReader {
     pub(in crate::runtime) fn new(use_custom_reader: bool) -> io::Result<Self> {
         if use_custom_reader {
-            CustomInputReader::spawn().map(Self::Custom)
+            #[cfg(unix)]
+            {
+                CustomInputReader::spawn().map(Self::Custom)
+            }
+            #[cfg(not(unix))]
+            {
+                Ok(Self::Crossterm)
+            }
         } else {
             Ok(Self::Crossterm)
         }
     }
 }
 
+#[cfg(unix)]
 pub(in crate::runtime) struct CustomInputReader {
     receiver: Receiver<io::Result<RuntimeInputEvent>>,
     paused: Arc<AtomicBool>,
 }
 
+#[cfg(unix)]
 impl CustomInputReader {
     fn spawn() -> io::Result<Self> {
         let tty = OpenOptions::new().read(true).open("/dev/tty")?;
@@ -87,10 +108,12 @@ impl CustomInputReader {
     }
 }
 
+#[cfg(unix)]
 fn current_terminal_size() -> Option<(u16, u16)> {
     terminal::size().ok()
 }
 
+#[cfg(unix)]
 fn read_loop(
     mut tty: std::fs::File,
     sender: mpsc::Sender<io::Result<RuntimeInputEvent>>,
@@ -122,6 +145,7 @@ fn read_loop(
     }
 }
 
+#[cfg(unix)]
 fn resize_loop(sender: mpsc::Sender<io::Result<RuntimeInputEvent>>, paused: Arc<AtomicBool>) {
     let mut last_size = current_terminal_size();
     loop {
@@ -148,6 +172,7 @@ fn resize_loop(sender: mpsc::Sender<io::Result<RuntimeInputEvent>>, paused: Arc<
     }
 }
 
+#[cfg(unix)]
 fn parse_buffer(
     parser_state: &mut parser::Parser,
     buffer: &mut Vec<u8>,
@@ -182,10 +207,12 @@ fn parse_buffer(
     }
 }
 
+#[cfg(unix)]
 fn is_unsupported_input_sequence(error: &io::Error) -> bool {
     error.kind() == io::ErrorKind::Other && error.to_string() == "Could not parse an event."
 }
 
+#[cfg(unix)]
 fn set_nonblocking(fd: i32) -> io::Result<()> {
     // SAFETY: fcntl is called with a live /dev/tty fd and does not retain pointers.
     let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
@@ -199,7 +226,7 @@ fn set_nonblocking(fd: i32) -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 

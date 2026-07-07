@@ -10,6 +10,7 @@ impl App {
         }
     }
 
+    #[cfg(unix)]
     pub(crate) fn clear_drag_candidate(&mut self) {
         self.input.drag_candidate = None;
         self.input.drag_paths.clear();
@@ -27,6 +28,7 @@ impl App {
         self.input.drag_suppressed_until_up = true;
     }
 
+    #[cfg(any(unix, test))]
     pub(crate) fn take_drag_export_paths_at(&mut self, column: u16, row: u16) -> Vec<PathBuf> {
         if self.input.drag_suppressed_until_up {
             self.input.drag_candidate = None;
@@ -60,6 +62,7 @@ impl App {
         vec![candidate.to_path_buf()]
     }
 
+    #[cfg(any(unix, test))]
     fn entry_path_at(&self, column: u16, row: u16) -> Option<PathBuf> {
         self.input
             .frame_state

@@ -103,6 +103,7 @@ impl App {
         Ok(())
     }
 
+    #[cfg(any(unix, test))]
     pub(crate) fn drop_external_paths(&mut self, paths: Vec<PathBuf>, op: ClipOp) -> Result<bool> {
         let paths: Vec<PathBuf> = paths.into_iter().filter(|path| path.exists()).collect();
         if paths.is_empty() {

@@ -39,6 +39,7 @@ type CFArrayRef = *const c_void;
 type CFStringRef = *const c_void;
 type CFIndex = isize;
 type CFStringEncoding = u32;
+type Boolean = u8;
 
 const LS_ROLES_ALL: u32 = 0xFFFF_FFFF;
 const LS_ROLES_VIEWER: u32 = 1 << 1;
@@ -87,7 +88,7 @@ unsafe extern "C" {
         buf: *mut i8,
         buf_size: CFIndex,
         enc: CFStringEncoding,
-    ) -> bool;
+    ) -> Boolean;
     fn CFRelease(cf: CFTypeRef);
 }
 
@@ -385,7 +386,7 @@ fn cf_url_to_path(url: CFURLRef) -> Option<String> {
     let ok =
         unsafe { CFStringGetCString(cf_str, buf.as_mut_ptr(), max_size, CF_STRING_ENCODING_UTF8) };
     unsafe { CFRelease(cf_str) };
-    if !ok {
+    if ok == 0 {
         return None;
     }
     unsafe { CStr::from_ptr(buf.as_ptr()) }
@@ -404,7 +405,7 @@ fn cf_string_to_string(value: CFStringRef) -> Option<String> {
     let mut buf: Vec<i8> = vec![0; max_size as usize];
     let ok =
         unsafe { CFStringGetCString(value, buf.as_mut_ptr(), max_size, CF_STRING_ENCODING_UTF8) };
-    if !ok {
+    if ok == 0 {
         return None;
     }
 

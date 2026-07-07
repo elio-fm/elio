@@ -1,4 +1,5 @@
 mod event;
+#[cfg(unix)]
 mod parser;
 mod reader;
 

@@ -14,11 +14,11 @@ use self::{
 };
 use crate::{
     RunOptions, RunOutcome,
-    app::{App, ChooserExit, ClipOp, PendingTerminalTask},
-    config,
-    core::EntryKind,
-    path_display, shell, ui, zoxide,
+    app::{App, ChooserExit, PendingTerminalTask},
+    config, path_display, shell, ui, zoxide,
 };
+#[cfg(unix)]
+use crate::{app::ClipOp, core::EntryKind};
 use anyhow::Result;
 use crossterm::{
     cursor::SetCursorStyle,
@@ -46,11 +46,13 @@ struct AppExit {
 }
 
 #[derive(Debug, Default)]
+#[cfg(unix)]
 struct PendingDragOut {
     active: bool,
     uri_list: Vec<u8>,
 }
 
+#[cfg(unix)]
 impl PendingDragOut {
     fn reset(&mut self) {
         self.active = false;
@@ -59,16 +61,19 @@ impl PendingDragOut {
 }
 
 #[derive(Debug, Default)]
+#[cfg(unix)]
 struct PendingDropIn {
     op: Option<ClipOp>,
 }
 
+#[cfg(unix)]
 struct DragIconLabel {
     icon: String,
     text: String,
     icon_color: ratatui::style::Color,
 }
 
+#[cfg(unix)]
 impl PendingDropIn {
     fn set(&mut self, op: ClipOp) {
         self.op = Some(op);
@@ -165,6 +170,7 @@ fn run_app(
     reveal_hidden_start_focus: bool,
     chooser_enabled: bool,
 ) -> Result<AppExit> {
+    #[cfg(unix)]
     if kitty_dnd.is_enabled() {
         kitty_dnd::prewarm_drag_image_renderer();
     }
@@ -203,7 +209,9 @@ fn run_app(
     let mut search_cursor_active = false;
     let mut terminal_focused = true;
     let mut last_relative_time_refresh_at = Instant::now();
+    #[cfg(unix)]
     let mut pending_drag_out = PendingDragOut::default();
+    #[cfg(unix)]
     let mut pending_drop_in = PendingDropIn::default();
 
     loop {
@@ -365,14 +373,17 @@ fn run_app(
                     &mut next_input,
                     &mut batched_events,
                 )?;
-                let Some(event) = handle_runtime_input(
+                #[cfg(unix)]
+                let input_result = handle_runtime_input(
                     terminal,
                     &mut app,
                     input,
                     &mut pending_drag_out,
                     &mut pending_drop_in,
-                )?
-                else {
+                )?;
+                #[cfg(not(unix))]
+                let input_result = handle_runtime_input(input)?;
+                let Some(event) = input_result else {
                     dirty = true;
                     next_input = try_read_runtime_input(&input_reader)?;
                     continue;
@@ -515,6 +526,7 @@ fn read_runtime_input(
                 Ok(None)
             }
         }
+        #[cfg(unix)]
         RuntimeInputReader::Custom(reader) => Ok(reader.recv_timeout(timeout)?),
     }
 }
@@ -528,14 +540,18 @@ fn try_read_runtime_input(reader: &RuntimeInputReader) -> Result<Option<RuntimeI
                 Ok(None)
             }
         }
+        #[cfg(unix)]
         RuntimeInputReader::Custom(reader) => Ok(reader.try_recv()?),
     }
 }
 
 fn pause_runtime_input(reader: &RuntimeInputReader, paused: bool) {
+    #[cfg(unix)]
     if let RuntimeInputReader::Custom(reader) = reader {
         reader.set_paused(paused);
     }
+    #[cfg(not(unix))]
+    let _ = (reader, paused);
 }
 
 fn coalesce_resize_inputs(
@@ -577,6 +593,7 @@ fn coalesce_resize_inputs(
     Ok(RuntimeInputEvent::Terminal(Event::Resize(width, height)))
 }
 
+#[cfg(unix)]
 fn handle_runtime_input(
     terminal: &mut AppTerminal,
     app: &mut App,
@@ -593,6 +610,14 @@ fn handle_runtime_input(
     }
 }
 
+#[cfg(not(unix))]
+fn handle_runtime_input(input: RuntimeInputEvent) -> Result<Option<Event>> {
+    match input {
+        RuntimeInputEvent::Terminal(event) => Ok(Some(event)),
+    }
+}
+
+#[cfg(unix)]
 fn handle_kitty_dnd_event(
     terminal: &mut AppTerminal,
     app: &mut App,
@@ -747,6 +772,7 @@ fn handle_kitty_dnd_event(
     Ok(())
 }
 
+#[cfg(unix)]
 fn unsupported_drop_scheme_status(schemes: &[String]) -> String {
     match schemes {
         [] => "Drop contains no local files".to_string(),
@@ -755,6 +781,7 @@ fn unsupported_drop_scheme_status(schemes: &[String]) -> String {
     }
 }
 
+#[cfg(unix)]
 fn choose_drop_op(operation: kitty_dnd::DndOperation) -> ClipOp {
     match operation {
         kitty_dnd::DndOperation::Copy => ClipOp::Yank,
@@ -762,6 +789,7 @@ fn choose_drop_op(operation: kitty_dnd::DndOperation) -> ClipOp {
     }
 }
 
+#[cfg(unix)]
 fn drop_op_to_dnd_operation(op: ClipOp) -> kitty_dnd::DndOperation {
     match op {
         ClipOp::Yank => kitty_dnd::DndOperation::Copy,
@@ -769,6 +797,7 @@ fn drop_op_to_dnd_operation(op: ClipOp) -> kitty_dnd::DndOperation {
     }
 }
 
+#[cfg(unix)]
 fn clip_op_to_drop_finish(op: ClipOp) -> kitty_dnd::DropFinish {
     match op {
         ClipOp::Yank => kitty_dnd::DropFinish::Copy,
@@ -776,6 +805,7 @@ fn clip_op_to_drop_finish(op: ClipOp) -> kitty_dnd::DropFinish {
     }
 }
 
+#[cfg(unix)]
 fn drag_icon_sequence(label: &DragIconLabel) -> String {
     let palette = ui::theme::palette();
     if let Some(image) = kitty_dnd::render_drag_image(
@@ -791,16 +821,19 @@ fn drag_icon_sequence(label: &DragIconLabel) -> String {
     kitty_dnd::present_drag_icon_sequence(&label.as_text())
 }
 
+#[cfg(unix)]
 impl DragIconLabel {
     fn as_text(&self) -> String {
         format!("{} {}", self.icon, self.text)
     }
 }
 
+#[cfg(unix)]
 fn drag_icon_label(app: &App, paths: &[PathBuf]) -> DragIconLabel {
     drag_icon_label_with(paths, |path| drag_icon_for_path(app, path))
 }
 
+#[cfg(unix)]
 fn drag_icon_label_with<F>(paths: &[PathBuf], mut icon_for_path: F) -> DragIconLabel
 where
     F: FnMut(&Path) -> (String, ratatui::style::Color),
@@ -834,6 +867,7 @@ where
     }
 }
 
+#[cfg(unix)]
 fn drag_icon_for_path(app: &App, path: &Path) -> (String, ratatui::style::Color) {
     if let Some(entry) = app
         .navigation
@@ -849,6 +883,7 @@ fn drag_icon_for_path(app: &App, path: &Path) -> (String, ratatui::style::Color)
     (appearance.icon.to_string(), appearance.color)
 }
 
+#[cfg(unix)]
 fn drag_entry_kind(path: &Path) -> EntryKind {
     match std::fs::symlink_metadata(path) {
         Ok(metadata) if metadata.is_dir() => EntryKind::Directory,
@@ -856,6 +891,7 @@ fn drag_entry_kind(path: &Path) -> EntryKind {
     }
 }
 
+#[cfg(unix)]
 fn drag_icon_for_many<F>(
     paths: &[PathBuf],
     icon_for_path: &mut F,
@@ -894,6 +930,7 @@ where
     }
 }
 
+#[cfg(unix)]
 fn truncate_drag_label_text(label: &str, max_chars: usize) -> String {
     if label.chars().count() <= max_chars {
         return label.to_string();
@@ -930,14 +967,18 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        ACTIVE_SCROLL_POLL_INTERVAL, IDLE_POLL_INTERVAL, drag_icon_label_with,
-        event_implies_terminal_focus, event_poll_interval, unsupported_drop_scheme_status,
+        ACTIVE_SCROLL_POLL_INTERVAL, IDLE_POLL_INTERVAL, event_implies_terminal_focus,
+        event_poll_interval,
     };
+    #[cfg(unix)]
+    use super::{drag_icon_label_with, unsupported_drop_scheme_status};
     use crossterm::event::Event;
+    use std::time::Duration;
+    #[cfg(unix)]
     use std::{
         fs,
         path::PathBuf,
-        time::{Duration, SystemTime, UNIX_EPOCH},
+        time::{SystemTime, UNIX_EPOCH},
     };
 
     #[test]
@@ -997,6 +1038,7 @@ mod tests {
         assert!(!event_implies_terminal_focus(&Event::Resize(80, 24)));
     }
 
+    #[cfg(unix)]
     #[test]
     fn unsupported_drop_scheme_status_names_one_or_many_schemes() {
         assert_eq!(
@@ -1009,6 +1051,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn drag_icon_label_uses_name_for_single_item_and_count_for_many() {
         assert_eq!(
@@ -1029,6 +1072,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn drag_icon_label_uses_multi_item_icon_for_mixed_selection() {
         let paths = [PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")];
@@ -1043,6 +1087,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn drag_icon_label_uses_multi_folder_icon_for_different_folder_icons() {
         let root = std::env::temp_dir().join(format!(
@@ -1071,6 +1116,7 @@ mod tests {
         assert_eq!(label, "󰉓 2 items");
     }
 
+    #[cfg(unix)]
     #[test]
     fn drag_icon_label_truncates_long_names() {
         assert_eq!(
