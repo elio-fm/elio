@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added safe symlink preservation for `.zip`, `.7z`, and `.tar` archive creation and extraction.
 - Added a show/hide control to encrypted archive password prompts.
 - Added YAML frontmatter rendering to Markdown previews and recognized Quarto `.qmd` files as Markdown. ([#223])
+- Added syntax-highlighted previews for Astro `.astro` files.
 - Added Kitty 0.47+ drag-and-drop support for dropping items into elio and dragging items out, with themed drag previews.
 
 ### Changed

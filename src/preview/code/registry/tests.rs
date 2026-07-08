@@ -69,6 +69,10 @@ fn extension_lookup_returns_canonical_language_ids() {
         Some("tsx")
     );
     assert_eq!(
+        language_for_extension("astro").map(|language| language.canonical_id),
+        Some("astro")
+    );
+    assert_eq!(
         language_for_extension("ps1").map(|language| language.canonical_id),
         Some("powershell")
     );
@@ -243,6 +247,10 @@ fn markdown_fence_lookup_supports_common_aliases() {
     assert_eq!(
         language_for_markdown_fence("qml").map(|language| language.canonical_id),
         Some("qml")
+    );
+    assert_eq!(
+        language_for_markdown_fence("astro").map(|language| language.canonical_id),
+        Some("astro")
     );
 }
 

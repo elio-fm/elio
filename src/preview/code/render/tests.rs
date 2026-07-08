@@ -108,6 +108,10 @@ fn enabled_generic_source_preview_specs_use_syntect() {
         ("sass", "$fg: #fff\n.button\n  color: $fg\n"),
         ("less", "@fg: #fff;\n.button { color: @fg; }\n"),
         (
+            "astro",
+            "---\nconst title = \"Elio\";\n---\n<h1>{title}</h1>\n",
+        ),
+        (
             "nix",
             "{ description = \"elio\"; outputs = { self }: { packages.default = self; }; }\n",
         ),

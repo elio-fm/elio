@@ -1,0 +1,106 @@
+%YAML 1.2
+---
+name: Astro
+file_extensions:
+  - astro
+scope: source.astro
+variables:
+  identifier: '[A-Za-z_$][A-Za-z0-9_$]*'
+contexts:
+  prototype:
+    - include: comments
+  main:
+    - match: '^---\s*$'
+      scope: punctuation.section.frontmatter.astro
+      push: frontmatter
+    - include: astro-expressions
+    - include: tags
+    - include: strings
+    - include: script
+  frontmatter:
+    - meta_scope: meta.frontmatter.astro source.ts
+    - match: '^---\s*$'
+      scope: punctuation.section.frontmatter.astro
+      pop: true
+    - include: script
+  astro-expressions:
+    - match: '\{'
+      scope: punctuation.section.embedded.begin.astro
+      push: expression
+  expression:
+    - meta_scope: meta.embedded.expression.astro source.ts
+    - match: '\}'
+      scope: punctuation.section.embedded.end.astro
+      pop: true
+    - include: script
+  tags:
+    - match: '<!--'
+      push: html-comment
+    - match: '(</?)([A-Za-z][A-Za-z0-9._:-]*)'
+      captures:
+        1: punctuation.definition.tag.astro
+        2: entity.name.tag.astro
+    - match: '(/?>)'
+      scope: punctuation.definition.tag.astro
+    - match: '\b([A-Za-z_:][-A-Za-z0-9_:.]*)(?=\s*(?:=|$))'
+      captures:
+        1: entity.other.attribute-name.astro
+  comments:
+    - match: '//.*$'
+      scope: comment.line.double-slash.astro
+    - match: '/\*'
+      push: block-comment
+  html-comment:
+    - meta_scope: comment.block.html.astro
+    - match: '-->'
+      pop: true
+  block-comment:
+    - meta_scope: comment.block.astro
+    - match: '/\*'
+      push: block-comment
+    - match: '\*/'
+      pop: true
+  strings:
+    - match: '"'
+      push: double-quoted-string
+    - match: "'"
+      push: single-quoted-string
+    - match: '`'
+      push: template-string
+  double-quoted-string:
+    - meta_scope: string.quoted.double.astro
+    - meta_include_prototype: false
+    - match: '\\.'
+      scope: constant.character.escape.astro
+    - match: '"'
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.astro
+    - meta_include_prototype: false
+    - match: '\\.'
+      scope: constant.character.escape.astro
+    - match: "'"
+      pop: true
+  template-string:
+    - meta_scope: string.quoted.template.astro
+    - meta_include_prototype: false
+    - match: '\\.'
+      scope: constant.character.escape.astro
+    - match: '`'
+      pop: true
+  script:
+    - include: strings
+    - match: '\b(?:import|export|from|as|const|let|var|function|return|if|else|for|while|switch|case|break|continue|new|this|class|extends|async|await|try|catch|finally|throw|typeof|interface|type|enum)\b'
+      scope: keyword.control.astro
+    - match: '\b(?:string|number|boolean|unknown|never|void|object|symbol|bigint|any)\b'
+      scope: support.type.astro
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.astro
+    - match: '\b{{identifier}}(?=\s*(?:<[^>\n]+>\s*)?\()'
+      scope: entity.name.function.astro
+    - match: '\b(?:true|false|null|undefined)\b'
+      scope: constant.language.astro
+    - match: '\b(?:0x[0-9A-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)\b'
+      scope: constant.numeric.astro
+    - match: '=>|[-+*/%=&|<>!?:]+'
+      scope: keyword.operator.astro

@@ -78,6 +78,16 @@ fn html_and_css_files_use_code_preview_support() {
 }
 
 #[test]
+fn astro_files_use_code_preview_support() {
+    let astro = inspect_path(Path::new("Card.astro"), EntryKind::File);
+
+    assert_eq!(astro.builtin_class, FileClass::Code);
+    assert_eq!(astro.specific_type_label, Some("Astro component"));
+    assert_eq!(astro.preview.language_hint, Some("astro"));
+    assert_code_spec(astro.preview, Some("astro"), CodeBackend::Syntect);
+}
+
+#[test]
 fn quarto_markdown_files_use_markdown_preview_support() {
     let facts = inspect_path(Path::new("analysis.qmd"), EntryKind::File);
 

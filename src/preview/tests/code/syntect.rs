@@ -314,6 +314,48 @@ fn qml_preview_uses_curated_syntect_support() {
 }
 
 #[test]
+fn astro_preview_uses_curated_syntect_support() {
+    let root = temp_path("astro");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("Card.astro");
+    fs::write(
+        &path,
+        "---\nconst title: string = \"Elio\";\nconst count = 2;\n---\n<Layout title={title} client:load>\n  <h1>{title}</h1>\n  <span>{count}</span>\n</Layout>\n",
+    )
+    .expect("failed to write astro source");
+
+    let preview = build_preview(&file_entry(path));
+    let code_palette = theme::code_preview_palette();
+
+    assert_eq!(preview.kind, PreviewKind::Code);
+    assert!(
+        preview
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("Astro"))
+    );
+    assert_eq!(
+        span_color(&preview.lines[1], "const"),
+        Some(code_palette.keyword)
+    );
+    assert_eq!(
+        span_color(&preview.lines[1], "string"),
+        Some(code_palette.r#type)
+    );
+    assert_eq!(
+        span_color(&preview.lines[4], "Layout"),
+        Some(code_palette.tag)
+    );
+    assert_eq!(
+        span_color(&preview.lines[4], "title"),
+        Some(code_palette.parameter)
+    );
+    assert_eq!(span_color(&preview.lines[5], "h1"), Some(code_palette.tag));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn tsx_preview_uses_code_renderer() {
     let root = temp_path("tsx");
     fs::create_dir_all(&root).expect("failed to create temp root");
