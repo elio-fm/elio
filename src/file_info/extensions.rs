@@ -96,6 +96,11 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             }),
             preview: preview_for_extension(ext),
         },
+        "astro" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Astro component"),
+            preview: preview_for_extension(ext),
+        },
         "sql" => FileFacts {
             builtin_class: FileClass::Code,
             specific_type_label: Some("SQL script"),

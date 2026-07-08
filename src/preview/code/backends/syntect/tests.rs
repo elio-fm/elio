@@ -189,6 +189,10 @@ fn curated_bundle_supports_newly_vendored_languages() {
             "export function App() { return <button className=\"cta\">Hi</button>; }\n",
         ),
         (
+            "astro",
+            "---\nconst title: string = \"Elio\";\n---\n<Layout title={title}><h1>{title}</h1></Layout>\n",
+        ),
+        (
             "nix",
             "{ description = \"elio\"; outputs = { self }: { packages.default = self; }; }\n",
         ),
