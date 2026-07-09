@@ -138,6 +138,16 @@ class = "data"
 icon = "󱎏"
 color = "#4eb274"
 
+[extensions.o]
+class = "file"
+icon = ""
+color = "#7aaeff"
+
+[extensions.obj]
+class = "file"
+icon = ""
+color = "#7aaeff"
+
 [extensions.desktop]
 class = "config"
 icon = "󰍹"

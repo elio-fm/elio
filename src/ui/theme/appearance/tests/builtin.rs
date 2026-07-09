@@ -127,6 +127,13 @@ fn default_theme_assigns_specific_icons_for_common_dev_paths() {
         assert_eq!(table.color, rgb(78, 178, 116), "{path}");
     }
 
+    for path in ["main.o", "main.obj"] {
+        let object = theme.resolve(Path::new(path), EntryKind::File);
+        assert_eq!(object.class, FileClass::File, "{path}");
+        assert_eq!(object.icon, "", "{path}");
+        assert_eq!(object.color, rgb(122, 174, 255), "{path}");
+    }
+
     let package = theme.resolve(Path::new("package.json"), EntryKind::File);
     assert_eq!(package.icon, "󰏗");
 
