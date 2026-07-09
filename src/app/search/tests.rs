@@ -143,6 +143,45 @@ fn opening_search_preserves_cached_limit_status() {
 }
 
 #[test]
+fn search_rows_keep_full_paths() {
+    let root = temp_path("row-full-path");
+    let license_path = root.join("nested/LICENSE.md");
+    fs::create_dir_all(license_path.parent().unwrap()).expect("failed to create temp tree");
+    fs::write(
+        &license_path,
+        "# SPDX-License-Identifier: Apache-2.0\n\nFixture license notes.\n",
+    )
+    .expect("failed to write license");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.jobs.search_cache = Some(SearchCache {
+        cwd: root.clone(),
+        scope: SearchScope::Files,
+        show_hidden: app.effective_show_hidden(),
+        fingerprint: app.navigation.directory_runtime.fingerprint,
+        candidates: Arc::new(vec![crate::fs::search::SearchCandidate {
+            path: license_path.clone(),
+            name: "LICENSE.md".to_string(),
+            name_key: "license.md".to_string(),
+            relative: "nested/LICENSE.md".to_string(),
+            relative_key: "nested/license.md".to_string(),
+            is_dir: false,
+            symlink: None,
+        }]),
+        stats: crate::fs::search::SearchIndexStats::default(),
+    });
+
+    app.open_fuzzy_finder(SearchScope::Files)
+        .expect("failed to open search");
+    let rows = app.search_rows(1);
+
+    assert_eq!(rows[0].path, license_path);
+    assert_eq!(rows[0].relative, "nested/LICENSE.md");
+
+    fs::remove_dir_all(root).expect("failed to remove temp tree");
+}
+
+#[test]
 fn search_progress_batch_updates_open_overlay_while_loading() {
     let root = temp_path("progress-batch");
     fs::create_dir_all(&root).expect("failed to create temp tree");

@@ -197,10 +197,13 @@ pub(super) fn render_search_overlay(
                 );
             }
 
-            let row_path = std::path::Path::new(&row.relative);
-            let icon = theme::path_symbol_with_symlink(row_path, row.is_dir, row.symlink.as_ref());
-            let icon_color =
-                theme::path_color_with_symlink(row_path, row.is_dir, row.symlink.as_ref(), palette);
+            let icon = theme::path_symbol_with_symlink(&row.path, row.is_dir, row.symlink.as_ref());
+            let icon_color = theme::path_color_with_symlink(
+                &row.path,
+                row.is_dir,
+                row.symlink.as_ref(),
+                palette,
+            );
             let name_width = rect.width.saturating_sub(6) as usize;
             let path_width = rect.width.saturating_sub(4) as usize;
             frame.render_widget(

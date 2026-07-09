@@ -15,12 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a show/hide control to encrypted archive password prompts.
 - Added YAML frontmatter rendering to Markdown previews and recognized Quarto `.qmd` files as Markdown. ([#223])
 - Added syntax-highlighted previews for Astro `.astro` files.
+- Added Jupyter notebook JSON previews and notebook icons.
+- Added default theme icons for Angular project files, CSV/TSV tables, object files, libraries, and WebAssembly modules.
 - Added Kitty 0.47+ drag-and-drop support for dropping items into elio and dragging items out, with themed drag previews.
 
 ### Changed
 
 - Made create and bulk rename overlays show more rows before scrolling, adapt better on short terminals, and use consistent scrollbar styling.
 - Dimmed help overlay key separators and removed the bottom close hint.
+
+### Fixed
+
+- Fixed Fuzzy Find result icons for nested files that use full-name rules, such as `LICENSE.md`.
 
 ## [1.10.0] - 2026-06-30
 

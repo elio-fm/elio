@@ -85,6 +85,7 @@ impl App {
                 let candidate = search.candidates.get(candidate_index)?;
                 Some(SearchRow {
                     index: visible_index,
+                    path: candidate.path.clone(),
                     name: candidate.name.clone(),
                     relative: candidate.relative.clone(),
                     is_dir: candidate.is_dir,
