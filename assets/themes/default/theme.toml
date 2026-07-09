@@ -128,6 +128,16 @@ class = "config"
 icon = ""
 color = "#7db0ff"
 
+[extensions.csv]
+class = "data"
+icon = "󱎏"
+color = "#4eb274"
+
+[extensions.tsv]
+class = "data"
+icon = "󱎏"
+color = "#4eb274"
+
 [extensions.desktop]
 class = "config"
 icon = "󰍹"

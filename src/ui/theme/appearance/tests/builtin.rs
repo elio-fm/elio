@@ -120,6 +120,13 @@ fn default_theme_assigns_specific_icons_for_common_dev_paths() {
     assert_eq!(json.icon, "");
     assert_eq!(json.color, rgb(125, 176, 255));
 
+    for path in ["customers.csv", "orders.tsv"] {
+        let table = theme.resolve(Path::new(path), EntryKind::File);
+        assert_eq!(table.class, FileClass::Data, "{path}");
+        assert_eq!(table.icon, "󱎏", "{path}");
+        assert_eq!(table.color, rgb(78, 178, 116), "{path}");
+    }
+
     let package = theme.resolve(Path::new("package.json"), EntryKind::File);
     assert_eq!(package.icon, "󰏗");
 
