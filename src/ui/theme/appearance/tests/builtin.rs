@@ -134,6 +134,24 @@ fn default_theme_assigns_specific_icons_for_common_dev_paths() {
         assert_eq!(object.color, rgb(122, 174, 255), "{path}");
     }
 
+    for path in [
+        "libapp.a",
+        "app.lib",
+        "libapp.so",
+        "libapp.dylib",
+        "app.dll",
+    ] {
+        let library = theme.resolve(Path::new(path), EntryKind::File);
+        assert_eq!(library.class, FileClass::File, "{path}");
+        assert_eq!(library.icon, "", "{path}");
+        assert_eq!(library.color, rgb(211, 170, 124), "{path}");
+    }
+
+    let wasm = theme.resolve(Path::new("module.wasm"), EntryKind::File);
+    assert_eq!(wasm.class, FileClass::File);
+    assert_eq!(wasm.icon, "");
+    assert_eq!(wasm.color, rgb(179, 140, 255));
+
     let package = theme.resolve(Path::new("package.json"), EntryKind::File);
     assert_eq!(package.icon, "󰏗");
 

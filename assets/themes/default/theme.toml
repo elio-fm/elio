@@ -148,6 +148,36 @@ class = "file"
 icon = ""
 color = "#7aaeff"
 
+[extensions.a]
+class = "file"
+icon = ""
+color = "#d3aa7c"
+
+[extensions.lib]
+class = "file"
+icon = ""
+color = "#d3aa7c"
+
+[extensions.so]
+class = "file"
+icon = ""
+color = "#d3aa7c"
+
+[extensions.dylib]
+class = "file"
+icon = ""
+color = "#d3aa7c"
+
+[extensions.dll]
+class = "file"
+icon = ""
+color = "#d3aa7c"
+
+[extensions.wasm]
+class = "file"
+icon = ""
+color = "#b38cff"
+
 [extensions.desktop]
 class = "config"
 icon = "󰍹"
