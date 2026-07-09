@@ -127,6 +127,11 @@ fn default_theme_assigns_specific_icons_for_common_dev_paths() {
         assert_eq!(table.color, rgb(78, 178, 116), "{path}");
     }
 
+    let notebook = theme.resolve(Path::new("analysis.ipynb"), EntryKind::File);
+    assert_eq!(notebook.class, FileClass::Document);
+    assert_eq!(notebook.icon, "");
+    assert_eq!(notebook.color, rgb(255, 184, 107));
+
     for path in ["main.o", "main.obj"] {
         let object = theme.resolve(Path::new(path), EntryKind::File);
         assert_eq!(object.class, FileClass::File, "{path}");

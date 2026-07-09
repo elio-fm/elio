@@ -17,6 +17,23 @@ fn json5_gets_parser_backed_preview_support() {
 }
 
 #[test]
+fn jupyter_notebooks_use_json_preview_support() {
+    let facts = inspect_path(Path::new("analysis.ipynb"), EntryKind::File);
+
+    assert_eq!(facts.builtin_class, FileClass::Document);
+    assert_eq!(facts.specific_type_label, Some("Jupyter notebook"));
+    assert_eq!(
+        facts.preview.structured_format,
+        Some(StructuredFormat::Json)
+    );
+    assert_code_spec(
+        facts.preview,
+        Some("json"),
+        CodeBackend::Custom(CustomCodeKind::Json),
+    );
+}
+
+#[test]
 fn supported_video_extensions_keep_specific_video_labels() {
     let cases = [
         ("clip.mp4", "MP4 video"),

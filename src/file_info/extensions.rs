@@ -40,6 +40,11 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("JSON5 file"),
             preview: preview_for_extension(ext),
         },
+        "ipynb" => FileFacts {
+            builtin_class: FileClass::Document,
+            specific_type_label: Some("Jupyter notebook"),
+            preview: preview_for_extension("json"),
+        },
         "toml" => FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("TOML file"),

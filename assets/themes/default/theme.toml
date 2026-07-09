@@ -138,6 +138,11 @@ class = "data"
 icon = "󱎏"
 color = "#4eb274"
 
+[extensions.ipynb]
+class = "document"
+icon = ""
+color = "#ffb86b"
+
 [extensions.o]
 class = "file"
 icon = ""
