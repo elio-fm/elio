@@ -36,8 +36,6 @@ const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const ACTIVE_SCROLL_POLL_INTERVAL: Duration = Duration::from_millis(12);
 const WINDOWS_TERMINAL_ACTIVE_POLL_INTERVAL: Duration = Duration::from_millis(24);
 const RELATIVE_TIME_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
-const MAX_INPUT_EVENTS_PER_FRAME: usize = 64;
-const MAX_INPUT_BATCH_DURATION: Duration = Duration::from_millis(4);
 
 #[derive(Debug)]
 struct AppExit {
@@ -356,10 +354,7 @@ fn run_app(
             // terminals) arrive faster than the app can render: instead of one render per
             // event we accumulate all queued events first and render the final state once.
             let mut next_input = Some(first_input);
-            let batch_started_at = Instant::now();
-            let mut batched_events = 0usize;
             loop {
-                batched_events += 1;
                 let input = match next_input.take() {
                     Some(input) => input,
                     None => match try_read_runtime_input(&input_reader)? {
@@ -367,12 +362,7 @@ fn run_app(
                         None => break,
                     },
                 };
-                let input = coalesce_resize_inputs(
-                    &input_reader,
-                    input,
-                    &mut next_input,
-                    &mut batched_events,
-                )?;
+                let input = coalesce_resize_inputs(&input_reader, input, &mut next_input)?;
                 #[cfg(unix)]
                 let input_result = handle_runtime_input(
                     terminal,
@@ -433,12 +423,6 @@ fn run_app(
                     }
                 };
                 next_input = try_read_runtime_input(&input_reader)?;
-                if next_input.is_some()
-                    && (batched_events >= MAX_INPUT_EVENTS_PER_FRAME
-                        || batch_started_at.elapsed() >= MAX_INPUT_BATCH_DURATION)
-                {
-                    break;
-                }
             }
 
             if app.should_quit {
@@ -558,13 +542,11 @@ fn coalesce_resize_inputs(
     reader: &RuntimeInputReader,
     input: RuntimeInputEvent,
     next_input: &mut Option<RuntimeInputEvent>,
-    batched_events: &mut usize,
 ) -> Result<RuntimeInputEvent> {
     let RuntimeInputEvent::Terminal(Event::Resize(mut width, mut height)) = input else {
         return Ok(input);
     };
 
-    let started_at = Instant::now();
     loop {
         let candidate = if let Some(input) = next_input.take() {
             Some(input)
@@ -575,12 +557,6 @@ fn coalesce_resize_inputs(
             Some(RuntimeInputEvent::Terminal(Event::Resize(w, h))) => {
                 width = w;
                 height = h;
-                *batched_events += 1;
-                if *batched_events >= MAX_INPUT_EVENTS_PER_FRAME
-                    || started_at.elapsed() >= MAX_INPUT_BATCH_DURATION
-                {
-                    break;
-                }
             }
             Some(other) => {
                 *next_input = Some(other);
