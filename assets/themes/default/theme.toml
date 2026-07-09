@@ -583,6 +583,16 @@ class = "config"
 icon = ""
 color = "#a884ff"
 
+[files."angular.json"]
+class = "config"
+icon = "󰚲"
+color = "#ef4444"
+
+[files."ng-package.json"]
+class = "config"
+icon = "󰚲"
+color = "#ef4444"
+
 [files."Dockerfile"]
 class = "config"
 icon = "󰡨"
@@ -1033,6 +1043,10 @@ color = "#5ba8ff"
 [directories.".astro"]
 icon = ""
 color = "#5ba8ff"
+
+[directories.".angular"]
+icon = "󰚲"
+color = "#ef4444"
 
 [directories."public"]
 icon = "󰉋"

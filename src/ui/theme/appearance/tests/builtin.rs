@@ -123,8 +123,20 @@ fn default_theme_assigns_specific_icons_for_common_dev_paths() {
     let package = theme.resolve(Path::new("package.json"), EntryKind::File);
     assert_eq!(package.icon, "󰏗");
 
+    for path in ["angular.json", "ng-package.json"] {
+        let angular = theme.resolve(Path::new(path), EntryKind::File);
+        assert_eq!(angular.class, FileClass::Config, "{path}");
+        assert_eq!(angular.icon, "󰚲", "{path}");
+        assert_eq!(angular.color, rgb(239, 68, 68), "{path}");
+    }
+
     let modules = theme.resolve(Path::new("node_modules"), EntryKind::Directory);
     assert_eq!(modules.icon, "󰏗");
+
+    let angular_cache = theme.resolve(Path::new(".angular"), EntryKind::Directory);
+    assert_eq!(angular_cache.class, FileClass::Directory);
+    assert_eq!(angular_cache.icon, "󰚲");
+    assert_eq!(angular_cache.color, rgb(239, 68, 68));
 
     let docs = theme.resolve(Path::new("docs"), EntryKind::Directory);
     assert_eq!(docs.class, FileClass::Directory);
