@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct OpenConfig {
@@ -41,10 +42,16 @@ pub(crate) enum OpenPlatform {
 #[derive(Deserialize, Default)]
 pub(super) struct OpenConfigOverride {
     rules: Option<Vec<toml::Value>>,
+    #[serde(flatten)]
+    unknown: BTreeMap<String, toml::Value>,
 }
 
 impl OpenConfig {
     pub(super) fn from_override(overrides: OpenConfigOverride, defaults: &Self) -> Self {
+        for key in overrides.unknown.keys() {
+            eprintln!("elio: open.{key}: unknown open config key; ignoring");
+        }
+
         let mut resolved = defaults.clone();
         if let Some(rules) = overrides.rules {
             resolved.rules = rules
@@ -61,10 +68,21 @@ impl OpenConfig {
 
 impl OpenRule {
     fn from_toml_value(value: &toml::Value, field_name: &str) -> Option<Self> {
+        const FIELDS: &[&str] = &["type", "ext", "platform", "command", "terminal"];
+
         let toml::Value::Table(table) = value else {
             eprintln!("elio: {field_name}: expected an open rule object; skipping rule");
             return None;
         };
+
+        for key in table.keys() {
+            if !FIELDS.contains(&key.as_str()) {
+                eprintln!(
+                    "elio: {field_name}: unknown field {key:?}; expected type, ext, platform, command, terminal; skipping rule"
+                );
+                return None;
+            }
+        }
 
         let types = parse_type_list(table.get("type"), field_name)?;
         let exts = parse_ext_list(table.get("ext"), field_name)?;

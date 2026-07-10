@@ -59,3 +59,39 @@ rules = [
     assert_eq!(config.open.rules[0].exts, vec!["txt"]);
     assert_eq!(config.open.rules[0].command, "hx");
 }
+
+#[test]
+fn config_skips_open_rules_with_unknown_fields_without_dropping_valid_rules() {
+    let config = Config::from_str(
+        r#"
+[open]
+rules = [
+  { ext = "pdf", command = "bad", plaform = "linux" },
+  { ext = "txt", command = "hx" },
+]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.open.rules.len(), 1);
+    assert_eq!(config.open.rules[0].exts, vec!["txt"]);
+    assert_eq!(config.open.rules[0].command, "hx");
+}
+
+#[test]
+fn config_ignores_unknown_open_keys_without_dropping_rules() {
+    let config = Config::from_str(
+        r#"
+[open]
+rulez = []
+rules = [
+  { ext = "txt", command = "hx" },
+]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.open.rules.len(), 1);
+    assert_eq!(config.open.rules[0].exts, vec!["txt"]);
+    assert_eq!(config.open.rules[0].command, "hx");
+}

@@ -513,6 +513,7 @@ impl App {
         let mut total = 0usize;
         let mut last_error = None;
         let mut terminal_commands = Vec::new();
+        let mut detached_started = false;
 
         for plan in plans {
             match plan {
@@ -528,7 +529,10 @@ impl App {
                 crate::app::open_rules::OpenPlan::Detached { program, args } => {
                     total += 1;
                     match crate::fs::detached_open_command(&program, &args) {
-                        Ok(()) => opened += 1,
+                        Ok(()) => {
+                            opened += 1;
+                            detached_started = true;
+                        }
                         Err(error) => last_error = Some(format!("{program}: {error}")),
                     }
                 }
@@ -551,14 +555,19 @@ impl App {
             return Ok(());
         }
 
+        let started_status = if detached_started {
+            "Opening"
+        } else {
+            "Opened"
+        };
         self.status = match (total, opened, last_error) {
             (0, _, _) => String::new(),
-            (1, 1, _) => "Opened item".to_string(),
-            (_, opened, None) => format!("Opened {opened} items"),
+            (1, 1, _) => format!("{started_status} item"),
+            (_, opened, None) => format!("{started_status} {opened} items"),
             (1, 0, Some(error)) => error,
             (_, 0, Some(error)) => format!("Failed to open {total} items: {error}"),
             (_, opened, Some(error)) => {
-                format!("Opened {opened}/{total} items; last error: {error}")
+                format!("{started_status} {opened}/{total} items; last error: {error}")
             }
         };
         Ok(())
@@ -675,6 +684,62 @@ mod tests {
             .expect("system time should be after unix epoch")
             .as_nanos();
         std::env::temp_dir().join(format!("elio-navigation-{label}-{unique}"))
+    }
+
+    #[cfg(windows)]
+    fn successful_detached_command() -> (String, Vec<String>) {
+        (
+            "cmd.exe".to_string(),
+            vec!["/C".to_string(), "exit 0".to_string()],
+        )
+    }
+
+    #[cfg(not(windows))]
+    fn successful_detached_command() -> (String, Vec<String>) {
+        (
+            "/bin/sh".to_string(),
+            vec!["-c".to_string(), "true".to_string()],
+        )
+    }
+
+    #[test]
+    fn detached_open_rule_reports_command_launch_failure() {
+        let root = temp_path("detached-open-rule-failure");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+        app.run_open_plans(vec![crate::app::open_rules::OpenPlan::Detached {
+            program: "definitely-not-real-elio-command".to_string(),
+            args: Vec::new(),
+        }])
+        .expect("open plan should be handled");
+
+        assert!(
+            app.status_message()
+                .contains("definitely-not-real-elio-command"),
+            "status should report detached command failure, got: {}",
+            app.status_message()
+        );
+
+        fs::remove_dir_all(root).expect("temp directory should be removed");
+    }
+
+    #[test]
+    fn detached_open_rule_uses_opening_status_after_successful_launch() {
+        let root = temp_path("detached-open-rule-opening");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+        let (program, args) = successful_detached_command();
+        app.run_open_plans(vec![crate::app::open_rules::OpenPlan::Detached {
+            program,
+            args,
+        }])
+        .expect("open plan should be handled");
+
+        assert_eq!(app.status_message(), "Opening item");
+
+        fs::remove_dir_all(root).expect("temp directory should be removed");
     }
 
     #[test]
