@@ -1,4 +1,4 @@
-# Copy to ~/.config/elio/config.toml to customize Elio's behavior.
+# Copy to ~/.config/elio/config.toml to customize elio's behavior.
 
 # [ui]
 # show_top_bar = false
@@ -57,20 +57,24 @@
 # ]
 #
 # Override elio's open action without changing system defaults. Rules are
-# checked top-to-bottom; if none match, elio uses the system opener.
+# checked top-to-bottom; put specific extension rules before broad type rules.
+# If none match, elio uses the system opener. Omit platform to match every OS.
 #
 # Match by elio file type and/or extension. Supported types: folder, text, code,
 # config, document, image, audio, video, archive, font, data, file.
-# `command` is split like a small shell command; if {path} is omitted, elio
-# appends selected matching paths. Use terminal = true for terminal apps so elio
-# suspends, waits, and restores after the command exits.
+# Without {path}, elio appends opened paths. Use {path} only when the app needs
+# the path inside an argument; then bulk opens run once per path.
+# Use terminal = true for terminal apps so elio suspends, waits, and restores.
+# For Windows paths with backslashes, prefer TOML literal strings.
 #
 # [open]
 # rules = [
+#   { ext = "md", command = "markdown-app", platform = "linux" },
 #   { type = ["text", "code", "config"], command = "$EDITOR", terminal = true },
-#   { ext = "pdf", command = "zathura", platform = ["linux", "bsd"] },
-#   { ext = "pdf", command = "open -a Preview", platform = "macos" },
-#   { ext = "pdf", command = "SumatraPDF.exe", platform = "windows" },
+#   { ext = "pdf", command = "pdf-app", platform = ["linux", "bsd"] },
+#   { ext = "pdf", command = "open -a App", platform = "macos" },
+#   { ext = "pdf", command = "pdf-app.exe", platform = "windows" },
+#   # or: { ext = "pdf", command = 'C:\Program Files\App\app.exe', platform = "windows" },
 # ]
 #
 # Optional pane weights for the browser body. Values are relative: in
@@ -78,7 +82,7 @@
 # below Files they control the Files / Preview vertical split.
 # Set a pane to 0 to hide it.
 #
-# If this table is omitted, Elio keeps the built-in responsive layout:
+# If this table is omitted, elio keeps the built-in responsive layout:
 # - horizontal layout: Places prefers 20 cols, Files / Preview use a 54 / 46
 #   split of the remaining width
 # - tighter windows: Places can shrink to 18 cols before Preview stacks

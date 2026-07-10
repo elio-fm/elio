@@ -164,11 +164,13 @@ fn tokenize_command(command: &str) -> Vec<String> {
         match ch {
             '\'' if !in_double_quotes => in_single_quotes = !in_single_quotes,
             '"' if !in_single_quotes => in_double_quotes = !in_double_quotes,
-            '\\' => {
-                if let Some(next) = chars.next() {
+            '\\' => match chars.peek().copied() {
+                Some(next) if matches!(next, ' ' | '\t' | '\'' | '"' | '\\') => {
+                    chars.next();
                     current.push(next);
                 }
-            }
+                _ => current.push(ch),
+            },
             ' ' | '\t' if !in_single_quotes && !in_double_quotes => {
                 if !current.is_empty() {
                     tokens.push(std::mem::take(&mut current));
@@ -181,7 +183,46 @@ fn tokenize_command(command: &str) -> Vec<String> {
     if !current.is_empty() {
         tokens.push(current);
     }
+    coalesce_windows_executable_path(tokens)
+}
+
+fn coalesce_windows_executable_path(tokens: Vec<String>) -> Vec<String> {
+    if tokens.len() < 2 || !looks_like_windows_path_start(&tokens[0]) {
+        return tokens;
+    }
+
+    let mut program = String::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if index > 0 {
+            program.push(' ');
+        }
+        program.push_str(token);
+
+        if looks_like_windows_executable_path(&program) {
+            let mut merged = Vec::with_capacity(tokens.len() - index);
+            merged.push(program);
+            merged.extend(tokens[index + 1..].iter().cloned());
+            return merged;
+        }
+    }
+
     tokens
+}
+
+fn looks_like_windows_path_start(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    (bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'\\' | b'/'))
+        || token.starts_with(r"\\")
+}
+
+fn looks_like_windows_executable_path(path: &str) -> bool {
+    let path = path.to_ascii_lowercase();
+    [".exe", ".cmd", ".bat", ".com"]
+        .iter()
+        .any(|suffix| path.ends_with(suffix))
 }
 
 fn expand_args(args: &[String], paths: &[PathBuf]) -> Vec<String> {
@@ -261,6 +302,55 @@ mod tests {
         assert_eq!(
             tokenize_command("open -a \"Preview App\" {path}"),
             vec!["open", "-a", "Preview App", "{path}"]
+        );
+    }
+
+    #[test]
+    fn preserves_backslashes_that_are_not_command_escapes() {
+        assert_eq!(
+            tokenize_command(r#"echo C:\tmp\notes.txt"#),
+            vec!["echo", r#"C:\tmp\notes.txt"#]
+        );
+    }
+
+    #[test]
+    fn still_supports_escaped_unix_whitespace() {
+        assert_eq!(
+            tokenize_command(r#"my\ command --flag"#),
+            vec!["my command", "--flag"]
+        );
+    }
+
+    #[test]
+    fn tokenizes_quoted_windows_command_path() {
+        assert_eq!(
+            tokenize_command(r#""C:\Program Files\SumatraPDF\SumatraPDF.exe" -reuse-instance"#),
+            vec![
+                r#"C:\Program Files\SumatraPDF\SumatraPDF.exe"#,
+                "-reuse-instance"
+            ]
+        );
+    }
+
+    #[test]
+    fn tokenizes_unquoted_windows_command_path_with_spaces() {
+        assert_eq!(
+            tokenize_command(r#"C:\Program Files\SumatraPDF\SumatraPDF.exe -reuse-instance"#),
+            vec![
+                r#"C:\Program Files\SumatraPDF\SumatraPDF.exe"#,
+                "-reuse-instance"
+            ]
+        );
+    }
+
+    #[test]
+    fn tokenizes_windows_forward_slash_command_path_with_spaces() {
+        assert_eq!(
+            tokenize_command(r#"C:/Program Files/SumatraPDF/SumatraPDF.exe -reuse-instance"#),
+            vec![
+                "C:/Program Files/SumatraPDF/SumatraPDF.exe",
+                "-reuse-instance"
+            ]
         );
     }
 
