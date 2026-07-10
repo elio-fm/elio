@@ -441,6 +441,16 @@ fn run_app(
                         pause_runtime_input(&input_reader, false);
                         None
                     }
+                    PendingTerminalTask::Commands(commands) => {
+                        pause_runtime_input(&input_reader, true);
+                        suspend_terminal(terminal, drainer, true, kitty_dnd)?;
+                        for (program, args) in commands {
+                            run_blocking_in_terminal(&program, &args);
+                        }
+                        resume_terminal(terminal, drainer, kitty_dnd)?;
+                        pause_runtime_input(&input_reader, false);
+                        None
+                    }
                     PendingTerminalTask::Shell { cwd } => {
                         pause_runtime_input(&input_reader, true);
                         suspend_terminal(terminal, drainer, true, kitty_dnd)?;

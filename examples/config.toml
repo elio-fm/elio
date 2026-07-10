@@ -56,6 +56,23 @@
 #   { title = "tmp", path = "/tmp", key = "T" },
 # ]
 #
+# Override elio's open action without changing system defaults. Rules are
+# checked top-to-bottom; if none match, elio uses the system opener.
+#
+# Match by elio file type and/or extension. Supported types: folder, text, code,
+# config, document, image, audio, video, archive, font, data, file.
+# `command` is split like a small shell command; if {path} is omitted, elio
+# appends selected matching paths. Use terminal = true for terminal apps so elio
+# suspends, waits, and restores after the command exits.
+#
+# [open]
+# rules = [
+#   { type = ["text", "code", "config"], command = "$EDITOR", terminal = true },
+#   { ext = "pdf", command = "zathura", platform = ["linux", "bsd"] },
+#   { ext = "pdf", command = "open -a Preview", platform = "macos" },
+#   { ext = "pdf", command = "SumatraPDF.exe", platform = "windows" },
+# ]
+#
 # Optional pane weights for the browser body. Values are relative: in
 # side-by-side layouts they control horizontal width, and when Preview stacks
 # below Files they control the Files / Preview vertical split.

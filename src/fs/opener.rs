@@ -203,6 +203,13 @@ fn detached_spawn(command: &mut Command) -> io::Result<()> {
     command.stderr(Stdio::null());
     #[cfg(unix)]
     command.process_group(0);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x00000008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+        command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    }
     command.spawn()?;
     Ok(())
 }

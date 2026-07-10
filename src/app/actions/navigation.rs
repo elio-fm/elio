@@ -411,6 +411,22 @@ impl App {
     }
 
     pub(in crate::app) fn open_in_system(&mut self) -> Result<()> {
+        let entries = self.open_target_entries();
+        match crate::app::open_rules::plans_for_entries(&entries) {
+            Ok(plans)
+                if plans.iter().any(|plan| {
+                    !matches!(plan, crate::app::open_rules::OpenPlan::System { .. })
+                }) =>
+            {
+                return self.run_open_plans(plans);
+            }
+            Err(error) => {
+                self.status = error;
+                return Ok(());
+            }
+            _ => {}
+        }
+
         #[cfg(all(unix, not(target_os = "macos")))]
         if let Some(entry) = self.single_file_open_target_entry() {
             if self.queue_terminal_default_open_if_needed(&entry) {
@@ -430,6 +446,21 @@ impl App {
     }
 
     fn open_entry_in_system(&mut self, entry: &Entry) -> Result<()> {
+        match crate::app::open_rules::plans_for_entries(std::slice::from_ref(entry)) {
+            Ok(plans)
+                if plans.iter().any(|plan| {
+                    !matches!(plan, crate::app::open_rules::OpenPlan::System { .. })
+                }) =>
+            {
+                return self.run_open_plans(plans);
+            }
+            Err(error) => {
+                self.status = error;
+                return Ok(());
+            }
+            _ => {}
+        }
+
         #[cfg(all(unix, not(target_os = "macos")))]
         {
             if self.queue_terminal_default_open_if_needed(entry) {
@@ -475,6 +506,62 @@ impl App {
         });
         self.status.clear();
         true
+    }
+
+    fn run_open_plans(&mut self, plans: Vec<crate::app::open_rules::OpenPlan>) -> Result<()> {
+        let mut opened = 0usize;
+        let mut total = 0usize;
+        let mut last_error = None;
+        let mut terminal_commands = Vec::new();
+
+        for plan in plans {
+            match plan {
+                crate::app::open_rules::OpenPlan::System { paths } => {
+                    total += paths.len();
+                    for path in &paths {
+                        match crate::fs::open_in_system(path) {
+                            Ok(()) => opened += 1,
+                            Err(error) => last_error = Some(error),
+                        }
+                    }
+                }
+                crate::app::open_rules::OpenPlan::Detached { program, args } => {
+                    total += 1;
+                    match crate::fs::detached_open_command(&program, &args) {
+                        Ok(()) => opened += 1,
+                        Err(error) => last_error = Some(format!("{program}: {error}")),
+                    }
+                }
+                crate::app::open_rules::OpenPlan::Terminal { program, args } => {
+                    total += 1;
+                    opened += 1;
+                    terminal_commands.push((program, args));
+                }
+            }
+        }
+
+        if !terminal_commands.is_empty() {
+            self.pending_terminal_task = if terminal_commands.len() == 1 {
+                let (program, args) = terminal_commands.remove(0);
+                Some(crate::app::PendingTerminalTask::Command { program, args })
+            } else {
+                Some(crate::app::PendingTerminalTask::Commands(terminal_commands))
+            };
+            self.status.clear();
+            return Ok(());
+        }
+
+        self.status = match (total, opened, last_error) {
+            (0, _, _) => String::new(),
+            (1, 1, _) => "Opened item".to_string(),
+            (_, opened, None) => format!("Opened {opened} items"),
+            (1, 0, Some(error)) => error,
+            (_, 0, Some(error)) => format!("Failed to open {total} items: {error}"),
+            (_, opened, Some(error)) => {
+                format!("Opened {opened}/{total} items; last error: {error}")
+            }
+        };
+        Ok(())
     }
 
     fn open_paths_in_system(&mut self, targets: Vec<PathBuf>) -> Result<()> {
@@ -536,6 +623,25 @@ impl App {
             .map(|entry| vec![entry.path.clone()])
             .unwrap_or_default()
     }
+
+    fn open_target_entries(&self) -> Vec<Entry> {
+        if !self.navigation.selected_paths.is_empty() {
+            return self
+                .selected_paths_sorted()
+                .into_iter()
+                .filter_map(|path| {
+                    self.navigation
+                        .entries
+                        .iter()
+                        .find(|entry| entry.path == path)
+                        .cloned()
+                        .or_else(|| entry_from_existing_path(&path))
+                })
+                .collect();
+        }
+
+        self.selected_entry().cloned().into_iter().collect()
+    }
 }
 
 fn open_status_name(path: &Path) -> String {
@@ -546,10 +652,12 @@ fn open_status_name(path: &Path) -> String {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 fn entry_from_existing_file(path: &Path) -> Option<Entry> {
+    entry_from_existing_path(path).filter(|entry| !entry.is_dir())
+}
+
+fn entry_from_existing_path(path: &Path) -> Option<Entry> {
     let name = path.file_name()?.to_string_lossy().into_owned();
-    crate::fs::entry_from_path(path.to_path_buf(), name)
-        .ok()
-        .filter(|entry| !entry.is_dir())
+    crate::fs::entry_from_path(path.to_path_buf(), name).ok()
 }
 
 #[cfg(test)]
