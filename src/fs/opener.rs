@@ -6,7 +6,11 @@ use std::{
     io,
     path::Path,
     process::{Command, Stdio},
+    time::Duration,
 };
+
+const DETACHED_COMMAND_DEADLINE: Duration = Duration::from_millis(250);
+const DETACHED_COMMAND_POLL: Duration = Duration::from_millis(10);
 
 #[cfg(test)]
 thread_local! {
@@ -179,7 +183,11 @@ pub(crate) fn detached_open(program: &str, args: &[&str], target: &Path) -> io::
         return status_spawn(&mut command);
     }
 
-    detached_spawn(&mut command)
+    detached_spawn_with_deadline(
+        &mut command,
+        DETACHED_COMMAND_DEADLINE,
+        DETACHED_COMMAND_POLL,
+    )
 }
 
 /// Spawns `program` with the given `args` detached from the terminal.
@@ -194,17 +202,53 @@ pub(crate) fn detached_open_command(program: &str, args: &[String]) -> io::Resul
         return status_spawn(&mut command);
     }
 
-    detached_spawn(&mut command)
+    detached_spawn_with_deadline(
+        &mut command,
+        DETACHED_COMMAND_DEADLINE,
+        DETACHED_COMMAND_POLL,
+    )
 }
 
-fn detached_spawn(command: &mut Command) -> io::Result<()> {
+fn detached_spawn_with_deadline(
+    command: &mut Command,
+    deadline_duration: Duration,
+    poll: Duration,
+) -> io::Result<()> {
+    use std::time::Instant;
+
+    prepare_detached_command(command);
+    let mut child = command.spawn()?;
+
+    let deadline = Instant::now() + deadline_duration;
+    while Instant::now() < deadline {
+        match child.try_wait()? {
+            Some(status) if status.success() => return Ok(()),
+            Some(status) => {
+                return Err(io::Error::other(format!("process exited with {status}")));
+            }
+            None => std::thread::sleep(poll),
+        }
+    }
+
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
+fn prepare_detached_command(command: &mut Command) {
     command.stdin(Stdio::null());
     command.stdout(Stdio::null());
     command.stderr(Stdio::null());
     #[cfg(unix)]
     command.process_group(0);
-    command.spawn()?;
-    Ok(())
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x00000008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+        command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -303,6 +347,43 @@ mod tests {
         assert_ne!(pgid, unsafe { libc::getpgrp() });
 
         fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+
+    #[test]
+    #[cfg(all(unix, not(target_os = "macos")))]
+    fn detached_open_command_reports_immediate_nonzero_exit() {
+        let mut command = Command::new("/bin/sh");
+        command.arg("-c").arg("exit 7");
+
+        let result = detached_spawn_with_deadline(
+            &mut command,
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_millis(10),
+        );
+
+        let error = result.expect_err("immediate nonzero exit should be reported");
+        assert!(
+            error.to_string().contains("process exited with"),
+            "error should report child exit status, got: {error}"
+        );
+    }
+
+    #[test]
+    #[cfg(all(unix, not(target_os = "macos")))]
+    fn detached_open_command_detaches_when_deadline_expires() {
+        let mut command = Command::new("/bin/sh");
+        command.arg("-c").arg("sleep 1");
+
+        let result = detached_spawn_with_deadline(
+            &mut command,
+            std::time::Duration::ZERO,
+            std::time::Duration::from_millis(10),
+        );
+
+        assert!(
+            result.is_ok(),
+            "deadline expiry should detach the still-running child: {result:?}"
+        );
     }
 
     #[test]

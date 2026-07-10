@@ -2,6 +2,7 @@ mod goto;
 mod keys;
 mod layout;
 mod loading;
+mod open;
 mod places;
 #[cfg(test)]
 mod tests;
@@ -14,6 +15,7 @@ pub(crate) use self::{
     keys::{Action, ChooserKeyAction, KeyBindings, KeyContext, KeyList, normalized_plain_key_char},
     layout::{LayoutConfig, PaneWeights},
     loading::config_dir,
+    open::{OpenConfig, OpenPlatform, OpenRule, OpenTargetType},
     places::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},
     ui::UiConfig,
 };
@@ -24,6 +26,7 @@ struct Config {
     places: PlacesConfig,
     layout: LayoutConfig,
     keys: KeyBindings,
+    open: OpenConfig,
 }
 
 #[derive(Deserialize, Default)]
@@ -33,6 +36,7 @@ struct ConfigFile {
     places: Option<places::PlacesConfigOverride>,
     layout: Option<layout::LayoutConfigOverride>,
     keys: Option<keys::KeysConfigOverride>,
+    open: Option<open::OpenConfigOverride>,
 }
 
 pub(crate) fn initialize() {
@@ -59,6 +63,10 @@ pub(crate) fn keys() -> &'static KeyBindings {
     &loading::active_config().keys
 }
 
+pub(crate) fn open() -> &'static OpenConfig {
+    &loading::active_config().open
+}
+
 impl Config {
     fn default_config() -> Self {
         Self {
@@ -67,6 +75,7 @@ impl Config {
             places: PlacesConfig::default(),
             layout: LayoutConfig::default(),
             keys: KeyBindings::default(),
+            open: OpenConfig::default(),
         }
     }
 
@@ -90,6 +99,9 @@ impl Config {
         }
         if let Some(keys) = parsed.keys {
             resolved.keys = KeyBindings::from_override(keys, &KeyBindings::default());
+        }
+        if let Some(open) = parsed.open {
+            resolved.open = OpenConfig::from_override(open, &resolved.open);
         }
         Ok(resolved)
     }
