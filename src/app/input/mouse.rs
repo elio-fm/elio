@@ -32,6 +32,10 @@ impl App {
             return self.handle_bulk_rename_mouse(mouse);
         }
 
+        if self.overlays.editor_rename_confirm.is_some() {
+            return self.handle_editor_rename_confirm_mouse(mouse);
+        }
+
         if self.overlays.goto.is_some() {
             return self.handle_goto_mouse(mouse);
         }

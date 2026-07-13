@@ -26,6 +26,7 @@ pub(in crate::config) struct KeysConfigOverride {
     pub(super) delete_permanently: Option<KeyConfigOverride>,
     pub(super) create: Option<KeyConfigOverride>,
     pub(super) rename: Option<KeyConfigOverride>,
+    pub(super) rename_in_editor: Option<KeyConfigOverride>,
     pub(super) restore_from_trash: Option<KeyConfigOverride>,
     pub(super) copy_path: Option<KeyConfigOverride>,
     pub(super) search_folders: Option<KeyConfigOverride>,

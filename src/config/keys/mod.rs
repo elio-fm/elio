@@ -62,7 +62,7 @@ impl KeyBindings {
             .collect()
     }
 
-    fn bindings(&self) -> [(&KeyList, Action); 46] {
+    fn bindings(&self) -> [(&KeyList, Action); 47] {
         [
             (&self.quit, Action::Quit),
             (&self.quit_without_cd, Action::QuitWithoutCd),
@@ -77,6 +77,7 @@ impl KeyBindings {
             (&self.delete_permanently, Action::DeletePermanently),
             (&self.create, Action::Create),
             (&self.rename, Action::Rename),
+            (&self.rename_in_editor, Action::RenameInEditor),
             (&self.restore_from_trash, Action::RestoreFromTrash),
             (&self.copy_path, Action::CopyPath),
             (&self.search_folders, Action::SearchFolders),

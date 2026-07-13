@@ -16,6 +16,10 @@ impl App {
         paths
     }
 
+    pub(in crate::app) fn selected_paths_in_selection_order(&self) -> Vec<PathBuf> {
+        self.navigation.selected_paths.ordered().cloned().collect()
+    }
+
     pub(in crate::app) fn current_directory_escape_for_paths(
         &self,
         paths: &[PathBuf],

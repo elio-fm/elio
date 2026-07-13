@@ -142,6 +142,7 @@
 # delete_permanently   = ["D", "shift+del"]
 # create               = "a"
 # rename               = ["r", "F2"]
+# rename_in_editor     = ["R", "shift+F2"]
 # restore_from_trash   = "r"
 # copy_path            = "c"
 # search_folders       = "f"

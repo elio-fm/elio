@@ -153,7 +153,7 @@ fn editor_tokens() -> Result<Vec<String>, String> {
     Err("$EDITOR is not set".to_string())
 }
 
-fn tokenize_command(command: &str) -> Vec<String> {
+pub(in crate::app) fn tokenize_command(command: &str) -> Vec<String> {
     let mut tokens = Vec::new();
     let mut current = String::new();
     let mut in_single_quotes = false;

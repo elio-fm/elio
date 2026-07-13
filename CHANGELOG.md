@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added default theme icons for Angular project files, CSV/TSV tables, object files, libraries, and WebAssembly modules.
 - Added Kitty 0.47+ drag-and-drop support for dropping items into elio and dragging items out, with themed drag previews.
 - Added configurable open rules for choosing preferred openers by file type, extension, and platform, including terminal apps such as `$EDITOR` without changing system defaults. ([#232])
+- Added `R` / `Shift+F2` to rename selected files in your editor ([#235]).
 
 ### Changed
 
@@ -283,6 +284,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#235]: https://github.com/elio-fm/elio/issues/235
 [#232]: https://github.com/elio-fm/elio/issues/232
 [#223]: https://github.com/elio-fm/elio/issues/223
 [#215]: https://github.com/elio-fm/elio/issues/215

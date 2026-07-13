@@ -23,6 +23,10 @@ impl Default for KeyBindings {
                 KeySpec::char('r'),
                 KeySpec::named(NamedKey::Function(2)),
             ]),
+            rename_in_editor: KeyList(vec![
+                KeySpec::char('R'),
+                KeySpec::shift_named(NamedKey::Function(2)),
+            ]),
             restore_from_trash: KeyList::one('r'),
             copy_path: KeyList::one('c'),
             search_folders: KeyList::one('f'),

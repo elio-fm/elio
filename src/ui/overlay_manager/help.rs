@@ -40,6 +40,7 @@ pub(super) fn render_help(
         keys.action(&kb.trash, "trash (delete if in trash)"),
         keys.action(&kb.delete_permanently, "delete permanently"),
         keys.action(&kb.rename, "rename (bulk if selection)"),
+        keys.action(&kb.rename_in_editor, "rename in editor"),
         keys.action_with_suffix(&kb.restore_from_trash, " (in trash)", "restore from trash"),
         keys.action(&kb.extract_archive, "extract archive"),
         keys.action(&kb.create_archive, "create archive"),
@@ -126,7 +127,7 @@ pub(super) fn render_help(
     } else {
         area.width.saturating_sub(4).clamp(44, 90)
     };
-    let popup_height = area.height.saturating_sub(3).clamp(9, 36);
+    let popup_height = area.height.saturating_sub(3).clamp(9, 37);
     let popup = helpers::centered_rect(area, popup_width, popup_height);
     state.help_panel = Some(popup);
     frame.render_widget(Clear, popup);

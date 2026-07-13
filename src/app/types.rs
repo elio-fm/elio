@@ -41,6 +41,8 @@ pub struct FrameState {
     pub trash_panel: Option<Rect>,
     pub trash_confirm_btn: Option<Rect>,
     pub trash_cancel_btn: Option<Rect>,
+    pub editor_rename_confirm_btn: Option<Rect>,
+    pub editor_rename_cancel_btn: Option<Rect>,
     pub restore_panel: Option<Rect>,
     pub restore_confirm_btn: Option<Rect>,
     pub restore_cancel_btn: Option<Rect>,

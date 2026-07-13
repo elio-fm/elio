@@ -803,7 +803,7 @@ fn foot_sixel_popup_erases_collision_and_repaints_after_close() {
     assert_eq!(collisions, vec![popup]);
     assert!(
         !erase.is_empty(),
-        "Foot Sixel should erase the popup/image collision like Yazi's Clear widget"
+        "Foot Sixel should erase the popup/image collision behind modal overlays"
     );
     assert!(
         app.static_image_overlay_displayed(),
@@ -865,7 +865,7 @@ fn windows_terminal_sixel_popup_erases_collision_and_repaints_after_close() {
     assert_eq!(collisions, vec![popup]);
     assert!(
         !erase.is_empty(),
-        "Windows Terminal Sixel should erase the popup/image collision like Yazi's Clear widget"
+        "Windows Terminal Sixel should erase the popup/image collision behind modal overlays"
     );
     assert!(
         app.static_image_overlay_displayed(),
