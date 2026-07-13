@@ -4,18 +4,13 @@ use super::super::text_edit::{
 };
 use super::super::{
     App,
-    state::{
-        BulkRenameItem, BulkRenameOverlay, DirectoryHistoryMode, DirectoryLoadCompletion,
-        PendingDirectoryLoad,
-    },
+    state::{BulkRenameItem, BulkRenameOverlay},
 };
+use super::editor_bulk_rename::confirm_bulk_rename_overlay;
 use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 impl App {
     pub(in crate::app) fn open_bulk_rename_prompt(&mut self) {
@@ -51,6 +46,7 @@ impl App {
         self.overlays.bulk_rename = Some(BulkRenameOverlay {
             items,
             new_names,
+            root: None,
             cursor_line: 0,
             cursor_col: 0,
             preferred_col: 0,
@@ -106,6 +102,18 @@ impl App {
             .as_ref()
             .and_then(|r| r.items.get(index))
             .is_some_and(|item| item.is_dir)
+    }
+
+    pub fn bulk_rename_live_path(&self, index: usize) -> PathBuf {
+        self.overlays
+            .bulk_rename
+            .as_ref()
+            .and_then(|r| {
+                r.new_names
+                    .get(index)
+                    .map(|name| r.root.as_ref().unwrap_or(&self.navigation.cwd).join(name))
+            })
+            .unwrap_or_else(|| self.navigation.cwd.clone())
     }
 
     pub fn bulk_rename_line_error(&self, index: usize) -> Option<&str> {
@@ -342,132 +350,7 @@ impl App {
     }
 
     pub(in crate::app::create) fn confirm_bulk_rename(&mut self) -> Result<()> {
-        let Some(r) = &self.overlays.bulk_rename else {
-            return Ok(());
-        };
-
-        let count = r.items.len();
-        let mut errors: Vec<Option<String>> = vec![None; count];
-        let mut first_error: Option<usize> = None;
-        let renaming_paths: std::collections::HashSet<&PathBuf> =
-            r.items.iter().map(|item| &item.path).collect();
-        let mut seen_new_paths: std::collections::HashSet<PathBuf> =
-            std::collections::HashSet::new();
-
-        for (index, (item, new_name_raw)) in r.items.iter().zip(r.new_names.iter()).enumerate() {
-            let new_name = new_name_raw.trim().to_string();
-            let err = if new_name.is_empty() {
-                Some("Name cannot be empty".to_string())
-            } else if new_name.contains('/') {
-                Some("Name cannot contain /".to_string())
-            } else {
-                let new_path = renamed_path(&item.path, &new_name);
-                if !seen_new_paths.insert(new_path.clone()) {
-                    Some(format!("\"{}\" appears more than once", new_name))
-                } else if new_path.exists() && !renaming_paths.contains(&new_path) {
-                    Some(format!("\"{}\" already exists", new_name))
-                } else {
-                    None
-                }
-            };
-            if let Some(msg) = err {
-                errors[index] = Some(msg);
-                if first_error.is_none() {
-                    first_error = Some(index);
-                }
-            }
-        }
-
-        if let Some(err_line) = first_error {
-            if let Some(r) = &mut self.overlays.bulk_rename {
-                r.line_errors = errors;
-                r.cursor_line = err_line;
-                r.cursor_col = r.cursor_col.min(r.new_names[err_line].chars().count());
-                r.preferred_col = r.cursor_col;
-            }
-            return Ok(());
-        }
-
-        let ops: Vec<(PathBuf, String, String, PathBuf)> = r
-            .items
-            .iter()
-            .zip(r.new_names.iter())
-            .map(|(item, new_name)| {
-                let new_name = new_name.trim().to_string();
-                (
-                    item.path.clone(),
-                    item.original_name.clone(),
-                    new_name.clone(),
-                    renamed_path(&item.path, &new_name),
-                )
-            })
-            .collect();
-        let changed_old_paths: Vec<PathBuf> = ops
-            .iter()
-            .filter(|(_, original_name, new_name, _)| original_name != new_name)
-            .map(|(old_path, _, _, _)| old_path.clone())
-            .collect();
-        let reload_cwd = self
-            .current_directory_escape_for_paths(&changed_old_paths)
-            .unwrap_or_else(|| self.navigation.cwd.clone());
-
-        self.overlays.bulk_rename = None;
-        self.navigation.selected_paths.clear();
-
-        let mut renamed = 0usize;
-        let mut last_new_path: Option<PathBuf> = None;
-
-        for (old_path, original_name, new_name, new_path) in &ops {
-            if *new_name == *original_name {
-                continue;
-            }
-            if let Err(error) = fs::rename(old_path, new_path) {
-                let msg = match error.kind() {
-                    std::io::ErrorKind::PermissionDenied => {
-                        format!("Permission denied renaming \"{}\"", original_name)
-                    }
-                    _ => format!("Could not rename \"{}\": {error}", original_name),
-                };
-                self.queue_directory_load(PendingDirectoryLoad {
-                    token: 0,
-                    target_cwd: reload_cwd.clone(),
-                    previous_cwd: self.navigation.cwd.clone(),
-                    previous_selected_path: None,
-                    previous_selection_name: None,
-                    reselect_path: last_new_path,
-                    history_mode: DirectoryHistoryMode::None,
-                    refresh_search: false,
-                    completion: DirectoryLoadCompletion::Status(msg),
-                })?;
-                return Ok(());
-            }
-            last_new_path = Some(new_path.clone());
-            renamed += 1;
-        }
-
-        let status = match renamed {
-            0 => "No files renamed".to_string(),
-            1 => {
-                let (_, original, new_name, _) = ops
-                    .iter()
-                    .find(|(_, original, new_name, _)| original != new_name)
-                    .expect("changed rename op should exist");
-                format!("Renamed \"{}\" → \"{}\"", original, new_name)
-            }
-            n => format!("Renamed {} items", n),
-        };
-        self.queue_directory_load(PendingDirectoryLoad {
-            token: 0,
-            target_cwd: reload_cwd,
-            previous_cwd: self.navigation.cwd.clone(),
-            previous_selected_path: None,
-            previous_selection_name: None,
-            reselect_path: last_new_path,
-            history_mode: DirectoryHistoryMode::None,
-            refresh_search: false,
-            completion: DirectoryLoadCompletion::Status(status),
-        })?;
-        Ok(())
+        confirm_bulk_rename_overlay(self)
     }
 }
 
@@ -486,10 +369,4 @@ fn path_name(path: &Path) -> String {
         .and_then(|name| name.to_str())
         .map(str::to_owned)
         .unwrap_or_else(|| path.display().to_string())
-}
-
-fn renamed_path(path: &Path, new_name: &str) -> PathBuf {
-    path.parent()
-        .map(|parent| parent.join(new_name))
-        .unwrap_or_else(|| PathBuf::from(new_name))
 }

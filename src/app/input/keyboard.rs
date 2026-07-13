@@ -106,6 +106,10 @@ impl App {
             return self.handle_bulk_rename_key(key);
         }
 
+        if self.overlays.editor_rename_confirm.is_some() {
+            return self.handle_editor_rename_confirm_key(key);
+        }
+
         if self.overlays.goto.is_some() {
             return self.handle_goto_key(key);
         }
@@ -319,6 +323,7 @@ impl App {
                     }
                 }
             }
+            Action::RenameInEditor => self.open_editor_bulk_rename()?,
             Action::RestoreFromTrash => {
                 if self.navigation.in_trash {
                     self.open_restore_prompt();

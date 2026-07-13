@@ -102,6 +102,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
         overlay_manager::render_rename_overlay(frame, area, app, state, palette);
     } else if app.bulk_rename_is_open() {
         overlay_manager::render_bulk_rename_overlay(frame, area, app, state, palette);
+    } else if app.editor_rename_confirm_is_open() {
+        overlay_manager::render_editor_rename_confirm_overlay(frame, area, app, state, palette);
     } else if app.goto_is_open() {
         overlay_manager::render_goto_overlay(frame, area, app, state, palette);
     } else if app.copy_is_open() {

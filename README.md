@@ -295,6 +295,7 @@ Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults
 | `d` / `Del` `*` | Trash; permanently delete if already in trash |
 | `D` / `Shift+Del` `*` | Delete permanently |
 | `r` / `F2` `*` | Rename / bulk rename |
+| `R` / `Shift+F2` `*` | Rename in editor |
 | `r` `*` (in Trash) | Restore from trash |
 
 ### View

@@ -210,22 +210,41 @@ pub(super) struct RenameOverlay {
     pub(super) error: Option<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct BulkRenameItem {
     pub(super) path: PathBuf,
     pub(super) original_name: String,
     pub(super) is_dir: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct BulkRenameEditorSession {
+    pub(crate) root: PathBuf,
+    pub(crate) temp_path: PathBuf,
+    pub(super) items: Vec<BulkRenameItem>,
+}
+
 pub(super) struct BulkRenameOverlay {
     pub(super) items: Vec<BulkRenameItem>,
     /// Editable new name for each item, one-to-one with `items`.
     pub(super) new_names: Vec<String>,
+    /// When set, `new_names` are paths relative to this root instead of bare
+    /// filenames relative to each item's current parent.
+    pub(super) root: Option<PathBuf>,
     pub(super) cursor_line: usize,
     pub(super) cursor_col: usize,
     /// Remembered column target for vertical motion.
     pub(super) preferred_col: usize,
     /// Per-line validation error; same length as `items`.
     pub(super) line_errors: Vec<Option<String>>,
+}
+
+pub(super) struct EditorRenameConfirmOverlay {
+    pub(super) items: Vec<BulkRenameItem>,
+    pub(super) new_names: Vec<String>,
+    pub(super) root: PathBuf,
+    pub(super) scroll: usize,
+    pub(super) confirmed: bool,
 }
 
 pub(super) struct CreateOverlay {
@@ -430,6 +449,7 @@ pub(super) struct DirectoryViewMemory {
 #[derive(Clone, Debug, Default)]
 pub(in crate::app) struct SelectedPaths {
     inner: HashSet<PathBuf>,
+    order: Vec<PathBuf>,
     ancestor_counts: HashMap<PathBuf, usize>,
 }
 
@@ -450,8 +470,13 @@ impl SelectedPaths {
         self.inner.iter()
     }
 
+    pub(in crate::app) fn ordered(&self) -> impl Iterator<Item = &PathBuf> {
+        self.order.iter()
+    }
+
     pub(in crate::app) fn clear(&mut self) {
         self.inner.clear();
+        self.order.clear();
         self.ancestor_counts.clear();
     }
 
@@ -462,6 +487,7 @@ impl SelectedPaths {
         if !self.inner.insert(path.clone()) {
             return false;
         }
+        self.order.push(path.clone());
         self.add_ancestors(&path);
         true
     }
@@ -470,6 +496,7 @@ impl SelectedPaths {
         if !self.inner.remove(path) {
             return false;
         }
+        self.order.retain(|selected| selected != path);
         self.remove_ancestors(path);
         true
     }
@@ -676,6 +703,7 @@ pub(crate) struct OverlayState {
     pub(in crate::app) create: Option<CreateOverlay>,
     pub(in crate::app) rename: Option<RenameOverlay>,
     pub(in crate::app) bulk_rename: Option<BulkRenameOverlay>,
+    pub(in crate::app) editor_rename_confirm: Option<EditorRenameConfirmOverlay>,
     pub(in crate::app) goto: Option<GoToOverlay>,
     pub(in crate::app) copy: Option<CopyOverlay>,
     pub(in crate::app) open_with: Option<OpenWithOverlay>,
@@ -746,9 +774,19 @@ pub(in crate::app) struct InputRuntime {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PendingTerminalTask {
-    Command { program: String, args: Vec<String> },
+    Command {
+        program: String,
+        args: Vec<String>,
+    },
     Commands(Vec<(String, Vec<String>)>),
-    Shell { cwd: PathBuf },
+    EditorBulkRename {
+        program: String,
+        args: Vec<String>,
+        session: BulkRenameEditorSession,
+    },
+    Shell {
+        cwd: PathBuf,
+    },
     Zoxide,
 }
 

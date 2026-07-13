@@ -16,6 +16,7 @@ pub(crate) enum Action {
     DeletePermanently,
     Create,
     Rename,
+    RenameInEditor,
     RestoreFromTrash,
     CopyPath,
     SearchFolders,
@@ -179,7 +180,9 @@ impl KeyContexts {
 impl Action {
     pub(super) fn key_contexts(self) -> KeyContexts {
         match self {
-            Self::Rename | Self::SymlinkAbsolute | Self::SymlinkRelative => KeyContexts::NORMAL,
+            Self::Rename | Self::RenameInEditor | Self::SymlinkAbsolute | Self::SymlinkRelative => {
+                KeyContexts::NORMAL
+            }
             Self::RestoreFromTrash => KeyContexts::TRASH,
             _ => KeyContexts::ALL,
         }
@@ -445,6 +448,7 @@ pub(crate) struct KeyBindings {
     pub delete_permanently: KeyList,
     pub create: KeyList,
     pub rename: KeyList,
+    pub rename_in_editor: KeyList,
     pub restore_from_trash: KeyList,
     pub copy_path: KeyList,
     pub search_folders: KeyList,

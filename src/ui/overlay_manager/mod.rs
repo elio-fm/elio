@@ -7,6 +7,7 @@ mod archive_password;
 mod bulk_rename;
 mod copy;
 mod create;
+mod editor_rename_confirm;
 mod goto;
 mod help;
 mod open_with;
@@ -92,6 +93,16 @@ pub(super) fn render_bulk_rename_overlay(
     palette: Palette,
 ) {
     bulk_rename::render_bulk_rename_overlay(frame, area, app, state, palette);
+}
+
+pub(super) fn render_editor_rename_confirm_overlay(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    state: &mut FrameState,
+    palette: Palette,
+) {
+    editor_rename_confirm::render_editor_rename_confirm_overlay(frame, area, app, state, palette);
 }
 
 pub(super) fn render_copy_overlay(

@@ -127,6 +127,13 @@ fn run_blocking_in_terminal(program: &str, args: &[String]) {
     let _ = Command::new(program).args(args).status();
 }
 
+fn run_blocking_in_terminal_result(
+    program: &str,
+    args: &[String],
+) -> std::io::Result<std::process::ExitStatus> {
+    Command::new(program).args(args).status()
+}
+
 fn refresh_after_shell(app: &mut App, cwd: &Path) {
     let cwd_label = path_display::user_facing(cwd);
     match cwd.try_exists() {
@@ -449,6 +456,21 @@ fn run_app(
                         }
                         resume_terminal(terminal, drainer, kitty_dnd)?;
                         pause_runtime_input(&input_reader, false);
+                        None
+                    }
+                    PendingTerminalTask::EditorBulkRename {
+                        program,
+                        args,
+                        session,
+                    } => {
+                        pause_runtime_input(&input_reader, true);
+                        suspend_terminal(terminal, drainer, true, kitty_dnd)?;
+                        let result = run_blocking_in_terminal_result(&program, &args);
+                        resume_terminal(terminal, drainer, kitty_dnd)?;
+                        pause_runtime_input(&input_reader, false);
+                        if let Err(error) = app.finish_editor_bulk_rename(session, result) {
+                            app.report_runtime_error("Editor rename failed", &error);
+                        }
                         None
                     }
                     PendingTerminalTask::Shell { cwd } => {
