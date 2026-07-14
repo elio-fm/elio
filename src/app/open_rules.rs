@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf};
+use std::{env, ffi::OsString, path::PathBuf};
 
 use crate::{
     config::{self, OpenPlatform, OpenRule, OpenTargetType},
@@ -121,12 +121,15 @@ fn entry_is_text_like(entry: &Entry, facts: file_info::FileFacts) -> bool {
 }
 
 fn command_template(command: &str) -> Result<CommandTemplate, String> {
+    command_template_with_env(command, env::var_os)
+}
+
+fn command_template_with_env(
+    command: &str,
+    env_var: impl FnMut(&'static str) -> Option<OsString>,
+) -> Result<CommandTemplate, String> {
     let command = command.trim();
-    let tokens = if command == "$EDITOR" {
-        editor_tokens()?
-    } else {
-        tokenize_command(command)
-    };
+    let tokens = command_tokens(command, env_var)?;
     let mut tokens = tokens.into_iter();
     let Some(program) = tokens.next() else {
         return Err("Open command is empty".to_string());
@@ -140,17 +143,40 @@ fn command_template(command: &str) -> Result<CommandTemplate, String> {
     })
 }
 
-fn editor_tokens() -> Result<Vec<String>, String> {
-    for key in ["VISUAL", "EDITOR"] {
-        let Some(value) = env::var_os(key).and_then(|value| value.into_string().ok()) else {
-            continue;
-        };
-        let tokens = tokenize_command(&value);
-        if !tokens.is_empty() {
-            return Ok(tokens);
-        }
+fn command_tokens(
+    command: &str,
+    mut env_var: impl FnMut(&'static str) -> Option<OsString>,
+) -> Result<Vec<String>, String> {
+    let mut tokens = tokenize_command(command);
+    let Some(first) = tokens.first().map(String::as_str) else {
+        return Ok(tokens);
+    };
+    let Some(env_key) = editor_env_key(first) else {
+        return Ok(tokens);
+    };
+
+    let mut expanded = editor_env_tokens(env_key, env_var(env_key))?;
+    expanded.extend(tokens.drain(1..));
+    Ok(expanded)
+}
+
+fn editor_env_key(token: &str) -> Option<&'static str> {
+    match token {
+        "$EDITOR" => Some("EDITOR"),
+        "$VISUAL" => Some("VISUAL"),
+        _ => None,
     }
-    Err("$EDITOR is not set".to_string())
+}
+
+fn editor_env_tokens(key: &'static str, value: Option<OsString>) -> Result<Vec<String>, String> {
+    let Some(value) = value.and_then(|value| value.into_string().ok()) else {
+        return Err(format!("${key} is not set"));
+    };
+    let tokens = tokenize_command(&value);
+    if tokens.is_empty() {
+        return Err(format!("${key} is not set"));
+    }
+    Ok(tokens)
 }
 
 pub(in crate::app) fn tokenize_command(command: &str) -> Vec<String> {
@@ -361,6 +387,43 @@ mod tests {
             expand_args(&["--file={path}".to_string()], &paths),
             vec!["--file=a.md", "--file=b.md"]
         );
+    }
+
+    #[test]
+    fn editor_command_uses_editor_even_when_visual_is_set() {
+        let template = command_template_with_env("$EDITOR --cmd {path}", |key| match key {
+            "EDITOR" => Some(OsString::from("nvim --clean")),
+            "VISUAL" => Some(OsString::from("hx")),
+            _ => None,
+        })
+        .expect("$EDITOR should expand");
+
+        assert_eq!(template.program, "nvim");
+        assert_eq!(template.args, vec!["--clean", "--cmd", "{path}"]);
+    }
+
+    #[test]
+    fn visual_command_uses_visual_even_when_editor_is_set() {
+        let template = command_template_with_env("$VISUAL", |key| match key {
+            "EDITOR" => Some(OsString::from("nvim")),
+            "VISUAL" => Some(OsString::from("code --wait")),
+            _ => None,
+        })
+        .expect("$VISUAL should expand");
+
+        assert_eq!(template.program, "code");
+        assert_eq!(template.args, vec!["--wait"]);
+    }
+
+    #[test]
+    fn editor_command_does_not_fall_back_to_visual() {
+        let error = command_template_with_env("$EDITOR", |key| match key {
+            "VISUAL" => Some(OsString::from("hx")),
+            _ => None,
+        })
+        .expect_err("$EDITOR should be required");
+
+        assert_eq!(error, "$EDITOR is not set");
     }
 
     #[test]
