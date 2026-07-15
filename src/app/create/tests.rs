@@ -1,9 +1,8 @@
+#[cfg(unix)]
+use super::super::state::{BulkRenameEditorSession, PendingTerminalTask};
 use super::super::{
     App,
-    state::{
-        BulkRenameEditorSession, BulkRenameItem, BulkRenameOverlay, DirectoryLoadCompletion,
-        PendingTerminalTask,
-    },
+    state::{BulkRenameItem, BulkRenameOverlay, DirectoryLoadCompletion},
 };
 use super::rename;
 #[cfg(unix)]

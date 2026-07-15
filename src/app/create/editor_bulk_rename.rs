@@ -1,16 +1,19 @@
+#[cfg(unix)]
+use super::super::state::{BulkRenameEditorSession, EditorRenameConfirmOverlay};
 use super::super::{
     App,
-    state::{
-        BulkRenameEditorSession, BulkRenameItem, DirectoryHistoryMode, DirectoryLoadCompletion,
-        EditorRenameConfirmOverlay, PendingDirectoryLoad,
-    },
+    state::{BulkRenameItem, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad},
 };
 use crate::fs::rect_contains;
-use anyhow::{Context, Result, bail};
+#[cfg(unix)]
+use anyhow::Context;
+use anyhow::{Result, bail};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+#[cfg(unix)]
+use std::env;
 use std::{
     collections::HashSet,
-    env, fs,
+    fs,
     path::{Component, Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -72,6 +75,7 @@ impl App {
         Ok(())
     }
 
+    #[cfg(unix)]
     pub(crate) fn finish_editor_bulk_rename(
         &mut self,
         session: BulkRenameEditorSession,
@@ -157,6 +161,7 @@ impl App {
         result
     }
 
+    #[cfg(unix)]
     fn editor_bulk_rename_targets(&self) -> Vec<PathBuf> {
         if !self.navigation.selected_paths.is_empty() {
             return self.selected_paths_in_selection_order();
@@ -166,6 +171,7 @@ impl App {
             .unwrap_or_default()
     }
 
+    #[cfg(unix)]
     fn close_transient_overlays(&mut self) {
         self.overlays.help = false;
         self.overlays.search = None;
@@ -678,6 +684,7 @@ fn display_label(item: &BulkRenameItem, root: Option<&Path>) -> String {
         .into_owned()
 }
 
+#[cfg(unix)]
 fn bulk_rename_item_from_path(path: PathBuf) -> BulkRenameItem {
     let original_name = path_name(&path);
     let is_dir = path.is_dir();
@@ -701,6 +708,7 @@ fn renamed_path(path: &Path, new_name: &str) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(new_name))
 }
 
+#[cfg(any(test, unix))]
 fn common_root(paths: &[PathBuf]) -> PathBuf {
     let mut components: Vec<_> = paths
         .first()
@@ -732,6 +740,7 @@ fn common_root(paths: &[PathBuf]) -> PathBuf {
     }
 }
 
+#[cfg(unix)]
 fn create_temp_file(rows: &[String]) -> Result<PathBuf> {
     let base = env::temp_dir();
     for attempt in 0..1000u32 {
@@ -761,6 +770,7 @@ fn create_temp_file(rows: &[String]) -> Result<PathBuf> {
     bail!("Could not create temporary rename file")
 }
 
+#[cfg(unix)]
 fn editor_command() -> (String, Vec<String>) {
     for key in ["VISUAL", "EDITOR"] {
         if let Some(value) = env::var_os(key).and_then(|value| value.into_string().ok()) {
@@ -773,6 +783,7 @@ fn editor_command() -> (String, Vec<String>) {
     ("vi".to_string(), Vec::new())
 }
 
+#[cfg(unix)]
 fn split_program_args(tokens: Vec<String>) -> Option<(String, Vec<String>)> {
     let mut tokens = tokens.into_iter();
     let program = tokens.next()?;

@@ -218,6 +218,7 @@ pub(super) struct BulkRenameItem {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(unix)]
 pub(crate) struct BulkRenameEditorSession {
     pub(crate) root: PathBuf,
     pub(crate) temp_path: PathBuf,
@@ -470,6 +471,7 @@ impl SelectedPaths {
         self.inner.iter()
     }
 
+    #[cfg(unix)]
     pub(in crate::app) fn ordered(&self) -> impl Iterator<Item = &PathBuf> {
         self.order.iter()
     }
@@ -779,6 +781,7 @@ pub(crate) enum PendingTerminalTask {
         args: Vec<String>,
     },
     Commands(Vec<(String, Vec<String>)>),
+    #[cfg(unix)]
     EditorBulkRename {
         program: String,
         args: Vec<String>,

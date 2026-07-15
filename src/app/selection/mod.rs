@@ -16,6 +16,7 @@ impl App {
         paths
     }
 
+    #[cfg(unix)]
     pub(in crate::app) fn selected_paths_in_selection_order(&self) -> Vec<PathBuf> {
         self.navigation.selected_paths.ordered().cloned().collect()
     }

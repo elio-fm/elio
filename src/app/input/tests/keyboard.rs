@@ -2,8 +2,8 @@ use super::super::*;
 #[cfg(all(unix, not(target_os = "macos")))]
 use super::helpers::read_open_capture;
 use super::helpers::{
-    OpenInSystemCaptureGuard, temp_path, wait_for_background_preview, wait_for_directory_load,
-    write_epub_fixture,
+    OpenInSystemCaptureGuard, cleanup_app_temp_root, temp_path, wait_for_background_preview,
+    wait_for_directory_load, write_epub_fixture,
 };
 use crate::config::Action;
 use std::{
@@ -1119,7 +1119,7 @@ fn tab_and_shift_tab_cycle_sidebar_locations_and_skip_section_rows() {
     wait_for_directory_load(&mut app);
     assert_eq!(app.navigation.cwd, downloads);
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[cfg(unix)]
@@ -1193,7 +1193,7 @@ fn tab_and_shift_tab_match_symlinked_sidebar_locations_by_identity() {
     wait_for_directory_load(&mut app);
     assert_eq!(app.navigation.cwd, target_identity);
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]

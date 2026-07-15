@@ -458,6 +458,7 @@ fn run_app(
                         pause_runtime_input(&input_reader, false);
                         None
                     }
+                    #[cfg(unix)]
                     PendingTerminalTask::EditorBulkRename {
                         program,
                         args,
