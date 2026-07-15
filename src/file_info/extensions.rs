@@ -1,5 +1,5 @@
 use super::types::{disk_image_file_facts, plain, source_only};
-use super::{DiskImageKind, DocumentFormat, FileFacts, PreviewSpec};
+use super::{CodeBackend, DiskImageKind, DocumentFormat, FileFacts, PreviewSpec};
 use crate::{core::FileClass, preview::code::registry};
 
 fn preview_for_extension(ext: &str) -> PreviewSpec {
@@ -119,6 +119,11 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             }),
             preview: preview_for_extension(ext),
         },
+        "cocci" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("Coccinelle semantic patch"),
+            preview: PreviewSpec::code("diff", CodeBackend::Syntect, None),
+        },
         "tex" | "ltx" | "bib" | "sty" | "cls" => FileFacts {
             builtin_class: FileClass::Document,
             specific_type_label: Some(match ext {
@@ -206,7 +211,19 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         "sha256" => plain(FileClass::Data, Some("SHA-256 checksum")),
         "sha512" => plain(FileClass::Data, Some("SHA-512 checksum")),
         "md5" => plain(FileClass::Data, Some("MD5 checksum")),
-        "srt" => plain(FileClass::Document, Some("SubRip subtitles")),
+        "srt" | "vtt" | "ass" | "ssa" | "ttml" | "sbv" | "smi" => plain(
+            FileClass::Document,
+            Some(match ext {
+                "srt" => "SubRip subtitles",
+                "vtt" => "WebVTT subtitles",
+                "ass" => "ASS subtitles",
+                "ssa" => "SubStation Alpha subtitles",
+                "ttml" => "TTML subtitles",
+                "sbv" => "SBV subtitles",
+                "smi" => "SAMI subtitles",
+                _ => unreachable!("subtitle extension arm only matches known subtitle extensions"),
+            }),
+        ),
         "p12" | "pfx" => plain(FileClass::Config, Some("PKCS#12 certificate")),
         "pem" => plain(FileClass::Config, Some("PEM certificate")),
         "crt" | "cer" => plain(FileClass::Config, Some("Certificate")),

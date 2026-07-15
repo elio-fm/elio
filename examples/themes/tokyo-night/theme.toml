@@ -303,7 +303,7 @@ icon = "󰉋"
 color = "#7aa2f7"
 
 [directories."config"]
-icon = "󰒓"
+icon = "󱁿"
 color = "#7aa2f7"
 
 [directories."docs"]
@@ -605,8 +605,38 @@ color = "#9399b2"
 
 [extensions.srt]
 class = "document"
-icon = "󰈙"
-color = "#9ece6a"
+icon = "󰨖"
+color = "#9d7cd8"
+
+[extensions.vtt]
+class = "document"
+icon = "󰨖"
+color = "#9d7cd8"
+
+[extensions.ass]
+class = "document"
+icon = "󰨖"
+color = "#9d7cd8"
+
+[extensions.ssa]
+class = "document"
+icon = "󰨖"
+color = "#9d7cd8"
+
+[extensions.ttml]
+class = "document"
+icon = "󰨖"
+color = "#9d7cd8"
+
+[extensions.sbv]
+class = "document"
+icon = "󰨖"
+color = "#9d7cd8"
+
+[extensions.smi]
+class = "document"
+icon = "󰨖"
+color = "#9d7cd8"
 
 [files."Cargo.lock"]
 class = "data"
@@ -683,7 +713,17 @@ class = "document"
 icon = "󰭘"
 color = "#9d7cd8"
 
+[files."Kyuafile"]
+class = "config"
+icon = ""
+color = "#7aa2f7"
+
 [files.".gitignore"]
+class = "config"
+icon = "󰊢"
+color = "#bb9af7"
+
+[files.".gitkeep"]
 class = "config"
 icon = "󰊢"
 color = "#bb9af7"

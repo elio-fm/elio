@@ -1,7 +1,7 @@
 use super::{
     entry_class_cache,
     rules::normalize_key,
-    types::{EntryClassCacheKey, ResolvedAppearance, Theme},
+    types::{EntryClassCacheKey, ResolvedAppearance, RuleOverride, Theme},
 };
 use crate::{
     app::{Entry, EntryKind, FileClass},
@@ -34,14 +34,34 @@ impl Theme {
             .and_then(|ext| ext.to_str())
             .unwrap_or_default()
             .to_ascii_lowercase();
+        let template_name = (kind == EntryKind::File)
+            .then(|| normalized_name.strip_suffix(".in"))
+            .flatten()
+            .filter(|name| !name.is_empty());
+        let template_ext = template_name
+            .and_then(|name| Path::new(name).extension())
+            .and_then(|ext| ext.to_str())
+            .map(str::to_ascii_lowercase);
 
         let exact_rule = match kind {
             EntryKind::Directory => self.directories.get(&normalized_name),
-            EntryKind::File => self.files.get(&normalized_name),
+            EntryKind::File => self.files.get(&normalized_name).or_else(|| {
+                template_name.and_then(|name| {
+                    self.files
+                        .get(name)
+                        .filter(|rule| is_template_rule_candidate(rule))
+                })
+            }),
         };
         let ext_rule = (kind == EntryKind::File)
             .then(|| self.extensions.get(&ext))
-            .flatten();
+            .flatten()
+            .or_else(|| {
+                template_ext
+                    .as_deref()
+                    .and_then(|ext| self.extensions.get(ext))
+                    .filter(|rule| is_template_rule_candidate(rule))
+            });
         let prefer_builtin_symlink = matches!(
             builtin_class,
             FileClass::SymlinkDirectory | FileClass::BrokenSymlink
@@ -96,6 +116,15 @@ impl Theme {
             color,
         }
     }
+}
+
+fn is_template_rule_candidate(rule: &RuleOverride) -> bool {
+    rule.class.is_none_or(|class| {
+        matches!(
+            class,
+            FileClass::Code | FileClass::Config | FileClass::Document | FileClass::Data
+        )
+    })
 }
 
 pub(super) fn builtin_classify_path(path: &Path, kind: EntryKind) -> FileClass {

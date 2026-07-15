@@ -173,7 +173,7 @@ pub(super) const LANGUAGES: &[RegistryEntry] = &[
     entry(
         language("lua", "Lua", CodeBackend::Syntect, None),
         &["lua"],
-        &[],
+        &["kyuafile"],
         &[],
         &["lua"],
         &["lua"],

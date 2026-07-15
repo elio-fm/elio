@@ -594,6 +594,16 @@ fn diff_preview_uses_curated_syntect_support() {
         }),
         "expected diff preview to contain at least one highlighted token",
     );
+    assert_eq!(
+        span_color(&preview.lines[6], "fn new() {}"),
+        Some(code_palette.string),
+        "expected added lines to use the themed string color",
+    );
+    assert_eq!(
+        span_color(&preview.lines[5], "fn old() {}"),
+        Some(code_palette.invalid),
+        "expected deleted lines to use the themed invalid color",
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

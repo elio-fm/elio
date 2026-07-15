@@ -303,7 +303,7 @@ icon = "󰉋"
 color = "#cf9c67"
 
 [directories."config"]
-icon = "󰒓"
+icon = "󱁿"
 color = "#cf9c67"
 
 [directories."docs"]
@@ -414,6 +414,41 @@ color = "#c4a27a"
 class = "document"
 icon = "󰈙"
 color = "#cd766d"
+
+[extensions.srt]
+class = "document"
+icon = "󰨖"
+color = "#af89bf"
+
+[extensions.vtt]
+class = "document"
+icon = "󰨖"
+color = "#af89bf"
+
+[extensions.ass]
+class = "document"
+icon = "󰨖"
+color = "#af89bf"
+
+[extensions.ssa]
+class = "document"
+icon = "󰨖"
+color = "#af89bf"
+
+[extensions.ttml]
+class = "document"
+icon = "󰨖"
+color = "#af89bf"
+
+[extensions.sbv]
+class = "document"
+icon = "󰨖"
+color = "#af89bf"
+
+[extensions.smi]
+class = "document"
+icon = "󰨖"
+color = "#af89bf"
 
 [extensions.epub]
 class = "document"

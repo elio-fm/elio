@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a show/hide control to encrypted archive password prompts.
 - Added YAML frontmatter rendering to Markdown previews and recognized Quarto `.qmd` files as Markdown. ([#223])
 - Added syntax-highlighted previews for Astro `.astro` files.
+- Added file type labels and icons for subtitle files and Coccinelle semantic patches, including diff-style previews for `.cocci` files.
 - Added Jupyter notebook JSON previews and notebook icons.
 - Added default theme icons for Angular project files, CSV/TSV tables, object files, libraries, and WebAssembly modules.
 - Added Kitty 0.47+ drag-and-drop support for dropping items into elio and dragging items out, with themed drag previews.
@@ -24,11 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Made create and bulk rename overlays show more rows before scrolling, adapt better on short terminals, and use consistent scrollbar styling.
-- Dimmed help overlay key separators and removed the bottom close hint.
+- Dimmed help overlay key separators (`/`) and removed the bottom close hint.
+- Improved default and example theme icons for `.gitkeep`, Makefile variants, `Kyuafile`, `config` directories, subtitle files, and diff/patch previews.
 
 ### Fixed
 
 - Fixed Fuzzy Find result icons for nested files that use full-name rules, such as `LICENSE.md`.
+- Fixed `.in` templates such as `Makefile.in`, `Kyuafile.in`, and shell completion templates being shown as plain files.
+- Fixed extensionless shell scripts with SPDX headers being shown as license files.
 
 ## [1.10.0] - 2026-06-30
 

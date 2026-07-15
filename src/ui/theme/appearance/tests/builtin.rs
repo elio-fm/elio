@@ -86,6 +86,7 @@ fn built_in_default_theme_asset_matches_runtime_default_theme() {
         ("Cargo.toml", EntryKind::File),
         ("Cargo.lock", EntryKind::File),
         ("README.md", EntryKind::File),
+        (".gitkeep", EntryKind::File),
         ("main.rs", EntryKind::File),
     ] {
         let built_in = built_in_asset.resolve(Path::new(path), kind);
@@ -132,6 +133,21 @@ fn default_theme_assigns_specific_icons_for_common_dev_paths() {
     assert_eq!(notebook.icon, "");
     assert_eq!(notebook.color, rgb(255, 184, 107));
 
+    for path in [
+        "movie.srt",
+        "movie.vtt",
+        "movie.ass",
+        "movie.ssa",
+        "movie.ttml",
+        "movie.sbv",
+        "movie.smi",
+    ] {
+        let subtitles = theme.resolve(Path::new(path), EntryKind::File);
+        assert_eq!(subtitles.class, FileClass::Document, "{path}");
+        assert_eq!(subtitles.icon, "󰨖", "{path}");
+        assert_eq!(subtitles.color, rgb(111, 102, 255), "{path}");
+    }
+
     for path in ["main.o", "main.obj"] {
         let object = theme.resolve(Path::new(path), EntryKind::File);
         assert_eq!(object.class, FileClass::File, "{path}");
@@ -159,6 +175,46 @@ fn default_theme_assigns_specific_icons_for_common_dev_paths() {
 
     let package = theme.resolve(Path::new("package.json"), EntryKind::File);
     assert_eq!(package.icon, "󰏗");
+
+    for path in [
+        "Makefile",
+        "GNUmakefile",
+        "BSDmakefile",
+        "Makefile.in",
+        "GNUmakefile.in",
+        "BSDmakefile.in",
+    ] {
+        let makefile = theme.resolve(Path::new(path), EntryKind::File);
+        assert_eq!(makefile.class, FileClass::Config, "{path}");
+        assert_eq!(makefile.icon, "", "{path}");
+        assert_eq!(makefile.color, rgb(255, 155, 97), "{path}");
+    }
+
+    let kyua_template = theme.resolve(Path::new("Kyuafile.in"), EntryKind::File);
+    assert_eq!(kyua_template.class, FileClass::Config);
+    assert_eq!(kyua_template.icon, "");
+    assert_eq!(kyua_template.color, rgb(122, 174, 255));
+
+    let bash_template = theme.resolve(Path::new("_pkg.bash.in"), EntryKind::File);
+    assert_eq!(bash_template.class, FileClass::Code);
+    assert_eq!(bash_template.icon, "");
+    assert_eq!(bash_template.color, rgb(214, 222, 240));
+
+    let unknown_template = theme.resolve(Path::new("1.in"), EntryKind::File);
+    assert_eq!(unknown_template.class, FileClass::File);
+
+    let binary_name_template = theme.resolve(Path::new("logo.png.in"), EntryKind::File);
+    assert_eq!(binary_name_template.class, FileClass::File);
+
+    let gitkeep = theme.resolve(Path::new(".gitkeep"), EntryKind::File);
+    assert_eq!(gitkeep.class, FileClass::Config);
+    assert_eq!(gitkeep.icon, "󰊢");
+    assert_eq!(gitkeep.color, rgb(215, 142, 255));
+
+    let cocci = theme.resolve(Path::new("andand.cocci"), EntryKind::File);
+    assert_eq!(cocci.class, FileClass::Code);
+    assert_eq!(cocci.icon, "");
+    assert_eq!(cocci.color, rgb(140, 184, 255));
 
     for path in ["angular.json", "ng-package.json"] {
         let angular = theme.resolve(Path::new(path), EntryKind::File);
@@ -189,6 +245,11 @@ fn default_theme_assigns_specific_icons_for_common_dev_paths() {
     assert_eq!(bin.class, FileClass::Directory);
     assert_eq!(bin.icon, "󱁿");
     assert_eq!(bin.color, rgb(91, 168, 255));
+
+    let config = theme.resolve(Path::new("config"), EntryKind::Directory);
+    assert_eq!(config.class, FileClass::Directory);
+    assert_eq!(config.icon, "󱁿");
+    assert_eq!(config.color, rgb(91, 168, 255));
 
     let lib = theme.resolve(Path::new("lib"), EntryKind::Directory);
     assert_eq!(lib.class, FileClass::Directory);

@@ -102,6 +102,25 @@ fn shell_files_and_dotfiles_get_targeted_preview_support() {
 }
 
 #[test]
+fn kyua_files_and_templates_use_lua_preview_support() {
+    let kyua = inspect_path(Path::new("Kyuafile"), EntryKind::File);
+    let kyua_template = inspect_path(Path::new("Kyuafile.in"), EntryKind::File);
+
+    assert_eq!(kyua.builtin_class, FileClass::Config);
+    assert_eq!(kyua.specific_type_label, Some("Kyua test config"));
+    assert_eq!(kyua.preview.language_hint, Some("lua"));
+    assert_code_spec(kyua.preview, Some("lua"), CodeBackend::Syntect);
+
+    assert_eq!(kyua_template.builtin_class, FileClass::Config);
+    assert_eq!(
+        kyua_template.specific_type_label,
+        Some("Kyua test config template")
+    );
+    assert_eq!(kyua_template.preview.language_hint, Some("lua"));
+    assert_code_spec(kyua_template.preview, Some("lua"), CodeBackend::Syntect);
+}
+
+#[test]
 fn shebang_and_exact_name_detection_cover_new_languages() {
     let (perl_root, perl_path) = write_temp_file(
         "extensionless-perl-script",

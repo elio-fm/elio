@@ -86,6 +86,41 @@ color = "ansi-green"
 [classes.file]
 color = "ansi-white"
 
+[extensions.srt]
+class = "document"
+icon = "󰨖"
+color = "ansi-magenta"
+
+[extensions.vtt]
+class = "document"
+icon = "󰨖"
+color = "ansi-magenta"
+
+[extensions.ass]
+class = "document"
+icon = "󰨖"
+color = "ansi-magenta"
+
+[extensions.ssa]
+class = "document"
+icon = "󰨖"
+color = "ansi-magenta"
+
+[extensions.ttml]
+class = "document"
+icon = "󰨖"
+color = "ansi-magenta"
+
+[extensions.sbv]
+class = "document"
+icon = "󰨖"
+color = "ansi-magenta"
+
+[extensions.smi]
+class = "document"
+icon = "󰨖"
+color = "ansi-magenta"
+
 [directories."node_modules"]
 icon = "󰏗"
 color = "ansi-blue"
@@ -171,7 +206,7 @@ icon = "󰉋"
 color = "ansi-blue"
 
 [directories."config"]
-icon = "󰒓"
+icon = "󱁿"
 color = "ansi-blue"
 
 [directories."docs"]

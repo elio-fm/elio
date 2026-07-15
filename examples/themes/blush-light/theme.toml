@@ -122,6 +122,41 @@ class = "document"
 icon = "󰈙"
 color = "#d96c7a"
 
+[extensions.srt]
+class = "document"
+icon = "󰨖"
+color = "#a08dd1"
+
+[extensions.vtt]
+class = "document"
+icon = "󰨖"
+color = "#a08dd1"
+
+[extensions.ass]
+class = "document"
+icon = "󰨖"
+color = "#a08dd1"
+
+[extensions.ssa]
+class = "document"
+icon = "󰨖"
+color = "#a08dd1"
+
+[extensions.ttml]
+class = "document"
+icon = "󰨖"
+color = "#a08dd1"
+
+[extensions.sbv]
+class = "document"
+icon = "󰨖"
+color = "#a08dd1"
+
+[extensions.smi]
+class = "document"
+icon = "󰨖"
+color = "#a08dd1"
+
 [extensions.epub]
 class = "document"
 icon = "󱗖"
@@ -407,7 +442,17 @@ class = "document"
 icon = ""
 color = "#bb907b"
 
+[files."Kyuafile"]
+class = "config"
+icon = ""
+color = "#9f82c6"
+
 [files.".gitignore"]
+class = "config"
+icon = "󰊢"
+color = "#b78fcd"
+
+[files.".gitkeep"]
 class = "config"
 icon = "󰊢"
 color = "#b78fcd"
@@ -855,7 +900,7 @@ icon = "󰉋"
 color = "#d46b93"
 
 [directories."config"]
-icon = "󰒓"
+icon = "󱁿"
 color = "#d46b93"
 
 [directories."docs"]

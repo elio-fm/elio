@@ -410,6 +410,27 @@ fn sh_tokens_map_to_semantic_roles() {
 }
 
 #[test]
+fn diff_tokens_map_to_theme_palette_roles() {
+    let tokens = token_scopes(
+        "diff",
+        "diff --git a/file b/file\n@@ -1 +1 @@\n-old\n+new\n",
+    );
+
+    let role_for = |needle: &str| {
+        let (_token, scopes) = tokens
+            .iter()
+            .find(|(token, _scopes)| token.contains(needle))
+            .unwrap_or_else(|| panic!("expected token containing {needle}"));
+        let stack = ScopeStack::from_str(scopes).expect("scope stack should parse");
+        semantic_role_for_token(needle, stack.as_slice())
+    };
+
+    assert_eq!(role_for("@@"), SemanticRole::Comment);
+    assert_eq!(role_for("old"), SemanticRole::Invalid);
+    assert_eq!(role_for("new"), SemanticRole::String);
+}
+
+#[test]
 fn bash_tokens_map_to_semantic_roles() {
     let palette = theme::code_preview_palette();
     let sample = "NAME=elio\nif [ -n \"$HOME\" ]; then\n  echo \"$NAME\"\nfi # done\n";

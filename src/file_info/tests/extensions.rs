@@ -51,6 +51,25 @@ fn supported_video_extensions_keep_specific_video_labels() {
 }
 
 #[test]
+fn subtitle_extensions_keep_specific_subtitle_labels() {
+    let cases = [
+        ("movie.srt", "SubRip subtitles"),
+        ("movie.vtt", "WebVTT subtitles"),
+        ("movie.ass", "ASS subtitles"),
+        ("movie.ssa", "SubStation Alpha subtitles"),
+        ("movie.ttml", "TTML subtitles"),
+        ("movie.sbv", "SBV subtitles"),
+        ("movie.smi", "SAMI subtitles"),
+    ];
+
+    for (path, label) in cases {
+        let facts = inspect_path(Path::new(path), EntryKind::File);
+        assert_eq!(facts.builtin_class, FileClass::Document, "{path}");
+        assert_eq!(facts.specific_type_label, Some(label), "{path}");
+    }
+}
+
+#[test]
 fn font_files_keep_specific_labels() {
     let cases = [
         ("JetBrainsMono.ttf", "TrueType font"),
@@ -175,6 +194,7 @@ fn nix_and_cmake_files_use_code_preview_support() {
 #[test]
 fn make_and_c_files_get_targeted_preview_support() {
     let makefile = inspect_path(Path::new("Makefile"), EntryKind::File);
+    let makefile_template = inspect_path(Path::new("Makefile.in"), EntryKind::File);
     let c_source = inspect_path(Path::new("main.c"), EntryKind::File);
     let c_header = inspect_path(Path::new("app.h"), EntryKind::File);
 
@@ -182,6 +202,18 @@ fn make_and_c_files_get_targeted_preview_support() {
     assert_eq!(makefile.specific_type_label, Some("Makefile"));
     assert_eq!(makefile.preview.language_hint, Some("make"));
     assert_code_spec(makefile.preview, Some("make"), CodeBackend::Syntect);
+
+    assert_eq!(makefile_template.builtin_class, FileClass::Config);
+    assert_eq!(
+        makefile_template.specific_type_label,
+        Some("Makefile template")
+    );
+    assert_eq!(makefile_template.preview.language_hint, Some("make"));
+    assert_code_spec(
+        makefile_template.preview,
+        Some("make"),
+        CodeBackend::Syntect,
+    );
 
     assert_eq!(c_source.builtin_class, FileClass::Code);
     assert_eq!(c_source.specific_type_label, Some("C source file"));
@@ -214,6 +246,7 @@ fn js_like_files_use_syntax_highlighting() {
 fn curated_generic_languages_use_syntect_preview_support() {
     let sql = inspect_path(Path::new("schema.sql"), EntryKind::File);
     let diff = inspect_path(Path::new("changes.diff"), EntryKind::File);
+    let cocci = inspect_path(Path::new("andand.cocci"), EntryKind::File);
     let dockerfile = inspect_path(Path::new("Dockerfile"), EntryKind::File);
     let groovy = inspect_path(Path::new("build.gradle"), EntryKind::File);
     let scala = inspect_path(Path::new("build.sbt"), EntryKind::File);
@@ -249,6 +282,10 @@ fn curated_generic_languages_use_syntect_preview_support() {
     assert_eq!(diff.builtin_class, FileClass::Code);
     assert_eq!(diff.specific_type_label, Some("Diff file"));
     assert_code_spec(diff.preview, Some("diff"), CodeBackend::Syntect);
+
+    assert_eq!(cocci.builtin_class, FileClass::Code);
+    assert_eq!(cocci.specific_type_label, Some("Coccinelle semantic patch"));
+    assert_code_spec(cocci.preview, Some("diff"), CodeBackend::Syntect);
 
     assert_eq!(dockerfile.builtin_class, FileClass::Config);
     assert_eq!(dockerfile.specific_type_label, Some("Docker build file"));

@@ -33,6 +33,10 @@ struct ScopeSelectors {
     macro_name: [Scope; 4],
     invalid: [Scope; 2],
     variable_readwrite: [Scope; 1],
+    diff_inserted: [Scope; 1],
+    diff_deleted: [Scope; 1],
+    diff_changed: [Scope; 1],
+    diff_header: [Scope; 2],
     shell_source: [Scope; 1],
     shell_function_call: [Scope; 1],
     shell_function_arguments: [Scope; 1],
@@ -41,7 +45,15 @@ struct ScopeSelectors {
 pub(super) fn semantic_role_for_token(text: &str, scope_stack: &[Scope]) -> SemanticRole {
     let selectors = scope_selectors();
 
-    if scope_stack_matches(scope_stack, &selectors.invalid) {
+    if scope_stack_matches(scope_stack, &selectors.diff_inserted) {
+        SemanticRole::String
+    } else if scope_stack_matches(scope_stack, &selectors.diff_deleted) {
+        SemanticRole::Invalid
+    } else if scope_stack_matches(scope_stack, &selectors.diff_changed) {
+        SemanticRole::Keyword
+    } else if scope_stack_matches(scope_stack, &selectors.diff_header) {
+        SemanticRole::Comment
+    } else if scope_stack_matches(scope_stack, &selectors.invalid) {
         SemanticRole::Invalid
     } else if scope_stack_matches(scope_stack, &selectors.comment) {
         SemanticRole::Comment
@@ -152,6 +164,10 @@ fn scope_selectors() -> &'static ScopeSelectors {
             ],
             invalid: [scope("invalid"), scope("invalid.deprecated")],
             variable_readwrite: [scope("variable.other.readwrite")],
+            diff_inserted: [scope("markup.inserted")],
+            diff_deleted: [scope("markup.deleted")],
+            diff_changed: [scope("markup.changed")],
+            diff_header: [scope("meta.diff"), scope("meta.diff.header")],
             shell_source: [scope("source.shell")],
             shell_function_call: [scope("meta.function-call")],
             shell_function_arguments: [scope("meta.function-call.arguments")],

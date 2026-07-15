@@ -360,6 +360,36 @@ fn resolve_browser_entry_preserves_non_canonical_spdx_license_appearance() {
 }
 
 #[test]
+fn resolve_browser_entry_keeps_spdx_shebang_scripts_as_code() {
+    let (root, path) = write_temp_file(
+        "browser-spdx-shell-script",
+        "configure",
+        "#!/bin/sh\n\n# SPDX-License-Identifier: ISC\n#\n# configure - POSIX shell build configuration framework\n\nset -e\n",
+    );
+
+    let metadata = fs::metadata(&path).expect("metadata should exist");
+    let entry = Entry {
+        path: path.clone(),
+        name: "configure".to_string(),
+        name_key: "configure".to_string(),
+        kind: EntryKind::File,
+        symlink: None,
+        size: metadata.len(),
+        modified: metadata.modified().ok(),
+        readonly: false,
+    };
+
+    let browser = resolve_browser_entry(&entry);
+    let preview = resolve_entry(&entry);
+
+    assert_eq!(browser.class, FileClass::Code);
+    assert_eq!(preview.class, FileClass::Code);
+    assert_ne!(browser.icon, "󰿃");
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn resolve_browser_entry_preserves_standalone_license_text_without_canonical_filename() {
     let (root, path) = write_temp_file(
         "browser-standalone-license",
@@ -430,10 +460,21 @@ fn type_labels_cover_supported_special_files() {
         specific_type_label(Path::new("server.log"), EntryKind::File),
         Some("Log file")
     );
-    assert_eq!(
-        specific_type_label(Path::new("movie.srt"), EntryKind::File),
-        Some("SubRip subtitles")
-    );
+    for (path, label) in [
+        ("movie.srt", "SubRip subtitles"),
+        ("movie.vtt", "WebVTT subtitles"),
+        ("movie.ass", "ASS subtitles"),
+        ("movie.ssa", "SubStation Alpha subtitles"),
+        ("movie.ttml", "TTML subtitles"),
+        ("movie.sbv", "SBV subtitles"),
+        ("movie.smi", "SAMI subtitles"),
+    ] {
+        assert_eq!(
+            specific_type_label(Path::new(path), EntryKind::File),
+            Some(label),
+            "{path}"
+        );
+    }
     assert_eq!(
         specific_type_label(Path::new("bindings.keys"), EntryKind::File),
         Some("Keys file")
@@ -602,10 +643,21 @@ fn builtin_classification_covers_new_special_file_types() {
         builtin_classify_path(Path::new("server.log"), EntryKind::File),
         FileClass::Document
     );
-    assert_eq!(
-        builtin_classify_path(Path::new("movie.srt"), EntryKind::File),
-        FileClass::Document
-    );
+    for path in [
+        "movie.srt",
+        "movie.vtt",
+        "movie.ass",
+        "movie.ssa",
+        "movie.ttml",
+        "movie.sbv",
+        "movie.smi",
+    ] {
+        assert_eq!(
+            builtin_classify_path(Path::new(path), EntryKind::File),
+            FileClass::Document,
+            "{path}"
+        );
+    }
     assert_eq!(
         builtin_classify_path(Path::new("bindings.keys"), EntryKind::File),
         FileClass::Config

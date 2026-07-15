@@ -1,5 +1,5 @@
 use super::{
-    FileFacts, PreviewSpec,
+    FileFacts, PreviewKind, PreviewSpec,
     archives::inspect_archive_name,
     extensions::inspect_extension,
     license::{sniff_browser_license_file_type, sniff_license_file_type},
@@ -51,6 +51,8 @@ fn inspect_path_with_name(path: &Path, display_name: Option<&str>, kind: EntryKi
         inspect_path_with_name_base(path, display_name, kind);
     if ext.is_empty() {
         facts = sniff_extensionless_file_type(path).unwrap_or(facts);
+    } else if ext == "in" {
+        facts = sniff_template_file_type(path).unwrap_or(facts);
     } else if matches!(ext.as_str(), "conf" | "cfg") {
         facts = sniff_config_file_type(path).unwrap_or(facts);
     }
@@ -62,7 +64,13 @@ fn inspect_path_with_name_fast(
     display_name: Option<&str>,
     kind: EntryKind,
 ) -> FileFacts {
-    let (_name_for_type, name, ext, facts) = inspect_path_with_name_base(path, display_name, kind);
+    let (_name_for_type, name, ext, mut facts) =
+        inspect_path_with_name_base(path, display_name, kind);
+    if ext.is_empty() {
+        facts = sniff_extensionless_file_type(path).unwrap_or(facts);
+    } else if ext == "in" {
+        facts = sniff_template_file_type(path).unwrap_or(facts);
+    }
     sniff_browser_license_file_type(path, &name, &ext, facts).unwrap_or(facts)
 }
 
@@ -98,6 +106,9 @@ fn inspect_path_with_name_base(
     }
     if let Some(facts) = inspect_archive_name(&name) {
         return (name_for_type, name, String::new(), facts);
+    }
+    if let Some(facts) = inspect_template_name(&name) {
+        return (name_for_type, name, "in".to_string(), facts);
     }
 
     let ext = Path::new(&name_for_type)
@@ -190,6 +201,47 @@ fn normalize_key(input: &str) -> String {
     input.trim().to_ascii_lowercase()
 }
 
+fn inspect_template_name(name: &str) -> Option<FileFacts> {
+    let inner = name.strip_suffix(".in")?;
+    if inner.is_empty() {
+        return None;
+    }
+
+    if let Some(facts) = inspect_exact_name(inner) {
+        return Some(template_facts(inner, facts));
+    }
+
+    let inner_ext = Path::new(inner)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(normalize_key)
+        .unwrap_or_default();
+    if inner_ext.is_empty() {
+        return None;
+    }
+
+    let facts = inspect_extension(&inner_ext);
+    is_template_inner_candidate(facts).then(|| template_facts(&inner_ext, facts))
+}
+
+fn is_template_inner_candidate(facts: FileFacts) -> bool {
+    facts.preview.language_hint.is_some()
+        || facts.preview.structured_format.is_some()
+        || matches!(facts.preview.kind, PreviewKind::Markdown | PreviewKind::Csv)
+}
+
+fn template_facts(inner_key: &str, mut facts: FileFacts) -> FileFacts {
+    facts.specific_type_label = match inner_key {
+        "bash" => Some("Bash template"),
+        "zsh" => Some("Zsh template"),
+        "sh" => Some("Shell template"),
+        "makefile" | "gnumakefile" | "bsdmakefile" => Some("Makefile template"),
+        "kyuafile" => Some("Kyua test config template"),
+        _ => facts.specific_type_label,
+    };
+    facts
+}
+
 fn sniff_extensionless_file_type(path: &Path) -> Option<FileFacts> {
     if !is_regular_file(path) {
         return None;
@@ -200,6 +252,18 @@ fn sniff_extensionless_file_type(path: &Path) -> Option<FileFacts> {
     let bytes_read = file.read(&mut buffer).ok()?;
     let prefix = &buffer[..bytes_read];
     sniff_image_type(prefix).or_else(|| sniff_shebang_script_type(prefix))
+}
+
+fn sniff_template_file_type(path: &Path) -> Option<FileFacts> {
+    if !is_regular_file(path) {
+        return None;
+    }
+
+    let mut file = File::open(path).ok()?;
+    let mut buffer = [0_u8; 512];
+    let bytes_read = file.read(&mut buffer).ok()?;
+    let prefix = &buffer[..bytes_read];
+    sniff_shebang_template_type(prefix).or_else(|| sniff_zsh_completion_template_type(prefix))
 }
 
 fn is_regular_file(path: &Path) -> bool {
@@ -267,6 +331,43 @@ fn sniff_shebang_script_type(buffer: &[u8]) -> Option<FileFacts> {
         specific_type_label: Some(specific_type_label),
         preview: language.preview_spec(),
     })
+}
+
+fn sniff_shebang_template_type(buffer: &[u8]) -> Option<FileFacts> {
+    let text = std::str::from_utf8(buffer).ok()?;
+    let first_line = text.lines().next()?.trim_start_matches('\u{feff}');
+    let interpreter = shebang_interpreter_name(first_line)?;
+    let language = registry::language_for_shebang(interpreter)?;
+
+    Some(FileFacts {
+        builtin_class: FileClass::Code,
+        specific_type_label: template_label_for_language(language.canonical_id),
+        preview: language.preview_spec(),
+    })
+}
+
+fn sniff_zsh_completion_template_type(buffer: &[u8]) -> Option<FileFacts> {
+    let text = std::str::from_utf8(buffer).ok()?;
+    let first_line = text.lines().next()?.trim_start_matches('\u{feff}').trim();
+    if !first_line.starts_with("#compdef") {
+        return None;
+    }
+    let language = registry::language_for_code_syntax("zsh")?;
+
+    Some(FileFacts {
+        builtin_class: FileClass::Code,
+        specific_type_label: Some("Zsh completion template"),
+        preview: language.preview_spec(),
+    })
+}
+
+fn template_label_for_language(language_id: &str) -> Option<&'static str> {
+    match language_id {
+        "bash" => Some("Bash template"),
+        "zsh" => Some("Zsh template"),
+        "sh" => Some("Shell template"),
+        _ => None,
+    }
 }
 
 fn shebang_interpreter_name(first_line: &str) -> Option<&str> {

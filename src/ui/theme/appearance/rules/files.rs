@@ -278,6 +278,14 @@ pub(super) fn default_file_rules() -> HashMap<String, RuleOverride> {
             },
         ),
         (
+            normalize_key(".gitkeep"),
+            RuleOverride {
+                class: Some(FileClass::Config),
+                icon: Some("󰊢".to_string()),
+                color: Some(rgb(232, 153, 88)),
+            },
+        ),
+        (
             normalize_key(".env"),
             RuleOverride {
                 class: Some(FileClass::Config),
@@ -291,6 +299,30 @@ pub(super) fn default_file_rules() -> HashMap<String, RuleOverride> {
                 class: Some(FileClass::Config),
                 icon: Some("".to_string()),
                 color: Some(rgb(102, 187, 255)),
+            },
+        ),
+        (
+            normalize_key("GNUmakefile"),
+            RuleOverride {
+                class: Some(FileClass::Config),
+                icon: Some("".to_string()),
+                color: Some(rgb(255, 155, 97)),
+            },
+        ),
+        (
+            normalize_key("BSDmakefile"),
+            RuleOverride {
+                class: Some(FileClass::Config),
+                icon: Some("".to_string()),
+                color: Some(rgb(255, 155, 97)),
+            },
+        ),
+        (
+            normalize_key("Kyuafile"),
+            RuleOverride {
+                class: Some(FileClass::Config),
+                icon: Some("".to_string()),
+                color: Some(rgb(122, 174, 255)),
             },
         ),
     ])

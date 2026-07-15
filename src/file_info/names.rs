@@ -19,6 +19,11 @@ pub(super) fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: Some("Makefile"),
             preview: preview_for_exact_name(name),
         }),
+        "kyuafile" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Kyua test config"),
+            preview: preview_for_exact_name(name),
+        }),
         "cmakelists.txt" => Some(FileFacts {
             builtin_class: FileClass::Config,
             specific_type_label: Some("CMake project"),

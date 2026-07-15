@@ -1,5 +1,6 @@
 use super::super::rules::rgb;
 use super::*;
+use ratatui::style::Color;
 
 const ALTERNATE_EXAMPLE_THEME_NAMES: &[&str] = &[
     "default-light",
@@ -100,6 +101,36 @@ fn alternate_example_themes_style_symlinks_like_their_base_kinds() {
     for name in ALTERNATE_EXAMPLE_THEME_NAMES {
         let theme = load_alternate_example_theme(name);
         assert_symlink_directory_matches_folder_color(&theme, name);
+    }
+}
+
+#[test]
+fn alternate_example_themes_use_theme_native_subtitle_colors() {
+    for (name, expected_color) in [
+        ("default-light", rgb(0x71, 0x68, 0xd9)),
+        ("blush-light", rgb(0xa0, 0x8d, 0xd1)),
+        ("amber-dusk", rgb(0xaf, 0x89, 0xbf)),
+        ("catppuccin-mocha", rgb(0xb4, 0xbe, 0xfe)),
+        ("tokyo-night", rgb(0x9d, 0x7c, 0xd8)),
+        ("terminal-ansi", Color::Magenta),
+    ] {
+        let theme = load_alternate_example_theme(name);
+
+        for path in [
+            "movie.srt",
+            "movie.vtt",
+            "movie.ass",
+            "movie.ssa",
+            "movie.ttml",
+            "movie.sbv",
+            "movie.smi",
+        ] {
+            let subtitles = theme.resolve(Path::new(path), EntryKind::File);
+
+            assert_eq!(subtitles.class, FileClass::Document, "{name}: {path}");
+            assert_eq!(subtitles.icon, "󰨖", "{name}: {path}");
+            assert_eq!(subtitles.color, expected_color, "{name}: {path}");
+        }
     }
 }
 

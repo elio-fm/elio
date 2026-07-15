@@ -265,8 +265,38 @@ color = "#8c97a8"
 
 [extensions.srt]
 class = "document"
-icon = "󰈙"
-color = "#8ddf6d"
+icon = "󰨖"
+color = "#6f66ff"
+
+[extensions.vtt]
+class = "document"
+icon = "󰨖"
+color = "#6f66ff"
+
+[extensions.ass]
+class = "document"
+icon = "󰨖"
+color = "#6f66ff"
+
+[extensions.ssa]
+class = "document"
+icon = "󰨖"
+color = "#6f66ff"
+
+[extensions.ttml]
+class = "document"
+icon = "󰨖"
+color = "#6f66ff"
+
+[extensions.sbv]
+class = "document"
+icon = "󰨖"
+color = "#6f66ff"
+
+[extensions.smi]
+class = "document"
+icon = "󰨖"
+color = "#6f66ff"
 
 [extensions.keys]
 class = "config"
@@ -441,6 +471,11 @@ color = "#79b8ff"
 [extensions.cpp]
 class = "code"
 icon = ""
+color = "#8cb8ff"
+
+[extensions.cocci]
+class = "code"
+icon = ""
 color = "#8cb8ff"
 
 [extensions.h]
@@ -708,6 +743,11 @@ class = "config"
 icon = "󰊢"
 color = "#d78eff"
 
+[files.".gitkeep"]
+class = "config"
+icon = "󰊢"
+color = "#d78eff"
+
 [files.".env"]
 class = "config"
 icon = "󰒓"
@@ -922,6 +962,21 @@ color = "#d6def0"
 class = "config"
 icon = ""
 color = "#ff9b61"
+
+[files."GNUmakefile"]
+class = "config"
+icon = ""
+color = "#ff9b61"
+
+[files."BSDmakefile"]
+class = "config"
+icon = ""
+color = "#ff9b61"
+
+[files."Kyuafile"]
+class = "config"
+icon = ""
+color = "#7aaeff"
 
 [files."PKGBUILD"]
 class = "config"
@@ -1280,7 +1335,7 @@ icon = "󰉋"
 color = "#5ba8ff"
 
 [directories."config"]
-icon = "󰒓"
+icon = "󱁿"
 color = "#5ba8ff"
 
 [directories."docs"]

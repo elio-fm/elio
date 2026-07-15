@@ -46,6 +46,14 @@ pub(super) fn default_extension_rules() -> HashMap<String, RuleOverride> {
             },
         ),
         (
+            "cocci".to_string(),
+            RuleOverride {
+                class: Some(FileClass::Code),
+                icon: Some("".to_string()),
+                color: Some(rgb(140, 184, 255)),
+            },
+        ),
+        (
             "hcl".to_string(),
             RuleOverride {
                 class: Some(FileClass::Config),
@@ -642,6 +650,12 @@ pub(super) fn default_extension_rules() -> HashMap<String, RuleOverride> {
         ("md5".to_string(), rule_class(FileClass::Data)),
         ("log".to_string(), rule_class(FileClass::Document)),
         ("srt".to_string(), rule_class(FileClass::Document)),
+        ("vtt".to_string(), rule_class(FileClass::Document)),
+        ("ass".to_string(), rule_class(FileClass::Document)),
+        ("ssa".to_string(), rule_class(FileClass::Document)),
+        ("ttml".to_string(), rule_class(FileClass::Document)),
+        ("sbv".to_string(), rule_class(FileClass::Document)),
+        ("smi".to_string(), rule_class(FileClass::Document)),
         ("keys".to_string(), rule_class(FileClass::Config)),
         ("p12".to_string(), rule_class(FileClass::Config)),
         ("pfx".to_string(), rule_class(FileClass::Config)),

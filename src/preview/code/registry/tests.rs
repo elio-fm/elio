@@ -117,6 +117,10 @@ fn exact_name_lookup_handles_lockfiles_and_env_variants() {
         Some("just")
     );
     assert_eq!(
+        language_for_exact_name("Kyuafile").map(|language| language.canonical_id),
+        Some("lua")
+    );
+    assert_eq!(
         language_for_exact_name("deps.edn").map(|language| language.canonical_id),
         Some("clojure")
     );
