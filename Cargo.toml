@@ -1,6 +1,6 @@
 [package]
 name = "elio"
-version = "1.11.0"
+version = "1.11.1"
 edition = "2024"
 rust-version = "1.95"
 description = "Snappy, batteries-included terminal file manager with rich previews, inline images, bulk actions, and trash support."
@@ -29,7 +29,7 @@ quick-xml = "0.40"
 ratatui = { version = "0.30", default-features = false, features = ["crossterm", "crossterm_0_29"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-syntect = { version = "5.2", default-features = false, features = ["parsing", "regex-onig"] }
+syntect = { version = "5.3", default-features = false, features = ["parsing", "regex-fancy"] }
 tar = "0.4"
 yaml_serde = "0.10"
 toml = "1.1"
@@ -47,7 +47,7 @@ sevenz-rust2 = { version = "0.21.1", default-features = false, features = ["aes2
 sevenz-rust2 = { version = "0.21.1", default-features = false, features = ["aes256", "compress"] }
 
 [build-dependencies]
-syntect = { version = "5.2", default-features = false, features = ["default-syntaxes", "yaml-load", "regex-onig"] }
+syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "yaml-load", "regex-fancy"] }
 
 [profile.release]
 strip = true

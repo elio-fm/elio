@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-07-18
+
+### Changed
+
+- Switched syntax highlighting to syntect's pure-Rust regex backend, removing the native Oniguruma dependency.
+
 ## [1.11.0] - 2026-07-18
 
 ### Added
@@ -279,7 +285,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Trash and restore support for safer file management workflows.
 - Optional external-tool integrations such as Poppler, ffmpeg, ffprobe, resvg, and 7-Zip for richer previews and metadata.
 
-[Unreleased]: https://github.com/elio-fm/elio/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/elio-fm/elio/compare/v1.11.1...HEAD
+[1.11.1]: https://github.com/elio-fm/elio/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/elio-fm/elio/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/elio-fm/elio/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/elio-fm/elio/compare/v1.8.0...v1.9.0

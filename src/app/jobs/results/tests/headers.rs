@@ -226,16 +226,11 @@ fn narrow_code_header_prefers_compact_subtype_and_drops_low_priority_notes() {
 fn byte_truncated_code_header_upgrades_to_exact_total_lines_after_background_count() {
     let root = temp_path("byte-truncated-code-header");
     fs::create_dir_all(&root).expect("failed to create temp root");
-    let source = root.join("main.rs");
-    // Lines are ~67 chars: fits 800 within 64 KiB (line cap hits first),
+    let source = root.join("settings.ini");
+    // Lines are ~49 chars: fits 800 within 64 KiB (line cap hits first),
     // but 1500 lines exceed 64 KiB (file is byte-truncated overall).
     let contents = (1..=1_500)
-        .map(|index| {
-            format!(
-                "fn line_{index}() {{ println!(\"{}\"); }}",
-                "word ".repeat(8)
-            )
-        })
+        .map(|index| format!("key_{index}={}", "word ".repeat(8)))
         .collect::<Vec<_>>()
         .join("\n");
     fs::write(&source, contents).expect("failed to write source");
@@ -247,7 +242,7 @@ fn byte_truncated_code_header_upgrades_to_exact_total_lines_after_background_cou
         8,
         40,
         &format!(
-            "Rust • {} / 1,500 lines shown",
+            "INI config • {} / 1,500 lines shown",
             default_code_preview_line_limit()
         ),
     );

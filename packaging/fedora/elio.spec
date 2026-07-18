@@ -1,5 +1,5 @@
 %bcond_with check
-%global fallback_version 1.11.0
+%global fallback_version 1.11.1
 %global fallback_release 1
 
 Name:           elio
@@ -53,6 +53,9 @@ desktop-file-validate packaging/linux/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Sat Jul 18 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.11.1-1
+- Switch syntax highlighting to the pure-Rust regex backend and remove the native Oniguruma dependency
+
 * Sat Jul 18 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.11.0-1
 - Add archive creation for zip, 7z, and tar variants with password prompts
 - Add Kitty drag-and-drop, configurable open rules, and editor-based rename
