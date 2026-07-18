@@ -127,6 +127,7 @@ fn run_blocking_in_terminal(program: &str, args: &[String]) {
     let _ = Command::new(program).args(args).status();
 }
 
+#[cfg(unix)]
 fn run_blocking_in_terminal_result(
     program: &str,
     args: &[String],

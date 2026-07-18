@@ -161,7 +161,7 @@ fn blush_light_example_theme_parses_as_user_theme_and_applies_custom_icon_and_co
 fn default_light_example_theme_parses_as_user_theme_and_preserves_default_icon_mappings() {
     let theme = load_alternate_example_theme("default-light");
 
-    assert_eq!(theme.palette.bg, rgb(0xef, 0xf2, 0xf5));
+    assert_eq!(theme.palette.bg, rgb(0xf5, 0xf9, 0xff));
     assert_eq!(theme.preview.code.keyword, rgb(0x7a, 0xae, 0xff));
     assert_eq!(theme.preview.code.function, rgb(0x46, 0x9f, 0xc3));
     assert_eq!(theme.preview.code.string, rgb(0x4d, 0x92, 0x79));
