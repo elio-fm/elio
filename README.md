@@ -228,7 +228,7 @@ elio reads configuration from:
 | Platform | Config file |
 |---|---|
 | Linux / BSD | `~/.config/elio/config.toml` or `$XDG_CONFIG_HOME/elio/config.toml` |
-| macOS | `~/Library/Application Support/elio/config.toml` |
+| macOS | `~/.config/elio/config.toml` or `~/Library/Application Support/elio/config.toml` |
 | Windows | `%APPDATA%\elio\config.toml` |
 
 See [`examples/config.toml`](examples/config.toml) for an annotated example, or the configuration docs:
@@ -243,7 +243,7 @@ elio themes are TOML files layered on top of the built-in defaults, so you only 
 | Platform | Theme file |
 |---|---|
 | Linux / BSD | `~/.config/elio/theme.toml` or `$XDG_CONFIG_HOME/elio/theme.toml` |
-| macOS | `~/Library/Application Support/elio/theme.toml` |
+| macOS | `~/.config/elio/theme.toml` or `~/Library/Application Support/elio/theme.toml` |
 | Windows | `%APPDATA%\elio\theme.toml` |
 
 See [`assets/themes/default/theme.toml`](assets/themes/default/theme.toml) for the full default theme and [`examples/themes/`](examples/themes/) for ready-made themes.

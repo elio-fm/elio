@@ -234,14 +234,13 @@ fn downloads_destination(app: &App) -> Option<PathBuf> {
         .filter(|path| path.exists())
 }
 
-/// Returns the platform config home — one level above elio's own config dir.
+/// Returns the platform config home.
 ///
 /// - Linux / BSD: `~/.config` (or `$XDG_CONFIG_HOME`)
 /// - macOS: `~/Library/Application Support`
 /// - Windows: `%APPDATA%`
 fn config_directory() -> Option<PathBuf> {
-    let dir = crate::config::config_dir()?;
-    dir.parent().map(PathBuf::from)
+    dirs::config_dir()
 }
 
 fn trash_destination(app: &App) -> Option<PathBuf> {

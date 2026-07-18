@@ -18,6 +18,19 @@ pub(crate) fn config_dir() -> Option<PathBuf> {
         return Some(PathBuf::from(config_home).join("elio"));
     }
 
+    #[cfg(target_os = "macos")]
+    {
+        // Prefer XDG-style config on macOS only when it contains Elio config
+        // files, avoiding empty ~/.config/elio directories shadowing the native
+        // Application Support location.
+        if let Some(home) = dirs::home_dir() {
+            let xdg_dir = home.join(".config/elio");
+            if xdg_dir.join("config.toml").is_file() || xdg_dir.join("theme.toml").is_file() {
+                return Some(xdg_dir);
+            }
+        }
+    }
+
     // dirs::config_dir() returns:
     //   Linux/BSD : $HOME/.config
     //   macOS     : $HOME/Library/Application Support
