@@ -347,12 +347,16 @@ fn build_osc52_set_clipboard_sequence(text: &str) -> String {
 }
 
 fn terminal_supports_osc52_clipboard() -> bool {
-    #[cfg(test)]
-    if env::var_os("ELIO_TEST_OSC52_CAPTURE").is_some() {
+    if env::var_os("ELIO_CLIPBOARD_OSC52").is_some() {
         return true;
     }
 
-    if env::var_os("ELIO_CLIPBOARD_OSC52").is_some() {
+    if env::var_os("TMUX").is_some() && !tmux_accepts_application_osc52() {
+        return false;
+    }
+
+    #[cfg(test)]
+    if env::var_os("ELIO_TEST_OSC52_CAPTURE").is_some() {
         return true;
     }
 
@@ -378,6 +382,21 @@ fn terminal_supports_osc52_clipboard() -> bool {
         || env::var_os("ALACRITTY_SOCKET").is_some()
         || env::var_os("VTE_VERSION").is_some()
         || env::var_os("WT_SESSION").is_some()
+}
+
+fn tmux_accepts_application_osc52() -> bool {
+    #[cfg(test)]
+    if let Some(value) = env::var_os("ELIO_TEST_TMUX_SET_CLIPBOARD") {
+        return value.to_string_lossy().trim().eq_ignore_ascii_case("on");
+    }
+
+    Command::new("tmux")
+        .args(["show-options", "-gqv", "set-clipboard"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("on"))
 }
 
 fn run_clipboard_command(program: &str, args: &[String], text: &str) -> Result<()> {

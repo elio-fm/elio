@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed Fuzzy Find result icons for nested files that use full-name rules, such as `LICENSE.md`.
 - Fixed `.in` templates such as `Makefile.in`, `Kyuafile.in`, and shell completion templates being shown as plain files.
 - Fixed extensionless shell scripts with SPDX headers being shown as license files.
+- Fixed Copy to clipboard inside tmux when tmux blocks OSC52 clipboard escape sequences.
 
 ## [1.10.0] - 2026-06-30
 

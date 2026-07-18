@@ -71,7 +71,9 @@ impl ClipboardEnvGuard {
         const VARS: &[&str] = &[
             "ELIO_TEST_CLIPBOARD_TOOL",
             "ELIO_TEST_OSC52_CAPTURE",
+            "ELIO_TEST_TMUX_SET_CLIPBOARD",
             "ELIO_CLIPBOARD_OSC52",
+            "TMUX",
             "TERM",
             "TERM_PROGRAM",
             "KITTY_WINDOW_ID",
@@ -1085,6 +1087,48 @@ fn copy_overlay_shortcut_uses_osc52_override_for_unknown_terminals() {
         !app.copy_is_open(),
         "successful copy should close the overlay"
     );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_overlay_skips_osc52_in_tmux_when_tmux_rejects_application_clipboard() {
+    let _lock = clipboard_env_lock();
+    let _env = ClipboardEnvGuard::isolate();
+    let root = temp_path("copy-overlay-tmux-external");
+    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
+    let file = root.join("docs/report final.md");
+    let capture = root.join("clipboard.txt");
+    let osc52_capture = root.join("osc52.txt");
+    fs::write(&file, "notes").expect("failed to write test file");
+    let tool = install_fake_clipboard_tool(&root, &capture);
+
+    unsafe {
+        env::set_var("ELIO_TEST_CLIPBOARD_TOOL", &tool);
+        env::set_var("ELIO_TEST_OSC52_CAPTURE", &osc52_capture);
+        env::set_var("ELIO_TEST_TMUX_SET_CLIPBOARD", "external");
+        env::set_var("TMUX", "/tmp/tmux-test,1,0");
+        env::set_var("TERM", "xterm-kitty");
+        env::set_var("KITTY_WINDOW_ID", "1");
+    }
+
+    let mut app = App::new_at(root.join("docs")).expect("failed to create app");
+    app.open_copy_overlay();
+    app.handle_copy_key(crossterm::event::KeyEvent::from(
+        crossterm::event::KeyCode::Char('p'),
+    ))
+    .expect("copy shortcut should succeed");
+
+    assert!(
+        !osc52_capture.exists(),
+        "tmux set-clipboard=external should prevent application OSC52 writes"
+    );
+    assert_eq!(
+        fs::read_to_string(&capture).expect("fake clipboard tool should capture text"),
+        file.display().to_string()
+    );
+    assert_eq!(app.status, "Copied file path");
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
