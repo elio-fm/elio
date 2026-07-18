@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Made create and bulk rename overlays show more rows before scrolling, adapt better on short terminals, and use consistent scrollbar styling.
 - Dimmed help overlay key separators (`/`) and removed the bottom close hint.
 - Improved default and example theme icons for `.gitkeep`, Makefile variants, `Kyuafile`, `config` directories, subtitle files, and diff/patch previews.
+- Improved Blush Light and Default Light focus contrast and refreshed the bundled theme screenshots.
 - Support `~/.config/elio` for config and theme files on macOS. ([#240])
 
 ### Fixed
