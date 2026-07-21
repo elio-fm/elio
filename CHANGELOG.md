@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed 32-bit builds by avoiding `usize` overflow in compact directory count formatting.
+
 ## [1.11.1] - 2026-07-18
 
 ### Changed
