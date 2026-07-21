@@ -381,16 +381,17 @@ fn format_compact_directory_count(count: usize, width: usize) -> String {
 }
 
 fn format_compact_directory_quantity(count: usize, width: usize) -> String {
+    let count = count as u64;
     let exact = count.to_string();
     if helpers::display_width(&exact) <= width {
         return exact;
     }
 
     for (divisor, suffix) in [
-        (1_000_000_000_000usize, "T"),
-        (1_000_000_000usize, "B"),
-        (1_000_000usize, "M"),
-        (1_000usize, "K"),
+        (1_000_000_000_000u64, "T"),
+        (1_000_000_000u64, "B"),
+        (1_000_000u64, "M"),
+        (1_000u64, "K"),
     ] {
         if count < divisor {
             continue;
