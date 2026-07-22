@@ -1,5 +1,5 @@
 %bcond_with check
-%global fallback_version 1.11.1
+%global fallback_version 1.11.2
 %global fallback_release 1
 
 Name:           elio
@@ -53,6 +53,9 @@ desktop-file-validate packaging/linux/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Wed Jul 22 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.11.2-1
+- Fix 32-bit builds by avoiding overflow in compact directory count formatting
+
 * Sat Jul 18 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.11.1-1
 - Switch syntax highlighting to the pure-Rust regex backend and remove the native Oniguruma dependency
 

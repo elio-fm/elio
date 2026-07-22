@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.2] - 2026-07-22
+
 ### Fixed
 
 - Fixed 32-bit builds by avoiding `usize` overflow in compact directory count formatting.
@@ -289,7 +291,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Trash and restore support for safer file management workflows.
 - Optional external-tool integrations such as Poppler, ffmpeg, ffprobe, resvg, and 7-Zip for richer previews and metadata.
 
-[Unreleased]: https://github.com/elio-fm/elio/compare/v1.11.1...HEAD
+[Unreleased]: https://github.com/elio-fm/elio/compare/v1.11.2...HEAD
+[1.11.2]: https://github.com/elio-fm/elio/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/elio-fm/elio/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/elio-fm/elio/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/elio-fm/elio/compare/v1.9.0...v1.10.0
