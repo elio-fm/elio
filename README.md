@@ -83,15 +83,6 @@ cargo install elio
 > [!TIP]
 > Recommended: use a Nerd Font in your terminal so icons display correctly.
 
-<details>
-<summary><strong>Running From Source</strong></summary>
-
-```bash
-cargo run --release
-```
-
-</details>
-
 ---
 
 ## Example Themes
@@ -147,15 +138,13 @@ Useful environment variables:
 
 ## Preview Coverage
 
-elio previews many file types directly in the Preview pane:
+elio previews many file types:
 
 - Text, source code, Markdown, logs, and structured data such as JSON, YAML, TOML, CSV/TSV, and SQLite
 - Documents such as PDFs, ebooks, Office files, OpenDocument files, and Apple Pages
 - Images, audio, and video metadata, with inline images, covers, and thumbnails when supported
-- Folders, archives, comic archives, torrents, ISO images, and other disk-image-style containers
-- Binary files with useful metadata when no richer preview is available
-
-Some richer previews require optional system tools such as Poppler, FFmpeg, resvg, 7-Zip, unar, or FontForge.
+- Folders, archives, comic archives, torrents, ISO images, and other container-style files
+- Fonts, binary files, and other metadata-focused previews
 
 See the preview docs:
 https://elio-fm.github.io/docs/previews/
@@ -164,47 +153,23 @@ https://elio-fm.github.io/docs/previews/
 
 ## Optional Preview Tools
 
-elio works out of the box, but a few external tools enable richer previews for specific file types:
+elio works out of the box. Optional tools unlock richer previews:
 
-- `poppler` for PDF previews
+- `poppler` for PDFs
 - `ffmpeg` / `ffprobe` for media metadata and thumbnails
 - `resvg` for SVG previews
-- `7z` / `unar` for archive previews
-- `fontforge` for font previews
+- 7-Zip for more archive types, comic archives, and RAR support
 
-See the full optional tools list and package names in the docs:
+See the optional tools docs:
 https://elio-fm.github.io/docs/optional-tools/
 
 ---
 
 ## Using elio over SSH
 
-elio works well over SSH for navigation, file operations, text/code previews, and terminal-based workflows.
+elio works over SSH. For the best experience, use a supported terminal and install optional tools on the remote host.
 
-Rich visual previews depend on the remote host and the local terminal:
-
-- Text and code previews work normally.
-- Images, PDF pages, video thumbnails, album art, SVG previews, and archive extras need terminal image support plus optional preview tools installed on the remote host.
-- Terminal apps opened through `Open With` run inside the SSH session.
-- System openers such as `Enter`, `o`, `open`, `gio`, `xdg-open`, or `cmd /c start` use the remote host's opener stack. From an SSH session, they may open on the remote host, fail, or do nothing useful.
-
----
-
-## Workflow
-
-elio supports common file-manager actions directly from the keyboard:
-
-- `Enter` opens folders or selected files with the system default application.
-- `O` opens files through the Open With flow when supported, including terminal apps.
-- `c` copies names, paths, or directory paths using OSC52 or the platform clipboard.
-- `g` opens quick jumps for common locations such as Home, Downloads, config, and Trash.
-- `d` moves files to Trash; `D` deletes permanently; in the Trash view, `d` also deletes permanently and `r` restores.
-- `f` searches folders, while `Ctrl+F` searches files in the current tree.
-- `z` jumps through zoxide history when `zoxide` is installed.
-- `!` opens a shell in the current folder and returns to elio when the shell exits.
-
-Platform details vary for clipboard tools, trash backends, file openers, and shell selection. See the workflow docs:
-https://elio-fm.github.io/docs/workflow/
+Opening files with terminal apps works normally inside SSH sessions. Desktop apps may open files on the remote host or do nothing useful.
 
 ---
 
@@ -258,9 +223,10 @@ https://elio-fm.github.io/docs/themes/
 ---
 
 <details>
-<summary><strong>Controls</strong></summary>
+<summary><strong>Controls</strong> — press <code>?</code> in elio to see current bindings, including overrides</summary>
 
-Keys marked with `*` are configurable in `[keys]` in `config.toml`; the defaults are shown here. Configurable actions accept one key, a list, or an empty list to unbind the action, such as `open_with = ["O", "w"]` or `delete_permanently = []`. Named keys are supported for arrows, `enter`, `space`, `tab`, `backtab` / `shift+tab`, `backspace`, `delete` / `del`, `pageup`, `pagedown`, `home`, `end`, and `F1`–`F12`; named keys and modifiers are case-insensitive, so `F2`, `PageUp`, and `Ctrl+O` work. Modifier bindings such as `ctrl+o`, `alt+o`, and `ctrl+enter` are also supported. Setting an action replaces its full default key list.
+Keys marked with `*` are configurable in `[keys]` in `config.toml`. Configurable actions accept one key, a list, or an empty list to unbind the action. See the configuration docs for full key syntax:
+https://elio-fm.github.io/docs/configuration/
 
 ### Navigation
 
