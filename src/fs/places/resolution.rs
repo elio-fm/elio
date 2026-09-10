@@ -29,7 +29,7 @@ pub(super) struct PlaceResolutionContext {
 }
 
 pub(crate) fn build_sidebar_rows() -> Vec<SidebarRow> {
-    let home = crate::config::invoking_user_home_dir().unwrap_or_else(|| {
+    let home = crate::elevated_session::home_dir().unwrap_or_else(|| {
         #[cfg(windows)]
         return PathBuf::from("C:\\");
         #[cfg(not(windows))]
@@ -107,7 +107,7 @@ fn system_place_resolution_context(
         } else {
             None
         },
-        trash: crate::config::trash_home_dir().and_then(|home| trash_dir(&home)),
+        trash: crate::elevated_session::trash_home_dir().and_then(|home| trash_dir(&home)),
         home,
     }
 }
@@ -407,8 +407,8 @@ pub(super) fn normalize_absolute_path(path: &Path) -> PathBuf {
 ///   that is not practically accessible as a regular filesystem path.
 pub(crate) fn trash_dir(home: &Path) -> Option<PathBuf> {
     #[cfg(all(unix, not(target_os = "macos")))]
-    let data_dir = if crate::config::trash_home_dir().as_deref() == Some(home) {
-        crate::config::trash_data_dir()
+    let data_dir = if crate::elevated_session::trash_home_dir().as_deref() == Some(home) {
+        crate::elevated_session::trash_data_dir()
     } else {
         Some(home.join(".local/share"))
     };

@@ -184,7 +184,7 @@ fn builtin_goto_destination(
         ),
         BuiltinGoto::Home => (
             "home",
-            crate::config::invoking_user_home_dir()
+            crate::elevated_session::home_dir()
                 .map(GoToDestination::Path)
                 .unwrap_or_else(|| GoToDestination::Missing("Home not available".to_string())),
         ),
@@ -249,7 +249,7 @@ fn trash_destination(app: &App) -> Option<PathBuf> {
         .filter_map(|row| row.item())
         .find(|item| item.kind == SidebarItemKind::Trash)
         .map(|item| item.path.clone())
-        .or_else(|| crate::config::trash_home_dir().and_then(|home| trash_dir(&home)))
+        .or_else(|| crate::elevated_session::trash_home_dir().and_then(|home| trash_dir(&home)))
 }
 
 #[cfg(test)]

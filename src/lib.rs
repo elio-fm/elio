@@ -2,15 +2,14 @@ mod app;
 mod archive;
 mod config;
 mod core;
+mod elevated_session;
 mod file_info;
 mod fs;
-mod invoking_user_command;
 mod path_display;
 mod preview;
 mod runtime;
 mod shell;
 mod ui;
-mod user_fs_helper;
 mod zoxide;
 
 use anyhow::Result;
@@ -46,7 +45,7 @@ pub fn run_with_options(options: RunOptions) -> Result<()> {
 
 #[doc(hidden)]
 pub fn run_user_fs_helper() -> Result<()> {
-    user_fs_helper::run()
+    elevated_session::run()
 }
 
 #[doc(hidden)]

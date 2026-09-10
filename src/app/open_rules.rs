@@ -121,7 +121,7 @@ fn entry_is_text_like(entry: &Entry, facts: file_info::FileFacts) -> bool {
 }
 
 fn command_template(command: &str) -> Result<CommandTemplate, String> {
-    command_template_with_env(command, config::invoking_user_env_var)
+    command_template_with_env(command, crate::elevated_session::env_var)
 }
 
 fn command_template_with_env(
