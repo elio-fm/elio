@@ -139,7 +139,7 @@ shell = "o"
 "#,
     )
     .expect("config should parse");
-    assert_eq!(config.keys.action_for('o'), Some(Action::Shell));
+    assert_eq!(config.keys.action_for('o'), Some(Action::ShellHere));
     assert_eq!(config.keys.action_for('!'), None);
 }
 
@@ -1030,7 +1030,7 @@ fn action_for_returns_correct_action_for_default_bindings() {
         Some(Action::OpenOrEnter)
     );
     assert_eq!(key_bindings.action_for('z'), Some(Action::Zoxide));
-    assert_eq!(key_bindings.action_for('!'), Some(Action::Shell));
+    assert_eq!(key_bindings.action_for('!'), Some(Action::ShellHere));
     assert_eq!(key_bindings.action_for('h'), Some(Action::NavLeft));
     assert_eq!(key_bindings.action_for('j'), Some(Action::NavDown));
     assert_eq!(key_bindings.action_for('k'), Some(Action::NavUp));
@@ -1449,7 +1449,7 @@ zoxide = "Z"
 fn shell_defaults_to_bang() {
     let key_bindings = KeyBindings::default();
     assert_eq!(key_bindings.shell, '!');
-    assert_eq!(key_bindings.action_for('!'), Some(Action::Shell));
+    assert_eq!(key_bindings.action_for('!'), Some(Action::ShellHere));
 }
 
 #[test]
@@ -1461,7 +1461,7 @@ shell = "S"
 "#,
     )
     .expect("config should parse");
-    assert_eq!(config.keys.action_for('S'), Some(Action::Shell));
+    assert_eq!(config.keys.action_for('S'), Some(Action::ShellHere));
     assert_eq!(config.keys.action_for('!'), None);
 }
 

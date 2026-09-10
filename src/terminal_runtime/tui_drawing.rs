@@ -1,4 +1,4 @@
-use super::terminal::{AppTerminal, clear_for_full_repaint};
+use super::tui_event_loop::clear_for_full_repaint;
 use crate::{
     app::{self, App},
     ui,
@@ -10,11 +10,173 @@ use crossterm::{
     terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate},
 };
 use ratatui::{
+    Terminal,
     backend::CrosstermBackend,
     buffer::{Buffer, Cell, CellDiffOption},
     layout::Rect,
 };
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError},
+    thread,
+};
+
+/// The TUI terminal, backed by [`ThreadedWriter`] so frame output never blocks
+/// the event loop.
+pub(super) type AppTerminal = Terminal<CrosstermBackend<ThreadedWriter>>;
+
+/// State shared between the event-loop side of [`ThreadedWriter`] and its
+/// background thread. `buf` accumulates flushed frames; the writer thread swaps
+/// it out and performs the blocking write outside the lock. `idle` is true while
+/// the writer thread is parked with nothing queued and nothing mid-write — the
+/// condition drain barriers wait for.
+struct WriterShared {
+    buf: Vec<u8>,
+    idle: bool,
+    dead: bool,
+    shutdown: bool,
+}
+
+struct WriterChannel {
+    state: Mutex<WriterShared>,
+    cond: Condvar,
+}
+
+impl WriterChannel {
+    fn lock(&self) -> MutexGuard<'_, WriterShared> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// A [`Write`] that hands each flushed frame to a background thread which
+/// performs the blocking write to stdout.
+///
+/// The TUI event loop must never block on terminal output. A single large frame
+/// — above all a multi-megabyte Kitty image payload — written synchronously
+/// stalls the entire loop (no input, no resize handling) for as long as the
+/// terminal/tmux takes to drain it. Through tmux that drain backs up whenever
+/// the outer terminal is busy (e.g. repainting after a resize), which froze the
+/// UI for seconds. Flushes append to a shared buffer under a mutex — never
+/// waiting on the terminal — so the loop stays responsive and the visible output
+/// catches up a beat later. The buffer is unbounded by design: frames are only
+/// produced on events/timers, so even a stalled terminal accumulates output far
+/// slower than memory matters, and bounding it would reintroduce the very
+/// backpressure stall this exists to remove.
+pub(super) struct ThreadedWriter {
+    channel: Arc<WriterChannel>,
+    pending: Vec<u8>,
+}
+
+impl ThreadedWriter {
+    pub(super) fn new(output: Box<dyn Write + Send>) -> Self {
+        let channel = Arc::new(WriterChannel {
+            state: Mutex::new(WriterShared {
+                buf: Vec::new(),
+                idle: true,
+                dead: false,
+                shutdown: false,
+            }),
+            cond: Condvar::new(),
+        });
+        let writer_channel = Arc::clone(&channel);
+        thread::spawn(move || {
+            let mut out = output;
+            let mut batch = Vec::new();
+            loop {
+                {
+                    let mut state = writer_channel.lock();
+                    while state.buf.is_empty() && !state.shutdown {
+                        state.idle = true;
+                        writer_channel.cond.notify_all();
+                        state = writer_channel
+                            .cond
+                            .wait(state)
+                            .unwrap_or_else(PoisonError::into_inner);
+                    }
+                    if state.buf.is_empty() {
+                        state.idle = true;
+                        writer_channel.cond.notify_all();
+                        return;
+                    }
+                    state.idle = false;
+                    std::mem::swap(&mut state.buf, &mut batch);
+                }
+                if out.write_all(&batch).is_err() || out.flush().is_err() {
+                    let mut state = writer_channel.lock();
+                    state.dead = true;
+                    state.idle = true;
+                    state.buf.clear();
+                    writer_channel.cond.notify_all();
+                    return;
+                }
+                batch.clear();
+            }
+        });
+        Self {
+            channel,
+            pending: Vec::new(),
+        }
+    }
+
+    pub(super) fn drainer(&self) -> Drainer {
+        Drainer {
+            channel: Arc::clone(&self.channel),
+        }
+    }
+
+    fn drain(&mut self) {
+        let _ = self.flush();
+        self.drainer().drain();
+    }
+}
+
+/// Blocks until the [`ThreadedWriter`] has flushed everything queued before it.
+pub(super) struct Drainer {
+    channel: Arc<WriterChannel>,
+}
+
+impl Drainer {
+    pub(super) fn drain(&self) {
+        let mut state = self.channel.lock();
+        while !(state.dead || state.buf.is_empty() && state.idle) {
+            state = self
+                .channel
+                .cond
+                .wait(state)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+    }
+}
+
+impl Write for ThreadedWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.pending.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+        let mut state = self.channel.lock();
+        if state.dead {
+            self.pending.clear();
+            return Ok(());
+        }
+        state.buf.append(&mut self.pending);
+        self.channel.cond.notify_all();
+        Ok(())
+    }
+}
+
+impl Drop for ThreadedWriter {
+    fn drop(&mut self) {
+        self.drain();
+        let mut state = self.channel.lock();
+        state.shutdown = true;
+        self.channel.cond.notify_all();
+    }
+}
 
 pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> Result<bool> {
     execute!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
@@ -175,53 +337,5 @@ fn intersect_rect(a: Rect, b: Rect) -> Option<Rect> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::collect_buffer_cells;
-    use ratatui::{
-        buffer::Buffer,
-        layout::Rect,
-        style::{Color, Modifier, Style},
-    };
-
-    #[test]
-    fn ratatui_diff_preserves_positions_beyond_u16_max_cells() {
-        let area = Rect::new(0, 0, 400, 200);
-        let previous = Buffer::empty(area);
-        let mut next = Buffer::empty(area);
-        next.set_string(123, 180, "X", Style::default());
-
-        let diff = previous.diff(&next);
-
-        assert!(
-            diff.iter()
-                .any(|(x, y, cell)| *x == 123 && *y == 180 && cell.symbol() == "X"),
-            "expected diff to keep the changed cell at (123, 180), got: {:?}",
-            diff.iter()
-                .map(|(x, y, cell)| (*x, *y, cell.symbol().to_string()))
-                .collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
-    fn collect_buffer_cells_captures_popup_cells_with_styles() {
-        let mut buffer = Buffer::empty(Rect::new(0, 0, 8, 4));
-        buffer.set_string(
-            2,
-            1,
-            "OK",
-            Style::default()
-                .fg(Color::LightGreen)
-                .bg(Color::Rgb(1, 2, 3))
-                .add_modifier(Modifier::BOLD),
-        );
-
-        let cells = collect_buffer_cells(&[Rect::new(2, 1, 2, 1)], &buffer);
-
-        assert_eq!(cells.len(), 2);
-        assert_eq!((cells[0].0, cells[0].1, cells[0].2.symbol()), (2, 1, "O"));
-        assert_eq!((cells[1].0, cells[1].1, cells[1].2.symbol()), (3, 1, "K"));
-        assert_eq!(cells[0].2.fg, Color::LightGreen);
-        assert_eq!(cells[0].2.bg, Color::Rgb(1, 2, 3));
-        assert!(cells[0].2.modifier.contains(Modifier::BOLD));
-    }
-}
+#[path = "tests/tui_drawing.rs"]
+mod tests;

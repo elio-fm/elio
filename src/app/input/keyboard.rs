@@ -534,8 +534,8 @@ impl App {
                 self.pending_terminal_task = Some(PendingTerminalTask::Zoxide);
                 self.status.clear();
             }
-            Action::Shell => {
-                self.pending_terminal_task = Some(PendingTerminalTask::Shell {
+            Action::ShellHere => {
+                self.pending_terminal_task = Some(PendingTerminalTask::ShellHere {
                     cwd: self.navigation.cwd.clone(),
                 });
                 self.status.clear();
@@ -757,7 +757,7 @@ fn fullscreen_preview_exits_then_dispatches(action: crate::config::Action) -> bo
             | Action::OpenWith
             | Action::Open
             | Action::Zoxide
-            | Action::Shell
+            | Action::ShellHere
             | Action::Create
             | Action::Rename
             | Action::RenameInEditor
@@ -862,7 +862,7 @@ mod tests {
             Action::OpenWith,
             Action::Open,
             Action::Zoxide,
-            Action::Shell,
+            Action::ShellHere,
             Action::Create,
             Action::Rename,
             Action::RenameInEditor,

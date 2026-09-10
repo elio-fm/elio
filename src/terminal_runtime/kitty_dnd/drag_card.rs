@@ -20,10 +20,10 @@ const RADIUS: f32 = 13.0;
 const MAX_TEXT_CHARS: usize = 30;
 const PREWARM_DRAG_ICONS: &str = "󰉋󰌺󰆍󰒓󰈙󰿃󰋩󰎆󰀼󰛖󰆼󰈔󰉓";
 
-pub(in crate::runtime) struct DragImage {
-    pub(in crate::runtime) png: Vec<u8>,
-    pub(in crate::runtime) width: u32,
-    pub(in crate::runtime) height: u32,
+pub(in crate::terminal_runtime) struct DragImage {
+    pub(in crate::terminal_runtime) png: Vec<u8>,
+    pub(in crate::terminal_runtime) width: u32,
+    pub(in crate::terminal_runtime) height: u32,
 }
 
 struct Canvas<'a> {
@@ -46,7 +46,7 @@ struct Rect {
     height: f32,
 }
 
-pub(in crate::runtime) fn prewarm_drag_image_renderer() {
+pub(in crate::terminal_runtime) fn prewarm_drag_image_renderer() {
     let _ = thread::Builder::new()
         .name("elio-drag-image-prewarm".to_string())
         .spawn(|| {
@@ -56,7 +56,7 @@ pub(in crate::runtime) fn prewarm_drag_image_renderer() {
         });
 }
 
-pub(in crate::runtime) fn render_drag_image(
+pub(in crate::terminal_runtime) fn render_drag_image(
     icon: &str,
     text: &str,
     icon_color: Color,
@@ -860,17 +860,5 @@ fn color_rgb(color: Color) -> Option<[u8; 3]> {
 }
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    #[cfg(not(target_os = "macos"))]
-    fn fontconfig_charset_query_uses_lowercase_hex_codepoint() {
-        assert_eq!(
-            super::platform_fonts::fontconfig_charset_query('󰉋'),
-            ":charset=f024b"
-        );
-        assert_eq!(
-            super::platform_fonts::fontconfig_charset_query('A'),
-            ":charset=41"
-        );
-    }
-}
+#[path = "tests/drag_card.rs"]
+mod tests;

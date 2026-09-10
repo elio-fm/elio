@@ -24,7 +24,7 @@ pub(crate) enum Action {
     FilterDirectory,
     FindDuplicates,
     Zoxide,
-    Shell,
+    ShellHere,
     Open,
     OpenWith,
     OpenOrEnter,
