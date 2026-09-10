@@ -42,7 +42,7 @@ pub(crate) use self::jobs::run_user_trash_helper;
 #[cfg(test)]
 pub use self::state::PreviewMetricsSnapshot;
 pub(crate) use self::state::{ChooserExit, DuplicateRow, PendingTerminalTask};
-pub(crate) use crate::core::FileClass;
+pub(crate) use crate::file_info::FileClass;
 pub(crate) use crate::fs::{
     format_item_count, format_size, format_size_parts, format_time_ago, rect_contains,
     sanitize_terminal_text,
@@ -54,8 +54,8 @@ pub use self::types::{
     SearchRow, SearchScope, ViewMetrics, ViewMode,
 };
 #[cfg(test)]
-pub use crate::core::SidebarItem;
-pub use crate::core::{Entry, EntryKind, SidebarItemKind, SidebarRow, SortMode};
+pub use crate::fs::SidebarItem;
+pub use crate::fs::{Entry, EntryKind, SidebarItemKind, SidebarRow, SortMode};
 
 impl App {
     pub fn set_frame_state(&mut self, mut frame_state: FrameState) -> bool {

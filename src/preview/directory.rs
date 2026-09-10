@@ -1,8 +1,5 @@
 use super::{appearance, *};
-use crate::{
-    core::{Entry, EntryKind},
-    fs as browser_support,
-};
+use crate::fs::{self as browser_support, Entry, EntryKind};
 use ratatui::{
     style::Style,
     text::{Line, Span},

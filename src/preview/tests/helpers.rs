@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::{Entry, EntryKind};
+use crate::fs::{Entry, EntryKind};
 use flate2::{Compression, write::GzEncoder};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use ratatui::style::Color;

@@ -7,6 +7,7 @@ pub(crate) mod watch;
 
 mod directory;
 mod directory_stats;
+mod entries;
 mod opener;
 mod restore;
 mod sort;
@@ -40,6 +41,7 @@ pub(crate) use directory::{
     load_directory_snapshot_cancellable, scan_directory_fingerprint_cancellable,
 };
 pub(crate) use directory_stats::{DirectoryStats, DirectoryStatsScanResult, scan_directory_stats};
+pub use entries::{Entry, EntryKind, SymlinkInfo};
 pub(crate) use format::{
     describe_io_error, format_item_count, format_size, format_size_parts, format_time_ago,
     rect_contains, sanitize_terminal_text, symlink_target_display_label,
@@ -50,6 +52,9 @@ pub(crate) use opener::detached_open;
 #[cfg(test)]
 pub(crate) use opener::set_open_in_system_capture_for_test;
 pub(crate) use opener::{detached_open_command, open_in_system};
+#[cfg(test)]
+pub use places::SidebarItem;
+pub use places::{SidebarItemKind, SidebarRow};
 pub(crate) use places::{build_sidebar_rows, trash_dir};
 pub(crate) use restore::restore_trash_item;
 #[cfg(target_os = "macos")]
@@ -57,6 +62,7 @@ pub(crate) use restore::{
     remove_restore_origins, remove_restore_origins_checked, restore_trash_item_checked_metadata,
     save_restore_origins_checked,
 };
+pub use sort::SortMode;
 pub(crate) use sort::natural_cmp;
 pub(crate) use watch::{
     DirectoryWatchEvent, DirectoryWatcher, directory_watch_debounce, event_affects_visible_entries,

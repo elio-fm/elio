@@ -3,7 +3,7 @@ use super::super::{
     rules::rgb,
 };
 use super::*;
-use crate::core::SymlinkInfo;
+use crate::fs::SymlinkInfo;
 
 fn write_temp_file(label: &str, file_name: &str, contents: &str) -> (PathBuf, PathBuf) {
     let root = temp_path(label);

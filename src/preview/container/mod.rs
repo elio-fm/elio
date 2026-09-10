@@ -4,8 +4,8 @@ mod torrent;
 
 use super::{appearance as theme, *};
 use crate::{
-    core::{EntryKind, FileClass},
-    file_info,
+    file_info::{self, FileClass},
+    fs::EntryKind,
 };
 use ratatui::{
     style::Style,

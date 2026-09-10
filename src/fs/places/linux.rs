@@ -1,5 +1,5 @@
 use super::resolution::normalize_absolute_path;
-use crate::core::{SidebarItem, SidebarItemKind};
+use super::{SidebarItem, SidebarItemKind};
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsStr,

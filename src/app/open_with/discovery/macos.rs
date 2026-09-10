@@ -286,8 +286,8 @@ const COMMON_TERMINAL_EDITORS: &[(&str, &str)] = &[
 ];
 
 fn generic_editor_content_types(path: &Path) -> &'static [&'static str] {
-    use crate::core::EntryKind;
     use crate::file_info::PreviewKind;
+    use crate::fs::EntryKind;
 
     match crate::file_info::inspect_path(path, EntryKind::File)
         .preview

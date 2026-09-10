@@ -1,7 +1,10 @@
 mod appearance;
 mod builtin_themes;
 
-use crate::core::{Entry, EntryKind, FileClass, SymlinkInfo};
+use crate::{
+    file_info::FileClass,
+    fs::{Entry, EntryKind, SymlinkInfo},
+};
 use ratatui::style::Color;
 use std::path::Path;
 

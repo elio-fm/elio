@@ -1,4 +1,4 @@
-use crate::core::{Entry, EntryKind, SortMode, SymlinkInfo};
+use super::{Entry, EntryKind, SortMode, SymlinkInfo};
 use anyhow::{Context, Result};
 use std::{
     cmp::Ordering,

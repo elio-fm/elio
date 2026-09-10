@@ -1,6 +1,6 @@
 use super::super::types::ClassStyle;
 use super::shared::rgb;
-use crate::core::FileClass;
+use crate::file_info::FileClass;
 use std::collections::HashMap;
 
 pub(super) fn base_class_styles() -> HashMap<FileClass, ClassStyle> {

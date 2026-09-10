@@ -1,6 +1,6 @@
 use super::{appearance as theme, *};
 #[cfg(unix)]
-use crate::core::{EntryKind, SymlinkInfo};
+use crate::fs::{EntryKind, SymlinkInfo};
 use image::ImageFormat;
 use ratatui::{style::Modifier, text::Line};
 #[cfg(unix)]

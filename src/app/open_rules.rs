@@ -2,8 +2,8 @@ use std::{ffi::OsString, path::PathBuf};
 
 use crate::{
     config::{self, OpenPlatform, OpenRule, OpenTargetType},
-    core::{Entry, EntryKind, FileClass},
-    file_info::{self, PreviewKind},
+    file_info::{self, FileClass, PreviewKind},
+    fs::{Entry, EntryKind},
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]

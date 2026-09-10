@@ -1,5 +1,5 @@
-use super::{FileFacts, PreviewSpec};
-use crate::{core::FileClass, preview::code::registry};
+use super::{FileClass, FileFacts, PreviewSpec};
+use crate::preview::code::registry;
 
 fn preview_for_exact_name(name: &str) -> PreviewSpec {
     registry::language_for_exact_name(name)

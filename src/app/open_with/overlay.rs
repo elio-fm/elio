@@ -77,7 +77,7 @@ impl App {
         self.open_open_with_overlay_for_entry(entry.clone());
     }
 
-    pub(in crate::app) fn open_open_with_overlay_for_entry(&mut self, entry: crate::core::Entry) {
+    pub(in crate::app) fn open_open_with_overlay_for_entry(&mut self, entry: crate::fs::Entry) {
         let path = entry.path.clone();
         #[cfg(test)]
         let apps = super::discovered_open_with_apps_for_test()

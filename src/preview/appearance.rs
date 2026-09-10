@@ -1,4 +1,7 @@
-use crate::core::{Entry, EntryKind, FileClass};
+use crate::{
+    file_info::FileClass,
+    fs::{Entry, EntryKind},
+};
 use ratatui::style::Color;
 use std::path::Path;
 

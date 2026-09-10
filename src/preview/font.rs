@@ -2,7 +2,7 @@ use super::PreviewContent;
 use super::PreviewKind;
 use super::appearance as theme;
 use super::process::run_command_capture_stdout_cancellable;
-use crate::core::Entry;
+use crate::fs::Entry;
 use anyhow::{Context, Result};
 use ratatui::{
     style::Style,

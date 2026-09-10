@@ -1,6 +1,5 @@
 use super::types::plain;
-use super::{CompoundArchiveKind, CompressionKind, DiskImageKind, FileFacts};
-use crate::core::FileClass;
+use super::{CompoundArchiveKind, CompressionKind, DiskImageKind, FileClass, FileFacts};
 
 pub(super) fn inspect_archive_name(name: &str) -> Option<FileFacts> {
     let detail = if let Some(kind) = inspect_compound_archive_name(name) {
