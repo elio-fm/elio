@@ -1,11 +1,8 @@
 use super::{
-    super::{
-        App,
-        state::{OpenWithApp, PendingTerminalTask},
-    },
+    super::{App, state::PendingTerminalTask},
     overlay::FallbackOpenOutcome,
-    path_is_text_like,
 };
+use crate::opening::open_with::{OpenWithApplication, path_is_text_like};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use std::{
     cell::{Cell, RefCell},
@@ -21,8 +18,8 @@ fn temp_dir_path(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("elio-open-with-{label}-{unique}"))
 }
 
-fn fake_open_with_app(display_name: &str) -> OpenWithApp {
-    OpenWithApp {
+fn fake_open_with_app(display_name: &str) -> OpenWithApplication {
+    OpenWithApplication {
         display_name: display_name.to_string(),
         desktop_id: None,
         program: "fake".to_string(),
@@ -32,8 +29,8 @@ fn fake_open_with_app(display_name: &str) -> OpenWithApp {
     }
 }
 
-fn fake_terminal_app(display_name: &str) -> OpenWithApp {
-    OpenWithApp {
+fn fake_terminal_app(display_name: &str) -> OpenWithApplication {
+    OpenWithApplication {
         display_name: display_name.to_string(),
         desktop_id: None,
         program: "nvim".to_string(),

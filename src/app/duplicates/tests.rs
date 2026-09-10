@@ -10,20 +10,20 @@ use std::{
 struct DiscoveredOpenWithAppsGuard;
 
 impl DiscoveredOpenWithAppsGuard {
-    fn install(apps: Vec<crate::app::state::OpenWithApp>) -> Self {
-        crate::app::open_with::set_discovered_open_with_apps_for_test(Some(apps));
+    fn install(apps: Vec<crate::opening::open_with::OpenWithApplication>) -> Self {
+        crate::opening::open_with::set_discovered_open_with_apps_for_test(Some(apps));
         Self
     }
 }
 
 impl Drop for DiscoveredOpenWithAppsGuard {
     fn drop(&mut self) {
-        crate::app::open_with::set_discovered_open_with_apps_for_test(None);
+        crate::opening::open_with::set_discovered_open_with_apps_for_test(None);
     }
 }
 
-fn fake_open_with_app(display_name: &str) -> crate::app::state::OpenWithApp {
-    crate::app::state::OpenWithApp {
+fn fake_open_with_app(display_name: &str) -> crate::opening::open_with::OpenWithApplication {
+    crate::opening::open_with::OpenWithApplication {
         display_name: display_name.to_string(),
         desktop_id: None,
         program: "true".to_string(),

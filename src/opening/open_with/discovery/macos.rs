@@ -11,7 +11,7 @@
 //
 // Launch flow
 // ───────────
-// Each OpenWithApp produced here uses `program = "open"` with
+// Each OpenWithApplication produced here uses `program = "open"` with
 // `args = ["-a", "/path/to/App.app", "/path/to/file"]`.  Using the `open`
 // command lets macOS handle sandbox entitlements, Rosetta translation, and
 // document handoff automatically.
@@ -26,7 +26,7 @@ use std::{
 
 use objc2_foundation::{NSBundle, NSFileManager, NSString, NSURL};
 
-use super::super::super::state::OpenWithApp;
+use super::super::OpenWithApplication;
 use super::super::path_is_text_like;
 use super::exec::tokenize_exec;
 
@@ -94,7 +94,7 @@ unsafe extern "C" {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-pub(super) fn discover_via_nsworkspace(path: &Path) -> Vec<OpenWithApp> {
+pub(super) fn discover_via_nsworkspace(path: &Path) -> Vec<OpenWithApplication> {
     let Some(path_str) = path.to_str() else {
         return vec![];
     };
@@ -110,7 +110,7 @@ pub(super) fn discover_via_nsworkspace(path: &Path) -> Vec<OpenWithApp> {
 
 // ── Core discovery ────────────────────────────────────────────────────────────
 
-fn discover_file_url_handlers(path_str: &str) -> Vec<OpenWithApp> {
+fn discover_file_url_handlers(path_str: &str) -> Vec<OpenWithApplication> {
     let ns_path = NSString::from_str(path_str);
     let file_url = NSURL::fileURLWithPath(&ns_path);
 
@@ -140,7 +140,7 @@ fn discover_file_url_handlers(path_str: &str) -> Vec<OpenWithApp> {
 
     let file_manager = NSFileManager::defaultManager();
     let count = unsafe { CFArrayGetCount(apps_cf) };
-    let mut result: Vec<OpenWithApp> = Vec::with_capacity(count as usize);
+    let mut result: Vec<OpenWithApplication> = Vec::with_capacity(count as usize);
 
     for i in 0..count {
         let app_cf_url: CFURLRef = unsafe { CFArrayGetValueAtIndex(apps_cf, i) };
@@ -164,7 +164,7 @@ fn discover_file_url_handlers(path_str: &str) -> Vec<OpenWithApp> {
 
         let is_default = default_path.as_deref() == Some(&app_path_str);
 
-        result.push(OpenWithApp {
+        result.push(OpenWithApplication {
             display_name,
             desktop_id: bundle_id,
             // Launch via `open -a App.app file` so macOS handles sandboxing,
@@ -191,7 +191,7 @@ fn discover_file_url_handlers(path_str: &str) -> Vec<OpenWithApp> {
     result
 }
 
-fn discover_generic_editor_apps(path_str: &str, path: &Path) -> Vec<OpenWithApp> {
+fn discover_generic_editor_apps(path_str: &str, path: &Path) -> Vec<OpenWithApplication> {
     let file_manager = NSFileManager::defaultManager();
     let mut result = Vec::new();
 
@@ -219,7 +219,7 @@ fn discover_generic_editor_apps(path_str: &str, path: &Path) -> Vec<OpenWithApp>
                 })
                 .unwrap_or_else(|| bundle_id.clone());
 
-            result.push(OpenWithApp {
+            result.push(OpenWithApplication {
                 display_name,
                 desktop_id: Some(bundle_id.clone()),
                 program: "open".to_string(),
@@ -233,7 +233,7 @@ fn discover_generic_editor_apps(path_str: &str, path: &Path) -> Vec<OpenWithApp>
     result
 }
 
-fn discover_terminal_editor_apps(path_str: &str) -> Vec<OpenWithApp> {
+fn discover_terminal_editor_apps(path_str: &str) -> Vec<OpenWithApplication> {
     let mut result = Vec::new();
     let mut seen_editors = HashSet::new();
 
@@ -257,7 +257,7 @@ fn discover_terminal_editor_apps(path_str: &str) -> Vec<OpenWithApp> {
         if !command_exists(program) {
             continue;
         }
-        result.push(OpenWithApp {
+        result.push(OpenWithApplication {
             display_name: display_name.to_string(),
             desktop_id: None,
             program: program.to_string(),
@@ -415,7 +415,7 @@ fn cf_string_to_string(value: CFStringRef) -> Option<String> {
         .map(str::to_string)
 }
 
-fn merge_unique_apps(target: &mut Vec<OpenWithApp>, apps: Vec<OpenWithApp>) {
+fn merge_unique_apps(target: &mut Vec<OpenWithApplication>, apps: Vec<OpenWithApplication>) {
     let mut seen = target
         .iter()
         .map(open_with_app_identity_key)
@@ -428,7 +428,7 @@ fn merge_unique_apps(target: &mut Vec<OpenWithApp>, apps: Vec<OpenWithApp>) {
     }
 }
 
-fn sort_open_with_apps(apps: &mut [OpenWithApp]) {
+fn sort_open_with_apps(apps: &mut [OpenWithApplication]) {
     apps.sort_unstable_by(|a, b| {
         b.is_default
             .cmp(&a.is_default)
@@ -442,7 +442,7 @@ fn sort_open_with_apps(apps: &mut [OpenWithApp]) {
     });
 }
 
-fn is_env_editor_app(app: &OpenWithApp) -> bool {
+fn is_env_editor_app(app: &OpenWithApplication) -> bool {
     app.display_name.contains("($VISUAL)") || app.display_name.contains("($EDITOR)")
 }
 
@@ -454,7 +454,7 @@ fn terminal_editor_key(program: &str) -> String {
         .to_ascii_lowercase()
 }
 
-fn open_with_app_identity_key(app: &OpenWithApp) -> String {
+fn open_with_app_identity_key(app: &OpenWithApplication) -> String {
     if let Some(desktop_id) = app.desktop_id.as_ref() {
         return format!("bundle:{desktop_id}");
     }
@@ -473,7 +473,7 @@ fn terminal_editor_app_from_command(
     var: &str,
     command: &str,
     path_str: &str,
-) -> Option<OpenWithApp> {
+) -> Option<OpenWithApplication> {
     let mut tokens = tokenize_exec(command);
     if tokens.is_empty() {
         return None;
@@ -491,7 +491,7 @@ fn terminal_editor_app_from_command(
     let display_name = terminal_editor_display_name(&program_name)?;
 
     tokens.push(path_str.to_string());
-    Some(OpenWithApp {
+    Some(OpenWithApplication {
         display_name: format!("{display_name} (${var})"),
         desktop_id: None,
         program,

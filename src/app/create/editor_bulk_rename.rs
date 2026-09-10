@@ -872,7 +872,7 @@ fn editor_command() -> (String, Vec<String>) {
         if let Some(value) =
             crate::elevated_session::env_var(key).and_then(|value| value.into_string().ok())
         {
-            let tokens = crate::app::open_rules::tokenize_command(&value);
+            let tokens = crate::opening::tokenize_command(&value);
             if let Some((program, args)) = split_program_args(tokens) {
                 return (program, args);
             }

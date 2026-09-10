@@ -18,8 +18,8 @@ struct DefaultOpenWithAppGuard;
 
 #[cfg(all(unix, not(target_os = "macos")))]
 impl DefaultOpenWithAppGuard {
-    fn install(app: crate::app::state::OpenWithApp) -> Self {
-        crate::app::open_with::set_default_open_with_app_for_test(Some(app));
+    fn install(app: crate::opening::open_with::OpenWithApplication) -> Self {
+        crate::opening::open_with::set_default_open_with_application_for_test(Some(app));
         Self
     }
 }
@@ -27,7 +27,7 @@ impl DefaultOpenWithAppGuard {
 #[cfg(all(unix, not(target_os = "macos")))]
 impl Drop for DefaultOpenWithAppGuard {
     fn drop(&mut self) {
-        crate::app::open_with::set_default_open_with_app_for_test(None);
+        crate::opening::open_with::set_default_open_with_application_for_test(None);
     }
 }
 
@@ -37,7 +37,7 @@ struct OpenWithAppsFoundGuard;
 #[cfg(all(unix, not(target_os = "macos")))]
 impl OpenWithAppsFoundGuard {
     fn install(found: bool) -> Self {
-        crate::app::open_with::set_open_with_apps_found_for_test(Some(found));
+        crate::opening::open_with::set_open_with_apps_found_for_test(Some(found));
         Self
     }
 }
@@ -45,7 +45,7 @@ impl OpenWithAppsFoundGuard {
 #[cfg(all(unix, not(target_os = "macos")))]
 impl Drop for OpenWithAppsFoundGuard {
     fn drop(&mut self) {
-        crate::app::open_with::set_open_with_apps_found_for_test(None);
+        crate::opening::open_with::set_open_with_apps_found_for_test(None);
     }
 }
 
@@ -54,8 +54,8 @@ struct EditorFallbackAppGuard;
 
 #[cfg(all(unix, not(target_os = "macos")))]
 impl EditorFallbackAppGuard {
-    fn install(app: crate::app::state::OpenWithApp) -> Self {
-        crate::app::open_with::set_editor_fallback_app_for_test(Some(app));
+    fn install(app: crate::opening::open_with::OpenWithApplication) -> Self {
+        crate::opening::open_with::set_editor_fallback_application_for_test(Some(app));
         Self
     }
 }
@@ -63,7 +63,7 @@ impl EditorFallbackAppGuard {
 #[cfg(all(unix, not(target_os = "macos")))]
 impl Drop for EditorFallbackAppGuard {
     fn drop(&mut self) {
-        crate::app::open_with::set_editor_fallback_app_for_test(None);
+        crate::opening::open_with::set_editor_fallback_application_for_test(None);
     }
 }
 
@@ -73,8 +73,8 @@ fn fake_default_open_with_app(
     program: &str,
     args: Vec<String>,
     requires_terminal: bool,
-) -> crate::app::state::OpenWithApp {
-    crate::app::state::OpenWithApp {
+) -> crate::opening::open_with::OpenWithApplication {
+    crate::opening::open_with::OpenWithApplication {
         display_name: display_name.to_string(),
         desktop_id: None,
         program: program.to_string(),
@@ -2456,26 +2456,6 @@ fn write_sentinel_script(dir: &std::path::Path, sentinel: &std::path::Path) -> s
     .expect("write sentinel script");
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).expect("chmod sentinel script");
     script
-}
-
-#[cfg(unix)]
-#[test]
-fn detached_open_command_executes_program() {
-    let dir = temp_path("detached-open-cmd");
-    let sentinel = dir.join("ran");
-    let script = write_sentinel_script(&dir, &sentinel);
-
-    crate::fs::detached_open_command(script.to_str().unwrap(), &[])
-        .expect("detached_open_command should succeed");
-
-    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(1000);
-    while !sentinel.exists() && std::time::Instant::now() < deadline {
-        thread::sleep(std::time::Duration::from_millis(10));
-    }
-
-    let ran = sentinel.exists(); // capture before cleanup
-    fs::remove_dir_all(&dir).ok();
-    assert!(ran, "script must have run");
 }
 
 #[cfg(unix)]

@@ -421,11 +421,11 @@ impl App {
 
     pub(in crate::app) fn open_in_system(&mut self) -> Result<()> {
         let entries = self.open_target_entries();
-        match crate::app::open_rules::plans_for_entries(&entries) {
+        match crate::opening::plans_for_entries(&entries) {
             Ok(plans)
-                if plans.iter().any(|plan| {
-                    !matches!(plan, crate::app::open_rules::OpenPlan::System { .. })
-                }) =>
+                if plans
+                    .iter()
+                    .any(|plan| !matches!(plan, crate::opening::OpenPlan::System { .. })) =>
             {
                 return self.run_open_plans(plans);
             }
@@ -441,7 +441,7 @@ impl App {
             if self.queue_terminal_default_open_if_needed(&entry) {
                 return Ok(());
             }
-            if !crate::app::open_with::open_with_apps_found_for_entry(&entry) {
+            if !crate::opening::open_with::open_with_apps_found_for_entry(&entry) {
                 if self.queue_editor_fallback_open_if_needed(&entry) {
                     return Ok(());
                 }
@@ -455,11 +455,11 @@ impl App {
     }
 
     fn open_entry_in_system(&mut self, entry: &Entry) -> Result<()> {
-        match crate::app::open_rules::plans_for_entries(std::slice::from_ref(entry)) {
+        match crate::opening::plans_for_entries(std::slice::from_ref(entry)) {
             Ok(plans)
-                if plans.iter().any(|plan| {
-                    !matches!(plan, crate::app::open_rules::OpenPlan::System { .. })
-                }) =>
+                if plans
+                    .iter()
+                    .any(|plan| !matches!(plan, crate::opening::OpenPlan::System { .. })) =>
             {
                 return self.run_open_plans(plans);
             }
@@ -475,7 +475,7 @@ impl App {
             if self.queue_terminal_default_open_if_needed(entry) {
                 return Ok(());
             }
-            if !crate::app::open_with::open_with_apps_found_for_entry(entry) {
+            if !crate::opening::open_with::open_with_apps_found_for_entry(entry) {
                 if self.queue_editor_fallback_open_if_needed(entry) {
                     return Ok(());
                 }
@@ -489,7 +489,7 @@ impl App {
 
     #[cfg(all(unix, not(target_os = "macos")))]
     fn queue_terminal_default_open_if_needed(&mut self, entry: &Entry) -> bool {
-        let Some(app) = crate::app::open_with::default_open_with_app_for_entry(entry)
+        let Some(app) = crate::opening::open_with::default_open_with_application_for_entry(entry)
             .filter(|app| app.requires_terminal)
         else {
             return false;
@@ -500,7 +500,8 @@ impl App {
 
     #[cfg(all(unix, not(target_os = "macos")))]
     fn queue_editor_fallback_open_if_needed(&mut self, entry: &Entry) -> bool {
-        let Some(app) = crate::app::open_with::editor_fallback_app_for_entry(entry) else {
+        let Some(app) = crate::opening::open_with::editor_fallback_application_for_entry(entry)
+        else {
             return false;
         };
 
@@ -508,7 +509,7 @@ impl App {
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
-    fn queue_terminal_open(&mut self, app: crate::app::state::OpenWithApp) -> bool {
+    fn queue_terminal_open(&mut self, app: crate::opening::open_with::OpenWithApplication) -> bool {
         self.pending_terminal_task = Some(crate::app::PendingTerminalTask::Command {
             program: app.program,
             args: app.args,
@@ -517,7 +518,7 @@ impl App {
         true
     }
 
-    fn run_open_plans(&mut self, plans: Vec<crate::app::open_rules::OpenPlan>) -> Result<()> {
+    fn run_open_plans(&mut self, plans: Vec<crate::opening::OpenPlan>) -> Result<()> {
         let mut opened = 0usize;
         let mut total = 0usize;
         let mut last_error = None;
@@ -526,18 +527,18 @@ impl App {
 
         for plan in plans {
             match plan {
-                crate::app::open_rules::OpenPlan::System { paths } => {
+                crate::opening::OpenPlan::System { paths } => {
                     total += paths.len();
                     for path in &paths {
-                        match crate::fs::open_in_system(path) {
+                        match crate::opening::open_in_system(path) {
                             Ok(()) => opened += 1,
                             Err(error) => last_error = Some(error),
                         }
                     }
                 }
-                crate::app::open_rules::OpenPlan::Detached { program, args } => {
+                crate::opening::OpenPlan::Detached { program, args } => {
                     total += 1;
-                    match crate::fs::detached_open_command(&program, &args) {
+                    match crate::opening::launch_application(&program, &args) {
                         Ok(()) => {
                             opened += 1;
                             detached_started = true;
@@ -545,7 +546,7 @@ impl App {
                         Err(error) => last_error = Some(format!("{program}: {error}")),
                     }
                 }
-                crate::app::open_rules::OpenPlan::Terminal { program, args } => {
+                crate::opening::OpenPlan::Terminal { program, args } => {
                     total += 1;
                     opened += 1;
                     terminal_commands.push((program, args));
@@ -591,7 +592,7 @@ impl App {
         let mut opened = 0;
         let mut last_error = None;
         for target in &targets {
-            match crate::fs::open_in_system(target) {
+            match crate::opening::open_in_system(target) {
                 Ok(()) => opened += 1,
                 Err(error) => last_error = Some(error),
             }
@@ -717,7 +718,7 @@ mod tests {
         fs::create_dir_all(&root).expect("failed to create temp root");
         let mut app = App::new_at(root.clone()).expect("failed to create app");
 
-        app.run_open_plans(vec![crate::app::open_rules::OpenPlan::Detached {
+        app.run_open_plans(vec![crate::opening::OpenPlan::Detached {
             program: "definitely-not-real-elio-command".to_string(),
             args: Vec::new(),
         }])
@@ -740,11 +741,8 @@ mod tests {
         let mut app = App::new_at(root.clone()).expect("failed to create app");
 
         let (program, args) = successful_detached_command();
-        app.run_open_plans(vec![crate::app::open_rules::OpenPlan::Detached {
-            program,
-            args,
-        }])
-        .expect("open plan should be handled");
+        app.run_open_plans(vec![crate::opening::OpenPlan::Detached { program, args }])
+            .expect("open plan should be handled");
 
         assert_eq!(app.status_message(), "Opening item");
 
