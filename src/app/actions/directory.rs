@@ -294,15 +294,12 @@ impl App {
         let metadata = std::fs::metadata(&path).map_err(|error| {
             anyhow!(
                 "Cannot open {}: {}",
-                crate::path_display::user_facing(&path),
+                crate::fs::display_path(&path),
                 crate::fs::describe_io_error(&error)
             )
         })?;
         if !metadata.is_dir() {
-            bail!(
-                "{} is not a directory",
-                crate::path_display::user_facing(&path)
-            );
+            bail!("{} is not a directory", crate::fs::display_path(&path));
         }
         let normalized = path.canonicalize().unwrap_or(path);
         if normalized == self.navigation.cwd
@@ -316,7 +313,7 @@ impl App {
             }
             self.status = format!(
                 "Already in {}",
-                crate::path_display::user_facing(&self.navigation.cwd)
+                crate::fs::display_path(&self.navigation.cwd)
             );
             return Ok(());
         }
@@ -333,10 +330,7 @@ impl App {
                 }
                 load.completion = completion;
             }
-            self.status = format!(
-                "Already opening {}",
-                crate::path_display::user_facing(&normalized)
-            );
+            self.status = format!("Already opening {}", crate::fs::display_path(&normalized));
             return Ok(());
         }
 

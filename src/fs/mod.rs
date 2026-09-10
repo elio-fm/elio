@@ -43,8 +43,8 @@ pub(crate) use directory::{
 pub(crate) use directory_stats::{DirectoryStats, DirectoryStatsScanResult, scan_directory_stats};
 pub use entries::{Entry, EntryKind, SymlinkInfo};
 pub(crate) use format::{
-    describe_io_error, format_item_count, format_size, format_size_parts, format_time_ago,
-    rect_contains, sanitize_terminal_text, symlink_target_display_label,
+    describe_io_error, display_path, format_item_count, format_size, format_size_parts,
+    format_time_ago, rect_contains, sanitize_terminal_text, symlink_target_display_label,
 };
 pub(crate) use item_count::count_directory_items;
 #[cfg(target_os = "macos")]

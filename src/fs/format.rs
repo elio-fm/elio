@@ -1,8 +1,22 @@
 use super::SymlinkInfo;
 use ratatui::layout::Rect;
-use std::{io, time::SystemTime};
+use std::{io, path::Path, time::SystemTime};
 
 const SIZE_UNITS: [&str; 7] = ["B", "kB", "MB", "GB", "TB", "PB", "EB"];
+
+pub(crate) fn display_path(path: &Path) -> String {
+    strip_windows_verbatim_prefix(&path.display().to_string())
+}
+
+fn strip_windows_verbatim_prefix(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = path.strip_prefix(r"\\?\") {
+        rest.to_string()
+    } else {
+        path.to_string()
+    }
+}
 
 pub(crate) fn rect_contains(rect: Rect, x: u16, y: u16) -> bool {
     x >= rect.x
@@ -158,5 +172,33 @@ mod tests {
         };
 
         assert_eq!(symlink_target_display_label(&symlink), "bad^Mname^[");
+    }
+
+    #[test]
+    fn removes_windows_drive_verbatim_prefix() {
+        assert_eq!(
+            strip_windows_verbatim_prefix(r"\\?\C:\Users\migue\AppData\Roaming"),
+            r"C:\Users\migue\AppData\Roaming"
+        );
+    }
+
+    #[test]
+    fn removes_windows_unc_verbatim_prefix() {
+        assert_eq!(
+            strip_windows_verbatim_prefix(r"\\?\UNC\server\share\folder"),
+            r"\\server\share\folder"
+        );
+    }
+
+    #[test]
+    fn leaves_regular_paths_unchanged() {
+        assert_eq!(
+            strip_windows_verbatim_prefix("/home/user/project"),
+            "/home/user/project"
+        );
+        assert_eq!(
+            strip_windows_verbatim_prefix(r"C:\Users\migue"),
+            r"C:\Users\migue"
+        );
     }
 }
