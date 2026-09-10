@@ -4,36 +4,239 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::super::OpenWithApplication;
-use super::desktop_file::{
-    DesktopEntryCandidate, parse_desktop_entry, parse_mimeapps_defaults, parse_mimeapps_removed,
-};
-use super::exec::expand_exec_template;
+
+pub(super) struct DesktopEntryCandidate {
+    pub(super) name: String,
+    pub(super) exec: String,
+    pub(super) mime_types: Vec<String>,
+    pub(super) terminal: bool,
+    only_show_in: Vec<String>,
+    not_show_in: Vec<String>,
+}
+
+impl DesktopEntryCandidate {
+    pub(super) fn is_shown_in(&self, desktops: &[String]) -> bool {
+        if desktops.is_empty() {
+            return true;
+        }
+        if !self.only_show_in.is_empty()
+            && !self.only_show_in.iter().any(|desktop| {
+                desktops
+                    .iter()
+                    .any(|current| current.eq_ignore_ascii_case(desktop))
+            })
+        {
+            return false;
+        }
+        !self.not_show_in.iter().any(|desktop| {
+            desktops
+                .iter()
+                .any(|current| current.eq_ignore_ascii_case(desktop))
+        })
+    }
+}
+
+fn parse_mimeapps_removed(contents: &str, mime: &str) -> Vec<String> {
+    parse_mimeapps_section(contents, mime, "[Removed Associations]")
+}
+
+fn parse_mimeapps_defaults(contents: &str, mime: &str) -> Vec<String> {
+    parse_mimeapps_section(contents, mime, "[Default Applications]")
+}
+
+fn parse_mimeapps_section(contents: &str, mime: &str, section: &str) -> Vec<String> {
+    let mut in_section = false;
+    let mut result = Vec::new();
+
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_section = line == section;
+            continue;
+        }
+        if !in_section || line.starts_with('#') {
+            continue;
+        }
+        if let Some((key, value)) = line.split_once('=')
+            && key.trim() == mime
+        {
+            result = value
+                .split(';')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .collect();
+        }
+    }
+
+    result
+}
+
+pub(super) fn parse_desktop_entry(contents: &str) -> Option<DesktopEntryCandidate> {
+    let mut in_entry = false;
+    let mut name = None;
+    let mut exec = None;
+    let mut mime_types = Vec::new();
+    let mut hidden = false;
+    let mut no_display = false;
+    let mut terminal = false;
+    let mut only_show_in = Vec::new();
+    let mut not_show_in = Vec::new();
+
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_entry = line == "[Desktop Entry]";
+            continue;
+        }
+        if !in_entry || line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let value = value.trim();
+        match key.trim() {
+            "Name" if name.is_none() => name = Some(value.to_string()),
+            "Exec" => exec = Some(value.to_string()),
+            "MimeType" => mime_types = semicolon_list(value),
+            "Hidden" => hidden = value.eq_ignore_ascii_case("true"),
+            "NoDisplay" => no_display = value.eq_ignore_ascii_case("true"),
+            "Terminal" => terminal = value.eq_ignore_ascii_case("true"),
+            "OnlyShowIn" => only_show_in = semicolon_list(value),
+            "NotShowIn" => not_show_in = semicolon_list(value),
+            _ => {}
+        }
+    }
+
+    if hidden || no_display {
+        return None;
+    }
+
+    Some(DesktopEntryCandidate {
+        name: name?,
+        exec: exec?,
+        mime_types,
+        terminal,
+        only_show_in,
+        not_show_in,
+    })
+}
+
+fn semicolon_list(value: &str) -> Vec<String> {
+    value
+        .split(';')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+pub(super) fn expand_exec_template(exec: &str, target: &Path) -> Option<(String, Vec<String>)> {
+    let target_str = target.to_str()?;
+    let tokens = tokenize_exec(exec);
+    let mut expanded = Vec::new();
+
+    for token in tokens {
+        match token.as_str() {
+            "%i" | "%c" | "%k" => {}
+            "%f" | "%F" | "%u" | "%U" => expanded.push(target_str.to_string()),
+            other => {
+                let replaced = other
+                    .replace("%f", target_str)
+                    .replace("%F", target_str)
+                    .replace("%u", target_str)
+                    .replace("%U", target_str)
+                    .replace("%i", "")
+                    .replace("%c", "")
+                    .replace("%k", "");
+                let clean = strip_unknown_field_codes(&replaced);
+                if !clean.is_empty() {
+                    expanded.push(clean);
+                }
+            }
+        }
+    }
+
+    if expanded.is_empty() {
+        return None;
+    }
+    let program = expanded.remove(0);
+    Some((program, expanded))
+}
+
+fn strip_unknown_field_codes(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character == '%' {
+            match chars.peek() {
+                Some('%') => {
+                    chars.next();
+                    result.push('%');
+                }
+                Some(_) => {
+                    chars.next();
+                }
+                None => {}
+            }
+        } else {
+            result.push(character);
+        }
+    }
+    result
+}
+
+fn tokenize_exec(exec: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut chars = exec.chars().peekable();
+
+    while let Some(character) = chars.next() {
+        match character {
+            '"' => in_quotes = !in_quotes,
+            '\\' => {
+                if let Some(next) = chars.next() {
+                    current.push(next);
+                }
+            }
+            ' ' | '\t' if !in_quotes => {
+                if !current.is_empty() {
+                    tokens.push(current.clone());
+                    current.clear();
+                }
+            }
+            _ => current.push(character),
+        }
+    }
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+    tokens
+}
 
 /// Manual desktop-file scan: walks all desktop entry directories and returns
 /// apps that explicitly list `mime` in their `MimeType=` field.
 /// Used as a fallback when `gio` is unavailable.
-pub(super) fn discover_via_desktop_scan(mime: &str, path: &Path) -> Vec<OpenWithApplication> {
-    discover_via_desktop_scan_in_dirs(mime, path, &desktop_entry_dirs())
+pub(super) fn applications_for(mime: &str, path: &Path) -> Vec<OpenWithApplication> {
+    applications_for_in_dirs(mime, path, &desktop_entry_dirs())
 }
 
 /// Inner scan that accepts an explicit directory list (allows hermetic testing).
-pub(super) fn discover_via_desktop_scan_in_dirs(
-    mime: &str,
-    path: &Path,
-    dirs: &[PathBuf],
-) -> Vec<OpenWithApplication> {
-    discover_via_desktop_scan_inner(mime, path, dirs, &mimeapps_paths())
+fn applications_for_in_dirs(mime: &str, path: &Path, dirs: &[PathBuf]) -> Vec<OpenWithApplication> {
+    applications_for_in_paths(mime, path, dirs, &mimeapps_paths())
 }
 
 /// Innermost scan accepting both explicit desktop dirs and explicit mimeapps
 /// paths, enabling fully hermetic tests without environment-variable mutation.
-fn discover_via_desktop_scan_inner(
+fn applications_for_in_paths(
     mime: &str,
     path: &Path,
     dirs: &[PathBuf],
     mime_paths: &[PathBuf],
 ) -> Vec<OpenWithApplication> {
-    let desktops = super::current_desktops();
+    let desktops = super::xdg_environment::current_desktops();
 
     // Collect all desktop entries that declare this MIME type, keyed by
     // desktop-id.  Higher-priority directories come first; once a desktop-id
@@ -101,7 +304,7 @@ fn discover_via_desktop_scan_inner(
         first_default_emitted = true;
         apps.push(OpenWithApplication {
             display_name: candidate.name,
-            desktop_id: Some(desktop_id.clone()),
+            application_id: Some(desktop_id.clone()),
             program,
             args,
             is_default,
@@ -118,7 +321,7 @@ fn discover_via_desktop_scan_inner(
         };
         apps.push(OpenWithApplication {
             display_name: candidate.name,
-            desktop_id: Some(desktop_id),
+            application_id: Some(desktop_id),
             program,
             args,
             is_default: false,
@@ -136,7 +339,7 @@ fn discover_via_desktop_scan_inner(
 /// managers are discovered even when they are not in `XDG_DATA_DIRS`.
 pub(super) fn desktop_entry_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
-    let data_dirs = super::xdg_data_dirs();
+    let data_dirs = super::xdg_environment::data_dirs();
 
     // XDG_DATA_HOME/applications — highest-priority user directory.
     if let Some(data_home) = data_dirs.first() {
@@ -146,7 +349,7 @@ pub(super) fn desktop_entry_dirs() -> Vec<PathBuf> {
     // Flatpak user exports sit between user data home and system dirs.
     // On many systems Flatpak adds this to XDG_DATA_DIRS itself, so the
     // deduplication step below will handle the overlap.
-    if let Some(home) = super::invoking_home_dir() {
+    if let Some(home) = super::xdg_environment::invoking_home_dir() {
         dirs.push(home.join(".local/share/flatpak/exports/share/applications"));
     }
 
@@ -183,7 +386,7 @@ pub(super) fn mimeapps_paths() -> Vec<PathBuf> {
 
     // Desktop names (lowercased) for per-desktop filename variants.
     // XDG spec: "$desktop" is each component of XDG_CURRENT_DESKTOP, lowercased.
-    let desktops: Vec<String> = super::current_desktops()
+    let desktops: Vec<String> = super::xdg_environment::current_desktops()
         .into_iter()
         .map(|s| s.to_lowercase())
         .collect();
@@ -191,7 +394,7 @@ pub(super) fn mimeapps_paths() -> Vec<PathBuf> {
     // ── Config-dir section ────────────────────────────────────────────────────
 
     // $XDG_CONFIG_HOME defaults to ~/.config
-    if let Some(config_home) = super::invoking_config_home()
+    if let Some(config_home) = super::xdg_environment::invoking_config_home()
         && !config_home.as_os_str().is_empty()
     {
         for desktop in &desktops {
@@ -216,7 +419,7 @@ pub(super) fn mimeapps_paths() -> Vec<PathBuf> {
 
     // ── Data-dir/applications section ─────────────────────────────────────────
 
-    for data_dir in super::xdg_data_dirs() {
+    for data_dir in super::xdg_environment::data_dirs() {
         let apps = data_dir.join("applications");
         for desktop in &desktops {
             paths.push(apps.join(format!("{desktop}-mimeapps.list")));
@@ -279,4 +482,5 @@ fn collect_desktop_entries_recursive(
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
+#[path = "tests/desktop_applications.rs"]
 mod tests;

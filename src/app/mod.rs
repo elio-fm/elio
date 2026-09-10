@@ -9,7 +9,7 @@ mod git;
 mod input;
 mod jobs;
 mod local_filter;
-mod open_with;
+mod open_with_overlay;
 mod overlays;
 use crate::{config, preview};
 mod search;

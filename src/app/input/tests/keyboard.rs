@@ -19,7 +19,7 @@ struct DefaultOpenWithAppGuard;
 #[cfg(all(unix, not(target_os = "macos")))]
 impl DefaultOpenWithAppGuard {
     fn install(app: crate::opening::open_with::OpenWithApplication) -> Self {
-        crate::opening::open_with::set_default_open_with_application_for_test(Some(app));
+        crate::opening::open_with::set_default_application_for_test(Some(app));
         Self
     }
 }
@@ -27,7 +27,7 @@ impl DefaultOpenWithAppGuard {
 #[cfg(all(unix, not(target_os = "macos")))]
 impl Drop for DefaultOpenWithAppGuard {
     fn drop(&mut self) {
-        crate::opening::open_with::set_default_open_with_application_for_test(None);
+        crate::opening::open_with::set_default_application_for_test(None);
     }
 }
 
@@ -37,7 +37,7 @@ struct OpenWithAppsFoundGuard;
 #[cfg(all(unix, not(target_os = "macos")))]
 impl OpenWithAppsFoundGuard {
     fn install(found: bool) -> Self {
-        crate::opening::open_with::set_open_with_apps_found_for_test(Some(found));
+        crate::opening::open_with::set_applications_found_for_test(Some(found));
         Self
     }
 }
@@ -45,7 +45,7 @@ impl OpenWithAppsFoundGuard {
 #[cfg(all(unix, not(target_os = "macos")))]
 impl Drop for OpenWithAppsFoundGuard {
     fn drop(&mut self) {
-        crate::opening::open_with::set_open_with_apps_found_for_test(None);
+        crate::opening::open_with::set_applications_found_for_test(None);
     }
 }
 
@@ -55,7 +55,7 @@ struct EditorFallbackAppGuard;
 #[cfg(all(unix, not(target_os = "macos")))]
 impl EditorFallbackAppGuard {
     fn install(app: crate::opening::open_with::OpenWithApplication) -> Self {
-        crate::opening::open_with::set_editor_fallback_application_for_test(Some(app));
+        crate::opening::open_with::set_editor_fallback_for_test(Some(app));
         Self
     }
 }
@@ -63,7 +63,7 @@ impl EditorFallbackAppGuard {
 #[cfg(all(unix, not(target_os = "macos")))]
 impl Drop for EditorFallbackAppGuard {
     fn drop(&mut self) {
-        crate::opening::open_with::set_editor_fallback_application_for_test(None);
+        crate::opening::open_with::set_editor_fallback_for_test(None);
     }
 }
 
@@ -76,7 +76,7 @@ fn fake_default_open_with_app(
 ) -> crate::opening::open_with::OpenWithApplication {
     crate::opening::open_with::OpenWithApplication {
         display_name: display_name.to_string(),
-        desktop_id: None,
+        application_id: None,
         program: program.to_string(),
         args,
         is_default: true,
