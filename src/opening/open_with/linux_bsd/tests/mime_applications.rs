@@ -158,7 +158,7 @@ fn display_name_extension_can_override_collision_suffixed_storage_path() {
 
 #[test]
 fn mime_from_xdg_database_returns_expected_type_for_common_extensions() {
-    let has_db = super::super::xdg_data_dirs()
+    let has_db = super::super::xdg_environment::data_dirs()
         .iter()
         .any(|d| d.join("mime/globs2").exists() || d.join("mime/globs").exists());
     if !has_db {
@@ -168,7 +168,7 @@ fn mime_from_xdg_database_returns_expected_type_for_common_extensions() {
     let result = mime_from_data_dirs_with_name(
         Path::new("/any/path/image.png"),
         None,
-        &super::super::xdg_data_dirs(),
+        &super::super::xdg_environment::data_dirs(),
     );
     assert_eq!(
         result.as_deref(),

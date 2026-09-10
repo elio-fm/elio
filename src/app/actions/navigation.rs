@@ -441,7 +441,7 @@ impl App {
             if self.queue_terminal_default_open_if_needed(&entry) {
                 return Ok(());
             }
-            if !crate::opening::open_with::open_with_apps_found_for_entry(&entry) {
+            if !crate::opening::open_with::has_applications_for(&entry) {
                 if self.queue_editor_fallback_open_if_needed(&entry) {
                     return Ok(());
                 }
@@ -475,7 +475,7 @@ impl App {
             if self.queue_terminal_default_open_if_needed(entry) {
                 return Ok(());
             }
-            if !crate::opening::open_with::open_with_apps_found_for_entry(entry) {
+            if !crate::opening::open_with::has_applications_for(entry) {
                 if self.queue_editor_fallback_open_if_needed(entry) {
                     return Ok(());
                 }
@@ -489,7 +489,7 @@ impl App {
 
     #[cfg(all(unix, not(target_os = "macos")))]
     fn queue_terminal_default_open_if_needed(&mut self, entry: &Entry) -> bool {
-        let Some(app) = crate::opening::open_with::default_open_with_application_for_entry(entry)
+        let Some(app) = crate::opening::open_with::default_application_for(entry)
             .filter(|app| app.requires_terminal)
         else {
             return false;
@@ -500,8 +500,7 @@ impl App {
 
     #[cfg(all(unix, not(target_os = "macos")))]
     fn queue_editor_fallback_open_if_needed(&mut self, entry: &Entry) -> bool {
-        let Some(app) = crate::opening::open_with::editor_fallback_application_for_entry(entry)
-        else {
+        let Some(app) = crate::opening::open_with::editor_fallback_for(entry) else {
             return false;
         };
 

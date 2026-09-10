@@ -107,7 +107,7 @@ fn parse_gio_mime_output_handles_empty_input() {
     assert!(result.is_empty());
 }
 
-// ── candidate_paths_for_desktop_id ────────────────────────────────────────
+// ── candidate_paths_for_desktop_id ────────────────────────────────────────────
 
 #[test]
 fn candidate_paths_no_dash_returns_flat_path() {
@@ -171,5 +171,5 @@ fn reads_nested_desktop_file_via_hyphenated_id() {
 
     let app = result.expect("should find kde/konsole.desktop via kde-konsole.desktop id");
     assert_eq!(app.display_name, "Konsole");
-    assert_eq!(app.desktop_id.as_deref(), Some("kde-konsole.desktop"));
+    assert_eq!(app.application_id.as_deref(), Some("kde-konsole.desktop"));
 }

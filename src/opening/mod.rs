@@ -8,5 +8,7 @@ pub(crate) use application_launching::launch_application;
 pub(crate) use application_launching::launch_application_with_target;
 pub(crate) use open_rules::{OpenPlan, plans_for_entries, tokenize_command};
 pub(crate) use system_openers::open_in_system;
+#[cfg(target_os = "macos")]
+pub(crate) use system_openers::open_in_text_editor;
 #[cfg(test)]
 pub(crate) use system_openers::set_open_in_system_capture_for_test;

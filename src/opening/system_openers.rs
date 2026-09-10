@@ -65,6 +65,12 @@ pub(crate) fn open_in_system(target: &Path) -> Result<(), String> {
     }
 }
 
+#[cfg(target_os = "macos")]
+pub(crate) fn open_in_text_editor(target: &Path) -> Result<(), String> {
+    super::launch_application_with_target("open", &["-t"], target)
+        .map_err(|error| format!("open: {error}"))
+}
+
 #[cfg(test)]
 pub(crate) fn set_open_in_system_capture_for_test(path: Option<PathBuf>) {
     TEST_OPEN_IN_SYSTEM_CAPTURE.with(|slot| *slot.borrow_mut() = path);

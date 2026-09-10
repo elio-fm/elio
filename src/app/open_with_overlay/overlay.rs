@@ -83,10 +83,10 @@ impl App {
     pub(in crate::app) fn open_open_with_overlay_for_entry(&mut self, entry: crate::fs::Entry) {
         let path = entry.path.clone();
         #[cfg(test)]
-        let apps = open_with::discovered_open_with_apps_for_test()
-            .unwrap_or_else(|| open_with::discover_open_with_applications_for_entry(&entry));
+        let apps = open_with::applications_for_test()
+            .unwrap_or_else(|| open_with::applications_for(&entry));
         #[cfg(not(test))]
-        let apps = open_with::discover_open_with_applications_for_entry(&entry);
+        let apps = open_with::applications_for(&entry);
         self.handle_discovered_open_with_apps(&path, apps, open_with_fallback, |app| {
             launch_application(&app.program, &app.args)
         });
@@ -254,8 +254,9 @@ fn is_env_editor_label(display_name: &str) -> bool {
 fn open_with_fallback(path: &Path) -> std::result::Result<FallbackOpenOutcome, String> {
     #[cfg(target_os = "macos")]
     {
-        if open_with::path_is_text_like(path) {
-            return open_in_text_editor(path).map(|()| FallbackOpenOutcome::TextEditor);
+        if open_with::is_editor_compatible(path) {
+            return crate::opening::open_in_text_editor(path)
+                .map(|()| FallbackOpenOutcome::TextEditor);
         }
         return open_in_system(path).map(|()| FallbackOpenOutcome::DefaultApp);
     }
@@ -268,12 +269,6 @@ fn open_with_fallback(path: &Path) -> std::result::Result<FallbackOpenOutcome, S
 
     #[cfg(all(any(not(unix), test), not(target_os = "macos")))]
     open_in_system(path).map(|()| FallbackOpenOutcome::DefaultApp)
-}
-
-#[cfg(target_os = "macos")]
-fn open_in_text_editor(path: &Path) -> std::result::Result<(), String> {
-    crate::opening::launch_application_with_target("open", &["-t"], path)
-        .map_err(|error| format!("open: {error}"))
 }
 
 // ── Test seam ─────────────────────────────────────────────────────────────────
@@ -314,7 +309,7 @@ impl App {
                         label: display_name.clone(),
                         app: OpenWithApplication {
                             display_name,
-                            desktop_id: None,
+                            application_id: None,
                             program,
                             args,
                             is_default: false,

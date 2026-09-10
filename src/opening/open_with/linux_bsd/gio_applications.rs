@@ -1,4 +1,4 @@
-// This module is only compiled on Linux / BSD (gated in discovery/mod.rs).
+// This module is only compiled on Linux / BSD.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -6,17 +6,19 @@ use std::process::Command;
 
 use crate::preview::process::run_command_capture_stdout_cancellable;
 
-use super::super::OpenWithApplication;
-use super::desktop_file::{DesktopEntryCandidate, parse_desktop_entry};
-use super::exec::expand_exec_template;
-use super::scan::desktop_entry_dirs;
+use super::{
+    super::OpenWithApplication,
+    desktop_applications::{
+        DesktopEntryCandidate, desktop_entry_dirs, expand_exec_template, parse_desktop_entry,
+    },
+};
 
 /// Asks `gio mime <mime>` for the full list of registered applications,
 /// including those that handle parent MIME types via inheritance.
 ///
 /// Returns `None` if gio is unavailable or was canceled; returns `Some(vec![])`
 /// if gio ran successfully but found no applications.
-pub(super) fn discover_via_gio(
+pub(super) fn applications_for(
     mime: &str,
     path: &Path,
     canceled: &impl Fn() -> bool,
@@ -33,7 +35,7 @@ pub(super) fn discover_via_gio(
     }
 
     let dirs = desktop_entry_dirs();
-    let desktops = super::current_desktops();
+    let desktops = super::xdg_environment::current_desktops();
     let mut apps = Vec::new();
     for (desktop_id, is_default) in entries {
         if let Some(app) =
@@ -78,7 +80,7 @@ fn read_desktop_entry_for_id(
             let (program, args) = expand_exec_template(&candidate.exec, target)?;
             return Some(OpenWithApplication {
                 display_name: candidate.name,
-                desktop_id: Some(desktop_id.to_string()),
+                application_id: Some(desktop_id.to_string()),
                 program,
                 args,
                 is_default,
@@ -175,4 +177,5 @@ fn parse_gio_mime_output(text: &str) -> Vec<(String, bool)> {
 }
 
 #[cfg(test)]
+#[path = "tests/gio_applications.rs"]
 mod tests;

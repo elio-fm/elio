@@ -78,6 +78,6 @@ assets = [
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Foundation types for path/string handling, display names, and bundle IDs.
-# CoreServices (linked inline in macos.rs) provides the Launch Services C API
+# CoreServices (linked in launch_services.rs) provides the Launch Services C API
 # used for app discovery — the same API Finder uses for its "Open With" menu.
 objc2-foundation = { version = "0.3", features = ["NSBundle", "NSFileManager", "NSString", "NSURL"] }

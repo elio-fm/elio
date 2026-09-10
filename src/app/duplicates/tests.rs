@@ -11,21 +11,21 @@ struct DiscoveredOpenWithAppsGuard;
 
 impl DiscoveredOpenWithAppsGuard {
     fn install(apps: Vec<crate::opening::open_with::OpenWithApplication>) -> Self {
-        crate::opening::open_with::set_discovered_open_with_apps_for_test(Some(apps));
+        crate::opening::open_with::set_applications_for_test(Some(apps));
         Self
     }
 }
 
 impl Drop for DiscoveredOpenWithAppsGuard {
     fn drop(&mut self) {
-        crate::opening::open_with::set_discovered_open_with_apps_for_test(None);
+        crate::opening::open_with::set_applications_for_test(None);
     }
 }
 
 fn fake_open_with_app(display_name: &str) -> crate::opening::open_with::OpenWithApplication {
     crate::opening::open_with::OpenWithApplication {
         display_name: display_name.to_string(),
-        desktop_id: None,
+        application_id: None,
         program: "true".to_string(),
         args: vec![],
         is_default: false,

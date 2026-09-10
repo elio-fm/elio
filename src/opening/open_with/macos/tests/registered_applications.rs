@@ -1,7 +1,5 @@
 use super::*;
 
-// ── discover_via_nsworkspace ──────────────────────────────────────────────
-
 #[test]
 fn discover_returns_apps_for_plain_text_file() {
     // Every macOS system has at least one app registered for .txt
@@ -9,7 +7,7 @@ fn discover_returns_apps_for_plain_text_file() {
     let tmp = std::env::temp_dir().join("elio-macos-open-with-test.txt");
     std::fs::write(&tmp, "hello").expect("write temp file");
 
-    let apps = discover_via_nsworkspace(&tmp);
+    let apps = applications_for(&tmp);
     let _ = std::fs::remove_file(&tmp);
 
     assert!(
@@ -42,7 +40,7 @@ fn discover_returns_apps_for_plain_text_file() {
 fn default_app_is_sorted_first_when_present() {
     let tmp = std::env::temp_dir().join("elio-macos-sort-test.txt");
     std::fs::write(&tmp, "hello").expect("write temp file");
-    let apps = discover_via_nsworkspace(&tmp);
+    let apps = applications_for(&tmp);
     let _ = std::fs::remove_file(&tmp);
 
     if apps.iter().any(|a| a.is_default) {
@@ -58,27 +56,9 @@ fn discover_returns_empty_for_non_utf8_path() {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
     let non_utf8 = OsStr::from_bytes(b"/tmp/\xff\xfe.txt");
-    let apps = discover_via_nsworkspace(Path::new(non_utf8));
+    let apps = applications_for(Path::new(non_utf8));
     assert!(
         apps.is_empty(),
         "expected empty vec for non-UTF-8 path, got {apps:?}"
     );
-}
-
-// ── cf_url_to_path ────────────────────────────────────────────────────────
-
-#[test]
-fn cf_url_to_path_returns_none_for_null() {
-    assert!(cf_url_to_path(std::ptr::null()).is_none());
-}
-
-#[test]
-fn cf_url_to_path_round_trips_via_nsurl() {
-    // Build a NSURL for a known path and verify the round-trip through CF.
-    let ns_path = NSString::from_str("/Applications");
-    let ns_url = NSURL::fileURLWithPath(&ns_path);
-    let cf_url: CFURLRef = (&*ns_url) as *const NSURL as *const c_void;
-
-    let result = cf_url_to_path(cf_url);
-    assert_eq!(result.as_deref(), Some("/Applications"));
 }

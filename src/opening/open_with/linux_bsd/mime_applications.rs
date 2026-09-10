@@ -1,9 +1,66 @@
-// This module is only compiled on Linux / BSD (gated in discovery/mod.rs).
+// This module is only compiled on Linux / BSD.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::preview::process::run_command_capture_stdout_cancellable;
+
+use super::super::{OpenWithApplication, terminal_editors};
+
+pub(in crate::opening::open_with) fn applications_for(
+    path: &Path,
+    display_name: Option<&str>,
+    include_editor_fallback: bool,
+) -> Vec<OpenWithApplication> {
+    if path.is_dir() {
+        return applications_for_mime("inode/directory", path, true, false);
+    }
+
+    use std::time::{Duration, Instant};
+
+    // 3-second budget for subprocess fallbacks; pure-Rust MIME lookup is
+    // instant and is tried first, so the timeout rarely matters in practice.
+    let deadline = Instant::now() + Duration::from_millis(3000);
+    let canceled = || Instant::now() > deadline;
+
+    let Some(mime_type) = detect_mime_type_with_name(path, display_name, &canceled) else {
+        return vec![];
+    };
+
+    applications_for_mime(&mime_type, path, include_editor_fallback, true)
+}
+
+#[cfg_attr(test, allow(dead_code))]
+pub(in crate::opening::open_with) fn desktop_applications_for(
+    path: &Path,
+    display_name: Option<&str>,
+) -> Vec<OpenWithApplication> {
+    applications_for(path, display_name, false)
+}
+
+fn applications_for_mime(
+    mime_type: &str,
+    path: &Path,
+    include_env_editor_fallback: bool,
+    require_text_like_editor: bool,
+) -> Vec<OpenWithApplication> {
+    use std::time::{Duration, Instant};
+
+    let deadline = Instant::now() + Duration::from_millis(3000);
+    let canceled = || Instant::now() > deadline;
+
+    // Primary: gio handles MIME inheritance (e.g. text/markdown → text/plain),
+    // aliases, and added/removed associations from mimeapps.list.
+    let mut apps = match super::gio_applications::applications_for(mime_type, path, &canceled) {
+        Some(apps) if !apps.is_empty() => apps,
+        _ => super::desktop_applications::applications_for(mime_type, path),
+    };
+
+    if include_env_editor_fallback {
+        terminal_editors::append_environment_editors(&mut apps, path, require_text_like_editor);
+    }
+    apps
+}
 
 pub(super) fn detect_mime_type_with_name(
     path: &Path,
@@ -14,7 +71,9 @@ pub(super) fn detect_mime_type_with_name(
     // This is instant (pure file read), covers virtually all files with a
     // recognisable extension, and works correctly on both Linux and BSD because
     // it searches the full XDG data dir chain rather than a hardcoded path.
-    if let Some(mime) = mime_from_data_dirs_with_name(path, display_name, &super::xdg_data_dirs()) {
+    if let Some(mime) =
+        mime_from_data_dirs_with_name(path, display_name, &super::xdg_environment::data_dirs())
+    {
         return Some(mime);
     }
 
@@ -161,4 +220,5 @@ fn parse_gio_content_type(output: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+#[path = "tests/mime_applications.rs"]
 mod tests;
