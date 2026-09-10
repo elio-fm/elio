@@ -201,7 +201,7 @@ pub(super) fn mimeapps_paths() -> Vec<PathBuf> {
     }
 
     // $XDG_CONFIG_DIRS defaults to /etc/xdg
-    for dir in crate::config::invoking_user_env_var("XDG_CONFIG_DIRS")
+    for dir in crate::elevated_session::env_var("XDG_CONFIG_DIRS")
         .and_then(|value| value.into_string().ok())
         .unwrap_or_else(|| "/etc/xdg".to_string())
         .split(':')

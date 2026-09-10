@@ -1,6 +1,6 @@
 use super::Config;
 #[cfg(unix)]
-use super::invoking_user::InvocationContext;
+use crate::elevated_session::InvocationContext;
 use std::{
     env, fs, io,
     path::{Path, PathBuf},
@@ -27,7 +27,7 @@ fn config_home() -> Option<PathBuf> {
         let process_xdg_home = env::var_os("XDG_CONFIG_HOME").map(PathBuf::from);
         let process_home = dirs::home_dir();
         config_home_for_context(
-            super::invoking_user::context(),
+            crate::elevated_session::context(),
             process_xdg_home.as_deref(),
             process_home.as_deref(),
         )
@@ -134,7 +134,7 @@ fn config_path() -> Option<PathBuf> {
 mod tests {
     use super::*;
     #[cfg(unix)]
-    use crate::config::InvokingUser;
+    use crate::elevated_session::InvokingUser;
     #[cfg(unix)]
     use std::ffi::OsString;
     use std::time::{SystemTime, UNIX_EPOCH};

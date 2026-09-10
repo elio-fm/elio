@@ -1,6 +1,4 @@
 mod config;
-#[cfg(unix)]
-mod invoking_user_fs;
 mod metrics;
 mod pool;
 mod results;

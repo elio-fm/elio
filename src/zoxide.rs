@@ -87,7 +87,7 @@ fn zoxide_command() -> io::Result<Command> {
     #[cfg(unix)]
     {
         let mut command = command;
-        crate::invoking_user_command::prepare_external(&mut command, None)?;
+        crate::elevated_session::prepare_external(&mut command, None)?;
         Ok(command)
     }
     #[cfg(not(unix))]
@@ -113,7 +113,7 @@ fn fzf_options() -> String {
 
 fn invoking_user_environment_string(name: &str) -> Option<String> {
     #[cfg(unix)]
-    let value = crate::config::invoking_user_env_var(name);
+    let value = crate::elevated_session::env_var(name);
     #[cfg(not(unix))]
     let value = env::var_os(name);
 

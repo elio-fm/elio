@@ -73,17 +73,16 @@ fn discover_open_with_apps_inner(
 #[cfg(all(unix, not(target_os = "macos")))]
 pub(super) fn xdg_data_dirs() -> Vec<std::path::PathBuf> {
     let mut dirs = Vec::new();
-    let context = crate::config::invoking_user_context();
+    let context = crate::elevated_session::context();
 
-    if let Some(data_home) = xdg_data_home_for_context(
-        context,
-        crate::config::invoking_user_env_var("XDG_DATA_HOME"),
-    ) && !data_home.as_os_str().is_empty()
+    if let Some(data_home) =
+        xdg_data_home_for_context(context, crate::elevated_session::env_var("XDG_DATA_HOME"))
+        && !data_home.as_os_str().is_empty()
     {
         dirs.push(data_home);
     }
 
-    for entry in crate::config::invoking_user_env_var("XDG_DATA_DIRS")
+    for entry in crate::elevated_session::env_var("XDG_DATA_DIRS")
         .and_then(|value| value.into_string().ok())
         .unwrap_or_else(|| "/usr/local/share:/usr/share".to_string())
         .split(':')
@@ -97,62 +96,62 @@ pub(super) fn xdg_data_dirs() -> Vec<std::path::PathBuf> {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 fn xdg_data_home_for_context(
-    context: &crate::config::InvocationContext,
+    context: &crate::elevated_session::InvocationContext,
     normal_xdg_data_home: Option<std::ffi::OsString>,
 ) -> Option<std::path::PathBuf> {
     match context {
-        crate::config::InvocationContext::Normal
-        | crate::config::InvocationContext::RootSession => normal_xdg_data_home
+        crate::elevated_session::InvocationContext::Normal
+        | crate::elevated_session::InvocationContext::RootSession => normal_xdg_data_home
             .map(std::path::PathBuf::from)
             .or_else(|| dirs::home_dir().map(|home| home.join(".local/share"))),
-        crate::config::InvocationContext::Elevated(user) => user
+        crate::elevated_session::InvocationContext::Elevated(user) => user
             .xdg_data_home
             .clone()
             .or_else(|| Some(user.home.join(".local/share"))),
-        crate::config::InvocationContext::ElevatedUnresolved => None,
+        crate::elevated_session::InvocationContext::ElevatedUnresolved => None,
     }
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
 pub(super) fn invoking_home_dir() -> Option<std::path::PathBuf> {
-    invoking_home_dir_for_context(crate::config::invoking_user_context())
+    invoking_home_dir_for_context(crate::elevated_session::context())
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
 fn invoking_home_dir_for_context(
-    context: &crate::config::InvocationContext,
+    context: &crate::elevated_session::InvocationContext,
 ) -> Option<std::path::PathBuf> {
     match context {
-        crate::config::InvocationContext::Normal
-        | crate::config::InvocationContext::RootSession => dirs::home_dir(),
-        crate::config::InvocationContext::Elevated(user) => Some(user.home.clone()),
-        crate::config::InvocationContext::ElevatedUnresolved => None,
+        crate::elevated_session::InvocationContext::Normal
+        | crate::elevated_session::InvocationContext::RootSession => dirs::home_dir(),
+        crate::elevated_session::InvocationContext::Elevated(user) => Some(user.home.clone()),
+        crate::elevated_session::InvocationContext::ElevatedUnresolved => None,
     }
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
 pub(super) fn invoking_config_home() -> Option<std::path::PathBuf> {
     invoking_config_home_for_context(
-        crate::config::invoking_user_context(),
-        crate::config::invoking_user_env_var("XDG_CONFIG_HOME"),
+        crate::elevated_session::context(),
+        crate::elevated_session::env_var("XDG_CONFIG_HOME"),
     )
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
 fn invoking_config_home_for_context(
-    context: &crate::config::InvocationContext,
+    context: &crate::elevated_session::InvocationContext,
     normal_xdg_config_home: Option<std::ffi::OsString>,
 ) -> Option<std::path::PathBuf> {
     match context {
-        crate::config::InvocationContext::Normal
-        | crate::config::InvocationContext::RootSession => normal_xdg_config_home
+        crate::elevated_session::InvocationContext::Normal
+        | crate::elevated_session::InvocationContext::RootSession => normal_xdg_config_home
             .map(std::path::PathBuf::from)
             .or_else(|| dirs::home_dir().map(|home| home.join(".config"))),
-        crate::config::InvocationContext::Elevated(user) => user
+        crate::elevated_session::InvocationContext::Elevated(user) => user
             .xdg_config_home
             .clone()
             .or_else(|| Some(user.home.join(".config"))),
-        crate::config::InvocationContext::ElevatedUnresolved => None,
+        crate::elevated_session::InvocationContext::ElevatedUnresolved => None,
     }
 }
 
@@ -160,7 +159,7 @@ fn invoking_config_home_for_context(
 /// original case).  Empty when the variable is unset or empty.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub(super) fn current_desktops() -> Vec<String> {
-    crate::config::invoking_user_env_var("XDG_CURRENT_DESKTOP")
+    crate::elevated_session::env_var("XDG_CURRENT_DESKTOP")
         .and_then(|value| value.into_string().ok())
         .unwrap_or_default()
         .split(':')
@@ -225,8 +224,8 @@ mod tests {
 
     use super::*;
 
-    fn test_user() -> crate::config::InvokingUser {
-        crate::config::InvokingUser {
+    fn test_user() -> crate::elevated_session::InvokingUser {
+        crate::elevated_session::InvokingUser {
             uid: 1000,
             gid: 1000,
             name: OsString::from("paco"),
@@ -241,7 +240,7 @@ mod tests {
 
     #[test]
     fn elevated_discovery_uses_invoking_user_directories() {
-        let context = crate::config::InvocationContext::Elevated(test_user());
+        let context = crate::elevated_session::InvocationContext::Elevated(test_user());
 
         assert_eq!(
             invoking_home_dir_for_context(&context),
@@ -259,7 +258,7 @@ mod tests {
 
     #[test]
     fn unresolved_elevated_discovery_omits_user_directories() {
-        let context = crate::config::InvocationContext::ElevatedUnresolved;
+        let context = crate::elevated_session::InvocationContext::ElevatedUnresolved;
 
         assert_eq!(invoking_home_dir_for_context(&context), None);
         assert_eq!(

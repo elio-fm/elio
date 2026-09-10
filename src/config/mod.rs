@@ -1,5 +1,4 @@
 mod goto;
-mod invoking_user;
 mod keys;
 mod layout;
 mod loading;
@@ -12,20 +11,8 @@ mod ui;
 use serde::Deserialize;
 use std::path::Path;
 
-pub(crate) use self::invoking_user::env_var as invoking_user_env_var;
-
-#[cfg(unix)]
-pub(crate) use self::invoking_user::{
-    InvocationContext, InvokingUser, SESSION_ENVIRONMENT_KEYS, context as invoking_user_context,
-    user_environment_value,
-};
-
-#[cfg(all(unix, not(target_os = "macos")))]
-pub(crate) use self::invoking_user::trash_data_dir;
-
 pub(crate) use self::{
     goto::{BuiltinGoto, GotoConfig, GotoEntrySpec},
-    invoking_user::{home_dir as invoking_user_home_dir, trash_home_dir},
     keys::{Action, ChooserKeyAction, KeyBindings, KeyContext, KeyList, normalized_plain_key_char},
     layout::{LayoutConfig, PaneWeights},
     loading::config_dir,
@@ -56,7 +43,7 @@ struct ConfigFile {
 pub(crate) fn initialize(path: Option<&Path>) -> anyhow::Result<()> {
     #[cfg(unix)]
     // Snapshot the invocation context before loading config or starting workers.
-    let _ = invoking_user::context();
+    let _ = crate::elevated_session::context();
     loading::initialize(path)
 }
 

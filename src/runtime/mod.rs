@@ -133,7 +133,7 @@ fn run_open_command_in_terminal(
     let mut command = Command::new(program);
     command.args(args);
     #[cfg(unix)]
-    crate::invoking_user_command::prepare_external(&mut command, Some(elevated_cwd))?;
+    crate::elevated_session::prepare_external(&mut command, Some(elevated_cwd))?;
     #[cfg(not(unix))]
     let _ = elevated_cwd;
     command.status()
@@ -156,7 +156,7 @@ fn run_blocking_in_terminal_result(
 ) -> std::io::Result<std::process::ExitStatus> {
     let mut command = Command::new(program);
     command.args(args);
-    crate::invoking_user_command::prepare_external(&mut command, None)?;
+    crate::elevated_session::prepare_external(&mut command, None)?;
     command.status()
 }
 

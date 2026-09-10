@@ -212,17 +212,14 @@ fn run_restore(
 fn restore_as_invoking_user(path: &std::path::Path) -> anyhow::Result<Option<String>> {
     #[cfg(unix)]
     {
-        use crate::{
-            config::{InvocationContext, invoking_user_context},
-            user_fs_helper::Request,
-        };
-        match invoking_user_context() {
+        use crate::elevated_session::{InvocationContext, Request};
+        match crate::elevated_session::context() {
             InvocationContext::Normal | InvocationContext::RootSession => {}
             InvocationContext::ElevatedUnresolved => {
                 anyhow::bail!("could not resolve invoking user; nothing was restored")
             }
             InvocationContext::Elevated(user) => {
-                let response = super::super::invoking_user_fs::run(
+                let response = crate::elevated_session::run_as_invoking_user(
                     user,
                     &Request::Restore(path.to_path_buf()),
                 )
@@ -236,7 +233,7 @@ fn restore_as_invoking_user(path: &std::path::Path) -> anyhow::Result<Option<Str
 
 #[cfg(unix)]
 fn restore_helper_response(
-    response: crate::user_fs_helper::Response,
+    response: crate::elevated_session::Response,
 ) -> anyhow::Result<Option<String>> {
     match (response.completed, response.error, response.warning) {
         (1, None, warning) => Ok(warning),
@@ -276,7 +273,7 @@ mod tests {
 
     #[test]
     fn completed_helper_restore_preserves_metadata_warning() {
-        let warning = restore_helper_response(crate::user_fs_helper::Response {
+        let warning = restore_helper_response(crate::elevated_session::Response {
             completed: 1,
             error: None,
             warning: Some("could not update Trash restore metadata".to_string()),
@@ -291,7 +288,7 @@ mod tests {
 
     #[test]
     fn failed_helper_restore_remains_an_error() {
-        let error = restore_helper_response(crate::user_fs_helper::Response {
+        let error = restore_helper_response(crate::elevated_session::Response {
             completed: 0,
             error: Some("permission denied".to_string()),
             warning: None,

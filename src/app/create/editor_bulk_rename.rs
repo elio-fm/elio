@@ -55,7 +55,7 @@ impl App {
             );
         }
 
-        let context = crate::config::invoking_user_context();
+        let context = crate::elevated_session::context();
         let invoking_user = editor_temp_owner(context)?;
         let expected_temp_owner = invoking_user.map(|(uid, _)| uid);
         let temp_path = create_temp_file(&rows, invoking_user)?;
@@ -764,13 +764,15 @@ fn common_root(paths: &[PathBuf]) -> PathBuf {
 
 #[cfg(unix)]
 fn editor_temp_owner(
-    context: &crate::config::InvocationContext,
+    context: &crate::elevated_session::InvocationContext,
 ) -> Result<Option<(libc::uid_t, libc::gid_t)>> {
     match context {
-        crate::config::InvocationContext::Normal
-        | crate::config::InvocationContext::RootSession => Ok(None),
-        crate::config::InvocationContext::Elevated(user) => Ok(Some((user.uid, user.gid))),
-        crate::config::InvocationContext::ElevatedUnresolved => {
+        crate::elevated_session::InvocationContext::Normal
+        | crate::elevated_session::InvocationContext::RootSession => Ok(None),
+        crate::elevated_session::InvocationContext::Elevated(user) => {
+            Ok(Some((user.uid, user.gid)))
+        }
+        crate::elevated_session::InvocationContext::ElevatedUnresolved => {
             bail!("could not resolve invoking user")
         }
     }
@@ -868,7 +870,7 @@ fn read_editor_rename_file(path: &Path, expected_owner: Option<libc::uid_t>) -> 
 fn editor_command() -> (String, Vec<String>) {
     for key in ["VISUAL", "EDITOR"] {
         if let Some(value) =
-            crate::config::invoking_user_env_var(key).and_then(|value| value.into_string().ok())
+            crate::elevated_session::env_var(key).and_then(|value| value.into_string().ok())
         {
             let tokens = crate::app::open_rules::tokenize_command(&value);
             if let Some((program, args)) = split_program_args(tokens) {
@@ -901,14 +903,17 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unresolved_elevation_cannot_prepare_editor_document() {
-        assert!(editor_temp_owner(&crate::config::InvocationContext::ElevatedUnresolved).is_err());
         assert!(
-            editor_temp_owner(&crate::config::InvocationContext::Normal)
+            editor_temp_owner(&crate::elevated_session::InvocationContext::ElevatedUnresolved)
+                .is_err()
+        );
+        assert!(
+            editor_temp_owner(&crate::elevated_session::InvocationContext::Normal)
                 .expect("normal session should be accepted")
                 .is_none()
         );
         assert!(
-            editor_temp_owner(&crate::config::InvocationContext::RootSession)
+            editor_temp_owner(&crate::elevated_session::InvocationContext::RootSession)
                 .expect("root session should be accepted")
                 .is_none()
         );

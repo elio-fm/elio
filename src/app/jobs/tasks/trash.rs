@@ -346,7 +346,7 @@ fn run_permanent_delete(
 
 #[cfg(target_os = "macos")]
 fn macos_restore_origins_trash_dir() -> Option<PathBuf> {
-    crate::config::trash_home_dir().map(|home| home.join(".Trash"))
+    crate::elevated_session::trash_home_dir().map(|home| home.join(".Trash"))
 }
 
 #[cfg(any(test, target_os = "macos"))]
@@ -364,19 +364,19 @@ fn collect_deleted_restore_origin(
 
 #[cfg(target_os = "macos")]
 fn remove_deleted_restore_origins(names: &[String]) -> Result<(), String> {
-    use crate::{config::InvocationContext, user_fs_helper::Request};
+    use crate::elevated_session::{InvocationContext, Request};
 
     if names.is_empty() {
         return Ok(());
     }
-    match crate::config::invoking_user_context() {
+    match crate::elevated_session::context() {
         InvocationContext::Normal | InvocationContext::RootSession => {
             let refs = names.iter().map(String::as_str).collect::<Vec<_>>();
             crate::fs::remove_restore_origins(&refs);
             Ok(())
         }
         InvocationContext::Elevated(user) => {
-            let response = super::super::invoking_user_fs::run(
+            let response = crate::elevated_session::run_as_invoking_user(
                 user,
                 &Request::RemoveRestoreOrigins(names.to_vec()),
             )?;
@@ -630,12 +630,9 @@ enum TrashBatchBackendResult {
 
 #[cfg(unix)]
 fn trash_as_invoking_user(paths: &[&Path]) -> Option<(usize, Vec<String>, Vec<String>, bool)> {
-    use crate::{
-        config::{InvocationContext, invoking_user_context},
-        user_fs_helper::Request,
-    };
+    use crate::elevated_session::{InvocationContext, Request};
 
-    match invoking_user_context() {
+    match crate::elevated_session::context() {
         InvocationContext::Normal | InvocationContext::RootSession => None,
         InvocationContext::ElevatedUnresolved => Some((
             0,
@@ -645,7 +642,8 @@ fn trash_as_invoking_user(paths: &[&Path]) -> Option<(usize, Vec<String>, Vec<St
         )),
         InvocationContext::Elevated(user) => {
             let owned = paths.iter().map(|path| (*path).to_path_buf()).collect();
-            let response = super::super::invoking_user_fs::run(user, &Request::Trash(owned));
+            let response =
+                crate::elevated_session::run_as_invoking_user(user, &Request::Trash(owned));
             Some(match response {
                 Ok(response) => (
                     response.completed,
@@ -665,23 +663,23 @@ fn trash_as_invoking_user(paths: &[&Path]) -> Option<(usize, Vec<String>, Vec<St
 }
 
 #[cfg(unix)]
-pub(crate) fn run_user_trash_helper(paths: &[PathBuf]) -> crate::user_fs_helper::Response {
+pub(crate) fn run_user_trash_helper(paths: &[PathBuf]) -> crate::elevated_session::Response {
     let refs: Vec<_> = paths.iter().map(PathBuf::as_path).collect();
     match trash_with_system_backend(&refs) {
-        TrashBatchBackendResult::Completed => crate::user_fs_helper::Response {
+        TrashBatchBackendResult::Completed => crate::elevated_session::Response {
             completed: paths.len(),
             error: None,
             warning: None,
         },
         #[cfg(any(test, target_os = "macos"))]
         TrashBatchBackendResult::CompletedWithWarning { completed, warning } => {
-            crate::user_fs_helper::Response {
+            crate::elevated_session::Response {
                 completed,
                 error: None,
                 warning: Some(warning),
             }
         }
-        TrashBatchBackendResult::Failed { completed, error } => crate::user_fs_helper::Response {
+        TrashBatchBackendResult::Failed { completed, error } => crate::elevated_session::Response {
             completed,
             error: Some(error),
             warning: None,
@@ -755,7 +753,7 @@ fn correlate_trash_name(
 
 #[cfg(target_os = "macos")]
 fn trash_with_macos_finder(paths: &[&Path]) -> TrashBatchBackendResult {
-    let trash_dir = crate::config::trash_home_dir().map(|home| home.join(".Trash"));
+    let trash_dir = crate::elevated_session::trash_home_dir().map(|home| home.join(".Trash"));
     let before = trash_dir
         .as_deref()
         .ok_or_else(|| "could not determine the selected user's Trash directory".to_string())

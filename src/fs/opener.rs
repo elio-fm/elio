@@ -255,7 +255,7 @@ fn prepare_detached_command(command: &mut Command) {
 
 #[cfg(unix)]
 fn prepare_external_open_command(command: &mut Command) -> io::Result<()> {
-    crate::invoking_user_command::prepare_external(command, None)
+    crate::elevated_session::prepare_external(command, None)
 }
 
 #[cfg(not(unix))]

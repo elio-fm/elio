@@ -33,7 +33,7 @@ pub(crate) fn run_in_current_terminal(cwd: &Path) -> Result<(), String> {
 
     #[cfg(unix)]
     let (invocations, invoking_user) = unix_shell_launch(
-        crate::config::invoking_user_context(),
+        crate::elevated_session::context(),
         std::env::var_os("SHELL"),
     )?;
     #[cfg(not(unix))]
@@ -57,9 +57,9 @@ pub(crate) fn run_in_current_terminal(cwd: &Path) -> Result<(), String> {
 
         #[cfg(unix)]
         if let Some(user) = &invoking_user {
-            crate::invoking_user_command::prepare(&mut command, user, Some(cwd)).map_err(
-                |error| format!("Could not prepare shell as invoking user in {cwd_label}: {error}"),
-            )?;
+            crate::elevated_session::prepare(&mut command, user, Some(cwd)).map_err(|error| {
+                format!("Could not prepare shell as invoking user in {cwd_label}: {error}")
+            })?;
         } else {
             command.current_dir(cwd);
         }
@@ -144,18 +144,24 @@ pub(crate) fn shell_invocations() -> Vec<ShellInvocation> {
 
 #[cfg(unix)]
 fn unix_shell_launch(
-    context: &crate::config::InvocationContext,
+    context: &crate::elevated_session::InvocationContext,
     inherited_shell: Option<OsString>,
-) -> Result<(Vec<ShellInvocation>, Option<&crate::config::InvokingUser>), String> {
+) -> Result<
+    (
+        Vec<ShellInvocation>,
+        Option<&crate::elevated_session::InvokingUser>,
+    ),
+    String,
+> {
     match context {
-        crate::config::InvocationContext::Normal
-        | crate::config::InvocationContext::RootSession => {
+        crate::elevated_session::InvocationContext::Normal
+        | crate::elevated_session::InvocationContext::RootSession => {
             Ok((unix_shell_invocations(inherited_shell), None))
         }
-        crate::config::InvocationContext::Elevated(user) => {
+        crate::elevated_session::InvocationContext::Elevated(user) => {
             Ok((unix_shell_invocations(Some(user.shell.clone())), Some(user)))
         }
-        crate::config::InvocationContext::ElevatedUnresolved => {
+        crate::elevated_session::InvocationContext::ElevatedUnresolved => {
             Err("Could not resolve invoking user; shell was not opened".to_string())
         }
     }
@@ -281,8 +287,8 @@ mod tests {
     }
 
     #[cfg(unix)]
-    fn test_invoking_user(shell: &str) -> crate::config::InvokingUser {
-        crate::config::InvokingUser {
+    fn test_invoking_user(shell: &str) -> crate::elevated_session::InvokingUser {
+        crate::elevated_session::InvokingUser {
             uid: 1000,
             gid: 1000,
             name: OsString::from("paco"),
@@ -299,7 +305,7 @@ mod tests {
     #[test]
     fn elevated_shell_uses_passwd_shell_not_inherited_root_shell() {
         let user = test_invoking_user("/bin/fish");
-        let context = crate::config::InvocationContext::Elevated(user);
+        let context = crate::elevated_session::InvocationContext::Elevated(user);
         let (invocations, actual_user) =
             unix_shell_launch(&context, Some(OsString::from("/bin/root-shell"))).unwrap();
 
@@ -312,7 +318,7 @@ mod tests {
     #[test]
     fn unresolved_elevated_shell_fails_closed() {
         let error = unix_shell_launch(
-            &crate::config::InvocationContext::ElevatedUnresolved,
+            &crate::elevated_session::InvocationContext::ElevatedUnresolved,
             Some(OsString::from("/bin/root-shell")),
         )
         .unwrap_err();
