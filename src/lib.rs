@@ -4,7 +4,6 @@ mod config;
 mod elevated_session;
 mod file_info;
 mod fs;
-mod path_display;
 mod preview;
 mod runtime;
 mod shell;

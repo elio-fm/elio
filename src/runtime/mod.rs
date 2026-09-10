@@ -15,7 +15,7 @@ use self::{
 use crate::{
     RunOptions, RunOutcome,
     app::{App, ChooserExit, PendingTerminalTask},
-    config, path_display, shell, ui, zoxide,
+    config, shell, ui, zoxide,
 };
 #[cfg(unix)]
 use crate::{app::ClipOp, fs::EntryKind};
@@ -161,7 +161,7 @@ fn run_blocking_in_terminal_result(
 }
 
 fn refresh_after_shell(app: &mut App, cwd: &Path) {
-    let cwd_label = path_display::user_facing(cwd);
+    let cwd_label = crate::fs::display_path(cwd);
     match cwd.try_exists() {
         Ok(true) => {
             if let Err(error) = app.reload() {

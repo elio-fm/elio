@@ -29,7 +29,7 @@ impl ShellInvocation {
 
 pub(crate) fn run_in_current_terminal(cwd: &Path) -> Result<(), String> {
     ensure_cwd_exists(cwd)?;
-    let cwd_label = crate::path_display::user_facing(cwd);
+    let cwd_label = crate::fs::display_path(cwd);
 
     #[cfg(unix)]
     let (invocations, invoking_user) = unix_shell_launch(
@@ -232,7 +232,7 @@ fn next_shell_level(current: Option<OsString>) -> OsString {
 }
 
 fn ensure_cwd_exists(cwd: &Path) -> Result<(), String> {
-    let cwd_label = crate::path_display::user_facing(cwd);
+    let cwd_label = crate::fs::display_path(cwd);
     match cwd.try_exists() {
         Ok(true) => Ok(()),
         Ok(false) => Err(format!(

@@ -28,10 +28,7 @@ impl App {
                     suffix,
                 )
             }
-            None => format!(
-                "0/0  {}",
-                crate::path_display::user_facing(&self.navigation.cwd)
-            ),
+            None => format!("0/0  {}", crate::fs::display_path(&self.navigation.cwd)),
         }
     }
 
@@ -668,7 +665,7 @@ impl App {
 fn open_status_name(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| crate::path_display::user_facing(path))
+        .unwrap_or_else(|| crate::fs::display_path(path))
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
