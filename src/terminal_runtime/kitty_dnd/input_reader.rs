@@ -1,65 +1,30 @@
-use std::io;
-
-#[cfg(unix)]
-use std::sync::mpsc;
-
-#[cfg(unix)]
-use std::time::Duration;
-
-#[cfg(unix)]
 use std::{
     fs::OpenOptions,
-    io::Read,
+    io::{self, Read},
     os::fd::AsRawFd,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
-        mpsc::{Receiver, TryRecvError},
+        mpsc::{self, Receiver, TryRecvError},
     },
     thread,
+    time::Duration,
 };
 
-#[cfg(unix)]
 use crossterm::{event::Event, terminal};
 
-#[cfg(unix)]
-use super::{RuntimeInputEvent, parser};
+use super::{KittyDndEvent, Osc72State, crossterm_parser, parse_osc72_with_state};
+use crate::terminal_runtime::terminal_input::InputEvent;
 
-#[cfg(unix)]
 const RESIZE_POLL_INTERVAL: Duration = Duration::from_millis(16);
 
-pub(in crate::runtime) enum RuntimeInputReader {
-    Crossterm,
-    #[cfg(unix)]
-    Custom(CustomInputReader),
-}
-
-impl RuntimeInputReader {
-    pub(in crate::runtime) fn new(use_custom_reader: bool) -> io::Result<Self> {
-        if use_custom_reader {
-            #[cfg(unix)]
-            {
-                CustomInputReader::spawn().map(Self::Custom)
-            }
-            #[cfg(not(unix))]
-            {
-                Ok(Self::Crossterm)
-            }
-        } else {
-            Ok(Self::Crossterm)
-        }
-    }
-}
-
-#[cfg(unix)]
-pub(in crate::runtime) struct CustomInputReader {
-    receiver: Receiver<io::Result<RuntimeInputEvent>>,
+pub(in crate::terminal_runtime) struct InputReader {
+    receiver: Receiver<io::Result<InputEvent>>,
     paused: Arc<AtomicBool>,
 }
 
-#[cfg(unix)]
-impl CustomInputReader {
-    fn spawn() -> io::Result<Self> {
+impl InputReader {
+    pub(in crate::terminal_runtime) fn spawn() -> io::Result<Self> {
         let tty = OpenOptions::new().read(true).open("/dev/tty")?;
         set_nonblocking(tty.as_raw_fd())?;
         let (sender, receiver) = mpsc::channel();
@@ -78,14 +43,14 @@ impl CustomInputReader {
         Ok(Self { receiver, paused })
     }
 
-    pub(in crate::runtime) fn set_paused(&self, paused: bool) {
+    pub(in crate::terminal_runtime) fn set_paused(&self, paused: bool) {
         self.paused.store(paused, Ordering::Relaxed);
     }
 
-    pub(in crate::runtime) fn recv_timeout(
+    pub(in crate::terminal_runtime) fn recv_timeout(
         &self,
         timeout: Duration,
-    ) -> io::Result<Option<RuntimeInputEvent>> {
+    ) -> io::Result<Option<InputEvent>> {
         match self.receiver.recv_timeout(timeout) {
             Ok(event) => event.map(Some),
             Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
@@ -96,7 +61,7 @@ impl CustomInputReader {
         }
     }
 
-    pub(in crate::runtime) fn try_recv(&self) -> io::Result<Option<RuntimeInputEvent>> {
+    pub(in crate::terminal_runtime) fn try_recv(&self) -> io::Result<Option<InputEvent>> {
         match self.receiver.try_recv() {
             Ok(event) => event.map(Some),
             Err(TryRecvError::Empty) => Ok(None),
@@ -108,19 +73,17 @@ impl CustomInputReader {
     }
 }
 
-#[cfg(unix)]
 fn current_terminal_size() -> Option<(u16, u16)> {
     terminal::size().ok()
 }
 
-#[cfg(unix)]
 fn read_loop(
     mut tty: std::fs::File,
-    sender: mpsc::Sender<io::Result<RuntimeInputEvent>>,
+    sender: mpsc::Sender<io::Result<InputEvent>>,
     paused: Arc<AtomicBool>,
 ) {
     let mut buffer = Vec::<u8>::new();
-    let mut parser = parser::Parser::default();
+    let mut parser = EventParser::default();
     let mut byte = [0u8; 1];
     loop {
         if paused.load(Ordering::Relaxed) {
@@ -145,8 +108,7 @@ fn read_loop(
     }
 }
 
-#[cfg(unix)]
-fn resize_loop(sender: mpsc::Sender<io::Result<RuntimeInputEvent>>, paused: Arc<AtomicBool>) {
+fn resize_loop(sender: mpsc::Sender<io::Result<InputEvent>>, paused: Arc<AtomicBool>) {
     let mut last_size = current_terminal_size();
     loop {
         thread::sleep(RESIZE_POLL_INTERVAL);
@@ -162,9 +124,7 @@ fn resize_loop(sender: mpsc::Sender<io::Result<RuntimeInputEvent>>, paused: Arc<
         }
         last_size = Some(size);
         if sender
-            .send(Ok(RuntimeInputEvent::Terminal(Event::Resize(
-                size.0, size.1,
-            ))))
+            .send(Ok(InputEvent::Terminal(Event::Resize(size.0, size.1))))
             .is_err()
         {
             break;
@@ -172,11 +132,10 @@ fn resize_loop(sender: mpsc::Sender<io::Result<RuntimeInputEvent>>, paused: Arc<
     }
 }
 
-#[cfg(unix)]
 fn parse_buffer(
-    parser_state: &mut parser::Parser,
+    parser_state: &mut EventParser,
     buffer: &mut Vec<u8>,
-    sender: &mpsc::Sender<io::Result<RuntimeInputEvent>>,
+    sender: &mpsc::Sender<io::Result<InputEvent>>,
     input_available: bool,
 ) {
     loop {
@@ -184,7 +143,7 @@ fn parse_buffer(
             return;
         }
         let len_before = buffer.len();
-        match parser::parse_event(parser_state, buffer, input_available) {
+        match parse_event(parser_state, buffer, input_available) {
             Ok(Some(event)) => {
                 if buffer.len() == len_before {
                     buffer.clear();
@@ -207,12 +166,10 @@ fn parse_buffer(
     }
 }
 
-#[cfg(unix)]
 fn is_unsupported_input_sequence(error: &io::Error) -> bool {
     error.kind() == io::ErrorKind::Other && error.to_string() == "Could not parse an event."
 }
 
-#[cfg(unix)]
 fn set_nonblocking(fd: i32) -> io::Result<()> {
     // SAFETY: fcntl is called with a live /dev/tty fd and does not retain pointers.
     let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
@@ -226,50 +183,73 @@ fn set_nonblocking(fd: i32) -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(all(test, unix))]
-mod tests {
-    use super::*;
+#[derive(Default)]
+struct EventParser {
+    kitty_dnd: KittyDndParser,
+}
 
-    #[test]
-    fn unsupported_mouse_button_sequence_is_ignored() {
-        let (sender, receiver) = mpsc::channel();
-        let mut parser = parser::Parser::default();
-        let mut buffer = b"\x1b[<128;10;5M".to_vec();
-
-        parse_buffer(&mut parser, &mut buffer, &sender, false);
-
-        assert!(buffer.is_empty());
-        assert!(receiver.try_recv().is_err());
+fn parse_event(
+    parser: &mut EventParser,
+    buffer: &mut Vec<u8>,
+    input_available: bool,
+) -> io::Result<Option<InputEvent>> {
+    let len_before_dnd = buffer.len();
+    if let Some(event) = parser.kitty_dnd.parse(buffer) {
+        return Ok(Some(InputEvent::KittyDnd(event)));
     }
-
-    #[test]
-    fn parse_errors_from_real_io_are_still_errors() {
-        let error = io::Error::other("different failure");
-        assert!(!is_unsupported_input_sequence(&error));
+    if buffer.len() != len_before_dnd {
+        return Ok(None);
     }
-
-    #[test]
-    fn parse_buffer_keeps_concatenated_kitty_dnd_events() {
-        let (sender, receiver) = mpsc::channel();
-        let mut parser = parser::Parser::default();
-        let mut buffer = b"\x1b]72;t=o:x=1:y=2\x1b\\\x1b]72;t=e:x=4:y=1\x1b\\".to_vec();
-
-        parse_buffer(&mut parser, &mut buffer, &sender, false);
-
-        assert!(buffer.is_empty());
-        assert_eq!(
-            receiver.try_recv().unwrap().unwrap(),
-            RuntimeInputEvent::KittyDnd(crate::runtime::kitty_dnd::KittyDndEvent::DragOffer {
-                x: 1,
-                y: 2,
-            })
-        );
-        assert_eq!(
-            receiver.try_recv().unwrap().unwrap(),
-            RuntimeInputEvent::KittyDnd(crate::runtime::kitty_dnd::KittyDndEvent::DragEnded {
-                cancelled: true,
-            })
-        );
-        assert!(receiver.try_recv().is_err());
+    if buffer.is_empty() {
+        return Ok(None);
+    }
+    if starts_with_osc(buffer) && osc_end(buffer).is_none() {
+        return Ok(None);
+    }
+    match crossterm_parser::parse_event(buffer, input_available) {
+        Ok(Some(crossterm_parser::InternalEvent::Event(event))) => {
+            Ok(Some(InputEvent::Terminal(event)))
+        }
+        Ok(Some(_)) => Ok(None),
+        Ok(None) => Ok(None),
+        Err(error) => Err(error),
     }
 }
+
+#[derive(Default)]
+struct KittyDndParser {
+    state: Osc72State,
+}
+
+impl KittyDndParser {
+    fn parse(&mut self, buffer: &mut Vec<u8>) -> Option<KittyDndEvent> {
+        if !buffer.starts_with(b"\x1b]72;") {
+            return None;
+        }
+        let end = osc_end(buffer)?;
+        let sequence: Vec<u8> = buffer.drain(..end).collect();
+        parse_osc72_with_state(&sequence, &mut self.state)
+    }
+}
+
+fn starts_with_osc(buffer: &[u8]) -> bool {
+    buffer.starts_with(b"\x1b]")
+}
+
+fn osc_end(buffer: &[u8]) -> Option<usize> {
+    let mut index = 0;
+    while index < buffer.len() {
+        if buffer[index] == b'\x07' {
+            return Some(index + 1);
+        }
+        if buffer[index] == b'\x1b' && buffer.get(index + 1) == Some(&b'\\') {
+            return Some(index + 2);
+        }
+        index += 1;
+    }
+    None
+}
+
+#[cfg(test)]
+#[path = "tests/input_reader.rs"]
+mod tests;

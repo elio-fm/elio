@@ -173,7 +173,7 @@ pub(super) fn resolve_key_overrides(
         },
         RawBinding {
             name: "shell",
-            action: Action::Shell,
+            action: Action::ShellHere,
             override_value: overrides.shell,
             default: defaults.shell.clone(),
         },

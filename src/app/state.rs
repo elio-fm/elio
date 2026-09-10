@@ -812,7 +812,7 @@ pub(crate) enum PendingTerminalTask {
         args: Vec<String>,
         session: BulkRenameEditorSession,
     },
-    Shell {
+    ShellHere {
         cwd: PathBuf,
     },
     Zoxide,

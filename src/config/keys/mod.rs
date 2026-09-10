@@ -85,7 +85,7 @@ impl KeyBindings {
             (&self.filter_directory, Action::FilterDirectory),
             (&self.find_duplicates, Action::FindDuplicates),
             (&self.zoxide, Action::Zoxide),
-            (&self.shell, Action::Shell),
+            (&self.shell, Action::ShellHere),
             (&self.open, Action::Open),
             (&self.open_with, Action::OpenWith),
             (&self.open_or_enter, Action::OpenOrEnter),

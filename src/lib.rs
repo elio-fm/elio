@@ -6,10 +6,8 @@ mod file_info;
 mod fs;
 mod opening;
 mod preview;
-mod runtime;
-mod shell;
+mod terminal_runtime;
 mod ui;
-mod zoxide;
 
 use anyhow::Result;
 use std::path::PathBuf;
@@ -39,7 +37,7 @@ pub fn run_at(cwd: PathBuf) -> Result<()> {
 }
 
 pub fn run_with_options(options: RunOptions) -> Result<()> {
-    runtime::run_with_startup_state(options, None, false, None, None, None).map(|_| ())
+    terminal_runtime::run_with_startup_state(options, None, false, None, None, None).map(|_| ())
 }
 
 #[doc(hidden)]
@@ -56,7 +54,7 @@ pub fn run_with_startup_options(
     config_file: Option<PathBuf>,
     theme_file: Option<PathBuf>,
 ) -> Result<RunOutcome> {
-    runtime::run_with_startup_state(
+    terminal_runtime::run_with_startup_state(
         options,
         start_focus,
         reveal_hidden_start_focus,

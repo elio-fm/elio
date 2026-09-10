@@ -2263,17 +2263,17 @@ fn zoxide_action_queues_pending_terminal_task() {
 }
 
 #[test]
-fn shell_action_queues_shell_in_current_directory() {
+fn shell_here_action_queues_shell_in_current_directory() {
     let root = temp_path("shell-action");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let mut app = App::new_at(root.clone()).expect("failed to create app");
 
-    app.dispatch_action(Action::Shell)
+    app.dispatch_action(Action::ShellHere)
         .expect("dispatch should succeed");
 
     assert_eq!(
         app.pending_terminal_task,
-        Some(PendingTerminalTask::Shell { cwd: root.clone() })
+        Some(PendingTerminalTask::ShellHere { cwd: root.clone() })
     );
     assert!(app.status.is_empty());
 
@@ -2281,11 +2281,11 @@ fn shell_action_queues_shell_in_current_directory() {
 }
 
 #[test]
-fn rebound_shell_key_queues_shell_action() {
+fn rebound_shell_key_queues_shell_here_action() {
     use crate::config::KeyBindings;
 
     let kb = KeyBindings::from_toml_str("[keys]\nshell = \"S\"");
-    assert_eq!(kb.action_for('S'), Some(Action::Shell));
+    assert_eq!(kb.action_for('S'), Some(Action::ShellHere));
     assert_eq!(kb.action_for('!'), None);
 
     let root = temp_path("rebind-shell-e2e");
@@ -2297,7 +2297,7 @@ fn rebound_shell_key_queues_shell_action() {
 
     assert_eq!(
         app.pending_terminal_task,
-        Some(PendingTerminalTask::Shell { cwd: root.clone() })
+        Some(PendingTerminalTask::ShellHere { cwd: root.clone() })
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
