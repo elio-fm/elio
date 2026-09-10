@@ -1,4 +1,4 @@
-use crate::core::{EntryKind, SymlinkInfo};
+use super::{EntryKind, SymlinkInfo};
 use anyhow::{Context, Result};
 use std::{
     collections::VecDeque,

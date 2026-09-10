@@ -11,10 +11,10 @@ use std::path::Path;
 #[cfg(any(test, all(unix, not(target_os = "macos"))))]
 use super::state::OpenWithApp;
 #[cfg(all(unix, not(target_os = "macos")))]
-use crate::core::Entry;
+use crate::fs::Entry;
 use crate::{
-    core::{EntryKind, FileClass},
-    file_info::{PreviewKind, inspect_path},
+    file_info::{FileClass, PreviewKind, inspect_path},
+    fs::EntryKind,
 };
 
 #[cfg(all(test, unix, not(target_os = "macos")))]

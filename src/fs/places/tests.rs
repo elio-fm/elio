@@ -3,10 +3,8 @@ use super::resolution::parse_user_dir;
 use super::resolution::{
     PlaceResolutionContext, build_sidebar_rows_with_context, resolve_personal_dir,
 };
-use crate::{
-    config::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},
-    core::{SidebarItemKind, SidebarRow},
-};
+use super::{SidebarItemKind, SidebarRow};
+use crate::config::{BuiltinPlace, PlaceEntrySpec, PlacesConfig};
 use std::{
     fs,
     path::{Path, PathBuf},

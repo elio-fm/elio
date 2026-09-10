@@ -16,7 +16,7 @@ mod scan;
 use std::path::Path;
 
 use super::super::state::OpenWithApp;
-use crate::core::Entry;
+use crate::fs::Entry;
 
 // ── public entry point ────────────────────────────────────────────────────────
 

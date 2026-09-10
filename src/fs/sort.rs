@@ -1,5 +1,30 @@
 use std::cmp::Ordering;
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum SortMode {
+    Name,
+    Modified,
+    Size,
+}
+
+impl SortMode {
+    pub fn cycle(self) -> Self {
+        match self {
+            Self::Name => Self::Modified,
+            Self::Modified => Self::Size,
+            Self::Size => Self::Name,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Name => "Name",
+            Self::Modified => "Modified",
+            Self::Size => "Size",
+        }
+    }
+}
+
 /// Compares already-normalized strings using natural ordering.
 ///
 /// Text is compared lexically, but adjacent ASCII digit runs are compared numerically so

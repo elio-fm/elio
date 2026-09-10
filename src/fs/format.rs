@@ -1,4 +1,4 @@
-use crate::core::SymlinkInfo;
+use super::SymlinkInfo;
 use ratatui::layout::Rect;
 use std::{io, time::SystemTime};
 

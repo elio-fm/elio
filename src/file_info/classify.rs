@@ -1,3 +1,4 @@
+use super::FileClass;
 use super::{
     FileFacts, PreviewKind, PreviewSpec,
     archives::inspect_archive_name,
@@ -6,7 +7,7 @@ use super::{
     names::inspect_exact_name,
 };
 use crate::{
-    core::{Entry, EntryKind, FileClass},
+    fs::{Entry, EntryKind},
     preview::code::registry,
 };
 use std::collections::{HashMap, VecDeque};

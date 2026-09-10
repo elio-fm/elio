@@ -13,9 +13,9 @@ use super::{
     overlays::{comic, epub, images, inline_image, pdf},
     types::*,
 };
-use crate::core::{Entry, SidebarRow, SortMode};
 use crate::fs::duplicates::{DuplicateGroup, DuplicateScanStats};
 use crate::fs::search::{SearchCandidate, SearchIndexStats};
+use crate::fs::{Entry, SidebarRow, SortMode};
 use crate::preview;
 
 #[derive(Clone, Debug)]

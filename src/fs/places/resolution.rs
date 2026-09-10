@@ -1,8 +1,6 @@
 use super::devices::mounted_device_items;
-use crate::{
-    config::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},
-    core::{SidebarItem, SidebarItemKind, SidebarRow},
-};
+use super::{SidebarItem, SidebarItemKind, SidebarRow};
+use crate::config::{BuiltinPlace, PlaceEntrySpec, PlacesConfig};
 #[cfg(all(unix, not(any(target_os = "macos", target_os = "ios"))))]
 use std::{collections::HashMap, ffi::OsString, os::unix::ffi::OsStringExt};
 use std::{

@@ -18,7 +18,7 @@ use crate::{
     config, path_display, shell, ui, zoxide,
 };
 #[cfg(unix)]
-use crate::{app::ClipOp, core::EntryKind};
+use crate::{app::ClipOp, fs::EntryKind};
 use anyhow::Result;
 use crossterm::{
     cursor::SetCursorStyle,

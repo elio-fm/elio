@@ -1,7 +1,8 @@
 use super::{appearance as theme, *};
-use crate::core::{Entry, FileClass};
-use crate::file_info;
-use crate::fs as browser_support;
+use crate::{
+    file_info::{self, FileClass},
+    fs::{self as browser_support, Entry},
+};
 use image::ImageReader;
 use ratatui::{
     style::Style,

@@ -15,5 +15,5 @@ pub(crate) use self::classify::{
 pub(crate) use self::license::is_canonical_license_file_name;
 pub(crate) use self::types::{
     CodeBackend, CompoundArchiveKind, CompressionKind, CustomCodeKind, DiskImageKind,
-    DocumentFormat, FileFacts, PreviewKind, PreviewSpec, StructuredFormat,
+    DocumentFormat, FileClass, FileFacts, PreviewKind, PreviewSpec, StructuredFormat,
 };

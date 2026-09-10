@@ -1,4 +1,20 @@
-use crate::core::FileClass;
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub(crate) enum FileClass {
+    Directory,
+    SymlinkDirectory,
+    BrokenSymlink,
+    Code,
+    Config,
+    Document,
+    License,
+    Image,
+    Audio,
+    Video,
+    Archive,
+    Font,
+    Data,
+    File,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PreviewKind {

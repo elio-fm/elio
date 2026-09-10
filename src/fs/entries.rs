@@ -1,51 +1,8 @@
 use std::{path::PathBuf, time::SystemTime};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum SortMode {
-    Name,
-    Modified,
-    Size,
-}
-
-impl SortMode {
-    pub fn cycle(self) -> Self {
-        match self {
-            Self::Name => Self::Modified,
-            Self::Modified => Self::Size,
-            Self::Size => Self::Name,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Name => "Name",
-            Self::Modified => "Modified",
-            Self::Size => "Size",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum EntryKind {
     Directory,
-    File,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub(crate) enum FileClass {
-    Directory,
-    SymlinkDirectory,
-    BrokenSymlink,
-    Code,
-    Config,
-    Document,
-    License,
-    Image,
-    Audio,
-    Video,
-    Archive,
-    Font,
-    Data,
     File,
 }
 

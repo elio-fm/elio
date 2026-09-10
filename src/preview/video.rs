@@ -3,7 +3,7 @@ use super::{
     appearance as theme,
     process::{run_command_capture_stdout_cancellable, run_command_status_cancellable},
 };
-use crate::core::Entry;
+use crate::fs::Entry;
 use ratatui::{
     style::Style,
     text::{Line, Span},

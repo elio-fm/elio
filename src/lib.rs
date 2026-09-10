@@ -1,7 +1,6 @@
 mod app;
 mod archive;
 mod config;
-mod core;
 mod elevated_session;
 mod file_info;
 mod fs;

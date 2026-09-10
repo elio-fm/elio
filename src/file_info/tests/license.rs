@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::Entry;
+use crate::fs::Entry;
 
 #[test]
 fn license_like_files_detect_specific_and_generic_licenses() {

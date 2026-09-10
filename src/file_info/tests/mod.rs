@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::{Entry, EntryKind, FileClass};
+use crate::fs::{Entry, EntryKind};
 use std::{
     fs,
     path::{Path, PathBuf},
