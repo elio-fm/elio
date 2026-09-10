@@ -6,11 +6,11 @@ use std::{
 #[cfg(test)]
 use std::env;
 
-use super::super::super::state::OpenWithApp;
+use super::super::OpenWithApplication;
 use super::exec::tokenize_exec;
 
 pub(super) fn append_editor_fallback(
-    apps: &mut Vec<OpenWithApp>,
+    apps: &mut Vec<OpenWithApplication>,
     path: &Path,
     require_text_like: bool,
 ) {
@@ -27,7 +27,7 @@ pub(super) fn append_editor_fallback(
     }
 }
 
-pub(super) fn editor_fallback_for_path(path: &Path) -> Option<OpenWithApp> {
+pub(super) fn editor_fallback_for_path(path: &Path) -> Option<OpenWithApplication> {
     if !super::super::path_is_text_like(path) {
         return None;
     }
@@ -41,12 +41,12 @@ pub(super) fn editor_fallback_for_path(path: &Path) -> Option<OpenWithApp> {
     None
 }
 
-pub(super) fn editor_app_for_path(var: &'static str, path: &Path) -> Option<OpenWithApp> {
+pub(super) fn editor_app_for_path(var: &'static str, path: &Path) -> Option<OpenWithApplication> {
     let value = crate::elevated_session::env_var(var).and_then(|value| value.into_string().ok())?;
     editor_app_from_command(var, &value, path)
 }
 
-fn editor_app_from_command(var: &str, command: &str, path: &Path) -> Option<OpenWithApp> {
+fn editor_app_from_command(var: &str, command: &str, path: &Path) -> Option<OpenWithApplication> {
     let path_str = path.to_str()?;
     let mut tokens = tokenize_exec(command);
     if tokens.is_empty() {
@@ -66,7 +66,7 @@ fn editor_app_from_command(var: &str, command: &str, path: &Path) -> Option<Open
     let display_name = editor_display_name(program_name);
 
     tokens.push(path_str.to_string());
-    Some(OpenWithApp {
+    Some(OpenWithApplication {
         display_name: format!("{display_name} (${var})"),
         desktop_id: None,
         program,
@@ -77,8 +77,8 @@ fn editor_app_from_command(var: &str, command: &str, path: &Path) -> Option<Open
 }
 
 fn promote_env_editor_app(
-    apps: &mut Vec<OpenWithApp>,
-    app: OpenWithApp,
+    apps: &mut Vec<OpenWithApplication>,
+    app: OpenWithApplication,
     insert_index: usize,
 ) -> usize {
     let Some(position) = matching_discovered_app_index(&app, apps) else {
@@ -106,11 +106,14 @@ fn promote_env_editor_app(
     index + 1
 }
 
-fn env_editor_insert_index(apps: &[OpenWithApp]) -> usize {
+fn env_editor_insert_index(apps: &[OpenWithApplication]) -> usize {
     apps.iter().take_while(|app| app.is_default).count()
 }
 
-fn matching_discovered_app_index(editor: &OpenWithApp, apps: &[OpenWithApp]) -> Option<usize> {
+fn matching_discovered_app_index(
+    editor: &OpenWithApplication,
+    apps: &[OpenWithApplication],
+) -> Option<usize> {
     let editor_program = program_key(&editor.program);
     apps.iter()
         .position(|app| program_key(&app.program) == editor_program)
@@ -262,7 +265,7 @@ mod tests {
         let _editor = EnvGuard::set("EDITOR", "hx");
 
         let mut apps = vec![
-            OpenWithApp {
+            OpenWithApplication {
                 display_name: "Text Editor".to_string(),
                 desktop_id: Some("org.gnome.gedit.desktop".to_string()),
                 program: "gedit".to_string(),
@@ -270,7 +273,7 @@ mod tests {
                 is_default: true,
                 requires_terminal: false,
             },
-            OpenWithApp {
+            OpenWithApplication {
                 display_name: "Other App".to_string(),
                 desktop_id: Some("other.desktop".to_string()),
                 program: "other-app".to_string(),
@@ -306,7 +309,7 @@ mod tests {
         let _visual = EnvGuard::remove("VISUAL");
         let _editor = EnvGuard::set("EDITOR", "hx");
 
-        let mut apps = vec![OpenWithApp {
+        let mut apps = vec![OpenWithApplication {
             display_name: "Helix".to_string(),
             desktop_id: Some("Helix.desktop".to_string()),
             program: bin.join("hx").display().to_string(),
@@ -336,7 +339,7 @@ mod tests {
         let _visual = EnvGuard::set("VISUAL", "nvim");
         let _editor = EnvGuard::set("EDITOR", "nvim");
 
-        let mut apps = vec![OpenWithApp {
+        let mut apps = vec![OpenWithApplication {
             display_name: "Neovim".to_string(),
             desktop_id: Some("nvim.desktop".to_string()),
             program: bin.join("nvim").display().to_string(),

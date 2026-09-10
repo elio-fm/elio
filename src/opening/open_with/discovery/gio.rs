@@ -6,7 +6,7 @@ use std::process::Command;
 
 use crate::preview::process::run_command_capture_stdout_cancellable;
 
-use super::super::super::state::OpenWithApp;
+use super::super::OpenWithApplication;
 use super::desktop_file::{DesktopEntryCandidate, parse_desktop_entry};
 use super::exec::expand_exec_template;
 use super::scan::desktop_entry_dirs;
@@ -20,7 +20,7 @@ pub(super) fn discover_via_gio(
     mime: &str,
     path: &Path,
     canceled: &impl Fn() -> bool,
-) -> Option<Vec<OpenWithApp>> {
+) -> Option<Vec<OpenWithApplication>> {
     let mut cmd = Command::new("gio");
     cmd.args(["mime", mime]);
     crate::elevated_session::prepare_external(&mut cmd, None).ok()?;
@@ -61,7 +61,7 @@ fn read_desktop_entry_for_id(
     target: &Path,
     is_default: bool,
     desktops: &[String],
-) -> Option<OpenWithApp> {
+) -> Option<OpenWithApplication> {
     for dir in dirs {
         // A desktop ID like "kde-konsole.desktop" may correspond to either a
         // flat file "kde-konsole.desktop" or a nested one "kde/konsole.desktop".
@@ -76,7 +76,7 @@ fn read_desktop_entry_for_id(
                 return None;
             }
             let (program, args) = expand_exec_template(&candidate.exec, target)?;
-            return Some(OpenWithApp {
+            return Some(OpenWithApplication {
                 display_name: candidate.name,
                 desktop_id: Some(desktop_id.to_string()),
                 program,

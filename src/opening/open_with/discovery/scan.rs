@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use super::super::super::state::OpenWithApp;
+use super::super::OpenWithApplication;
 use super::desktop_file::{
     DesktopEntryCandidate, parse_desktop_entry, parse_mimeapps_defaults, parse_mimeapps_removed,
 };
@@ -12,7 +12,7 @@ use super::exec::expand_exec_template;
 /// Manual desktop-file scan: walks all desktop entry directories and returns
 /// apps that explicitly list `mime` in their `MimeType=` field.
 /// Used as a fallback when `gio` is unavailable.
-pub(super) fn discover_via_desktop_scan(mime: &str, path: &Path) -> Vec<OpenWithApp> {
+pub(super) fn discover_via_desktop_scan(mime: &str, path: &Path) -> Vec<OpenWithApplication> {
     discover_via_desktop_scan_in_dirs(mime, path, &desktop_entry_dirs())
 }
 
@@ -21,7 +21,7 @@ pub(super) fn discover_via_desktop_scan_in_dirs(
     mime: &str,
     path: &Path,
     dirs: &[PathBuf],
-) -> Vec<OpenWithApp> {
+) -> Vec<OpenWithApplication> {
     discover_via_desktop_scan_inner(mime, path, dirs, &mimeapps_paths())
 }
 
@@ -32,7 +32,7 @@ fn discover_via_desktop_scan_inner(
     path: &Path,
     dirs: &[PathBuf],
     mime_paths: &[PathBuf],
-) -> Vec<OpenWithApp> {
+) -> Vec<OpenWithApplication> {
     let desktops = super::current_desktops();
 
     // Collect all desktop entries that declare this MIME type, keyed by
@@ -87,7 +87,7 @@ fn discover_via_desktop_scan_inner(
     // Only the first resolved default gets is_default=true — that is the user's
     // explicit preferred handler; subsequent entries in the defaults list are
     // listed before non-defaults but are not flagged as the default.
-    let mut apps: Vec<OpenWithApp> = Vec::new();
+    let mut apps: Vec<OpenWithApplication> = Vec::new();
     let mut first_default_emitted = false;
 
     for desktop_id in &ordered_defaults {
@@ -99,7 +99,7 @@ fn discover_via_desktop_scan_inner(
         };
         let is_default = !first_default_emitted;
         first_default_emitted = true;
-        apps.push(OpenWithApp {
+        apps.push(OpenWithApplication {
             display_name: candidate.name,
             desktop_id: Some(desktop_id.clone()),
             program,
@@ -116,7 +116,7 @@ fn discover_via_desktop_scan_inner(
         let Some((program, args)) = expand_exec_template(&candidate.exec, path) else {
             continue;
         };
-        apps.push(OpenWithApp {
+        apps.push(OpenWithApplication {
             display_name: candidate.name,
             desktop_id: Some(desktop_id),
             program,

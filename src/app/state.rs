@@ -349,24 +349,10 @@ pub(super) struct GoToOverlay {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct OpenWithApp {
-    pub(super) display_name: String,
-    // Reserved for a future "set as default" action; not yet read at launch time.
-    #[allow(dead_code)]
-    pub(super) desktop_id: Option<String>,
-    pub(super) program: String,
-    pub(super) args: Vec<String>,
-    pub(super) is_default: bool,
-    /// True when the .desktop file has `Terminal=true` — the app must be run
-    /// inside a terminal emulator, not launched detached.
-    pub(super) requires_terminal: bool,
-}
-
-#[derive(Clone, Debug)]
 pub(super) struct OpenWithRow {
     pub(super) shortcut: Option<char>,
     pub(super) label: String,
-    pub(super) app: OpenWithApp,
+    pub(super) app: crate::opening::open_with::OpenWithApplication,
 }
 
 #[derive(Clone, Debug)]

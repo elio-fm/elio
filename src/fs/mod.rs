@@ -8,7 +8,6 @@ pub(crate) mod watch;
 mod directory;
 mod directory_stats;
 mod entries;
-mod opener;
 mod restore;
 mod sort;
 mod trashinfo;
@@ -47,11 +46,6 @@ pub(crate) use format::{
     format_time_ago, rect_contains, sanitize_terminal_text, symlink_target_display_label,
 };
 pub(crate) use item_count::count_directory_items;
-#[cfg(target_os = "macos")]
-pub(crate) use opener::detached_open;
-#[cfg(test)]
-pub(crate) use opener::set_open_in_system_capture_for_test;
-pub(crate) use opener::{detached_open_command, open_in_system};
 #[cfg(test)]
 pub use places::SidebarItem;
 pub use places::{SidebarItemKind, SidebarRow};

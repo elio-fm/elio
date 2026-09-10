@@ -71,14 +71,14 @@ pub(super) struct OpenInSystemCaptureGuard;
 impl OpenInSystemCaptureGuard {
     pub(super) fn install(path: PathBuf) -> Self {
         let _ = fs::remove_file(&path);
-        crate::fs::set_open_in_system_capture_for_test(Some(path));
+        crate::opening::set_open_in_system_capture_for_test(Some(path));
         Self
     }
 }
 
 impl Drop for OpenInSystemCaptureGuard {
     fn drop(&mut self) {
-        crate::fs::set_open_in_system_capture_for_test(None);
+        crate::opening::set_open_in_system_capture_for_test(None);
     }
 }
 

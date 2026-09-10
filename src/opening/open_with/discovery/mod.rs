@@ -15,24 +15,24 @@ mod scan;
 
 use std::path::Path;
 
-use super::super::state::OpenWithApp;
+use super::OpenWithApplication;
 use crate::fs::Entry;
 
 // ── public entry point ────────────────────────────────────────────────────────
 
-pub(super) fn discover_open_with_apps_for_entry(entry: &Entry) -> Vec<OpenWithApp> {
+pub(super) fn discover_open_with_apps_for_entry(entry: &Entry) -> Vec<OpenWithApplication> {
     discover_open_with_apps_inner(&entry.path, Some(entry.name.as_str()), true)
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
 #[cfg_attr(test, allow(dead_code))]
-pub(super) fn discover_desktop_apps_for_entry(entry: &Entry) -> Vec<OpenWithApp> {
+pub(super) fn discover_desktop_apps_for_entry(entry: &Entry) -> Vec<OpenWithApplication> {
     discover_open_with_apps_inner(&entry.path, Some(entry.name.as_str()), false)
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
 #[cfg_attr(test, allow(dead_code))]
-pub(super) fn editor_fallback_app_for_entry(entry: &Entry) -> Option<OpenWithApp> {
+pub(super) fn editor_fallback_app_for_entry(entry: &Entry) -> Option<OpenWithApplication> {
     editor::editor_fallback_for_path(&entry.path)
 }
 
@@ -40,7 +40,7 @@ fn discover_open_with_apps_inner(
     path: &Path,
     display_name: Option<&str>,
     include_editor_fallback: bool,
-) -> Vec<OpenWithApp> {
+) -> Vec<OpenWithApplication> {
     #[cfg(target_os = "macos")]
     {
         let _ = display_name;
@@ -175,7 +175,7 @@ fn discover_xdg(
     path: &Path,
     display_name: Option<&str>,
     include_editor_fallback: bool,
-) -> Vec<OpenWithApp> {
+) -> Vec<OpenWithApplication> {
     use std::time::{Duration, Instant};
 
     // 3-second budget for subprocess fallbacks; pure-Rust MIME lookup is
@@ -196,7 +196,7 @@ fn discover_xdg_for_mime(
     path: &Path,
     include_env_editor_fallback: bool,
     require_text_like_editor: bool,
-) -> Vec<OpenWithApp> {
+) -> Vec<OpenWithApplication> {
     use std::time::{Duration, Instant};
 
     let deadline = Instant::now() + Duration::from_millis(3000);

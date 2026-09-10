@@ -2,11 +2,14 @@ use std::path::Path;
 
 use super::super::{
     App,
-    state::{OpenWithApp, OpenWithOverlay, OpenWithRow, PendingTerminalTask},
+    state::{OpenWithOverlay, OpenWithRow, PendingTerminalTask},
 };
-use crate::fs::detached_open_command;
 #[cfg(any(test, target_os = "macos", not(unix)))]
-use crate::fs::open_in_system;
+use crate::opening::open_in_system;
+use crate::opening::{
+    launch_application,
+    open_with::{self, OpenWithApplication},
+};
 use anyhow::Result;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -80,12 +83,12 @@ impl App {
     pub(in crate::app) fn open_open_with_overlay_for_entry(&mut self, entry: crate::fs::Entry) {
         let path = entry.path.clone();
         #[cfg(test)]
-        let apps = super::discovered_open_with_apps_for_test()
-            .unwrap_or_else(|| super::discovery::discover_open_with_apps_for_entry(&entry));
+        let apps = open_with::discovered_open_with_apps_for_test()
+            .unwrap_or_else(|| open_with::discover_open_with_applications_for_entry(&entry));
         #[cfg(not(test))]
-        let apps = super::discovery::discover_open_with_apps_for_entry(&entry);
+        let apps = open_with::discover_open_with_applications_for_entry(&entry);
         self.handle_discovered_open_with_apps(&path, apps, open_with_fallback, |app| {
-            detached_open_command(&app.program, &app.args)
+            launch_application(&app.program, &app.args)
         });
     }
 
@@ -109,7 +112,7 @@ impl App {
             self.pending_terminal_task = Some(PendingTerminalTask::Command { program, args });
             self.status.clear();
         } else {
-            match detached_open_command(&program, &args) {
+            match launch_application(&program, &args) {
                 Ok(()) => self.status.clear(),
                 Err(error) => {
                     self.status = format!("Failed to open with {display_name}: {error}");
@@ -130,12 +133,12 @@ impl App {
     pub(in crate::app) fn handle_discovered_open_with_apps<F, G>(
         &mut self,
         path: &Path,
-        mut apps: Vec<OpenWithApp>,
+        mut apps: Vec<OpenWithApplication>,
         mut fallback_open: F,
         mut launch_app: G,
     ) where
         F: FnMut(&Path) -> std::result::Result<FallbackOpenOutcome, String>,
-        G: FnMut(&OpenWithApp) -> std::io::Result<()>,
+        G: FnMut(&OpenWithApplication) -> std::io::Result<()>,
     {
         match apps.len() {
             0 => match fallback_open(path) {
@@ -205,7 +208,10 @@ impl App {
     }
 }
 
-fn build_open_with_overlay(apps: Vec<OpenWithApp>, reserved_shortcuts: &[char]) -> OpenWithOverlay {
+fn build_open_with_overlay(
+    apps: Vec<OpenWithApplication>,
+    reserved_shortcuts: &[char],
+) -> OpenWithOverlay {
     let mut shortcuts = open_with_shortcuts(reserved_shortcuts);
     let rows = apps
         .into_iter()
@@ -248,7 +254,7 @@ fn is_env_editor_label(display_name: &str) -> bool {
 fn open_with_fallback(path: &Path) -> std::result::Result<FallbackOpenOutcome, String> {
     #[cfg(target_os = "macos")]
     {
-        if super::path_is_text_like(path) {
+        if open_with::path_is_text_like(path) {
             return open_in_text_editor(path).map(|()| FallbackOpenOutcome::TextEditor);
         }
         return open_in_system(path).map(|()| FallbackOpenOutcome::DefaultApp);
@@ -266,7 +272,8 @@ fn open_with_fallback(path: &Path) -> std::result::Result<FallbackOpenOutcome, S
 
 #[cfg(target_os = "macos")]
 fn open_in_text_editor(path: &Path) -> std::result::Result<(), String> {
-    crate::fs::detached_open("open", &["-t"], path).map_err(|error| format!("open: {error}"))
+    crate::opening::launch_application_with_target("open", &["-t"], path)
+        .map_err(|error| format!("open: {error}"))
 }
 
 // ── Test seam ─────────────────────────────────────────────────────────────────
@@ -294,7 +301,8 @@ impl App {
         &mut self,
         rows: Vec<(String, String, Vec<String>, bool)>,
     ) {
-        use super::super::state::{OpenWithApp, OpenWithOverlay, OpenWithRow};
+        use super::super::state::{OpenWithOverlay, OpenWithRow};
+        use crate::opening::open_with::OpenWithApplication;
         self.overlays.open_with = Some(OpenWithOverlay {
             title: "Open With".to_string(),
             rows: rows
@@ -304,7 +312,7 @@ impl App {
                     |(index, (display_name, program, args, requires_terminal))| OpenWithRow {
                         shortcut: char::from_digit((index + 1) as u32, 10),
                         label: display_name.clone(),
-                        app: OpenWithApp {
+                        app: OpenWithApplication {
                             display_name,
                             desktop_id: None,
                             program,
