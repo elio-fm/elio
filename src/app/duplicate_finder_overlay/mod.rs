@@ -7,7 +7,7 @@ mod scanning;
 mod tests;
 
 use super::*;
-use crate::background_jobs::DuplicateScanRequest;
+use crate::background_jobs::job_requests::DuplicateScanRequest;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::{

@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::preview::static_images;
-use crate::background_jobs::SixelPrepareConfig;
+use crate::background_jobs::job_requests::SixelPrepareConfig;
 use std::{
     collections::{HashSet, VecDeque},
     path::PathBuf,

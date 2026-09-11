@@ -1,5 +1,6 @@
 use super::super::*;
 use super::helpers::*;
+use crate::background_jobs::job_results as background_job_results;
 
 #[test]
 fn apply_pdf_probe_build_updates_current_session_and_cached_dimensions() {
@@ -19,7 +20,7 @@ fn apply_pdf_probe_build_updates_current_session_and_cached_dimensions() {
     };
     app.preview.pdf.pending_page_probes.insert(key.clone());
 
-    let dirty = app.apply_pdf_probe_build(jobs::PdfProbeBuild {
+    let dirty = app.apply_pdf_probe_build(background_job_results::PdfProbeBuild {
         path: root.join("demo.pdf"),
         size: 128,
         modified: None,
@@ -101,7 +102,7 @@ fn apply_pdf_probe_build_queues_render_for_current_page() {
     let page_key = PdfPageKey::from_request(&request);
     app.preview.pdf.pending_page_probes.insert(page_key);
 
-    let dirty = app.apply_pdf_probe_build(jobs::PdfProbeBuild {
+    let dirty = app.apply_pdf_probe_build(background_job_results::PdfProbeBuild {
         path: request.path.clone(),
         size: request.size,
         modified: request.modified,
@@ -135,7 +136,7 @@ fn apply_pdf_probe_build_queues_render_even_before_selection_activation_is_ready
     let page_key = PdfPageKey::from_request(&request);
     app.preview.pdf.pending_page_probes.insert(page_key);
 
-    let dirty = app.apply_pdf_probe_build(jobs::PdfProbeBuild {
+    let dirty = app.apply_pdf_probe_build(background_job_results::PdfProbeBuild {
         path: request.path.clone(),
         size: request.size,
         modified: request.modified,
@@ -176,7 +177,7 @@ fn apply_pdf_probe_build_prefetches_adjacent_page_probes_once_total_is_known() {
     let page_key = PdfPageKey::from_request(&request);
     app.preview.pdf.pending_page_probes.insert(page_key);
 
-    let dirty = app.apply_pdf_probe_build(jobs::PdfProbeBuild {
+    let dirty = app.apply_pdf_probe_build(background_job_results::PdfProbeBuild {
         path: request.path.clone(),
         size: request.size,
         modified: request.modified,
@@ -303,7 +304,7 @@ fn apply_pdf_render_build_prefetches_next_page_when_current_page_is_ready() {
     let rendered_path = root.join("current-page.png");
     fs::write(&rendered_path, b"png").expect("failed to write rendered page placeholder");
 
-    let dirty = app.apply_pdf_render_build(jobs::PdfRenderBuild {
+    let dirty = app.apply_pdf_render_build(background_job_results::PdfRenderBuild {
         path: current_request.path.clone(),
         size: current_request.size,
         modified: current_request.modified,

@@ -25,18 +25,18 @@ pub(crate) use self::text_edit::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
 };
-use crate::background_jobs as jobs;
 #[cfg(test)]
 use crate::background_jobs::SchedulerMetricsSnapshot;
-#[cfg(unix)]
-pub(crate) use crate::background_jobs::run_user_trash_helper;
-pub(crate) use crate::background_jobs::{
+use crate::background_jobs::job_requests as jobs;
+pub(crate) use crate::background_jobs::job_requests::{
     ArchiveCreateRequest, ArchiveExtractBatchState, ArchiveExtractRequest, PasteRequest,
     RestoreRequest, TrashRequest,
 };
-use crate::background_jobs::{
+use crate::background_jobs::job_requests::{
     PreviewLineCountRequest, PreviewPriority, PreviewRequest, SearchRequest,
 };
+#[cfg(unix)]
+pub(crate) use crate::background_jobs::run_user_trash_helper;
 pub(crate) use crate::file_operations::ClipOp;
 use anyhow::Result;
 #[cfg(test)]

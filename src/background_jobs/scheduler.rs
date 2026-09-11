@@ -1,27 +1,55 @@
-use super::{
-    pool::{
-        duplicate_finder::DuplicateFinderPool, fuzzy_finder::FuzzyFinderPool, preview::PreviewPool,
-    },
-    tasks::{
-        archive_create::ArchiveCreatePool, archive_extract::ArchiveExtractPool,
-        directory::DirectoryPool, directory_fingerprint::DirectoryFingerprintPool,
-        directory_stats::DirectoryStatsPool, git_status::GitStatusPool, image::ImagePreparePool,
-        item_count::DirectoryItemCountPool, line_count::PreviewLineCountPool, paste::PastePool,
-        pdf_probe::PdfProbePool, pdf_render::PdfRenderPool, restore::RestorePool, trash::TrashPool,
-    },
-    *,
-};
 #[cfg(test)]
+use super::scheduler_metrics::SchedulerMetricsSnapshot;
+#[cfg(test)]
+use super::workers::{
+    fuzzy_finder::FuzzyFinderJobKey, pdf_page_inspection::PdfProbeJobKey,
+    pdf_page_rendering::PdfRenderJobKey, preview_building::PreviewJobKey,
+    static_image_preparation::ImagePrepareJobKey,
+};
 use super::{
-    pool::{fuzzy_finder::FuzzyFinderJobKey, preview::PreviewJobKey},
-    tasks::{image::ImagePrepareJobKey, pdf_probe::PdfProbeJobKey, pdf_render::PdfRenderJobKey},
+    job_requests::*,
+    job_results::JobResult,
+    scheduler_config::SchedulerConfig,
+    scheduler_metrics::SchedulerMetrics,
+    workers::{
+        archive_creation::ArchiveCreatePool,
+        archive_extraction::ArchiveExtractPool,
+        copy_move::PastePool,
+        directory_fingerprint::DirectoryFingerprintPool,
+        directory_item_counts::DirectoryItemCountPool,
+        directory_loading::DirectoryPool,
+        directory_statistics::DirectoryStatsPool,
+        duplicate_finder::DuplicateFinderPool,
+        fuzzy_finder::FuzzyFinderPool,
+        git_status::GitStatusPool,
+        pdf_page_inspection::PdfProbePool,
+        pdf_page_rendering::PdfRenderPool,
+        preview_building::PreviewPool,
+        preview_line_counts::PreviewLineCountPool,
+        restore::RestorePool,
+        static_image_preparation::ImagePreparePool,
+        trash_delete::{self, TrashPool},
+    },
 };
 use std::{
     collections::VecDeque,
     path::Path,
-    sync::{Arc, Mutex, mpsc},
+    sync::{Arc, Condvar, Mutex, MutexGuard, mpsc},
     time::SystemTime,
 };
+
+pub(super) fn lock_unpoison<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poison| poison.into_inner())
+}
+
+pub(super) fn wait_unpoison<'a, T>(
+    condvar: &Condvar,
+    guard: MutexGuard<'a, T>,
+) -> MutexGuard<'a, T> {
+    condvar
+        .wait(guard)
+        .unwrap_or_else(|poison| poison.into_inner())
+}
 
 pub(crate) struct JobScheduler {
     directory: DirectoryPool,
@@ -55,7 +83,7 @@ impl JobScheduler {
     fn with_config(config: SchedulerConfig) -> Self {
         // Reclaim any staging directories left behind by a previous session
         // that was killed before staged-directory cleanup could finish.
-        tasks::trash::sweep_staging_on_startup();
+        trash_delete::sweep_staging_on_startup();
 
         let (result_tx, result_rx) = mpsc::channel();
         let metrics = Arc::new(Mutex::new(SchedulerMetrics::default()));

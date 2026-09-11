@@ -4,6 +4,7 @@ use super::{
 };
 use crate::app::preview::terminal_images::read_png_dimensions;
 use crate::app::{App, Entry, jobs};
+use crate::background_jobs::job_results as background_job_results;
 use crate::file_classification::{self, DocumentFormat};
 use std::time::{Duration, Instant};
 
@@ -214,7 +215,10 @@ impl App {
         self.active_pdf_overlay_request().is_some()
     }
 
-    pub(in crate::app) fn apply_pdf_probe_build(&mut self, build: jobs::PdfProbeBuild) -> bool {
+    pub(in crate::app) fn apply_pdf_probe_build(
+        &mut self,
+        build: background_job_results::PdfProbeBuild,
+    ) -> bool {
         let key = PdfPageKey {
             path: build.path.clone(),
             size: build.size,
@@ -287,7 +291,10 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn apply_pdf_render_build(&mut self, build: jobs::PdfRenderBuild) -> bool {
+    pub(in crate::app) fn apply_pdf_render_build(
+        &mut self,
+        build: background_job_results::PdfRenderBuild,
+    ) -> bool {
         let key = PdfRenderKey {
             path: build.path.clone(),
             size: build.size,

@@ -95,7 +95,7 @@ fn concurrent_inline_raster_prepares_keep_shared_render_cache_readable() {
     let page = root.join("page.jpg");
     write_test_raster_image(&page, ImageFormat::Jpeg, 2200, 3200);
     let metadata = fs::metadata(&page).expect("page image metadata should exist");
-    let request = Arc::new(crate::background_jobs::ImagePrepareRequest {
+    let request = Arc::new(crate::background_jobs::job_requests::ImagePrepareRequest {
         path: page,
         size: metadata.len(),
         modified: metadata.modified().ok(),
@@ -179,40 +179,41 @@ fn current_comic_prepare_build_marks_preview_dirty() {
             modified: None,
         });
 
-    let dirty = app.apply_image_prepare_build(crate::background_jobs::ImagePrepareBuild {
-        path: source,
-        size: metadata.len(),
-        modified: None,
-        target_width_px: image_target_width_px(
-            app.input
-                .frame_state
-                .preview_media_area
-                .expect("preview media area should exist"),
-            app.cached_terminal_window(),
-        ),
-        target_height_px: image_target_height_px(
-            app.input
-                .frame_state
-                .preview_media_area
-                .expect("preview media area should exist"),
-            app.cached_terminal_window(),
-        ),
-        force_render_to_cache: false,
-        prepare_inline_payload: false,
-        canceled: false,
-        result: Some(
-            crate::app::preview::static_images::PreparedStaticImageAsset {
-                display_path: rendered,
-                dimensions: crate::app::preview::terminal_images::RenderedImageDimensions {
-                    width_px: 768,
-                    height_px: 432,
+    let dirty =
+        app.apply_image_prepare_build(crate::background_jobs::job_results::ImagePrepareBuild {
+            path: source,
+            size: metadata.len(),
+            modified: None,
+            target_width_px: image_target_width_px(
+                app.input
+                    .frame_state
+                    .preview_media_area
+                    .expect("preview media area should exist"),
+                app.cached_terminal_window(),
+            ),
+            target_height_px: image_target_height_px(
+                app.input
+                    .frame_state
+                    .preview_media_area
+                    .expect("preview media area should exist"),
+                app.cached_terminal_window(),
+            ),
+            force_render_to_cache: false,
+            prepare_inline_payload: false,
+            canceled: false,
+            result: Some(
+                crate::app::preview::static_images::PreparedStaticImageAsset {
+                    display_path: rendered,
+                    dimensions: crate::app::preview::terminal_images::RenderedImageDimensions {
+                        width_px: 768,
+                        height_px: 432,
+                    },
+                    inline_payload: None,
+                    sixel_dcs: None,
+                    sixel_dcs_key: None,
                 },
-                inline_payload: None,
-                sixel_dcs: None,
-                sixel_dcs_key: None,
-            },
-        ),
-    });
+            ),
+        });
 
     assert!(dirty);
 

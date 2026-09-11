@@ -205,8 +205,8 @@ fn search_progress_batch_updates_open_overlay_while_loading() {
 
     app.jobs
         .scheduler
-        .defer_result(crate::background_jobs::JobResult::SearchBatch(
-            crate::background_jobs::SearchBatchBuild {
+        .defer_result(crate::background_jobs::job_results::JobResult::SearchBatch(
+            crate::background_jobs::job_results::SearchBatchBuild {
                 token: 42,
                 cwd: root.clone(),
                 scope: SearchScope::Folders,
@@ -280,10 +280,9 @@ fn search_progress_batches_update_current_query_incrementally() {
         ),
         (3, vec![folder_candidate(&root, "fastlane")]),
     ] {
-        app.jobs
-            .scheduler
-            .defer_result(crate::background_jobs::JobResult::SearchBatch(
-                crate::background_jobs::SearchBatchBuild {
+        app.jobs.scheduler.defer_result(
+            crate::background_jobs::job_results::JobResult::SearchBatch(
+                crate::background_jobs::job_results::SearchBatchBuild {
                     token: 42,
                     cwd: root.clone(),
                     scope: SearchScope::Folders,
@@ -298,7 +297,8 @@ fn search_progress_batches_update_current_query_incrementally() {
                         },
                     },
                 },
-            ));
+            ),
+        );
         assert!(app.process_background_jobs());
     }
 
@@ -364,8 +364,8 @@ fn closing_search_cancels_inflight_index_token() {
 
     app.jobs
         .scheduler
-        .defer_result(crate::background_jobs::JobResult::SearchBatch(
-            crate::background_jobs::SearchBatchBuild {
+        .defer_result(crate::background_jobs::job_results::JobResult::SearchBatch(
+            crate::background_jobs::job_results::SearchBatchBuild {
                 token: 42,
                 cwd: root.clone(),
                 scope: SearchScope::Folders,

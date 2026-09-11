@@ -398,5 +398,5 @@ fn source_contains_destination(src: &Path, dest: &Path) -> bool {
 }
 
 #[cfg(test)]
-#[path = "tests/paste.rs"]
+#[path = "tests/copy_move.rs"]
 mod tests;
