@@ -1,6 +1,6 @@
 use super::{
     entry_class_cache,
-    rules::normalize_key,
+    parsing::normalize_key,
     types::{EntryClassCacheKey, ResolvedAppearance, RuleOverride, Theme},
 };
 use crate::{
