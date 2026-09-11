@@ -1,5 +1,5 @@
-use super::model::{KeyCodeSpec, KeyList, KeyModifierSpec, KeySpec, NamedKey};
-use super::validate::{is_reserved_plain_char, validate_key_spec};
+use super::action_bindings::{KeyCodeSpec, KeyList, KeyModifierSpec, KeySpec, NamedKey};
+use super::binding_validation::{is_reserved_plain_char, validate_key_spec};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 

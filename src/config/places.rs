@@ -235,27 +235,3 @@ fn normalize_absolute_path(path: &Path) -> PathBuf {
     }
     normalized
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn normalize_absolute_path_drops_current_and_parent_segments() {
-        let path = PathBuf::from("/tmp/elio/./config/../theme.toml");
-        assert_eq!(
-            normalize_absolute_path(&path),
-            PathBuf::from("/tmp/elio/theme.toml")
-        );
-    }
-
-    #[test]
-    fn expand_custom_place_path_accepts_absolute_paths() {
-        let path = std::env::temp_dir().join("elio-projects");
-        let path_str = path.to_string_lossy().into_owned();
-        assert_eq!(
-            expand_custom_place_path(&path_str).expect("path should parse"),
-            path
-        );
-    }
-}

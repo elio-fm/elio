@@ -1,4 +1,5 @@
 use super::{super::*, toml_string};
+use std::path::PathBuf;
 
 #[test]
 fn config_defaults_places_to_builtin_sidebar_and_devices() {
@@ -222,5 +223,25 @@ entries = [
                 icon: None,
             },
         ]
+    );
+}
+
+#[test]
+fn custom_place_paths_drop_current_and_parent_segments() {
+    let path = PathBuf::from("/tmp/elio/./config/../theme.toml");
+    assert_eq!(
+        super::super::places::expand_custom_place_path(&path.to_string_lossy())
+            .expect("path should parse"),
+        PathBuf::from("/tmp/elio/theme.toml")
+    );
+}
+
+#[test]
+fn custom_places_accept_absolute_paths() {
+    let path = std::env::temp_dir().join("elio-projects");
+    let path_str = path.to_string_lossy().into_owned();
+    assert_eq!(
+        super::super::places::expand_custom_place_path(&path_str).expect("path should parse"),
+        path
     );
 }

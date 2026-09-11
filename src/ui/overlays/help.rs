@@ -32,7 +32,7 @@ pub(in crate::ui) fn render_help_overlay(
         HelpMode::Normal
     };
     let scroll_top = app.overlays.help_scroll;
-    let kb = crate::config::keys();
+    let kb = crate::config::key_bindings();
     let keys = HelpKeys::new(kb, mode);
 
     let navigation_entries = navigation_entries(&keys);

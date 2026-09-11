@@ -174,7 +174,7 @@ impl App {
                 self.overlays.help = false;
                 self.overlays.open_with = Some(build_open_with_overlay(
                     apps,
-                    &crate::config::keys().open_with_reserved_shortcuts(),
+                    &crate::config::key_bindings().open_with_reserved_shortcuts(),
                 ));
                 self.status.clear();
             }

@@ -14,7 +14,9 @@ impl App {
             KeyCode::Esc => {
                 self.overlays.open_with = None;
             }
-            _ => match crate::config::keys().action_for_key_in_context(key, self.key_context()) {
+            _ => match crate::config::key_bindings()
+                .action_for_key_in_context(key, self.key_context())
+            {
                 Some(Action::NavDown) => self.move_open_with_selection(1),
                 Some(Action::NavUp) => self.move_open_with_selection(-1),
                 Some(Action::OpenOrEnter) => self.confirm_selected_open_with_row()?,
