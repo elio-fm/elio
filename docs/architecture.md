@@ -8,7 +8,8 @@ This crate is organized around focused subsystems.
 - `archive` and `opening`: archive operations and launching items with applications.
 - `preview`: preview construction and rendering-oriented preview data.
 - `theme`: palettes and file appearance rules shared by rendered interfaces.
-- `app`: application state, input dispatch, and centralized background-job infrastructure.
+- `app`: application state, input dispatch, preview coordination, and centralized background-job
+  infrastructure.
 - `elevated_session`: privileged filesystem operations through sudo or doas.
 - `terminal_runtime`: application startup, terminal lifecycle, event loop, drawing, and session output.
 - `ui`: terminal rendering and layout.
@@ -21,7 +22,9 @@ Current boundary rules:
   `app/jobs` with Elio's other workers.
 - `fs` and `file_classification` should not depend on `app`.
 - Code-language recognition belongs to `file_classification`, not to a preview renderer.
-- `preview` is presentation code, but it should not depend on `app`.
+- Preview-content construction in `preview` should not depend on `app`.
+- Active-preview caching, navigation, and terminal-image presentation live in `app/preview`; the
+  independent `preview` subsystem constructs preview content.
 - `preview` should not reach into `theme` directly. The explicit adapter boundary for theme
   access is `src/preview/appearance.rs`.
 - `app` owns behavior; it should not be the home for generic data model types that other

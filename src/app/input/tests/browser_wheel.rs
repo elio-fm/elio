@@ -465,8 +465,8 @@ fn foot_sixel_browser_wheel_defers_preview_refresh() {
     app.navigation.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::Default;
     app.set_terminal_image_protocol_for_tests(
-        crate::app::overlays::inline_image::ImageProtocol::Sixel,
-        crate::app::overlays::inline_image::TerminalIdentity::Foot,
+        crate::app::preview::terminal_images::ImageProtocol::Sixel,
+        crate::app::preview::terminal_images::TerminalIdentity::Foot,
     );
     app.select_index(0);
     app.set_frame_state(FrameState {
@@ -522,8 +522,8 @@ fn windows_terminal_sixel_browser_wheel_defers_preview_refresh() {
     app.navigation.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::Default;
     app.set_terminal_image_protocol_for_tests(
-        crate::app::overlays::inline_image::ImageProtocol::Sixel,
-        crate::app::overlays::inline_image::TerminalIdentity::WindowsTerminal,
+        crate::app::preview::terminal_images::ImageProtocol::Sixel,
+        crate::app::preview::terminal_images::TerminalIdentity::WindowsTerminal,
     );
     app.select_index(0);
     app.set_frame_state(FrameState {

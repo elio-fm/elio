@@ -33,7 +33,7 @@ A brief overview of the repository layout:
 ├── examples/                   # Example config and theme files
 ├── packaging/                  # Distribution packaging files
 ├── src/
-│   ├── app/                    # Application state, input dispatch, and background jobs
+│   ├── app/                    # Application state, input, preview coordination, and background jobs
 │   ├── archive/                # Archive creation, extraction, and format handling
 │   ├── cli/                    # Command-line arguments, options, help, and shell commands
 │   ├── config/                 # Configuration loading, validation, and key bindings

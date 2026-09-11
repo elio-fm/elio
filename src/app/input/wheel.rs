@@ -1,4 +1,5 @@
 use super::*;
+use crate::preview;
 
 #[derive(Clone, Copy)]
 pub(in crate::app) struct WheelTuning {

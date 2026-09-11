@@ -1,7 +1,6 @@
 mod directory;
 mod goto;
 mod navigation;
-mod preview;
 
 use super::*;
 use anyhow::{Result, anyhow, bail};

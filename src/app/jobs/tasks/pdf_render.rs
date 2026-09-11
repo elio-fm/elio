@@ -62,7 +62,7 @@ impl PdfRenderPool {
             workers.push(thread::spawn(move || {
                 while let Some(request) = PdfRenderShared::pop(&shared) {
                     let key = PdfRenderJobKey::from_request(&request);
-                    let result = overlays::pdf::render_pdf_page_to_cache(
+                    let result = preview::pdf::render_pdf_page_to_cache(
                         &request.path,
                         request.size,
                         request.modified,
@@ -79,15 +79,16 @@ impl PdfRenderPool {
                                     width: config.area_width,
                                     height: config.area_height,
                                 };
-                                let (target_w, target_h) = overlays::inline_image::area_pixel_size(
-                                    placement,
-                                    config.window_size,
-                                );
-                                let dcs = overlays::inline_image::encode_sixel_dcs(
+                                let (target_w, target_h) =
+                                    preview::terminal_images::area_pixel_size(
+                                        placement,
+                                        config.window_size,
+                                    );
+                                let dcs = preview::terminal_images::encode_sixel_dcs(
                                     path, target_w, target_h,
                                 )
                                 .ok()?;
-                                let dcs_key = overlays::images::SixelDcsKey::new(
+                                let dcs_key = preview::static_images::SixelDcsKey::new(
                                     path,
                                     placement,
                                     config.window_size,

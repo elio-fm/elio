@@ -40,16 +40,16 @@ fn duplicate_finder_does_not_depend_on_app() {
 }
 
 #[test]
-fn app_ui_access_stays_confined_to_inline_image_theme_helpers() {
+fn app_ui_access_stays_confined_to_terminal_image_theme_helpers() {
     assert_tree_has_no_pattern(
         "src/app",
         "crate::ui::",
         &[
-            "src/app/overlays/inline_image/iterm.rs",
-            "src/app/overlays/inline_image/kitty.rs",
+            "src/app/preview/terminal_images/iterm.rs",
+            "src/app/preview/terminal_images/kitty.rs",
             // Sixel composites RGBA pixels over the panel background colour
             // before quantising, requiring the same theme access as iterm/kitty.
-            "src/app/overlays/inline_image/sixel.rs",
+            "src/app/preview/terminal_images/sixel.rs",
         ],
     );
 }
