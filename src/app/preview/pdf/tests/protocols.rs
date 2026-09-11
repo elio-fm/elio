@@ -31,7 +31,7 @@ fn iterm_png_and_jpeg_static_images_use_direct_source_payloads() {
         let metadata = fs::metadata(&path).expect("image metadata should exist");
 
         let prepared = crate::app::preview::static_images::prepare_static_image_asset(
-            &crate::app::jobs::ImagePrepareRequest {
+            &crate::background_jobs::ImagePrepareRequest {
                 path: path.clone(),
                 size: metadata.len(),
                 modified: None,
@@ -75,7 +75,7 @@ fn iterm_large_jpeg_static_image_uses_compact_cached_payload() {
     );
 
     let prepared = crate::app::preview::static_images::prepare_static_image_asset(
-        &crate::app::jobs::ImagePrepareRequest {
+        &crate::background_jobs::ImagePrepareRequest {
             path: path.clone(),
             size: metadata.len(),
             modified: None,

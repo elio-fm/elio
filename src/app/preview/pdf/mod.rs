@@ -7,11 +7,12 @@ mod session;
 mod types;
 
 pub(crate) use self::pipeline::{probe_pdf_page, render_pdf_page_to_cache};
+pub(in crate::app) use self::types::PdfPreviewState;
+pub(crate) use self::types::PdfProbeResult;
 pub(in crate::app::preview::pdf) use self::types::{
     DisplayedPdfPreview, FittedPdfPlacement, PdfDocumentKey, PdfOverlayRequest, PdfPageDimensions,
     PdfPageKey, PdfRenderKey, PdfSession,
 };
-pub(in crate::app) use self::types::{PdfPreviewState, PdfProbeResult};
 #[cfg(test)]
 use self::{
     geometry::{bucket_render_dimensions, fit_pdf_page},

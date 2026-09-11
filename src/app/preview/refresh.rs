@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::jobs::DirectoryStatsRequest;
+use crate::background_jobs::DirectoryStatsRequest;
 use crate::preview::{PreviewContent, PreviewKind, loading_preview_for, preview_work_class};
 use std::time::Instant;
 

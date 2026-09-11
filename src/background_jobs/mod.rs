@@ -1,7 +1,6 @@
 mod config;
 mod metrics;
 mod pool;
-mod results;
 mod scheduler;
 mod sync;
 mod tasks;
@@ -33,7 +32,5 @@ use self::{
     pool::{fuzzy_finder::FuzzyFinderJobKey, preview::PreviewJobKey},
     tasks::{image::ImagePrepareJobKey, pdf_probe::PdfProbeJobKey, pdf_render::PdfRenderJobKey},
 };
-use super::*;
-
 #[cfg(test)]
 mod tests;

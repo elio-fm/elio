@@ -14,7 +14,7 @@ use std::{
 
 const MAX_CONCURRENT_LOW_PRIORITY_HEAVY_PREVIEWS: usize = 2;
 
-pub(in crate::app::jobs) struct PreviewPool {
+pub(in crate::background_jobs) struct PreviewPool {
     shared: Arc<PreviewShared>,
     workers: Vec<thread::JoinHandle<()>>,
     metrics: Arc<Mutex<SchedulerMetrics>>,
@@ -45,20 +45,20 @@ struct ActivePreviewJob {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(in crate::app::jobs) struct PreviewJobKey {
-    pub(in crate::app::jobs) path: PathBuf,
-    pub(in crate::app::jobs) size: u64,
-    pub(in crate::app::jobs) modified: Option<SystemTime>,
-    pub(in crate::app::jobs) variant: PreviewRequestOptions,
-    pub(in crate::app::jobs) ffmpeg_available: bool,
-    pub(in crate::app::jobs) code_line_limit: usize,
+pub(in crate::background_jobs) struct PreviewJobKey {
+    pub(in crate::background_jobs) path: PathBuf,
+    pub(in crate::background_jobs) size: u64,
+    pub(in crate::background_jobs) modified: Option<SystemTime>,
+    pub(in crate::background_jobs) variant: PreviewRequestOptions,
+    pub(in crate::background_jobs) ffmpeg_available: bool,
+    pub(in crate::background_jobs) code_line_limit: usize,
     /// Included so that an initial partial render and its extension job are
     /// treated as distinct keys and not deduplicated against each other.
-    pub(in crate::app::jobs) code_render_limit: usize,
+    pub(in crate::background_jobs) code_render_limit: usize,
 }
 
 impl PreviewPool {
-    pub(in crate::app::jobs) fn new(
+    pub(in crate::background_jobs) fn new(
         worker_count: usize,
         capacity: usize,
         result_tx: mpsc::Sender<JobResult>,
@@ -124,7 +124,7 @@ impl PreviewPool {
         }
     }
 
-    pub(in crate::app::jobs) fn submit(&self, request: PreviewRequest) -> bool {
+    pub(in crate::background_jobs) fn submit(&self, request: PreviewRequest) -> bool {
         let key = PreviewJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
@@ -185,7 +185,7 @@ impl PreviewPool {
         true
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         !state.pending_high.is_empty()
             || !state.pending_low.is_empty()
@@ -193,7 +193,7 @@ impl PreviewPool {
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn pending_keys(
+    pub(in crate::background_jobs) fn pending_keys(
         &self,
         priority: PreviewPriority,
     ) -> Vec<PreviewJobKey> {
@@ -206,7 +206,7 @@ impl PreviewPool {
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn active_keys(&self) -> Vec<PreviewJobKey> {
+    pub(in crate::background_jobs) fn active_keys(&self) -> Vec<PreviewJobKey> {
         let mut keys = lock_unpoison(&self.shared.state)
             .active_jobs
             .iter()
@@ -217,7 +217,7 @@ impl PreviewPool {
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn pending_len(&self, priority: PreviewPriority) -> usize {
+    pub(in crate::background_jobs) fn pending_len(&self, priority: PreviewPriority) -> usize {
         let state = lock_unpoison(&self.shared.state);
         match priority {
             PreviewPriority::High => state.pending_high.len(),
@@ -226,12 +226,12 @@ impl PreviewPool {
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn active_len(&self) -> usize {
+    pub(in crate::background_jobs) fn active_len(&self) -> usize {
         lock_unpoison(&self.shared.state).active_jobs.len()
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn canceled_active_keys(&self) -> Vec<PreviewJobKey> {
+    pub(in crate::background_jobs) fn canceled_active_keys(&self) -> Vec<PreviewJobKey> {
         let mut keys = lock_unpoison(&self.shared.state)
             .active_jobs
             .iter()
@@ -243,7 +243,7 @@ impl PreviewPool {
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn pop_next_pending_for_tests(&self) -> Option<PreviewRequest> {
+    pub(in crate::background_jobs) fn pop_next_pending_for_tests(&self) -> Option<PreviewRequest> {
         let mut state = lock_unpoison(&self.shared.state);
         if let Some(request) = state.pending_high.pop_front() {
             let key = PreviewJobKey::from_request(&request);

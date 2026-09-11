@@ -244,11 +244,11 @@ fn pasted_text_updates_archive_password_and_flattens_newlines() {
     let root = temp_path("paste-archive-password");
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.open_archive_password_prompt(
-        crate::app::jobs::ArchiveExtractRequest {
+        crate::background_jobs::ArchiveExtractRequest {
             token: 0,
             archives: vec![root.join("archive.zip")],
             password: None,
-            batch: crate::app::jobs::ArchiveExtractBatchState::new(1, 0),
+            batch: crate::background_jobs::ArchiveExtractBatchState::new(1, 0),
         },
         None,
     );

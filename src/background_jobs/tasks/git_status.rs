@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-pub(in crate::app::jobs) struct GitStatusPool {
+pub(in crate::background_jobs) struct GitStatusPool {
     shared: Arc<GitStatusShared>,
     worker: Option<thread::JoinHandle<()>>,
 }
@@ -21,7 +21,7 @@ struct GitStatusState {
 }
 
 impl GitStatusPool {
-    pub(in crate::app::jobs) fn new(result_tx: mpsc::Sender<JobResult>) -> Self {
+    pub(in crate::background_jobs) fn new(result_tx: mpsc::Sender<JobResult>) -> Self {
         let shared = Arc::new(GitStatusShared {
             state: Mutex::new(GitStatusState {
                 pending: None,
@@ -54,7 +54,7 @@ impl GitStatusPool {
         }
     }
 
-    pub(in crate::app::jobs) fn submit(&self, request: GitStatusRequest) -> bool {
+    pub(in crate::background_jobs) fn submit(&self, request: GitStatusRequest) -> bool {
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
             return false;
@@ -64,7 +64,7 @@ impl GitStatusPool {
         true
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         state.pending.is_some() || state.active
     }

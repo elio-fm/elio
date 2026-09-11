@@ -4,12 +4,12 @@ mod directory_counts;
 mod drag;
 mod duplicate_finder_overlay;
 mod fuzzy_finder_overlay;
-mod git;
+pub(crate) mod git;
 mod input;
-mod jobs;
+mod job_results;
 mod local_filter;
 mod open_with_overlay;
-mod preview;
+pub(crate) mod preview;
 use crate::config;
 mod selection;
 mod state;
@@ -18,21 +18,24 @@ mod types;
 
 use self::constants::*;
 #[cfg(test)]
-use self::jobs::SchedulerMetricsSnapshot;
-#[cfg(unix)]
-pub(crate) use self::jobs::run_user_trash_helper;
-pub(crate) use self::jobs::{
-    ArchiveCreateRequest, ArchiveExtractBatchState, ArchiveExtractRequest, PasteRequest,
-    RestoreRequest, TrashRequest,
-};
-use self::jobs::{PreviewLineCountRequest, PreviewPriority, PreviewRequest, SearchRequest};
-#[cfg(test)]
 pub(crate) use self::state::DuplicateFinderOverlay;
 use self::state::*;
 pub(crate) use self::state::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
 pub(crate) use self::text_edit::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
+};
+use crate::background_jobs as jobs;
+#[cfg(test)]
+use crate::background_jobs::SchedulerMetricsSnapshot;
+#[cfg(unix)]
+pub(crate) use crate::background_jobs::run_user_trash_helper;
+pub(crate) use crate::background_jobs::{
+    ArchiveCreateRequest, ArchiveExtractBatchState, ArchiveExtractRequest, PasteRequest,
+    RestoreRequest, TrashRequest,
+};
+use crate::background_jobs::{
+    PreviewLineCountRequest, PreviewPriority, PreviewRequest, SearchRequest,
 };
 pub(crate) use crate::file_operations::ClipOp;
 use anyhow::Result;
@@ -60,7 +63,7 @@ pub use self::types::{
     CopyHit, DuplicateHit, EntryHit, FrameState, GoToHit, OpenWithHit, PathHit, SearchHit,
     SearchRow, SearchScope, ViewMetrics, ViewMode,
 };
-pub use crate::fs::{Entry, EntryKind, SortMode};
+pub use crate::fs::{Entry, EntryKind};
 #[cfg(test)]
 pub use crate::places::PlaceItem;
 pub use crate::places::{PlaceKind, PlaceRow};

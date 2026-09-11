@@ -1,4 +1,5 @@
 use super::*;
+use crate::fuzzy_finder::SearchScope;
 use std::{
     path::PathBuf,
     sync::{
@@ -10,7 +11,7 @@ use std::{
     time::Instant,
 };
 
-pub(in crate::app::jobs) struct FuzzyFinderPool {
+pub(in crate::background_jobs) struct FuzzyFinderPool {
     shared: Arc<SearchShared>,
     workers: Vec<thread::JoinHandle<()>>,
     metrics: Arc<Mutex<SchedulerMetrics>>,
@@ -35,15 +36,15 @@ struct ActiveSearchJob {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(in crate::app::jobs) struct FuzzyFinderJobKey {
-    pub(in crate::app::jobs) cwd: PathBuf,
-    pub(in crate::app::jobs) scope: SearchScope,
-    pub(in crate::app::jobs) show_hidden: bool,
-    pub(in crate::app::jobs) fingerprint: crate::fs::DirectoryFingerprint,
+pub(in crate::background_jobs) struct FuzzyFinderJobKey {
+    pub(in crate::background_jobs) cwd: PathBuf,
+    pub(in crate::background_jobs) scope: SearchScope,
+    pub(in crate::background_jobs) show_hidden: bool,
+    pub(in crate::background_jobs) fingerprint: crate::fs::DirectoryFingerprint,
 }
 
 impl FuzzyFinderPool {
-    pub(in crate::app::jobs) fn new(
+    pub(in crate::background_jobs) fn new(
         worker_count: usize,
         result_tx: mpsc::Sender<JobResult>,
         metrics: Arc<Mutex<SchedulerMetrics>>,
@@ -128,7 +129,7 @@ impl FuzzyFinderPool {
         }
     }
 
-    pub(in crate::app::jobs) fn submit(&self, request: SearchRequest) -> bool {
+    pub(in crate::background_jobs) fn submit(&self, request: SearchRequest) -> bool {
         let key = FuzzyFinderJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
@@ -152,7 +153,7 @@ impl FuzzyFinderPool {
         true
     }
 
-    pub(in crate::app::jobs) fn cancel_all(&self) {
+    pub(in crate::background_jobs) fn cancel_all(&self) {
         let mut state = lock_unpoison(&self.shared.state);
         state.pending = None;
         state.pending_key = None;
@@ -161,18 +162,18 @@ impl FuzzyFinderPool {
         }
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         state.pending.is_some() || state.active.is_some()
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn pending_key(&self) -> Option<FuzzyFinderJobKey> {
+    pub(in crate::background_jobs) fn pending_key(&self) -> Option<FuzzyFinderJobKey> {
         lock_unpoison(&self.shared.state).pending_key.clone()
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn active_key(&self) -> Option<FuzzyFinderJobKey> {
+    pub(in crate::background_jobs) fn active_key(&self) -> Option<FuzzyFinderJobKey> {
         lock_unpoison(&self.shared.state)
             .active
             .as_ref()

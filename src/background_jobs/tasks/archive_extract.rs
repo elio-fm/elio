@@ -12,7 +12,7 @@ use std::{
 
 const PROGRESS_SEND_INTERVAL: Duration = Duration::from_millis(80);
 
-pub(in crate::app::jobs) struct ArchiveExtractPool {
+pub(in crate::background_jobs) struct ArchiveExtractPool {
     shared: Arc<ArchiveExtractShared>,
     workers: Vec<thread::JoinHandle<()>>,
 }
@@ -31,7 +31,7 @@ struct ArchiveExtractState {
 }
 
 impl ArchiveExtractPool {
-    pub(in crate::app::jobs) fn new(result_tx: mpsc::Sender<JobResult>) -> Self {
+    pub(in crate::background_jobs) fn new(result_tx: mpsc::Sender<JobResult>) -> Self {
         let shared = Arc::new(ArchiveExtractShared {
             state: Mutex::new(ArchiveExtractState {
                 pending: None,
@@ -61,7 +61,7 @@ impl ArchiveExtractPool {
         }
     }
 
-    pub(in crate::app::jobs) fn submit(&self, request: ArchiveExtractRequest) -> bool {
+    pub(in crate::background_jobs) fn submit(&self, request: ArchiveExtractRequest) -> bool {
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed || state.pending.is_some() || state.active {
             return false;
@@ -71,11 +71,11 @@ impl ArchiveExtractPool {
         true
     }
 
-    pub(in crate::app::jobs) fn cancel_extract(&self, token: u64) {
+    pub(in crate::background_jobs) fn cancel_extract(&self, token: u64) {
         self.shared.cancel_token.store(token, Ordering::Relaxed);
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         state.pending.is_some() || state.active
     }

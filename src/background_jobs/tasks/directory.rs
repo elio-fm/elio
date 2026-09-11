@@ -1,4 +1,5 @@
 use super::*;
+use crate::fs::SortMode;
 use std::{
     path::PathBuf,
     sync::{
@@ -10,7 +11,7 @@ use std::{
     time::Instant,
 };
 
-pub(in crate::app::jobs) struct DirectoryPool {
+pub(in crate::background_jobs) struct DirectoryPool {
     shared: Arc<DirectoryShared>,
     workers: Vec<thread::JoinHandle<()>>,
     metrics: Arc<Mutex<SchedulerMetrics>>,
@@ -42,7 +43,7 @@ struct DirectoryJobKey {
 }
 
 impl DirectoryPool {
-    pub(in crate::app::jobs) fn new(
+    pub(in crate::background_jobs) fn new(
         worker_count: usize,
         result_tx: mpsc::Sender<JobResult>,
         metrics: Arc<Mutex<SchedulerMetrics>>,
@@ -111,7 +112,7 @@ impl DirectoryPool {
         }
     }
 
-    pub(in crate::app::jobs) fn submit(&self, request: DirectoryRequest) -> bool {
+    pub(in crate::background_jobs) fn submit(&self, request: DirectoryRequest) -> bool {
         let key = DirectoryJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
@@ -135,7 +136,7 @@ impl DirectoryPool {
         true
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         state.pending.is_some() || state.active.is_some()
     }

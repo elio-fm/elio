@@ -9,10 +9,10 @@ use std::{
 use anyhow::{Context, Result};
 
 use super::{
-    jobs::{ArchiveExtractRequest, JobScheduler},
     preview::{comic, epub, pdf, static_images, terminal_images},
     types::*,
 };
+use crate::background_jobs::{ArchiveExtractRequest, JobScheduler};
 use crate::duplicate_finder::{DuplicateGroup, DuplicateScanStats};
 #[cfg(unix)]
 use crate::file_operations::BulkRenameEditorSession;

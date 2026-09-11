@@ -1,4 +1,5 @@
 use super::*;
+use crate::file_operations::ClipOp;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -16,7 +17,7 @@ use std::{
 /// when pasting or trashing large numbers of small files.
 const PROGRESS_SEND_INTERVAL: Duration = Duration::from_millis(80);
 
-pub(in crate::app::jobs) struct PastePool {
+pub(in crate::background_jobs) struct PastePool {
     shared: Arc<PasteShared>,
     workers: Vec<thread::JoinHandle<()>>,
 }
@@ -40,7 +41,7 @@ struct PasteState {
 }
 
 impl PastePool {
-    pub(in crate::app::jobs) fn new(result_tx: mpsc::Sender<JobResult>) -> Self {
+    pub(in crate::background_jobs) fn new(result_tx: mpsc::Sender<JobResult>) -> Self {
         let shared = Arc::new(PasteShared {
             state: Mutex::new(PasteState {
                 pending: None,
@@ -119,7 +120,7 @@ impl PastePool {
         }
     }
 
-    pub(in crate::app::jobs) fn submit(&self, request: PasteRequest) -> bool {
+    pub(in crate::background_jobs) fn submit(&self, request: PasteRequest) -> bool {
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
             return false;
@@ -132,11 +133,11 @@ impl PastePool {
     /// Signal the worker to stop after the current item if it is processing
     /// the paste with the given token.  A concurrent or future paste with a
     /// different token is unaffected.
-    pub(in crate::app::jobs) fn cancel_paste(&self, token: u64) {
+    pub(in crate::background_jobs) fn cancel_paste(&self, token: u64) {
         self.shared.cancel_token.store(token, Ordering::Relaxed);
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         state.pending.is_some() || state.active
     }

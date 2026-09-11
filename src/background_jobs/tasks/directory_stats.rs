@@ -9,7 +9,7 @@ use std::{
     thread,
 };
 
-pub(in crate::app::jobs) struct DirectoryStatsPool {
+pub(in crate::background_jobs) struct DirectoryStatsPool {
     shared: Arc<DirectoryStatsShared>,
     workers: Vec<thread::JoinHandle<()>>,
 }
@@ -38,7 +38,7 @@ struct DirectoryStatsJobKey {
 }
 
 impl DirectoryStatsPool {
-    pub(in crate::app::jobs) fn new(
+    pub(in crate::background_jobs) fn new(
         worker_count: usize,
         result_tx: mpsc::Sender<JobResult>,
     ) -> Self {
@@ -80,7 +80,7 @@ impl DirectoryStatsPool {
         Self { shared, workers }
     }
 
-    pub(in crate::app::jobs) fn submit(&self, request: DirectoryStatsRequest) -> bool {
+    pub(in crate::background_jobs) fn submit(&self, request: DirectoryStatsRequest) -> bool {
         let key = DirectoryStatsJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
@@ -110,7 +110,7 @@ impl DirectoryStatsPool {
         true
     }
 
-    pub(in crate::app::jobs) fn cancel_all(&self) {
+    pub(in crate::background_jobs) fn cancel_all(&self) {
         let mut state = lock_unpoison(&self.shared.state);
         state.pending = None;
         if let Some(active) = &state.active {
@@ -118,7 +118,7 @@ impl DirectoryStatsPool {
         }
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         state.pending.is_some() || state.active.is_some()
     }
