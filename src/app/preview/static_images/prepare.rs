@@ -13,10 +13,10 @@ use super::{
     STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES, STATIC_IMAGE_RENDER_CACHE_VERSION,
     SixelDcsKey, StaticImageKey, StaticImageOverlayRequest,
 };
-use crate::app::jobs;
 use crate::app::preview::terminal_images::{
     area_pixel_size, encode_iterm_inline_payload, encode_sixel_dcs, fit_image_area,
 };
+use crate::background_jobs as jobs;
 use image::{ImageFormat, ImageReader};
 use ratatui::layout::Rect;
 use std::{

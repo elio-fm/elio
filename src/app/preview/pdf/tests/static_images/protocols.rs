@@ -69,7 +69,7 @@ fn prepared_full_pane_image_uses_aspect_fitted_kitty_placement() {
     let rendered = root.join("photo-rendered.png");
     write_test_raster_image(&rendered, ImageFormat::Png, 1024, 1024);
 
-    let dirty = app.apply_image_prepare_build(crate::app::jobs::ImagePrepareBuild {
+    let dirty = app.apply_image_prepare_build(crate::background_jobs::ImagePrepareBuild {
         path: path.clone(),
         size: metadata.len(),
         modified: None,

@@ -29,7 +29,7 @@ const GIO_TRASH_ARG_BUDGET: usize = 128 * 1024;
 #[cfg(target_os = "linux")]
 const GIO_TRASH_COMMAND_OVERHEAD: usize = "gio".len() + 1 + "trash".len() + 1 + "--".len() + 1;
 
-pub(in crate::app::jobs) struct TrashPool {
+pub(in crate::background_jobs) struct TrashPool {
     shared: Arc<TrashShared>,
     workers: Vec<thread::JoinHandle<()>>,
 }
@@ -48,7 +48,7 @@ struct TrashState {
 }
 
 impl TrashPool {
-    pub(in crate::app::jobs) fn new(result_tx: mpsc::Sender<JobResult>) -> Self {
+    pub(in crate::background_jobs) fn new(result_tx: mpsc::Sender<JobResult>) -> Self {
         let shared = Arc::new(TrashShared {
             state: Mutex::new(TrashState {
                 pending: None,
@@ -141,7 +141,7 @@ impl TrashPool {
         }
     }
 
-    pub(in crate::app::jobs) fn submit(&self, request: TrashRequest) -> bool {
+    pub(in crate::background_jobs) fn submit(&self, request: TrashRequest) -> bool {
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
             return false;
@@ -154,11 +154,11 @@ impl TrashPool {
     /// Signal the worker to stop after the current item if it is processing
     /// the trash request with the given token.  A concurrent or future request
     /// with a different token is unaffected.
-    pub(in crate::app::jobs) fn cancel_trash(&self, token: u64) {
+    pub(in crate::background_jobs) fn cancel_trash(&self, token: u64) {
         self.shared.cancel_token.store(token, Ordering::Relaxed);
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         state.pending.is_some() || state.active
     }
@@ -492,7 +492,7 @@ fn run_staged_cleanup(staged: Vec<(String, PathBuf)>) -> Vec<String> {
 /// Spawns a background thread that sweeps any PID subdirectories left in the
 /// staging root from sessions that were killed before cleanup could finish.
 /// Best-effort: errors are silently ignored.
-pub(in crate::app::jobs) fn sweep_staging_on_startup() {
+pub(in crate::background_jobs) fn sweep_staging_on_startup() {
     let current_pid = std::process::id();
     let Some(cleanup_root) = staging_root() else {
         return;

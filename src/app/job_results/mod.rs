@@ -1,4 +1,5 @@
 use super::*;
+use crate::background_jobs::*;
 use crate::preview;
 use std::{
     collections::HashMap,

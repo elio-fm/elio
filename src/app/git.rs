@@ -49,7 +49,7 @@ impl App {
     }
 }
 
-pub(in crate::app) fn current_status(cwd: &Path) -> (Option<String>, bool) {
+pub(crate) fn current_status(cwd: &Path) -> (Option<String>, bool) {
     if git_command(cwd, ["rev-parse", "--is-inside-work-tree"])
         .is_none_or(|output| output.trim() != "true")
     {

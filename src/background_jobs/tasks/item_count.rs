@@ -7,39 +7,39 @@ use std::{
     time::SystemTime,
 };
 
-pub(in crate::app::jobs) struct PreviewLineCountPool {
-    shared: Arc<PreviewLineCountShared>,
+pub(in crate::background_jobs) struct DirectoryItemCountPool {
+    shared: Arc<DirectoryItemCountShared>,
     workers: Vec<thread::JoinHandle<()>>,
 }
 
-struct PreviewLineCountShared {
-    state: Mutex<PreviewLineCountState>,
+struct DirectoryItemCountShared {
+    state: Mutex<DirectoryItemCountState>,
     available: Condvar,
 }
 
-struct PreviewLineCountState {
-    pending: VecDeque<PreviewLineCountRequest>,
-    queued_keys: HashSet<PreviewLineCountJobKey>,
-    active_keys: HashSet<PreviewLineCountJobKey>,
+struct DirectoryItemCountState {
+    pending: VecDeque<DirectoryItemCountRequest>,
+    queued_keys: HashSet<DirectoryItemCountJobKey>,
+    active_keys: HashSet<DirectoryItemCountJobKey>,
     closed: bool,
     capacity: usize,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct PreviewLineCountJobKey {
+struct DirectoryItemCountJobKey {
     path: PathBuf,
-    size: u64,
     modified: Option<SystemTime>,
+    show_hidden: bool,
 }
 
-impl PreviewLineCountPool {
-    pub(in crate::app::jobs) fn new(
+impl DirectoryItemCountPool {
+    pub(in crate::background_jobs) fn new(
         worker_count: usize,
         capacity: usize,
         result_tx: mpsc::Sender<JobResult>,
     ) -> Self {
-        let shared = Arc::new(PreviewLineCountShared {
-            state: Mutex::new(PreviewLineCountState {
+        let shared = Arc::new(DirectoryItemCountShared {
+            state: Mutex::new(DirectoryItemCountState {
                 pending: VecDeque::new(),
                 queued_keys: HashSet::new(),
                 active_keys: HashSet::new(),
@@ -53,16 +53,17 @@ impl PreviewLineCountPool {
             let shared = Arc::clone(&shared);
             let result_tx = result_tx.clone();
             workers.push(thread::spawn(move || {
-                while let Some(request) = PreviewLineCountShared::pop(&shared) {
-                    let key = PreviewLineCountJobKey::from_request(&request);
-                    let total_lines = crate::preview::count_total_text_lines(&request.path).ok();
-                    PreviewLineCountShared::finish(&shared, &key);
+                while let Some(request) = DirectoryItemCountShared::pop(&shared) {
+                    let key = DirectoryItemCountJobKey::from_request(&request);
+                    let item_count =
+                        crate::fs::count_directory_items(&request.path, request.show_hidden).ok();
+                    DirectoryItemCountShared::finish(&shared, &key);
                     if result_tx
-                        .send(JobResult::PreviewLineCount(PreviewLineCountBuild {
+                        .send(JobResult::DirectoryItemCount(DirectoryItemCountBuild {
                             path: request.path,
-                            size: request.size,
                             modified: request.modified,
-                            total_lines,
+                            show_hidden: request.show_hidden,
+                            item_count,
                         }))
                         .is_err()
                     {
@@ -74,8 +75,8 @@ impl PreviewLineCountPool {
         Self { shared, workers }
     }
 
-    pub(in crate::app::jobs) fn submit(&self, request: PreviewLineCountRequest) -> bool {
-        let key = PreviewLineCountJobKey::from_request(&request);
+    pub(in crate::background_jobs) fn submit(&self, request: DirectoryItemCountRequest) -> bool {
+        let key = DirectoryItemCountJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
             return false;
@@ -89,7 +90,7 @@ impl PreviewLineCountPool {
             };
             state
                 .queued_keys
-                .remove(&PreviewLineCountJobKey::from_request(&stale));
+                .remove(&DirectoryItemCountJobKey::from_request(&stale));
         }
         state.queued_keys.insert(key);
         state.pending.push_back(request);
@@ -97,13 +98,13 @@ impl PreviewLineCountPool {
         true
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         !state.pending.is_empty() || !state.active_keys.is_empty()
     }
 }
 
-impl Drop for PreviewLineCountPool {
+impl Drop for DirectoryItemCountPool {
     fn drop(&mut self) {
         {
             let mut state = lock_unpoison(&self.shared.state);
@@ -118,15 +119,15 @@ impl Drop for PreviewLineCountPool {
     }
 }
 
-impl PreviewLineCountShared {
-    fn pop(shared: &Arc<Self>) -> Option<PreviewLineCountRequest> {
+impl DirectoryItemCountShared {
+    fn pop(shared: &Arc<Self>) -> Option<DirectoryItemCountRequest> {
         let mut state = lock_unpoison(&shared.state);
         loop {
             if state.closed {
                 return None;
             }
             if let Some(request) = state.pending.pop_front() {
-                let key = PreviewLineCountJobKey::from_request(&request);
+                let key = DirectoryItemCountJobKey::from_request(&request);
                 state.queued_keys.remove(&key);
                 state.active_keys.insert(key);
                 return Some(request);
@@ -135,18 +136,18 @@ impl PreviewLineCountShared {
         }
     }
 
-    fn finish(shared: &Arc<Self>, key: &PreviewLineCountJobKey) {
+    fn finish(shared: &Arc<Self>, key: &DirectoryItemCountJobKey) {
         let mut state = lock_unpoison(&shared.state);
         state.active_keys.remove(key);
     }
 }
 
-impl PreviewLineCountJobKey {
-    fn from_request(request: &PreviewLineCountRequest) -> Self {
+impl DirectoryItemCountJobKey {
+    fn from_request(request: &DirectoryItemCountRequest) -> Self {
         Self {
             path: request.path.clone(),
-            size: request.size,
             modified: request.modified,
+            show_hidden: request.show_hidden,
         }
     }
 }

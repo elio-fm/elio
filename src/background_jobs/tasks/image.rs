@@ -1,5 +1,6 @@
 use super::*;
-use crate::app::jobs::SixelPrepareConfig;
+use crate::app::preview::static_images;
+use crate::background_jobs::SixelPrepareConfig;
 use std::{
     collections::{HashSet, VecDeque},
     path::PathBuf,
@@ -12,7 +13,7 @@ use std::{
     time::SystemTime,
 };
 
-pub(in crate::app::jobs) struct ImagePreparePool {
+pub(in crate::background_jobs) struct ImagePreparePool {
     shared: Arc<ImagePrepareShared>,
     workers: Vec<thread::JoinHandle<()>>,
 }
@@ -33,21 +34,21 @@ struct ImagePrepareState {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(in crate::app::jobs) struct ImagePrepareJobKey {
-    pub(in crate::app::jobs) path: PathBuf,
-    pub(in crate::app::jobs) size: u64,
-    pub(in crate::app::jobs) modified: Option<SystemTime>,
-    pub(in crate::app::jobs) target_width_px: u32,
-    pub(in crate::app::jobs) target_height_px: u32,
-    pub(in crate::app::jobs) force_render_to_cache: bool,
-    pub(in crate::app::jobs) prepare_inline_payload: bool,
+pub(in crate::background_jobs) struct ImagePrepareJobKey {
+    pub(in crate::background_jobs) path: PathBuf,
+    pub(in crate::background_jobs) size: u64,
+    pub(in crate::background_jobs) modified: Option<SystemTime>,
+    pub(in crate::background_jobs) target_width_px: u32,
+    pub(in crate::background_jobs) target_height_px: u32,
+    pub(in crate::background_jobs) force_render_to_cache: bool,
+    pub(in crate::background_jobs) prepare_inline_payload: bool,
     /// Included so that Sixel and non-Sixel jobs for the same image are not
     /// incorrectly deduplicated against each other.
-    pub(in crate::app::jobs) sixel_prepare: Option<SixelPrepareConfig>,
+    pub(in crate::background_jobs) sixel_prepare: Option<SixelPrepareConfig>,
 }
 
 impl ImagePreparePool {
-    pub(in crate::app::jobs) fn new(
+    pub(in crate::background_jobs) fn new(
         worker_count: usize,
         capacity: usize,
         result_tx: mpsc::Sender<JobResult>,
@@ -71,10 +72,9 @@ impl ImagePreparePool {
             workers.push(thread::spawn(move || {
                 while let Some((request, canceled)) = ImagePrepareShared::pop(&shared) {
                     let key = ImagePrepareJobKey::from_request(&request);
-                    let result =
-                        preview::static_images::prepare_static_image_asset(&request, || {
-                            canceled.load(Ordering::Relaxed)
-                        });
+                    let result = static_images::prepare_static_image_asset(&request, || {
+                        canceled.load(Ordering::Relaxed)
+                    });
                     ImagePrepareShared::finish(&shared, &key);
                     if result_tx
                         .send(JobResult::ImagePrepare(ImagePrepareBuild {
@@ -98,7 +98,7 @@ impl ImagePreparePool {
         Self { shared, workers }
     }
 
-    pub(in crate::app::jobs) fn submit(
+    pub(in crate::background_jobs) fn submit(
         &self,
         request: ImagePrepareRequest,
         priority: ImageJobPriority,
@@ -162,14 +162,14 @@ impl ImagePreparePool {
         true
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         !state.pending_current.is_empty()
             || !state.pending_nearby.is_empty()
             || !state.active.is_empty()
     }
 
-    pub(in crate::app::jobs) fn retain_pending(
+    pub(in crate::background_jobs) fn retain_pending(
         &self,
         current: Option<&ImagePrepareRequest>,
         nearby: &[ImagePrepareRequest],
@@ -262,7 +262,7 @@ impl ImagePreparePool {
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn pending_keys(&self) -> Vec<ImagePrepareJobKey> {
+    pub(in crate::background_jobs) fn pending_keys(&self) -> Vec<ImagePrepareJobKey> {
         let state = lock_unpoison(&self.shared.state);
         state
             .pending_current

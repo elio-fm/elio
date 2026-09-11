@@ -94,7 +94,7 @@ pub(super) struct FittedPdfPlacement {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub(in crate::app) struct PdfProbeResult {
+pub(crate) struct PdfProbeResult {
     pub total_pages: Option<usize>,
     pub width_pts: Option<f32>,
     pub height_pts: Option<f32>,

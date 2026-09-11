@@ -1,5 +1,10 @@
 use super::*;
 use crate::preview::{PreviewRequestOptions, PreviewWorkClass, default_code_preview_line_limit};
+use crate::{
+    fs::{Entry, EntryKind},
+    fuzzy_finder::SearchScope,
+};
+use std::path::PathBuf;
 
 fn image_prepare_request(name: &str) -> ImagePrepareRequest {
     ImagePrepareRequest {

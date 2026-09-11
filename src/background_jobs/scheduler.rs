@@ -48,7 +48,7 @@ pub(crate) struct JobScheduler {
 }
 
 impl JobScheduler {
-    pub(in crate::app) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::with_config(SchedulerConfig::production())
     }
 
@@ -119,57 +119,51 @@ impl JobScheduler {
         }
     }
 
-    pub(in crate::app) fn submit_directory(&self, request: DirectoryRequest) -> bool {
+    pub(crate) fn submit_directory(&self, request: DirectoryRequest) -> bool {
         self.directory.submit(request)
     }
 
-    pub(in crate::app) fn submit_directory_fingerprint(
+    pub(crate) fn submit_directory_fingerprint(
         &self,
         request: DirectoryFingerprintRequest,
     ) -> bool {
         self.directory_fingerprint.submit(request)
     }
 
-    pub(in crate::app) fn cancel_directory_fingerprints(&self) {
+    pub(crate) fn cancel_directory_fingerprints(&self) {
         self.directory_fingerprint.cancel_all();
     }
 
-    pub(in crate::app) fn submit_directory_item_count(
-        &self,
-        request: DirectoryItemCountRequest,
-    ) -> bool {
+    pub(crate) fn submit_directory_item_count(&self, request: DirectoryItemCountRequest) -> bool {
         self.directory_item_count.submit(request)
     }
 
-    pub(in crate::app) fn submit_directory_stats(&self, request: DirectoryStatsRequest) -> bool {
+    pub(crate) fn submit_directory_stats(&self, request: DirectoryStatsRequest) -> bool {
         self.directory_stats.submit(request)
     }
 
-    pub(in crate::app) fn cancel_directory_stats(&self) {
+    pub(crate) fn cancel_directory_stats(&self) {
         self.directory_stats.cancel_all();
     }
 
-    pub(in crate::app) fn submit_git_status(&self, request: GitStatusRequest) -> bool {
+    pub(crate) fn submit_git_status(&self, request: GitStatusRequest) -> bool {
         self.git_status.submit(request)
     }
 
-    pub(in crate::app) fn submit_preview_line_count(
-        &self,
-        request: PreviewLineCountRequest,
-    ) -> bool {
+    pub(crate) fn submit_preview_line_count(&self, request: PreviewLineCountRequest) -> bool {
         self.preview_line_count.submit(request)
     }
 
-    pub(in crate::app) fn submit_image_prepare(&self, request: ImagePrepareRequest) -> bool {
+    pub(crate) fn submit_image_prepare(&self, request: ImagePrepareRequest) -> bool {
         self.image_prepare
             .submit(request, ImageJobPriority::Current)
     }
 
-    pub(in crate::app) fn submit_nearby_image_prepare(&self, request: ImagePrepareRequest) -> bool {
+    pub(crate) fn submit_nearby_image_prepare(&self, request: ImagePrepareRequest) -> bool {
         self.image_prepare.submit(request, ImageJobPriority::Nearby)
     }
 
-    pub(in crate::app) fn retain_image_prepares(
+    pub(crate) fn retain_image_prepares(
         &self,
         current: Option<&ImagePrepareRequest>,
         nearby: &[ImagePrepareRequest],
@@ -177,7 +171,7 @@ impl JobScheduler {
         self.image_prepare.retain_pending(current, nearby);
     }
 
-    pub(in crate::app) fn submit_pdf_probe(
+    pub(crate) fn submit_pdf_probe(
         &self,
         request: PdfProbeRequest,
         priority: PdfJobPriority,
@@ -185,7 +179,7 @@ impl JobScheduler {
         self.pdf_probe.submit(request, priority)
     }
 
-    pub(in crate::app) fn submit_pdf_render(
+    pub(crate) fn submit_pdf_render(
         &self,
         request: PdfRenderRequest,
         priority: PdfJobPriority,
@@ -193,12 +187,12 @@ impl JobScheduler {
         self.pdf_render.submit(request, priority)
     }
 
-    pub(in crate::app) fn clear_pending_pdf_jobs(&self) {
+    pub(crate) fn clear_pending_pdf_jobs(&self) {
         self.pdf_probe.clear_pending();
         self.pdf_render.clear_pending();
     }
 
-    pub(in crate::app) fn retain_pdf_probe_pages(
+    pub(crate) fn retain_pdf_probe_pages(
         &self,
         path: &Path,
         size: u64,
@@ -209,7 +203,7 @@ impl JobScheduler {
             .retain_pending(path, size, modified, keep_pages);
     }
 
-    pub(in crate::app) fn retain_pdf_render_variants(
+    pub(crate) fn retain_pdf_render_variants(
         &self,
         path: &Path,
         size: u64,
@@ -260,38 +254,38 @@ impl JobScheduler {
         self.restore.cancel_restore(token);
     }
 
-    pub(in crate::app) fn submit_search(&self, request: SearchRequest) -> bool {
+    pub(crate) fn submit_search(&self, request: SearchRequest) -> bool {
         self.search.submit(request)
     }
 
-    pub(in crate::app) fn cancel_search(&self) {
+    pub(crate) fn cancel_search(&self) {
         self.search.cancel_all();
     }
 
-    pub(in crate::app) fn submit_duplicate_scan(&self, request: DuplicateScanRequest) -> bool {
+    pub(crate) fn submit_duplicate_scan(&self, request: DuplicateScanRequest) -> bool {
         self.duplicates.submit(request)
     }
 
-    pub(in crate::app) fn cancel_duplicate_scan(&self) {
+    pub(crate) fn cancel_duplicate_scan(&self) {
         self.duplicates.cancel_all();
     }
 
-    pub(in crate::app) fn submit_preview(&self, request: PreviewRequest) -> bool {
+    pub(crate) fn submit_preview(&self, request: PreviewRequest) -> bool {
         self.preview.submit(request)
     }
 
-    pub(in crate::app) fn try_recv(&self) -> Result<JobResult, mpsc::TryRecvError> {
+    pub(crate) fn try_recv(&self) -> Result<JobResult, mpsc::TryRecvError> {
         if let Some(job) = lock_unpoison(&self.buffered_results).pop_front() {
             return Ok(job);
         }
         self.result_rx.try_recv()
     }
 
-    pub(in crate::app) fn defer_result(&self, job: JobResult) {
+    pub(crate) fn defer_result(&self, job: JobResult) {
         lock_unpoison(&self.buffered_results).push_front(job);
     }
 
-    pub(in crate::app) fn has_pending_work(&self) -> bool {
+    pub(crate) fn has_pending_work(&self) -> bool {
         !lock_unpoison(&self.buffered_results).is_empty()
             || self.directory.has_pending_work()
             || self.directory_fingerprint.has_pending_work()
@@ -313,7 +307,7 @@ impl JobScheduler {
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn metrics_snapshot(&self) -> SchedulerMetricsSnapshot {
+    pub(crate) fn metrics_snapshot(&self) -> SchedulerMetricsSnapshot {
         let mut snapshot = lock_unpoison(&self.metrics).snapshot();
         snapshot.preview_pending_high = self.preview.pending_len(PreviewPriority::High);
         snapshot.preview_pending_low = self.preview.pending_len(PreviewPriority::Low);
@@ -322,7 +316,7 @@ impl JobScheduler {
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn new_for_tests(
+    pub(in crate::background_jobs) fn new_for_tests(
         search_worker_count: usize,
         preview_worker_count: usize,
         preview_queue_limit: usize,
@@ -335,7 +329,7 @@ impl JobScheduler {
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn snapshot(&self) -> SchedulerSnapshot {
+    pub(in crate::background_jobs) fn snapshot(&self) -> SchedulerSnapshot {
         SchedulerSnapshot {
             search_pending: self.search.pending_key(),
             search_active: self.search.active_key(),
@@ -349,14 +343,14 @@ impl JobScheduler {
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn pop_next_pending_preview_for_tests(
+    pub(in crate::background_jobs) fn pop_next_pending_preview_for_tests(
         &self,
     ) -> Option<PreviewRequest> {
         self.preview.pop_next_pending_for_tests()
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn canceled_active_preview_keys_for_tests(
+    pub(in crate::background_jobs) fn canceled_active_preview_keys_for_tests(
         &self,
     ) -> Vec<PreviewJobKey> {
         self.preview.canceled_active_keys()
@@ -365,13 +359,13 @@ impl JobScheduler {
 
 #[cfg(test)]
 #[derive(Debug, PartialEq)]
-pub(in crate::app::jobs) struct SchedulerSnapshot {
-    pub(in crate::app::jobs) search_pending: Option<FuzzyFinderJobKey>,
-    pub(in crate::app::jobs) search_active: Option<FuzzyFinderJobKey>,
-    pub(in crate::app::jobs) image_prepare_pending: Vec<ImagePrepareJobKey>,
-    pub(in crate::app::jobs) pdf_probe_pending: Vec<PdfProbeJobKey>,
-    pub(in crate::app::jobs) pdf_render_pending: Vec<PdfRenderJobKey>,
-    pub(in crate::app::jobs) preview_pending_high: Vec<PreviewJobKey>,
-    pub(in crate::app::jobs) preview_pending_low: Vec<PreviewJobKey>,
-    pub(in crate::app::jobs) preview_active: Vec<PreviewJobKey>,
+pub(in crate::background_jobs) struct SchedulerSnapshot {
+    pub(in crate::background_jobs) search_pending: Option<FuzzyFinderJobKey>,
+    pub(in crate::background_jobs) search_active: Option<FuzzyFinderJobKey>,
+    pub(in crate::background_jobs) image_prepare_pending: Vec<ImagePrepareJobKey>,
+    pub(in crate::background_jobs) pdf_probe_pending: Vec<PdfProbeJobKey>,
+    pub(in crate::background_jobs) pdf_render_pending: Vec<PdfRenderJobKey>,
+    pub(in crate::background_jobs) preview_pending_high: Vec<PreviewJobKey>,
+    pub(in crate::background_jobs) preview_pending_low: Vec<PreviewJobKey>,
+    pub(in crate::background_jobs) preview_active: Vec<PreviewJobKey>,
 }

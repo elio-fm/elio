@@ -14,10 +14,11 @@ use super::terminal_images::read_png_dimensions;
 use ratatui::layout::Rect;
 
 pub(crate) use self::prepare::prepare_static_image_asset;
-pub(in crate::app) use self::types::SixelDcsKey;
+pub(crate) use self::types::PreparedStaticImageAsset;
+pub(crate) use self::types::SixelDcsKey;
 pub(in crate::app) use self::types::{
-    ImagePreviewState, PreparedStaticImage, PreparedStaticImageAsset, StaticImageKey,
-    StaticImageOverlayMode, StaticImageOverlayPreparation, StaticImageOverlayRequest,
+    ImagePreviewState, PreparedStaticImage, StaticImageKey, StaticImageOverlayMode,
+    StaticImageOverlayPreparation, StaticImageOverlayRequest,
 };
 
 const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 64;

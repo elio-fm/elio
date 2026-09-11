@@ -33,8 +33,9 @@ A brief overview of the repository layout:
 ├── examples/                   # Example config and theme files
 ├── packaging/                  # Distribution packaging files
 ├── src/
-│   ├── app/                    # Application state, input, preview coordination, and background jobs
+│   ├── app/                    # Application state, input, and preview coordination
 │   ├── archive/                # Archive creation, extraction, and format handling
+│   ├── background_jobs/        # Shared job scheduling, workers, requests, and results
 │   ├── cli/                    # Command-line arguments, options, help, and shell commands
 │   ├── config/                 # Configuration loading, validation, and key bindings
 │   ├── duplicate_finder/       # Duplicate candidate collection and content verification

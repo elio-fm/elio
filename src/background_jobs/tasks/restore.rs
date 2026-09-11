@@ -12,7 +12,7 @@ use std::{
 /// Minimum time between intermediate progress results sent to the UI.
 const PROGRESS_SEND_INTERVAL: Duration = Duration::from_millis(80);
 
-pub(in crate::app::jobs) struct RestorePool {
+pub(in crate::background_jobs) struct RestorePool {
     shared: Arc<RestoreShared>,
     workers: Vec<thread::JoinHandle<()>>,
 }
@@ -31,7 +31,7 @@ struct RestoreState {
 }
 
 impl RestorePool {
-    pub(in crate::app::jobs) fn new(result_tx: mpsc::Sender<JobResult>) -> Self {
+    pub(in crate::background_jobs) fn new(result_tx: mpsc::Sender<JobResult>) -> Self {
         let shared = Arc::new(RestoreShared {
             state: Mutex::new(RestoreState {
                 pending: None,
@@ -109,7 +109,7 @@ impl RestorePool {
         }
     }
 
-    pub(in crate::app::jobs) fn submit(&self, request: RestoreRequest) -> bool {
+    pub(in crate::background_jobs) fn submit(&self, request: RestoreRequest) -> bool {
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
             return false;
@@ -122,11 +122,11 @@ impl RestorePool {
     /// Signal the worker to stop after the current item if it is processing
     /// the restore request with the given token.  A concurrent or future
     /// request with a different token is unaffected.
-    pub(in crate::app::jobs) fn cancel_restore(&self, token: u64) {
+    pub(in crate::background_jobs) fn cancel_restore(&self, token: u64) {
         self.shared.cancel_token.store(token, Ordering::Relaxed);
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         state.pending.is_some() || state.active
     }

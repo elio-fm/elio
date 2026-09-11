@@ -30,11 +30,7 @@ const SIXEL_NEUQUANT_SAMPLE_FOOT: i32 = 20;
 /// positioning prefix is included — callers splice one in with
 /// [`place_sixel_from_dcs`] so the same encoded buffer can be reused at
 /// different screen positions.
-pub(in crate::app) fn encode_sixel_dcs(
-    path: &Path,
-    target_w: u32,
-    target_h: u32,
-) -> Result<Arc<[u8]>> {
+pub(crate) fn encode_sixel_dcs(path: &Path, target_w: u32, target_h: u32) -> Result<Arc<[u8]>> {
     let profile = sixel_encode_profile();
     if let Some(dcs) = encode_sixel_dcs_with_img2sixel(path, target_w, target_h, profile) {
         return Ok(dcs);

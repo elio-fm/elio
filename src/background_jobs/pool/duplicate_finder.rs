@@ -9,7 +9,7 @@ use std::{
     thread,
 };
 
-pub(in crate::app::jobs) struct DuplicateFinderPool {
+pub(in crate::background_jobs) struct DuplicateFinderPool {
     shared: Arc<DuplicateShared>,
     workers: Vec<thread::JoinHandle<()>>,
 }
@@ -34,13 +34,13 @@ struct ActiveDuplicateJob {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(in crate::app::jobs) struct DuplicateFinderJobKey {
-    pub(in crate::app::jobs) cwd: PathBuf,
-    pub(in crate::app::jobs) show_hidden: bool,
+pub(in crate::background_jobs) struct DuplicateFinderJobKey {
+    pub(in crate::background_jobs) cwd: PathBuf,
+    pub(in crate::background_jobs) show_hidden: bool,
 }
 
 impl DuplicateFinderPool {
-    pub(in crate::app::jobs) fn new(
+    pub(in crate::background_jobs) fn new(
         worker_count: usize,
         result_tx: mpsc::Sender<JobResult>,
     ) -> Self {
@@ -111,7 +111,7 @@ impl DuplicateFinderPool {
         Self { shared, workers }
     }
 
-    pub(in crate::app::jobs) fn submit(&self, request: DuplicateScanRequest) -> bool {
+    pub(in crate::background_jobs) fn submit(&self, request: DuplicateScanRequest) -> bool {
         let key = DuplicateFinderJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
@@ -126,7 +126,7 @@ impl DuplicateFinderPool {
         true
     }
 
-    pub(in crate::app::jobs) fn cancel_all(&self) {
+    pub(in crate::background_jobs) fn cancel_all(&self) {
         let mut state = lock_unpoison(&self.shared.state);
         state.pending = None;
         state.pending_key = None;
@@ -135,7 +135,7 @@ impl DuplicateFinderPool {
         }
     }
 
-    pub(in crate::app::jobs) fn has_pending_work(&self) -> bool {
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
         let state = lock_unpoison(&self.shared.state);
         state.pending.is_some() || state.active.is_some()
     }

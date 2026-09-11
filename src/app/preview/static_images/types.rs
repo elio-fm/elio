@@ -17,7 +17,7 @@ use std::{
 /// excluded so that the same encoded bytes can be reused when the image moves
 /// to a different screen position without changing its size.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(in crate::app) struct SixelDcsKey {
+pub(crate) struct SixelDcsKey {
     pub(in crate::app) path: PathBuf,
     pub(in crate::app) area_width: u16,
     pub(in crate::app) area_height: u16,
@@ -28,11 +28,7 @@ pub(in crate::app) struct SixelDcsKey {
 }
 
 impl SixelDcsKey {
-    pub(in crate::app) fn new(
-        path: &std::path::Path,
-        placement: Rect,
-        window: TerminalWindowSize,
-    ) -> Self {
+    pub(crate) fn new(path: &std::path::Path, placement: Rect, window: TerminalWindowSize) -> Self {
         Self {
             path: path.to_path_buf(),
             area_width: placement.width,
@@ -128,7 +124,7 @@ pub(super) struct StaticImagePreloadViewport {
 }
 
 #[derive(Debug)]
-pub(in crate::app) struct PreparedStaticImageAsset {
+pub(crate) struct PreparedStaticImageAsset {
     pub(in crate::app::preview) display_path: PathBuf,
     pub(in crate::app::preview) dimensions: RenderedImageDimensions,
     pub(in crate::app::preview) inline_payload: Option<Arc<str>>,
