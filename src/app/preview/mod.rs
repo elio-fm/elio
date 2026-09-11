@@ -8,7 +8,7 @@ mod preview_pane;
 mod refresh;
 mod requests;
 pub(crate) mod static_images;
-pub(crate) mod terminal_images;
+pub(super) mod terminal_image_previews;
 mod visual_layout;
 
 use super::*;

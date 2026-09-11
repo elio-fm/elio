@@ -121,7 +121,7 @@ fn concurrent_inline_raster_prepares_keep_shared_render_cache_readable() {
                     || false,
                 )
                 .expect("shared render cache should prepare");
-                let dimensions = crate::app::preview::terminal_images::read_png_dimensions(
+                let dimensions = crate::terminal_runtime::terminal_images::read_png_dimensions(
                     &prepared.display_path,
                 )
                 .expect("shared render cache should contain a readable png");
@@ -204,7 +204,7 @@ fn current_comic_prepare_build_marks_preview_dirty() {
             result: Some(
                 crate::app::preview::static_images::PreparedStaticImageAsset {
                     display_path: rendered,
-                    dimensions: crate::app::preview::terminal_images::RenderedImageDimensions {
+                    dimensions: crate::terminal_runtime::terminal_images::RenderedImageDimensions {
                         width_px: 768,
                         height_px: 432,
                     },

@@ -3,10 +3,10 @@ use crate::app::preview::static_images::{
     StaticImageKey, StaticImageOverlayMode, StaticImageOverlayRequest, image_target_height_px,
     image_target_width_px,
 };
-use crate::app::preview::terminal_images::{ImageProtocol, TerminalWindowSize};
 use crate::preview::{
     PreviewContent, PreviewKind, PreviewVisual, PreviewVisualKind, PreviewVisualLayout,
 };
+use crate::terminal_runtime::terminal_images::{ImageProtocol, TerminalWindowSize};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use ratatui::layout::Rect;
 use std::{

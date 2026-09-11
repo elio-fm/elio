@@ -1,44 +1,14 @@
-mod geometry;
-mod iterm;
-mod kitty;
-mod konsole;
-mod protocol;
-mod sixel;
-mod tmux;
-mod window;
-
 use anyhow::{Context, Result};
 use ratatui::{buffer::Buffer, layout::Rect};
 use std::{
     env,
-    io::Write as _,
-    path::Path,
     time::{Duration, Instant},
 };
 
 use crate::app::App;
-
-pub(crate) use self::geometry::area_pixel_size;
-pub(in crate::app) use self::geometry::{fit_image_area, fit_image_pixels, read_png_dimensions};
-pub(in crate::app) use self::iterm::encode_iterm_inline_payload;
-pub(in crate::app) use self::protocol::{command_exists, select_image_protocol};
-use self::protocol::{detect_terminal_identity, pdf_preview_tools_available};
-pub(crate) use self::sixel::encode_sixel_dcs;
-pub(in crate::app) use self::sixel::place_sixel_from_dcs;
-use self::window::query_terminal_window_size;
-
-/// Write a line to `<temp>/elio-preview.log` when `ELIO_DEBUG_PREVIEW` is set.
-/// Does nothing (and compiles to nothing meaningful) when the env var is absent.
-pub(in crate::app) fn preview_log(msg: impl std::fmt::Display) {
-    if env::var_os("ELIO_DEBUG_PREVIEW").is_none() {
-        return;
-    }
-    let _ = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(std::env::temp_dir().join("elio-preview.log"))
-        .and_then(|mut f| writeln!(f, "{msg}"));
-}
+use crate::terminal_runtime::terminal_images::{
+    self, ImageProtocol, TerminalIdentity, TerminalWindowSize,
+};
 
 /// How long terminal geometry must stay unchanged before image payloads are
 /// (re)transmitted. Tiling window managers resize the terminal in an animated
@@ -70,73 +40,13 @@ pub(in crate::app) enum OverlayPresentState {
     Displayed,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(in crate::app) enum TerminalIdentity {
-    Kitty,
-    Ghostty,
-    Warp,
-    WezTerm,
-    ITerm2,
-    Konsole,
-    Alacritty,
-    Foot,
-    WindowsTerminal,
-    #[default]
-    Other,
-}
-
-/// The wire protocol used to render images in the terminal preview pane.
-/// Kept separate from `TerminalIdentity` so that multiple terminals can share
-/// the same protocol without coupling detection logic to rendering logic.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(in crate::app) enum ImageProtocol {
-    /// Kitty Graphics Protocol (APC `\x1b_G…\x1b\\`) using the Unicode
-    /// placeholder extension. Used by Kitty and Ghostty.
-    KittyGraphics,
-    /// Direct-placement variant of the Kitty Graphics Protocol: same APC wire
-    /// format, but without the Unicode placeholder extension. Images are
-    /// positioned with an explicit CSI cursor move and need explicit delete
-    /// commands. Used by Konsole and Warp.
-    KittyDirectGraphics,
-    /// iTerm2 inline image protocol (OSC 1337). Used by WezTerm and iTerm2.
-    ItermInline,
-    /// Sixel graphics protocol (DCS). Used by Windows Terminal (≥ 1.22).
-    Sixel,
-    #[default]
-    None,
-}
-
-impl ImageProtocol {
-    /// Returns `true` for pixel-buffer protocols that write directly into the
-    /// terminal framebuffer and have no dedicated clear command (iTerm2 and
-    /// Sixel).  These protocols require a pre-draw cell-erase pass before
-    /// ratatui can safely overpaint stale image content.
-    pub(in crate::app) fn is_raster(self) -> bool {
-        matches!(self, ImageProtocol::ItermInline | ImageProtocol::Sixel)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct TerminalWindowSize {
-    pub(super) cells_width: u16,
-    pub(super) cells_height: u16,
-    pub(super) pixels_width: u32,
-    pub(super) pixels_height: u32,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) struct RenderedImageDimensions {
-    pub(super) width_px: u32,
-    pub(super) height_px: u32,
-}
-
 impl App {
     pub(crate) fn enable_terminal_image_previews(&mut self) {
         let was_available = self.terminal_image_overlay_available();
-        let identity = detect_terminal_identity();
+        let identity = terminal_images::detect_terminal_identity();
         let image_previews_override = env::var_os("ELIO_IMAGE_PREVIEWS").is_some();
-        let protocol = select_image_protocol(identity, image_previews_override);
-        preview_log(format_args!(
+        let protocol = terminal_images::select_image_protocol(identity, image_previews_override);
+        terminal_images::preview_log(format_args!(
             "enable_terminal_image_previews:\n  TERM={}\n  TERM_PROGRAM={}\n  KITTY_WINDOW_ID={}\n  WARP_SESSION_ID={}\n  WT_SESSION={}\n  KONSOLE_DBUS_SESSION={}\n  KONSOLE_DBUS_SERVICE={}\n  KONSOLE_DBUS_WINDOW={}\n  identity={identity:?}\n  override={image_previews_override}\n  protocol={protocol:?}",
             env::var("TERM").unwrap_or_default(),
             env::var("TERM_PROGRAM").unwrap_or_default(),
@@ -156,11 +66,11 @@ impl App {
                 | ImageProtocol::ItermInline
                 | ImageProtocol::Sixel
         ) {
-            tmux::enable_allow_passthrough();
+            terminal_images::enable_allow_passthrough();
         }
-        self.preview.pdf.pdf_tools_available = pdf_preview_tools_available();
+        self.preview.pdf.pdf_tools_available = terminal_images::pdf_preview_tools_available();
         self.refresh_terminal_image_window_size();
-        preview_log(format_args!(
+        terminal_images::preview_log(format_args!(
             "  window={:?}",
             self.preview.terminal_images.window
         ));
@@ -205,7 +115,7 @@ impl App {
         if self.preview.terminal_images.protocol == ImageProtocol::None {
             return;
         }
-        let delay = if tmux::inside_tmux() {
+        let delay = if terminal_images::inside_tmux() {
             TMUX_RESIZE_SETTLE_DELAY
         } else {
             RESIZE_SETTLE_DELAY
@@ -295,7 +205,8 @@ impl App {
     }
 
     pub(in crate::app) fn uses_iterm_inline_protocol_inside_tmux(&self) -> bool {
-        self.preview.terminal_images.protocol == ImageProtocol::ItermInline && tmux::inside_tmux()
+        self.preview.terminal_images.protocol == ImageProtocol::ItermInline
+            && terminal_images::inside_tmux()
     }
 
     pub(crate) fn is_windows_terminal(&self) -> bool {
@@ -371,7 +282,7 @@ impl App {
         }
         self.displayed_static_image_clear_area()
             .or_else(|| self.displayed_pdf_overlay_area())
-            .map(iterm::erase_cells)
+            .map(terminal_images::erase_cells)
             .unwrap_or_default()
     }
 
@@ -405,7 +316,7 @@ impl App {
         let mut to_erase = Vec::new();
         for popup in modal_rects {
             for image in image_rects.iter().flatten() {
-                if let Some(mask) = geometry::intersect_rect(*popup, *image) {
+                if let Some(mask) = terminal_images::intersect_rect(*popup, *image) {
                     push_blank_cell_runs(&mut to_erase, mask, frame_buffer);
                 }
             }
@@ -419,7 +330,10 @@ impl App {
             self.preview.terminal_images.pending_iterm_popup_restore = true;
         }
 
-        to_erase.into_iter().flat_map(iterm::erase_cells).collect()
+        to_erase
+            .into_iter()
+            .flat_map(terminal_images::erase_cells)
+            .collect()
     }
 
     /// Returns iTerm2 erase bytes that must be written to the terminal **before**
@@ -439,13 +353,13 @@ impl App {
             && !keep_stale
             && let Some(area) = self.displayed_static_image_clear_area()
         {
-            geometry::push_unique_rect(&mut areas, area);
+            terminal_images::push_unique_rect(&mut areas, area);
         }
         if self.pdf_overlay_displayed()
             && !self.displayed_pdf_overlay_matches_active()
             && let Some(area) = self.displayed_pdf_overlay_area()
         {
-            geometry::push_unique_rect(&mut areas, area);
+            terminal_images::push_unique_rect(&mut areas, area);
         }
         if areas.is_empty() {
             return Vec::new();
@@ -463,9 +377,9 @@ impl App {
             } else {
                 (0, 2)
             };
-            geometry::push_unique_rect(
+            terminal_images::push_unique_rect(
                 &mut expanded_areas,
-                iterm::expand_raster_erase_area(
+                expand_raster_erase_area(
                     &self.input.frame_state,
                     area,
                     expand_right,
@@ -475,7 +389,7 @@ impl App {
         }
         expanded_areas
             .into_iter()
-            .flat_map(iterm::erase_cells)
+            .flat_map(terminal_images::erase_cells)
             .collect()
     }
 
@@ -535,7 +449,7 @@ impl App {
 
         let protocol = self.preview.terminal_images.protocol;
         if protocol == ImageProtocol::None {
-            preview_log("present_preview_overlay: no protocol -> clear");
+            terminal_images::preview_log("present_preview_overlay: no protocol -> clear");
             return self.clear_preview_overlay();
         }
 
@@ -594,7 +508,7 @@ impl App {
             force_protocol_repaint,
             &mut out,
         )?;
-        preview_log(format_args!(
+        terminal_images::preview_log(format_args!(
             "present_preview_overlay: protocol={protocol:?} static={static_state:?} out_len={}",
             out.len()
         ));
@@ -605,7 +519,7 @@ impl App {
 
         let pdf_state =
             self.present_pdf_overlay(protocol, &excluded, force_protocol_repaint, &mut out)?;
-        preview_log(format_args!(
+        terminal_images::preview_log(format_args!(
             "present_preview_overlay: pdf={pdf_state:?} out_len={}",
             out.len()
         ));
@@ -620,7 +534,7 @@ impl App {
             force_protocol_repaint,
             &mut out,
         )?;
-        preview_log(format_args!(
+        terminal_images::preview_log(format_args!(
             "present_preview_overlay: visual={visual_state:?} out_len={}",
             out.len()
         ));
@@ -710,7 +624,7 @@ impl App {
         if !self.static_image_overlay_displayed() && !self.pdf_overlay_displayed() {
             return Ok(Vec::new());
         }
-        let bytes = clear_terminal_images(self.preview.terminal_images.protocol)
+        let bytes = terminal_images::clear_terminal_images(self.preview.terminal_images.protocol)
             .context("failed to clear preview overlay")?;
         // iTerm2 erase is emitted by iterm_pre_draw_erase() *before* terminal.draw(),
         // so ratatui naturally overpaints with the correct panel background. Nothing
@@ -740,8 +654,8 @@ impl App {
         let mut collisions = Vec::new();
         for popup in modal_rects {
             for image in image_rects.iter().flatten() {
-                if let Some(collision) = geometry::intersect_rect(*popup, *image) {
-                    geometry::push_unique_rect(&mut collisions, collision);
+                if let Some(collision) = terminal_images::intersect_rect(*popup, *image) {
+                    terminal_images::push_unique_rect(&mut collisions, collision);
                 }
             }
         }
@@ -753,7 +667,7 @@ impl App {
         let erase = collisions
             .iter()
             .copied()
-            .flat_map(iterm::erase_cells)
+            .flat_map(terminal_images::erase_cells)
             .collect();
         (collisions, erase)
     }
@@ -763,10 +677,16 @@ impl App {
             return;
         }
         if let Some(area) = self.displayed_static_image_clear_area() {
-            geometry::push_unique_rect(&mut self.preview.terminal_images.pending_iterm_erase, area);
+            terminal_images::push_unique_rect(
+                &mut self.preview.terminal_images.pending_iterm_erase,
+                area,
+            );
         }
         if let Some(area) = self.displayed_pdf_overlay_area() {
-            geometry::push_unique_rect(&mut self.preview.terminal_images.pending_iterm_erase, area);
+            terminal_images::push_unique_rect(
+                &mut self.preview.terminal_images.pending_iterm_erase,
+                area,
+            );
         }
     }
 
@@ -782,13 +702,13 @@ impl App {
     fn refresh_terminal_image_window_size(&mut self) {
         self.preview.terminal_images.window = (self.preview.terminal_images.protocol
             != ImageProtocol::None)
-            .then(query_terminal_window_size)
+            .then(terminal_images::query_terminal_window_size)
             .flatten();
     }
 }
 
-fn push_blank_cell_runs(rects: &mut Vec<Rect>, area: Rect, frame_buffer: &Buffer) {
-    let Some(area) = geometry::intersect_rect(area, *frame_buffer.area()) else {
+pub(super) fn push_blank_cell_runs(rects: &mut Vec<Rect>, area: Rect, frame_buffer: &Buffer) {
+    let Some(area) = terminal_images::intersect_rect(area, *frame_buffer.area()) else {
         return;
     };
 
@@ -801,7 +721,7 @@ fn push_blank_cell_runs(rects: &mut Vec<Rect>, area: Rect, frame_buffer: &Buffer
             match (transparent_blank, run_start) {
                 (true, None) => run_start = Some(x),
                 (false, Some(start)) => {
-                    geometry::push_unique_rect(
+                    terminal_images::push_unique_rect(
                         rects,
                         Rect {
                             x: start,
@@ -816,7 +736,7 @@ fn push_blank_cell_runs(rects: &mut Vec<Rect>, area: Rect, frame_buffer: &Buffer
             }
         }
         if let Some(start) = run_start {
-            geometry::push_unique_rect(
+            terminal_images::push_unique_rect(
                 rects,
                 Rect {
                     x: start,
@@ -829,92 +749,30 @@ fn push_blank_cell_runs(rects: &mut Vec<Rect>, area: Rect, frame_buffer: &Buffer
     }
 }
 
-pub(in crate::app) fn place_terminal_image(
-    protocol: ImageProtocol,
-    path: &Path,
+pub(super) fn expand_raster_erase_area(
+    frame_state: &crate::app::FrameState,
     area: Rect,
-    excluded: &[Rect],
-    inline_payload: Option<&str>,
-    window_size: Option<TerminalWindowSize>,
-) -> Result<Vec<u8>> {
-    match protocol {
-        ImageProtocol::KittyGraphics => {
-            kitty::place_terminal_image_with_kitty_protocol(path, area, excluded)
-        }
-        ImageProtocol::KittyDirectGraphics => {
-            konsole::place_terminal_image_with_konsole_protocol(path, area)
-        }
-        ImageProtocol::ItermInline => {
-            iterm::place_terminal_image_with_iterm_protocol(path, area, inline_payload)
-        }
-        ImageProtocol::Sixel => {
-            let ws = window_size.ok_or_else(|| {
-                anyhow::anyhow!("sixel protocol requires terminal window size, but none available")
-            })?;
-            sixel::place_terminal_image_with_sixel_protocol(path, area, ws)
-        }
-        ImageProtocol::None => Ok(Vec::new()),
-    }
-}
-
-pub(in crate::app) fn clear_terminal_images(protocol: ImageProtocol) -> Result<Vec<u8>> {
-    match protocol {
-        ImageProtocol::KittyGraphics => kitty::clear_terminal_images_with_kitty_protocol(),
-        ImageProtocol::KittyDirectGraphics => {
-            konsole::clear_terminal_images_with_konsole_protocol()
-        }
-        // iTerm2 has no clear primitive — the overlay is erased by the next
-        // ratatui draw call overwriting the cell region.
-        ImageProtocol::ItermInline | ImageProtocol::None => Ok(Vec::new()),
-        // Sixel also has no clear primitive (same as iTerm2).
-        ImageProtocol::Sixel => sixel::clear_terminal_images_with_sixel_protocol(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ratatui::style::{Color, Style};
-
-    #[test]
-    fn modal_mask_only_targets_reset_background_blank_cells() {
-        let mut buffer = Buffer::empty(Rect {
-            x: 0,
-            y: 0,
-            width: 5,
-            height: 1,
-        });
-        buffer.set_string(1, 0, "  ", Style::default().bg(Color::Blue));
-        buffer.set_string(3, 0, "x", Style::default());
-
-        let mut rects = Vec::new();
-        push_blank_cell_runs(
-            &mut rects,
-            Rect {
-                x: 0,
-                y: 0,
-                width: 5,
-                height: 1,
-            },
-            &buffer,
-        );
-
-        assert_eq!(
-            rects,
-            vec![
-                Rect {
-                    x: 0,
-                    y: 0,
-                    width: 1,
-                    height: 1,
-                },
-                Rect {
-                    x: 4,
-                    y: 0,
-                    width: 1,
-                    height: 1,
-                },
-            ]
-        );
+    expand_right: u16,
+    expand_bottom: u16,
+) -> Rect {
+    let bounds = frame_state
+        .preview_body_area
+        .or(frame_state.preview_content_area)
+        .unwrap_or(area);
+    // Only erase inside the preview body/content, never into the pane border.
+    // Ratatui may skip unchanged border cells on the following draw, so erasing
+    // the bottom border here can leave it blank in raster terminals like WezTerm.
+    let clamped = terminal_images::intersect_rect(area, bounds).unwrap_or(area);
+    let right = clamped.x.saturating_add(clamped.width);
+    let bottom = clamped.y.saturating_add(clamped.height);
+    let bounds_right = bounds.x.saturating_add(bounds.width);
+    let bounds_bottom = bounds.y.saturating_add(bounds.height);
+    let extra_cols = bounds_right.saturating_sub(right).min(expand_right);
+    let extra_rows = bounds_bottom.saturating_sub(bottom).min(expand_bottom);
+    Rect {
+        x: clamped.x,
+        y: clamped.y,
+        width: clamped.width.saturating_add(extra_cols),
+        height: clamped.height.saturating_add(extra_rows),
     }
 }

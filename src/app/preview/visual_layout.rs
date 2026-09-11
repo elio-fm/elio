@@ -1,7 +1,7 @@
 use super::static_images;
-use super::terminal_images::ImageProtocol;
 use super::*;
 use crate::preview;
+use crate::terminal_runtime::terminal_images::ImageProtocol;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
 const PREVIEW_INLINE_COVER_MIN_HEIGHT: u16 = 6;

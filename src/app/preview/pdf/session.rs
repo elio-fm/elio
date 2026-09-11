@@ -2,10 +2,10 @@ use super::{
     PDF_PAGE_MIN, PDF_PAGE_STATUS_PREFIX, PDF_SELECTION_ACTIVATION_DELAY, PdfDocumentKey,
     PdfOverlayRequest, PdfPageDimensions, PdfPageKey, PdfRenderKey, PdfSession,
 };
-use crate::app::preview::terminal_images::read_png_dimensions;
 use crate::app::{App, Entry, jobs};
 use crate::background_jobs::job_results as background_job_results;
 use crate::file_classification::{self, DocumentFormat};
+use crate::terminal_runtime::terminal_images::read_png_dimensions;
 use std::time::{Duration, Instant};
 
 impl App {
@@ -52,7 +52,7 @@ impl App {
             }
 
             let sixel_prepare = if self.preview.terminal_images.protocol
-                == crate::app::preview::terminal_images::ImageProtocol::Sixel
+                == crate::terminal_runtime::terminal_images::ImageProtocol::Sixel
             {
                 self.cached_terminal_window()
                     .map(|window_size| jobs::SixelPrepareConfig {

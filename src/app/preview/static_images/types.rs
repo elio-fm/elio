@@ -1,4 +1,4 @@
-use crate::app::preview::terminal_images::{
+use crate::terminal_runtime::terminal_images::{
     ImageProtocol, RenderedImageDimensions, TerminalWindowSize,
 };
 use ratatui::layout::Rect;

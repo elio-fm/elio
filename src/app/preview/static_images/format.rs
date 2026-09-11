@@ -1,6 +1,6 @@
 use super::StaticImageOverlayRequest;
-use crate::app::preview::terminal_images::RenderedImageDimensions;
 use crate::app::{Entry, EntryKind, jobs};
+use crate::terminal_runtime::terminal_images::RenderedImageDimensions;
 use quick_xml::{Reader, events::Event};
 use std::{fs, fs::File, io::Read, path::Path};
 

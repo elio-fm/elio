@@ -3,10 +3,10 @@ use super::{
     FittedPdfPlacement, PDF_RENDER_CACHE_LIMIT, PdfOverlayRequest, PdfPageDimensions, PdfPageKey,
     PdfRenderKey,
 };
-use crate::app::preview::terminal_images::{
+use crate::app::{App, jobs};
+use crate::terminal_runtime::terminal_images::{
     ImageProtocol, RenderedImageDimensions, fit_image_area, read_png_dimensions,
 };
-use crate::app::{App, jobs};
 use std::{
     fs,
     path::{Path, PathBuf},

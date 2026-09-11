@@ -48,7 +48,7 @@ fn oriented_jpeg_fallback_preview_uses_exif_corrected_dimensions() {
 
 #[test]
 fn oriented_jpeg_ffmpeg_preview_uses_exif_corrected_dimensions() {
-    if !crate::app::preview::terminal_images::command_exists("ffmpeg") {
+    if !crate::terminal_runtime::terminal_images::command_exists("ffmpeg") {
         return;
     }
 

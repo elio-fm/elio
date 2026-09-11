@@ -40,18 +40,13 @@ fn duplicate_finder_does_not_depend_on_app() {
 }
 
 #[test]
-fn app_ui_access_stays_confined_to_terminal_image_theme_helpers() {
-    assert_tree_has_no_pattern(
-        "src/app",
-        "crate::ui::",
-        &[
-            "src/app/preview/terminal_images/iterm.rs",
-            "src/app/preview/terminal_images/kitty.rs",
-            // Sixel composites RGBA pixels over the panel background colour
-            // before quantising, requiring the same theme access as iterm/kitty.
-            "src/app/preview/terminal_images/sixel.rs",
-        ],
-    );
+fn app_does_not_depend_on_ui() {
+    assert_tree_has_no_pattern("src/app", "crate::ui::", &[]);
+}
+
+#[test]
+fn terminal_images_do_not_depend_on_app() {
+    assert_tree_has_no_pattern("src/terminal_runtime/terminal_images", "crate::app", &[]);
 }
 
 fn assert_tree_has_no_pattern(root: &str, forbidden: &str, allowed_files: &[&str]) {

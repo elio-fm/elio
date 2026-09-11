@@ -1,5 +1,5 @@
 use super::format::StaticImageFormat;
-use crate::app::preview::terminal_images::{RenderedImageDimensions, TerminalWindowSize};
+use crate::terminal_runtime::terminal_images::{RenderedImageDimensions, TerminalWindowSize};
 use image::{DynamicImage, GenericImageView, imageops::FilterType};
 use ratatui::layout::Rect;
 use std::{

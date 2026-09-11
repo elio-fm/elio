@@ -29,7 +29,7 @@ fn current_small_jpeg_queues_background_prepare_for_overlay() {
 
 #[test]
 fn current_large_jpeg_queues_background_prepare_when_ffmpeg_is_available() {
-    if !crate::app::preview::terminal_images::command_exists("ffmpeg") {
+    if !crate::terminal_runtime::terminal_images::command_exists("ffmpeg") {
         return;
     }
 
@@ -159,7 +159,7 @@ fn raster_static_images_use_png_display_paths() {
 
 #[test]
 fn svg_static_images_prefer_resvg_when_available() {
-    if !crate::app::preview::terminal_images::command_exists("resvg") {
+    if !crate::terminal_runtime::terminal_images::command_exists("resvg") {
         return;
     }
 
@@ -205,7 +205,7 @@ fn svg_static_images_prefer_resvg_when_available() {
 
 #[test]
 fn svg_static_images_fall_back_to_magick_when_resvg_is_unavailable() {
-    if !crate::app::preview::terminal_images::command_exists("magick") {
+    if !crate::terminal_runtime::terminal_images::command_exists("magick") {
         return;
     }
 
@@ -251,7 +251,7 @@ fn svg_static_images_fall_back_to_magick_when_resvg_is_unavailable() {
 
 #[test]
 fn extensionless_svg_static_image_preparation_succeeds() {
-    if !crate::app::preview::terminal_images::command_exists("resvg") {
+    if !crate::terminal_runtime::terminal_images::command_exists("resvg") {
         return;
     }
 

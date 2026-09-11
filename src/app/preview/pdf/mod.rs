@@ -21,7 +21,9 @@ use self::{
 #[cfg(test)]
 use super::super::*;
 #[cfg(test)]
-use super::terminal_images::{RenderedImageDimensions, fit_image_area, read_png_dimensions};
+use crate::terminal_runtime::terminal_images::{
+    RenderedImageDimensions, fit_image_area, read_png_dimensions,
+};
 #[cfg(test)]
 use ratatui::layout::Rect;
 use std::time::Duration;
