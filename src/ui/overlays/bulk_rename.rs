@@ -1,9 +1,7 @@
-use super::{
-    compute_scroll_top, edit_overlay_visible_rows, scrollbar::render_overlay_scrollbar_on_bg,
-};
 use crate::app::{App, FrameState};
 use crate::ui::{
     helpers,
+    scrollbars::{render_overlay_scrollbar_on_bg, scroll_top_for_cursor, visible_edit_rows},
     theme::{self, Palette},
 };
 use ratatui::{
@@ -14,7 +12,7 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-pub(super) fn render_bulk_rename_overlay(
+pub(in crate::ui) fn render_bulk_rename_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
@@ -22,7 +20,7 @@ pub(super) fn render_bulk_rename_overlay(
     palette: Palette,
 ) {
     let item_count = app.bulk_rename_item_count();
-    let visible_lines = edit_overlay_visible_rows(area, item_count, 5);
+    let visible_lines = visible_edit_rows(area, item_count, 5);
     let popup_width = area.width.saturating_sub(8).clamp(40, 68);
     let popup_height = visible_lines + 5;
     let popup = helpers::centered_rect(area, popup_width, popup_height);
@@ -56,7 +54,7 @@ pub(super) fn render_bulk_rename_overlay(
     let cursor_line = app.bulk_rename_cursor_line();
     let cursor_col = app.bulk_rename_cursor_col();
 
-    let scroll_top = compute_scroll_top(cursor_line, visible_lines as usize);
+    let scroll_top = scroll_top_for_cursor(cursor_line, visible_lines as usize);
     state.bulk_rename_list_area = Some(list_area);
     state.bulk_rename_scroll_top = scroll_top;
 

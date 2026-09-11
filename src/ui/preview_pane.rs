@@ -1,6 +1,6 @@
-use super::super::theme::Palette;
-use super::super::{helpers, theme};
-use super::scrollbar::render_preview_scrollbar;
+use super::scrollbars::render_preview_scrollbar;
+use super::theme::Palette;
+use super::{helpers, theme};
 use crate::app::{App, FrameState};
 use ratatui::{
     Frame,
@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph, Widget},
 };
 
-pub(super) fn render_preview(
+pub(super) fn render_preview_pane(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,

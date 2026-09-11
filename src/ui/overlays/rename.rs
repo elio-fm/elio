@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-pub(super) fn render_rename_overlay(
+pub(in crate::ui) fn render_rename_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,

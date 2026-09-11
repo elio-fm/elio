@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
-pub(super) fn render_copy_overlay(
+pub(in crate::ui) fn render_copy_to_clipboard_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,

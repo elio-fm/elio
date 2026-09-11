@@ -11,20 +11,20 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-pub(super) fn render_trash_overlay(
+pub(in crate::ui) fn render_restore_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
     state: &mut FrameState,
     palette: Palette,
 ) {
-    let block_title = format!(" {} ", app.trash_title());
-    let count = app.trash_target_count();
-    let list_rows = app.trash_visible_rows().max(1) as u16;
+    let block_title = format!(" {} ", app.restore_title());
+    let count = app.restore_target_count();
+    let list_rows = app.restore_visible_rows().max(1) as u16;
     let popup_height = (list_rows + 2) + 1 + 2;
     let popup_width = area.width.saturating_sub(8).clamp(40, 60);
     let popup = helpers::centered_rect(area, popup_width, popup_height);
-    state.trash_panel = Some(popup);
+    state.restore_panel = Some(popup);
 
     frame.render_widget(Clear, popup);
     frame.render_widget(
@@ -46,8 +46,8 @@ pub(super) fn render_trash_overlay(
         horizontal: 1,
         vertical: 1,
     });
-    let visible = app.trash_visible_rows().max(1);
-    let scroll = app.trash_scroll();
+    let visible = app.restore_visible_rows().max(1);
+    let scroll = app.restore_scroll();
 
     let show_scrollbar = count > visible;
     let thumb_size = if show_scrollbar {
@@ -64,12 +64,12 @@ pub(super) fn render_trash_overlay(
 
     for row_offset in 0..visible {
         let item_index = scroll + row_offset;
-        let Some(label) = app.trash_target_label_at(item_index) else {
+        let Some(name) = app.restore_target_name_at(item_index) else {
             break;
         };
-        let is_dir = app.trash_target_is_dir_at(item_index);
+        let is_dir = app.restore_target_is_dir_at(item_index);
         let (icon, icon_color) = app
-            .trash_target_path_at(item_index)
+            .restore_target_path_at(item_index)
             .map(|path| {
                 (
                     theme::path_symbol(path, is_dir),
@@ -102,7 +102,7 @@ pub(super) fn render_trash_overlay(
                 ),
                 Span::raw(" "),
                 Span::styled(
-                    helpers::clamp_label(&label, name_width),
+                    helpers::clamp_label(name, name_width),
                     Style::default().fg(palette.muted),
                 ),
             ]))
@@ -124,7 +124,7 @@ pub(super) fn render_trash_overlay(
         }
     }
 
-    let confirmed = app.trash_confirmed();
+    let confirmed = app.restore_confirmed();
     let confirm_style = if confirmed {
         Style::default()
             .bg(palette.selected_bg)
@@ -149,13 +149,13 @@ pub(super) fn render_trash_overlay(
     let btn_y = rows[1].y;
     let confirm_x = rows[1].x + left_pad;
     let cancel_x = confirm_x + confirm_w + gap;
-    state.trash_confirm_btn = Some(Rect {
+    state.restore_confirm_btn = Some(Rect {
         x: confirm_x,
         y: btn_y,
         width: confirm_w,
         height: 1,
     });
-    state.trash_cancel_btn = Some(Rect {
+    state.restore_cancel_btn = Some(Rect {
         x: cancel_x,
         y: btn_y,
         width: cancel_w,

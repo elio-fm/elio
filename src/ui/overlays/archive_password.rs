@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-pub(super) fn render_archive_password_overlay(
+pub(in crate::ui) fn render_archive_password_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
