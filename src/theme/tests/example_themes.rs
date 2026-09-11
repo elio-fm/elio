@@ -1,4 +1,3 @@
-use super::super::parsing::rgb;
 use super::*;
 use ratatui::style::Color;
 
@@ -43,18 +42,18 @@ const GENERIC_DEV_DIRECTORIES: &[&str] = &[
 
 fn alternate_example_theme_config(name: &str) -> &'static str {
     match name {
-        "default-light" => include_str!("../../../../examples/themes/default-light/theme.toml"),
-        "blush-light" => include_str!("../../../../examples/themes/blush-light/theme.toml"),
-        "amber-dusk" => include_str!("../../../../examples/themes/amber-dusk/theme.toml"),
+        "default-light" => include_str!("../../../examples/themes/default-light/theme.toml"),
+        "blush-light" => include_str!("../../../examples/themes/blush-light/theme.toml"),
+        "amber-dusk" => include_str!("../../../examples/themes/amber-dusk/theme.toml"),
         "catppuccin-mocha" => {
-            include_str!("../../../../examples/themes/catppuccin-mocha/theme.toml")
+            include_str!("../../../examples/themes/catppuccin-mocha/theme.toml")
         }
-        "tokyo-night" => include_str!("../../../../examples/themes/tokyo-night/theme.toml"),
-        "nord" => include_str!("../../../../examples/themes/nord/theme.toml"),
-        "navi" => include_str!("../../../../examples/themes/navi/theme.toml"),
-        "neon-cherry" => include_str!("../../../../examples/themes/neon-cherry/theme.toml"),
-        "terminal-ansi" => include_str!("../../../../examples/themes/terminal-ansi/theme.toml"),
-        "transparent" => include_str!("../../../../examples/themes/transparent/theme.toml"),
+        "tokyo-night" => include_str!("../../../examples/themes/tokyo-night/theme.toml"),
+        "nord" => include_str!("../../../examples/themes/nord/theme.toml"),
+        "navi" => include_str!("../../../examples/themes/navi/theme.toml"),
+        "neon-cherry" => include_str!("../../../examples/themes/neon-cherry/theme.toml"),
+        "terminal-ansi" => include_str!("../../../examples/themes/terminal-ansi/theme.toml"),
+        "transparent" => include_str!("../../../examples/themes/transparent/theme.toml"),
         _ => panic!("unknown alternate example theme fixture: {name}"),
     }
 }

@@ -1,4 +1,3 @@
-use super::super::parsing::rgb;
 use super::*;
 
 const GENERIC_DEV_DIRECTORIES: &[&str] = &[

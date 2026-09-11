@@ -1,16 +1,173 @@
-use super::{
-    entry_class_cache,
-    parsing::normalize_key,
-    types::{EntryClassCacheKey, ResolvedAppearance, RuleOverride, Theme},
-};
+use super::theme_loading::{Palette, Theme, active_theme, normalize_key};
 use crate::{
-    app::{Entry, EntryKind, FileClass},
-    file_classification,
+    file_classification::{self, FileClass},
+    fs::{Entry, EntryKind, SymlinkInfo},
 };
+use ratatui::style::Color;
 use std::{
-    path::Path,
+    collections::{HashMap, VecDeque},
+    path::{Path, PathBuf},
+    sync::{Mutex, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
 };
+
+const ENTRY_CLASS_CACHE_LIMIT: usize = 4_096;
+
+#[derive(Clone)]
+pub(super) struct ClassStyle {
+    pub(super) icon: String,
+    pub(super) color: Color,
+}
+
+#[derive(Clone, Default)]
+pub(super) struct RuleOverride {
+    pub(super) class: Option<FileClass>,
+    pub(super) icon: Option<String>,
+    pub(super) color: Option<Color>,
+}
+
+pub(crate) struct ResolvedAppearance<'a> {
+    #[cfg(test)]
+    pub class: FileClass,
+    pub icon: &'a str,
+    pub color: Color,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct EntryClassCacheKey {
+    path: PathBuf,
+    is_dir: bool,
+    size: u64,
+    modified: Option<(u64, u32)>,
+}
+
+#[derive(Default)]
+struct EntryClassCache {
+    classes: HashMap<EntryClassCacheKey, FileClass>,
+    order: VecDeque<EntryClassCacheKey>,
+}
+
+static ENTRY_CLASS_CACHE: OnceLock<Mutex<EntryClassCache>> = OnceLock::new();
+
+pub(crate) fn resolve_path(path: &Path, kind: EntryKind) -> ResolvedAppearance<'static> {
+    active_theme().resolve(path, kind)
+}
+
+pub(crate) fn resolve_path_with_class(
+    path: &Path,
+    kind: EntryKind,
+    class: FileClass,
+) -> ResolvedAppearance<'static> {
+    active_theme().resolve_with_builtin_class(path, kind, class)
+}
+
+pub(crate) fn resolve_entry(entry: &Entry) -> ResolvedAppearance<'static> {
+    let builtin_class = symlink_entry_class(entry)
+        .unwrap_or_else(|| file_classification::inspect_entry_cached(entry).builtin_class);
+    active_theme().resolve_with_builtin_class(&entry.path, entry.kind, builtin_class)
+}
+
+pub(crate) fn resolve_browser_entry(entry: &Entry) -> ResolvedAppearance<'static> {
+    let builtin_class = builtin_classify_browser_entry(entry);
+    active_theme().resolve_with_builtin_class(&entry.path, entry.kind, builtin_class)
+}
+
+pub(crate) fn mix_color(base: Color, tint: Color, tint_weight: u8) -> Color {
+    match (base, tint) {
+        (Color::Rgb(br, bg, bb), Color::Rgb(tr, tg, tb)) => {
+            let weight = u16::from(tint_weight);
+            let base_weight = 255 - weight;
+            Color::Rgb(
+                ((u16::from(br) * base_weight + u16::from(tr) * weight) / 255) as u8,
+                ((u16::from(bg) * base_weight + u16::from(tg) * weight) / 255) as u8,
+                ((u16::from(bb) * base_weight + u16::from(tb) * weight) / 255) as u8,
+            )
+        }
+        _ => base,
+    }
+}
+
+pub(crate) fn entry_color(entry: &Entry, palette: Palette) -> Color {
+    let _ = palette;
+    resolve_entry(entry).color
+}
+
+pub(crate) fn entry_symbol(entry: &Entry) -> &'static str {
+    resolve_entry(entry).icon
+}
+
+pub(crate) fn path_color(path: &Path, is_dir: bool, palette: Palette) -> Color {
+    let _ = palette;
+    resolve_path(path, entry_kind(is_dir)).color
+}
+
+pub(crate) fn path_symbol(path: &Path, is_dir: bool) -> &'static str {
+    resolve_path(path, entry_kind(is_dir)).icon
+}
+
+pub(crate) fn path_symbol_with_symlink(
+    path: &Path,
+    is_dir: bool,
+    symlink: Option<&SymlinkInfo>,
+) -> &'static str {
+    let kind = entry_kind(is_dir);
+    match symlink_file_class(symlink) {
+        Some(class) => resolve_path_with_class(path, kind, class).icon,
+        None => resolve_path(path, kind).icon,
+    }
+}
+
+pub(crate) fn path_color_with_symlink(
+    path: &Path,
+    is_dir: bool,
+    symlink: Option<&SymlinkInfo>,
+    palette: Palette,
+) -> Color {
+    let _ = palette;
+    let kind = entry_kind(is_dir);
+    match symlink_file_class(symlink) {
+        Some(class) => resolve_path_with_class(path, kind, class).color,
+        None => resolve_path(path, kind).color,
+    }
+}
+
+fn entry_kind(is_dir: bool) -> EntryKind {
+    if is_dir {
+        EntryKind::Directory
+    } else {
+        EntryKind::File
+    }
+}
+
+fn symlink_file_class(symlink: Option<&SymlinkInfo>) -> Option<FileClass> {
+    let symlink = symlink?;
+    match symlink.target_kind {
+        Some(EntryKind::Directory) => Some(FileClass::SymlinkDirectory),
+        None => Some(FileClass::BrokenSymlink),
+        Some(EntryKind::File) => None,
+    }
+}
+
+fn entry_class_cache() -> &'static Mutex<EntryClassCache> {
+    ENTRY_CLASS_CACHE.get_or_init(|| Mutex::new(EntryClassCache::default()))
+}
+
+impl EntryClassCache {
+    fn get(&self, key: &EntryClassCacheKey) -> Option<FileClass> {
+        self.classes.get(key).copied()
+    }
+
+    fn insert(&mut self, key: EntryClassCacheKey, class: FileClass) {
+        self.classes.insert(key.clone(), class);
+        self.order.retain(|cached| cached != &key);
+        self.order.push_back(key);
+        while self.order.len() > ENTRY_CLASS_CACHE_LIMIT {
+            if let Some(stale_key) = self.order.pop_front() {
+                self.classes.remove(&stale_key);
+            }
+        }
+    }
+}
 
 impl Theme {
     pub(super) fn resolve(&self, path: &Path, kind: EntryKind) -> ResolvedAppearance<'_> {
