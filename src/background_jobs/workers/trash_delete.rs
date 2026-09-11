@@ -1083,5 +1083,5 @@ fn send_trash_progress(
 }
 
 #[cfg(test)]
-#[path = "tests/trash.rs"]
+#[path = "tests/trash_delete.rs"]
 mod tests;

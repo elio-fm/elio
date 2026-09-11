@@ -69,28 +69,29 @@ fn prepared_full_pane_image_uses_aspect_fitted_kitty_placement() {
     let rendered = root.join("photo-rendered.png");
     write_test_raster_image(&rendered, ImageFormat::Png, 1024, 1024);
 
-    let dirty = app.apply_image_prepare_build(crate::background_jobs::ImagePrepareBuild {
-        path: path.clone(),
-        size: metadata.len(),
-        modified: None,
-        target_width_px: request.target_width_px,
-        target_height_px: request.target_height_px,
-        force_render_to_cache: false,
-        prepare_inline_payload: false,
-        canceled: false,
-        result: Some(
-            crate::app::preview::static_images::PreparedStaticImageAsset {
-                display_path: rendered,
-                dimensions: RenderedImageDimensions {
-                    width_px: 1024,
-                    height_px: 1024,
+    let dirty =
+        app.apply_image_prepare_build(crate::background_jobs::job_results::ImagePrepareBuild {
+            path: path.clone(),
+            size: metadata.len(),
+            modified: None,
+            target_width_px: request.target_width_px,
+            target_height_px: request.target_height_px,
+            force_render_to_cache: false,
+            prepare_inline_payload: false,
+            canceled: false,
+            result: Some(
+                crate::app::preview::static_images::PreparedStaticImageAsset {
+                    display_path: rendered,
+                    dimensions: RenderedImageDimensions {
+                        width_px: 1024,
+                        height_px: 1024,
+                    },
+                    inline_payload: None,
+                    sixel_dcs: None,
+                    sixel_dcs_key: None,
                 },
-                inline_payload: None,
-                sixel_dcs: None,
-                sixel_dcs_key: None,
-            },
-        ),
-    });
+            ),
+        });
 
     assert!(dirty);
     app.preview.image.selection_activation_delay = Duration::ZERO;

@@ -1,7 +1,5 @@
-use super::{
-    App,
-    jobs::{GitStatusBuild, GitStatusRequest},
-};
+use super::App;
+use crate::background_jobs::{job_requests::GitStatusRequest, job_results::GitStatusBuild};
 use std::{path::Path, process::Command};
 
 impl App {

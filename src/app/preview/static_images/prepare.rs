@@ -16,7 +16,7 @@ use super::{
 use crate::app::preview::terminal_images::{
     area_pixel_size, encode_iterm_inline_payload, encode_sixel_dcs, fit_image_area,
 };
-use crate::background_jobs as jobs;
+use crate::background_jobs::job_requests as jobs;
 use image::{ImageFormat, ImageReader};
 use ratatui::layout::Rect;
 use std::{

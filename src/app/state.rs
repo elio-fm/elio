@@ -12,7 +12,7 @@ use super::{
     preview::{comic, epub, pdf, static_images, terminal_images},
     types::*,
 };
-use crate::background_jobs::{ArchiveExtractRequest, JobScheduler};
+use crate::background_jobs::{JobScheduler, job_requests::ArchiveExtractRequest};
 use crate::duplicate_finder::{DuplicateGroup, DuplicateScanStats};
 #[cfg(unix)]
 use crate::file_operations::BulkRenameEditorSession;
