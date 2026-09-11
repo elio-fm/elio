@@ -1,7 +1,4 @@
-use super::{
-    rules::{default_class_style, normalize_key, rgb, rule_class},
-    types::{CodePreviewPalette, Palette, PreviewTheme, RuleOverride, Theme},
-};
+use super::types::{ClassStyle, CodePreviewPalette, Palette, PreviewTheme, RuleOverride, Theme};
 use crate::file_classification::FileClass;
 use ratatui::style::Color;
 use serde::Deserialize;
@@ -95,6 +92,11 @@ enum RuleOverrideDef {
 }
 
 impl Theme {
+    pub(super) fn from_default_config_str(config: &str) -> anyhow::Result<Self> {
+        let parsed: ThemeFile = toml::from_str(config)?;
+        parsed.into_complete_theme()
+    }
+
     pub(super) fn from_config_str(config: &str) -> anyhow::Result<Self> {
         Self::apply_config_on(Self::default_theme(), config)
     }
@@ -123,8 +125,8 @@ impl Theme {
                 let ClassStyleOverride { icon, color } = override_style;
                 let style = self
                     .classes
-                    .entry(class)
-                    .or_insert_with(|| default_class_style(class));
+                    .get_mut(&class)
+                    .expect("built-in theme defines every file class");
                 if let Some(icon) = icon {
                     style.icon = icon;
                 }
@@ -179,6 +181,157 @@ impl Theme {
             style.color = invalid_color;
         }
     }
+}
+
+impl ThemeFile {
+    fn into_complete_theme(self) -> anyhow::Result<Theme> {
+        Ok(Theme {
+            palette: required(self.palette, "palette")?.into_complete_palette()?,
+            preview: required(self.preview, "preview")?.into_complete_preview()?,
+            classes: parse_complete_classes(required(self.classes, "classes")?)?,
+            extensions: parse_rule_map(required(self.extensions, "extensions")?)?,
+            files: parse_rule_map(required(self.files, "files")?)?,
+            directories: parse_rule_map(required(self.directories, "directories")?)?,
+        })
+    }
+}
+
+impl PaletteOverride {
+    fn into_complete_palette(self) -> anyhow::Result<Palette> {
+        macro_rules! color {
+            ($field:ident) => {
+                parse_required_color(self.$field, concat!("palette.", stringify!($field)))?
+            };
+        }
+
+        Ok(Palette {
+            bg: color!(bg),
+            chrome: color!(chrome),
+            chrome_alt: color!(chrome_alt),
+            chip_text: color!(chip_text),
+            panel: color!(panel),
+            panel_alt: color!(panel_alt),
+            surface: color!(surface),
+            elevated: color!(elevated),
+            border: color!(border),
+            text: color!(text),
+            muted: color!(muted),
+            accent: color!(accent),
+            accent_soft: color!(accent_soft),
+            accent_text: color!(accent_text),
+            selected_bg: color!(selected_bg),
+            selected_border: color!(selected_border),
+            selection_bar: color!(selection_bar),
+            yank_bar: color!(yank_bar),
+            cut_bar: color!(cut_bar),
+            progress_bar: color!(progress_bar),
+            grid_selection_band: color!(grid_selection_band),
+            grid_yank_band: color!(grid_yank_band),
+            grid_cut_band: color!(grid_cut_band),
+            trash_bar: color!(trash_bar),
+            restore_bar: color!(restore_bar),
+            sidebar_active: color!(sidebar_active),
+            button_bg: color!(button_bg),
+            button_disabled_bg: color!(button_disabled_bg),
+            path_bg: color!(path_bg),
+        })
+    }
+}
+
+impl PreviewOverride {
+    fn into_complete_preview(self) -> anyhow::Result<PreviewTheme> {
+        Ok(PreviewTheme {
+            code: required(self.code, "preview.code")?.into_complete_palette()?,
+        })
+    }
+}
+
+impl CodePreviewOverride {
+    fn into_complete_palette(self) -> anyhow::Result<CodePreviewPalette> {
+        macro_rules! color {
+            ($field:ident) => {
+                parse_required_color(self.$field, concat!("preview.code.", stringify!($field)))?
+            };
+        }
+
+        Ok(CodePreviewPalette {
+            fg: color!(fg),
+            bg: color!(bg),
+            selection_bg: color!(selection_bg),
+            selection_fg: color!(selection_fg),
+            caret: color!(caret),
+            line_highlight: color!(line_highlight),
+            line_number: color!(line_number),
+            comment: color!(comment),
+            string: color!(string),
+            constant: color!(constant),
+            keyword: color!(keyword),
+            function: color!(function),
+            r#type: color!(r#type),
+            parameter: color!(parameter),
+            tag: color!(tag),
+            operator: color!(operator),
+            r#macro: color!(r#macro),
+            invalid: color!(invalid),
+        })
+    }
+}
+
+fn required<T>(value: Option<T>, name: &str) -> anyhow::Result<T> {
+    value.ok_or_else(|| anyhow::anyhow!("built-in theme is missing `{name}`"))
+}
+
+fn parse_required_color(value: Option<String>, name: &str) -> anyhow::Result<Color> {
+    parse_color(&required(value, name)?)
+}
+
+fn parse_complete_classes(
+    source: HashMap<String, ClassStyleOverride>,
+) -> anyhow::Result<HashMap<FileClass, ClassStyle>> {
+    let mut classes = HashMap::new();
+    for (name, style) in source {
+        let class =
+            parse_class_name(&name).ok_or_else(|| anyhow::anyhow!("unknown class `{name}`"))?;
+        classes.insert(
+            class,
+            ClassStyle {
+                icon: required(style.icon, &format!("classes.{name}.icon"))?,
+                color: parse_required_color(style.color, &format!("classes.{name}.color"))?,
+            },
+        );
+    }
+
+    for name in [
+        "directory",
+        "symlink_directory",
+        "broken_symlink",
+        "code",
+        "config",
+        "document",
+        "license",
+        "image",
+        "audio",
+        "video",
+        "archive",
+        "font",
+        "data",
+        "file",
+    ] {
+        let class = parse_class_name(name).expect("known file class");
+        if !classes.contains_key(&class) {
+            anyhow::bail!("built-in theme is missing `classes.{name}`");
+        }
+    }
+
+    Ok(classes)
+}
+
+fn parse_rule_map(
+    source: HashMap<String, RuleOverrideDef>,
+) -> anyhow::Result<HashMap<String, RuleOverride>> {
+    let mut rules = HashMap::with_capacity(source.len());
+    apply_rule_map(&mut rules, source)?;
+    Ok(rules)
 }
 
 fn apply_palette_overrides(
@@ -277,11 +430,13 @@ fn apply_rule_map(
 
 fn parse_rule_override(value: RuleOverrideDef) -> anyhow::Result<RuleOverride> {
     match value {
-        RuleOverrideDef::Class(class) => {
-            Ok(rule_class(parse_class_name(&class).ok_or_else(|| {
-                anyhow::anyhow!("unknown class `{class}`")
-            })?))
-        }
+        RuleOverrideDef::Class(class) => Ok(RuleOverride {
+            class: Some(
+                parse_class_name(&class)
+                    .ok_or_else(|| anyhow::anyhow!("unknown class `{class}`"))?,
+            ),
+            ..RuleOverride::default()
+        }),
         RuleOverrideDef::Rich { class, icon, color } => Ok(RuleOverride {
             class: match class {
                 Some(class) => Some(
@@ -319,6 +474,10 @@ pub(super) fn parse_class_name(name: &str) -> Option<FileClass> {
     }
 }
 
+pub(in crate::theme::appearance) fn normalize_key(value: &str) -> String {
+    value.trim().to_ascii_lowercase()
+}
+
 pub(super) fn parse_color(value: &str) -> anyhow::Result<Color> {
     let trimmed = value.trim();
     let normalized = trimmed.to_ascii_lowercase();
@@ -354,5 +513,10 @@ pub(super) fn parse_color(value: &str) -> anyhow::Result<Color> {
     let red = u8::from_str_radix(&hex[0..2], 16)?;
     let green = u8::from_str_radix(&hex[2..4], 16)?;
     let blue = u8::from_str_radix(&hex[4..6], 16)?;
-    Ok(rgb(red, green, blue))
+    Ok(Color::Rgb(red, green, blue))
+}
+
+#[cfg(test)]
+pub(super) fn rgb(red: u8, green: u8, blue: u8) -> Color {
+    Color::Rgb(red, green, blue)
 }

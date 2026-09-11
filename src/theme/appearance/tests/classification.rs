@@ -1,6 +1,6 @@
 use super::super::{
+    parsing::rgb,
     resolve::{builtin_classify_browser_entry, builtin_classify_path},
-    rules::rgb,
 };
 use super::*;
 use crate::fs::SymlinkInfo;

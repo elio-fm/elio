@@ -1,7 +1,6 @@
 mod loading;
 mod parsing;
 mod resolve;
-mod rules;
 #[cfg(test)]
 mod tests;
 mod types;
@@ -105,9 +104,7 @@ impl EntryClassCache {
 
 impl Theme {
     fn default_theme() -> Self {
-        Self::apply_config_on(Self::base_theme(), DEFAULT_THEME_TOML).unwrap_or_else(|error| {
-            eprintln!("elio: failed to load built-in default theme: {error}");
-            Self::base_theme()
-        })
+        Self::from_default_config_str(DEFAULT_THEME_TOML)
+            .unwrap_or_else(|error| panic!("elio: failed to load built-in default theme: {error}"))
     }
 }

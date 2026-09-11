@@ -1,4 +1,4 @@
-use super::super::rules::rgb;
+use super::super::parsing::rgb;
 use super::*;
 
 const GENERIC_DEV_DIRECTORIES: &[&str] = &[
@@ -28,8 +28,8 @@ const GENERIC_DEV_DIRECTORIES: &[&str] = &[
 ];
 
 fn load_built_in_default_theme_asset() -> Theme {
-    Theme::apply_config_on(Theme::base_theme(), DEFAULT_THEME_TOML)
-        .expect("built-in default theme asset should parse")
+    Theme::from_default_config_str(DEFAULT_THEME_TOML)
+        .expect("built-in default theme asset should be complete and valid")
 }
 
 fn assert_uses_normal_folder_color_for_generic_dev_directories(theme: &Theme, label: &str) {

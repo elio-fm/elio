@@ -1,4 +1,4 @@
-use super::super::rules::rgb;
+use super::super::parsing::rgb;
 use super::*;
 use ratatui::style::Color;
 
