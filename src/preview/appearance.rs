@@ -68,7 +68,7 @@ pub(crate) struct PathAppearance<'a> {
 }
 
 pub(crate) fn palette() -> Palette {
-    let palette = crate::ui::theme::palette();
+    let palette = crate::theme::palette();
     Palette {
         bg: palette.bg,
         chrome: palette.chrome,
@@ -102,7 +102,7 @@ pub(crate) fn palette() -> Palette {
 }
 
 pub(crate) fn code_palette() -> CodePalette {
-    let palette = crate::ui::theme::code_preview_palette();
+    let palette = crate::theme::code_preview_palette();
     CodePalette {
         fg: palette.fg,
         bg: palette.bg,
@@ -130,7 +130,7 @@ pub(crate) fn code_preview_palette() -> CodePreviewPalette {
 }
 
 pub(crate) fn resolve_path(path: &Path, kind: EntryKind) -> PathAppearance<'static> {
-    let appearance = crate::ui::theme::resolve_path(path, kind);
+    let appearance = crate::theme::resolve_path(path, kind);
     PathAppearance {
         icon: appearance.icon,
         color: appearance.color,
@@ -142,7 +142,7 @@ pub(crate) fn resolve_path_with_class(
     kind: EntryKind,
     class: FileClass,
 ) -> PathAppearance<'static> {
-    let appearance = crate::ui::theme::resolve_path_with_class(path, kind, class);
+    let appearance = crate::theme::resolve_path_with_class(path, kind, class);
     PathAppearance {
         icon: appearance.icon,
         color: appearance.color,
@@ -150,7 +150,7 @@ pub(crate) fn resolve_path_with_class(
 }
 
 pub(crate) fn resolve_entry(entry: &Entry) -> PathAppearance<'static> {
-    let appearance = crate::ui::theme::resolve_entry(entry);
+    let appearance = crate::theme::resolve_entry(entry);
     PathAppearance {
         icon: appearance.icon,
         color: appearance.color,

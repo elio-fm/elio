@@ -10,7 +10,7 @@ use self::{
     files::default_file_rules,
     palette::{default_palette, default_preview_theme},
 };
-pub(in crate::ui::theme::appearance) use self::{
+pub(in crate::theme::appearance) use self::{
     classes::default_class_style,
     shared::{normalize_key, rgb, rule_class},
 };

@@ -7,11 +7,10 @@ mod places_pane;
 mod preview_pane;
 mod scrollbars;
 mod status_bar;
-pub(crate) mod theme;
 
 use crate::{
     app::{App, FrameState},
-    config,
+    config, theme,
 };
 use ratatui::{Frame, widgets::Block};
 

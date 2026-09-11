@@ -1,8 +1,10 @@
-use crate::app::{App, DuplicateHit, FrameState};
-use crate::ui::{
-    helpers,
-    scrollbars::{render_overlay_scrollbar, render_preview_scrollbar},
+use crate::{
+    app::{App, DuplicateHit, FrameState},
     theme::{self, Palette},
+    ui::{
+        helpers,
+        scrollbars::{render_overlay_scrollbar, render_preview_scrollbar},
+    },
 };
 use ratatui::{
     Frame,

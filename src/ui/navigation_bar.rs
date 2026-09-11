@@ -1,6 +1,6 @@
 use super::helpers;
-use super::theme::Palette;
 use crate::app::{App, FrameState};
+use crate::theme::Palette;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},

@@ -78,7 +78,7 @@ pub(super) fn erase_cells(area: Rect) -> Vec<u8> {
     let blank_row = " ".repeat(usize::from(area.width));
     // Set background to the panel color so empty cells match the pane background.
     // Fall back to default-background reset if the theme returns a non-RGB value.
-    match crate::ui::theme::palette().panel {
+    match crate::theme::palette().panel {
         Color::Rgb(r, g, b) => {
             let _ = write!(out, "\x1b[0;48;2;{r};{g};{b}m");
         }

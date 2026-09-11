@@ -204,7 +204,7 @@ fn sixel_encode_profile() -> SixelEncodeProfile {
 // ── private helpers ───────────────────────────────────────────────────────────
 
 fn panel_background() -> (u8, u8, u8) {
-    match crate::ui::theme::palette().panel {
+    match crate::theme::palette().panel {
         ratatui::style::Color::Rgb(r, g, b) => (r, g, b),
         _ => (0, 0, 0),
     }

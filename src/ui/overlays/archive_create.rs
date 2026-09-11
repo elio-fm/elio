@@ -1,8 +1,10 @@
-use crate::app::{App, FrameState};
-use crate::ui::{
-    helpers,
-    scrollbars::{render_overlay_scrollbar_on_bg, visible_edit_rows},
+use crate::{
+    app::{App, FrameState},
     theme::{self, Palette},
+    ui::{
+        helpers,
+        scrollbars::{render_overlay_scrollbar_on_bg, visible_edit_rows},
+    },
 };
 use ratatui::{
     Frame,

@@ -1,5 +1,5 @@
 use crate::app::{App, FrameState, GoToHit};
-use crate::ui::{helpers, theme::Palette};
+use crate::{theme::Palette, ui::helpers};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},

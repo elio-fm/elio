@@ -1,8 +1,7 @@
-use crate::app::{App, FrameState, SearchHit, SearchScope};
-use crate::ui::{
-    helpers,
-    scrollbars::render_overlay_scrollbar,
+use crate::{
+    app::{App, FrameState, SearchHit, SearchScope},
     theme::{self, Palette},
+    ui::{helpers, scrollbars::render_overlay_scrollbar},
 };
 use ratatui::{
     Frame,

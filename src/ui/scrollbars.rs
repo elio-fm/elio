@@ -1,5 +1,5 @@
-use super::theme::Palette;
 use crate::app::App;
+use crate::theme::Palette;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},

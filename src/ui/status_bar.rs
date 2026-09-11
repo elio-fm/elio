@@ -1,6 +1,6 @@
 use super::helpers;
-use super::theme::Palette;
 use crate::app::{App, ClipOp};
+use crate::theme::Palette;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
