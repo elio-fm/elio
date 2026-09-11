@@ -7,7 +7,7 @@ mod directory;
 mod documents;
 pub(crate) mod external_commands;
 mod font;
-mod images;
+pub(crate) mod images;
 mod markdown;
 mod plain_text;
 mod preview_building;

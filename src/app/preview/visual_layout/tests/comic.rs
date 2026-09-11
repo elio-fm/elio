@@ -6,11 +6,11 @@ fn comic_page_ffmpeg_render_uses_fast_raster_args() {
     let comic_args: &[&str] = &["-compression_level", "1", "-sws_flags", "fast_bilinear"];
 
     assert_eq!(
-        crate::app::preview::static_images::ffmpeg_raster_render_args(false),
+        crate::preview::images::ffmpeg_raster_render_args(false),
         default_args
     );
     assert_eq!(
-        crate::app::preview::static_images::ffmpeg_raster_render_args(true),
+        crate::preview::images::ffmpeg_raster_render_args(true),
         comic_args
     );
 }

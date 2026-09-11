@@ -1,10 +1,12 @@
 use super::job_requests::ArchiveExtractRequest;
 use crate::app::preview::pdf::PdfProbeResult;
-use crate::app::preview::static_images::{PreparedStaticImageAsset, SixelDcsKey};
 use crate::duplicate_finder::{DuplicateScanBatch, DuplicateScanResult};
 use crate::fs::Entry;
 use crate::fuzzy_finder::{SearchIndex, SearchIndexBatch, SearchScope};
-use crate::preview;
+use crate::preview::{
+    self,
+    images::{PreparedStaticImageAsset, SixelDcsKey},
+};
 use std::{path::PathBuf, sync::Arc, time::SystemTime};
 
 #[derive(Debug)]

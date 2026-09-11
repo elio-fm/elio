@@ -1,4 +1,75 @@
 use super::*;
+use crate::preview::PreviewKind;
+
+fn write_test_svg_image(path: &Path, width_px: u32, height_px: u32) {
+    fs::write(
+        path,
+        format!(
+            r#"<svg viewBox="0 0 {width_px} {height_px}" xmlns="http://www.w3.org/2000/svg"></svg>"#
+        ),
+    )
+    .expect("failed to write svg placeholder");
+}
+
+fn write_test_image(path: &Path) {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("png") => write_test_raster_image(path, ImageFormat::Png, 600, 300),
+        Some("ico") => write_test_raster_image(path, ImageFormat::Ico, 64, 64),
+        Some("jpg" | "jpeg") => write_test_raster_image(path, ImageFormat::Jpeg, 600, 300),
+        Some("gif") => write_test_raster_image(path, ImageFormat::Gif, 600, 300),
+        Some("webp") => write_test_raster_image(path, ImageFormat::WebP, 600, 300),
+        Some("svg") => write_test_svg_image(path, 600, 300),
+        Some("txt") => fs::write(path, "plain text").expect("failed to write text placeholder"),
+        _ => panic!("unsupported test image path: {}", path.display()),
+    }
+}
+
+fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBuf) {
+    let root = temp_root(label);
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join(file_name);
+    write_test_image(&path);
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_terminal_image_support(&mut app);
+    app.preview.pdf.pdf_tools_available = true;
+    set_single_test_entry(&mut app, &path);
+    app.refresh_preview();
+    (app, root)
+}
+
+fn build_selected_extensionless_png_app(label: &str, file_name: &str) -> (App, PathBuf) {
+    let root = temp_root(label);
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join(file_name);
+    write_test_raster_image(&path, ImageFormat::Png, 600, 300);
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_terminal_image_support(&mut app);
+    app.preview.pdf.pdf_tools_available = true;
+    set_single_test_entry(&mut app, &path);
+    app.refresh_preview();
+    (app, root)
+}
+
+fn build_multi_static_image_app(label: &str, file_names: &[&str]) -> (App, PathBuf) {
+    let root = temp_root(label);
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    for file_name in file_names {
+        write_test_image(&root.join(file_name));
+    }
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_terminal_image_support(&mut app);
+    app.preview.pdf.pdf_tools_available = true;
+    app.input.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+    app.input.frame_state.metrics.cols = 1;
+    app.input.frame_state.metrics.rows_visible = 6;
+    app.refresh_preview();
+    (app, root)
+}
 
 #[test]
 fn refresh_preview_uses_blank_static_image_surface_preview_when_backend_enabled() {
@@ -100,9 +171,7 @@ fn refresh_preview_preloads_current_and_visible_nearby_static_images() {
         .visible_entry_indices()
         .into_iter()
         .filter_map(|index| app.navigation.entries.get(index))
-        .filter(|entry| {
-            crate::app::preview::static_images::static_image_detail_label(entry).is_some()
-        })
+        .filter(|entry| crate::preview::images::static_image_detail_label(entry).is_some())
         .filter(|entry| {
             crate::file_classification::inspect_path_cached(
                 &entry.path,

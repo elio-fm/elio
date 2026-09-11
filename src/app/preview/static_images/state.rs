@@ -1,9 +1,3 @@
-use super::format::{
-    StaticImageFormat, static_image_format_for_overlay_request, static_image_format_for_path,
-};
-use super::prepare::{
-    static_image_can_prepare_inline, static_image_supports_iterm_source_passthrough,
-};
 use super::{
     StaticImageKey, StaticImageOverlayMode, StaticImageOverlayRequest, image_target_height_px,
     image_target_width_px, static_image_detail_label,
@@ -11,6 +5,10 @@ use super::{
 use crate::app::state::PreviewLoadState;
 use crate::app::{App, Entry};
 use crate::preview;
+use crate::preview::images::{
+    StaticImageFormat, static_image_can_prepare_inline, static_image_format_for_cached_path,
+    static_image_format_for_path, static_image_supports_iterm_source_passthrough,
+};
 use crate::terminal_runtime::terminal_images::{ImageProtocol, command_exists};
 use ratatui::layout::Rect;
 use std::time::{Duration, Instant};
@@ -158,7 +156,8 @@ impl App {
             self.preview.terminal_images.protocol,
             ImageProtocol::KittyGraphics | ImageProtocol::KittyDirectGraphics
         ) && !request.force_render_to_cache
-            && static_image_format_for_overlay_request(request) == Some(StaticImageFormat::Png)
+            && static_image_format_for_cached_path(&request.path, request.size, request.modified)
+                == Some(StaticImageFormat::Png)
     }
 
     pub(super) fn static_image_can_use_source_path(
@@ -169,7 +168,12 @@ impl App {
             ImageProtocol::KittyGraphics | ImageProtocol::KittyDirectGraphics => {
                 self.static_image_can_display_directly_now(request)
             }
-            ImageProtocol::ItermInline => static_image_supports_iterm_source_passthrough(request),
+            ImageProtocol::ItermInline => static_image_supports_iterm_source_passthrough(
+                &request.path,
+                request.size,
+                request.modified,
+                request.force_render_to_cache,
+            ),
             // Sixel requires decoding and re-encoding the image, so the source path
             // can never be used directly — always go through the prepare pipeline.
             ImageProtocol::Sixel | ImageProtocol::None => false,

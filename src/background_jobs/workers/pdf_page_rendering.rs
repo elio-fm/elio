@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    app::preview::{pdf, static_images},
-    terminal_runtime::terminal_images,
-};
+use crate::{app::preview::pdf, preview::images::SixelDcsKey, terminal_runtime::terminal_images};
 use std::{
     collections::{HashSet, VecDeque},
     path::{Path, PathBuf},
@@ -88,11 +85,7 @@ impl PdfRenderPool {
                                 let dcs =
                                     terminal_images::encode_sixel_dcs(path, target_w, target_h)
                                         .ok()?;
-                                let dcs_key = static_images::SixelDcsKey::new(
-                                    path,
-                                    placement,
-                                    config.window_size,
-                                );
+                                let dcs_key = SixelDcsKey::new(path, placement, config.window_size);
                                 Some((dcs, dcs_key))
                             })
                         })

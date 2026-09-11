@@ -116,11 +116,9 @@ fn concurrent_inline_raster_prepares_keep_shared_render_cache_readable() {
         handles.push(thread::spawn(move || {
             barrier.wait();
             for _ in 0..6 {
-                let prepared = crate::app::preview::static_images::prepare_static_image_asset(
-                    &request,
-                    || false,
-                )
-                .expect("shared render cache should prepare");
+                let prepared =
+                    crate::preview::images::prepare_static_image_asset(&request, || false)
+                        .expect("shared render cache should prepare");
                 let dimensions = crate::terminal_runtime::terminal_images::read_png_dimensions(
                     &prepared.display_path,
                 )
@@ -201,18 +199,16 @@ fn current_comic_prepare_build_marks_preview_dirty() {
             force_render_to_cache: false,
             prepare_inline_payload: false,
             canceled: false,
-            result: Some(
-                crate::app::preview::static_images::PreparedStaticImageAsset {
-                    display_path: rendered,
-                    dimensions: crate::terminal_runtime::terminal_images::RenderedImageDimensions {
-                        width_px: 768,
-                        height_px: 432,
-                    },
-                    inline_payload: None,
-                    sixel_dcs: None,
-                    sixel_dcs_key: None,
+            result: Some(crate::preview::images::PreparedStaticImageAsset {
+                display_path: rendered,
+                dimensions: crate::terminal_runtime::terminal_images::RenderedImageDimensions {
+                    width_px: 768,
+                    height_px: 432,
                 },
-            ),
+                inline_payload: None,
+                sixel_dcs: None,
+                sixel_dcs_key: None,
+            }),
         });
 
     assert!(dirty);

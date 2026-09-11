@@ -1,6 +1,6 @@
 use super::*;
-use crate::app::preview::static_images;
 use crate::background_jobs::job_requests::SixelPrepareConfig;
+use crate::preview::images;
 use std::{
     collections::{HashSet, VecDeque},
     path::PathBuf,
@@ -72,7 +72,7 @@ impl ImagePreparePool {
             workers.push(thread::spawn(move || {
                 while let Some((request, canceled)) = ImagePrepareShared::pop(&shared) {
                     let key = ImagePrepareJobKey::from_request(&request);
-                    let result = static_images::prepare_static_image_asset(&request, || {
+                    let result = images::prepare_static_image_asset(&request, || {
                         canceled.load(Ordering::Relaxed)
                     });
                     ImagePrepareShared::finish(&shared, &key);

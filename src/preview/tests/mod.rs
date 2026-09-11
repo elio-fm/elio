@@ -19,7 +19,6 @@ mod audio;
 mod directory;
 mod font;
 mod helpers;
-mod images;
 mod markdown;
 mod plain_text;
 mod torrent;
