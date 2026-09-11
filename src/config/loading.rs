@@ -1,6 +1,7 @@
-use super::Config;
+use super::{GotoConfig, KeyBindings, LayoutConfig, OpenConfig, PlacesConfig, UiConfig};
 #[cfg(unix)]
 use crate::elevated_session::InvocationContext;
+use serde::Deserialize;
 use std::{
     env, fs, io,
     path::{Path, PathBuf},
@@ -9,7 +10,30 @@ use std::{
 
 static ACTIVE_CONFIG: OnceLock<Config> = OnceLock::new();
 
+pub(super) struct Config {
+    pub(super) ui: UiConfig,
+    pub(super) goto: GotoConfig,
+    pub(super) places: PlacesConfig,
+    pub(super) layout: LayoutConfig,
+    pub(super) keys: KeyBindings,
+    pub(super) open: OpenConfig,
+}
+
+#[derive(Deserialize, Default)]
+struct ConfigFile {
+    ui: Option<super::ui::UiConfigOverride>,
+    goto: Option<super::goto::GotoConfigOverride>,
+    places: Option<super::places::PlacesConfigOverride>,
+    layout: Option<super::layout::LayoutConfigOverride>,
+    keys: Option<super::key_bindings::KeysConfigOverride>,
+    open: Option<super::open::OpenConfigOverride>,
+}
+
 pub(super) fn initialize(path: Option<&Path>) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    // Snapshot the invocation context before loading config or starting workers.
+    let _ = crate::elevated_session::context();
+
     if ACTIVE_CONFIG.get().is_none() {
         let config = load_config_from_disk(path)?;
         let _ = ACTIVE_CONFIG.set(config);
@@ -130,140 +154,46 @@ fn config_path() -> Option<PathBuf> {
     config_dir().map(|dir| dir.join("config.toml"))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[cfg(unix)]
-    use crate::elevated_session::InvokingUser;
-    #[cfg(unix)]
-    use std::ffi::OsString;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[cfg(unix)]
-    fn test_user(xdg_config_home: Option<&str>) -> InvokingUser {
-        InvokingUser {
-            uid: 1000,
-            gid: 1000,
-            name: OsString::from("paco"),
-            home: PathBuf::from("/home/paco"),
-            shell: OsString::from("/bin/sh"),
-            groups: vec![1000],
-            session_environment: Vec::new(),
-            xdg_config_home: xdg_config_home.map(PathBuf::from),
-            xdg_data_home: None,
+impl Config {
+    pub(super) fn default_config() -> Self {
+        Self {
+            ui: UiConfig::default(),
+            goto: GotoConfig::default(),
+            places: PlacesConfig::default(),
+            layout: LayoutConfig::default(),
+            keys: KeyBindings::default(),
+            open: OpenConfig::default(),
         }
     }
 
-    fn temp_path(label: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time should be after unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("elio-config-{label}-{unique}"))
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn config_home_follows_invocation_context() {
-        let root_default = if cfg!(target_os = "macos") {
-            Path::new("/root/Library/Application Support")
-        } else {
-            Path::new("/root/.config")
-        };
-        let user_default = if cfg!(target_os = "macos") {
-            Path::new("/home/paco/Library/Application Support")
-        } else {
-            Path::new("/home/paco/.config")
-        };
-        let process_xdg = Some(Path::new("/root/custom"));
-        let cases = [
-            (
-                InvocationContext::Normal,
-                process_xdg,
-                Some(Path::new("/root/custom")),
-            ),
-            (
-                InvocationContext::RootSession,
-                process_xdg,
-                Some(Path::new("/root/custom")),
-            ),
-            (InvocationContext::Normal, None, Some(root_default)),
-            (InvocationContext::RootSession, None, Some(root_default)),
-            (
-                InvocationContext::Elevated(test_user(Some("/home/paco/custom-config"))),
-                process_xdg,
-                Some(Path::new("/home/paco/custom-config")),
-            ),
-            (
-                InvocationContext::Elevated(test_user(None)),
-                process_xdg,
-                Some(user_default),
-            ),
-            (InvocationContext::ElevatedUnresolved, process_xdg, None),
-        ];
-
-        for (context, process_xdg, expected) in cases {
-            let actual = config_home_for_context(&context, process_xdg, Some(Path::new("/root")));
-            assert_eq!(actual.as_deref(), expected, "context: {context:?}");
+    pub(super) fn from_str(config: &str) -> anyhow::Result<Self> {
+        let parsed: ConfigFile = toml::from_str(config)?;
+        let mut resolved = Self::default_config();
+        if let Some(ui) = parsed.ui {
+            resolved.ui.apply_override(ui);
         }
-    }
-
-    #[test]
-    fn explicit_config_path_is_loaded() {
-        let root = temp_path("explicit");
-        let path = root.join("custom-settings.toml");
-        fs::create_dir_all(&root).expect("config directory should be created");
-        fs::write(&path, "[ui]\nshow_hidden = true\n").expect("explicit config should be written");
-
-        let config = load_config_from_disk(Some(&path)).expect("explicit config should load");
-
-        assert!(config.ui.show_hidden);
-        fs::remove_dir_all(root).expect("config directory should be removed");
-    }
-
-    #[test]
-    fn missing_explicit_config_path_is_an_error() {
-        let path = temp_path("missing").join("config.toml");
-
-        let error = load_config_from_disk(Some(&path))
-            .err()
-            .expect("missing explicit config should fail");
-
-        assert!(error.to_string().contains(&format!(
-            "elio: failed to read config from {}",
-            path.display()
-        )));
-    }
-
-    #[test]
-    fn unreadable_explicit_config_path_is_an_error() {
-        let root = temp_path("unreadable");
-        let path = root.join("config.toml");
-        fs::create_dir_all(&root).expect("config directory should be created");
-        fs::write(&path, [0xff]).expect("invalid UTF-8 config should be written");
-
-        let error = load_config_from_disk(Some(&path))
-            .err()
-            .expect("unreadable explicit config should fail");
-
-        assert!(error.to_string().contains(&format!(
-            "elio: failed to read config from {}",
-            path.display()
-        )));
-        fs::remove_dir_all(root).expect("config directory should be removed");
-    }
-
-    #[test]
-    fn invalid_explicit_config_falls_back_to_defaults() {
-        let root = temp_path("invalid");
-        let path = root.join("config.toml");
-        fs::create_dir_all(&root).expect("config directory should be created");
-        fs::write(&path, "[ui\nshow_hidden = true\n").expect("invalid config should be written");
-
-        let config =
-            load_config_from_disk(Some(&path)).expect("invalid explicit config should fall back");
-
-        assert!(!config.ui.show_hidden);
-        fs::remove_dir_all(root).expect("config directory should be removed");
+        if let Some(goto) = parsed.goto {
+            resolved.goto = GotoConfig::from_override(goto, &resolved.goto);
+        }
+        if let Some(places) = parsed.places {
+            resolved.places = PlacesConfig::from_override(places, &resolved.places);
+        }
+        if let Some(layout) = parsed.layout {
+            match LayoutConfig::from_override(layout) {
+                Ok(layout) => resolved.layout = layout,
+                Err(error) => eprintln!("elio: invalid [layout.panes] config: {error}"),
+            }
+        }
+        if let Some(keys) = parsed.keys {
+            resolved.keys = KeyBindings::from_override(keys, &KeyBindings::default());
+        }
+        if let Some(open) = parsed.open {
+            resolved.open = OpenConfig::from_override(open, &resolved.open);
+        }
+        Ok(resolved)
     }
 }
+
+#[cfg(test)]
+#[path = "tests/loading.rs"]
+mod tests;

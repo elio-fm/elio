@@ -1,5 +1,5 @@
-use super::model::{Action, KeyBindings, KeyCodeSpec, KeyList, KeySpec};
-use super::parse::{KeyConfigOverride, KeysConfigOverride, parse_key_override};
+use super::action_bindings::{Action, KeyBindings, KeyCodeSpec, KeyList, KeySpec};
+use super::binding_parsing::{KeyConfigOverride, KeysConfigOverride, parse_key_override};
 use std::collections::BTreeMap;
 
 /// Characters that are hard-wired to non-configurable actions and may not be

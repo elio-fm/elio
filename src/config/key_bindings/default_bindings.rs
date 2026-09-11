@@ -1,4 +1,4 @@
-use super::model::{KeyBindings, KeyList, KeySpec, NamedKey};
+use super::action_bindings::{KeyBindings, KeyList, KeySpec, NamedKey};
 
 impl Default for KeyBindings {
     fn default() -> Self {

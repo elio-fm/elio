@@ -357,7 +357,7 @@ impl App {
         }
 
         let configured_action = if self.chooser_mode {
-            match crate::config::keys().chooser_action_for_key(key, self.key_context()) {
+            match crate::config::key_bindings().chooser_action_for_key(key, self.key_context()) {
                 Some(crate::config::ChooserKeyAction::Choose) => {
                     self.confirm_chooser();
                     return Ok(());
@@ -370,7 +370,7 @@ impl App {
                 None => None,
             }
         } else {
-            crate::config::keys().action_for_key_in_context(key, self.key_context())
+            crate::config::key_bindings().action_for_key_in_context(key, self.key_context())
         };
 
         if self.preview_fullscreen() {
@@ -637,7 +637,7 @@ impl App {
             return None;
         }
 
-        match crate::config::keys().action_for_key(key) {
+        match crate::config::key_bindings().action_for_key(key) {
             Some(crate::config::Action::NavUp) => Some(NavigationRepeatKey::Up),
             Some(crate::config::Action::NavDown) => Some(NavigationRepeatKey::Down),
             Some(crate::config::Action::NavLeft) => Some(NavigationRepeatKey::Left),

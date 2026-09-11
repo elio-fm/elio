@@ -17,7 +17,7 @@ impl App {
             self.overlays.help = true;
             return Ok(());
         }
-        if let Some(action) = crate::config::keys().action_for_key(key) {
+        if let Some(action) = crate::config::key_bindings().action_for_key(key) {
             use crate::config::Action;
             match action {
                 Action::Quit | Action::QuitWithoutCd => {
