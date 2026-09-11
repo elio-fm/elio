@@ -1,7 +1,9 @@
 use super::*;
 
 impl App {
-    pub(in crate::app::duplicates) fn open_duplicate_targets(&mut self) -> Result<()> {
+    pub(in crate::app::duplicate_finder_overlay) fn open_duplicate_targets(
+        &mut self,
+    ) -> Result<()> {
         let targets = self.duplicate_action_paths();
         if targets.is_empty() {
             return Ok(());
@@ -9,14 +11,14 @@ impl App {
         self.jobs.clipboard = None;
         self.open_paths_in_system(targets)
     }
-    pub(in crate::app::duplicates) fn open_duplicate_open_with_overlay(&mut self) {
+    pub(in crate::app::duplicate_finder_overlay) fn open_duplicate_open_with_overlay(&mut self) {
         let Some(entry) = self.duplicate_focused_entry() else {
             self.status = "Nothing selected".to_string();
             return;
         };
         self.open_open_with_overlay_for_entry(entry);
     }
-    pub(in crate::app::duplicates) fn open_duplicate_rename(&mut self) {
+    pub(in crate::app::duplicate_finder_overlay) fn open_duplicate_rename(&mut self) {
         if self
             .overlays
             .duplicates
@@ -37,7 +39,7 @@ impl App {
             error: None,
         });
     }
-    pub(in crate::app::duplicates) fn open_duplicate_bulk_rename(&mut self) {
+    pub(in crate::app::duplicate_finder_overlay) fn open_duplicate_bulk_rename(&mut self) {
         let paths = self.duplicate_action_paths();
         if paths.is_empty() {
             return;
@@ -69,7 +71,9 @@ impl App {
             line_errors: vec![None; count],
         });
     }
-    pub(in crate::app::duplicates) fn open_duplicate_editor_bulk_rename(&mut self) -> Result<()> {
+    pub(in crate::app::duplicate_finder_overlay) fn open_duplicate_editor_bulk_rename(
+        &mut self,
+    ) -> Result<()> {
         let paths = self.duplicate_action_paths();
         if paths.is_empty() {
             return Ok(());
@@ -83,7 +87,7 @@ impl App {
         self.navigation.selected_paths = saved_selection;
         result
     }
-    pub(in crate::app::duplicates) fn open_duplicate_trash_prompt(&mut self) {
+    pub(in crate::app::duplicate_finder_overlay) fn open_duplicate_trash_prompt(&mut self) {
         let Some(targets) = self.duplicate_trash_targets_or_status(false) else {
             return;
         };
@@ -101,12 +105,14 @@ impl App {
             _ => self.open_trash_prompt_for_explicit_targets(targets, false),
         }
     }
-    pub(in crate::app::duplicates) fn open_duplicate_delete_permanently_prompt(&mut self) {
+    pub(in crate::app::duplicate_finder_overlay) fn open_duplicate_delete_permanently_prompt(
+        &mut self,
+    ) {
         if let Some(targets) = self.duplicate_trash_targets_or_status(true) {
             self.open_trash_prompt_for_explicit_targets(targets, true);
         }
     }
-    pub(in crate::app::duplicates) fn duplicate_trash_targets_or_status(
+    pub(in crate::app::duplicate_finder_overlay) fn duplicate_trash_targets_or_status(
         &mut self,
         permanent: bool,
     ) -> Option<Vec<TrashTarget>> {
@@ -135,7 +141,7 @@ impl App {
         }
         Some(targets)
     }
-    pub(in crate::app::duplicates) fn duplicate_action_paths(&self) -> Vec<PathBuf> {
+    pub(in crate::app::duplicate_finder_overlay) fn duplicate_action_paths(&self) -> Vec<PathBuf> {
         if let Some(overlay) = self
             .overlays
             .duplicates

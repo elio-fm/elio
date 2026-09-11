@@ -1,5 +1,7 @@
 use super::{
-    pool::{duplicates::DuplicatePool, fuzzy_finder::FuzzyFinderPool, preview::PreviewPool},
+    pool::{
+        duplicate_finder::DuplicateFinderPool, fuzzy_finder::FuzzyFinderPool, preview::PreviewPool,
+    },
     tasks::{
         archive_create::ArchiveCreatePool, archive_extract::ArchiveExtractPool,
         directory::DirectoryPool, directory_fingerprint::DirectoryFingerprintPool,
@@ -37,7 +39,7 @@ pub(in crate::app) struct JobScheduler {
     pdf_probe: PdfProbePool,
     pdf_render: PdfRenderPool,
     search: FuzzyFinderPool,
-    duplicates: DuplicatePool,
+    duplicates: DuplicateFinderPool,
     preview: PreviewPool,
     result_rx: mpsc::Receiver<JobResult>,
     buffered_results: Mutex<VecDeque<JobResult>>,
@@ -103,7 +105,7 @@ impl JobScheduler {
                 result_tx.clone(),
                 Arc::clone(&metrics),
             ),
-            duplicates: DuplicatePool::new(1, result_tx.clone()),
+            duplicates: DuplicateFinderPool::new(1, result_tx.clone()),
             preview: PreviewPool::new(
                 config.preview_worker_count,
                 config.preview_queue_limit,

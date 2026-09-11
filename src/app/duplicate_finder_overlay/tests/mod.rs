@@ -128,11 +128,11 @@ fn duplicate_scan_stop_keeps_sorted_partial_results_and_unlocks_actions() {
         duplicate_group_at(&root, 1, 10, &["small-a.txt", "small-b.txt"]),
         duplicate_group_at(&root, 2, 100, &["large-a.txt", "large-b.txt"]),
     ];
-    overlay.stats = crate::fs::duplicates::DuplicateScanStats {
+    overlay.stats = crate::duplicate_finder::DuplicateScanStats {
         checked_candidates: 300_549,
         candidate_files: 300_552,
         processed_bytes: 170_000_000_000,
-        ..crate::fs::duplicates::DuplicateScanStats::default()
+        ..crate::duplicate_finder::DuplicateScanStats::default()
     };
     overlay.selected = 3;
     overlay.scroll = 2;
@@ -697,18 +697,18 @@ fn duplicate_batch_append_keeps_existing_focus_stable() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.open_duplicate_finder();
 
-    app.apply_duplicate_batch(crate::fs::duplicates::DuplicateScanBatch {
+    app.apply_duplicate_batch(crate::duplicate_finder::DuplicateScanBatch {
         groups: vec![duplicate_group(1, 10, &["small-a.txt", "small-b.txt"])],
-        stats: crate::fs::duplicates::DuplicateScanStats::default(),
+        stats: crate::duplicate_finder::DuplicateScanStats::default(),
     });
     assert_eq!(
         app.duplicate_focused_path(),
         Some(PathBuf::from("small-a.txt"))
     );
 
-    app.apply_duplicate_batch(crate::fs::duplicates::DuplicateScanBatch {
+    app.apply_duplicate_batch(crate::duplicate_finder::DuplicateScanBatch {
         groups: vec![duplicate_group(2, 10_000, &["large-a.txt", "large-b.txt"])],
-        stats: crate::fs::duplicates::DuplicateScanStats::default(),
+        stats: crate::duplicate_finder::DuplicateScanStats::default(),
     });
 
     assert_eq!(
@@ -743,12 +743,12 @@ fn duplicate_final_result_resets_focus_to_top_after_reorder() {
     overlay.selected_paths.insert(PathBuf::from("small-c.txt"));
     overlay.preview_path = Some(PathBuf::from("small-c.txt"));
 
-    app.apply_duplicate_result(Ok(crate::fs::duplicates::DuplicateScanResult {
+    app.apply_duplicate_result(Ok(crate::duplicate_finder::DuplicateScanResult {
         groups: vec![
             duplicate_group(2, 10_000, &["large-a.txt", "large-b.txt"]),
             duplicate_group(1, 10, &["small-a.txt", "small-b.txt", "small-c.txt"]),
         ],
-        stats: crate::fs::duplicates::DuplicateScanStats::default(),
+        stats: crate::duplicate_finder::DuplicateScanStats::default(),
     }));
 
     let overlay = app
@@ -1008,13 +1008,13 @@ fn duplicate_group_at(
     id: u64,
     size: u64,
     names: &[&str],
-) -> crate::fs::duplicates::DuplicateGroup {
-    crate::fs::duplicates::DuplicateGroup {
+) -> crate::duplicate_finder::DuplicateGroup {
+    crate::duplicate_finder::DuplicateGroup {
         id,
         size,
         files: names
             .iter()
-            .map(|name| crate::fs::duplicates::DuplicateFile {
+            .map(|name| crate::duplicate_finder::DuplicateFile {
                 path: root.join(name),
                 name: (*name).to_string(),
                 relative: (*name).to_string(),
@@ -1025,13 +1025,13 @@ fn duplicate_group_at(
     }
 }
 
-fn duplicate_group(id: u64, size: u64, names: &[&str]) -> crate::fs::duplicates::DuplicateGroup {
-    crate::fs::duplicates::DuplicateGroup {
+fn duplicate_group(id: u64, size: u64, names: &[&str]) -> crate::duplicate_finder::DuplicateGroup {
+    crate::duplicate_finder::DuplicateGroup {
         id,
         size,
         files: names
             .iter()
-            .map(|name| crate::fs::duplicates::DuplicateFile {
+            .map(|name| crate::duplicate_finder::DuplicateFile {
                 path: PathBuf::from(name),
                 name: (*name).to_string(),
                 relative: (*name).to_string(),

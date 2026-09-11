@@ -1,4 +1,4 @@
-use super::model::duplicate_group_file_count;
+use super::results::duplicate_group_file_count;
 use super::*;
 
 impl App {
@@ -18,7 +18,7 @@ impl App {
         self.overlays.duplicates = Some(DuplicateFinderOverlay {
             cwd: cwd.clone(),
             groups: Vec::new(),
-            stats: crate::fs::duplicates::DuplicateScanStats::default(),
+            stats: crate::duplicate_finder::DuplicateScanStats::default(),
             selected: 0,
             scroll: 0,
             selected_paths: HashSet::new(),
@@ -41,7 +41,9 @@ impl App {
         self.refresh_duplicate_preview();
     }
 
-    pub(in crate::app::duplicates) fn stop_duplicate_scan_with_partial_results(&mut self) {
+    pub(in crate::app::duplicate_finder_overlay) fn stop_duplicate_scan_with_partial_results(
+        &mut self,
+    ) {
         let Some(overlay) = self
             .overlays
             .duplicates
@@ -52,7 +54,7 @@ impl App {
         };
         self.jobs.duplicate_token = self.jobs.duplicate_token.wrapping_add(1);
         self.jobs.scheduler.cancel_duplicate_scan();
-        crate::fs::duplicates::sort_duplicate_groups(&mut overlay.groups);
+        crate::duplicate_finder::sort_duplicate_groups(&mut overlay.groups);
         overlay.loading = false;
         overlay.partial = true;
         overlay.error = None;
@@ -62,7 +64,7 @@ impl App {
         overlay.stats.duplicate_bytes = overlay
             .groups
             .iter()
-            .map(crate::fs::duplicates::DuplicateGroup::duplicate_bytes)
+            .map(crate::duplicate_finder::DuplicateGroup::duplicate_bytes)
             .sum();
         overlay.selected_paths.retain(|path| {
             overlay
@@ -86,7 +88,7 @@ impl App {
 
     pub(in crate::app) fn apply_duplicate_batch(
         &mut self,
-        batch: crate::fs::duplicates::DuplicateScanBatch,
+        batch: crate::duplicate_finder::DuplicateScanBatch,
     ) {
         let mut became_non_empty = false;
         if let Some(overlay) = &mut self.overlays.duplicates {
@@ -107,7 +109,7 @@ impl App {
 
     pub(in crate::app) fn apply_duplicate_result(
         &mut self,
-        result: Result<crate::fs::duplicates::DuplicateScanResult, String>,
+        result: Result<crate::duplicate_finder::DuplicateScanResult, String>,
     ) {
         let had_files = self.duplicate_file_count() > 0;
         if let Some(overlay) = &mut self.overlays.duplicates {
@@ -123,7 +125,7 @@ impl App {
                 }
                 Err(error) => {
                     overlay.groups.clear();
-                    overlay.stats = crate::fs::duplicates::DuplicateScanStats::default();
+                    overlay.stats = crate::duplicate_finder::DuplicateScanStats::default();
                     overlay.partial = false;
                     overlay.error = Some(error);
                 }

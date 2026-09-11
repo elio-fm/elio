@@ -1,6 +1,7 @@
 mod app;
 mod archive;
 mod config;
+mod duplicate_finder;
 mod elevated_session;
 mod file_classification;
 mod fs;

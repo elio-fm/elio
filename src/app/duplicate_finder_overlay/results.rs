@@ -3,7 +3,7 @@ use super::*;
 impl App {
     pub(in crate::app) fn duplicate_flat_files(
         &self,
-    ) -> Vec<(u64, crate::fs::duplicates::DuplicateFile)> {
+    ) -> Vec<(u64, crate::duplicate_finder::DuplicateFile)> {
         let Some(overlay) = &self.overlays.duplicates else {
             return Vec::new();
         };
@@ -96,7 +96,7 @@ impl App {
             .as_ref()
             .map_or(0, |overlay| duplicate_group_file_count(&overlay.groups))
     }
-    pub fn duplicate_stats(&self) -> Option<crate::fs::duplicates::DuplicateScanStats> {
+    pub fn duplicate_stats(&self) -> Option<crate::duplicate_finder::DuplicateScanStats> {
         self.overlays.duplicates.as_ref().map(|d| d.stats)
     }
     pub fn duplicate_loading(&self) -> bool {
@@ -195,7 +195,7 @@ impl App {
         self.refresh_duplicate_preview();
     }
 
-    pub(in crate::app::duplicates) fn refresh_duplicate_preview(&mut self) {
+    pub(in crate::app::duplicate_finder_overlay) fn refresh_duplicate_preview(&mut self) {
         let Some(path) = self.duplicate_focused_path() else {
             return;
         };
@@ -213,9 +213,9 @@ impl App {
 }
 
 fn duplicate_file_at(
-    groups: &[crate::fs::duplicates::DuplicateGroup],
+    groups: &[crate::duplicate_finder::DuplicateGroup],
     index: usize,
-) -> Option<&crate::fs::duplicates::DuplicateFile> {
+) -> Option<&crate::duplicate_finder::DuplicateFile> {
     let mut remaining = index;
     for group in groups {
         if remaining < group.files.len() {
@@ -245,7 +245,7 @@ fn duplicate_parent_label(path: &Path, cwd: &Path) -> String {
 }
 
 pub(super) fn duplicate_group_file_count(
-    groups: &[crate::fs::duplicates::DuplicateGroup],
+    groups: &[crate::duplicate_finder::DuplicateGroup],
 ) -> usize {
     groups.iter().map(|group| group.files.len()).sum()
 }

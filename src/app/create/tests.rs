@@ -598,18 +598,18 @@ fn finish_editor_bulk_rename_opens_confirmation_with_relative_paths() {
 
     app.overlays.duplicates = Some(DuplicateFinderOverlay {
         cwd: root.clone(),
-        groups: vec![crate::fs::duplicates::DuplicateGroup {
+        groups: vec![crate::duplicate_finder::DuplicateGroup {
             id: 1,
             size: 5,
             files: vec![
-                crate::fs::duplicates::DuplicateFile {
+                crate::duplicate_finder::DuplicateFile {
                     path: alpha.clone(),
                     name: "alpha.txt".to_string(),
                     relative: "left/alpha.txt".to_string(),
                     size: 5,
                     modified: None,
                 },
-                crate::fs::duplicates::DuplicateFile {
+                crate::duplicate_finder::DuplicateFile {
                     path: beta.clone(),
                     name: "beta.txt".to_string(),
                     relative: "right/beta.txt".to_string(),
@@ -618,7 +618,7 @@ fn finish_editor_bulk_rename_opens_confirmation_with_relative_paths() {
                 },
             ],
         }],
-        stats: crate::fs::duplicates::DuplicateScanStats::default(),
+        stats: crate::duplicate_finder::DuplicateScanStats::default(),
         selected: 0,
         scroll: 0,
         selected_paths: [beta.clone()].into_iter().collect(),

@@ -1,4 +1,3 @@
-pub(crate) mod duplicates;
 pub(crate) mod format;
 pub(crate) mod item_count;
 pub(crate) mod watch;
