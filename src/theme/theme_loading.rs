@@ -1,8 +1,151 @@
-use super::types::{ClassStyle, CodePreviewPalette, Palette, PreviewTheme, RuleOverride, Theme};
-use crate::file_classification::FileClass;
+use super::item_styling::{ClassStyle, RuleOverride};
+use crate::{config, file_classification::FileClass};
 use ratatui::style::Color;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fs, io,
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
+
+pub(super) const DEFAULT_THEME_TOML: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/themes/default/theme.toml"
+));
+
+static ACTIVE_THEME: OnceLock<Theme> = OnceLock::new();
+
+#[derive(Clone, Copy)]
+pub(crate) struct Palette {
+    pub bg: Color,
+    pub chrome: Color,
+    pub chrome_alt: Color,
+    pub chip_text: Color,
+    pub panel: Color,
+    pub panel_alt: Color,
+    pub surface: Color,
+    pub elevated: Color,
+    pub border: Color,
+    pub text: Color,
+    pub muted: Color,
+    pub accent: Color,
+    pub accent_soft: Color,
+    pub accent_text: Color,
+    pub selected_bg: Color,
+    pub selected_border: Color,
+    pub selection_bar: Color,
+    pub yank_bar: Color,
+    pub cut_bar: Color,
+    pub progress_bar: Color,
+    pub grid_selection_band: Color,
+    pub grid_yank_band: Color,
+    pub grid_cut_band: Color,
+    pub trash_bar: Color,
+    pub restore_bar: Color,
+    pub sidebar_active: Color,
+    pub button_bg: Color,
+    pub button_disabled_bg: Color,
+    pub path_bg: Color,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct CodePreviewPalette {
+    pub fg: Color,
+    pub bg: Color,
+    pub selection_bg: Color,
+    pub selection_fg: Color,
+    pub caret: Color,
+    pub line_highlight: Color,
+    pub line_number: Color,
+    pub comment: Color,
+    pub string: Color,
+    pub constant: Color,
+    pub keyword: Color,
+    pub function: Color,
+    pub r#type: Color,
+    pub parameter: Color,
+    pub tag: Color,
+    pub operator: Color,
+    pub r#macro: Color,
+    pub invalid: Color,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct PreviewTheme {
+    pub(super) code: CodePreviewPalette,
+}
+
+#[derive(Clone)]
+pub(super) struct Theme {
+    pub(super) palette: Palette,
+    pub(super) preview: PreviewTheme,
+    pub(super) classes: HashMap<FileClass, ClassStyle>,
+    pub(super) extensions: HashMap<String, RuleOverride>,
+    pub(super) files: HashMap<String, RuleOverride>,
+    pub(super) directories: HashMap<String, RuleOverride>,
+}
+
+pub(crate) fn initialize(path: Option<&Path>) -> anyhow::Result<()> {
+    if ACTIVE_THEME.get().is_none() {
+        let theme = load_theme_from_disk(path)?;
+        let _ = ACTIVE_THEME.set(theme);
+    }
+    Ok(())
+}
+
+pub(crate) fn palette() -> Palette {
+    active_theme().palette
+}
+
+pub(crate) fn code_preview_palette() -> CodePreviewPalette {
+    active_theme().preview.code
+}
+
+pub(super) fn active_theme() -> &'static Theme {
+    ACTIVE_THEME.get_or_init(Theme::default_theme)
+}
+
+pub(super) fn load_theme_from_disk(override_path: Option<&Path>) -> anyhow::Result<Theme> {
+    let is_override = override_path.is_some();
+    let Some(path) = override_path.map(Path::to_path_buf).or_else(theme_path) else {
+        return Ok(Theme::default_theme());
+    };
+    let contents = match fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(error) if !is_override && error.kind() == io::ErrorKind::NotFound => {
+            return Ok(Theme::default_theme());
+        }
+        Err(error) if is_override => {
+            anyhow::bail!(
+                "elio: failed to read theme from {}: {error}",
+                path.display()
+            );
+        }
+        Err(error) => {
+            eprintln!(
+                "elio: failed to read theme from {}: {error}",
+                path.display()
+            );
+            return Ok(Theme::default_theme());
+        }
+    };
+
+    Ok(match Theme::from_config_str(&contents) {
+        Ok(theme) => theme,
+        Err(error) => {
+            eprintln!(
+                "elio: failed to load theme from {}: {error}",
+                path.display()
+            );
+            Theme::default_theme()
+        }
+    })
+}
+
+fn theme_path() -> Option<PathBuf> {
+    config::config_dir().map(|dir| dir.join("theme.toml"))
+}
 
 #[derive(Deserialize, Default)]
 struct ThemeFile {
@@ -92,6 +235,11 @@ enum RuleOverrideDef {
 }
 
 impl Theme {
+    pub(super) fn default_theme() -> Self {
+        Self::from_default_config_str(DEFAULT_THEME_TOML)
+            .unwrap_or_else(|error| panic!("elio: failed to load built-in default theme: {error}"))
+    }
+
     pub(super) fn from_default_config_str(config: &str) -> anyhow::Result<Self> {
         let parsed: ThemeFile = toml::from_str(config)?;
         parsed.into_complete_theme()
@@ -474,7 +622,7 @@ pub(super) fn parse_class_name(name: &str) -> Option<FileClass> {
     }
 }
 
-pub(in crate::theme::appearance) fn normalize_key(value: &str) -> String {
+pub(super) fn normalize_key(value: &str) -> String {
     value.trim().to_ascii_lowercase()
 }
 
@@ -514,9 +662,4 @@ pub(super) fn parse_color(value: &str) -> anyhow::Result<Color> {
     let green = u8::from_str_radix(&hex[2..4], 16)?;
     let blue = u8::from_str_radix(&hex[4..6], 16)?;
     Ok(Color::Rgb(red, green, blue))
-}
-
-#[cfg(test)]
-pub(super) fn rgb(red: u8, green: u8, blue: u8) -> Color {
-    Color::Rgb(red, green, blue)
 }

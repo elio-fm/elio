@@ -1,7 +1,3 @@
-use super::super::{
-    loading::load_theme_from_disk,
-    parsing::{parse_color, rgb},
-};
 use super::*;
 use ratatui::style::Color;
 use std::{
