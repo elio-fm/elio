@@ -5,8 +5,22 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use super::Shell;
 use super::scripts::{init_script, nu_string_literal, shell_quote};
-use super::{InstallReport, Shell, UninstallReport};
+
+pub(crate) struct InstallReport {
+    pub(crate) shell: Shell,
+    pub(crate) path: PathBuf,
+    pub(crate) reload_command: String,
+}
+
+pub(crate) struct UninstallReport {
+    pub(crate) shell: Shell,
+    pub(crate) path: PathBuf,
+    pub(crate) reload_command: String,
+    pub(crate) changed: bool,
+    pub(crate) removed_file: bool,
+}
 
 pub(crate) const MANAGED_START: &str = "# >>> elio shell integration >>>";
 pub(crate) const MANAGED_END: &str = "# <<< elio shell integration <<<";
