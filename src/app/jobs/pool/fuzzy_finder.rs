@@ -10,7 +10,7 @@ use std::{
     time::Instant,
 };
 
-pub(in crate::app::jobs) struct SearchPool {
+pub(in crate::app::jobs) struct FuzzyFinderPool {
     shared: Arc<SearchShared>,
     workers: Vec<thread::JoinHandle<()>>,
     metrics: Arc<Mutex<SchedulerMetrics>>,
@@ -23,26 +23,26 @@ struct SearchShared {
 
 struct SearchState {
     pending: Option<SearchRequest>,
-    pending_key: Option<SearchJobKey>,
+    pending_key: Option<FuzzyFinderJobKey>,
     active: Option<ActiveSearchJob>,
     closed: bool,
 }
 
 #[derive(Clone, Debug)]
 struct ActiveSearchJob {
-    key: SearchJobKey,
+    key: FuzzyFinderJobKey,
     canceled: Arc<AtomicBool>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(in crate::app::jobs) struct SearchJobKey {
+pub(in crate::app::jobs) struct FuzzyFinderJobKey {
     pub(in crate::app::jobs) cwd: PathBuf,
     pub(in crate::app::jobs) scope: SearchScope,
     pub(in crate::app::jobs) show_hidden: bool,
     pub(in crate::app::jobs) fingerprint: crate::fs::DirectoryFingerprint,
 }
 
-impl SearchPool {
+impl FuzzyFinderPool {
     pub(in crate::app::jobs) fn new(
         worker_count: usize,
         result_tx: mpsc::Sender<JobResult>,
@@ -64,7 +64,7 @@ impl SearchPool {
             let metrics = Arc::clone(&metrics);
             workers.push(thread::spawn(move || {
                 while let Some((request, canceled)) = SearchShared::pop(&shared) {
-                    let key = SearchJobKey::from_request(&request);
+                    let key = FuzzyFinderJobKey::from_request(&request);
                     let started_at = Instant::now();
                     let progress_cwd = request.cwd.clone();
                     let progress_scope = request.scope;
@@ -72,10 +72,10 @@ impl SearchPool {
                     let progress_fingerprint = request.fingerprint;
                     let progress_token = request.token;
                     let mut progress_send_failed = false;
-                    let result = crate::fs::search::collect_candidates_streaming(
+                    let result = crate::fuzzy_finder::collect_candidates_streaming(
                         &request.cwd,
                         request.show_hidden,
-                        request.scope.candidate_scope(),
+                        request.scope,
                         || canceled.load(Ordering::Relaxed),
                         |batch| {
                             if result_tx
@@ -129,7 +129,7 @@ impl SearchPool {
     }
 
     pub(in crate::app::jobs) fn submit(&self, request: SearchRequest) -> bool {
-        let key = SearchJobKey::from_request(&request);
+        let key = FuzzyFinderJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
             return false;
@@ -167,12 +167,12 @@ impl SearchPool {
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn pending_key(&self) -> Option<SearchJobKey> {
+    pub(in crate::app::jobs) fn pending_key(&self) -> Option<FuzzyFinderJobKey> {
         lock_unpoison(&self.shared.state).pending_key.clone()
     }
 
     #[cfg(test)]
-    pub(in crate::app::jobs) fn active_key(&self) -> Option<SearchJobKey> {
+    pub(in crate::app::jobs) fn active_key(&self) -> Option<FuzzyFinderJobKey> {
         lock_unpoison(&self.shared.state)
             .active
             .as_ref()
@@ -180,7 +180,7 @@ impl SearchPool {
     }
 }
 
-impl Drop for SearchPool {
+impl Drop for FuzzyFinderPool {
     fn drop(&mut self) {
         {
             let mut state = lock_unpoison(&self.shared.state);
@@ -223,7 +223,7 @@ impl SearchShared {
         }
     }
 
-    fn finish(shared: &Arc<Self>, key: &SearchJobKey) {
+    fn finish(shared: &Arc<Self>, key: &FuzzyFinderJobKey) {
         let mut state = lock_unpoison(&shared.state);
         if state
             .active
@@ -236,7 +236,7 @@ impl SearchShared {
     }
 }
 
-impl SearchJobKey {
+impl FuzzyFinderJobKey {
     fn from_request(request: &SearchRequest) -> Self {
         Self {
             cwd: request.cwd.clone(),

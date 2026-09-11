@@ -14,7 +14,7 @@ use super::{
     types::*,
 };
 use crate::fs::duplicates::{DuplicateGroup, DuplicateScanStats};
-use crate::fs::search::{SearchCandidate, SearchIndexStats};
+use crate::fuzzy_finder::{SearchCandidate, SearchIndexStats};
 use crate::preview;
 use crate::{
     fs::{Entry, SortMode},

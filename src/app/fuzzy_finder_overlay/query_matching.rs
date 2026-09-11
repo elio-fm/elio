@@ -15,7 +15,7 @@ impl App {
         } else {
             let result = {
                 let pool = select_search_pool(search, previous_query, &next_query);
-                crate::fs::search::filter_candidates_in(
+                crate::fuzzy_finder::filter_candidates_in(
                     &search.candidates,
                     pool.iter().copied(),
                     &next_query,
@@ -39,28 +39,6 @@ impl App {
 
         search.selected = search.selected.min(search.matches.len().saturating_sub(1));
         self.sync_search_scroll();
-    }
-
-    pub(crate) fn prewarm_search_index(&mut self, scope: SearchScope) {
-        self.jobs.search_token = self.jobs.search_token.wrapping_add(1);
-        self.jobs.search_loading = true;
-        self.jobs.search_cache = None;
-        let request = SearchRequest {
-            token: self.jobs.search_token,
-            cwd: self.navigation.cwd.clone(),
-            scope,
-            show_hidden: self.effective_show_hidden(),
-            fingerprint: self.navigation.directory_runtime.fingerprint,
-        };
-        if !self.jobs.scheduler.submit_search(request) {
-            self.jobs.search_loading = false;
-            if let Some(search) = &mut self.overlays.search
-                && search.scope == scope
-            {
-                search.loading = false;
-                search.error = Some("Search worker unavailable".to_string());
-            }
-        }
     }
 }
 

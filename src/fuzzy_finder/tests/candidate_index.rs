@@ -10,42 +10,14 @@ fn temp_path(label: &str) -> PathBuf {
 }
 
 #[test]
-fn fuzzy_filter_prefers_tighter_name_match() {
-    let candidates = vec![
-        SearchCandidate {
-            path: PathBuf::from("/tmp/src/main.rs"),
-            name: "main.rs".to_string(),
-            name_key: "main.rs".to_string(),
-            relative: "src/main.rs".to_string(),
-            relative_key: "src/main.rs".to_string(),
-            is_dir: false,
-            symlink: None,
-        },
-        SearchCandidate {
-            path: PathBuf::from("/tmp/docs/readme.md"),
-            name: "readme.md".to_string(),
-            name_key: "readme.md".to_string(),
-            relative: "docs/readme.md".to_string(),
-            relative_key: "docs/readme.md".to_string(),
-            is_dir: false,
-            symlink: None,
-        },
-    ];
-
-    let result = filter_candidates_in(&candidates, 0..candidates.len(), "mn", 10);
-    assert_eq!(result.matches.first().copied(), Some(0));
-}
-
-#[test]
 fn collect_candidates_respects_hidden_toggle() {
     let root = temp_path("hidden-toggle");
     fs::create_dir_all(root.join(".hidden-root/needle")).expect("failed to create hidden dir");
     fs::create_dir_all(root.join("projects/needle")).expect("failed to create visible dir");
 
-    let hidden_off =
-        collect_candidates_with_limits(&root, false, SearchCandidateScope::Folders, 100, 1_000)
-            .expect("failed to collect visible candidates")
-            .candidates;
+    let hidden_off = collect_candidates_with_limits(&root, false, SearchScope::Folders, 100, 1_000)
+        .expect("failed to collect visible candidates")
+        .candidates;
     assert!(
         hidden_off
             .iter()
@@ -62,10 +34,9 @@ fn collect_candidates_respects_hidden_toggle() {
             .any(|candidate| candidate.relative == ".hidden-root/needle")
     );
 
-    let hidden_on =
-        collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
-            .expect("failed to collect hidden candidates")
-            .candidates;
+    let hidden_on = collect_candidates_with_limits(&root, true, SearchScope::Folders, 100, 1_000)
+        .expect("failed to collect hidden candidates")
+        .candidates;
     assert!(
         hidden_on
             .iter()
@@ -83,10 +54,9 @@ fn collect_candidates_follow_stable_breadth_first_order_under_limit() {
     fs::create_dir_all(root.join("beta")).expect("failed to create beta dir");
     fs::create_dir_all(root.join("gamma")).expect("failed to create gamma dir");
 
-    let candidates =
-        collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 6, 1_000)
-            .expect("failed to collect candidates")
-            .candidates;
+    let candidates = collect_candidates_with_limits(&root, true, SearchScope::Folders, 6, 1_000)
+        .expect("failed to collect candidates")
+        .candidates;
 
     assert_eq!(candidates[0].relative, ".hidden-root");
     assert_eq!(candidates[1].relative, "alpha");
@@ -107,10 +77,9 @@ fn collect_candidates_prune_known_dirs_without_hiding_the_directory_itself() {
     fs::create_dir_all(root.join("node_modules/package")).expect("failed to create node_modules");
     fs::create_dir_all(root.join("src/feature")).expect("failed to create src tree");
 
-    let candidates =
-        collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
-            .expect("failed to collect candidates")
-            .candidates;
+    let candidates = collect_candidates_with_limits(&root, true, SearchScope::Folders, 100, 1_000)
+        .expect("failed to collect candidates")
+        .candidates;
     let names = candidates
         .iter()
         .map(|candidate| candidate.relative.as_str())
@@ -131,10 +100,9 @@ fn collect_candidates_still_descends_directories_when_searching_files() {
     fs::write(root.join("alpha/needle.txt"), "needle").expect("failed to write needle");
     fs::write(root.join("top.txt"), "top").expect("failed to write top");
 
-    let candidates =
-        collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
-            .expect("failed to collect file candidates")
-            .candidates;
+    let candidates = collect_candidates_with_limits(&root, true, SearchScope::Files, 100, 1_000)
+        .expect("failed to collect file candidates")
+        .candidates;
     let names = candidates
         .iter()
         .map(|candidate| candidate.relative.as_str())
@@ -155,7 +123,7 @@ fn collect_candidates_reports_node_limit_truncation() {
     fs::write(root.join("beta.txt"), "beta").expect("failed to write beta");
     fs::write(root.join("gamma.txt"), "gamma").expect("failed to write gamma");
 
-    let index = collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 2)
+    let index = collect_candidates_with_limits(&root, true, SearchScope::Files, 100, 2)
         .expect("failed to collect candidates");
 
     assert_eq!(index.stats.visited_nodes, 2);
@@ -175,7 +143,7 @@ fn collect_candidates_reports_candidate_limit_truncation() {
     fs::write(root.join("beta.txt"), "beta").expect("failed to write beta");
     fs::write(root.join("gamma.txt"), "gamma").expect("failed to write gamma");
 
-    let index = collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 2, 100)
+    let index = collect_candidates_with_limits(&root, true, SearchScope::Files, 2, 100)
         .expect("failed to collect candidates");
 
     assert_eq!(index.stats.visited_nodes, 3);
@@ -199,7 +167,7 @@ fn collect_candidates_streaming_emits_batches_before_final_index() {
     let index = collect_candidates_streaming(
         &root,
         true,
-        SearchCandidateScope::Files,
+        SearchScope::Files,
         || false,
         |batch| {
             batches.push((batch.candidates.len(), batch.stats.visited_nodes));
@@ -240,7 +208,7 @@ fn collect_candidates_streaming_stops_after_cancellation() {
     let index = collect_candidates_with_limits_and_emitter(
         &root,
         true,
-        SearchCandidateScope::Files,
+        SearchScope::Files,
         SearchCollectionLimits {
             candidate_limit: usize::MAX,
             node_visit_limit: 100,
@@ -271,10 +239,9 @@ fn collect_candidates_includes_linked_directory_in_folder_search() {
     fs::create_dir_all(root.join("real-dir/inner")).expect("failed to create real dir");
     symlink(root.join("real-dir"), root.join("linked-dir")).expect("failed to create dir symlink");
 
-    let candidates =
-        collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
-            .expect("failed to collect folder candidates")
-            .candidates;
+    let candidates = collect_candidates_with_limits(&root, true, SearchScope::Folders, 100, 1_000)
+        .expect("failed to collect folder candidates")
+        .candidates;
     let linked = candidates
         .iter()
         .find(|candidate| candidate.relative == "linked-dir")
@@ -310,10 +277,9 @@ fn collect_candidates_includes_linked_file_in_file_search() {
     fs::write(root.join("real.txt"), "data").expect("failed to write real file");
     symlink(root.join("real.txt"), root.join("linked.txt")).expect("failed to create file symlink");
 
-    let candidates =
-        collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
-            .expect("failed to collect file candidates")
-            .candidates;
+    let candidates = collect_candidates_with_limits(&root, true, SearchScope::Files, 100, 1_000)
+        .expect("failed to collect file candidates")
+        .candidates;
     let linked = candidates
         .iter()
         .find(|candidate| candidate.relative == "linked.txt")
@@ -340,10 +306,9 @@ fn collect_candidates_includes_broken_symlink_in_file_search() {
     symlink(root.join("missing-target"), root.join("dangling"))
         .expect("failed to create broken symlink");
 
-    let candidates =
-        collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
-            .expect("failed to collect file candidates")
-            .candidates;
+    let candidates = collect_candidates_with_limits(&root, true, SearchScope::Files, 100, 1_000)
+        .expect("failed to collect file candidates")
+        .candidates;
     let broken = candidates
         .iter()
         .find(|candidate| candidate.relative == "dangling")
@@ -356,7 +321,7 @@ fn collect_candidates_includes_broken_symlink_in_file_search() {
     assert!(symlink_info.is_broken());
 
     let folder_candidates =
-        collect_candidates_with_limits(&root, true, SearchCandidateScope::Folders, 100, 1_000)
+        collect_candidates_with_limits(&root, true, SearchScope::Folders, 100, 1_000)
             .expect("failed to collect folder candidates")
             .candidates;
     assert!(
@@ -382,10 +347,9 @@ fn collect_candidates_handles_symlink_cycle() {
     symlink(root.join("loop"), root.join("loop"))
         .expect("failed to create self-referential symlink");
 
-    let candidates =
-        collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
-            .expect("failed to collect candidates")
-            .candidates;
+    let candidates = collect_candidates_with_limits(&root, true, SearchScope::Files, 100, 1_000)
+        .expect("failed to collect candidates")
+        .candidates;
     let loop_entry = candidates
         .iter()
         .find(|candidate| candidate.relative == "loop")
@@ -413,10 +377,9 @@ fn collect_candidates_hides_dot_prefixed_symlink_when_hidden_off() {
     symlink(root.join("visible.txt"), root.join(".hidden-link"))
         .expect("failed to create hidden symlink");
 
-    let visible =
-        collect_candidates_with_limits(&root, false, SearchCandidateScope::Files, 100, 1_000)
-            .expect("failed to collect non-hidden candidates")
-            .candidates;
+    let visible = collect_candidates_with_limits(&root, false, SearchScope::Files, 100, 1_000)
+        .expect("failed to collect non-hidden candidates")
+        .candidates;
     assert!(
         !visible
             .iter()
@@ -424,7 +387,7 @@ fn collect_candidates_hides_dot_prefixed_symlink_when_hidden_off() {
         "dot-prefixed symlink must respect hidden toggle"
     );
 
-    let all = collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 100, 1_000)
+    let all = collect_candidates_with_limits(&root, true, SearchScope::Files, 100, 1_000)
         .expect("failed to collect hidden candidates")
         .candidates;
     assert!(
@@ -444,10 +407,9 @@ fn collect_candidates_uses_natural_name_order() {
     fs::write(root.join("chapter 2.txt"), "two").expect("failed to write file");
     fs::write(root.join("chapter 1.txt"), "one").expect("failed to write file");
 
-    let candidates =
-        collect_candidates_with_limits(&root, true, SearchCandidateScope::Files, 10, 1_000)
-            .expect("failed to collect candidates")
-            .candidates;
+    let candidates = collect_candidates_with_limits(&root, true, SearchScope::Files, 10, 1_000)
+        .expect("failed to collect candidates")
+        .candidates;
     let names = candidates
         .iter()
         .map(|candidate| candidate.name.as_str())

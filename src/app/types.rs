@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use ratatui::layout::Rect;
 
+pub use crate::fuzzy_finder::SearchScope;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ViewMode {
     Grid,
@@ -135,35 +137,6 @@ impl Default for ViewMetrics {
         Self {
             cols: 1,
             rows_visible: 1,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum SearchScope {
-    Folders,
-    Files,
-}
-
-impl SearchScope {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Folders => "Folders",
-            Self::Files => "Files",
-        }
-    }
-
-    pub(super) fn candidate_scope(self) -> crate::fs::search::SearchCandidateScope {
-        match self {
-            Self::Folders => crate::fs::search::SearchCandidateScope::Folders,
-            Self::Files => crate::fs::search::SearchCandidateScope::Files,
-        }
-    }
-
-    pub fn empty_label(self) -> &'static str {
-        match self {
-            Self::Folders => "No matching folders in this tree",
-            Self::Files => "No matching files in this tree",
         }
     }
 }

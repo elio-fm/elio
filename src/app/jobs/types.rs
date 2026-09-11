@@ -3,8 +3,8 @@ use crate::app::overlays::inline_image::TerminalWindowSize;
 use crate::app::overlays::pdf::PdfProbeResult;
 use crate::app::{ClipOp, SearchScope};
 use crate::fs::duplicates::{DuplicateScanBatch, DuplicateScanResult};
-use crate::fs::search::{SearchIndex, SearchIndexBatch};
 use crate::fs::{Entry, SortMode};
+use crate::fuzzy_finder::{SearchIndex, SearchIndexBatch};
 use crate::{preview, preview::PreviewWorkClass};
 use std::{path::PathBuf, sync::Arc, time::SystemTime};
 

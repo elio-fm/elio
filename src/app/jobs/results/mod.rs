@@ -208,7 +208,7 @@ impl App {
                                 search.candidates = candidates;
                                 search.cached_matches = HashMap::from([(
                                     String::new(),
-                                    crate::app::search::build_base_search_cache_entry(
+                                    crate::app::fuzzy_finder_overlay::build_base_search_cache_entry(
                                         (0..search.candidates.len()).collect(),
                                     ),
                                 )]);
@@ -227,13 +227,15 @@ impl App {
                                 search.matches.clear();
                                 search.cached_matches = HashMap::from([(
                                     String::new(),
-                                    crate::app::search::build_base_search_cache_entry(Vec::new()),
+                                    crate::app::fuzzy_finder_overlay::build_base_search_cache_entry(
+                                        Vec::new(),
+                                    ),
                                 )]);
                                 search.selected = 0;
                                 search.scroll = 0;
                                 search.loading = false;
                                 search.error = Some(error);
-                                search.stats = crate::fs::search::SearchIndexStats::default();
+                                search.stats = crate::fuzzy_finder::SearchIndexStats::default();
                             }
                         }
                     }
@@ -667,7 +669,7 @@ impl App {
 
 fn append_streamed_search_candidates(
     search: &mut SearchOverlay,
-    candidates: Vec<crate::fs::search::SearchCandidate>,
+    candidates: Vec<crate::fuzzy_finder::SearchCandidate>,
 ) {
     let start = search.candidates.len();
     let end = start + candidates.len();
@@ -676,7 +678,7 @@ fn append_streamed_search_candidates(
     append_empty_query_search_cache(search, start, end);
 
     let query = search.query.clone();
-    let query_key = crate::app::search::search_cache_key(&query);
+    let query_key = crate::app::fuzzy_finder_overlay::search_cache_key(&query);
     search
         .cached_matches
         .retain(|cached_query, _| cached_query.is_empty() || cached_query == &query_key);
@@ -696,7 +698,9 @@ fn append_empty_query_search_cache(search: &mut SearchOverlay, start: usize, end
     let base = search
         .cached_matches
         .entry(String::new())
-        .or_insert_with(|| crate::app::search::build_base_search_cache_entry((0..start).collect()));
+        .or_insert_with(|| {
+            crate::app::fuzzy_finder_overlay::build_base_search_cache_entry((0..start).collect())
+        });
     for index in start..end {
         base.pool.push(index);
         if base.matches.len() < SEARCH_MATCH_LIMIT {
@@ -713,7 +717,7 @@ fn update_streamed_query_search_cache(
     end: usize,
 ) {
     let Some(existing) = search.cached_matches.remove(query_key) else {
-        let result = crate::fs::search::filter_candidates_in(
+        let result = crate::fuzzy_finder::filter_candidates_in(
             &search.candidates,
             0..end,
             query,
@@ -722,12 +726,12 @@ fn update_streamed_query_search_cache(
         search.matches = result.matches.clone();
         search.cached_matches.insert(
             query_key.to_string(),
-            crate::app::search::build_search_cache_entry(result.pool, result.matches),
+            crate::app::fuzzy_finder_overlay::build_search_cache_entry(result.pool, result.matches),
         );
         return;
     };
 
-    let new_result = crate::fs::search::filter_candidates_in(
+    let new_result = crate::fuzzy_finder::filter_candidates_in(
         &search.candidates,
         start..end,
         query,
@@ -741,7 +745,7 @@ fn update_streamed_query_search_cache(
         .iter()
         .copied()
         .chain(new_result.pool.iter().copied());
-    let matches = crate::fs::search::filter_candidates_in(
+    let matches = crate::fuzzy_finder::filter_candidates_in(
         &search.candidates,
         rerank_pool,
         query,
@@ -752,7 +756,7 @@ fn update_streamed_query_search_cache(
     search.matches = matches.clone();
     search.cached_matches.insert(
         query_key.to_string(),
-        crate::app::search::build_search_cache_entry(pool, matches),
+        crate::app::fuzzy_finder_overlay::build_search_cache_entry(pool, matches),
     );
 }
 

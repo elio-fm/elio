@@ -28,7 +28,7 @@ pub(super) use self::types::{
 use self::{config::SchedulerConfig, metrics::SchedulerMetrics};
 #[cfg(test)]
 use self::{
-    pool::{preview::PreviewJobKey, search::SearchJobKey},
+    pool::{fuzzy_finder::FuzzyFinderJobKey, preview::PreviewJobKey},
     tasks::{image::ImagePrepareJobKey, pdf_probe::PdfProbeJobKey, pdf_render::PdfRenderJobKey},
 };
 use super::*;
