@@ -3,7 +3,8 @@ use super::super::status_bar::{
 };
 use crate::{
     app::{App, FrameState},
-    ui::{helpers, theme},
+    theme,
+    ui::helpers,
 };
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};

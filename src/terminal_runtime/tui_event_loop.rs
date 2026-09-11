@@ -7,7 +7,7 @@ use super::{
 use crate::{
     RunOptions, RunOutcome,
     app::{App, ChooserExit, PendingTerminalTask},
-    config, ui,
+    config, theme,
 };
 use anyhow::Result;
 use crossterm::{
@@ -277,7 +277,7 @@ pub(crate) fn run_with_startup_state(
         cwd_file,
     } = options;
     config::initialize(config_file.as_deref())?;
-    ui::theme::initialize(theme_file.as_deref())?;
+    theme::initialize(theme_file.as_deref())?;
     let (mut terminal, drainer, kitty_dnd) = init_terminal()?;
     let result = run_app(
         &mut terminal,

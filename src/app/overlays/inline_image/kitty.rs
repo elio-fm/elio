@@ -77,7 +77,7 @@ fn build_kitty_upload_sequence(path: &Path, id: u32, area: Rect) -> Result<Vec<u
 fn build_kitty_placeholder_sequence(id: u32, area: Rect, excluded: &[Rect]) -> Vec<u8> {
     let mut buf = Vec::with_capacity(usize::from(area.width) * usize::from(area.height) * 8 + 32);
     let (r, g, b) = ((id >> 16) & 0xff, (id >> 8) & 0xff, id & 0xff);
-    match crate::ui::theme::palette().panel {
+    match crate::theme::palette().panel {
         Color::Rgb(bg_r, bg_g, bg_b) => {
             let _ = write!(
                 buf,

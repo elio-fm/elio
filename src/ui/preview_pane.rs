@@ -1,7 +1,7 @@
+use super::helpers;
 use super::scrollbars::render_preview_scrollbar;
-use super::theme::Palette;
-use super::{helpers, theme};
 use crate::app::{App, FrameState};
+use crate::theme::{self, Palette};
 use ratatui::{
     Frame,
     buffer::Buffer,

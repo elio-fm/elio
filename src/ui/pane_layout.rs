@@ -1,10 +1,10 @@
 use super::file_browser_pane::render_file_browser_pane;
 use super::places_pane::render_places_pane;
 use super::preview_pane::render_preview_pane;
-use super::theme::Palette;
 use crate::{
     app::{App, FrameState},
     config::{self, PaneWeights},
+    theme::Palette,
 };
 use ratatui::{Frame, layout::Rect};
 

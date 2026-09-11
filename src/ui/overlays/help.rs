@@ -1,6 +1,9 @@
 use crate::app::{App, FrameState};
 use crate::config::{KeyBindings, KeyList};
-use crate::ui::{helpers, scrollbars::render_overlay_scrollbar, theme::Palette};
+use crate::{
+    theme::Palette,
+    ui::{helpers, scrollbars::render_overlay_scrollbar},
+};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},

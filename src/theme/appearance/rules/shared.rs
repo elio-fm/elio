@@ -2,7 +2,7 @@ use super::super::types::RuleOverride;
 use crate::file_classification::FileClass;
 use ratatui::style::Color;
 
-pub(in crate::ui::theme::appearance) fn rule_class(class: FileClass) -> RuleOverride {
+pub(in crate::theme::appearance) fn rule_class(class: FileClass) -> RuleOverride {
     RuleOverride {
         class: Some(class),
         ..RuleOverride::default()
@@ -57,10 +57,10 @@ pub(super) fn rule_bibtex_file() -> RuleOverride {
     }
 }
 
-pub(in crate::ui::theme::appearance) fn normalize_key(value: &str) -> String {
+pub(in crate::theme::appearance) fn normalize_key(value: &str) -> String {
     value.trim().to_ascii_lowercase()
 }
 
-pub(in crate::ui::theme::appearance) fn rgb(red: u8, green: u8, blue: u8) -> Color {
+pub(in crate::theme::appearance) fn rgb(red: u8, green: u8, blue: u8) -> Color {
     Color::Rgb(red, green, blue)
 }

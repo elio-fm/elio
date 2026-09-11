@@ -1,7 +1,7 @@
-use crate::app::{App, FrameState};
-use crate::ui::{
-    helpers,
+use crate::{
+    app::{App, FrameState},
     theme::{self, Palette},
+    ui::helpers,
 };
 use ratatui::{
     Frame,

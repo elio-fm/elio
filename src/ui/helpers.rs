@@ -1,5 +1,5 @@
-use super::theme::Palette;
 use crate::app::sanitize_terminal_text;
+use crate::theme::Palette;
 use ratatui::{
     Frame,
     layout::{Alignment, Margin, Rect},

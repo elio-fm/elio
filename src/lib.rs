@@ -7,6 +7,7 @@ mod fs;
 mod opening;
 mod preview;
 mod terminal_runtime;
+mod theme;
 mod ui;
 
 use anyhow::Result;

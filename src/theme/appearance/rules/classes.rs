@@ -34,7 +34,7 @@ pub(super) fn base_class_styles() -> HashMap<FileClass, ClassStyle> {
     ])
 }
 
-pub(in crate::ui::theme::appearance) fn default_class_style(class: FileClass) -> ClassStyle {
+pub(in crate::theme::appearance) fn default_class_style(class: FileClass) -> ClassStyle {
     match class {
         FileClass::Directory => ClassStyle {
             icon: "󰉋".to_string(),

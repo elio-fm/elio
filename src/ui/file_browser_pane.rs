@@ -1,11 +1,11 @@
 use super::helpers;
 use super::scrollbars::{render_browser_scrollbar, split_scrollbar_area};
-use super::theme::{self, Palette};
 use crate::app::{
     App, ClipOp, Entry, EntryHit, FrameState, ViewMetrics, format_size, format_size_parts,
     format_time_ago, sanitize_terminal_text,
 };
 use crate::fs::symlink_target_display_label;
+use crate::theme::{self, Palette};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},

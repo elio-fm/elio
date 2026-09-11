@@ -1,6 +1,7 @@
 use crate::{
     app::{App, FrameState},
-    ui::{self, helpers, theme},
+    theme,
+    ui::{self, helpers},
 };
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, layout::Rect, style::Modifier};

@@ -1,5 +1,6 @@
-use super::{helpers, theme::Palette};
+use super::helpers;
 use crate::app::{App, FrameState, PathHit, SidebarRow};
+use crate::theme::Palette;
 use ratatui::{
     Frame,
     layout::Rect,

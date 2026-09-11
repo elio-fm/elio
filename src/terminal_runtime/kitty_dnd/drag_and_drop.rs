@@ -3,7 +3,7 @@ use crate::{
     app::{App, ClipOp},
     fs::EntryKind,
     terminal_runtime::tui_drawing::AppTerminal,
-    ui,
+    theme,
 };
 use anyhow::Result;
 use std::{
@@ -233,7 +233,7 @@ fn clip_op_to_drop_finish(op: ClipOp) -> DropFinish {
 }
 
 fn drag_icon_sequence(label: &DragIconLabel) -> String {
-    let palette = ui::theme::palette();
+    let palette = theme::palette();
     if let Some(image) = render_drag_image(
         &label.icon,
         &label.text,
@@ -297,11 +297,11 @@ fn drag_icon_for_path(app: &App, path: &Path) -> (String, ratatui::style::Color)
         .iter()
         .find(|entry| entry.path == path)
     {
-        let appearance = ui::theme::resolve_browser_entry(entry);
+        let appearance = theme::resolve_browser_entry(entry);
         return (appearance.icon.to_string(), appearance.color);
     }
 
-    let appearance = ui::theme::resolve_path(path, drag_entry_kind(path));
+    let appearance = theme::resolve_path(path, drag_entry_kind(path));
     (appearance.icon.to_string(), appearance.color)
 }
 
@@ -323,7 +323,7 @@ where
     const MULTIPLE_FILES_ICON: &str = "";
 
     let Some((first, rest)) = paths.split_first() else {
-        let appearance = ui::theme::resolve_path(Path::new("item"), EntryKind::File);
+        let appearance = theme::resolve_path(Path::new("item"), EntryKind::File);
         return (MULTIPLE_FILES_ICON.to_string(), appearance.color);
     };
 
@@ -342,10 +342,10 @@ where
     if all_same_icon {
         (first_icon, first_color)
     } else if all_directories {
-        let appearance = ui::theme::resolve_path(Path::new("folder"), EntryKind::Directory);
+        let appearance = theme::resolve_path(Path::new("folder"), EntryKind::Directory);
         (MULTIPLE_FOLDERS_ICON.to_string(), appearance.color)
     } else {
-        let appearance = ui::theme::resolve_path(Path::new("item"), EntryKind::File);
+        let appearance = theme::resolve_path(Path::new("item"), EntryKind::File);
         (MULTIPLE_FILES_ICON.to_string(), appearance.color)
     }
 }

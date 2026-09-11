@@ -1,5 +1,8 @@
 use crate::app::{App, FrameState};
-use crate::ui::{helpers, scrollbars::render_overlay_scrollbar_on_bg, theme::Palette};
+use crate::{
+    theme::Palette,
+    ui::{helpers, scrollbars::render_overlay_scrollbar_on_bg},
+};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Margin, Rect},
