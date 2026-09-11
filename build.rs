@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use syntect::dumps::dump_to_uncompressed_file;
 use syntect::parsing::SyntaxSet;
 
-mod syntax_manifest {
-    include!("src/preview/code/syntax_manifest.rs");
+mod supported_syntaxes {
+    include!("src/preview/code/syntect_highlighting/supported_syntaxes.rs");
 }
 
-use syntax_manifest::{CURATED_SYNTAXES, CuratedSyntax};
+use supported_syntaxes::{CURATED_SYNTAXES, CuratedSyntax};
 
 fn main() {
     if let Err(error) = generate_curated_syntax_bundle() {
@@ -17,7 +17,7 @@ fn main() {
 
 fn generate_curated_syntax_bundle() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=src/preview/code/syntax_manifest.rs");
+    println!("cargo:rerun-if-changed=src/preview/code/syntect_highlighting/supported_syntaxes.rs");
     println!("cargo:rerun-if-changed=assets/syntaxes");
 
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);

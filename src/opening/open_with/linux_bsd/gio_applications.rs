@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::preview::process::run_command_capture_stdout_cancellable;
+use crate::preview::external_commands::run_command_capture_stdout_cancellable;
 
 use super::{
     super::OpenWithApplication,
