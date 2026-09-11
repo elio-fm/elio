@@ -397,12 +397,13 @@ impl App {
                             && (nav_target.is_none() || nav_to_dest)
                             && !defer_reload_for_same_dest
                         {
-                            let reselect_path =
-                                if paste_origin == Some(crate::app::state::PasteOrigin::Drop) {
-                                    build.destination_paths.first().cloned()
-                                } else {
-                                    None
-                                };
+                            let reselect_path = if paste_origin
+                                == Some(crate::file_operations::PasteOrigin::Drop)
+                            {
+                                build.destination_paths.first().cloned()
+                            } else {
+                                None
+                            };
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,
                                 target_cwd: dest_dir,

@@ -1,13 +1,40 @@
-mod copy;
-
-use super::{
-    App,
-    jobs::PasteRequest,
-    state::{Clipboard, PasteOrigin, PasteProgress, QueuedPaste},
-    types::ClipOp,
-};
+use crate::app::{App, PasteRequest};
 use anyhow::Result;
 use std::path::{Path, PathBuf};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ClipOp {
+    Yank,
+    Cut,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct Clipboard {
+    pub(crate) paths: Vec<PathBuf>,
+    pub(crate) op: ClipOp,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PasteProgress {
+    pub(crate) completed: usize,
+    pub(crate) total: usize,
+    pub(crate) op: ClipOp,
+    pub(crate) origin: PasteOrigin,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum PasteOrigin {
+    Clipboard,
+    Drop,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct QueuedPaste {
+    pub(crate) dest_dir: PathBuf,
+    pub(crate) paths: Vec<PathBuf>,
+    pub(crate) op: ClipOp,
+    pub(crate) origin: PasteOrigin,
+}
 
 impl App {
     /// Returns `(count, op)` for the current clipboard, or `None` if empty.
@@ -38,7 +65,7 @@ impl App {
     }
 
     /// Yank (copy-mark) the current selection or the focused entry.
-    pub(in crate::app) fn yank(&mut self) {
+    pub(crate) fn yank(&mut self) {
         let paths = self.clipboard_target_paths();
         if paths.is_empty() {
             return;
@@ -52,7 +79,7 @@ impl App {
     }
 
     /// Cut-mark the current selection or the focused entry.
-    pub(in crate::app) fn cut(&mut self) {
+    pub(crate) fn cut(&mut self) {
         let paths = self.clipboard_target_paths();
         if paths.is_empty() {
             return;
@@ -67,7 +94,7 @@ impl App {
 
     /// Paste the clipboard contents into the current directory (async with
     /// progress reporting).
-    pub(in crate::app) fn paste(&mut self) -> Result<()> {
+    pub(crate) fn paste(&mut self) -> Result<()> {
         if self.jobs.paste_progress.is_some() && self.jobs.clipboard.is_none() {
             self.status = "Paste in progress — yank or cut another item to queue it".to_string();
             return Ok(());
@@ -146,13 +173,13 @@ impl App {
         Ok(true)
     }
 
-    pub(super) fn clear_queued_pastes(&mut self) -> usize {
+    pub(crate) fn clear_queued_pastes(&mut self) -> usize {
         let queued = self.jobs.queued_pastes.len();
         self.jobs.queued_pastes.clear();
         queued
     }
 
-    pub(super) fn start_next_queued_paste(&mut self) -> bool {
+    pub(crate) fn start_next_queued_paste(&mut self) -> bool {
         let Some(request) = self.jobs.queued_pastes.pop_front() else {
             return false;
         };
@@ -192,72 +219,6 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn link_yanked(&mut self, relative: bool) -> Result<()> {
-        let Some(clipboard) = &self.jobs.clipboard else {
-            self.status = "Nothing to link".to_string();
-            return Ok(());
-        };
-        if clipboard.op != ClipOp::Yank {
-            self.status = "Yank items before linking".to_string();
-            return Ok(());
-        }
-
-        let paths = clipboard.paths.clone();
-        if paths.is_empty() {
-            self.status = "Nothing to link".to_string();
-            return Ok(());
-        }
-
-        #[cfg(unix)]
-        {
-            let mut created = Vec::new();
-            let mut first_error = None;
-            for source in paths {
-                let link_path = unique_link_dest(&self.navigation.cwd, &source);
-                let target = if relative {
-                    relative_path(&self.navigation.cwd, &source)
-                } else {
-                    source.clone()
-                };
-                match std::os::unix::fs::symlink(&target, &link_path) {
-                    Ok(()) => created.push(link_path),
-                    Err(error) => {
-                        let name = source
-                            .file_name()
-                            .and_then(|name| name.to_str())
-                            .unwrap_or("item");
-                        first_error = Some(format!("Could not link \"{name}\": {error}"));
-                        break;
-                    }
-                }
-            }
-
-            if !created.is_empty() {
-                let _ = self.queue_directory_reload(false);
-            }
-            self.status = match (created.len(), first_error) {
-                (0, Some(error)) => error,
-                (1, None) => format!(
-                    "Created symlink \"{}\"",
-                    created[0]
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or("item")
-                ),
-                (n, None) => format!("Created {n} symlinks"),
-                (n, Some(error)) => format!("Created {n} symlinks; last error: {error}"),
-            };
-        }
-
-        #[cfg(not(unix))]
-        {
-            let _ = relative;
-            self.status = "Symlinks are not supported on this platform".to_string();
-        }
-
-        Ok(())
-    }
-
     /// Collect the paths that y/x should act on: all space-selected paths if
     /// any exist (sorted for stable ordering), otherwise the focused entry.
     pub(super) fn clipboard_target_paths(&self) -> Vec<PathBuf> {
@@ -280,62 +241,3 @@ fn paste_would_copy_directory_into_itself(request: &QueuedPaste) -> bool {
         .iter()
         .any(|path| path.is_dir() && request.dest_dir.starts_with(path))
 }
-
-#[cfg(unix)]
-fn unique_link_dest(dest_dir: &Path, source: &Path) -> PathBuf {
-    let name = source
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "link".to_string());
-    let candidate = dest_dir.join(&name);
-    if std::fs::symlink_metadata(&candidate).is_err() {
-        return candidate;
-    }
-
-    let source_path = Path::new(&name);
-    let stem = source_path
-        .file_stem()
-        .map(|stem| stem.to_string_lossy().into_owned())
-        .unwrap_or_else(|| name.clone());
-    let ext = source_path
-        .extension()
-        .map(|ext| ext.to_string_lossy().into_owned());
-    for index in 1u32.. {
-        let next_name = match &ext {
-            Some(ext) => format!("{stem}_{index}.{ext}"),
-            None => format!("{stem}_{index}"),
-        };
-        let next = dest_dir.join(next_name);
-        if std::fs::symlink_metadata(&next).is_err() {
-            return next;
-        }
-    }
-    candidate
-}
-
-#[cfg(unix)]
-fn relative_path(from_dir: &Path, to: &Path) -> PathBuf {
-    let from = from_dir.components().collect::<Vec<_>>();
-    let to = to.components().collect::<Vec<_>>();
-    let common = from
-        .iter()
-        .zip(to.iter())
-        .take_while(|(left, right)| left == right)
-        .count();
-
-    let mut relative = PathBuf::new();
-    for _ in common..from.len() {
-        relative.push("..");
-    }
-    for component in &to[common..] {
-        relative.push(component.as_os_str());
-    }
-    if relative.as_os_str().is_empty() {
-        PathBuf::from(".")
-    } else {
-        relative
-    }
-}
-
-#[cfg(test)]
-mod tests;

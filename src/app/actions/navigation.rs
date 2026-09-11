@@ -296,7 +296,7 @@ impl App {
         self.sync_scroll();
     }
 
-    pub(in crate::app) fn select_index(&mut self, index: usize) {
+    pub(crate) fn select_index(&mut self, index: usize) {
         self.set_selected(index);
     }
 

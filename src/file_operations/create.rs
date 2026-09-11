@@ -1,13 +1,20 @@
-use super::super::text_edit::char_to_byte;
-use super::super::{
-    App,
-    state::{CreateOverlay, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad},
+use crate::app::{
+    App, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad, char_to_byte,
+    next_delete_end, next_word_start, previous_delete_start, previous_word_start,
+    remove_char_range,
 };
-use super::validation::{ParsedCreateItem, parse_create_line, validate_parsed_item};
 use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use std::fs;
+use std::{fs, path::Path};
+
+pub(crate) struct CreateOverlay {
+    pub(crate) lines: Vec<String>,
+    pub(crate) cursor_line: usize,
+    pub(crate) cursor_col: usize,
+    pub(crate) preferred_col: usize,
+    pub(crate) line_errors: Vec<Option<String>>,
+}
 
 impl App {
     pub fn create_is_open(&self) -> bool {
@@ -79,7 +86,169 @@ impl App {
 }
 
 impl App {
-    pub(in crate::app) fn open_create_prompt(&mut self) {
+    pub(crate) fn create_insert_newline(&mut self) {
+        let Some(create) = &mut self.overlays.create else {
+            return;
+        };
+        let tail = {
+            let byte = char_to_byte(&create.lines[create.cursor_line], create.cursor_col);
+            create.lines[create.cursor_line].split_off(byte)
+        };
+        create.cursor_line += 1;
+        create.lines.insert(create.cursor_line, tail);
+        create.line_errors.insert(create.cursor_line, None);
+        create.cursor_col = 0;
+        create.preferred_col = 0;
+    }
+
+    fn create_move_horizontal(&mut self, delta: isize) {
+        let Some(create) = &mut self.overlays.create else {
+            return;
+        };
+        if delta < 0 {
+            if create.cursor_col > 0 {
+                create.cursor_col -= 1;
+            } else if create.cursor_line > 0 {
+                create.cursor_line -= 1;
+                create.cursor_col = create.lines[create.cursor_line].chars().count();
+            }
+        } else {
+            let len = create.lines[create.cursor_line].chars().count();
+            if create.cursor_col < len {
+                create.cursor_col += 1;
+            } else if create.cursor_line + 1 < create.lines.len() {
+                create.cursor_line += 1;
+                create.cursor_col = 0;
+            }
+        }
+        create.preferred_col = create.cursor_col;
+    }
+
+    fn create_move_word(&mut self, direction: isize) {
+        let Some(create) = &mut self.overlays.create else {
+            return;
+        };
+        let line = &create.lines[create.cursor_line];
+        let new_col = if direction < 0 {
+            previous_word_start(line, create.cursor_col)
+        } else {
+            next_word_start(line, create.cursor_col)
+        };
+        create.cursor_col = new_col;
+        create.preferred_col = new_col;
+    }
+
+    fn create_move_vertical(&mut self, delta: isize) {
+        let Some(create) = &mut self.overlays.create else {
+            return;
+        };
+        let new_line = (create.cursor_line as isize + delta)
+            .clamp(0, create.lines.len() as isize - 1) as usize;
+        if new_line == create.cursor_line {
+            return;
+        }
+        create.cursor_line = new_line;
+        let max_col = create.lines[create.cursor_line].chars().count();
+        create.cursor_col = create.preferred_col.min(max_col);
+    }
+
+    fn create_backspace(&mut self) {
+        let Some(create) = &mut self.overlays.create else {
+            return;
+        };
+        if create.cursor_col > 0 {
+            let start = char_to_byte(&create.lines[create.cursor_line], create.cursor_col - 1);
+            let end = char_to_byte(&create.lines[create.cursor_line], create.cursor_col);
+            create.lines[create.cursor_line].replace_range(start..end, "");
+            create.cursor_col -= 1;
+            create.preferred_col = create.cursor_col;
+            create.line_errors[create.cursor_line] = None;
+        } else if create.cursor_line > 0 {
+            let removed = create.lines.remove(create.cursor_line);
+            create.line_errors.remove(create.cursor_line);
+            create.cursor_line -= 1;
+            create.cursor_col = create.lines[create.cursor_line].chars().count();
+            create.preferred_col = create.cursor_col;
+            create.lines[create.cursor_line].push_str(&removed);
+            create.line_errors[create.cursor_line] = None;
+        }
+    }
+
+    fn create_delete(&mut self) {
+        let Some(create) = &mut self.overlays.create else {
+            return;
+        };
+        let len = create.lines[create.cursor_line].chars().count();
+        if create.cursor_col < len {
+            let start = char_to_byte(&create.lines[create.cursor_line], create.cursor_col);
+            let end = char_to_byte(&create.lines[create.cursor_line], create.cursor_col + 1);
+            create.lines[create.cursor_line].replace_range(start..end, "");
+            create.line_errors[create.cursor_line] = None;
+        } else if create.cursor_line + 1 < create.lines.len() {
+            let next = create.lines.remove(create.cursor_line + 1);
+            create.line_errors.remove(create.cursor_line + 1);
+            create.lines[create.cursor_line].push_str(&next);
+            create.line_errors[create.cursor_line] = None;
+        }
+    }
+
+    fn create_delete_word_back(&mut self) {
+        let Some(create) = &mut self.overlays.create else {
+            return;
+        };
+        if create.cursor_col == 0 {
+            return;
+        }
+        let line = &mut create.lines[create.cursor_line];
+        let start = previous_delete_start(line, create.cursor_col);
+        remove_char_range(line, start, create.cursor_col);
+        create.cursor_col = start;
+        create.preferred_col = start;
+        create.line_errors[create.cursor_line] = None;
+    }
+
+    fn create_delete_word_forward(&mut self) {
+        let Some(create) = &mut self.overlays.create else {
+            return;
+        };
+        let line = &mut create.lines[create.cursor_line];
+        let end = next_delete_end(line, create.cursor_col);
+        remove_char_range(line, create.cursor_col, end);
+        create.line_errors[create.cursor_line] = None;
+    }
+}
+
+struct ParsedCreateItem {
+    raw: String,
+    name: String,
+    is_dir: bool,
+}
+
+fn parse_create_line(line: &str) -> ParsedCreateItem {
+    let is_dir = line.starts_with('/') || line.ends_with('/');
+    let name = line.trim_matches('/').to_string();
+    ParsedCreateItem {
+        raw: line.to_string(),
+        name,
+        is_dir,
+    }
+}
+
+fn validate_parsed_item(item: &ParsedCreateItem, cwd: &Path) -> Option<String> {
+    if item.name.is_empty() {
+        return Some("Name cannot be empty".to_string());
+    }
+    if item.name.contains('/') {
+        return Some("Name cannot contain /".to_string());
+    }
+    if cwd.join(&item.name).exists() {
+        return Some(format!("\"{}\" already exists", item.name));
+    }
+    None
+}
+
+impl App {
+    pub(crate) fn open_create_prompt(&mut self) {
         self.overlays.help = false;
         self.overlays.search = None;
         self.overlays.create = Some(CreateOverlay {
@@ -93,7 +262,7 @@ impl App {
 }
 
 impl App {
-    pub(in crate::app) fn handle_create_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_create_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.overlays.create = None;
             return Ok(());
@@ -203,7 +372,7 @@ impl App {
 }
 
 impl App {
-    pub(in crate::app) fn handle_create_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+    pub(crate) fn handle_create_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
@@ -247,7 +416,7 @@ impl App {
 }
 
 impl App {
-    pub(in crate::app::create) fn confirm_create(&mut self) -> Result<()> {
+    pub(super) fn confirm_create(&mut self) -> Result<()> {
         let Some(c) = &self.overlays.create else {
             return Ok(());
         };

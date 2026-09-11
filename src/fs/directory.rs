@@ -77,7 +77,7 @@ fn read_trash_info_metadata(info_dir: &Path, name: &str) -> Option<TrashInfoMeta
 }
 
 fn trash_original_name(encoded_path: &str) -> Option<String> {
-    super::trashinfo::original_basename_from_path_value(encoded_path)
+    super::original_basename_from_path_value(encoded_path)
 }
 
 /// Parses a `DeletionDate` value from a `.trashinfo` file into a `SystemTime`.

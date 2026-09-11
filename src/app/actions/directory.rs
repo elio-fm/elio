@@ -75,10 +75,7 @@ impl App {
         self.queue_directory_fingerprint_scan()
     }
 
-    pub(in crate::app) fn queue_directory_load(
-        &mut self,
-        mut load: PendingDirectoryLoad,
-    ) -> Result<()> {
+    pub(crate) fn queue_directory_load(&mut self, mut load: PendingDirectoryLoad) -> Result<()> {
         self.navigation.directory_runtime.pending_fingerprint_scan = None;
         self.jobs.scheduler.cancel_directory_fingerprints();
         self.jobs.scheduler.cancel_directory_stats();
@@ -98,7 +95,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn queue_directory_reload(&mut self, refresh_search: bool) -> Result<()> {
+    pub(crate) fn queue_directory_reload(&mut self, refresh_search: bool) -> Result<()> {
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
             target_cwd: self.navigation.cwd.clone(),
@@ -112,7 +109,7 @@ impl App {
         })
     }
 
-    pub(in crate::app) fn queue_directory_escape_for_paths(
+    pub(crate) fn queue_directory_escape_for_paths(
         &mut self,
         paths: &[PathBuf],
     ) -> Result<PathBuf> {
@@ -265,7 +262,7 @@ impl App {
         self.navigation.directory_view_memory.get(cwd).cloned()
     }
 
-    pub(in crate::app) fn remember_current_directory_view(&mut self) {
+    pub(crate) fn remember_current_directory_view(&mut self) {
         self.navigation.directory_view_memory.insert(
             self.navigation.cwd.clone(),
             DirectoryViewMemory {

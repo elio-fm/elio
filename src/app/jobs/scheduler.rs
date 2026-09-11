@@ -23,7 +23,7 @@ use std::{
     time::SystemTime,
 };
 
-pub(in crate::app) struct JobScheduler {
+pub(crate) struct JobScheduler {
     directory: DirectoryPool,
     directory_fingerprint: DirectoryFingerprintPool,
     archive_create: ArchiveCreatePool,
@@ -220,43 +220,43 @@ impl JobScheduler {
             .retain_pending(path, size, modified, keep_variants);
     }
 
-    pub(in crate::app) fn submit_archive_create(&self, request: ArchiveCreateRequest) -> bool {
+    pub(crate) fn submit_archive_create(&self, request: ArchiveCreateRequest) -> bool {
         self.archive_create.submit(request)
     }
 
-    pub(in crate::app) fn cancel_archive_create(&self, token: u64) {
+    pub(crate) fn cancel_archive_create(&self, token: u64) {
         self.archive_create.cancel_create(token);
     }
 
-    pub(in crate::app) fn submit_archive_extract(&self, request: ArchiveExtractRequest) -> bool {
+    pub(crate) fn submit_archive_extract(&self, request: ArchiveExtractRequest) -> bool {
         self.archive_extract.submit(request)
     }
 
-    pub(in crate::app) fn cancel_archive_extract(&self, token: u64) {
+    pub(crate) fn cancel_archive_extract(&self, token: u64) {
         self.archive_extract.cancel_extract(token);
     }
 
-    pub(in crate::app) fn submit_paste(&self, request: PasteRequest) -> bool {
+    pub(crate) fn submit_paste(&self, request: PasteRequest) -> bool {
         self.paste.submit(request)
     }
 
-    pub(in crate::app) fn cancel_paste(&self, token: u64) {
+    pub(crate) fn cancel_paste(&self, token: u64) {
         self.paste.cancel_paste(token);
     }
 
-    pub(in crate::app) fn submit_trash(&self, request: TrashRequest) -> bool {
+    pub(crate) fn submit_trash(&self, request: TrashRequest) -> bool {
         self.trash.submit(request)
     }
 
-    pub(in crate::app) fn cancel_trash(&self, token: u64) {
+    pub(crate) fn cancel_trash(&self, token: u64) {
         self.trash.cancel_trash(token);
     }
 
-    pub(in crate::app) fn submit_restore(&self, request: RestoreRequest) -> bool {
+    pub(crate) fn submit_restore(&self, request: RestoreRequest) -> bool {
         self.restore.submit(request)
     }
 
-    pub(in crate::app) fn cancel_restore(&self, token: u64) {
+    pub(crate) fn cancel_restore(&self, token: u64) {
         self.restore.cancel_restore(token);
     }
 

@@ -20,6 +20,11 @@ fn fs_does_not_depend_on_app() {
 }
 
 #[test]
+fn fs_does_not_depend_on_file_operations() {
+    assert_tree_has_no_pattern("src/fs", "file_operations::", &[]);
+}
+
+#[test]
 fn file_classification_does_not_depend_on_app() {
     assert_tree_has_no_pattern("src/file_classification", "app::", &[]);
 }

@@ -13,21 +13,18 @@ impl App {
         self.navigation.selected_paths.len()
     }
 
-    pub(in crate::app) fn selected_paths_sorted(&self) -> Vec<PathBuf> {
+    pub(crate) fn selected_paths_sorted(&self) -> Vec<PathBuf> {
         let mut paths: Vec<PathBuf> = self.navigation.selected_paths.iter().cloned().collect();
         paths.sort();
         paths
     }
 
     #[cfg(unix)]
-    pub(in crate::app) fn selected_paths_in_selection_order(&self) -> Vec<PathBuf> {
+    pub(crate) fn selected_paths_in_selection_order(&self) -> Vec<PathBuf> {
         self.navigation.selected_paths.ordered().cloned().collect()
     }
 
-    pub(in crate::app) fn current_directory_escape_for_paths(
-        &self,
-        paths: &[PathBuf],
-    ) -> Option<PathBuf> {
+    pub(crate) fn current_directory_escape_for_paths(&self, paths: &[PathBuf]) -> Option<PathBuf> {
         paths
             .iter()
             .filter(|path| self.navigation.cwd == **path || self.navigation.cwd.starts_with(path))
@@ -81,7 +78,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn clear_selection(&mut self) {
+    pub(crate) fn clear_selection(&mut self) {
         if !self.navigation.selected_paths.is_empty() {
             self.navigation.selected_paths.clear();
             self.status.clear();

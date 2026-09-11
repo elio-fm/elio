@@ -129,7 +129,7 @@ impl App {
         self.overlays.duplicates.as_ref().map_or(0, |d| d.scroll)
     }
 
-    pub(in crate::app) fn apply_duplicate_rename_pairs(&mut self, pairs: Vec<(PathBuf, PathBuf)>) {
+    pub(crate) fn apply_duplicate_rename_pairs(&mut self, pairs: Vec<(PathBuf, PathBuf)>) {
         if pairs.is_empty() {
             return;
         }

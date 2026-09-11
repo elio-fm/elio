@@ -1,19 +1,33 @@
-use super::super::text_edit::{
+use super::editor_bulk_rename::confirm_bulk_rename_overlay;
+use crate::app::App;
+use crate::app::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
 };
-use super::super::{
-    App,
-    state::{BulkRenameItem, BulkRenameOverlay},
-};
-use super::editor_bulk_rename::confirm_bulk_rename_overlay;
 use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::{Path, PathBuf};
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct BulkRenameItem {
+    pub(crate) path: PathBuf,
+    pub(crate) original_name: String,
+    pub(crate) is_dir: bool,
+}
+
+pub(crate) struct BulkRenameOverlay {
+    pub(crate) items: Vec<BulkRenameItem>,
+    pub(crate) new_names: Vec<String>,
+    pub(crate) root: Option<PathBuf>,
+    pub(crate) cursor_line: usize,
+    pub(crate) cursor_col: usize,
+    pub(crate) preferred_col: usize,
+    pub(crate) line_errors: Vec<Option<String>>,
+}
+
 impl App {
-    pub(in crate::app) fn open_bulk_rename_prompt(&mut self) {
+    pub(crate) fn open_bulk_rename_prompt(&mut self) {
         if self.navigation.in_trash {
             return;
         }
@@ -138,7 +152,7 @@ impl App {
             .map_or(0, |r| r.cursor_col)
     }
 
-    pub(in crate::app) fn handle_bulk_rename_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_bulk_rename_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.overlays.bulk_rename = None;
             return Ok(());
@@ -307,7 +321,7 @@ impl App {
         r.cursor_col = r.preferred_col.min(max_col);
     }
 
-    pub(in crate::app) fn handle_bulk_rename_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+    pub(crate) fn handle_bulk_rename_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
@@ -349,7 +363,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app::create) fn confirm_bulk_rename(&mut self) -> Result<()> {
+    pub(super) fn confirm_bulk_rename(&mut self) -> Result<()> {
         confirm_bulk_rename_overlay(self)
     }
 }

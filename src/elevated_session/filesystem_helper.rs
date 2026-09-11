@@ -358,7 +358,7 @@ pub fn run() -> anyhow::Result<()> {
         #[cfg(target_os = "macos")]
         Request::RemoveRestoreOrigins(names) => {
             let names_ref = names.iter().map(String::as_str).collect::<Vec<_>>();
-            match crate::fs::remove_restore_origins_checked(&names_ref) {
+            match crate::file_operations::remove_restore_origins_checked(&names_ref) {
                 Ok(()) => Response {
                     completed: names.len(),
                     error: None,
@@ -380,11 +380,13 @@ pub fn run() -> anyhow::Result<()> {
 fn restore_response(path: &std::path::Path) -> Response {
     #[cfg(target_os = "macos")]
     {
-        return checked_restore_response(crate::fs::restore_trash_item_checked_metadata(path));
+        return checked_restore_response(
+            crate::file_operations::restore_trash_item_checked_metadata(path),
+        );
     }
 
     #[cfg(not(target_os = "macos"))]
-    match crate::fs::restore_trash_item(path) {
+    match crate::file_operations::restore_trash_item(path) {
         Ok(()) => Response {
             completed: 1,
             error: None,

@@ -1,4 +1,5 @@
 use super::*;
+use crate::file_operations::{BulkRenameItem, BulkRenameOverlay, RenameOverlay, TrashTarget};
 
 impl App {
     pub(in crate::app::duplicate_finder_overlay) fn open_duplicate_targets(
@@ -155,7 +156,7 @@ impl App {
         self.duplicate_focused_path().into_iter().collect()
     }
 
-    pub(in crate::app) fn confirm_duplicate_rename(
+    pub(crate) fn confirm_duplicate_rename(
         &mut self,
         original_name: String,
         new_name: String,

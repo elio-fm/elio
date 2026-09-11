@@ -281,12 +281,12 @@ pub(in crate::app) struct PreviewRequest {
 }
 
 #[derive(Clone, Debug)]
-pub(in crate::app) struct ArchiveCreateRequest {
-    pub(in crate::app) token: u64,
-    pub(in crate::app) cwd: PathBuf,
-    pub(in crate::app) sources: Vec<PathBuf>,
-    pub(in crate::app) output_name: String,
-    pub(in crate::app) options: crate::archive::CreateArchiveOptions,
+pub(crate) struct ArchiveCreateRequest {
+    pub(crate) token: u64,
+    pub(crate) cwd: PathBuf,
+    pub(crate) sources: Vec<PathBuf>,
+    pub(crate) output_name: String,
+    pub(crate) options: crate::archive::CreateArchiveOptions,
 }
 
 #[derive(Debug)]
@@ -303,17 +303,17 @@ pub(in crate::app) struct ArchiveCreateBuild {
 }
 
 #[derive(Clone, Debug)]
-pub(in crate::app) struct ArchiveExtractBatchState {
-    pub(in crate::app) total_archives: usize,
-    pub(in crate::app) completed_archives: usize,
-    pub(in crate::app) failed_archives: usize,
-    pub(in crate::app) skipped_archives: usize,
-    pub(in crate::app) skipped_non_archives: usize,
-    pub(in crate::app) dest_dirs: Vec<PathBuf>,
+pub(crate) struct ArchiveExtractBatchState {
+    pub(crate) total_archives: usize,
+    pub(crate) completed_archives: usize,
+    pub(crate) failed_archives: usize,
+    pub(crate) skipped_archives: usize,
+    pub(crate) skipped_non_archives: usize,
+    pub(crate) dest_dirs: Vec<PathBuf>,
 }
 
 impl ArchiveExtractBatchState {
-    pub(in crate::app) fn new(total_archives: usize, skipped_non_archives: usize) -> Self {
+    pub(crate) fn new(total_archives: usize, skipped_non_archives: usize) -> Self {
         Self {
             total_archives,
             completed_archives: 0,
@@ -324,21 +324,21 @@ impl ArchiveExtractBatchState {
         }
     }
 
-    pub(in crate::app) fn finished_archives(&self) -> usize {
+    pub(crate) fn finished_archives(&self) -> usize {
         self.completed_archives + self.failed_archives + self.skipped_archives
     }
 
-    pub(in crate::app) fn is_single_archive(&self) -> bool {
+    pub(crate) fn is_single_archive(&self) -> bool {
         self.total_archives == 1 && self.skipped_non_archives == 0
     }
 
-    pub(in crate::app) fn reselect_path(&self) -> Option<PathBuf> {
+    pub(crate) fn reselect_path(&self) -> Option<PathBuf> {
         self.is_single_archive()
             .then(|| self.dest_dirs.first().cloned())
             .flatten()
     }
 
-    pub(in crate::app) fn status(&self) -> String {
+    pub(crate) fn status(&self) -> String {
         if self.is_single_archive()
             && self.completed_archives == 1
             && let Some(dest_dir) = self.dest_dirs.first()
@@ -382,11 +382,11 @@ impl ArchiveExtractBatchState {
 }
 
 #[derive(Clone, Debug)]
-pub(in crate::app) struct ArchiveExtractRequest {
-    pub(in crate::app) token: u64,
-    pub(in crate::app) archives: Vec<PathBuf>,
-    pub(in crate::app) password: Option<crate::archive::ArchivePassword>,
-    pub(in crate::app) batch: ArchiveExtractBatchState,
+pub(crate) struct ArchiveExtractRequest {
+    pub(crate) token: u64,
+    pub(crate) archives: Vec<PathBuf>,
+    pub(crate) password: Option<crate::archive::ArchivePassword>,
+    pub(crate) batch: ArchiveExtractBatchState,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -413,11 +413,11 @@ pub(in crate::app) struct ArchiveExtractBuild {
 }
 
 #[derive(Clone, Debug)]
-pub(in crate::app) struct PasteRequest {
-    pub(in crate::app) token: u64,
-    pub(in crate::app) dest_dir: PathBuf,
-    pub(in crate::app) paths: Vec<PathBuf>,
-    pub(in crate::app) op: ClipOp,
+pub(crate) struct PasteRequest {
+    pub(crate) token: u64,
+    pub(crate) dest_dir: PathBuf,
+    pub(crate) paths: Vec<PathBuf>,
+    pub(crate) op: ClipOp,
 }
 
 #[derive(Debug)]
@@ -433,10 +433,10 @@ pub(in crate::app) struct PasteBuild {
 }
 
 #[derive(Clone, Debug)]
-pub(in crate::app) struct TrashRequest {
-    pub(in crate::app) token: u64,
-    pub(in crate::app) targets: Vec<crate::app::state::TrashTarget>,
-    pub(in crate::app) permanent: bool,
+pub(crate) struct TrashRequest {
+    pub(crate) token: u64,
+    pub(crate) targets: Vec<crate::file_operations::TrashTarget>,
+    pub(crate) permanent: bool,
 }
 
 #[derive(Debug)]
@@ -450,9 +450,9 @@ pub(in crate::app) struct TrashBuild {
 }
 
 #[derive(Clone, Debug)]
-pub(in crate::app) struct RestoreRequest {
-    pub(in crate::app) token: u64,
-    pub(in crate::app) targets: Vec<crate::app::state::TrashTarget>,
+pub(crate) struct RestoreRequest {
+    pub(crate) token: u64,
+    pub(crate) targets: Vec<crate::file_operations::TrashTarget>,
 }
 
 #[derive(Debug)]

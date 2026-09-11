@@ -1,7 +1,4 @@
-use super::super::{
-    App,
-    state::{CopyOverlay, CopyOverlayRow},
-};
+use crate::app::App;
 use crate::fs::rect_contains;
 use anyhow::{Result, anyhow};
 use base64::Engine as _;
@@ -12,6 +9,20 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
+
+#[derive(Clone, Debug)]
+pub(crate) struct CopyOverlayRow {
+    pub(crate) shortcut: char,
+    pub(crate) label: String,
+    pub(crate) status_label: String,
+    pub(crate) value: String,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct CopyOverlay {
+    pub(crate) title: String,
+    pub(crate) rows: Vec<CopyOverlayRow>,
+}
 
 impl App {
     pub fn copy_is_open(&self) -> bool {
@@ -53,7 +64,7 @@ impl App {
 }
 
 impl App {
-    pub(in crate::app) fn open_copy_overlay(&mut self) {
+    pub(crate) fn open_copy_overlay(&mut self) {
         let paths = self.clipboard_target_paths();
         if paths.is_empty() {
             self.status = "Nothing to copy".to_string();
@@ -63,7 +74,7 @@ impl App {
         self.open_copy_overlay_for_paths(paths);
     }
 
-    pub(in crate::app) fn open_copy_overlay_for_paths(&mut self, paths: Vec<PathBuf>) {
+    pub(crate) fn open_copy_overlay_for_paths(&mut self, paths: Vec<PathBuf>) {
         if paths.is_empty() {
             self.status = "Nothing to copy".to_string();
             return;
@@ -74,7 +85,7 @@ impl App {
         self.status.clear();
     }
 
-    pub(in crate::app) fn handle_copy_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_copy_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.overlays.copy = None;
             return Ok(());
@@ -99,7 +110,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn handle_copy_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+    pub(crate) fn handle_copy_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
             let inside = self
                 .input

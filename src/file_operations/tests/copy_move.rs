@@ -1,156 +1,4 @@
-use super::super::App;
-use crate::app::ClipOp;
-use std::{
-    fs,
-    path::PathBuf,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
-
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-#[cfg(unix)]
-use std::{
-    env,
-    ffi::OsString,
-    sync::{Mutex, OnceLock},
-};
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-fn temp_path(label: &str) -> PathBuf {
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time should be after unix epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!("elio-clipboard-{label}-{unique}"))
-}
-
-/// Poll `process_background_jobs` until there is no active paste and no queued
-/// follow-up paste left to start, or the timeout expires.
-fn wait_for_paste(app: &mut App) {
-    for _ in 0..500 {
-        let _ = app.process_background_jobs();
-        if app.paste_progress().is_none() && app.jobs.queued_pastes.is_empty() {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    panic!("timed out waiting for paste to complete");
-}
-
-fn wait_for_paste_and_reload(app: &mut App) {
-    for _ in 0..500 {
-        let _ = app.process_background_jobs();
-        if app.paste_progress().is_none()
-            && app.jobs.queued_pastes.is_empty()
-            && app.navigation.directory_runtime.pending_load.is_none()
-        {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    panic!("timed out waiting for paste and directory reload to complete");
-}
-
-#[cfg(unix)]
-fn clipboard_env_lock() -> std::sync::MutexGuard<'static, ()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-#[cfg(unix)]
-struct ClipboardEnvGuard {
-    saved: Vec<(&'static str, Option<OsString>)>,
-}
-
-#[cfg(unix)]
-impl ClipboardEnvGuard {
-    fn isolate() -> Self {
-        const VARS: &[&str] = &[
-            "ELIO_TEST_CLIPBOARD_TOOL",
-            "ELIO_TEST_OSC52_CAPTURE",
-            "ELIO_TEST_TMUX_SET_CLIPBOARD",
-            "ELIO_CLIPBOARD_OSC52",
-            "TMUX",
-            "TERM",
-            "TERM_PROGRAM",
-            "KITTY_WINDOW_ID",
-            "WARP_SESSION_ID",
-            "ALACRITTY_SOCKET",
-            "VTE_VERSION",
-            "PATH",
-        ];
-
-        let saved = VARS
-            .iter()
-            .map(|name| (*name, env::var_os(name)))
-            .collect::<Vec<_>>();
-        for name in VARS {
-            unsafe {
-                env::remove_var(name);
-            }
-        }
-
-        Self { saved }
-    }
-}
-
-#[cfg(unix)]
-impl Drop for ClipboardEnvGuard {
-    fn drop(&mut self) {
-        for (name, value) in &self.saved {
-            if let Some(value) = value {
-                unsafe {
-                    env::set_var(name, value);
-                }
-            } else {
-                unsafe {
-                    env::remove_var(name);
-                }
-            }
-        }
-    }
-}
-
-#[cfg(unix)]
-fn install_fake_clipboard_tool(root: &std::path::Path, capture_path: &std::path::Path) -> PathBuf {
-    let tool = root.join("fake-clipboard");
-    fs::write(
-        &tool,
-        format!("#!/bin/sh\ncat > '{}'\n", capture_path.display()),
-    )
-    .expect("failed to write fake clipboard tool");
-    let mut permissions = fs::metadata(&tool)
-        .expect("fake clipboard tool metadata should exist")
-        .permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&tool, permissions).expect("failed to chmod fake clipboard tool");
-    tool
-}
-
-#[cfg(unix)]
-fn install_backgrounding_clipboard_tool(
-    root: &std::path::Path,
-    capture_path: &std::path::Path,
-) -> PathBuf {
-    let tool = root.join("fake-clipboard-background");
-    fs::write(
-        &tool,
-        format!(
-            "#!/bin/sh\ncat > '{capture}'\n(sleep 1) >/dev/null 2>&1 &\nexit 0\n",
-            capture = capture_path.display()
-        ),
-    )
-    .expect("failed to write backgrounding clipboard tool");
-    let mut permissions = fs::metadata(&tool)
-        .expect("backgrounding clipboard tool metadata should exist")
-        .permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&tool, permissions).expect("failed to chmod backgrounding clipboard tool");
-    tool
-}
+use super::clipboard_test_support::*;
 
 // ── yank / copy path ─────────────────────────────────────────────────────────
 
@@ -366,7 +214,7 @@ fn paste_refuses_folder_into_itself() {
     fs::create_dir_all(&child).unwrap();
 
     let mut app = App::new_at(child.clone()).unwrap();
-    app.jobs.clipboard = Some(super::super::state::Clipboard {
+    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![source.clone()],
         op: ClipOp::Yank,
     });
@@ -379,104 +227,6 @@ fn paste_refuses_folder_into_itself() {
     assert!(!child.join("source").exists());
 
     fs::remove_dir_all(&root).unwrap();
-}
-
-#[cfg(unix)]
-#[test]
-fn link_yanked_creates_absolute_symlink_in_current_directory() {
-    let src_dir = temp_path("link-absolute-src");
-    let dst_dir = temp_path("link-absolute-dst");
-    fs::create_dir_all(&src_dir).unwrap();
-    fs::create_dir_all(&dst_dir).unwrap();
-    let source = src_dir.join("repo");
-    fs::create_dir_all(&source).unwrap();
-
-    let mut app = App::new_at(src_dir.clone()).unwrap();
-    app.yank();
-    app.navigation.cwd = dst_dir.clone();
-
-    app.link_yanked(false).unwrap();
-
-    let link = dst_dir.join("repo");
-    assert_eq!(fs::read_link(&link).unwrap(), source);
-    assert_eq!(app.status_message(), "Created symlink \"repo\"");
-    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Yank)));
-
-    fs::remove_dir_all(&src_dir).unwrap();
-    fs::remove_dir_all(&dst_dir).unwrap();
-}
-
-#[cfg(unix)]
-#[test]
-fn link_yanked_creates_relative_symlink_in_current_directory() {
-    let root = temp_path("link-relative");
-    let source = root.join("sources/repo");
-    let dest = root.join("project/context");
-    fs::create_dir_all(&source).unwrap();
-    fs::create_dir_all(&dest).unwrap();
-
-    let mut app = App::new_at(source.parent().unwrap().to_path_buf()).unwrap();
-    app.yank();
-    app.navigation.cwd = dest.clone();
-
-    app.link_yanked(true).unwrap();
-
-    assert_eq!(
-        fs::read_link(dest.join("repo")).unwrap(),
-        PathBuf::from("../../sources/repo")
-    );
-    assert_eq!(app.status_message(), "Created symlink \"repo\"");
-
-    fs::remove_dir_all(&root).unwrap();
-}
-
-#[cfg(unix)]
-#[test]
-fn link_yanked_uses_unique_destination_names() {
-    let src_dir = temp_path("link-unique-src");
-    let dst_dir = temp_path("link-unique-dst");
-    fs::create_dir_all(&src_dir).unwrap();
-    fs::create_dir_all(&dst_dir).unwrap();
-    fs::write(src_dir.join("note.txt"), "note").unwrap();
-    fs::write(dst_dir.join("note.txt"), "existing").unwrap();
-
-    let mut app = App::new_at(src_dir.clone()).unwrap();
-    app.yank();
-    app.navigation.cwd = dst_dir.clone();
-
-    app.link_yanked(false).unwrap();
-
-    assert_eq!(
-        fs::read_link(dst_dir.join("note_1.txt")).unwrap(),
-        src_dir.join("note.txt")
-    );
-    assert_eq!(app.status_message(), "Created symlink \"note_1.txt\"");
-
-    fs::remove_dir_all(&src_dir).unwrap();
-    fs::remove_dir_all(&dst_dir).unwrap();
-}
-
-#[cfg(unix)]
-#[test]
-fn link_yanked_refuses_cut_clipboard() {
-    let src_dir = temp_path("link-cut-src");
-    let dst_dir = temp_path("link-cut-dst");
-    fs::create_dir_all(&src_dir).unwrap();
-    fs::create_dir_all(&dst_dir).unwrap();
-    fs::write(src_dir.join("move.txt"), "move").unwrap();
-
-    let mut app = App::new_at(src_dir.clone()).unwrap();
-    app.cut();
-    app.navigation.cwd = dst_dir.clone();
-
-    app.link_yanked(false).unwrap();
-
-    assert_eq!(app.status_message(), "Yank items before linking");
-    assert!(!dst_dir.join("move.txt").exists());
-    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Cut)));
-
-    fs::remove_dir_all(&src_dir).unwrap();
-    fs::remove_dir_all(&dst_dir).unwrap();
 }
 
 // ── progress state machine ────────────────────────────────────────────────────
@@ -628,7 +378,7 @@ fn new_paste_after_cancel_is_not_affected_by_old_cancel_token() {
     // Re-yank and start a second paste to a different destination.  Its token
     // is 2; cancel_token stored in PasteShared is still 1, so the second
     // paste must NOT be stopped.
-    app.jobs.clipboard = Some(super::super::state::Clipboard {
+    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![src_dir.join("file.txt")],
         op: ClipOp::Yank,
     });
@@ -726,14 +476,14 @@ fn queued_paste_with_missing_destination_fails_and_later_queue_continues() {
     app.navigation.cwd = dst1.clone();
     app.paste().unwrap();
 
-    app.jobs.clipboard = Some(super::super::state::Clipboard {
+    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![src_dir.join("b.txt")],
         op: ClipOp::Yank,
     });
     app.navigation.cwd = missing_dst.clone();
     app.paste().unwrap();
 
-    app.jobs.clipboard = Some(super::super::state::Clipboard {
+    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![src_dir.join("c.txt")],
         op: ClipOp::Yank,
     });
@@ -774,7 +524,7 @@ fn queued_same_destination_pastes_defer_reload_until_queue_drains() {
     app.paste().unwrap();
     let first_token = app.jobs.paste_token;
 
-    app.jobs.clipboard = Some(super::super::state::Clipboard {
+    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![src_dir.join("b.txt")],
         op: ClipOp::Yank,
     });
@@ -828,7 +578,7 @@ fn esc_cancels_active_paste_and_clears_queued_pastes() {
     app.navigation.cwd = dst1.clone();
     app.paste().unwrap();
 
-    app.jobs.clipboard = Some(super::super::state::Clipboard {
+    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![src_dir.join("b.txt")],
         op: ClipOp::Yank,
     });
@@ -904,301 +654,4 @@ fn paste_during_active_paste_without_clipboard_explains_how_to_queue() {
 
     fs::remove_dir_all(&src_dir).unwrap();
     fs::remove_dir_all(&dst_dir).unwrap();
-}
-
-#[test]
-fn copy_overlay_populates_expected_rows_for_selected_file() {
-    let root = temp_path("copy-overlay-rows");
-    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
-    let file = root.join("docs/report.final.md");
-    fs::write(&file, "notes").expect("failed to write test file");
-
-    let mut app = App::new_at(root.join("docs")).expect("failed to create app");
-    app.open_copy_overlay();
-
-    assert!(app.copy_is_open(), "copy overlay should open");
-    assert_eq!(app.copy_title(), "Copy to clipboard");
-    assert_eq!(app.copy_row_count(), 4);
-    assert_eq!(app.copy_row_label(0), "Copy file name");
-    assert_eq!(app.copy_row_label(1), "Name without extension");
-    assert_eq!(app.copy_row_label(2), "File path");
-    assert_eq!(app.copy_row_label(3), "Directory path");
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[cfg(unix)]
-#[test]
-fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {
-    let _lock = clipboard_env_lock();
-    let _env = ClipboardEnvGuard::isolate();
-    let root = temp_path("copy-overlay-copy");
-    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
-    let file = root.join("docs/report final.md");
-    let capture = root.join("clipboard.txt");
-    fs::write(&file, "notes").expect("failed to write test file");
-    let tool = install_fake_clipboard_tool(&root, &capture);
-
-    unsafe {
-        env::set_var("ELIO_TEST_CLIPBOARD_TOOL", &tool);
-    }
-
-    let mut app = App::new_at(root.join("docs")).expect("failed to create app");
-    app.open_copy_overlay();
-    app.handle_copy_key(crossterm::event::KeyEvent::from(
-        crossterm::event::KeyCode::Char('p'),
-    ))
-    .expect("copy shortcut should succeed");
-
-    let copied = fs::read_to_string(&capture).expect("fake clipboard tool should capture text");
-    assert_eq!(
-        copied,
-        file.display().to_string(),
-        "fake clipboard tool should capture the copied file path"
-    );
-    assert_eq!(app.status, "Copied file path");
-    assert!(
-        !app.copy_is_open(),
-        "successful copy should close the overlay"
-    );
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[cfg(unix)]
-#[test]
-fn copy_overlay_shortcut_uses_osc52_when_no_clipboard_tool_is_installed() {
-    let _lock = clipboard_env_lock();
-    let _env = ClipboardEnvGuard::isolate();
-    let root = temp_path("copy-overlay-osc52");
-    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
-    let file = root.join("docs/report final.md");
-    let capture = root.join("osc52.txt");
-    fs::write(&file, "notes").expect("failed to write test file");
-
-    unsafe {
-        env::set_var("ELIO_TEST_OSC52_CAPTURE", &capture);
-        env::set_var("TERM", "xterm-kitty");
-        env::set_var("KITTY_WINDOW_ID", "1");
-    }
-
-    let mut app = App::new_at(root.join("docs")).expect("failed to create app");
-    app.open_copy_overlay();
-    app.handle_copy_key(crossterm::event::KeyEvent::from(
-        crossterm::event::KeyCode::Char('p'),
-    ))
-    .expect("copy shortcut should succeed");
-
-    let osc52 = fs::read_to_string(&capture).expect("osc52 capture should exist");
-    assert!(
-        osc52.starts_with("\u{1b}]52;c;"),
-        "expected osc52 clipboard escape, got: {osc52:?}"
-    );
-    assert!(
-        osc52.ends_with("\u{1b}\\"),
-        "expected osc52 clipboard escape terminator, got: {osc52:?}"
-    );
-    assert_eq!(app.status, "Copied file path");
-    assert!(
-        !app.copy_is_open(),
-        "successful copy should close the overlay"
-    );
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[cfg(unix)]
-#[test]
-fn copy_overlay_shortcut_uses_osc52_in_alacritty_without_clipboard_tool() {
-    let _lock = clipboard_env_lock();
-    let _env = ClipboardEnvGuard::isolate();
-    let root = temp_path("copy-overlay-osc52-alacritty");
-    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
-    let file = root.join("docs/report final.md");
-    let capture = root.join("osc52.txt");
-    fs::write(&file, "notes").expect("failed to write test file");
-
-    unsafe {
-        env::set_var("ELIO_TEST_OSC52_CAPTURE", &capture);
-        env::set_var("TERM", "alacritty");
-        env::set_var("ALACRITTY_SOCKET", "/tmp/elio-alacritty.sock");
-    }
-
-    let mut app = App::new_at(root.join("docs")).expect("failed to create app");
-    app.open_copy_overlay();
-    app.handle_copy_key(crossterm::event::KeyEvent::from(
-        crossterm::event::KeyCode::Char('p'),
-    ))
-    .expect("copy shortcut should succeed");
-
-    let osc52 = fs::read_to_string(&capture).expect("osc52 capture should exist");
-    assert!(
-        osc52.starts_with("\u{1b}]52;c;"),
-        "expected osc52 clipboard escape, got: {osc52:?}"
-    );
-    assert!(
-        osc52.ends_with("\u{1b}\\"),
-        "expected osc52 clipboard escape terminator, got: {osc52:?}"
-    );
-    assert_eq!(app.status, "Copied file path");
-    assert!(
-        !app.copy_is_open(),
-        "successful copy should close the overlay"
-    );
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[cfg(unix)]
-#[test]
-fn copy_overlay_shortcut_uses_osc52_override_for_unknown_terminals() {
-    let _lock = clipboard_env_lock();
-    let _env = ClipboardEnvGuard::isolate();
-    let root = temp_path("copy-overlay-osc52-override");
-    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
-    let file = root.join("docs/report final.md");
-    let capture = root.join("osc52.txt");
-    fs::write(&file, "notes").expect("failed to write test file");
-
-    unsafe {
-        env::set_var("ELIO_TEST_OSC52_CAPTURE", &capture);
-        env::set_var("TERM", "vt100-unknown");
-        env::set_var("ELIO_CLIPBOARD_OSC52", "1");
-    }
-
-    let mut app = App::new_at(root.join("docs")).expect("failed to create app");
-    app.open_copy_overlay();
-    app.handle_copy_key(crossterm::event::KeyEvent::from(
-        crossterm::event::KeyCode::Char('p'),
-    ))
-    .expect("copy shortcut should succeed");
-
-    let osc52 = fs::read_to_string(&capture).expect("osc52 capture should exist");
-    assert!(
-        osc52.starts_with("\u{1b}]52;c;"),
-        "expected osc52 clipboard escape, got: {osc52:?}"
-    );
-    assert!(
-        osc52.ends_with("\u{1b}\\"),
-        "expected osc52 clipboard escape terminator, got: {osc52:?}"
-    );
-    assert_eq!(app.status, "Copied file path");
-    assert!(
-        !app.copy_is_open(),
-        "successful copy should close the overlay"
-    );
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[cfg(unix)]
-#[test]
-fn copy_overlay_skips_osc52_in_tmux_when_tmux_rejects_application_clipboard() {
-    let _lock = clipboard_env_lock();
-    let _env = ClipboardEnvGuard::isolate();
-    let root = temp_path("copy-overlay-tmux-external");
-    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
-    let file = root.join("docs/report final.md");
-    let capture = root.join("clipboard.txt");
-    let osc52_capture = root.join("osc52.txt");
-    fs::write(&file, "notes").expect("failed to write test file");
-    let tool = install_fake_clipboard_tool(&root, &capture);
-
-    unsafe {
-        env::set_var("ELIO_TEST_CLIPBOARD_TOOL", &tool);
-        env::set_var("ELIO_TEST_OSC52_CAPTURE", &osc52_capture);
-        env::set_var("ELIO_TEST_TMUX_SET_CLIPBOARD", "external");
-        env::set_var("TMUX", "/tmp/tmux-test,1,0");
-        env::set_var("TERM", "xterm-kitty");
-        env::set_var("KITTY_WINDOW_ID", "1");
-    }
-
-    let mut app = App::new_at(root.join("docs")).expect("failed to create app");
-    app.open_copy_overlay();
-    app.handle_copy_key(crossterm::event::KeyEvent::from(
-        crossterm::event::KeyCode::Char('p'),
-    ))
-    .expect("copy shortcut should succeed");
-
-    assert!(
-        !osc52_capture.exists(),
-        "tmux set-clipboard=external should prevent application OSC52 writes"
-    );
-    assert_eq!(
-        fs::read_to_string(&capture).expect("fake clipboard tool should capture text"),
-        file.display().to_string()
-    );
-    assert_eq!(app.status, "Copied file path");
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[cfg(unix)]
-#[test]
-fn copy_overlay_reports_short_error_when_no_clipboard_backend_is_available() {
-    let _lock = clipboard_env_lock();
-    let _env = ClipboardEnvGuard::isolate();
-    let root = temp_path("copy-overlay-no-backend");
-    fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
-    let file = root.join("docs/report final.md");
-    fs::write(&file, "notes").expect("failed to write test file");
-
-    unsafe {
-        env::set_var("TERM", "vt100-unknown");
-        env::set_var("PATH", "");
-    }
-
-    let mut app = App::new_at(root.join("docs")).expect("failed to create app");
-    app.open_copy_overlay();
-    app.handle_copy_key(crossterm::event::KeyEvent::from(
-        crossterm::event::KeyCode::Char('p'),
-    ))
-    .expect("copy shortcut should not error");
-
-    assert_eq!(app.status, "Clipboard helper not found");
-    assert!(
-        app.copy_is_open(),
-        "copy overlay should remain open when clipboard copy fails"
-    );
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[cfg(unix)]
-#[test]
-fn copy_overlay_does_not_block_on_backgrounding_clipboard_helpers() {
-    let _lock = clipboard_env_lock();
-    let _env = ClipboardEnvGuard::isolate();
-    let root = temp_path("copy-overlay-background");
-    fs::create_dir_all(&root).expect("failed to create temp root");
-    let report = root.join("aaa-report.txt");
-    fs::write(&report, "hello").expect("failed to write test file");
-    let capture = root.join("clipboard.txt");
-    let tool = install_backgrounding_clipboard_tool(&root, &capture);
-
-    unsafe {
-        env::set_var("ELIO_TEST_CLIPBOARD_TOOL", &tool);
-    }
-
-    let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.open_copy_overlay();
-    let start = std::time::Instant::now();
-    app.handle_copy_key(crossterm::event::KeyEvent::from(
-        crossterm::event::KeyCode::Char('c'),
-    ))
-    .expect("copy confirmation should succeed");
-
-    assert!(
-        start.elapsed() < Duration::from_millis(500),
-        "copy confirmation should not block on helpers that hand work off to background processes"
-    );
-    assert_eq!(
-        fs::read_to_string(&capture).expect("backgrounding clipboard tool should capture stdin"),
-        report
-            .file_name()
-            .expect("test file should have a file name")
-            .to_string_lossy()
-    );
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
 }
