@@ -1,7 +1,7 @@
 use super::super::*;
 pub(super) use crate::app::preview::static_images::StaticImageKey;
-pub(super) use crate::app::preview::terminal_images::{ImageProtocol, TerminalWindowSize};
 pub(super) use crate::preview::PreviewKind;
+pub(super) use crate::terminal_runtime::terminal_images::{ImageProtocol, TerminalWindowSize};
 pub(super) use image::ImageFormat;
 use image::{DynamicImage, Rgba, RgbaImage};
 use std::{

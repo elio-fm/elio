@@ -1,11 +1,11 @@
 use super::{ImageProtocol, TerminalIdentity};
 use std::{env, fs, path::Path, process::Command};
 
-pub(super) fn pdf_preview_tools_available() -> bool {
+pub(crate) fn pdf_preview_tools_available() -> bool {
     command_exists("pdfinfo") && command_exists("pdftocairo")
 }
 
-pub(in crate::app) fn detect_terminal_identity() -> TerminalIdentity {
+pub(crate) fn detect_terminal_identity() -> TerminalIdentity {
     detect_terminal_identity_with(
         real_env_lookup,
         query_tmux_client_termname,
@@ -278,7 +278,7 @@ fn parse_show_environment_line(stdout: &str, name: &str) -> Option<String> {
     None
 }
 
-pub(in crate::app) fn select_image_protocol(
+pub(crate) fn select_image_protocol(
     identity: TerminalIdentity,
     image_previews_override: bool,
 ) -> ImageProtocol {
@@ -320,7 +320,7 @@ fn select_image_protocol_with_zellij(
     }
 }
 
-pub(in crate::app) fn command_exists(program: &str) -> bool {
+pub(crate) fn command_exists(program: &str) -> bool {
     if program.is_empty() {
         return false;
     }
@@ -361,4 +361,5 @@ fn executable_file_exists(path: &Path) -> bool {
 }
 
 #[cfg(test)]
+#[path = "tests/protocol.rs"]
 mod tests;

@@ -1,7 +1,7 @@
-use crate::app::preview::terminal_images::TerminalWindowSize;
 use crate::file_operations::ClipOp;
 use crate::fs::{Entry, SortMode};
 use crate::fuzzy_finder::SearchScope;
+use crate::terminal_runtime::terminal_images::TerminalWindowSize;
 use crate::{preview, preview::PreviewWorkClass};
 use std::{path::PathBuf, time::SystemTime};
 

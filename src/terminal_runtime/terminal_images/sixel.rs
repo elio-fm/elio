@@ -49,7 +49,7 @@ pub(crate) fn encode_sixel_dcs(path: &Path, target_w: u32, target_h: u32) -> Res
 ///
 /// This is O(n) in the DCS buffer size due to the memory copy, but avoids
 /// re-running the expensive encode for re-renders of the same image.
-pub(in crate::app) fn place_sixel_from_dcs(dcs: &[u8], placement: Rect) -> Result<Vec<u8>> {
+pub(crate) fn place_sixel_from_dcs(dcs: &[u8], placement: Rect) -> Result<Vec<u8>> {
     if tmux::inside_tmux() {
         if detect_terminal_identity() == TerminalIdentity::WindowsTerminal {
             return Ok(build_sixel_tmux_native_placement_sequence(dcs, placement));
@@ -368,4 +368,5 @@ fn rle_encode_sixel_row(out: &mut Vec<u8>, data: &[u8]) -> Result<()> {
 }
 
 #[cfg(test)]
+#[path = "tests/sixel.rs"]
 mod tests;

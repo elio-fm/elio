@@ -1,6 +1,8 @@
-use super::super::terminal_images::{TerminalWindowSize, fit_image_area, fit_image_pixels};
 use super::{
     FittedPdfPlacement, PDF_RENDER_BUCKET_PX, PDF_RENDER_MIN_DIMENSION_PX, PdfPageDimensions,
+};
+use crate::terminal_runtime::terminal_images::{
+    TerminalWindowSize, fit_image_area, fit_image_pixels,
 };
 use ratatui::layout::Rect;
 

@@ -9,8 +9,7 @@ mod types;
 
 use self::format::read_raster_dimensions;
 use super::super::*;
-use super::terminal_images::TerminalWindowSize;
-use super::terminal_images::read_png_dimensions;
+use crate::terminal_runtime::terminal_images::{TerminalWindowSize, read_png_dimensions};
 use ratatui::layout::Rect;
 
 pub(crate) use self::prepare::prepare_static_image_asset;

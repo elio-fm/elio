@@ -9,7 +9,7 @@ use std::{
 use anyhow::{Context, Result};
 
 use super::{
-    preview::{comic, epub, pdf, static_images, terminal_images},
+    preview::{comic, epub, pdf, static_images, terminal_image_previews},
     types::*,
 };
 use crate::background_jobs::{JobScheduler, job_requests::ArchiveExtractRequest};
@@ -527,7 +527,7 @@ pub(in crate::app) struct PreviewRuntime {
     pub(in crate::app) image: static_images::ImagePreviewState,
     pub(in crate::app) media: MediaPreviewState,
     pub(in crate::app) pdf: pdf::PdfPreviewState,
-    pub(in crate::app) terminal_images: terminal_images::TerminalImageState,
+    pub(in crate::app) terminal_images: terminal_image_previews::TerminalImageState,
 }
 
 #[derive(Default)]
@@ -738,7 +738,7 @@ impl App {
                 image: static_images::ImagePreviewState::default(),
                 media: MediaPreviewState::default(),
                 pdf: pdf::PdfPreviewState::default(),
-                terminal_images: terminal_images::TerminalImageState::default(),
+                terminal_images: terminal_image_previews::TerminalImageState::default(),
             },
             overlays: OverlayState::default(),
             jobs: JobRuntime {
@@ -833,19 +833,15 @@ impl App {
     }
 
     pub(in crate::app) fn ffprobe_available(&mut self) -> bool {
-        *self
-            .preview
-            .media
-            .ffprobe_available
-            .get_or_insert_with(|| terminal_images::command_exists("ffprobe"))
+        *self.preview.media.ffprobe_available.get_or_insert_with(|| {
+            crate::terminal_runtime::terminal_images::command_exists("ffprobe")
+        })
     }
 
     pub(in crate::app) fn media_ffmpeg_available(&mut self) -> bool {
-        *self
-            .preview
-            .media
-            .ffmpeg_available
-            .get_or_insert_with(|| terminal_images::command_exists("ffmpeg"))
+        *self.preview.media.ffmpeg_available.get_or_insert_with(|| {
+            crate::terminal_runtime::terminal_images::command_exists("ffmpeg")
+        })
     }
 
     #[cfg(test)]

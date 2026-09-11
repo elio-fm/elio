@@ -1,7 +1,7 @@
 use super::*;
-use crate::app::preview::terminal_images::{
-    ImageProtocol, OverlayPresentState, RenderedImageDimensions, TerminalIdentity,
-    TerminalWindowSize,
+use crate::app::preview::terminal_image_previews::OverlayPresentState;
+use crate::terminal_runtime::terminal_images::{
+    ImageProtocol, RenderedImageDimensions, TerminalIdentity, TerminalWindowSize,
 };
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use ratatui::{buffer::Buffer, layout::Rect};
@@ -413,7 +413,7 @@ fn foot_sixel_limits_nearby_static_image_preloads() {
     configure_terminal_image_support(&mut app);
     app.preview.terminal_images.protocol = ImageProtocol::Sixel;
     app.preview.terminal_images.identity =
-        crate::app::preview::terminal_images::TerminalIdentity::Foot;
+        crate::terminal_runtime::terminal_images::TerminalIdentity::Foot;
     app.preview.pdf.pdf_tools_available = true;
     app.navigation.view_mode = ViewMode::List;
     app.set_ffmpeg_available_for_tests(true);
@@ -471,7 +471,7 @@ fn windows_terminal_sixel_limits_nearby_static_image_preloads() {
     configure_terminal_image_support(&mut app);
     app.preview.terminal_images.protocol = ImageProtocol::Sixel;
     app.preview.terminal_images.identity =
-        crate::app::preview::terminal_images::TerminalIdentity::WindowsTerminal;
+        crate::terminal_runtime::terminal_images::TerminalIdentity::WindowsTerminal;
     app.preview.pdf.pdf_tools_available = true;
     app.navigation.view_mode = ViewMode::List;
     app.set_ffmpeg_available_for_tests(true);

@@ -1,8 +1,9 @@
 use super::DisplayedPdfPreview;
 use crate::app::App;
 use crate::app::preview::static_images::SixelDcsKey;
-use crate::app::preview::terminal_images::{
-    ImageProtocol, OverlayPresentState, place_sixel_from_dcs, place_terminal_image, preview_log,
+use crate::app::preview::terminal_image_previews::OverlayPresentState;
+use crate::terminal_runtime::terminal_images::{
+    ImageProtocol, place_sixel_from_dcs, place_terminal_image, preview_log,
 };
 use anyhow::{Context, Result};
 use ratatui::layout::Rect;

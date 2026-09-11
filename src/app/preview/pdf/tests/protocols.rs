@@ -51,7 +51,7 @@ fn iterm_png_and_jpeg_static_images_use_direct_source_payloads() {
         assert_eq!(prepared.display_path, path);
         assert_eq!(
             prepared.dimensions,
-            crate::app::preview::terminal_images::RenderedImageDimensions {
+            crate::terminal_runtime::terminal_images::RenderedImageDimensions {
                 width_px: 600,
                 height_px: 300,
             }
@@ -126,8 +126,8 @@ fn iterm_large_jpeg_static_image_uses_compact_cached_payload() {
 #[test]
 fn iterm_inline_protocol_uses_preencoded_payload_without_reading_source() {
     let output = String::from_utf8(
-        crate::app::preview::terminal_images::place_terminal_image(
-            crate::app::preview::terminal_images::ImageProtocol::ItermInline,
+        crate::terminal_runtime::terminal_images::place_terminal_image(
+            crate::terminal_runtime::terminal_images::ImageProtocol::ItermInline,
             std::path::Path::new("/definitely/missing.png"),
             Rect {
                 x: 2,
@@ -155,8 +155,8 @@ fn konsole_protocol_uses_kitty_graphics_sequence_for_pngs() {
     write_test_raster_image(&path, ImageFormat::Png, 600, 300);
 
     let output = String::from_utf8(
-        crate::app::preview::terminal_images::place_terminal_image(
-            crate::app::preview::terminal_images::ImageProtocol::KittyDirectGraphics,
+        crate::terminal_runtime::terminal_images::place_terminal_image(
+            crate::terminal_runtime::terminal_images::ImageProtocol::KittyDirectGraphics,
             &path,
             Rect {
                 x: 2,

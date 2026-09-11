@@ -2,7 +2,7 @@ use super::{RenderedImageDimensions, TerminalWindowSize};
 use ratatui::layout::Rect;
 use std::{fs::File, io::Read, path::Path};
 
-pub(in crate::app) fn read_png_dimensions(path: &Path) -> Option<RenderedImageDimensions> {
+pub(crate) fn read_png_dimensions(path: &Path) -> Option<RenderedImageDimensions> {
     let mut file = File::open(path).ok()?;
     let mut header = [0_u8; 24];
     file.read_exact(&mut header).ok()?;
@@ -18,7 +18,7 @@ pub(in crate::app) fn read_png_dimensions(path: &Path) -> Option<RenderedImageDi
     })
 }
 
-pub(in crate::app) fn fit_image_pixels(
+pub(crate) fn fit_image_pixels(
     area: Rect,
     window_size: TerminalWindowSize,
     aspect_ratio: f32,
@@ -39,7 +39,7 @@ pub(in crate::app) fn fit_image_pixels(
     }
 }
 
-pub(in crate::app) fn fit_image_area(
+pub(crate) fn fit_image_area(
     area: Rect,
     window_size: TerminalWindowSize,
     aspect_ratio: f32,
@@ -71,14 +71,14 @@ pub(crate) fn area_pixel_size(area: Rect, window_size: TerminalWindowSize) -> (u
     (w.max(1), h.max(1))
 }
 
-pub(super) fn push_unique_rect(rects: &mut Vec<Rect>, area: Rect) {
+pub(crate) fn push_unique_rect(rects: &mut Vec<Rect>, area: Rect) {
     if area.width == 0 || area.height == 0 || rects.contains(&area) {
         return;
     }
     rects.push(area);
 }
 
-pub(super) fn intersect_rect(a: Rect, b: Rect) -> Option<Rect> {
+pub(crate) fn intersect_rect(a: Rect, b: Rect) -> Option<Rect> {
     let left = a.x.max(b.x);
     let top = a.y.max(b.y);
     let right = a.x.saturating_add(a.width).min(b.x.saturating_add(b.width));

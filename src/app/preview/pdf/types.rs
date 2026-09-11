@@ -1,5 +1,5 @@
 use crate::app::Entry;
-use crate::app::preview::terminal_images::RenderedImageDimensions;
+use crate::terminal_runtime::terminal_images::RenderedImageDimensions;
 use ratatui::layout::Rect;
 use std::{
     collections::{HashMap, HashSet, VecDeque},

@@ -1,13 +1,15 @@
-use super::terminal_images::{ImageProtocol, TerminalIdentity};
 use super::*;
 use crate::preview::{
     PreviewContent, PreviewKind, PreviewRequestOptions, default_code_preview_line_limit,
 };
+use crate::terminal_runtime::terminal_images::{ImageProtocol, TerminalIdentity};
 use std::{
     fs,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+mod terminal_image_previews;
 
 fn temp_path(label: &str) -> PathBuf {
     let unique = SystemTime::now()
