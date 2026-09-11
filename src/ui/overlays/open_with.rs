@@ -1,6 +1,5 @@
-use super::scrollbar::render_overlay_scrollbar;
 use crate::app::{App, FrameState, OpenWithHit};
-use crate::ui::{helpers, theme::Palette};
+use crate::ui::{helpers, scrollbars::render_overlay_scrollbar, theme::Palette};
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
@@ -9,7 +8,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
-pub(super) fn render_open_with_overlay(
+pub(in crate::ui) fn render_open_with_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,

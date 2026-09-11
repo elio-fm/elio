@@ -1,7 +1,12 @@
-mod browser;
-mod chrome;
+mod file_browser_pane;
 mod helpers;
-mod overlay_manager;
+mod navigation_bar;
+mod overlays;
+mod pane_layout;
+mod places_pane;
+mod preview_pane;
+mod scrollbars;
+mod status_bar;
 pub(crate) mod theme;
 
 use crate::{
@@ -76,9 +81,9 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
             ])
             .split(area);
 
-        chrome::render_toolbar(frame, rows[0], app, state, palette);
-        browser::render_body(frame, rows[1], app, state, palette);
-        chrome::render_status(frame, rows[2], app, palette);
+        navigation_bar::render_navigation_bar(frame, rows[0], app, state, palette);
+        pane_layout::render_panes(frame, rows[1], app, state, palette);
+        status_bar::render_status_bar(frame, rows[2], app, palette);
     } else {
         let rows = ratatui::layout::Layout::default()
             .direction(ratatui::layout::Direction::Vertical)
@@ -88,8 +93,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
             ])
             .split(area);
 
-        browser::render_body(frame, rows[0], app, state, palette);
-        chrome::render_status(frame, rows[1], app, palette);
+        pane_layout::render_panes(frame, rows[0], app, state, palette);
+        status_bar::render_status_bar(frame, rows[1], app, palette);
     }
 
     if app.duplicates_is_open() {
@@ -97,8 +102,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
             height: area.height.saturating_sub(1),
             ..area
         };
-        overlay_manager::render_duplicate_overlay(frame, duplicate_area, app, state, palette);
-        chrome::render_status(
+        overlays::render_duplicate_finder_overlay(frame, duplicate_area, app, state, palette);
+        status_bar::render_status_bar(
             frame,
             ratatui::layout::Rect {
                 y: area.y + area.height.saturating_sub(1),
@@ -111,60 +116,33 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
     }
 
     if app.trash_is_open() {
-        overlay_manager::render_trash_overlay(frame, area, app, state, palette);
+        overlays::render_trash_delete_overlay(frame, area, app, state, palette);
     } else if app.restore_is_open() {
-        overlay_manager::render_restore_overlay(frame, area, app, state, palette);
+        overlays::render_restore_overlay(frame, area, app, state, palette);
     } else if app.archive_password_is_open() {
-        overlay_manager::render_archive_password_overlay(frame, area, app, state, palette);
+        overlays::render_archive_password_overlay(frame, area, app, state, palette);
     } else if app.archive_create_is_open() {
-        overlay_manager::render_archive_create_overlay(frame, area, app, state, palette);
+        overlays::render_archive_create_overlay(frame, area, app, state, palette);
     } else if app.create_is_open() {
-        overlay_manager::render_create_overlay(frame, area, app, state, palette);
+        overlays::render_create_overlay(frame, area, app, state, palette);
     } else if app.rename_is_open() {
-        overlay_manager::render_rename_overlay(frame, area, app, state, palette);
+        overlays::render_rename_overlay(frame, area, app, state, palette);
     } else if app.bulk_rename_is_open() {
-        overlay_manager::render_bulk_rename_overlay(frame, area, app, state, palette);
+        overlays::render_bulk_rename_overlay(frame, area, app, state, palette);
     } else if app.editor_rename_confirm_is_open() {
-        overlay_manager::render_editor_rename_confirm_overlay(frame, area, app, state, palette);
+        overlays::render_editor_rename_confirm_overlay(frame, area, app, state, palette);
     } else if app.goto_is_open() {
-        overlay_manager::render_goto_overlay(frame, area, app, state, palette);
+        overlays::render_goto_overlay(frame, area, app, state, palette);
     } else if app.copy_is_open() {
-        overlay_manager::render_copy_overlay(frame, area, app, state, palette);
+        overlays::render_copy_to_clipboard_overlay(frame, area, app, state, palette);
     } else if app.open_with_is_open() {
-        overlay_manager::render_open_with_overlay(frame, area, app, state, palette);
+        overlays::render_open_with_overlay(frame, area, app, state, palette);
     } else if app.search_is_open() {
-        overlay_manager::render_search_overlay(frame, area, app, state, palette);
+        overlays::render_fuzzy_finder_overlay(frame, area, app, state, palette);
     } else if app.overlays.help {
-        overlay_manager::render_help(frame, area, app, state, palette);
+        overlays::render_help_overlay(frame, area, app, state, palette);
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::{DuplicateHit, FrameState};
-    use ratatui::{Terminal, backend::TestBackend, layout::Rect};
-
-    #[test]
-    fn render_clears_duplicate_frame_hits_before_drawing() {
-        let mut terminal = Terminal::new(TestBackend::new(40, 12)).expect("terminal should init");
-        let app = App::new().expect("app should init");
-        let mut state = FrameState {
-            duplicate_hits: vec![DuplicateHit {
-                rect: Rect::new(1, 1, 5, 1),
-                index: 42,
-            }],
-            duplicate_panel: Some(Rect::new(0, 0, 10, 10)),
-            duplicate_rows_visible: 9,
-            ..FrameState::default()
-        };
-
-        terminal
-            .draw(|frame| render(frame, &app, &mut state))
-            .expect("ui should render");
-
-        assert!(state.duplicate_hits.is_empty());
-        assert!(state.duplicate_panel.is_none());
-        assert_eq!(state.duplicate_rows_visible, 0);
-    }
-}
+mod tests;

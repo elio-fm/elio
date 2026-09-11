@@ -1,7 +1,7 @@
-use super::{edit_overlay_visible_rows, scrollbar::render_overlay_scrollbar_on_bg};
 use crate::app::{App, FrameState};
 use crate::ui::{
     helpers,
+    scrollbars::{render_overlay_scrollbar_on_bg, visible_edit_rows},
     theme::{self, Palette},
 };
 use ratatui::{
@@ -12,7 +12,7 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-pub(super) fn render_archive_create_overlay(
+pub(in crate::ui) fn render_archive_create_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
@@ -20,7 +20,7 @@ pub(super) fn render_archive_create_overlay(
     palette: Palette,
 ) {
     let item_count = app.archive_create_source_names().len();
-    let visible_lines = edit_overlay_visible_rows(area, item_count, 8);
+    let visible_lines = visible_edit_rows(area, item_count, 8);
     let popup_width = area.width.saturating_sub(8).clamp(40, 68);
     let max_height = (visible_lines + 8).min(area.height.max(4));
     let inner_height = max_height.saturating_sub(2);

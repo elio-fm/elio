@@ -1,6 +1,5 @@
-use super::scrollbar::render_overlay_scrollbar_on_bg;
 use crate::app::{App, FrameState};
-use crate::ui::{helpers, theme::Palette};
+use crate::ui::{helpers, scrollbars::render_overlay_scrollbar_on_bg, theme::Palette};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Margin, Rect},
@@ -9,7 +8,7 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-pub(super) fn render_editor_rename_confirm_overlay(
+pub(in crate::ui) fn render_editor_rename_confirm_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,

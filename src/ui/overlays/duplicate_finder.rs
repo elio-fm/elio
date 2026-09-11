@@ -1,7 +1,7 @@
-use super::scrollbar::render_overlay_scrollbar;
 use crate::app::{App, DuplicateHit, FrameState};
 use crate::ui::{
     helpers,
+    scrollbars::{render_overlay_scrollbar, render_preview_scrollbar},
     theme::{self, Palette},
 };
 use ratatui::{
@@ -18,7 +18,7 @@ const MIN_PREVIEW_WIDTH: u16 = 14;
 const MIN_DUPLICATE_NAME_WIDTH: usize = 18;
 const MIN_DUPLICATE_PARENT_WIDTH: usize = 10;
 
-pub(super) fn render_duplicate_overlay(
+pub(in crate::ui) fn render_duplicate_finder_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
@@ -498,137 +498,6 @@ fn render_duplicate_preview(
     }
 }
 
-fn render_preview_scrollbar(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    app: &App,
-    visible_rows: usize,
-    visible_cols: usize,
-    palette: Palette,
-) {
-    let total = app.preview_total_lines(visible_cols);
-    if area.height == 0 || total <= visible_rows.max(1) {
-        frame.render_widget(
-            Paragraph::new(" ").style(Style::default().bg(palette.panel).fg(palette.border)),
-            area,
-        );
-        return;
-    }
-    let track = vec![
-        Line::from(Span::styled("│", Style::default().fg(palette.border)));
-        area.height as usize
-    ];
-    frame.render_widget(
-        Paragraph::new(track).style(Style::default().bg(palette.panel)),
-        area,
-    );
-    let thumb_height = ((visible_rows.max(1) * area.height as usize) / total)
-        .max(1)
-        .min(area.height as usize);
-    let max_scroll = total.saturating_sub(visible_rows.max(1));
-    let thumb_max_top = area.height as usize - thumb_height;
-    let thumb_top = app
-        .preview_scroll_offset()
-        .checked_mul(thumb_max_top)
-        .and_then(|offset| offset.checked_div(max_scroll))
-        .unwrap_or(0);
-    let thumb = Rect {
-        x: area.x,
-        y: area.y + thumb_top as u16,
-        width: area.width,
-        height: thumb_height as u16,
-    };
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled(
-                "┃",
-                Style::default()
-                    .fg(palette.accent)
-                    .add_modifier(Modifier::BOLD),
-            ));
-            thumb.height as usize
-        ])
-        .style(Style::default().bg(palette.panel)),
-        thumb,
-    );
-}
-
 #[cfg(test)]
-mod tests {
-    use super::{
-        MIN_PREVIEW_WIDTH, MIN_RESULTS_WIDTH_WITH_PREVIEW, duplicate_group_label,
-        duplicate_loading_status, duplicate_partial_status, duplicate_preview_width,
-    };
-    use crate::fs::duplicates::{DuplicateScanPhase, DuplicateScanStats};
-
-    #[test]
-    fn duplicate_group_labels_zero_pad_to_rank_width() {
-        assert_eq!(duplicate_group_label(9, 1), "G9");
-        assert_eq!(duplicate_group_label(9, 2), "G09");
-        assert_eq!(duplicate_group_label(10, 2), "G10");
-        assert_eq!(duplicate_group_label(100, 3), "G100");
-    }
-
-    #[test]
-    fn duplicate_preview_width_scales_with_available_space() {
-        let compact = MIN_RESULTS_WIDTH_WITH_PREVIEW + MIN_PREVIEW_WIDTH;
-        assert_eq!(duplicate_preview_width(compact), MIN_PREVIEW_WIDTH);
-        assert_eq!(duplicate_preview_width(80), 20);
-        assert_eq!(duplicate_preview_width(120), 34);
-        assert_eq!(duplicate_preview_width(200), 60);
-    }
-
-    #[test]
-    fn duplicate_preview_width_is_monotonic_while_shrinking() {
-        let first = MIN_RESULTS_WIDTH_WITH_PREVIEW + MIN_PREVIEW_WIDTH;
-        let mut previous = duplicate_preview_width(first);
-        for width in first + 1..220 {
-            let current = duplicate_preview_width(width);
-            assert!(
-                current >= previous,
-                "preview width regressed at total width {width}: {current} < {previous}"
-            );
-            previous = current;
-        }
-    }
-
-    #[test]
-    fn duplicate_loading_status_shows_bytes_read_while_checking() {
-        let status = duplicate_loading_status(
-            DuplicateScanStats {
-                phase: DuplicateScanPhase::ContentChecking,
-                checked_candidates: 300_549,
-                candidate_files: 300_552,
-                processed_bytes: 170_000_000_000,
-                cached_hashes: 42,
-                duplicate_bytes: 21_000_000_000,
-                ..DuplicateScanStats::default()
-            },
-            18,
-        );
-
-        assert_eq!(
-            status,
-            "checking… • 300549/300552 checked • 170 GB read • 42 cached • 18 groups • 21 GB reclaimable"
-        );
-    }
-
-    #[test]
-    fn duplicate_partial_status_omits_bytes_read_after_stop() {
-        let status = duplicate_partial_status(
-            DuplicateScanStats {
-                checked_candidates: 300_549,
-                candidate_files: 300_552,
-                processed_bytes: 170_000_000_000,
-                duplicate_bytes: 21_000_000_000,
-                ..DuplicateScanStats::default()
-            },
-            18,
-        );
-
-        assert_eq!(
-            status,
-            "partial results • 300549/300552 checked • 18 groups • 21 GB reclaimable"
-        );
-    }
-}
+#[path = "tests/duplicate_finder.rs"]
+mod tests;

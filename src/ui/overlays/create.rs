@@ -1,9 +1,7 @@
-use super::{
-    compute_scroll_top, edit_overlay_visible_rows, scrollbar::render_overlay_scrollbar_on_bg,
-};
 use crate::app::{App, FrameState};
 use crate::ui::{
     helpers,
+    scrollbars::{render_overlay_scrollbar_on_bg, scroll_top_for_cursor, visible_edit_rows},
     theme::{self, Palette},
 };
 use ratatui::{
@@ -14,7 +12,7 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-pub(super) fn render_create_overlay(
+pub(in crate::ui) fn render_create_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
@@ -22,7 +20,7 @@ pub(super) fn render_create_overlay(
     palette: Palette,
 ) {
     let line_count = app.create_line_count().max(1);
-    let visible_lines = edit_overlay_visible_rows(area, line_count, 5);
+    let visible_lines = visible_edit_rows(area, line_count, 5);
     let popup_width = area.width.saturating_sub(8).clamp(36, 64);
     let popup_height = visible_lines + 5;
     let popup = helpers::centered_rect(area, popup_width, popup_height);
@@ -55,7 +53,7 @@ pub(super) fn render_create_overlay(
 
     let cursor_line = app.create_cursor_line();
     let cursor_col = app.create_cursor_col();
-    let scroll_top = compute_scroll_top(cursor_line, visible_lines as usize);
+    let scroll_top = scroll_top_for_cursor(cursor_line, visible_lines as usize);
     state.create_list_area = Some(list_area);
     state.create_scroll_top = scroll_top;
 

@@ -1,4 +1,4 @@
-use super::super::{helpers, theme::Palette};
+use super::{helpers, theme::Palette};
 use crate::app::{App, FrameState, PathHit, SidebarRow};
 use ratatui::{
     Frame,
@@ -10,7 +10,7 @@ use ratatui::{
 
 const ICON_ONLY_SIDEBAR_WIDTH: u16 = 5;
 
-pub(super) fn render_sidebar(
+pub(super) fn render_places_pane(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,

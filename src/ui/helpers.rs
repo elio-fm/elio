@@ -119,67 +119,6 @@ pub(super) fn chip_span<'a>(label: &'a str, bg: Color, fg: Color, bold: bool) ->
     Span::styled(format!(" {label} "), style)
 }
 
-#[derive(Clone, Copy)]
-pub(super) struct GridZoomSpec {
-    pub tile_width_hint: u16,
-    pub min_tile_width: u16,
-    pub tile_height: u16,
-    pub gap_x: u16,
-    pub gap_y: u16,
-    pub padding_x: u16,
-    pub emphasize_icon: bool,
-    pub show_kind_hint: bool,
-}
-
-pub(super) fn grid_zoom_spec(zoom: u8) -> GridZoomSpec {
-    match zoom {
-        0 => GridZoomSpec {
-            tile_width_hint: 16,
-            min_tile_width: 14,
-            tile_height: 2,
-            gap_x: 1,
-            gap_y: 1,
-            padding_x: 1,
-            emphasize_icon: false,
-            show_kind_hint: false,
-        },
-        1 => GridZoomSpec {
-            tile_width_hint: 20,
-            min_tile_width: 18,
-            tile_height: 3,
-            gap_x: 1,
-            gap_y: 1,
-            padding_x: 1,
-            emphasize_icon: false,
-            show_kind_hint: false,
-        },
-        2 => GridZoomSpec {
-            tile_width_hint: 24,
-            min_tile_width: 21,
-            tile_height: 5,
-            gap_x: 2,
-            gap_y: 1,
-            padding_x: 2,
-            emphasize_icon: true,
-            show_kind_hint: false,
-        },
-        _ => GridZoomSpec {
-            tile_width_hint: 24,
-            min_tile_width: 21,
-            tile_height: 5,
-            gap_x: 2,
-            gap_y: 1,
-            padding_x: 2,
-            emphasize_icon: true,
-            show_kind_hint: false,
-        },
-    }
-}
-
-pub(super) fn list_row_height() -> u16 {
-    1
-}
-
 pub(super) fn stable_path_label(path: &Path, max_chars: usize) -> String {
     let display = if let Some(home) = env::var_os("HOME") {
         let home = std::path::PathBuf::from(home);
