@@ -71,9 +71,10 @@ impl ImagePreparePool {
             workers.push(thread::spawn(move || {
                 while let Some((request, canceled)) = ImagePrepareShared::pop(&shared) {
                     let key = ImagePrepareJobKey::from_request(&request);
-                    let result = overlays::images::prepare_static_image_asset(&request, || {
-                        canceled.load(Ordering::Relaxed)
-                    });
+                    let result =
+                        preview::static_images::prepare_static_image_asset(&request, || {
+                            canceled.load(Ordering::Relaxed)
+                        });
                     ImagePrepareShared::finish(&shared, &key);
                     if result_tx
                         .send(JobResult::ImagePrepare(ImagePrepareBuild {

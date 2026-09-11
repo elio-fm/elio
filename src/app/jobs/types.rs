@@ -1,6 +1,6 @@
-use crate::app::overlays::images::{PreparedStaticImageAsset, SixelDcsKey};
-use crate::app::overlays::inline_image::TerminalWindowSize;
-use crate::app::overlays::pdf::PdfProbeResult;
+use crate::app::preview::pdf::PdfProbeResult;
+use crate::app::preview::static_images::{PreparedStaticImageAsset, SixelDcsKey};
+use crate::app::preview::terminal_images::TerminalWindowSize;
 use crate::app::{ClipOp, SearchScope};
 use crate::duplicate_finder::{DuplicateScanBatch, DuplicateScanResult};
 use crate::fs::{Entry, SortMode};

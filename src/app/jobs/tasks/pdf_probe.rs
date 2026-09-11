@@ -60,7 +60,7 @@ impl PdfProbePool {
             workers.push(thread::spawn(move || {
                 while let Some(request) = PdfProbeShared::pop(&shared) {
                     let key = PdfProbeJobKey::from_request(&request);
-                    let result = overlays::pdf::probe_pdf_page(&request.path, request.page)
+                    let result = preview::pdf::probe_pdf_page(&request.path, request.page)
                         .map_err(|error| error.to_string());
                     PdfProbeShared::finish(&shared, &key);
                     if result_tx

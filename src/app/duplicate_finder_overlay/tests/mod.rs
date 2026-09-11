@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::app::overlays::inline_image::{ImageProtocol, TerminalIdentity};
+use crate::app::preview::terminal_images::{ImageProtocol, TerminalIdentity};
 use std::{
     fs,
     path::PathBuf,

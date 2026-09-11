@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 
 use super::{
     jobs::{ArchiveExtractRequest, JobScheduler},
-    overlays::{comic, epub, images, inline_image, pdf},
+    preview::{comic, epub, pdf, static_images, terminal_images},
     types::*,
 };
 use crate::duplicate_finder::{DuplicateGroup, DuplicateScanStats};
@@ -524,10 +524,10 @@ pub(in crate::app) struct PreviewRuntime {
     pub(in crate::app) state: PreviewState,
     pub(in crate::app) comic: comic::ComicPreviewState,
     pub(in crate::app) epub: epub::EpubPreviewState,
-    pub(in crate::app) image: images::ImagePreviewState,
+    pub(in crate::app) image: static_images::ImagePreviewState,
     pub(in crate::app) media: MediaPreviewState,
     pub(in crate::app) pdf: pdf::PdfPreviewState,
-    pub(in crate::app) terminal_images: inline_image::TerminalImageState,
+    pub(in crate::app) terminal_images: terminal_images::TerminalImageState,
 }
 
 #[derive(Default)]
@@ -735,10 +735,10 @@ impl App {
                 },
                 comic: comic::ComicPreviewState::default(),
                 epub: epub::EpubPreviewState::default(),
-                image: images::ImagePreviewState::default(),
+                image: static_images::ImagePreviewState::default(),
                 media: MediaPreviewState::default(),
                 pdf: pdf::PdfPreviewState::default(),
-                terminal_images: inline_image::TerminalImageState::default(),
+                terminal_images: terminal_images::TerminalImageState::default(),
             },
             overlays: OverlayState::default(),
             jobs: JobRuntime {
@@ -837,7 +837,7 @@ impl App {
             .preview
             .media
             .ffprobe_available
-            .get_or_insert_with(|| inline_image::command_exists("ffprobe"))
+            .get_or_insert_with(|| terminal_images::command_exists("ffprobe"))
     }
 
     pub(in crate::app) fn media_ffmpeg_available(&mut self) -> bool {
@@ -845,7 +845,7 @@ impl App {
             .preview
             .media
             .ffmpeg_available
-            .get_or_insert_with(|| inline_image::command_exists("ffmpeg"))
+            .get_or_insert_with(|| terminal_images::command_exists("ffmpeg"))
     }
 
     #[cfg(test)]
