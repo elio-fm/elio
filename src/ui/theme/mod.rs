@@ -2,7 +2,7 @@ mod appearance;
 mod builtin_themes;
 
 use crate::{
-    file_info::FileClass,
+    file_classification::FileClass,
     fs::{Entry, EntryKind, SymlinkInfo},
 };
 use ratatui::style::Color;

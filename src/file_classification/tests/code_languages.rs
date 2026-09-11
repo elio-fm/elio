@@ -1,11 +1,9 @@
-use super::*;
-use crate::{
-    file_info::{CodeBackend, CustomCodeKind, StructuredFormat},
-    preview::code::syntax_manifest::CURATED_SYNTAXES,
+use crate::file_classification::{
+    CodeBackend, CustomCodeKind, StructuredFormat, code_languages::*,
 };
 
-fn assert_registered_language(
-    language: Option<RegisteredLanguage>,
+fn assert_detected_language(
+    language: Option<CodeLanguage>,
     canonical_id: &'static str,
     display_label: &'static str,
     backend: CodeBackend,
@@ -19,7 +17,7 @@ fn assert_registered_language(
 }
 
 #[test]
-fn extension_lookup_returns_canonical_language_ids() {
+fn extension_detection_returns_canonical_language_ids() {
     assert_eq!(
         language_for_extension("js").map(|language| language.canonical_id),
         Some("javascript")
@@ -95,7 +93,7 @@ fn extension_lookup_returns_canonical_language_ids() {
 }
 
 #[test]
-fn exact_name_lookup_handles_lockfiles_and_env_variants() {
+fn exact_name_detection_handles_lockfiles_and_env_variants() {
     assert_eq!(
         language_for_exact_name("uv.lock").map(|language| language.canonical_id),
         Some("toml")
@@ -131,7 +129,7 @@ fn exact_name_lookup_handles_lockfiles_and_env_variants() {
 }
 
 #[test]
-fn shebang_and_modeline_lookups_share_one_source_of_truth() {
+fn shebang_and_modeline_detection_share_one_source_of_truth() {
     assert_eq!(
         language_for_shebang("bash").map(|language| language.canonical_id),
         Some("bash")
@@ -199,7 +197,7 @@ fn shebang_and_modeline_lookups_share_one_source_of_truth() {
 }
 
 #[test]
-fn markdown_fence_lookup_supports_common_aliases() {
+fn markdown_fence_detection_supports_common_aliases() {
     assert_eq!(
         language_for_markdown_fence("rs").map(|language| language.canonical_id),
         Some("rust")
@@ -259,64 +257,64 @@ fn markdown_fence_lookup_supports_common_aliases() {
 }
 
 #[test]
-fn registry_resolution_preserves_backend_and_structured_metadata() {
-    assert_registered_language(
+fn language_detection_preserves_backend_and_structured_metadata() {
+    assert_detected_language(
         language_for_extension("yaml"),
         "yaml",
         "YAML",
         CodeBackend::Custom(CustomCodeKind::Yaml),
         Some(StructuredFormat::Yaml),
     );
-    assert_registered_language(
+    assert_detected_language(
         language_for_exact_name(".env.production"),
         "dotenv",
         ".env",
         CodeBackend::Custom(CustomCodeKind::Ini),
         Some(StructuredFormat::Dotenv),
     );
-    assert_registered_language(
+    assert_detected_language(
         language_for_exact_name("Cargo.lock"),
         "toml",
         "TOML",
         CodeBackend::Custom(CustomCodeKind::Toml),
         Some(StructuredFormat::Toml),
     );
-    assert_registered_language(
+    assert_detected_language(
         language_for_shebang("bash"),
         "bash",
         "Bash",
         CodeBackend::Syntect,
         None,
     );
-    assert_registered_language(
+    assert_detected_language(
         language_for_modeline(" c++ "),
         "cpp",
         "C++",
         CodeBackend::Syntect,
         None,
     );
-    assert_registered_language(
+    assert_detected_language(
         language_for_markdown_fence("shell"),
         "sh",
         "Shell",
         CodeBackend::Syntect,
         None,
     );
-    assert_registered_language(
+    assert_detected_language(
         language_for_shebang("pwsh"),
         "powershell",
         "PowerShell",
         CodeBackend::Syntect,
         None,
     );
-    assert_registered_language(
+    assert_detected_language(
         language_for_exact_name("Dockerfile"),
         "dockerfile",
         "Dockerfile",
         CodeBackend::Syntect,
         None,
     );
-    assert_registered_language(
+    assert_detected_language(
         language_for_markdown_fence("terraform"),
         "terraform",
         "Terraform",
@@ -326,7 +324,7 @@ fn registry_resolution_preserves_backend_and_structured_metadata() {
 }
 
 #[test]
-fn preview_specs_round_trip_registry_metadata() {
+fn preview_specs_round_trip_supported_language_metadata() {
     let json5 = language_for_code_syntax("json5")
         .expect("json5 should be available")
         .preview_spec();
@@ -346,25 +344,9 @@ fn preview_specs_round_trip_registry_metadata() {
 }
 
 #[test]
-fn syntect_registry_entries_match_curated_support_matrix() {
-    let mut registered = data::all_languages()
-        .filter(|entry| entry.language.backend == CodeBackend::Syntect)
-        .map(|entry| entry.language.canonical_id)
-        .collect::<Vec<_>>();
-    registered.sort_unstable();
-
-    let mut curated = CURATED_SYNTAXES
+fn custom_language_entries_stay_limited_to_product_specific_renderers() {
+    let mut custom_entries = LANGUAGES
         .iter()
-        .map(|syntax| syntax.canonical_id)
-        .collect::<Vec<_>>();
-    curated.sort_unstable();
-
-    assert_eq!(registered, curated);
-}
-
-#[test]
-fn custom_registry_entries_stay_limited_to_product_specific_renderers() {
-    let mut custom_entries = data::all_languages()
         .filter_map(|entry| match entry.language.backend {
             CodeBackend::Custom(kind) => Some((entry.language.canonical_id, kind)),
             CodeBackend::Plain | CodeBackend::Syntect => None,

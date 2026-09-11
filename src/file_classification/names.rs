@@ -1,8 +1,8 @@
+use super::code_languages;
 use super::{FileClass, FileFacts, PreviewSpec};
-use crate::preview::code::registry;
 
 fn preview_for_exact_name(name: &str) -> PreviewSpec {
-    registry::language_for_exact_name(name)
+    code_languages::language_for_exact_name(name)
         .expect("exact-name registry entry should exist for code preview")
         .preview_spec()
 }

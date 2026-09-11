@@ -2,7 +2,7 @@ use std::{ffi::OsString, path::PathBuf};
 
 use crate::{
     config::{self, OpenPlatform, OpenRule, OpenTargetType},
-    file_info::{self, FileClass, PreviewKind},
+    file_classification::{self, FileClass, PreviewKind},
     fs::{Entry, EntryKind},
 };
 
@@ -67,13 +67,17 @@ fn entry_ext_matches(entry: &Entry, exts: &[String]) -> bool {
 }
 
 fn entry_type_matches(entry: &Entry, types: &[OpenTargetType]) -> bool {
-    let facts = file_info::inspect_entry_cached(entry);
+    let facts = file_classification::inspect_entry_cached(entry);
     types
         .iter()
         .any(|target_type| entry_has_type(entry, facts, *target_type))
 }
 
-fn entry_has_type(entry: &Entry, facts: file_info::FileFacts, target_type: OpenTargetType) -> bool {
+fn entry_has_type(
+    entry: &Entry,
+    facts: file_classification::FileFacts,
+    target_type: OpenTargetType,
+) -> bool {
     match target_type {
         OpenTargetType::Folder => entry.kind == EntryKind::Directory,
         OpenTargetType::Text => entry_is_text_like(entry, facts),
@@ -90,7 +94,7 @@ fn entry_has_type(entry: &Entry, facts: file_info::FileFacts, target_type: OpenT
     }
 }
 
-fn entry_is_text_like(entry: &Entry, facts: file_info::FileFacts) -> bool {
+fn entry_is_text_like(entry: &Entry, facts: file_classification::FileFacts) -> bool {
     if entry.kind == EntryKind::Directory {
         return false;
     }

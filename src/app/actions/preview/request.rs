@@ -110,8 +110,8 @@ impl App {
         entry: &Entry,
         preview_rows_visible: usize,
     ) -> usize {
-        let facts = crate::file_info::inspect_entry_cached(entry);
-        if facts.preview.kind == crate::file_info::PreviewKind::Source
+        let facts = crate::file_classification::inspect_entry_cached(entry);
+        if facts.preview.kind == crate::file_classification::PreviewKind::Source
             && facts.preview.structured_format.is_none()
         {
             return preview_code_line_limit(preview_rows_visible);

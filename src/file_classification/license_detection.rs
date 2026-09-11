@@ -725,7 +725,7 @@ mod tests {
             "// SPDX-License-Identifier: MPL-2.0\npub fn license() {}\n",
         );
 
-        let facts = super::super::classify::inspect_path(&path, EntryKind::File);
+        let facts = super::super::file_inspection::inspect_path(&path, EntryKind::File);
 
         assert_eq!(facts.builtin_class, FileClass::Code);
         assert_eq!(facts.specific_type_label, Some("Rust source file"));

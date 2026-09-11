@@ -3,7 +3,7 @@ mod logs;
 mod toml;
 mod tree;
 
-use crate::file_info::StructuredFormat;
+use crate::file_classification::StructuredFormat;
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},

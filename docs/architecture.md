@@ -1,19 +1,22 @@
 # Architecture
 
-This crate is organized around a small set of layers.
+This crate is organized around focused subsystems.
 
-- `core`: shared, dependency-light model types that multiple layers need.
-- `fs` and `file_info`: filesystem access, file classification, and metadata discovery.
+- `cli` and `shell_integration`: command-line behavior and shell setup.
+- `fs` and `file_classification`: filesystem access and file, format, and code-language identification.
+- `archive` and `opening`: archive operations and launching items with applications.
 - `preview`: preview construction and rendering-oriented preview data.
 - `app`: application state, jobs, and user actions.
-- `runtime`: application runner, terminal lifecycle, event loop, drawing glue, and session output.
+- `elevated_session`: privileged filesystem operations through sudo or doas.
+- `terminal_runtime`: application startup, terminal lifecycle, event loop, drawing, and session output.
 - `ui`: terminal rendering, layout, and theming.
 
 Current boundary rules:
 
-- Shared model types that multiple layers need, such as file-model and sidebar types, live in
-  `src/core/`, not in `src/app/`.
-- `fs` and `file_info` may depend on `core`, but should not depend on `app`.
+- Shared model types live in the narrowest subsystem that owns their responsibility rather than in
+  a generic shared module.
+- `fs` and `file_classification` should not depend on `app`.
+- Code-language recognition belongs to `file_classification`, not to a preview renderer.
 - `preview` is presentation code, but it should not depend on `app`.
 - `preview` should not reach into `ui::theme` directly. The explicit adapter boundary for theme
   access is `src/preview/appearance.rs`.

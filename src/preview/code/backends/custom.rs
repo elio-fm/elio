@@ -1,4 +1,4 @@
-use crate::file_info::CustomCodeKind;
+use crate::file_classification::CustomCodeKind;
 use ratatui::text::Line;
 
 pub(in crate::preview::code) fn render_custom_code_preview<F>(

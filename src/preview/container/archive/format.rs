@@ -1,4 +1,4 @@
-use crate::file_info;
+use crate::file_classification;
 use std::path::Path;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -29,26 +29,26 @@ pub(super) fn detect_archive_format(path: &Path) -> ArchiveFormat {
         .and_then(|name| name.to_str())
         .map(|name| name.to_ascii_lowercase())
         .unwrap_or_default();
-    if let Some(kind) = file_info::inspect_compound_archive_name(&name) {
+    if let Some(kind) = file_classification::inspect_compound_archive_name(&name) {
         return match kind {
-            file_info::CompoundArchiveKind::TarGzip => ArchiveFormat::TarGzip,
-            file_info::CompoundArchiveKind::TarXz => ArchiveFormat::TarXz,
-            file_info::CompoundArchiveKind::TarBzip2 => ArchiveFormat::TarBzip2,
-            file_info::CompoundArchiveKind::TarZstd => ArchiveFormat::TarZstd,
-            file_info::CompoundArchiveKind::CompressedDiskImage {
-                compression: file_info::CompressionKind::Gzip,
+            file_classification::CompoundArchiveKind::TarGzip => ArchiveFormat::TarGzip,
+            file_classification::CompoundArchiveKind::TarXz => ArchiveFormat::TarXz,
+            file_classification::CompoundArchiveKind::TarBzip2 => ArchiveFormat::TarBzip2,
+            file_classification::CompoundArchiveKind::TarZstd => ArchiveFormat::TarZstd,
+            file_classification::CompoundArchiveKind::CompressedDiskImage {
+                compression: file_classification::CompressionKind::Gzip,
                 ..
             } => ArchiveFormat::Gzip,
-            file_info::CompoundArchiveKind::CompressedDiskImage {
-                compression: file_info::CompressionKind::Xz,
+            file_classification::CompoundArchiveKind::CompressedDiskImage {
+                compression: file_classification::CompressionKind::Xz,
                 ..
             } => ArchiveFormat::Xz,
-            file_info::CompoundArchiveKind::CompressedDiskImage {
-                compression: file_info::CompressionKind::Bzip2,
+            file_classification::CompoundArchiveKind::CompressedDiskImage {
+                compression: file_classification::CompressionKind::Bzip2,
                 ..
             } => ArchiveFormat::Bzip2,
-            file_info::CompoundArchiveKind::CompressedDiskImage {
-                compression: file_info::CompressionKind::Zstd,
+            file_classification::CompoundArchiveKind::CompressedDiskImage {
+                compression: file_classification::CompressionKind::Zstd,
                 ..
             } => ArchiveFormat::Zstd,
         };

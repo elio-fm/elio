@@ -2,7 +2,7 @@ mod app;
 mod archive;
 mod config;
 mod elevated_session;
-mod file_info;
+mod file_classification;
 mod fs;
 mod opening;
 mod preview;

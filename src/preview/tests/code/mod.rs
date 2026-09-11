@@ -16,7 +16,7 @@ fn code_preview_includes_line_numbers() {
 }
 
 mod custom;
-mod registry;
+mod language_detection;
 mod shell;
 mod syntect;
 

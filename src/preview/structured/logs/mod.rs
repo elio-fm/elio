@@ -15,7 +15,7 @@ pub(super) fn render_log_preview(text: &str) -> Option<StructuredPreview> {
     if text.trim().is_empty() {
         return Some(StructuredPreview {
             lines: vec![ratatui::text::Line::from("File is empty")],
-            detail: crate::file_info::StructuredFormat::Log.detail_label(),
+            detail: crate::file_classification::StructuredFormat::Log.detail_label(),
             truncation_note: None,
         });
     }

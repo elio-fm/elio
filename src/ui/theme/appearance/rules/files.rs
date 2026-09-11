@@ -1,6 +1,6 @@
 use super::super::types::RuleOverride;
 use super::shared::{normalize_key, rgb};
-use crate::file_info::FileClass;
+use crate::file_classification::FileClass;
 use std::collections::HashMap;
 
 pub(super) fn default_file_rules() -> HashMap<String, RuleOverride> {

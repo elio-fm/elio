@@ -6,7 +6,7 @@ pub(super) mod pages;
 pub(super) mod pdf;
 
 use super::metadata::DocumentMetadata;
-use crate::file_info::DocumentFormat;
+use crate::file_classification::DocumentFormat;
 use std::{io::Read, path::Path};
 use zip::ZipArchive;
 

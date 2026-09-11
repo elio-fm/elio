@@ -3,7 +3,7 @@ use super::super::{
     metadata::{DocumentMetadata, render_document_preview},
 };
 use crate::{
-    file_info::DocumentFormat,
+    file_classification::DocumentFormat,
     preview::{PreviewContent, PreviewVisual, PreviewVisualKind, PreviewVisualLayout},
 };
 use std::{

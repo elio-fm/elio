@@ -803,16 +803,18 @@ impl MarkdownRenderer {
             ),
         ]));
 
-        let preview_spec = super::code::registry::language_for_markdown_fence(&code_block.language)
-            .map(|language| language.preview_spec())
-            .unwrap_or(crate::file_info::PreviewSpec {
-                kind: crate::file_info::PreviewKind::Source,
-                language_hint: None,
-                code_syntax: None,
-                code_backend: crate::file_info::CodeBackend::Plain,
-                structured_format: None,
-                document_format: None,
-            });
+        let preview_spec = crate::file_classification::code_languages::language_for_markdown_fence(
+            &code_block.language,
+        )
+        .map(|language| language.preview_spec())
+        .unwrap_or(crate::file_classification::PreviewSpec {
+            kind: crate::file_classification::PreviewKind::Source,
+            language_hint: None,
+            code_syntax: None,
+            code_backend: crate::file_classification::CodeBackend::Plain,
+            structured_format: None,
+            document_format: None,
+        });
         let rendered = super::code::render_code_preview(
             preview_spec,
             &code_block.text,

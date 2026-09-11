@@ -1,6 +1,6 @@
 use super::StructuredPreview;
 use crate::{
-    file_info::{CodeBackend, CustomCodeKind, PreviewSpec},
+    file_classification::{CodeBackend, CustomCodeKind, PreviewSpec},
     preview,
 };
 use toml_edit::DocumentMut;

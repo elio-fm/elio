@@ -1,5 +1,5 @@
 use crate::{
-    file_info::DocumentFormat,
+    file_classification::DocumentFormat,
     preview::{PreviewContent, PreviewKind, appearance as theme},
 };
 use ratatui::{

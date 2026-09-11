@@ -5,7 +5,7 @@ use std::path::Path;
 #[cfg(all(unix, not(target_os = "macos")))]
 use crate::fs::Entry;
 use crate::{
-    file_info::{FileClass, PreviewKind, inspect_path},
+    file_classification::{FileClass, PreviewKind, inspect_path},
     fs::EntryKind,
 };
 

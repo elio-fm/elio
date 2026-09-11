@@ -1,4 +1,4 @@
-use crate::file_info::FileClass;
+use crate::file_classification::FileClass;
 use ratatui::style::Color;
 use std::{collections::HashMap, path::PathBuf};
 

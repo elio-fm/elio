@@ -1,5 +1,5 @@
 use super::*;
-use crate::file_info::{CodeBackend, CustomCodeKind, PreviewKind, PreviewSpec};
+use crate::file_classification::{CodeBackend, CustomCodeKind, PreviewKind, PreviewSpec};
 use ratatui::text::Line;
 use std::cell::Cell;
 
