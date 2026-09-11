@@ -1,24 +1,10 @@
 use crate::file_operations::ClipOp;
 use crate::fs::{Entry, SortMode};
 use crate::fuzzy_finder::SearchScope;
-use crate::terminal_runtime::terminal_images::TerminalWindowSize;
 use crate::{preview, preview::PreviewWorkClass};
 use std::{path::PathBuf, time::SystemTime};
 
-/// Parameters needed by the background image-prepare job to pre-encode a
-/// Sixel DCS stream alongside the rendered PNG.  Bundled as an `Option` so
-/// non-Sixel sessions pay no extra memory cost.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct SixelPrepareConfig {
-    /// Width of the target area in terminal cells.
-    pub(crate) area_width: u16,
-    /// Height of the target area in terminal cells.
-    pub(crate) area_height: u16,
-    /// Terminal window dimensions at the time the job was submitted.
-    /// Required to reproduce the exact aspect-ratio fitting and pixel-size
-    /// computation that will be used at render time.
-    pub(crate) window_size: TerminalWindowSize,
-}
+pub(crate) use crate::preview::images::{ImagePrepareRequest, SixelPrepareConfig};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PreviewPriority {
@@ -93,23 +79,6 @@ pub(crate) struct PreviewLineCountRequest {
     pub(crate) path: PathBuf,
     pub(crate) size: u64,
     pub(crate) modified: Option<SystemTime>,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct ImagePrepareRequest {
-    pub(crate) path: PathBuf,
-    pub(crate) size: u64,
-    pub(crate) modified: Option<SystemTime>,
-    pub(crate) target_width_px: u32,
-    pub(crate) target_height_px: u32,
-    pub(crate) ffmpeg_available: bool,
-    pub(crate) resvg_available: bool,
-    pub(crate) magick_available: bool,
-    pub(crate) force_render_to_cache: bool,
-    pub(crate) prepare_inline_payload: bool,
-    /// When `Some`, the prepare job also encodes a Sixel DCS stream for the
-    /// rendered image using the area and window dimensions supplied here.
-    pub(crate) sixel_prepare: Option<SixelPrepareConfig>,
 }
 
 #[derive(Clone, Debug)]

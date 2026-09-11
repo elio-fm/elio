@@ -6,6 +6,11 @@ fn preview_does_not_depend_on_app() {
 }
 
 #[test]
+fn preview_does_not_depend_on_background_jobs() {
+    assert_tree_has_no_pattern("src/preview", "background_jobs::", &[]);
+}
+
+#[test]
 fn preview_theme_access_stays_behind_preview_appearance_adapter() {
     assert_tree_has_no_pattern(
         "src/preview",

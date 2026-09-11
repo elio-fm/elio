@@ -1,4 +1,4 @@
-use super::format::StaticImageFormat;
+use super::image_inspection::StaticImageFormat;
 use crate::terminal_runtime::terminal_images::{RenderedImageDimensions, TerminalWindowSize};
 use image::{DynamicImage, GenericImageView, imageops::FilterType};
 use ratatui::layout::Rect;
@@ -7,6 +7,18 @@ use std::{
     path::Path,
     process::{Command, Stdio},
 };
+
+const FAST_FORCE_RENDER_FFMPEG_RASTER_ARGS: [&str; 4] =
+    ["-compression_level", "1", "-sws_flags", "fast_bilinear"];
+const DEFAULT_FFMPEG_RASTER_ARGS: [&str; 0] = [];
+
+pub(crate) fn ffmpeg_raster_render_args(force_render_to_cache: bool) -> &'static [&'static str] {
+    if force_render_to_cache {
+        &FAST_FORCE_RENDER_FFMPEG_RASTER_ARGS
+    } else {
+        &DEFAULT_FFMPEG_RASTER_ARGS
+    }
+}
 
 pub(super) fn render_svg_to_png_with_resvg(
     input_path: &Path,
@@ -125,7 +137,7 @@ pub(super) fn render_raster_to_png_with_ffmpeg(
             target_width_px.max(1),
             target_height_px.max(1)
         ));
-    command.args(super::ffmpeg_raster_render_args(force_render_to_cache));
+    command.args(ffmpeg_raster_render_args(force_render_to_cache));
     command
         .arg(output_path)
         .stdout(Stdio::null())
@@ -204,14 +216,14 @@ pub(super) fn shrink_image_to_fit(
     }
 }
 
-pub(super) fn image_target_width_px(area: Rect, window_size: Option<TerminalWindowSize>) -> u32 {
+pub(crate) fn image_target_width_px(area: Rect, window_size: Option<TerminalWindowSize>) -> u32 {
     let (cell_width_px, _) = image_cell_pixels(window_size);
     (f32::from(area.width.max(1)) * cell_width_px)
         .round()
         .max(1.0) as u32
 }
 
-pub(super) fn image_target_height_px(area: Rect, window_size: Option<TerminalWindowSize>) -> u32 {
+pub(crate) fn image_target_height_px(area: Rect, window_size: Option<TerminalWindowSize>) -> u32 {
     let (_, cell_height_px) = image_cell_pixels(window_size);
     (f32::from(area.height.max(1)) * cell_height_px)
         .round()

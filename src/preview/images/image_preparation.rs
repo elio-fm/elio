@@ -1,21 +1,15 @@
-use super::format::{
+use super::image_inspection::{
     StaticImageFormat, read_exif_orientation, read_raster_dimensions, read_svg_dimensions,
-    static_image_format_for_overlay_request, static_image_format_for_prepare_request,
+    static_image_format_for_cached_path,
 };
-use super::render::{
+use super::image_rendering::{
     apply_raster_orientation, render_raster_to_jpeg_with_ffmpeg, render_raster_to_png_with_ffmpeg,
     render_svg_to_png_with_magick, render_svg_to_png_with_resvg, should_render_raster_with_ffmpeg,
     shrink_image_to_fit,
 };
-use super::{
-    PreparedStaticImageAsset, STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES,
-    STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES,
-    STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES, STATIC_IMAGE_RENDER_CACHE_VERSION,
-    SixelDcsKey, StaticImageKey, StaticImageOverlayRequest,
-};
-use crate::background_jobs::job_requests as jobs;
 use crate::terminal_runtime::terminal_images::{
-    area_pixel_size, encode_iterm_inline_payload, encode_sixel_dcs, fit_image_area,
+    RenderedImageDimensions, TerminalWindowSize, area_pixel_size, encode_iterm_inline_payload,
+    encode_sixel_dcs, fit_image_area,
 };
 use image::{ImageFormat, ImageReader};
 use ratatui::layout::Rect;
@@ -28,8 +22,104 @@ use std::{
     time::SystemTime,
 };
 
+const STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES: u64 = 512 * 1024;
+const STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES: u64 = 16 * 1024 * 1024;
+const STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES: u64 = 700 * 1024;
+const STATIC_IMAGE_RENDER_CACHE_VERSION: usize = 5;
+
+/// Parameters needed to pre-encode a Sixel image alongside its rendered file.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct SixelPrepareConfig {
+    pub(crate) area_width: u16,
+    pub(crate) area_height: u16,
+    pub(crate) window_size: TerminalWindowSize,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ImagePrepareRequest {
+    pub(crate) path: PathBuf,
+    pub(crate) size: u64,
+    pub(crate) modified: Option<SystemTime>,
+    pub(crate) target_width_px: u32,
+    pub(crate) target_height_px: u32,
+    pub(crate) ffmpeg_available: bool,
+    pub(crate) resvg_available: bool,
+    pub(crate) magick_available: bool,
+    pub(crate) force_render_to_cache: bool,
+    pub(crate) prepare_inline_payload: bool,
+    pub(crate) sixel_prepare: Option<SixelPrepareConfig>,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct StaticImageKey {
+    pub(crate) path: PathBuf,
+    pub(crate) size: u64,
+    pub(crate) modified: Option<SystemTime>,
+    pub(crate) target_width_px: u32,
+    pub(crate) target_height_px: u32,
+    pub(crate) force_render_to_cache: bool,
+    pub(crate) prepare_inline_payload: bool,
+}
+
+impl StaticImageKey {
+    pub(crate) fn from_parts(
+        path: PathBuf,
+        size: u64,
+        modified: Option<SystemTime>,
+        target_width_px: u32,
+        target_height_px: u32,
+        force_render_to_cache: bool,
+        prepare_inline_payload: bool,
+    ) -> Self {
+        Self {
+            path,
+            size,
+            modified,
+            target_width_px,
+            target_height_px,
+            force_render_to_cache,
+            prepare_inline_payload,
+        }
+    }
+}
+
+/// Cache key for a rendered Sixel stream at a specific terminal image size.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct SixelDcsKey {
+    pub(crate) path: PathBuf,
+    pub(crate) area_width: u16,
+    pub(crate) area_height: u16,
+    pub(crate) cells_width: u16,
+    pub(crate) cells_height: u16,
+    pub(crate) pixels_width: u32,
+    pub(crate) pixels_height: u32,
+}
+
+impl SixelDcsKey {
+    pub(crate) fn new(path: &Path, placement: Rect, window: TerminalWindowSize) -> Self {
+        Self {
+            path: path.to_path_buf(),
+            area_width: placement.width,
+            area_height: placement.height,
+            cells_width: window.cells_width,
+            cells_height: window.cells_height,
+            pixels_width: window.pixels_width,
+            pixels_height: window.pixels_height,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct PreparedStaticImageAsset {
+    pub(crate) display_path: PathBuf,
+    pub(crate) dimensions: RenderedImageDimensions,
+    pub(crate) inline_payload: Option<Arc<str>>,
+    pub(crate) sixel_dcs: Option<Arc<[u8]>>,
+    pub(crate) sixel_dcs_key: Option<SixelDcsKey>,
+}
+
 pub(crate) fn prepare_static_image_asset<F>(
-    request: &jobs::ImagePrepareRequest,
+    request: &ImagePrepareRequest,
     canceled: F,
 ) -> Option<PreparedStaticImageAsset>
 where
@@ -38,7 +128,8 @@ where
     if canceled() {
         return None;
     }
-    let format = static_image_format_for_prepare_request(request)?;
+    let format =
+        static_image_format_for_cached_path(&request.path, request.size, request.modified)?;
     let source_dimensions = if format == StaticImageFormat::Svg {
         read_svg_dimensions(&request.path)?
     } else {
@@ -243,7 +334,7 @@ impl StaticImageRenderCacheFormat {
 }
 
 fn static_image_render_cache_format(
-    request: &jobs::ImagePrepareRequest,
+    request: &ImagePrepareRequest,
     format: StaticImageFormat,
 ) -> StaticImageRenderCacheFormat {
     if request.prepare_inline_payload && format == StaticImageFormat::Jpeg {
@@ -253,7 +344,7 @@ fn static_image_render_cache_format(
     }
 }
 
-fn static_image_use_fast_png_render(request: &jobs::ImagePrepareRequest) -> bool {
+fn static_image_use_fast_png_render(request: &ImagePrepareRequest) -> bool {
     request.force_render_to_cache && !request.prepare_inline_payload
 }
 
@@ -330,7 +421,7 @@ fn finalize_static_image_render(temp_path: &Path, cache_path: &Path) -> Option<(
     }
 }
 
-pub(super) fn static_image_can_prepare_inline(
+pub(crate) fn static_image_can_prepare_inline(
     size: u64,
     format: StaticImageFormat,
     ffmpeg_available: bool,
@@ -349,20 +440,21 @@ pub(super) fn static_image_can_prepare_inline(
     }
 }
 
-pub(super) fn static_image_supports_iterm_source_passthrough(
-    request: &StaticImageOverlayRequest,
+pub(crate) fn static_image_supports_iterm_source_passthrough(
+    path: &Path,
+    size: u64,
+    modified: Option<SystemTime>,
+    force_render_to_cache: bool,
 ) -> bool {
-    if request.force_render_to_cache
-        || request.size > STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES
-    {
+    if force_render_to_cache || size > STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES {
         return false;
     }
-    static_image_format_for_overlay_request(request)
-        .is_some_and(|format| static_image_supports_iterm_source_format(&request.path, format))
+    static_image_format_for_cached_path(path, size, modified)
+        .is_some_and(|format| static_image_supports_iterm_source_format(path, format))
 }
 
 fn static_image_supports_iterm_source_passthrough_for_prepare(
-    request: &jobs::ImagePrepareRequest,
+    request: &ImagePrepareRequest,
     format: StaticImageFormat,
 ) -> bool {
     request.prepare_inline_payload
@@ -381,38 +473,14 @@ fn static_image_supports_iterm_source_format(path: &Path, format: StaticImageFor
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn image_prepare_request(
-        force_render_to_cache: bool,
-        prepare_inline_payload: bool,
-    ) -> jobs::ImagePrepareRequest {
-        jobs::ImagePrepareRequest {
-            path: PathBuf::from("demo.gif"),
-            size: 1024,
-            modified: None,
-            target_width_px: 320,
-            target_height_px: 180,
-            ffmpeg_available: true,
-            resvg_available: false,
-            magick_available: false,
-            force_render_to_cache,
-            prepare_inline_payload,
-            sixel_prepare: None,
-        }
-    }
-
-    #[test]
-    fn iterm_inline_forced_cache_does_not_use_fast_png_rendering() {
-        assert!(!static_image_use_fast_png_render(&image_prepare_request(
-            true, true,
-        )));
-        assert!(static_image_use_fast_png_render(&image_prepare_request(
-            true, false,
-        )));
-        assert!(!static_image_use_fast_png_render(&image_prepare_request(
-            false, true,
-        )));
-    }
-}
+#[path = "tests/image_preparation_formats.rs"]
+mod format_tests;
+#[cfg(test)]
+#[path = "tests/inline_payloads.rs"]
+mod inline_payload_tests;
+#[cfg(test)]
+#[path = "tests/image_normalization.rs"]
+mod normalization_tests;
+#[cfg(test)]
+#[path = "tests/image_preparation.rs"]
+mod tests;

@@ -1,11 +1,10 @@
-use super::StaticImageOverlayRequest;
-use crate::app::{Entry, EntryKind, jobs};
+use crate::fs::{Entry, EntryKind};
 use crate::terminal_runtime::terminal_images::RenderedImageDimensions;
 use quick_xml::{Reader, events::Event};
-use std::{fs, fs::File, io::Read, path::Path};
+use std::{fs, fs::File, io::Read, path::Path, time::SystemTime};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum StaticImageFormat {
+pub(crate) enum StaticImageFormat {
     Png,
     Ico,
     Jpeg,
@@ -39,7 +38,7 @@ impl StaticImageFormat {
     }
 }
 
-pub(super) fn static_image_detail_label(entry: &Entry) -> Option<&'static str> {
+pub(crate) fn static_image_detail_label(entry: &Entry) -> Option<&'static str> {
     static_image_format_for_entry(entry).map(StaticImageFormat::detail_label)
 }
 
@@ -49,35 +48,18 @@ fn static_image_format_for_entry(entry: &Entry) -> Option<StaticImageFormat> {
         .and_then(StaticImageFormat::from_label)
 }
 
-pub(super) fn static_image_format_for_overlay_request(
-    request: &StaticImageOverlayRequest,
+pub(crate) fn static_image_format_for_cached_path(
+    path: &Path,
+    size: u64,
+    modified: Option<SystemTime>,
 ) -> Option<StaticImageFormat> {
-    crate::file_classification::inspect_path_cached(
-        &request.path,
-        EntryKind::File,
-        request.size,
-        request.modified,
-    )
-    .specific_type_label
-    .and_then(StaticImageFormat::from_label)
-    .or_else(|| sniff_static_image_format(&request.path))
+    crate::file_classification::inspect_path_cached(path, EntryKind::File, size, modified)
+        .specific_type_label
+        .and_then(StaticImageFormat::from_label)
+        .or_else(|| sniff_static_image_format(path))
 }
 
-pub(super) fn static_image_format_for_prepare_request(
-    request: &jobs::ImagePrepareRequest,
-) -> Option<StaticImageFormat> {
-    crate::file_classification::inspect_path_cached(
-        &request.path,
-        EntryKind::File,
-        request.size,
-        request.modified,
-    )
-    .specific_type_label
-    .and_then(StaticImageFormat::from_label)
-    .or_else(|| sniff_static_image_format(&request.path))
-}
-
-pub(super) fn static_image_format_for_path(path: &Path) -> Option<StaticImageFormat> {
+pub(crate) fn static_image_format_for_path(path: &Path) -> Option<StaticImageFormat> {
     crate::file_classification::inspect_path(path, EntryKind::File)
         .specific_type_label
         .and_then(StaticImageFormat::from_label)
@@ -111,7 +93,7 @@ fn sniff_static_image_format(path: &Path) -> Option<StaticImageFormat> {
         .then_some(StaticImageFormat::Svg)
 }
 
-pub(super) fn read_raster_dimensions(path: &Path) -> Option<RenderedImageDimensions> {
+pub(crate) fn read_raster_dimensions(path: &Path) -> Option<RenderedImageDimensions> {
     let (mut width_px, mut height_px) = image::ImageReader::open(path)
         .ok()?
         .with_guessed_format()
@@ -287,33 +269,5 @@ fn parse_svg_view_box(value: &str) -> Option<(f32, f32)> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::{
-        path::PathBuf,
-        time::{SystemTime, UNIX_EPOCH},
-    };
-
-    fn temp_path(label: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time should be after unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("elio-static-image-format-{label}-{unique}"))
-    }
-
-    #[test]
-    fn static_image_format_sniffs_collision_suffixed_jpeg_path() {
-        let root = temp_path("jpeg-collision-suffix");
-        fs::create_dir_all(&root).expect("failed to create temp root");
-        let path = root.join("photo.jpeg.2");
-        fs::write(&path, [0xff, 0xd8, 0xff, 0xdb]).expect("failed to write jpeg signature");
-
-        assert_eq!(
-            static_image_format_for_path(&path),
-            Some(StaticImageFormat::Jpeg)
-        );
-
-        fs::remove_dir_all(root).expect("failed to remove temp root");
-    }
-}
+#[path = "tests/image_inspection.rs"]
+mod tests;

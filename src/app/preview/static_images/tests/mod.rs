@@ -13,6 +13,10 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+mod overlay;
+mod preparation;
+mod protocols;
+
 fn temp_root(label: &str) -> PathBuf {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -77,6 +81,11 @@ fn set_single_test_entry(app: &mut App, path: &Path) {
     });
     app.input.frame_state.metrics.cols = 1;
     app.input.frame_state.metrics.rows_visible = 6;
+}
+
+fn set_single_unmodified_test_entry(app: &mut App, path: &Path) {
+    set_single_test_entry(app, path);
+    app.navigation.entries[0].modified = None;
 }
 
 fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBuf, PathBuf) {

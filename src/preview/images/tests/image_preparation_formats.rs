@@ -1,70 +1,78 @@
 use super::*;
+use crate::terminal_runtime::terminal_images::{
+    RenderedImageDimensions, command_exists, read_png_dimensions,
+};
+use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-#[test]
-fn current_small_jpeg_queues_background_prepare_for_overlay() {
-    let root = temp_root("image-inline-jpeg");
-    fs::create_dir_all(&root).expect("failed to create temp root");
-    let mut app = App::new_at(root.clone()).expect("app should initialize");
-    configure_terminal_image_support(&mut app);
-    app.preview.pdf.pdf_tools_available = true;
-
-    let path = root.join("photo.jpg");
-    write_test_raster_image(&path, ImageFormat::Jpeg, 600, 300);
-    set_single_test_entry(&mut app, &path);
-    app.refresh_preview();
-
-    let request = app
-        .active_static_image_overlay_request()
-        .expect("image request should be available");
-    let key = StaticImageKey::from_request(&request);
-    match app.prepared_static_image_for_overlay(&request) {
-        crate::app::preview::static_images::StaticImageOverlayPreparation::Pending => {}
-        _ => panic!("small jpeg should prepare in the background"),
-    }
-    assert!(app.preview.image.pending_prepares.contains(&key));
-    assert_eq!(app.preview_overlay_placeholder_message(), None);
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+fn temp_root(label: &str) -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be after unix epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!("elio-image-preview-{label}-{unique}"))
 }
 
-#[test]
-fn current_large_jpeg_queues_background_prepare_when_ffmpeg_is_available() {
-    if !crate::terminal_runtime::terminal_images::command_exists("ffmpeg") {
-        return;
+fn write_test_raster_image(path: &Path, format: ImageFormat, width_px: u32, height_px: u32) {
+    let mut image = RgbaImage::new(width_px, height_px);
+    for pixel in image.pixels_mut() {
+        *pixel = Rgba([32, 128, 224, 255]);
     }
+    DynamicImage::ImageRgba8(image)
+        .save_with_format(path, format)
+        .expect("failed to write raster test image");
+}
 
-    let root = temp_root("image-inline-large-jpeg");
-    fs::create_dir_all(&root).expect("failed to create temp root");
-    let mut app = App::new_at(root.clone()).expect("app should initialize");
-    configure_terminal_image_support(&mut app);
-    app.preview.pdf.pdf_tools_available = true;
-
-    let path = root.join("photo.jpg");
-    write_test_raster_image(&path, ImageFormat::Jpeg, 3200, 1800);
-    set_single_test_entry(&mut app, &path);
-    app.refresh_preview();
-
-    let request = app
-        .active_static_image_overlay_request()
-        .expect("image request should be available");
-    let key = StaticImageKey::from_request(&request);
-    match app.prepared_static_image_for_overlay(&request) {
-        crate::app::preview::static_images::StaticImageOverlayPreparation::Pending => {}
-        _ => panic!("large jpeg should prepare in the background when ffmpeg is available"),
+fn write_test_transparent_png(path: &Path, width_px: u32, height_px: u32) {
+    let mut image = RgbaImage::new(width_px, height_px);
+    for (x, y, pixel) in image.enumerate_pixels_mut() {
+        *pixel = if (x + y) % 2 == 0 {
+            Rgba([32, 128, 224, 255])
+        } else {
+            Rgba([0, 0, 0, 0])
+        };
     }
-    assert!(app.preview.image.pending_prepares.contains(&key));
-    assert_eq!(app.preview_overlay_placeholder_message(), None);
+    DynamicImage::ImageRgba8(image)
+        .save_with_format(path, ImageFormat::Png)
+        .expect("failed to write transparent png");
+}
 
-    fs::remove_dir_all(root).expect("failed to remove temp root");
+fn write_test_svg_image(path: &Path, width_px: u32, height_px: u32) {
+    fs::write(
+        path,
+        format!(
+            r#"<svg viewBox="0 0 {width_px} {height_px}" xmlns="http://www.w3.org/2000/svg"></svg>"#
+        ),
+    )
+    .expect("failed to write svg placeholder");
+}
+
+fn write_test_image(root: &Path, file_name: &str) {
+    let path = root.join(file_name);
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("png") => write_test_raster_image(&path, ImageFormat::Png, 600, 300),
+        Some("ico") => write_test_raster_image(&path, ImageFormat::Ico, 64, 64),
+        Some("jpg" | "jpeg") => write_test_raster_image(&path, ImageFormat::Jpeg, 600, 300),
+        Some("gif") => write_test_raster_image(&path, ImageFormat::Gif, 600, 300),
+        Some("webp") => write_test_raster_image(&path, ImageFormat::WebP, 600, 300),
+        Some("svg") => write_test_svg_image(&path, 600, 300),
+        _ => panic!("unsupported test image extension: {file_name}"),
+    }
 }
 
 #[test]
 fn extensionless_png_static_image_preparation_succeeds() {
-    let (_app, root) = build_selected_extensionless_png_app("image-prepare-noext", "background");
+    let root = temp_root("image-prepare-noext");
+    fs::create_dir_all(&root).expect("failed to create temp root");
     let path = root.join("background");
+    write_test_raster_image(&path, ImageFormat::Png, 600, 300);
     let metadata = fs::metadata(&path).expect("image metadata should exist");
-    let prepared = crate::app::preview::static_images::prepare_static_image_asset(
-        &jobs::ImagePrepareRequest {
+    let prepared = prepare_static_image_asset(
+        &ImagePrepareRequest {
             path: path.clone(),
             size: metadata.len(),
             modified: None,
@@ -119,11 +127,13 @@ fn raster_static_images_use_png_display_paths() {
         "demo.gif",
         "demo.webp",
     ] {
-        let (_app, root) = build_selected_static_image_app("image-cache", file_name);
+        let root = temp_root("image-cache");
+        fs::create_dir_all(&root).expect("failed to create temp root");
+        write_test_image(&root, file_name);
         let path = root.join(file_name);
         let metadata = fs::metadata(&path).expect("image metadata should exist");
-        let prepared = crate::app::preview::static_images::prepare_static_image_asset(
-            &jobs::ImagePrepareRequest {
+        let prepared = prepare_static_image_asset(
+            &ImagePrepareRequest {
                 path: path.clone(),
                 size: metadata.len(),
                 modified: None,
@@ -159,15 +169,17 @@ fn raster_static_images_use_png_display_paths() {
 
 #[test]
 fn svg_static_images_prefer_resvg_when_available() {
-    if !crate::terminal_runtime::terminal_images::command_exists("resvg") {
+    if !command_exists("resvg") {
         return;
     }
 
-    let (_app, root) = build_selected_static_image_app("svg-cache", "demo.svg");
+    let root = temp_root("svg-cache");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    write_test_image(&root, "demo.svg");
     let path = root.join("demo.svg");
     let metadata = fs::metadata(&path).expect("svg metadata should exist");
-    let prepared = crate::app::preview::static_images::prepare_static_image_asset(
-        &jobs::ImagePrepareRequest {
+    let prepared = prepare_static_image_asset(
+        &ImagePrepareRequest {
             path: path.clone(),
             size: metadata.len(),
             modified: None,
@@ -205,15 +217,17 @@ fn svg_static_images_prefer_resvg_when_available() {
 
 #[test]
 fn svg_static_images_fall_back_to_magick_when_resvg_is_unavailable() {
-    if !crate::terminal_runtime::terminal_images::command_exists("magick") {
+    if !command_exists("magick") {
         return;
     }
 
-    let (_app, root) = build_selected_static_image_app("svg-magick-fallback", "demo.svg");
+    let root = temp_root("svg-magick-fallback");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    write_test_image(&root, "demo.svg");
     let path = root.join("demo.svg");
     let metadata = fs::metadata(&path).expect("svg metadata should exist");
-    let prepared = crate::app::preview::static_images::prepare_static_image_asset(
-        &jobs::ImagePrepareRequest {
+    let prepared = prepare_static_image_asset(
+        &ImagePrepareRequest {
             path: path.clone(),
             size: metadata.len(),
             modified: None,
@@ -251,7 +265,7 @@ fn svg_static_images_fall_back_to_magick_when_resvg_is_unavailable() {
 
 #[test]
 fn extensionless_svg_static_image_preparation_succeeds() {
-    if !crate::terminal_runtime::terminal_images::command_exists("resvg") {
+    if !command_exists("resvg") {
         return;
     }
 
@@ -261,8 +275,8 @@ fn extensionless_svg_static_image_preparation_succeeds() {
     write_test_svg_image(&path, 600, 300);
     let metadata = fs::metadata(&path).expect("svg metadata should exist");
 
-    let prepared = crate::app::preview::static_images::prepare_static_image_asset(
-        &jobs::ImagePrepareRequest {
+    let prepared = prepare_static_image_asset(
+        &ImagePrepareRequest {
             path: path.clone(),
             size: metadata.len(),
             modified: None,
@@ -306,8 +320,8 @@ fn png_static_image_preparation_preserves_alpha_channel() {
     write_test_transparent_png(&path, 8, 8);
     let metadata = fs::metadata(&path).expect("png metadata should exist");
 
-    let prepared = crate::app::preview::static_images::prepare_static_image_asset(
-        &jobs::ImagePrepareRequest {
+    let prepared = prepare_static_image_asset(
+        &ImagePrepareRequest {
             path: path.clone(),
             size: metadata.len(),
             modified: None,

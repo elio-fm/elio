@@ -10,7 +10,7 @@ fn current_extensionless_png_uses_direct_kitty_source_overlay() {
 
     let path = root.join("background");
     write_test_raster_image(&path, ImageFormat::Png, 600, 300);
-    set_single_test_entry(&mut app, &path);
+    set_single_unmodified_test_entry(&mut app, &path);
     app.refresh_preview();
 
     let request = app
@@ -53,7 +53,7 @@ fn prepared_full_pane_image_uses_aspect_fitted_kitty_placement() {
 
     let path = root.join("photo.jpg");
     write_test_raster_image(&path, ImageFormat::Jpeg, 1600, 900);
-    set_single_test_entry(&mut app, &path);
+    set_single_unmodified_test_entry(&mut app, &path);
     app.input.frame_state.preview_content_area = Some(Rect {
         x: 46,
         y: 2,
@@ -79,18 +79,16 @@ fn prepared_full_pane_image_uses_aspect_fitted_kitty_placement() {
             force_render_to_cache: false,
             prepare_inline_payload: false,
             canceled: false,
-            result: Some(
-                crate::app::preview::static_images::PreparedStaticImageAsset {
-                    display_path: rendered,
-                    dimensions: RenderedImageDimensions {
-                        width_px: 1024,
-                        height_px: 1024,
-                    },
-                    inline_payload: None,
-                    sixel_dcs: None,
-                    sixel_dcs_key: None,
+            result: Some(crate::preview::images::PreparedStaticImageAsset {
+                display_path: rendered,
+                dimensions: RenderedImageDimensions {
+                    width_px: 1024,
+                    height_px: 1024,
                 },
-            ),
+                inline_payload: None,
+                sixel_dcs: None,
+                sixel_dcs_key: None,
+            }),
         });
 
     assert!(dirty);

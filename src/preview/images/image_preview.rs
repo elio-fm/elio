@@ -1,4 +1,4 @@
-use super::{PreviewContent, PreviewKind, appearance as theme};
+use super::super::{PreviewContent, PreviewKind, appearance as theme};
 use crate::fs::Entry;
 use image::ImageReader;
 use ratatui::{
@@ -6,7 +6,7 @@ use ratatui::{
     text::{Line, Span},
 };
 
-pub(super) fn build_image_preview(
+pub(in crate::preview) fn build_image_preview(
     entry: &Entry,
     type_detail: Option<&'static str>,
 ) -> PreviewContent {
@@ -58,3 +58,7 @@ fn preview_field_line(
         Span::styled(value.to_string(), Style::default().fg(palette.text)),
     ])
 }
+
+#[cfg(test)]
+#[path = "tests/image_preview.rs"]
+mod tests;

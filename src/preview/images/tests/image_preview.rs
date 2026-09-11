@@ -1,4 +1,50 @@
-use super::*;
+use crate::fs::{Entry, EntryKind};
+use crate::preview::{PreviewKind, build_preview};
+use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
+use ratatui::text::Line;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
+};
+
+fn temp_path(label: &str) -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be after unix epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!("elio-preview-{label}-{unique}"))
+}
+
+fn file_entry(path: PathBuf) -> Entry {
+    Entry {
+        name: path.file_name().unwrap().to_string_lossy().to_string(),
+        name_key: path.file_name().unwrap().to_string_lossy().to_lowercase(),
+        path,
+        kind: EntryKind::File,
+        symlink: None,
+        size: 0,
+        modified: None,
+        readonly: false,
+    }
+}
+
+fn line_text(line: &Line<'_>) -> String {
+    line.spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect()
+}
+
+fn write_test_raster_image(path: &Path, format: ImageFormat, width_px: u32, height_px: u32) {
+    let mut image = RgbaImage::new(width_px, height_px);
+    for pixel in image.pixels_mut() {
+        *pixel = Rgba([32, 128, 224, 255]);
+    }
+    DynamicImage::ImageRgba8(image)
+        .save_with_format(path, format)
+        .expect("failed to write raster test image");
+}
 
 #[test]
 fn raster_image_preview_uses_image_metadata_fallback() {
