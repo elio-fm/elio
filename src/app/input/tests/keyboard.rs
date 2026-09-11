@@ -1701,23 +1701,23 @@ fn tab_and_shift_tab_cycle_sidebar_locations_and_skip_section_rows() {
 
     let sidebar_rows = || {
         vec![
-            SidebarRow::Item(SidebarItem::new(
-                SidebarItemKind::Home,
+            PlaceRow::Item(PlaceItem::new(
+                PlaceKind::Home,
                 "Home",
                 "H",
                 root.clone(),
                 root.clone(),
             )),
-            SidebarRow::Item(SidebarItem::new(
-                SidebarItemKind::Downloads,
+            PlaceRow::Item(PlaceItem::new(
+                PlaceKind::Downloads,
                 "Downloads",
                 "D",
                 downloads.clone(),
                 downloads.clone(),
             )),
-            SidebarRow::Section { title: "Devices" },
-            SidebarRow::Item(SidebarItem::new(
-                SidebarItemKind::Device { removable: true },
+            PlaceRow::Section { title: "Devices" },
+            PlaceRow::Item(PlaceItem::new(
+                PlaceKind::Device { removable: true },
                 "USB",
                 "U",
                 usb.clone(),
@@ -1777,22 +1777,22 @@ fn tab_and_shift_tab_match_symlinked_sidebar_locations_by_identity() {
     let next_identity = next.canonicalize().expect("next should canonicalize");
     let sidebar_rows = || {
         vec![
-            SidebarRow::Item(SidebarItem::new(
-                SidebarItemKind::Home,
+            PlaceRow::Item(PlaceItem::new(
+                PlaceKind::Home,
                 "Home",
                 "H",
                 root.clone(),
                 root_identity.clone(),
             )),
-            SidebarRow::Item(SidebarItem::new(
-                SidebarItemKind::Custom,
+            PlaceRow::Item(PlaceItem::new(
+                PlaceKind::Custom,
                 "Linked",
                 "L",
                 linked.clone(),
                 target_identity.clone(),
             )),
-            SidebarRow::Item(SidebarItem::new(
-                SidebarItemKind::Downloads,
+            PlaceRow::Item(PlaceItem::new(
+                PlaceKind::Downloads,
                 "Next",
                 "N",
                 next.clone(),

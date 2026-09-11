@@ -1,7 +1,6 @@
 pub(crate) mod duplicates;
 pub(crate) mod format;
 pub(crate) mod item_count;
-pub(crate) mod places;
 pub(crate) mod search;
 pub(crate) mod watch;
 
@@ -46,10 +45,6 @@ pub(crate) use format::{
     format_time_ago, rect_contains, sanitize_terminal_text, symlink_target_display_label,
 };
 pub(crate) use item_count::count_directory_items;
-#[cfg(test)]
-pub use places::SidebarItem;
-pub use places::{SidebarItemKind, SidebarRow};
-pub(crate) use places::{build_sidebar_rows, trash_dir};
 pub(crate) use restore::restore_trash_item;
 #[cfg(target_os = "macos")]
 pub(crate) use restore::{

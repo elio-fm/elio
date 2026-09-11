@@ -1,5 +1,5 @@
-use super::resolution::normalize_absolute_path;
-use super::{SidebarItem, SidebarItemKind};
+use super::places_list::normalize_absolute_path;
+use super::{PlaceItem, PlaceKind};
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsStr,
@@ -8,16 +8,13 @@ use std::{
 };
 
 #[derive(Clone, Debug)]
-struct LinuxMount {
+pub(super) struct LinuxMount {
     source: String,
     mount_point: PathBuf,
     fstype: String,
 }
 
-pub(super) fn mounted_device_items(
-    home: &Path,
-    pinned_paths: &HashSet<PathBuf>,
-) -> Vec<SidebarItem> {
+pub(super) fn mounted_device_items(home: &Path, pinned_paths: &HashSet<PathBuf>) -> Vec<PlaceItem> {
     let mounts_content = match fs::read_to_string("/proc/mounts") {
         Ok(content) => content,
         Err(_) => return Vec::new(),
@@ -28,7 +25,7 @@ pub(super) fn mounted_device_items(
     linux_device_items_from_mounts(&mounts, home, &labels, &removable, pinned_paths)
 }
 
-fn parse_linux_mounts(content: &str) -> Vec<LinuxMount> {
+pub(super) fn parse_linux_mounts(content: &str) -> Vec<LinuxMount> {
     let mut mounts = Vec::new();
     for line in content.lines() {
         let mut fields = line.split_whitespace();
@@ -50,13 +47,13 @@ fn parse_linux_mounts(content: &str) -> Vec<LinuxMount> {
     mounts
 }
 
-fn linux_device_items_from_mounts(
+pub(super) fn linux_device_items_from_mounts(
     mounts: &[LinuxMount],
     home: &Path,
     labels: &HashMap<PathBuf, String>,
     removable: &HashMap<String, bool>,
     pinned_paths: &HashSet<PathBuf>,
-) -> Vec<SidebarItem> {
+) -> Vec<PlaceItem> {
     let mut seen_mount_points = HashSet::new();
     let mut items = Vec::new();
 
@@ -74,8 +71,8 @@ fn linux_device_items_from_mounts(
         // trigger or a dead network share parks the calling thread (the main
         // event loop — this runs on every sidebar refresh) in uninterruptible
         // sleep until the share answers.
-        items.push(SidebarItem::new(
-            SidebarItemKind::Device { removable },
+        items.push(PlaceItem::new(
+            PlaceKind::Device { removable },
             linux_mount_title(mount, labels),
             if removable { "󰕓" } else { "󰋊" },
             mount.mount_point.clone(),
@@ -265,7 +262,7 @@ fn linux_device_labels() -> HashMap<PathBuf, String> {
     labels
 }
 
-fn decode_linux_label_name(label: &OsStr) -> String {
+pub(super) fn decode_linux_label_name(label: &OsStr) -> String {
     use std::os::unix::ffi::OsStrExt;
 
     let bytes = label.as_bytes();
@@ -372,75 +369,4 @@ fn unmangle_proc_mount_field(value: &str) -> String {
         value = value.replace(from, to);
     }
     value
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::{
-        collections::{HashMap, HashSet},
-        ffi::OsStr,
-        path::{Path, PathBuf},
-    };
-
-    #[test]
-    fn linux_device_items_filter_system_mounts_and_keep_user_visible_volumes() {
-        let mounts = parse_linux_mounts(
-            "proc /proc proc rw 0 0\n\
-             tmpfs /run tmpfs rw 0 0\n\
-             /dev/sda1 /boot ext4 rw 0 0\n\
-             /dev/sdb1 /run/media/regueiro/My\\040USB exfat rw 0 0\n\
-             /dev/sdc1 /home/regueiro/mnt/photos ext4 rw 0 0\n\
-             server:/share /run/user/1000/gvfs fuse.gvfsd-fuse rw 0 0\n",
-        );
-        let home = Path::new("/home/regueiro");
-        let pinned_paths = HashSet::from([home.to_path_buf(), PathBuf::from("/")]);
-        let labels = HashMap::from([(PathBuf::from("/dev/sdb1"), "Vacation".to_string())]);
-        let removable = HashMap::from([("sdb".to_string(), true), ("sdc".to_string(), false)]);
-
-        let items =
-            linux_device_items_from_mounts(&mounts, home, &labels, &removable, &pinned_paths);
-
-        assert_eq!(items.len(), 2);
-        assert_eq!(items[0].title, "photos");
-        assert_eq!(items[0].path, PathBuf::from("/home/regueiro/mnt/photos"));
-        assert_eq!(items[1].title, "Vacation");
-        assert_eq!(items[1].path, PathBuf::from("/run/media/regueiro/My USB"));
-        assert_eq!(items[1].kind, SidebarItemKind::Device { removable: true });
-    }
-
-    #[test]
-    fn linux_device_items_keep_custom_top_level_mounts_but_skip_system_roots() {
-        let mounts = parse_linux_mounts(
-            "/dev/sda2 /home ext4 rw 0 0\n\
-             /dev/sda3 /var ext4 rw 0 0\n\
-             /dev/sdb1 /data ext4 rw 0 0\n\
-             /dev/loop0 /snap/core squashfs ro 0 0\n",
-        );
-        let home = Path::new("/home/regueiro");
-        let pinned_paths = HashSet::from([home.to_path_buf(), PathBuf::from("/")]);
-        let removable = HashMap::from([
-            ("sda".to_string(), false),
-            ("sdb".to_string(), false),
-            ("loop0".to_string(), false),
-        ]);
-
-        let items = linux_device_items_from_mounts(
-            &mounts,
-            home,
-            &HashMap::new(),
-            &removable,
-            &pinned_paths,
-        );
-
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].title, "data");
-        assert_eq!(items[0].path, PathBuf::from("/data"));
-    }
-
-    #[test]
-    fn decode_linux_label_name_unescapes_hex_sequences() {
-        let decoded = decode_linux_label_name(OsStr::new("New\\x20vol\\x23A"));
-        assert_eq!(decoded, "New vol#A");
-    }
 }

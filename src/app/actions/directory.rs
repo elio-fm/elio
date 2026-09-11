@@ -13,7 +13,7 @@ impl App {
         }
         self.navigation.last_sidebar_refresh_at = Instant::now();
 
-        let sidebar = crate::fs::build_sidebar_rows();
+        let sidebar = crate::places::build_place_rows();
         if sidebar == self.navigation.sidebar {
             return false;
         }
@@ -154,7 +154,7 @@ impl App {
         self.navigation.in_trash = Self::path_is_trash(&self.navigation.cwd);
         self.navigation.unfiltered_entries = snapshot.entries;
         self.apply_local_filter();
-        self.navigation.sidebar = crate::fs::build_sidebar_rows();
+        self.navigation.sidebar = crate::places::build_place_rows();
         self.navigation.last_sidebar_refresh_at = Instant::now();
         self.navigation.directory_runtime.fingerprint = snapshot.fingerprint;
         self.navigation.directory_runtime.last_auto_reload_at = Instant::now();

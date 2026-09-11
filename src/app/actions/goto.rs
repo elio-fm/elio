@@ -1,10 +1,11 @@
 use super::super::{
-    App, SidebarItemKind,
+    App, PlaceKind,
     state::{GoToDestination, GoToOverlay, GoToOverlayRow},
 };
 use crate::{
     config::{BuiltinGoto, GotoEntrySpec},
-    fs::{rect_contains, trash_dir},
+    fs::rect_contains,
+    places::trash_dir,
 };
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
@@ -228,7 +229,7 @@ fn downloads_destination(app: &App) -> Option<PathBuf> {
         .sidebar
         .iter()
         .filter_map(|row| row.item())
-        .find(|item| item.kind == SidebarItemKind::Downloads)
+        .find(|item| item.kind == PlaceKind::Downloads)
         .map(|item| item.path.clone())
         .filter(|path| path.exists())
 }
@@ -247,7 +248,7 @@ fn trash_destination(app: &App) -> Option<PathBuf> {
         .sidebar
         .iter()
         .filter_map(|row| row.item())
-        .find(|item| item.kind == SidebarItemKind::Trash)
+        .find(|item| item.kind == PlaceKind::Trash)
         .map(|item| item.path.clone())
         .or_else(|| crate::elevated_session::trash_home_dir().and_then(|home| trash_dir(&home)))
 }

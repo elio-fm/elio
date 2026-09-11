@@ -5,7 +5,7 @@ use super::super::helpers;
 use super::super::pane_layout::resolve_pane_layout;
 use super::super::places_pane::render_places_pane;
 use super::super::scrollbars::split_scrollbar_area;
-use crate::app::{App, FrameState, SidebarItem, SidebarItemKind, SidebarRow};
+use crate::app::{App, FrameState, PlaceItem, PlaceKind, PlaceRow};
 use crate::config::PaneWeights;
 use crate::preview::default_code_preview_line_limit;
 use crate::theme;
@@ -629,8 +629,8 @@ fn sidebar_clamps_long_labels_when_width_is_tight() {
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    app.navigation.sidebar = vec![SidebarRow::Item(SidebarItem::new(
-        SidebarItemKind::Downloads,
+    app.navigation.sidebar = vec![PlaceRow::Item(PlaceItem::new(
+        PlaceKind::Downloads,
         "Downloads Directory",
         "D",
         root.clone(),
@@ -667,9 +667,9 @@ fn sidebar_uses_icons_only_at_icon_width() {
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
     app.navigation.sidebar = vec![
-        SidebarRow::Section { title: "Devices" },
-        SidebarRow::Item(SidebarItem::new(
-            SidebarItemKind::Downloads,
+        PlaceRow::Section { title: "Devices" },
+        PlaceRow::Item(PlaceItem::new(
+            PlaceKind::Downloads,
             "Downloads Directory",
             "D",
             root.clone(),
@@ -710,9 +710,9 @@ fn sidebar_sections_render_without_creating_click_targets() {
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
     app.navigation.sidebar = vec![
-        SidebarRow::Section { title: "Devices" },
-        SidebarRow::Item(SidebarItem::new(
-            SidebarItemKind::Device { removable: true },
+        PlaceRow::Section { title: "Devices" },
+        PlaceRow::Item(PlaceItem::new(
+            PlaceKind::Device { removable: true },
             "Vacation",
             "U",
             drive.clone(),
@@ -760,8 +760,8 @@ fn sidebar_marks_symlinked_place_active_by_identity_path() {
     let target_identity = target.canonicalize().expect("target should canonicalize");
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
     app.navigation.cwd = target_identity.clone();
-    app.navigation.sidebar = vec![SidebarRow::Item(SidebarItem::new(
-        SidebarItemKind::Custom,
+    app.navigation.sidebar = vec![PlaceRow::Item(PlaceItem::new(
+        PlaceKind::Custom,
         "Linked",
         "L",
         linked.clone(),
