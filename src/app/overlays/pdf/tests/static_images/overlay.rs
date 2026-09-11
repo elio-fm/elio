@@ -102,7 +102,7 @@ fn refresh_preview_preloads_current_and_visible_nearby_static_images() {
         .filter_map(|index| app.navigation.entries.get(index))
         .filter(|entry| crate::app::overlays::images::static_image_detail_label(entry).is_some())
         .filter(|entry| {
-            crate::file_info::inspect_path_cached(
+            crate::file_classification::inspect_path_cached(
                 &entry.path,
                 entry.kind,
                 entry.size,

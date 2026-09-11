@@ -1,15 +1,13 @@
 use super::FileClass;
+use super::code_languages;
 use super::{
     FileFacts, PreviewKind, PreviewSpec,
-    archives::inspect_archive_name,
+    archive_detection::inspect_archive_name,
     extensions::inspect_extension,
-    license::{sniff_browser_license_file_type, sniff_license_file_type},
+    license_detection::{sniff_browser_license_file_type, sniff_license_file_type},
     names::inspect_exact_name,
 };
-use crate::{
-    fs::{Entry, EntryKind},
-    preview::code::registry,
-};
+use crate::fs::{Entry, EntryKind};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -308,7 +306,7 @@ fn sniff_shebang_script_type(buffer: &[u8]) -> Option<FileFacts> {
     let text = std::str::from_utf8(buffer).ok()?;
     let first_line = text.lines().next()?.trim_start_matches('\u{feff}');
     let interpreter = shebang_interpreter_name(first_line)?;
-    let language = registry::language_for_shebang(interpreter)?;
+    let language = code_languages::language_for_shebang(interpreter)?;
 
     let specific_type_label = match language.canonical_id {
         "bash" => Some("Bash script"),
@@ -338,7 +336,7 @@ fn sniff_shebang_template_type(buffer: &[u8]) -> Option<FileFacts> {
     let text = std::str::from_utf8(buffer).ok()?;
     let first_line = text.lines().next()?.trim_start_matches('\u{feff}');
     let interpreter = shebang_interpreter_name(first_line)?;
-    let language = registry::language_for_shebang(interpreter)?;
+    let language = code_languages::language_for_shebang(interpreter)?;
 
     Some(FileFacts {
         builtin_class: FileClass::Code,
@@ -353,7 +351,7 @@ fn sniff_zsh_completion_template_type(buffer: &[u8]) -> Option<FileFacts> {
     if !first_line.starts_with("#compdef") {
         return None;
     }
-    let language = registry::language_for_code_syntax("zsh")?;
+    let language = code_languages::language_for_code_syntax("zsh")?;
 
     Some(FileFacts {
         builtin_class: FileClass::Code,
@@ -400,15 +398,15 @@ fn sniff_config_file_type(path: &Path) -> Option<FileFacts> {
 
     let (ini_score, shell_score) = score_config_prefix(&prefix);
     if ini_score >= STRONG_INI_THRESHOLD && ini_score >= shell_score.saturating_add(SCORE_MARGIN) {
-        return registry::language_for_code_syntax("ini").map(config_file_facts);
+        return code_languages::language_for_code_syntax("ini").map(config_file_facts);
     }
     if shell_score >= STRONG_SHELL_THRESHOLD
         && shell_score >= ini_score.saturating_add(SCORE_MARGIN)
     {
-        return registry::language_for_code_syntax("sh").map(config_file_facts);
+        return code_languages::language_for_code_syntax("sh").map(config_file_facts);
     }
 
-    registry::language_for_code_syntax("config").map(config_file_facts)
+    code_languages::language_for_code_syntax("config").map(config_file_facts)
 }
 
 fn read_text_prefix(path: &Path) -> Option<String> {
@@ -479,10 +477,10 @@ fn extract_vim_mode_hint(line: &str) -> Option<&str> {
 }
 
 fn config_facts_from_hint(token: &str) -> Option<FileFacts> {
-    registry::language_for_modeline(token).map(config_file_facts)
+    code_languages::language_for_modeline(token).map(config_file_facts)
 }
 
-fn config_file_facts(language: registry::RegisteredLanguage) -> FileFacts {
+fn config_file_facts(language: code_languages::CodeLanguage) -> FileFacts {
     FileFacts {
         builtin_class: FileClass::Config,
         specific_type_label: None,

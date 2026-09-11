@@ -14,7 +14,7 @@ use self::{
 };
 use super::builtin_themes::DEFAULT_THEME_TOML;
 use crate::{
-    file_info::FileClass,
+    file_classification::FileClass,
     fs::{Entry, EntryKind},
 };
 use std::{
@@ -64,7 +64,7 @@ pub(crate) fn resolve_path_with_class(
 
 pub(crate) fn resolve_entry(entry: &Entry) -> ResolvedAppearance<'static> {
     let builtin_class = resolve::symlink_entry_class(entry)
-        .unwrap_or_else(|| crate::file_info::inspect_entry_cached(entry).builtin_class);
+        .unwrap_or_else(|| crate::file_classification::inspect_entry_cached(entry).builtin_class);
     active_theme().resolve_with_builtin_class(&entry.path, entry.kind, builtin_class)
 }
 
@@ -75,7 +75,7 @@ pub(crate) fn resolve_browser_entry(entry: &Entry) -> ResolvedAppearance<'static
 
 #[cfg(test)]
 pub(crate) fn specific_type_label(path: &Path, kind: EntryKind) -> Option<&'static str> {
-    crate::file_info::inspect_path(path, kind).specific_type_label
+    crate::file_classification::inspect_path(path, kind).specific_type_label
 }
 
 fn active_theme() -> &'static Theme {

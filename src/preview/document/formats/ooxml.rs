@@ -4,7 +4,7 @@ use super::super::{
     },
     metadata::DocumentMetadata,
 };
-use crate::file_info::DocumentFormat;
+use crate::file_classification::DocumentFormat;
 use std::io::{Read, Seek};
 use zip::ZipArchive;
 

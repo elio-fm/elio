@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::FileClass;
-use crate::file_info;
+use crate::file_classification;
 use crate::preview::{PreviewContent, PreviewWorkClass, preview_work_class};
 
 impl App {
@@ -139,7 +139,7 @@ impl App {
             return preview_mode;
         };
         let variant = self.preview_request_options_for_entry(&entry);
-        let facts = file_info::inspect_entry_cached(&entry);
+        let facts = file_classification::inspect_entry_cached(&entry);
         let cold_navigation_heavy_preview =
             matches!(facts.builtin_class, FileClass::Audio | FileClass::Video)
                 || matches!(

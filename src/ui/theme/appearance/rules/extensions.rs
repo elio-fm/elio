@@ -3,7 +3,7 @@ use super::shared::{
     rgb, rule_bibtex_file, rule_class, rule_document_file, rule_ebook_file, rule_presentation_file,
     rule_spreadsheet_file, rule_tex_file,
 };
-use crate::file_info::FileClass;
+use crate::file_classification::FileClass;
 use std::collections::HashMap;
 
 pub(super) fn default_extension_rules() -> HashMap<String, RuleOverride> {

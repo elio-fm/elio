@@ -1,6 +1,20 @@
 use super::*;
 
 #[test]
+fn registered_languages_match_curated_syntect_support() {
+    let mut registered = crate::file_classification::code_languages::syntect_language_ids();
+    registered.sort_unstable();
+
+    let mut curated = crate::preview::code::syntax_manifest::CURATED_SYNTAXES
+        .iter()
+        .map(|syntax| syntax.canonical_id)
+        .collect::<Vec<_>>();
+    curated.sort_unstable();
+
+    assert_eq!(registered, curated);
+}
+
+#[test]
 fn c_preview_uses_code_renderer() {
     let root = temp_path("c");
     fs::create_dir_all(&root).expect("failed to create temp root");

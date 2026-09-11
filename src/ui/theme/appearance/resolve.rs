@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     app::{Entry, EntryKind, FileClass},
-    file_info,
+    file_classification,
 };
 use std::{
     path::Path,
@@ -128,7 +128,7 @@ fn is_template_rule_candidate(rule: &RuleOverride) -> bool {
 }
 
 pub(super) fn builtin_classify_path(path: &Path, kind: EntryKind) -> FileClass {
-    file_info::inspect_path(path, kind).builtin_class
+    file_classification::inspect_path(path, kind).builtin_class
 }
 
 pub(super) fn builtin_classify_browser_entry(entry: &Entry) -> FileClass {
@@ -150,7 +150,7 @@ pub(super) fn builtin_classify_browser_entry(entry: &Entry) -> FileClass {
         }
     }
 
-    let class = file_info::inspect_entry_fast(entry).builtin_class;
+    let class = file_classification::inspect_entry_fast(entry).builtin_class;
     entry_class_cache()
         .lock()
         .expect("entry class cache lock")

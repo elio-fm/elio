@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::file_info::{self, DocumentFormat};
+use crate::file_classification::{self, DocumentFormat};
 use crate::preview::preview_work_class;
 use std::{
     path::PathBuf,
@@ -332,7 +332,7 @@ impl App {
 }
 
 fn is_epub_entry(entry: &Entry) -> bool {
-    file_info::inspect_entry_cached(entry)
+    file_classification::inspect_entry_cached(entry)
         .preview
         .document_format
         == Some(DocumentFormat::Epub)

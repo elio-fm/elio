@@ -4,7 +4,7 @@ mod torrent;
 
 use super::{appearance as theme, *};
 use crate::{
-    file_info::{self, FileClass},
+    file_classification::{self, FileClass},
     fs::EntryKind,
 };
 use ratatui::{
@@ -205,7 +205,7 @@ fn render_archive_tree_line(
         && path
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(file_info::is_canonical_license_file_name);
+            .is_some_and(file_classification::is_canonical_license_file_name);
     let appearance = if license_entry {
         theme::resolve_path_with_class(path, kind, FileClass::License)
     } else {

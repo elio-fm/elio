@@ -1,5 +1,5 @@
 use super::backends::{custom, plain, syntect};
-use crate::file_info::{CodeBackend, PreviewSpec};
+use crate::file_classification::{CodeBackend, PreviewSpec};
 use ratatui::text::Line;
 
 pub(crate) fn render_code_preview<F>(

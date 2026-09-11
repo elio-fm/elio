@@ -12,7 +12,7 @@ use self::{
     metadata::render_document_preview,
 };
 use super::PreviewContent;
-use crate::file_info::DocumentFormat;
+use crate::file_classification::DocumentFormat;
 use std::path::Path;
 
 pub(super) fn build_document_preview(

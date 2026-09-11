@@ -1,6 +1,6 @@
 use super::{appearance as theme, *};
 use crate::{
-    file_info::{self, FileClass},
+    file_classification::{self, FileClass},
     fs::{self as browser_support, Entry},
 };
 use image::ImageReader;
@@ -24,15 +24,15 @@ pub(crate) fn preview_work_class(
     if entry.is_broken_symlink() {
         return PreviewWorkClass::Light;
     }
-    let facts = file_info::inspect_entry_cached(entry);
+    let facts = file_classification::inspect_entry_cached(entry);
     if options.comic_page_index().is_some()
         || options.epub_section_index().is_some()
         || facts.builtin_class == FileClass::Audio
         || facts.builtin_class == FileClass::Archive
         || facts.builtin_class == FileClass::Video
-        || facts.preview.kind == file_info::PreviewKind::Iso
-        || facts.preview.kind == file_info::PreviewKind::Torrent
-        || facts.preview.kind == file_info::PreviewKind::Sqlite  // SqliteCandidate stays Light
+        || facts.preview.kind == file_classification::PreviewKind::Iso
+        || facts.preview.kind == file_classification::PreviewKind::Torrent
+        || facts.preview.kind == file_classification::PreviewKind::Sqlite  // SqliteCandidate stays Light
         || facts.preview.document_format.is_some()
     {
         PreviewWorkClass::Heavy
@@ -52,7 +52,7 @@ pub(crate) fn loading_preview_for(
     if entry.is_dir() {
         return PreviewContent::new(PreviewKind::Directory, Vec::new());
     }
-    let facts = file_info::inspect_entry_cached(entry);
+    let facts = file_classification::inspect_entry_cached(entry);
     let detail = facts
         .specific_type_label
         .or_else(|| {
@@ -71,11 +71,11 @@ pub(crate) fn loading_preview_for(
     );
     let is_epub_section_preview = matches!(
         (facts.preview.document_format, options.epub_section_index()),
-        (Some(file_info::DocumentFormat::Epub), Some(_))
+        (Some(file_classification::DocumentFormat::Epub), Some(_))
     );
     let is_silent_kindle_loading = matches!(
         facts.preview.document_format,
-        Some(file_info::DocumentFormat::Mobi | file_info::DocumentFormat::Azw3)
+        Some(file_classification::DocumentFormat::Mobi | file_classification::DocumentFormat::Azw3)
     );
     let is_silent_archive_loading = matches!(facts.specific_type_label, Some("RAR archive"));
     let kind = if is_comic_page_preview {
@@ -114,7 +114,7 @@ pub(crate) fn loading_preview_for(
     PreviewContent::new(kind, lines).with_detail(detail)
 }
 
-fn loading_preview_kind(facts: &file_info::FileFacts) -> PreviewKind {
+fn loading_preview_kind(facts: &file_classification::FileFacts) -> PreviewKind {
     if facts.builtin_class == FileClass::Archive {
         return PreviewKind::Archive;
     }
@@ -128,7 +128,7 @@ fn loading_preview_kind(facts: &file_info::FileFacts) -> PreviewKind {
         return PreviewKind::Audio;
     }
     if facts.builtin_class == FileClass::Image
-        && facts.preview.kind != file_info::PreviewKind::Source
+        && facts.preview.kind != file_classification::PreviewKind::Source
     {
         return PreviewKind::Image;
     }
@@ -137,13 +137,15 @@ fn loading_preview_kind(facts: &file_info::FileFacts) -> PreviewKind {
     }
 
     match facts.preview.kind {
-        file_info::PreviewKind::Markdown => PreviewKind::Markdown,
-        file_info::PreviewKind::Source => PreviewKind::Code,
-        file_info::PreviewKind::PlainText | file_info::PreviewKind::Torrent => PreviewKind::Text,
-        file_info::PreviewKind::Iso => PreviewKind::Archive,
-        file_info::PreviewKind::Sqlite
-        | file_info::PreviewKind::SqliteCandidate
-        | file_info::PreviewKind::Csv => PreviewKind::Data,
+        file_classification::PreviewKind::Markdown => PreviewKind::Markdown,
+        file_classification::PreviewKind::Source => PreviewKind::Code,
+        file_classification::PreviewKind::PlainText | file_classification::PreviewKind::Torrent => {
+            PreviewKind::Text
+        }
+        file_classification::PreviewKind::Iso => PreviewKind::Archive,
+        file_classification::PreviewKind::Sqlite
+        | file_classification::PreviewKind::SqliteCandidate
+        | file_classification::PreviewKind::Csv => PreviewKind::Data,
     }
 }
 
@@ -187,7 +189,7 @@ where
         return broken_symlink_preview(entry);
     }
 
-    let facts = file_info::inspect_entry_cached(entry);
+    let facts = file_classification::inspect_entry_cached(entry);
     let preview_spec = facts.preview;
     let type_detail = facts.specific_type_label;
     if !is_regular_file_for_preview(entry) {
@@ -196,17 +198,18 @@ where
             type_detail,
         );
     }
-    if preview_spec.kind == file_info::PreviewKind::Iso
+    if preview_spec.kind == file_classification::PreviewKind::Iso
         && let Some(preview) = container::build_iso_preview(&entry.path)
     {
         return preview;
     }
-    if preview_spec.kind == file_info::PreviewKind::Torrent
+    if preview_spec.kind == file_classification::PreviewKind::Torrent
         && let Some(preview) = container::build_torrent_preview(&entry.path)
     {
         return preview;
     }
-    if facts.builtin_class == FileClass::Archive && preview_spec.kind != file_info::PreviewKind::Iso
+    if facts.builtin_class == FileClass::Archive
+        && preview_spec.kind != file_classification::PreviewKind::Iso
     {
         if let Some(preview) = container::build_archive_preview(
             &entry.path,
@@ -230,7 +233,7 @@ where
         return apply_type_detail(preview, type_detail);
     }
     if facts.builtin_class == FileClass::Image
-        && preview_spec.kind != file_info::PreviewKind::Source
+        && preview_spec.kind != file_classification::PreviewKind::Source
     {
         return image_metadata_preview(entry, type_detail);
     }
@@ -261,7 +264,8 @@ where
 
     if matches!(
         preview_spec.kind,
-        file_info::PreviewKind::Sqlite | file_info::PreviewKind::SqliteCandidate
+        file_classification::PreviewKind::Sqlite
+            | file_classification::PreviewKind::SqliteCandidate
     ) && let Some(preview) = data::build_sqlite_preview(&entry.path)
     {
         return apply_type_detail(preview, type_detail);
@@ -285,7 +289,7 @@ where
     let line_truncated = source_line_count > PREVIEW_RENDER_LINE_LIMIT;
     let mut preview_truncation_note = truncation_note(text_preview.bytes_truncated, line_truncated);
 
-    if preview_spec.kind == file_info::PreviewKind::Csv {
+    if preview_spec.kind == file_classification::PreviewKind::Csv {
         let is_tsv = std::path::Path::new(&entry.name)
             .extension()
             .and_then(|e| e.to_str())
@@ -298,7 +302,7 @@ where
         );
     }
 
-    if preview_spec.kind == file_info::PreviewKind::Markdown {
+    if preview_spec.kind == file_classification::PreviewKind::Markdown {
         let preview = PreviewContent::new(
             PreviewKind::Markdown,
             markdown::render_markdown_preview(&text_preview.text),
@@ -312,7 +316,7 @@ where
         );
     }
 
-    if preview_spec.kind == file_info::PreviewKind::Source {
+    if preview_spec.kind == file_classification::PreviewKind::Source {
         if let Some(structured_format) = preview_spec.structured_format {
             let structured_attempt = structured::render_structured_preview(
                 &text_preview.text,
@@ -425,7 +429,7 @@ fn is_regular_file_for_preview(entry: &Entry) -> bool {
 
 fn source_preview_detail(
     type_detail: Option<&'static str>,
-    preview_spec: file_info::PreviewSpec,
+    preview_spec: file_classification::PreviewSpec,
 ) -> Option<String> {
     type_detail
         .map(ToString::to_string)
@@ -433,7 +437,7 @@ fn source_preview_detail(
 }
 
 fn display_language_hint(language_hint: &str) -> String {
-    super::code::registry::display_label_for_code_syntax(language_hint)
+    crate::file_classification::code_languages::display_label_for_code_syntax(language_hint)
         .map(str::to_string)
         .unwrap_or_else(|| {
             let mut chars = language_hint.chars();

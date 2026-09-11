@@ -13,7 +13,7 @@ use super::{
     toc::epub_section_title_from_path,
 };
 use crate::{
-    file_info::DocumentFormat,
+    file_classification::DocumentFormat,
     preview::{
         PreviewContent, PreviewKind, PreviewVisual, PreviewVisualKind, PreviewVisualLayout,
         render_reflowed_text_preview,

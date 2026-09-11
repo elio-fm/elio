@@ -208,7 +208,7 @@ impl App {
 
 fn preview_cache_entry_uses_ffmpeg(entry: &Entry) -> bool {
     matches!(
-        crate::file_info::inspect_entry_cached(entry).builtin_class,
+        crate::file_classification::inspect_entry_cached(entry).builtin_class,
         FileClass::Audio | FileClass::Video
     )
 }

@@ -4,7 +4,7 @@ use super::{
 };
 use crate::app::overlays::inline_image::read_png_dimensions;
 use crate::app::{App, Entry, jobs};
-use crate::file_info::{self, DocumentFormat};
+use crate::file_classification::{self, DocumentFormat};
 use std::time::{Duration, Instant};
 
 impl App {
@@ -406,7 +406,7 @@ impl App {
 }
 
 fn is_pdf_entry(entry: &Entry) -> bool {
-    file_info::inspect_entry_cached(entry)
+    file_classification::inspect_entry_cached(entry)
         .preview
         .document_format
         == Some(DocumentFormat::Pdf)

@@ -16,8 +16,8 @@ fn fs_does_not_depend_on_app() {
 }
 
 #[test]
-fn file_info_does_not_depend_on_app() {
-    assert_tree_has_no_pattern("src/file_info", "app::", &[]);
+fn file_classification_does_not_depend_on_app() {
+    assert_tree_has_no_pattern("src/file_classification", "app::", &[]);
 }
 
 #[test]

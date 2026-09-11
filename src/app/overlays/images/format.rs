@@ -44,7 +44,7 @@ pub(super) fn static_image_detail_label(entry: &Entry) -> Option<&'static str> {
 }
 
 fn static_image_format_for_entry(entry: &Entry) -> Option<StaticImageFormat> {
-    crate::file_info::inspect_entry_cached(entry)
+    crate::file_classification::inspect_entry_cached(entry)
         .specific_type_label
         .and_then(StaticImageFormat::from_label)
 }
@@ -52,7 +52,7 @@ fn static_image_format_for_entry(entry: &Entry) -> Option<StaticImageFormat> {
 pub(super) fn static_image_format_for_overlay_request(
     request: &StaticImageOverlayRequest,
 ) -> Option<StaticImageFormat> {
-    crate::file_info::inspect_path_cached(
+    crate::file_classification::inspect_path_cached(
         &request.path,
         EntryKind::File,
         request.size,
@@ -66,7 +66,7 @@ pub(super) fn static_image_format_for_overlay_request(
 pub(super) fn static_image_format_for_prepare_request(
     request: &jobs::ImagePrepareRequest,
 ) -> Option<StaticImageFormat> {
-    crate::file_info::inspect_path_cached(
+    crate::file_classification::inspect_path_cached(
         &request.path,
         EntryKind::File,
         request.size,
@@ -78,7 +78,7 @@ pub(super) fn static_image_format_for_prepare_request(
 }
 
 pub(super) fn static_image_format_for_path(path: &Path) -> Option<StaticImageFormat> {
-    crate::file_info::inspect_path(path, EntryKind::File)
+    crate::file_classification::inspect_path(path, EntryKind::File)
         .specific_type_label
         .and_then(StaticImageFormat::from_label)
         .or_else(|| sniff_static_image_format(path))

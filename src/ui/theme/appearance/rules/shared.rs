@@ -1,5 +1,5 @@
 use super::super::types::RuleOverride;
-use crate::file_info::FileClass;
+use crate::file_classification::FileClass;
 use ratatui::style::Color;
 
 pub(in crate::ui::theme::appearance) fn rule_class(class: FileClass) -> RuleOverride {

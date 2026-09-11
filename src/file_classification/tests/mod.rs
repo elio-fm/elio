@@ -14,7 +14,7 @@ fn temp_path(label: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system time should be after unix epoch")
         .as_nanos();
-    std::env::temp_dir().join(format!("elio-file-info-{label}-{unique}"))
+    std::env::temp_dir().join(format!("elio-file-classification-{label}-{unique}"))
 }
 
 fn write_temp_file(label: &str, file_name: &str, contents: &str) -> (PathBuf, PathBuf) {
@@ -48,7 +48,8 @@ fn make_fifo(path: &Path) {
     );
 }
 
-mod classify;
+mod code_languages;
 mod extensions;
-mod license;
+mod file_inspection;
+mod license_detection;
 mod names;

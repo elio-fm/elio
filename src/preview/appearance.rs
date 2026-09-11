@@ -1,5 +1,5 @@
 use crate::{
-    file_info::FileClass,
+    file_classification::FileClass,
     fs::{Entry, EntryKind},
 };
 use ratatui::style::Color;

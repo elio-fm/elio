@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::FileClass;
-use crate::file_info;
+use crate::file_classification;
 use crate::preview::{PreviewWorkClass, preview_work_class, should_build_preview_in_background};
 
 const AUDIO_ENTRY_PREFETCH_OFFSETS: [isize; 4] = [1, -1, 2, -2];
@@ -220,5 +220,5 @@ impl App {
 }
 
 fn is_audio_entry(entry: &Entry) -> bool {
-    file_info::inspect_entry_cached(entry).builtin_class == FileClass::Audio
+    file_classification::inspect_entry_cached(entry).builtin_class == FileClass::Audio
 }

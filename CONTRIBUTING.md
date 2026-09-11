@@ -35,15 +35,16 @@ A brief overview of the repository layout:
 ├── src/
 │   ├── app/                    # Application state, jobs, and user actions
 │   ├── archive/                # Archive creation, extraction, and format handling
+│   ├── cli/                    # Command-line arguments, options, help, and shell commands
 │   ├── config/                 # Config and theme loading/parsing
-│   ├── core/                   # Shared model types used across layers
-│   ├── file_info/              # File classification and metadata discovery
+│   ├── elevated_session/       # Privileged filesystem operations through sudo or doas
+│   ├── file_classification/    # File, format, and code-language identification
 │   ├── fs/                     # Filesystem access and path-level operations
+│   ├── opening/                # Open rules, application launching, and Open With discovery
 │   ├── preview/                # Preview construction and preview-specific tests
-│   ├── runtime/                # App runner, terminal lifecycle, drawing, and session output
-│   ├── shell_integration/       # Shell scripts and install/uninstall support
+│   ├── shell_integration/      # Shell scripts and install/uninstall support
+│   ├── terminal_runtime/       # Terminal lifecycle, event loop, drawing, and session output
 │   ├── ui/                     # Terminal rendering, layout, theming, and interaction
-│   ├── cli.rs                  # Command-line parsing and command dispatch
 │   ├── lib.rs                  # Public library API entrypoints
 │   └── main.rs                 # Binary entrypoint
 ├── tests/                      # Integration tests and architecture guardrails
