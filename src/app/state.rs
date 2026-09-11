@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    env, fmt,
+    env,
     path::PathBuf,
     sync::Arc,
     time::{Duration, Instant, SystemTime},
@@ -14,6 +14,14 @@ use super::{
     types::*,
 };
 use crate::duplicate_finder::{DuplicateGroup, DuplicateScanStats};
+#[cfg(unix)]
+use crate::file_operations::BulkRenameEditorSession;
+use crate::file_operations::{
+    ArchiveCreateOverlay, ArchiveCreateProgress, ArchiveExtractProgress, ArchivePasswordOverlay,
+    BulkRenameOverlay, Clipboard, CopyOverlay, CreateOverlay, EditorRenameConfirmOverlay,
+    PasteProgress, QueuedPaste, RenameOverlay, RestoreOverlay, RestoreProgress, TrashOverlay,
+    TrashProgress,
+};
 use crate::fuzzy_finder::{SearchCandidate, SearchIndexStats};
 use crate::preview;
 use crate::{
@@ -84,204 +92,18 @@ pub(super) enum NavigationRepeatKey {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct Clipboard {
-    pub(super) paths: Vec<PathBuf>,
-    pub(super) op: ClipOp,
-}
-
-pub(super) struct ArchiveCreateProgress {
-    pub(super) completed: usize,
-    pub(super) total: usize,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct ArchiveExtractProgress {
-    pub(super) completed: usize,
-    pub(super) total: Option<usize>,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct PasteProgress {
-    pub(super) completed: usize,
-    pub(super) total: usize,
-    pub(super) op: ClipOp,
-    pub(super) origin: PasteOrigin,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) enum PasteOrigin {
-    Clipboard,
-    Drop,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct QueuedPaste {
-    pub(super) dest_dir: PathBuf,
-    pub(super) paths: Vec<PathBuf>,
-    pub(super) op: ClipOp,
-    pub(super) origin: PasteOrigin,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct TrashProgress {
-    pub(super) completed: usize,
-    pub(super) total: usize,
-    pub(super) permanent: bool,
-    /// Duplicate Finder rows targeted by this operation.  When present, the
-    /// completion handler removes only these stale virtual rows and keeps the
-    /// duplicate overlay open.
-    pub(super) duplicate_targets: Option<Vec<std::path::PathBuf>>,
-    /// Path of the entry to select after deletion completes: the first
-    /// surviving entry at or after the cursor, falling back to the last entry
-    /// before the cursor.  Stored as a path (not name) so it takes priority
-    /// over the stale remembered-view for this directory.
-    pub(super) next_selection: Option<std::path::PathBuf>,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct RestoreProgress {
-    pub(super) completed: usize,
-    pub(super) total: usize,
-    /// Path of the entry to select after restore completes: the first
-    /// surviving entry at or after the cursor, falling back to the last entry
-    /// before the cursor.
-    pub(super) next_selection: Option<std::path::PathBuf>,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct TrashTarget {
-    pub(super) path: std::path::PathBuf,
-    pub(super) name: String,
-    pub(super) is_dir: bool,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct TrashOverlay {
-    pub(super) targets: Vec<TrashTarget>,
-    pub(super) scroll: usize,
-    pub(super) confirmed: bool,
-    /// When true the items will be permanently deleted instead of trashed.
-    pub(super) permanent: bool,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct RestoreOverlay {
-    pub(super) targets: Vec<TrashTarget>,
-    pub(super) scroll: usize,
-    pub(super) confirmed: bool,
-}
-
-#[derive(Debug)]
-pub(super) struct ArchiveCreateOverlay {
-    pub(super) sources: Vec<PathBuf>,
-    pub(super) source_names: Vec<String>,
-    pub(super) source_scroll: usize,
-    pub(super) input: String,
-    pub(super) cursor_col: usize,
-    pub(super) options: crate::archive::CreateArchiveOptions,
-    pub(super) error: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub(super) enum ArchivePasswordPurpose {
-    Extract { request: ArchiveExtractRequest },
-    Create,
-}
-
-#[derive(Clone)]
-pub(super) struct ArchivePasswordOverlay {
-    pub(super) purpose: ArchivePasswordPurpose,
-    pub(super) input: String,
-    pub(super) cursor_col: usize,
-    pub(super) visible: bool,
-    pub(super) error: Option<String>,
-}
-
-impl fmt::Debug for ArchivePasswordOverlay {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ArchivePasswordOverlay")
-            .field("purpose", &self.purpose)
-            .field("input", &"<redacted>")
-            .field("cursor_col", &self.cursor_col)
-            .field("visible", &self.visible)
-            .field("error", &self.error)
-            .finish()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct RenameOverlay {
-    pub(super) is_dir: bool,
-    pub(super) original_name: String,
-    pub(super) input: String,
-    pub(super) cursor_col: usize,
-    pub(super) error: Option<String>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct BulkRenameItem {
-    pub(super) path: PathBuf,
-    pub(super) original_name: String,
-    pub(super) is_dir: bool,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg(unix)]
-pub(crate) struct BulkRenameEditorSession {
-    pub(crate) root: PathBuf,
-    pub(crate) temp_path: PathBuf,
-    pub(crate) expected_temp_owner: Option<libc::uid_t>,
-    pub(super) items: Vec<BulkRenameItem>,
-}
-
-pub(super) struct BulkRenameOverlay {
-    pub(super) items: Vec<BulkRenameItem>,
-    /// Editable new name for each item, one-to-one with `items`.
-    pub(super) new_names: Vec<String>,
-    /// When set, `new_names` are paths relative to this root instead of bare
-    /// filenames relative to each item's current parent.
-    pub(super) root: Option<PathBuf>,
-    pub(super) cursor_line: usize,
-    pub(super) cursor_col: usize,
-    /// Remembered column target for vertical motion.
-    pub(super) preferred_col: usize,
-    /// Per-line validation error; same length as `items`.
-    pub(super) line_errors: Vec<Option<String>>,
-}
-
-pub(super) struct EditorRenameConfirmOverlay {
-    pub(super) items: Vec<BulkRenameItem>,
-    pub(super) new_names: Vec<String>,
-    pub(super) root: PathBuf,
-    pub(super) scroll: usize,
-    pub(super) confirmed: bool,
-}
-
-pub(super) struct CreateOverlay {
-    /// One entry per line; always at least one element.
-    pub(super) lines: Vec<String>,
-    pub(super) cursor_line: usize,
-    pub(super) cursor_col: usize,
-    /// Remembered column target for vertical motion — updated on horizontal
-    /// edits but NOT when vertical motion clamps to a shorter line.
-    pub(super) preferred_col: usize,
-    /// Per-line validation error; same length as `lines`.
-    pub(super) line_errors: Vec<Option<String>>,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct DuplicateFinderOverlay {
-    pub(super) cwd: PathBuf,
-    pub(super) groups: Vec<DuplicateGroup>,
-    pub(super) stats: DuplicateScanStats,
-    pub(super) selected: usize,
-    pub(super) scroll: usize,
-    pub(super) selected_paths: HashSet<PathBuf>,
-    pub(super) loading: bool,
-    pub(super) partial: bool,
-    pub(super) error: Option<String>,
-    pub(super) preview_visible: bool,
-    pub(super) preview_path: Option<PathBuf>,
+pub(crate) struct DuplicateFinderOverlay {
+    pub(crate) cwd: PathBuf,
+    pub(crate) groups: Vec<DuplicateGroup>,
+    pub(crate) stats: DuplicateScanStats,
+    pub(crate) selected: usize,
+    pub(crate) scroll: usize,
+    pub(crate) selected_paths: HashSet<PathBuf>,
+    pub(crate) loading: bool,
+    pub(crate) partial: bool,
+    pub(crate) error: Option<String>,
+    pub(crate) preview_visible: bool,
+    pub(crate) preview_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -297,38 +119,24 @@ pub struct DuplicateRow {
     pub focused: bool,
 }
 
-pub(super) struct SearchOverlay {
-    pub(super) scope: SearchScope,
-    pub(super) query: String,
-    pub(super) query_cursor: usize,
-    pub(super) candidates: Arc<Vec<SearchCandidate>>,
-    pub(super) matches: Vec<usize>,
-    pub(super) cached_matches: HashMap<String, SearchMatchCacheEntry>,
-    pub(super) selected: usize,
-    pub(super) scroll: usize,
-    pub(super) loading: bool,
-    pub(super) error: Option<String>,
-    pub(super) stats: SearchIndexStats,
+pub(crate) struct SearchOverlay {
+    pub(in crate::app) scope: SearchScope,
+    pub(in crate::app) query: String,
+    pub(in crate::app) query_cursor: usize,
+    pub(in crate::app) candidates: Arc<Vec<SearchCandidate>>,
+    pub(in crate::app) matches: Vec<usize>,
+    pub(in crate::app) cached_matches: HashMap<String, SearchMatchCacheEntry>,
+    pub(in crate::app) selected: usize,
+    pub(in crate::app) scroll: usize,
+    pub(in crate::app) loading: bool,
+    pub(in crate::app) error: Option<String>,
+    pub(in crate::app) stats: SearchIndexStats,
 }
 
 #[derive(Clone, Debug)]
 pub(super) struct SearchMatchCacheEntry {
     pub(super) pool: Vec<usize>,
     pub(super) matches: Vec<usize>,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct CopyOverlayRow {
-    pub(super) shortcut: char,
-    pub(super) label: String,
-    pub(super) status_label: String,
-    pub(super) value: String,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct CopyOverlay {
-    pub(super) title: String,
-    pub(super) rows: Vec<CopyOverlayRow>,
 }
 
 #[derive(Clone, Debug)]
@@ -346,9 +154,9 @@ pub(super) struct GoToOverlayRow {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct GoToOverlay {
-    pub(super) title: String,
-    pub(super) rows: Vec<GoToOverlayRow>,
+pub(crate) struct GoToOverlay {
+    pub(in crate::app) title: String,
+    pub(in crate::app) rows: Vec<GoToOverlayRow>,
 }
 
 #[derive(Clone, Debug)]
@@ -359,10 +167,10 @@ pub(super) struct OpenWithRow {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct OpenWithOverlay {
-    pub(super) title: String,
-    pub(super) rows: Vec<OpenWithRow>,
-    pub(super) selected: usize,
+pub(crate) struct OpenWithOverlay {
+    pub(in crate::app) title: String,
+    pub(in crate::app) rows: Vec<OpenWithRow>,
+    pub(in crate::app) selected: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -438,7 +246,7 @@ impl PreviewMetrics {
 }
 
 #[derive(Clone, Debug)]
-pub(super) enum DirectoryHistoryMode {
+pub(crate) enum DirectoryHistoryMode {
     None,
     PushCurrent,
     GoBack,
@@ -446,7 +254,7 @@ pub(super) enum DirectoryHistoryMode {
 }
 
 #[derive(Clone, Debug)]
-pub(super) enum DirectoryLoadCompletion {
+pub(crate) enum DirectoryLoadCompletion {
     Keep,
     Clear,
     Status(String),
@@ -471,7 +279,7 @@ pub(super) struct DirectoryViewMemory {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(in crate::app) struct SelectedPaths {
+pub(crate) struct SelectedPaths {
     inner: HashSet<PathBuf>,
     order: Vec<PathBuf>,
     ancestor_counts: HashMap<PathBuf, usize>,
@@ -482,15 +290,15 @@ impl SelectedPaths {
         self.inner.len()
     }
 
-    pub(in crate::app) fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
-    pub(in crate::app) fn contains(&self, path: &std::path::Path) -> bool {
+    pub(crate) fn contains(&self, path: &std::path::Path) -> bool {
         self.inner.contains(path)
     }
 
-    pub(in crate::app) fn iter(&self) -> impl Iterator<Item = &PathBuf> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &PathBuf> {
         self.inner.iter()
     }
 
@@ -499,13 +307,13 @@ impl SelectedPaths {
         self.order.iter()
     }
 
-    pub(in crate::app) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.inner.clear();
         self.order.clear();
         self.ancestor_counts.clear();
     }
 
-    pub(in crate::app) fn insert(&mut self, path: PathBuf) -> bool {
+    pub(crate) fn insert(&mut self, path: PathBuf) -> bool {
         if self.has_nesting_conflict(&path) {
             return false;
         }
@@ -652,16 +460,16 @@ pub(in crate::app) struct LocalFilter {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct PendingDirectoryLoad {
-    pub(super) token: u64,
-    pub(super) target_cwd: PathBuf,
-    pub(super) previous_cwd: PathBuf,
-    pub(super) previous_selected_path: Option<PathBuf>,
-    pub(super) previous_selection_name: Option<String>,
-    pub(super) reselect_path: Option<PathBuf>,
-    pub(super) history_mode: DirectoryHistoryMode,
-    pub(super) refresh_search: bool,
-    pub(super) completion: DirectoryLoadCompletion,
+pub(crate) struct PendingDirectoryLoad {
+    pub(crate) token: u64,
+    pub(crate) target_cwd: PathBuf,
+    pub(crate) previous_cwd: PathBuf,
+    pub(crate) previous_selected_path: Option<PathBuf>,
+    pub(crate) previous_selection_name: Option<String>,
+    pub(crate) reselect_path: Option<PathBuf>,
+    pub(crate) history_mode: DirectoryHistoryMode,
+    pub(crate) refresh_search: bool,
+    pub(crate) completion: DirectoryLoadCompletion,
 }
 
 #[derive(Clone, Debug)]
@@ -671,14 +479,14 @@ pub(super) struct PendingDirectoryFingerprintScan {
     pub(super) show_hidden: bool,
 }
 
-pub(super) struct DirectoryRuntime {
+pub(crate) struct DirectoryRuntime {
     pub(super) fingerprint: crate::fs::DirectoryFingerprint,
     pub(super) watch_tx: std::sync::mpsc::Sender<crate::fs::DirectoryWatchEvent>,
     pub(super) watch_rx: std::sync::mpsc::Receiver<crate::fs::DirectoryWatchEvent>,
-    pub(super) watch: Option<crate::fs::DirectoryWatcher>,
+    pub(crate) watch: Option<crate::fs::DirectoryWatcher>,
     pub(super) pending_reload_at: Option<Instant>,
     pub(super) pending_fingerprint_scan: Option<PendingDirectoryFingerprintScan>,
-    pub(super) pending_load: Option<PendingDirectoryLoad>,
+    pub(crate) pending_load: Option<PendingDirectoryLoad>,
     pub(super) use_polling_reload: bool,
     pub(super) last_auto_reload_at: Instant,
 }
@@ -697,15 +505,15 @@ pub(crate) struct NavigationState {
     pub(crate) show_hidden: bool,
     /// True when the loaded directory is the trash folder.
     /// Set in apply_directory_snapshot so it's only true once the load completes.
-    pub(in crate::app) in_trash: bool,
+    pub(crate) in_trash: bool,
     pub(in crate::app) navigation_history: NavigationHistory,
-    pub(in crate::app) selected_paths: SelectedPaths,
+    pub(crate) selected_paths: SelectedPaths,
     pub(in crate::app) directory_item_count_cache: HashMap<DirectoryItemCountKey, Option<usize>>,
     pub(in crate::app) directory_item_count_order: VecDeque<DirectoryItemCountKey>,
     pub(in crate::app) directory_count_viewport: Option<DirectoryCountViewport>,
     pub(in crate::app) directory_item_count_ready_at: Option<Instant>,
     pub(in crate::app) directory_view_memory: HashMap<PathBuf, DirectoryViewMemory>,
-    pub(in crate::app) directory_runtime: DirectoryRuntime,
+    pub(crate) directory_runtime: DirectoryRuntime,
     pub(in crate::app) last_sidebar_refresh_at: Instant,
 }
 
@@ -724,62 +532,62 @@ pub(in crate::app) struct PreviewRuntime {
 
 #[derive(Default)]
 pub(crate) struct OverlayState {
-    pub(in crate::app) trash: Option<TrashOverlay>,
-    pub(in crate::app) restore: Option<RestoreOverlay>,
-    pub(in crate::app) archive_create: Option<ArchiveCreateOverlay>,
-    pub(in crate::app) archive_password: Option<ArchivePasswordOverlay>,
-    pub(in crate::app) create: Option<CreateOverlay>,
-    pub(in crate::app) rename: Option<RenameOverlay>,
-    pub(in crate::app) bulk_rename: Option<BulkRenameOverlay>,
-    pub(in crate::app) editor_rename_confirm: Option<EditorRenameConfirmOverlay>,
-    pub(in crate::app) goto: Option<GoToOverlay>,
-    pub(in crate::app) copy: Option<CopyOverlay>,
-    pub(in crate::app) open_with: Option<OpenWithOverlay>,
-    pub(in crate::app) search: Option<SearchOverlay>,
-    pub(in crate::app) duplicates: Option<DuplicateFinderOverlay>,
+    pub(crate) trash: Option<TrashOverlay>,
+    pub(crate) restore: Option<RestoreOverlay>,
+    pub(crate) archive_create: Option<ArchiveCreateOverlay>,
+    pub(crate) archive_password: Option<ArchivePasswordOverlay>,
+    pub(crate) create: Option<CreateOverlay>,
+    pub(crate) rename: Option<RenameOverlay>,
+    pub(crate) bulk_rename: Option<BulkRenameOverlay>,
+    pub(crate) editor_rename_confirm: Option<EditorRenameConfirmOverlay>,
+    pub(crate) goto: Option<GoToOverlay>,
+    pub(crate) copy: Option<CopyOverlay>,
+    pub(crate) open_with: Option<OpenWithOverlay>,
+    pub(crate) search: Option<SearchOverlay>,
+    pub(crate) duplicates: Option<DuplicateFinderOverlay>,
     pub(crate) help: bool,
     pub(crate) help_scroll: usize,
 }
 
-pub(in crate::app) struct JobRuntime {
+pub(crate) struct JobRuntime {
     pub(in crate::app) directory_token: u64,
     pub(in crate::app) directory_fingerprint_token: u64,
     pub(in crate::app) search_token: u64,
     pub(in crate::app) search_loading: bool,
     pub(in crate::app) search_cache: Option<SearchCache>,
     pub(in crate::app) duplicate_token: u64,
-    pub(in crate::app) scheduler: JobScheduler,
-    pub(in crate::app) clipboard: Option<Clipboard>,
-    pub(in crate::app) archive_create_token: u64,
-    pub(in crate::app) archive_create_progress: Option<ArchiveCreateProgress>,
-    pub(in crate::app) archive_create_source_cwd: Option<PathBuf>,
-    pub(in crate::app) archive_create_path: Option<PathBuf>,
-    pub(in crate::app) archive_extract_token: u64,
-    pub(in crate::app) archive_extract_progress: Option<ArchiveExtractProgress>,
-    pub(in crate::app) archive_extract_source_cwd: Option<PathBuf>,
-    pub(in crate::app) archive_extract_request: Option<ArchiveExtractRequest>,
-    pub(in crate::app) paste_token: u64,
-    pub(in crate::app) paste_progress: Option<PasteProgress>,
-    pub(in crate::app) queued_pastes: VecDeque<QueuedPaste>,
+    pub(crate) scheduler: JobScheduler,
+    pub(crate) clipboard: Option<Clipboard>,
+    pub(crate) archive_create_token: u64,
+    pub(crate) archive_create_progress: Option<ArchiveCreateProgress>,
+    pub(crate) archive_create_source_cwd: Option<PathBuf>,
+    pub(crate) archive_create_path: Option<PathBuf>,
+    pub(crate) archive_extract_token: u64,
+    pub(crate) archive_extract_progress: Option<ArchiveExtractProgress>,
+    pub(crate) archive_extract_source_cwd: Option<PathBuf>,
+    pub(crate) archive_extract_request: Option<ArchiveExtractRequest>,
+    pub(crate) paste_token: u64,
+    pub(crate) paste_progress: Option<PasteProgress>,
+    pub(crate) queued_pastes: VecDeque<QueuedPaste>,
     /// Destination directory of the in-flight paste. Kept separately from
     /// `paste_progress` so that cancelling the chip does not lose the context
     /// needed by the completion handler to reload the right directory.
-    pub(in crate::app) paste_dest_dir: Option<PathBuf>,
-    pub(in crate::app) trash_token: u64,
-    pub(in crate::app) trash_progress: Option<TrashProgress>,
+    pub(crate) paste_dest_dir: Option<PathBuf>,
+    pub(crate) trash_token: u64,
+    pub(crate) trash_progress: Option<TrashProgress>,
     /// Source directory of the in-flight trash. Kept separately from
     /// `trash_progress` for the same reason as `paste_dest_dir`.
-    pub(in crate::app) trash_source_cwd: Option<PathBuf>,
-    pub(in crate::app) restore_token: u64,
-    pub(in crate::app) restore_progress: Option<RestoreProgress>,
+    pub(crate) trash_source_cwd: Option<PathBuf>,
+    pub(crate) restore_token: u64,
+    pub(crate) restore_progress: Option<RestoreProgress>,
     /// Source directory of the in-flight restore. Kept separately from
     /// `restore_progress` so that cancelling the chip does not lose the
     /// context needed by the completion handler.
-    pub(in crate::app) restore_source_cwd: Option<PathBuf>,
+    pub(crate) restore_source_cwd: Option<PathBuf>,
 }
 
-pub(in crate::app) struct InputRuntime {
-    pub(in crate::app) frame_state: FrameState,
+pub(crate) struct InputRuntime {
+    pub(crate) frame_state: FrameState,
     pub(in crate::app) last_click: Option<ClickState>,
     pub(in crate::app) drag_candidate: Option<PathBuf>,
     pub(in crate::app) drag_paths: Vec<PathBuf>,
@@ -838,10 +646,10 @@ pub struct App {
     pub(crate) navigation: NavigationState,
     pub(in crate::app) preview: PreviewRuntime,
     pub(crate) overlays: OverlayState,
-    pub(in crate::app) jobs: JobRuntime,
-    pub(in crate::app) input: InputRuntime,
+    pub(crate) jobs: JobRuntime,
+    pub(crate) input: InputRuntime,
     pub(in crate::app) git: GitRuntime,
-    pub(in crate::app) status: String,
+    pub(crate) status: String,
     pub(crate) should_quit: bool,
     pub(crate) should_change_directory_on_quit: bool,
     pub(crate) chooser_mode: bool,

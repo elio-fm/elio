@@ -26,12 +26,6 @@ impl ViewMode {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ClipOp {
-    Yank,
-    Cut,
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct FrameState {
     pub sidebar_hits: Vec<PathHit>,

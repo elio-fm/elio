@@ -33,14 +33,15 @@ A brief overview of the repository layout:
 ├── examples/                   # Example config and theme files
 ├── packaging/                  # Distribution packaging files
 ├── src/
-│   ├── app/                    # Application state, jobs, and user actions
+│   ├── app/                    # Application state, input dispatch, and background jobs
 │   ├── archive/                # Archive creation, extraction, and format handling
 │   ├── cli/                    # Command-line arguments, options, help, and shell commands
 │   ├── config/                 # Configuration loading, validation, and key bindings
 │   ├── duplicate_finder/       # Duplicate candidate collection and content verification
 │   ├── elevated_session/       # Privileged filesystem operations through sudo or doas
 │   ├── file_classification/    # File, format, and code-language identification
-│   ├── fs/                     # Filesystem access and path-level operations
+│   ├── file_operations/        # Create, rename, copy, move, trash, restore, and archive workflows
+│   ├── fs/                     # Directory access, entries, sorting, watching, and metadata
 │   ├── fuzzy_finder/           # Candidate indexing and fuzzy matching
 │   ├── opening/                # Open rules, application launching, and Open With discovery
 │   ├── places/                 # Places list and mounted-device discovery

@@ -1,7 +1,5 @@
 mod actions;
-mod clipboard;
 mod constants;
-mod create;
 mod directory_counts;
 mod drag;
 mod duplicate_finder_overlay;
@@ -18,13 +16,25 @@ mod state;
 mod text_edit;
 mod types;
 
+use self::constants::*;
 #[cfg(test)]
 use self::jobs::SchedulerMetricsSnapshot;
-use self::jobs::{
-    ArchiveExtractBatchState, ArchiveExtractRequest, PreviewLineCountRequest, PreviewPriority,
-    PreviewRequest, SearchRequest,
+#[cfg(unix)]
+pub(crate) use self::jobs::run_user_trash_helper;
+pub(crate) use self::jobs::{
+    ArchiveCreateRequest, ArchiveExtractBatchState, ArchiveExtractRequest, PasteRequest,
+    RestoreRequest, TrashRequest,
 };
-use self::{constants::*, state::*};
+use self::jobs::{PreviewLineCountRequest, PreviewPriority, PreviewRequest, SearchRequest};
+#[cfg(test)]
+pub(crate) use self::state::DuplicateFinderOverlay;
+use self::state::*;
+pub(crate) use self::state::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
+pub(crate) use self::text_edit::{
+    char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
+    remove_char_range,
+};
+pub(crate) use crate::file_operations::ClipOp;
 use anyhow::Result;
 #[cfg(test)]
 use ratatui::layout::Rect;
@@ -37,7 +47,6 @@ use std::{
 pub use self::state::App;
 
 #[cfg(unix)]
-pub(crate) use self::jobs::run_user_trash_helper;
 #[cfg(test)]
 pub use self::state::PreviewMetricsSnapshot;
 pub(crate) use self::state::{ChooserExit, DuplicateRow, PendingTerminalTask};
@@ -47,7 +56,6 @@ pub(crate) use crate::fs::{
     sanitize_terminal_text,
 };
 
-pub(crate) use self::types::ClipOp;
 pub use self::types::{
     CopyHit, DuplicateHit, EntryHit, FrameState, GoToHit, OpenWithHit, PathHit, SearchHit,
     SearchRow, SearchScope, ViewMetrics, ViewMode,

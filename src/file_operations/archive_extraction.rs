@@ -1,10 +1,46 @@
-use super::*;
-use crate::app::text_edit::{
+use crate::app::*;
+use crate::app::{ArchiveExtractBatchState, ArchiveExtractRequest};
+use crate::app::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
 };
 use crate::archive::{ArchiveEncryption, ArchivePassword};
+use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use std::fmt;
+
+#[derive(Clone, Debug)]
+pub(crate) struct ArchiveExtractProgress {
+    pub(crate) completed: usize,
+    pub(crate) total: Option<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum ArchivePasswordPurpose {
+    Extract { request: ArchiveExtractRequest },
+    Create,
+}
+
+#[derive(Clone)]
+pub(crate) struct ArchivePasswordOverlay {
+    pub(crate) purpose: ArchivePasswordPurpose,
+    pub(crate) input: String,
+    pub(crate) cursor_col: usize,
+    pub(crate) visible: bool,
+    pub(crate) error: Option<String>,
+}
+
+impl fmt::Debug for ArchivePasswordOverlay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ArchivePasswordOverlay")
+            .field("purpose", &self.purpose)
+            .field("input", &"<redacted>")
+            .field("cursor_col", &self.cursor_col)
+            .field("visible", &self.visible)
+            .field("error", &self.error)
+            .finish()
+    }
+}
 
 impl App {
     pub fn archive_extract_progress(&self) -> Option<(usize, Option<usize>)> {
@@ -14,7 +50,7 @@ impl App {
             .map(|progress| (progress.completed, progress.total))
     }
 
-    pub(in crate::app) fn extract_focused_archive(&mut self) -> Result<()> {
+    pub(crate) fn extract_focused_archive(&mut self) -> Result<()> {
         if self.jobs.archive_extract_progress.is_some() {
             self.status = "Extraction already in progress".to_string();
             return Ok(());
@@ -147,7 +183,7 @@ impl App {
             .and_then(|overlay| overlay.error.as_deref())
     }
 
-    pub(in crate::app) fn open_archive_password_prompt(
+    pub(crate) fn open_archive_password_prompt(
         &mut self,
         request: ArchiveExtractRequest,
         error: Option<String>,
@@ -179,13 +215,13 @@ impl App {
             .is_some_and(|overlay| overlay.visible)
     }
 
-    pub(in crate::app) fn toggle_archive_password_visibility(&mut self) {
+    pub(crate) fn toggle_archive_password_visibility(&mut self) {
         if let Some(overlay) = &mut self.overlays.archive_password {
             overlay.visible = !overlay.visible;
         }
     }
 
-    pub(in crate::app) fn handle_archive_password_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_archive_password_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.cancel_archive_password_prompt()?;
             return Ok(());
@@ -327,10 +363,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn handle_archive_password_mouse(
-        &mut self,
-        mouse: MouseEvent,
-    ) -> Result<()> {
+    pub(crate) fn handle_archive_password_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
             if self
                 .input
@@ -411,7 +444,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn finish_archive_extract_batch(&mut self, batch: ArchiveExtractBatchState) {
+    pub(crate) fn finish_archive_extract_batch(&mut self, batch: ArchiveExtractBatchState) {
         let status = batch.status();
         let dest_dir = batch.reselect_path();
         let source_cwd = self

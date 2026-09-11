@@ -1,9 +1,9 @@
 //! Shared text editing primitives used by the create and search overlays.
-pub(super) fn is_word_char(ch: char) -> bool {
+fn is_word_char(ch: char) -> bool {
     ch.is_alphanumeric() || ch == '_'
 }
 
-pub(super) fn char_to_byte(s: &str, char_idx: usize) -> usize {
+pub(crate) fn char_to_byte(s: &str, char_idx: usize) -> usize {
     s.char_indices()
         .nth(char_idx)
         .map(|(i, _)| i)
@@ -39,7 +39,7 @@ fn normalize_paste_newlines(text: &str) -> String {
 }
 
 /// Move cursor left to the start of the previous word (shell-style).
-pub(super) fn previous_word_start(text: &str, cursor: usize) -> usize {
+pub(crate) fn previous_word_start(text: &str, cursor: usize) -> usize {
     let chars: Vec<char> = text.chars().collect();
     let mut i = cursor.min(chars.len());
     while i > 0 && chars[i - 1].is_whitespace() {
@@ -55,7 +55,7 @@ pub(super) fn previous_word_start(text: &str, cursor: usize) -> usize {
 }
 
 /// Move cursor right to the start of the next word.
-pub(super) fn next_word_start(text: &str, cursor: usize) -> usize {
+pub(crate) fn next_word_start(text: &str, cursor: usize) -> usize {
     let chars: Vec<char> = text.chars().collect();
     let mut i = cursor.min(chars.len());
     while i < chars.len() && is_word_char(chars[i]) {
@@ -68,7 +68,7 @@ pub(super) fn next_word_start(text: &str, cursor: usize) -> usize {
 }
 
 /// Start of the region that Ctrl+Backspace should delete (back to word boundary).
-pub(super) fn previous_delete_start(text: &str, cursor: usize) -> usize {
+pub(crate) fn previous_delete_start(text: &str, cursor: usize) -> usize {
     let chars: Vec<char> = text.chars().collect();
     let mut i = cursor.min(chars.len());
     while i > 0 && !is_word_char(chars[i - 1]) {
@@ -81,7 +81,7 @@ pub(super) fn previous_delete_start(text: &str, cursor: usize) -> usize {
 }
 
 /// End of the region that Ctrl+Delete should delete (forward to word boundary).
-pub(super) fn next_delete_end(text: &str, cursor: usize) -> usize {
+pub(crate) fn next_delete_end(text: &str, cursor: usize) -> usize {
     let chars: Vec<char> = text.chars().collect();
     let mut i = cursor.min(chars.len());
     if i >= chars.len() {
@@ -105,7 +105,7 @@ pub(super) fn next_delete_end(text: &str, cursor: usize) -> usize {
     i
 }
 
-pub(super) fn remove_char_range(text: &mut String, start_char: usize, end_char: usize) {
+pub(crate) fn remove_char_range(text: &mut String, start_char: usize, end_char: usize) {
     let start = char_to_byte(text, start_char);
     let end = char_to_byte(text, end_char);
     if start < end {

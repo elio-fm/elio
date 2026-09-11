@@ -9,21 +9,23 @@ mod types;
 
 #[cfg(test)]
 pub(super) use self::metrics::SchedulerMetricsSnapshot;
-pub(super) use self::scheduler::JobScheduler;
+pub(crate) use self::scheduler::JobScheduler;
 use self::sync::{lock_unpoison, wait_unpoison};
 #[cfg(unix)]
 pub(crate) use self::tasks::trash::run_user_trash_helper;
 pub(super) use self::types::{
-    ArchiveCreateBuild, ArchiveCreateRequest, ArchiveExtractBatchState, ArchiveExtractBuild,
-    ArchiveExtractRequest, ArchivePasswordPrompt, DirectoryBuild, DirectoryFingerprintBuild,
-    DirectoryFingerprintRequest, DirectoryItemCountBuild, DirectoryItemCountRequest,
-    DirectoryRequest, DirectoryStatsBuild, DirectoryStatsRequest, DuplicateScanBatchBuild,
-    DuplicateScanBuild, DuplicateScanRequest, GitStatusBuild, GitStatusRequest, ImageJobPriority,
-    ImagePrepareBuild, ImagePrepareRequest, JobResult, PasteBuild, PasteRequest, PdfJobPriority,
-    PdfProbeBuild, PdfProbeRequest, PdfRenderBuild, PdfRenderRequest, PreviewBuild,
-    PreviewLineCountBuild, PreviewLineCountRequest, PreviewPriority, PreviewRequest, RestoreBuild,
-    RestoreRequest, SearchBatchBuild, SearchBuild, SearchRequest, SixelPrepareConfig, TrashBuild,
-    TrashRequest,
+    ArchiveCreateBuild, ArchiveExtractBuild, ArchivePasswordPrompt, DirectoryBuild,
+    DirectoryFingerprintBuild, DirectoryFingerprintRequest, DirectoryItemCountBuild,
+    DirectoryItemCountRequest, DirectoryRequest, DirectoryStatsBuild, DirectoryStatsRequest,
+    DuplicateScanBatchBuild, DuplicateScanBuild, DuplicateScanRequest, GitStatusBuild,
+    GitStatusRequest, ImageJobPriority, ImagePrepareBuild, ImagePrepareRequest, JobResult,
+    PasteBuild, PdfJobPriority, PdfProbeBuild, PdfProbeRequest, PdfRenderBuild, PdfRenderRequest,
+    PreviewBuild, PreviewLineCountBuild, PreviewLineCountRequest, PreviewPriority, PreviewRequest,
+    RestoreBuild, SearchBatchBuild, SearchBuild, SearchRequest, SixelPrepareConfig, TrashBuild,
+};
+pub(crate) use self::types::{
+    ArchiveCreateRequest, ArchiveExtractBatchState, ArchiveExtractRequest, PasteRequest,
+    RestoreRequest, TrashRequest,
 };
 use self::{config::SchedulerConfig, metrics::SchedulerMetrics};
 #[cfg(test)]

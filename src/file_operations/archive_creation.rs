@@ -1,14 +1,32 @@
-use super::*;
-use crate::app::jobs::ArchiveCreateRequest;
-use crate::app::text_edit::{
+use super::archive_extraction::{ArchivePasswordOverlay, ArchivePasswordPurpose};
+use crate::app::ArchiveCreateRequest;
+use crate::app::*;
+use crate::app::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
 };
 use crate::archive::{
     ArchiveEncryption, CreateArchiveFormat, CreateArchiveOptions, normalize_archive_output_name,
 };
+use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::PathBuf;
+
+pub(crate) struct ArchiveCreateProgress {
+    pub(crate) completed: usize,
+    pub(crate) total: usize,
+}
+
+#[derive(Debug)]
+pub(crate) struct ArchiveCreateOverlay {
+    pub(crate) sources: Vec<PathBuf>,
+    pub(crate) source_names: Vec<String>,
+    pub(crate) source_scroll: usize,
+    pub(crate) input: String,
+    pub(crate) cursor_col: usize,
+    pub(crate) options: CreateArchiveOptions,
+    pub(crate) error: Option<String>,
+}
 
 impl App {
     pub fn archive_create_progress(&self) -> Option<(usize, usize)> {
@@ -106,7 +124,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn open_archive_create_prompt(&mut self) {
+    pub(crate) fn open_archive_create_prompt(&mut self) {
         if self.jobs.archive_create_progress.is_some() {
             self.status = "Archive creation already in progress".to_string();
             return;
@@ -158,7 +176,7 @@ impl App {
         ))
     }
 
-    pub(in crate::app) fn handle_archive_create_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_archive_create_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.overlays.archive_create = None;
             return Ok(());
@@ -307,7 +325,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn handle_archive_create_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+    pub(crate) fn handle_archive_create_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         match mouse.kind {
             MouseEventKind::ScrollDown
                 if self.archive_create_mouse_in_list(mouse.column, mouse.row) =>

@@ -1,21 +1,41 @@
-use super::super::{
-    App,
-    jobs::TrashRequest,
-    state::{TrashOverlay, TrashProgress, TrashTarget},
-};
+use crate::app::{App, TrashRequest};
 use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::{Path, PathBuf};
 
+#[derive(Clone, Debug)]
+pub(crate) struct TrashProgress {
+    pub(crate) completed: usize,
+    pub(crate) total: usize,
+    pub(crate) permanent: bool,
+    pub(crate) duplicate_targets: Option<Vec<PathBuf>>,
+    pub(crate) next_selection: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TrashTarget {
+    pub(crate) path: PathBuf,
+    pub(crate) name: String,
+    pub(crate) is_dir: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TrashOverlay {
+    pub(crate) targets: Vec<TrashTarget>,
+    pub(crate) scroll: usize,
+    pub(crate) confirmed: bool,
+    pub(crate) permanent: bool,
+}
+
 impl App {
-    pub(in crate::app) fn cwd_is_trash(&self) -> bool {
+    pub(crate) fn cwd_is_trash(&self) -> bool {
         self.navigation.in_trash
     }
 
     /// Returns `true` when the current directory is *inside* a trashed folder
     /// (i.e. a subdirectory of the trash root, but not the root itself).
-    pub(in crate::app) fn cwd_is_inside_trash_subfolder(&self) -> bool {
+    pub(crate) fn cwd_is_inside_trash_subfolder(&self) -> bool {
         crate::elevated_session::trash_home_dir()
             .and_then(|home| crate::places::trash_dir(&home))
             .is_some_and(|trash| {
@@ -23,29 +43,29 @@ impl App {
             })
     }
 
-    pub(in crate::app) fn path_is_trash(path: &Path) -> bool {
+    pub(crate) fn path_is_trash(path: &Path) -> bool {
         crate::elevated_session::trash_home_dir()
             .and_then(|home| crate::places::trash_dir(&home))
             .is_some_and(|trash| path == trash)
     }
 
-    pub(in crate::app) fn path_is_inside_trash(path: &Path) -> bool {
+    pub(crate) fn path_is_inside_trash(path: &Path) -> bool {
         crate::elevated_session::trash_home_dir()
             .and_then(|home| crate::places::trash_dir(&home))
             .is_some_and(|trash| path.starts_with(&trash))
     }
 
-    pub(in crate::app) fn effective_show_hidden(&self) -> bool {
+    pub(crate) fn effective_show_hidden(&self) -> bool {
         self.navigation.show_hidden || self.navigation.in_trash
     }
 
-    pub(in crate::app) fn effective_show_hidden_for(&self, path: &Path) -> bool {
+    pub(crate) fn effective_show_hidden_for(&self, path: &Path) -> bool {
         self.navigation.show_hidden || Self::path_is_trash(path)
     }
 }
 
 impl App {
-    pub(in crate::app::create) fn selected_trash_targets(&self) -> Vec<TrashTarget> {
+    pub(super) fn selected_trash_targets(&self) -> Vec<TrashTarget> {
         if !self.navigation.selected_paths.is_empty() {
             self.selected_paths_sorted()
                 .into_iter()
@@ -64,7 +84,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn open_trash_prompt(&mut self) {
+    pub(crate) fn open_trash_prompt(&mut self) {
         let targets = self.selected_trash_targets();
 
         if targets.is_empty() {
@@ -80,7 +100,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn open_delete_permanently_prompt(&mut self) {
+    pub(crate) fn open_delete_permanently_prompt(&mut self) {
         let targets = self.selected_trash_targets();
 
         if targets.is_empty() {
@@ -90,7 +110,7 @@ impl App {
         self.open_trash_prompt_for_targets(targets, true);
     }
 
-    pub(in crate::app) fn open_trash_prompt_for_explicit_targets(
+    pub(crate) fn open_trash_prompt_for_explicit_targets(
         &mut self,
         targets: Vec<TrashTarget>,
         permanent: bool,
@@ -134,7 +154,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn trash_target_is_inside_trash(&self, path: &Path) -> bool {
+    pub(crate) fn trash_target_is_inside_trash(&self, path: &Path) -> bool {
         Self::path_is_inside_trash(path)
             || (self.navigation.in_trash && path.starts_with(&self.navigation.cwd))
     }
@@ -242,7 +262,7 @@ impl App {
         self.overlays.trash.as_ref().is_some_and(|t| t.confirmed)
     }
 
-    pub(in crate::app) fn handle_trash_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_trash_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.overlays.trash = None;
             return Ok(());
@@ -290,7 +310,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn handle_trash_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+    pub(crate) fn handle_trash_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
@@ -335,7 +355,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app::create) fn confirm_trash(&mut self) -> Result<()> {
+    pub(super) fn confirm_trash(&mut self) -> Result<()> {
         if let Some(prog) = &self.jobs.trash_progress {
             self.status = if prog.permanent {
                 "Delete in progress — press Esc to cancel".to_string()
@@ -441,7 +461,7 @@ enum TrashTargetScope {
 /// briefly before the fast rename completes.  The heuristic is UI-only and
 /// never affects behaviour.
 #[cfg(unix)]
-fn likely_cross_device_trash(targets: &[crate::app::state::TrashTarget]) -> bool {
+fn likely_cross_device_trash(targets: &[TrashTarget]) -> bool {
     use std::os::unix::fs::MetadataExt;
     let source_dev = targets
         .first()

@@ -1,18 +1,24 @@
-use super::super::text_edit::{
-    char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
+use crate::app::{
+    App, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad, char_to_byte,
+    next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
-};
-use super::super::{
-    App,
-    state::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad, RenameOverlay},
 };
 use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::fs;
 
+#[derive(Clone, Debug)]
+pub(crate) struct RenameOverlay {
+    pub(crate) is_dir: bool,
+    pub(crate) original_name: String,
+    pub(crate) input: String,
+    pub(crate) cursor_col: usize,
+    pub(crate) error: Option<String>,
+}
+
 impl App {
-    pub(in crate::app) fn open_rename_prompt(&mut self) {
+    pub(crate) fn open_rename_prompt(&mut self) {
         if self.navigation.in_trash {
             return;
         }
@@ -66,7 +72,7 @@ impl App {
             .and_then(|r| r.error.as_deref())
     }
 
-    pub(in crate::app) fn handle_rename_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_rename_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.overlays.rename = None;
             return Ok(());
@@ -205,7 +211,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn handle_rename_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+    pub(crate) fn handle_rename_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
             let inside = self
                 .input
@@ -219,7 +225,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app::create) fn confirm_rename(&mut self) -> Result<()> {
+    pub(super) fn confirm_rename(&mut self) -> Result<()> {
         let Some(r) = &self.overlays.rename else {
             return Ok(());
         };
@@ -294,7 +300,7 @@ impl App {
     }
 }
 
-pub(in crate::app::create) fn cursor_before_extension(name: &str) -> usize {
+pub(super) fn cursor_before_extension(name: &str) -> usize {
     let total = name.chars().count();
     if let Some(dot_pos) = name.rfind('.') {
         let dot_char = name[..dot_pos].chars().count();

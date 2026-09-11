@@ -1,9 +1,5 @@
-#[cfg(unix)]
-use super::super::state::{BulkRenameEditorSession, EditorRenameConfirmOverlay};
-use super::super::{
-    App,
-    state::{BulkRenameItem, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad},
-};
+use super::bulk_rename::BulkRenameItem;
+use crate::app::{App, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
 use crate::fs::rect_contains;
 #[cfg(unix)]
 use anyhow::Context;
@@ -15,6 +11,23 @@ use std::{
     path::{Component, Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(unix)]
+pub(crate) struct BulkRenameEditorSession {
+    pub(crate) root: PathBuf,
+    pub(crate) temp_path: PathBuf,
+    pub(crate) expected_temp_owner: Option<libc::uid_t>,
+    pub(crate) items: Vec<BulkRenameItem>,
+}
+
+pub(crate) struct EditorRenameConfirmOverlay {
+    pub(crate) items: Vec<BulkRenameItem>,
+    pub(crate) new_names: Vec<String>,
+    pub(crate) root: PathBuf,
+    pub(crate) scroll: usize,
+    pub(crate) confirmed: bool,
+}
 #[cfg(unix)]
 use std::{
     env,
@@ -27,7 +40,7 @@ const MAX_EDITOR_RENAME_BYTES: u64 = 1024 * 1024;
 
 impl App {
     #[cfg(unix)]
-    pub(in crate::app) fn open_editor_bulk_rename(&mut self) -> Result<()> {
+    pub(crate) fn open_editor_bulk_rename(&mut self) -> Result<()> {
         if self.navigation.in_trash || self.cwd_is_inside_trash_subfolder() {
             return Ok(());
         }
@@ -81,7 +94,7 @@ impl App {
     }
 
     #[cfg(not(unix))]
-    pub(in crate::app) fn open_editor_bulk_rename(&mut self) -> Result<()> {
+    pub(crate) fn open_editor_bulk_rename(&mut self) -> Result<()> {
         self.status = "Editor batch rename is only supported on Unix-like systems".to_string();
         Ok(())
     }
@@ -240,19 +253,19 @@ impl App {
             .is_some_and(|overlay| overlay.confirmed)
     }
 
-    pub(in crate::app) fn cancel_editor_rename_confirm(&mut self) {
+    pub(crate) fn cancel_editor_rename_confirm(&mut self) {
         self.overlays.editor_rename_confirm = None;
         self.status = "Editor rename cancelled".to_string();
     }
 
-    pub(in crate::app) fn scroll_editor_rename_confirm(&mut self, delta: isize) {
+    pub(crate) fn scroll_editor_rename_confirm(&mut self, delta: isize) {
         if let Some(overlay) = &mut self.overlays.editor_rename_confirm {
             let max_scroll = overlay.items.len().saturating_sub(1);
             overlay.scroll = overlay.scroll.saturating_add_signed(delta).min(max_scroll);
         }
     }
 
-    pub(in crate::app) fn confirm_editor_rename(&mut self) -> Result<()> {
+    pub(crate) fn confirm_editor_rename(&mut self) -> Result<()> {
         let Some(overlay) = &self.overlays.editor_rename_confirm else {
             return Ok(());
         };
@@ -300,7 +313,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn handle_editor_rename_confirm_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_editor_rename_confirm_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.cancel_editor_rename_confirm();
             return Ok(());
@@ -349,10 +362,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn handle_editor_rename_confirm_mouse(
-        &mut self,
-        mouse: MouseEvent,
-    ) -> Result<()> {
+    pub(crate) fn handle_editor_rename_confirm_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         let inside = self
             .input
             .frame_state
@@ -392,7 +402,7 @@ impl App {
     }
 }
 
-pub(in crate::app::create) fn confirm_bulk_rename_overlay(app: &mut App) -> Result<()> {
+pub(super) fn confirm_bulk_rename_overlay(app: &mut App) -> Result<()> {
     let Some(r) = &app.overlays.bulk_rename else {
         return Ok(());
     };
@@ -889,198 +899,5 @@ fn split_program_args(tokens: Vec<String>) -> Option<(String, Vec<String>)> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn item(path: &Path, is_dir: bool) -> BulkRenameItem {
-        BulkRenameItem {
-            path: path.to_path_buf(),
-            original_name: path_name(path),
-            is_dir,
-        }
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn unresolved_elevation_cannot_prepare_editor_document() {
-        assert!(
-            editor_temp_owner(&crate::elevated_session::InvocationContext::ElevatedUnresolved)
-                .is_err()
-        );
-        assert!(
-            editor_temp_owner(&crate::elevated_session::InvocationContext::Normal)
-                .expect("normal session should be accepted")
-                .is_none()
-        );
-        assert!(
-            editor_temp_owner(&crate::elevated_session::InvocationContext::RootSession)
-                .expect("root session should be accepted")
-                .is_none()
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn invoking_user_editor_document_is_private_and_readable() {
-        use std::os::unix::fs::MetadataExt;
-
-        let uid = unsafe { libc::getuid() };
-        let gid = unsafe { libc::getgid() };
-        let path = create_temp_file(&["alpha.txt".to_string()], Some((uid, gid)))
-            .expect("failed to create invoking-user editor document");
-        let metadata = fs::metadata(&path).expect("failed to stat editor document");
-
-        assert!(path.is_absolute());
-        assert_eq!(path.parent(), Some(Path::new("/tmp")));
-        assert_eq!(metadata.uid(), uid);
-        assert_eq!(metadata.gid(), gid);
-        assert_eq!(metadata.mode() & 0o777, 0o600);
-        assert_eq!(
-            read_editor_rename_file(&path, Some(uid)).expect("failed to read editor document"),
-            "alpha.txt\n"
-        );
-        fs::remove_file(path).expect("failed to remove editor document");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn invoking_user_editor_document_accepts_atomic_save_replacement() {
-        let uid = unsafe { libc::getuid() };
-        let gid = unsafe { libc::getgid() };
-        let path = create_temp_file(&["alpha.txt".to_string()], Some((uid, gid)))
-            .expect("failed to create invoking-user editor document");
-        let replacement = path.with_extension("replacement");
-        fs::write(&replacement, "renamed.txt\n").expect("failed to write replacement document");
-        fs::rename(&replacement, &path).expect("failed to replace editor document");
-
-        assert_eq!(
-            read_editor_rename_file(&path, Some(uid)).expect("failed to read replacement document"),
-            "renamed.txt\n"
-        );
-        fs::remove_file(path).expect("failed to remove editor document");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn invoking_user_editor_document_rejects_symlinks_and_oversized_files() {
-        use std::os::unix::fs::{PermissionsExt, symlink};
-
-        let uid = unsafe { libc::getuid() };
-        let gid = unsafe { libc::getgid() };
-        let path = create_temp_file(&["alpha.txt".to_string()], Some((uid, gid)))
-            .expect("failed to create invoking-user editor document");
-        let target = path.with_extension("target");
-        fs::write(&target, "renamed.txt\n").expect("failed to write symlink target");
-        fs::remove_file(&path).expect("failed to remove editor document");
-        symlink(&target, &path).expect("failed to create editor document symlink");
-        assert!(read_editor_rename_file(&path, Some(uid)).is_err());
-        fs::remove_file(&path).expect("failed to remove editor document symlink");
-        fs::remove_file(target).expect("failed to remove symlink target");
-
-        let path = create_temp_file(&["alpha.txt".to_string()], Some((uid, gid)))
-            .expect("failed to create invoking-user editor document");
-        fs::write(&path, vec![b'a'; MAX_EDITOR_RENAME_BYTES as usize + 1])
-            .expect("failed to write oversized editor document");
-        assert!(read_editor_rename_file(&path, Some(uid)).is_err());
-        fs::remove_file(path).expect("failed to remove oversized editor document");
-
-        let path = create_temp_file(&["alpha.txt".to_string()], Some((uid, gid)))
-            .expect("failed to create invoking-user editor document");
-        fs::set_permissions(&path, std::fs::Permissions::from_mode(0o622))
-            .expect("failed to make editor document world-writable");
-        assert!(read_editor_rename_file(&path, Some(uid)).is_err());
-        fs::remove_file(path).expect("failed to remove world-writable editor document");
-    }
-
-    #[test]
-    fn common_root_uses_parent_paths() {
-        let paths = vec![
-            PathBuf::from("/tmp/root/left/a.txt"),
-            PathBuf::from("/tmp/root/right/b.txt"),
-        ];
-        assert_eq!(common_root(&paths), PathBuf::from("/tmp/root"));
-    }
-
-    #[test]
-    fn editor_plan_accepts_relative_paths_in_multiple_directories() {
-        let root =
-            std::env::temp_dir().join(format!("elio-editor-rename-plan-{}", std::process::id()));
-        std::fs::create_dir_all(root.join("left")).expect("failed to create left dir");
-        std::fs::create_dir_all(root.join("right")).expect("failed to create right dir");
-        let items = vec![
-            item(&root.join("left/a.txt"), false),
-            item(&root.join("right/b.txt"), false),
-        ];
-        let names = vec![
-            "left/renamed.txt".to_string(),
-            "right/renamed.txt".to_string(),
-        ];
-        let plan = build_rename_plan(&items, &names, Some(&root)).expect("plan should build");
-        assert_eq!(plan[0].new_path, root.join("left/renamed.txt"));
-        assert_eq!(plan[1].new_path, root.join("right/renamed.txt"));
-        std::fs::remove_dir_all(root).expect("failed to remove temp root");
-    }
-
-    #[test]
-    fn editor_plan_rejects_parent_traversal() {
-        let root = PathBuf::from("/tmp/root");
-        let items = vec![item(&root.join("a.txt"), false)];
-        let names = vec!["../outside.txt".to_string()];
-        let errors = build_rename_plan(&items, &names, Some(&root)).expect_err("plan should fail");
-        assert_eq!(errors[0].as_deref(), Some("Path cannot contain . or .."));
-    }
-
-    #[test]
-    fn apply_failure_rolls_back_chained_renames_without_overwriting() {
-        let root = std::env::temp_dir().join(format!(
-            "elio-editor-rename-rollback-{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).expect("failed to create temp root");
-        let a = root.join("a.txt");
-        let b = root.join("b.txt");
-        let c = root.join("c.txt");
-        std::fs::write(&a, "alpha").expect("failed to write a");
-        std::fs::write(&b, "beta").expect("failed to write b");
-        std::fs::create_dir(&c).expect("failed to create blocking directory");
-
-        let ops = vec![
-            RenameOp {
-                old_path: a.clone(),
-                original_label: "a.txt".to_string(),
-                new_label: "b.txt".to_string(),
-                new_path: b.clone(),
-            },
-            RenameOp {
-                old_path: b.clone(),
-                original_label: "b.txt".to_string(),
-                new_label: "c.txt".to_string(),
-                new_path: c.clone(),
-            },
-        ];
-
-        let error = apply_rename_ops(&ops).expect_err("second apply should fail");
-        assert!(error.to_string().contains("Could not rename \"b.txt\""));
-        assert_eq!(
-            std::fs::read_to_string(&a).expect("a should be restored"),
-            "alpha"
-        );
-        assert_eq!(
-            std::fs::read_to_string(&b).expect("b should be restored"),
-            "beta"
-        );
-        assert!(c.is_dir());
-        assert!(
-            std::fs::read_dir(&root)
-                .expect("root should be readable")
-                .all(|entry| !entry
-                    .expect("entry should be readable")
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with(".elio-rename-"))
-        );
-
-        std::fs::remove_dir_all(root).expect("failed to remove temp root");
-    }
-}
+#[path = "tests/editor_bulk_rename_unit.rs"]
+mod tests;

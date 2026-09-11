@@ -1,15 +1,26 @@
-use super::super::{
-    App,
-    jobs::RestoreRequest,
-    state::{RestoreOverlay, RestoreProgress},
-};
+use super::trash_delete::TrashTarget;
+use crate::app::{App, RestoreRequest};
 use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::PathBuf;
 
+#[derive(Clone, Debug)]
+pub(crate) struct RestoreProgress {
+    pub(crate) completed: usize,
+    pub(crate) total: usize,
+    pub(crate) next_selection: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct RestoreOverlay {
+    pub(crate) targets: Vec<TrashTarget>,
+    pub(crate) scroll: usize,
+    pub(crate) confirmed: bool,
+}
+
 impl App {
-    pub(in crate::app) fn open_restore_prompt(&mut self) {
+    pub(crate) fn open_restore_prompt(&mut self) {
         if !self.navigation.in_trash {
             return;
         }
@@ -136,7 +147,7 @@ impl App {
         self.overlays.restore.as_ref().is_some_and(|r| r.confirmed)
     }
 
-    pub(in crate::app) fn handle_restore_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_restore_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.overlays.restore = None;
             return Ok(());
@@ -184,7 +195,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn handle_restore_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+    pub(crate) fn handle_restore_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
@@ -229,7 +240,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app::create) fn confirm_restore(&mut self) -> Result<()> {
+    pub(super) fn confirm_restore(&mut self) -> Result<()> {
         if self.jobs.restore_progress.is_some() {
             self.status = "Restore in progress — press Esc to cancel".to_string();
             self.overlays.restore = None;

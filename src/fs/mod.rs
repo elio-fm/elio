@@ -5,9 +5,8 @@ pub(crate) mod watch;
 mod directory;
 mod directory_stats;
 mod entries;
-mod restore;
 mod sort;
-mod trashinfo;
+mod trash_metadata;
 
 fn is_hidden(file_name: &std::ffi::OsStr) -> bool {
     file_name.to_string_lossy().starts_with('.')
@@ -43,14 +42,9 @@ pub(crate) use format::{
     format_time_ago, rect_contains, sanitize_terminal_text, symlink_target_display_label,
 };
 pub(crate) use item_count::count_directory_items;
-pub(crate) use restore::restore_trash_item;
-#[cfg(target_os = "macos")]
-pub(crate) use restore::{
-    remove_restore_origins, remove_restore_origins_checked, restore_trash_item_checked_metadata,
-    save_restore_origins_checked,
-};
 pub use sort::SortMode;
 pub(crate) use sort::natural_cmp;
+pub(crate) use trash_metadata::{original_basename_from_path_value, parse_original_path};
 pub(crate) use watch::{
     DirectoryWatchEvent, DirectoryWatcher, directory_watch_debounce, event_affects_visible_entries,
     start_directory_watcher,

@@ -606,7 +606,7 @@ fn cancel_keys_clear_selection_before_cancelling_archive_creation() {
         let mut app = App::new_at(root.clone()).expect("failed to create app");
         wait_for_directory_load(&mut app);
         app.navigation.selected_paths.insert(alpha);
-        app.jobs.archive_create_progress = Some(crate::app::ArchiveCreateProgress {
+        app.jobs.archive_create_progress = Some(crate::file_operations::ArchiveCreateProgress {
             completed: 0,
             total: 1,
         });
