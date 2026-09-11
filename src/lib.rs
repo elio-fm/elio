@@ -4,6 +4,7 @@ mod config;
 mod elevated_session;
 mod file_classification;
 mod fs;
+mod fuzzy_finder;
 mod opening;
 mod places;
 mod preview;

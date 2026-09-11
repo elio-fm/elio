@@ -471,13 +471,13 @@ impl App {
             search.matches.clear();
             search.cached_matches = HashMap::from([(
                 String::new(),
-                super::super::search::build_base_search_cache_entry(Vec::new()),
+                super::super::fuzzy_finder_overlay::build_base_search_cache_entry(Vec::new()),
             )]);
             search.selected = 0;
             search.scroll = 0;
             search.loading = true;
             search.error = None;
-            search.stats = crate::fs::search::SearchIndexStats::default();
+            search.stats = crate::fuzzy_finder::SearchIndexStats::default();
         }
         self.prewarm_search_index(scope);
     }

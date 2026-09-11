@@ -1,5 +1,5 @@
-mod index;
-mod overlay;
+mod interaction;
+mod query_matching;
 
 #[cfg(test)]
 mod tests;

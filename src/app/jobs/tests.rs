@@ -88,7 +88,7 @@ fn search_pool_replaces_pending_request_with_latest_distinct_job() {
     }));
     assert_eq!(
         scheduler.snapshot().search_pending,
-        Some(SearchJobKey {
+        Some(FuzzyFinderJobKey {
             cwd: PathBuf::from("/tmp/b"),
             scope: SearchScope::Files,
             show_hidden: false,
@@ -449,9 +449,9 @@ fn scheduler_reports_pending_work_for_buffered_results() {
         scope: SearchScope::Files,
         show_hidden: false,
         fingerprint: crate::fs::DirectoryFingerprint::default(),
-        result: Ok(crate::fs::search::SearchIndex {
+        result: Ok(crate::fuzzy_finder::SearchIndex {
             candidates: Vec::new(),
-            stats: crate::fs::search::SearchIndexStats::default(),
+            stats: crate::fuzzy_finder::SearchIndexStats::default(),
         }),
     }));
 

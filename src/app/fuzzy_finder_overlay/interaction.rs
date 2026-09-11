@@ -122,7 +122,7 @@ impl App {
         let (candidates, stats) = cached.clone().unwrap_or_else(|| {
             (
                 Arc::new(Vec::new()),
-                crate::fs::search::SearchIndexStats::default(),
+                crate::fuzzy_finder::SearchIndexStats::default(),
             )
         });
         let base_matches = (0..candidates.len()).collect::<Vec<_>>();
@@ -153,6 +153,28 @@ impl App {
         });
         self.status.clear();
         Ok(())
+    }
+
+    pub(crate) fn prewarm_search_index(&mut self, scope: SearchScope) {
+        self.jobs.search_token = self.jobs.search_token.wrapping_add(1);
+        self.jobs.search_loading = true;
+        self.jobs.search_cache = None;
+        let request = SearchRequest {
+            token: self.jobs.search_token,
+            cwd: self.navigation.cwd.clone(),
+            scope,
+            show_hidden: self.effective_show_hidden(),
+            fingerprint: self.navigation.directory_runtime.fingerprint,
+        };
+        if !self.jobs.scheduler.submit_search(request) {
+            self.jobs.search_loading = false;
+            if let Some(search) = &mut self.overlays.search
+                && search.scope == scope
+            {
+                search.loading = false;
+                search.error = Some("Search worker unavailable".to_string());
+            }
+        }
     }
 
     fn close_search_overlay(&mut self) {
@@ -366,7 +388,7 @@ impl App {
         self.sync_search_scroll();
     }
 
-    pub(in crate::app::search) fn confirm_search_selection(&mut self) -> Result<()> {
+    pub(in crate::app::fuzzy_finder_overlay) fn confirm_search_selection(&mut self) -> Result<()> {
         let Some(path) = self.overlays.search.as_ref().and_then(|search| {
             search
                 .matches

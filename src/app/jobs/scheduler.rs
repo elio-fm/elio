@@ -1,5 +1,5 @@
 use super::{
-    pool::{duplicates::DuplicatePool, preview::PreviewPool, search::SearchPool},
+    pool::{duplicates::DuplicatePool, fuzzy_finder::FuzzyFinderPool, preview::PreviewPool},
     tasks::{
         archive_create::ArchiveCreatePool, archive_extract::ArchiveExtractPool,
         directory::DirectoryPool, directory_fingerprint::DirectoryFingerprintPool,
@@ -11,7 +11,7 @@ use super::{
 };
 #[cfg(test)]
 use super::{
-    pool::{preview::PreviewJobKey, search::SearchJobKey},
+    pool::{fuzzy_finder::FuzzyFinderJobKey, preview::PreviewJobKey},
     tasks::{image::ImagePrepareJobKey, pdf_probe::PdfProbeJobKey, pdf_render::PdfRenderJobKey},
 };
 use std::{
@@ -36,7 +36,7 @@ pub(in crate::app) struct JobScheduler {
     image_prepare: ImagePreparePool,
     pdf_probe: PdfProbePool,
     pdf_render: PdfRenderPool,
-    search: SearchPool,
+    search: FuzzyFinderPool,
     duplicates: DuplicatePool,
     preview: PreviewPool,
     result_rx: mpsc::Receiver<JobResult>,
@@ -98,7 +98,7 @@ impl JobScheduler {
                 config.pdf_render_queue_limit,
                 result_tx.clone(),
             ),
-            search: SearchPool::new(
+            search: FuzzyFinderPool::new(
                 config.search_worker_count,
                 result_tx.clone(),
                 Arc::clone(&metrics),
@@ -364,8 +364,8 @@ impl JobScheduler {
 #[cfg(test)]
 #[derive(Debug, PartialEq)]
 pub(in crate::app::jobs) struct SchedulerSnapshot {
-    pub(in crate::app::jobs) search_pending: Option<SearchJobKey>,
-    pub(in crate::app::jobs) search_active: Option<SearchJobKey>,
+    pub(in crate::app::jobs) search_pending: Option<FuzzyFinderJobKey>,
+    pub(in crate::app::jobs) search_active: Option<FuzzyFinderJobKey>,
     pub(in crate::app::jobs) image_prepare_pending: Vec<ImagePrepareJobKey>,
     pub(in crate::app::jobs) pdf_probe_pending: Vec<PdfProbeJobKey>,
     pub(in crate::app::jobs) pdf_render_pending: Vec<PdfRenderJobKey>,

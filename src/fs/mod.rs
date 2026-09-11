@@ -1,7 +1,6 @@
 pub(crate) mod duplicates;
 pub(crate) mod format;
 pub(crate) mod item_count;
-pub(crate) mod search;
 pub(crate) mod watch;
 
 mod directory;
@@ -19,7 +18,7 @@ fn is_hidden(file_name: &std::ffi::OsStr) -> bool {
 ///
 /// On all platforms, entries whose names begin with `.` are hidden.
 /// On Windows, entries with the `FILE_ATTRIBUTE_HIDDEN` attribute are also hidden.
-fn is_hidden_entry(entry: &std::fs::DirEntry) -> bool {
+pub(crate) fn is_hidden_entry(entry: &std::fs::DirEntry) -> bool {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
