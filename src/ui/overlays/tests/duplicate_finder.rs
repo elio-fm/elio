@@ -2,7 +2,7 @@ use super::{
     MIN_PREVIEW_WIDTH, MIN_RESULTS_WIDTH_WITH_PREVIEW, duplicate_group_label,
     duplicate_loading_status, duplicate_partial_status, duplicate_preview_width,
 };
-use crate::fs::duplicates::{DuplicateScanPhase, DuplicateScanStats};
+use crate::duplicate_finder::{DuplicateScanPhase, DuplicateScanStats};
 
 #[test]
 fn duplicate_group_labels_zero_pad_to_rank_width() {

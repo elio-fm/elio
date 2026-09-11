@@ -129,7 +129,7 @@ fn render_header(frame: &mut Frame<'_>, area: Rect, app: &App, palette: Palette)
 }
 
 fn duplicate_loading_status(
-    stats: crate::fs::duplicates::DuplicateScanStats,
+    stats: crate::duplicate_finder::DuplicateScanStats,
     group_count: usize,
 ) -> String {
     let mut parts = vec![format!(
@@ -154,7 +154,7 @@ fn duplicate_loading_status(
 }
 
 fn duplicate_partial_status(
-    stats: crate::fs::duplicates::DuplicateScanStats,
+    stats: crate::duplicate_finder::DuplicateScanStats,
     group_count: usize,
 ) -> String {
     format!(

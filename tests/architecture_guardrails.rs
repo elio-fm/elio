@@ -30,6 +30,11 @@ fn fuzzy_finder_does_not_depend_on_app() {
 }
 
 #[test]
+fn duplicate_finder_does_not_depend_on_app() {
+    assert_tree_has_no_pattern("src/duplicate_finder", "app::", &[]);
+}
+
+#[test]
 fn app_ui_access_stays_confined_to_inline_image_theme_helpers() {
     assert_tree_has_no_pattern(
         "src/app",

@@ -13,7 +13,7 @@ use super::{
     overlays::{comic, epub, images, inline_image, pdf},
     types::*,
 };
-use crate::fs::duplicates::{DuplicateGroup, DuplicateScanStats};
+use crate::duplicate_finder::{DuplicateGroup, DuplicateScanStats};
 use crate::fuzzy_finder::{SearchCandidate, SearchIndexStats};
 use crate::preview;
 use crate::{

@@ -37,6 +37,7 @@ A brief overview of the repository layout:
 │   ├── archive/                # Archive creation, extraction, and format handling
 │   ├── cli/                    # Command-line arguments, options, help, and shell commands
 │   ├── config/                 # Configuration loading, validation, and key bindings
+│   ├── duplicate_finder/       # Duplicate candidate collection and content verification
 │   ├── elevated_session/       # Privileged filesystem operations through sudo or doas
 │   ├── file_classification/    # File, format, and code-language identification
 │   ├── fs/                     # Filesystem access and path-level operations

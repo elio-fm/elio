@@ -4,7 +4,7 @@ mod constants;
 mod create;
 mod directory_counts;
 mod drag;
-mod duplicates;
+mod duplicate_finder_overlay;
 mod fuzzy_finder_overlay;
 mod git;
 mod input;

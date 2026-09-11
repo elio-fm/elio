@@ -1,7 +1,7 @@
 mod actions;
 mod input;
-mod model;
-mod scan;
+mod results;
+mod scanning;
 
 #[cfg(test)]
 mod tests;

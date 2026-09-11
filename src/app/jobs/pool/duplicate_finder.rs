@@ -9,37 +9,37 @@ use std::{
     thread,
 };
 
-pub(in crate::app::jobs) struct DuplicatePool {
+pub(in crate::app::jobs) struct DuplicateFinderPool {
     shared: Arc<DuplicateShared>,
     workers: Vec<thread::JoinHandle<()>>,
 }
 
 struct DuplicateShared {
     state: Mutex<DuplicateState>,
-    hash_cache: Mutex<crate::fs::duplicates::DuplicateHashCache>,
+    hash_cache: Mutex<crate::duplicate_finder::DuplicateHashCache>,
     available: Condvar,
 }
 
 struct DuplicateState {
     pending: Option<DuplicateScanRequest>,
-    pending_key: Option<DuplicateJobKey>,
+    pending_key: Option<DuplicateFinderJobKey>,
     active: Option<ActiveDuplicateJob>,
     closed: bool,
 }
 
 #[derive(Clone, Debug)]
 struct ActiveDuplicateJob {
-    key: DuplicateJobKey,
+    key: DuplicateFinderJobKey,
     canceled: Arc<AtomicBool>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(in crate::app::jobs) struct DuplicateJobKey {
+pub(in crate::app::jobs) struct DuplicateFinderJobKey {
     pub(in crate::app::jobs) cwd: PathBuf,
     pub(in crate::app::jobs) show_hidden: bool,
 }
 
-impl DuplicatePool {
+impl DuplicateFinderPool {
     pub(in crate::app::jobs) fn new(
         worker_count: usize,
         result_tx: mpsc::Sender<JobResult>,
@@ -51,7 +51,7 @@ impl DuplicatePool {
                 active: None,
                 closed: false,
             }),
-            hash_cache: Mutex::new(crate::fs::duplicates::DuplicateHashCache::default()),
+            hash_cache: Mutex::new(crate::duplicate_finder::DuplicateHashCache::default()),
             available: Condvar::new(),
         });
         let mut workers = Vec::with_capacity(worker_count);
@@ -60,14 +60,14 @@ impl DuplicatePool {
             let result_tx = result_tx.clone();
             workers.push(thread::spawn(move || {
                 while let Some((request, canceled)) = DuplicateShared::pop(&shared) {
-                    let key = DuplicateJobKey::from_request(&request);
+                    let key = DuplicateFinderJobKey::from_request(&request);
                     let progress_token = request.token;
                     let progress_cwd = request.cwd.clone();
                     let progress_show_hidden = request.show_hidden;
                     let mut progress_send_failed = false;
                     let result = {
                         let mut hash_cache = lock_unpoison(&shared.hash_cache);
-                        crate::fs::duplicates::scan_duplicates_streaming_with_cache(
+                        crate::duplicate_finder::scan_duplicates_streaming_with_cache(
                             &request.cwd,
                             request.show_hidden,
                             &mut hash_cache,
@@ -112,7 +112,7 @@ impl DuplicatePool {
     }
 
     pub(in crate::app::jobs) fn submit(&self, request: DuplicateScanRequest) -> bool {
-        let key = DuplicateJobKey::from_request(&request);
+        let key = DuplicateFinderJobKey::from_request(&request);
         let mut state = lock_unpoison(&self.shared.state);
         if state.closed {
             return false;
@@ -141,7 +141,7 @@ impl DuplicatePool {
     }
 }
 
-impl Drop for DuplicatePool {
+impl Drop for DuplicateFinderPool {
     fn drop(&mut self) {
         {
             let mut state = lock_unpoison(&self.shared.state);
@@ -181,7 +181,7 @@ impl DuplicateShared {
         }
     }
 
-    fn finish(shared: &Arc<Self>, key: &DuplicateJobKey) {
+    fn finish(shared: &Arc<Self>, key: &DuplicateFinderJobKey) {
         let mut state = lock_unpoison(&shared.state);
         if state
             .active
@@ -194,7 +194,7 @@ impl DuplicateShared {
     }
 }
 
-impl DuplicateJobKey {
+impl DuplicateFinderJobKey {
     fn from_request(request: &DuplicateScanRequest) -> Self {
         Self {
             cwd: request.cwd.clone(),

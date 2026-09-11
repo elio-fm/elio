@@ -1,4 +1,4 @@
-use super::model::is_duplicate_help_shortcut;
+use super::results::is_duplicate_help_shortcut;
 use super::*;
 
 impl App {
@@ -126,7 +126,10 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app::duplicates) fn move_duplicate_selection(&mut self, delta: isize) {
+    pub(in crate::app::duplicate_finder_overlay) fn move_duplicate_selection(
+        &mut self,
+        delta: isize,
+    ) {
         let count = self.duplicate_file_count();
         if count == 0 {
             return;
@@ -136,7 +139,10 @@ impl App {
             (current + delta).clamp(0, count.saturating_sub(1) as isize) as usize
         );
     }
-    pub(in crate::app::duplicates) fn page_duplicate_selection(&mut self, direction: isize) {
+    pub(in crate::app::duplicate_finder_overlay) fn page_duplicate_selection(
+        &mut self,
+        direction: isize,
+    ) {
         let visible = self.input.frame_state.duplicate_rows_visible.max(1) as isize;
         self.move_duplicate_selection(direction * visible);
     }
@@ -170,7 +176,7 @@ impl App {
         overlay.scroll = overlay.scroll.min(count.saturating_sub(visible));
         previous_selected != overlay.selected || previous_scroll != overlay.scroll
     }
-    pub(in crate::app::duplicates) fn toggle_duplicate_selection(&mut self) {
+    pub(in crate::app::duplicate_finder_overlay) fn toggle_duplicate_selection(&mut self) {
         let Some(path) = self.duplicate_focused_path() else {
             return;
         };
@@ -183,7 +189,7 @@ impl App {
         self.status.clear();
         self.move_duplicate_selection(1);
     }
-    pub(in crate::app::duplicates) fn select_all_duplicates(&mut self) {
+    pub(in crate::app::duplicate_finder_overlay) fn select_all_duplicates(&mut self) {
         let paths = self
             .duplicate_flat_files()
             .into_iter()
@@ -195,7 +201,7 @@ impl App {
         overlay.selected_paths.extend(paths);
         self.status.clear();
     }
-    pub(in crate::app::duplicates) fn clear_duplicate_selection_or_close(&mut self) {
+    pub(in crate::app::duplicate_finder_overlay) fn clear_duplicate_selection_or_close(&mut self) {
         if let Some(overlay) = self
             .overlays
             .duplicates
@@ -208,7 +214,9 @@ impl App {
         }
         self.close_duplicate_finder();
     }
-    pub(in crate::app::duplicates) fn reveal_duplicate_focus(&mut self) -> Result<()> {
+    pub(in crate::app::duplicate_finder_overlay) fn reveal_duplicate_focus(
+        &mut self,
+    ) -> Result<()> {
         let Some(path) = self.duplicate_focused_path() else {
             return Ok(());
         };
@@ -279,7 +287,7 @@ impl App {
         }
         Ok(())
     }
-    pub(in crate::app::duplicates) fn toggle_duplicate_preview(&mut self) {
+    pub(in crate::app::duplicate_finder_overlay) fn toggle_duplicate_preview(&mut self) {
         self.queue_terminal_image_geometry_clear();
         let mut hidden = false;
         if let Some(overlay) = &mut self.overlays.duplicates {
