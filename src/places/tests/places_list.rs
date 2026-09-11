@@ -1,9 +1,9 @@
 #[cfg(all(unix, not(any(target_os = "macos", target_os = "ios"))))]
-use super::resolution::parse_user_dir;
-use super::resolution::{
-    PlaceResolutionContext, build_sidebar_rows_with_context, resolve_personal_dir,
+use super::super::places_list::parse_user_dir;
+use super::super::places_list::{
+    PlaceResolutionContext, build_place_rows_with_context, resolve_personal_dir,
 };
-use super::{SidebarItemKind, SidebarRow};
+use super::super::{PlaceKind, PlaceRow};
 use crate::config::{BuiltinPlace, PlaceEntrySpec, PlacesConfig};
 use std::{
     fs,
@@ -190,22 +190,22 @@ fn configured_places_order_and_semantic_kinds_are_preserved() {
         ],
     };
 
-    let rows = build_sidebar_rows_with_context(&places, &context);
-    let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+    let rows = build_place_rows_with_context(&places, &context);
+    let items = rows.iter().filter_map(PlaceRow::item).collect::<Vec<_>>();
 
     assert_eq!(items.len(), 4);
     assert_eq!(items[0].title, "Downloads");
-    assert_eq!(items[0].kind, SidebarItemKind::Downloads);
+    assert_eq!(items[0].kind, PlaceKind::Downloads);
     assert_eq!(items[0].icon, "D");
     assert_eq!(items[1].title, "Projects");
-    assert_eq!(items[1].kind, SidebarItemKind::Custom);
+    assert_eq!(items[1].kind, PlaceKind::Custom);
     assert_eq!(items[1].icon, "P");
     assert_eq!(items[1].path, projects);
     assert_eq!(items[2].title, "Home");
-    assert_eq!(items[2].kind, SidebarItemKind::Home);
+    assert_eq!(items[2].kind, PlaceKind::Home);
     assert_eq!(items[3].title, "Trash");
-    assert_eq!(items[3].kind, SidebarItemKind::Trash);
-    assert!(rows.iter().all(|row| matches!(row, SidebarRow::Item(_))));
+    assert_eq!(items[3].kind, PlaceKind::Trash);
+    assert!(rows.iter().all(|row| matches!(row, PlaceRow::Item(_))));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -234,12 +234,12 @@ fn missing_builtin_places_are_skipped_but_nonexistent_custom_places_stay_visible
         ],
     };
 
-    let rows = build_sidebar_rows_with_context(&places, &context);
-    let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+    let rows = build_place_rows_with_context(&places, &context);
+    let items = rows.iter().filter_map(PlaceRow::item).collect::<Vec<_>>();
 
     assert_eq!(items.len(), 2);
     assert_eq!(items[0].title, "Camera");
-    assert_eq!(items[0].kind, SidebarItemKind::Custom);
+    assert_eq!(items[0].kind, PlaceKind::Custom);
     assert_eq!(items[0].path, future_mount);
     assert_eq!(items[1].title, "Downloads");
 
@@ -271,12 +271,12 @@ fn localized_builtin_places_show_resolved_folder_name() {
         }],
     };
 
-    let rows = build_sidebar_rows_with_context(&places, &context);
-    let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+    let rows = build_place_rows_with_context(&places, &context);
+    let items = rows.iter().filter_map(PlaceRow::item).collect::<Vec<_>>();
 
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].title, "Descargas");
-    assert_eq!(items[0].kind, SidebarItemKind::Downloads);
+    assert_eq!(items[0].kind, PlaceKind::Downloads);
     assert_eq!(items[0].path, downloads);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -310,8 +310,8 @@ fn places_deduplicate_entries_by_resolved_path() {
         ],
     };
 
-    let rows = build_sidebar_rows_with_context(&places, &context);
-    let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+    let rows = build_place_rows_with_context(&places, &context);
+    let items = rows.iter().filter_map(PlaceRow::item).collect::<Vec<_>>();
 
     assert_eq!(items.len(), 2);
     assert_eq!(items[0].title, "Home");
@@ -340,8 +340,8 @@ fn custom_symlinked_places_store_resolved_identity_path() {
         }],
     };
 
-    let rows = build_sidebar_rows_with_context(&places, &context);
-    let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+    let rows = build_place_rows_with_context(&places, &context);
+    let items = rows.iter().filter_map(PlaceRow::item).collect::<Vec<_>>();
 
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].path, linked);
@@ -427,8 +427,8 @@ fn symlinked_places_use_link_icon_unless_icon_is_configured() {
         ],
     };
 
-    let rows = build_sidebar_rows_with_context(&places, &context);
-    let items = rows.iter().filter_map(SidebarRow::item).collect::<Vec<_>>();
+    let rows = build_place_rows_with_context(&places, &context);
+    let items = rows.iter().filter_map(PlaceRow::item).collect::<Vec<_>>();
 
     assert_eq!(items.len(), 5);
     assert_eq!(items[0].title, "Downloads");

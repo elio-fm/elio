@@ -1,18 +1,18 @@
-use super::SidebarItem;
+use super::PlaceItem;
 #[cfg(any(
     target_os = "macos",
     windows,
     target_os = "freebsd",
     target_os = "openbsd"
 ))]
-use super::SidebarItemKind;
+use super::PlaceKind;
 #[cfg(any(
     target_os = "macos",
     windows,
     target_os = "freebsd",
     target_os = "openbsd"
 ))]
-use super::resolution::{path_identity_key, sidebar_item};
+use super::places_list::{path_identity_key, place_item};
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -22,18 +22,15 @@ use std::{
 use std::fs;
 
 #[cfg(target_os = "linux")]
-pub(super) fn mounted_device_items(
-    home: &Path,
-    pinned_paths: &HashSet<PathBuf>,
-) -> Vec<SidebarItem> {
-    super::linux::mounted_device_items(home, pinned_paths)
+pub(super) fn mounted_device_items(home: &Path, pinned_paths: &HashSet<PathBuf>) -> Vec<PlaceItem> {
+    super::linux_devices::mounted_device_items(home, pinned_paths)
 }
 
 #[cfg(target_os = "macos")]
 pub(super) fn mounted_device_items(
     _home: &Path,
     pinned_paths: &HashSet<PathBuf>,
-) -> Vec<SidebarItem> {
+) -> Vec<PlaceItem> {
     use std::os::unix::fs::MetadataExt;
 
     // Device ID of the root filesystem — used to skip the boot volume whether it
@@ -67,8 +64,8 @@ pub(super) fn mounted_device_items(
             continue;
         };
 
-        items.push(sidebar_item(
-            SidebarItemKind::Device { removable: false },
+        items.push(place_item(
+            PlaceKind::Device { removable: false },
             title,
             "󰋊",
             path,
@@ -90,13 +87,13 @@ pub(super) fn mounted_device_items(
 pub(super) fn mounted_device_items(
     _home: &Path,
     pinned_paths: &HashSet<PathBuf>,
-) -> Vec<SidebarItem> {
+) -> Vec<PlaceItem> {
     let mut items = Vec::new();
     for letter in b'A'..=b'Z' {
         let path = PathBuf::from(format!("{}:\\", letter as char));
         if path.exists() && !pinned_paths.contains(&path_identity_key(&path)) {
-            items.push(sidebar_item(
-                SidebarItemKind::Device { removable: false },
+            items.push(place_item(
+                PlaceKind::Device { removable: false },
                 format!("{}:", letter as char),
                 "󰋊",
                 path,
@@ -109,10 +106,7 @@ pub(super) fn mounted_device_items(
 // FreeBSD and OpenBSD share the same getmntinfo(3) interface and statfs field
 // names, so one implementation covers both.
 #[cfg(any(target_os = "freebsd", target_os = "openbsd"))]
-pub(super) fn mounted_device_items(
-    home: &Path,
-    pinned_paths: &HashSet<PathBuf>,
-) -> Vec<SidebarItem> {
+pub(super) fn mounted_device_items(home: &Path, pinned_paths: &HashSet<PathBuf>) -> Vec<PlaceItem> {
     let mut mntbuf: *mut libc::statfs = std::ptr::null_mut();
     let count = unsafe { libc::getmntinfo(&mut mntbuf, libc::MNT_NOWAIT) };
     if count <= 0 || mntbuf.is_null() {
@@ -155,8 +149,8 @@ pub(super) fn mounted_device_items(
             })
             .unwrap_or_else(|| path.display().to_string());
 
-        items.push(sidebar_item(
-            SidebarItemKind::Device { removable: false },
+        items.push(place_item(
+            PlaceKind::Device { removable: false },
             title,
             "󰋊",
             path,
@@ -213,6 +207,6 @@ fn bsd_user_visible_path(path: &Path, home: &Path) -> bool {
 pub(super) fn mounted_device_items(
     _home: &Path,
     _pinned_paths: &HashSet<PathBuf>,
-) -> Vec<SidebarItem> {
+) -> Vec<PlaceItem> {
     Vec::new()
 }

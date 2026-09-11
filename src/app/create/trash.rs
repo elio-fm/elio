@@ -17,7 +17,7 @@ impl App {
     /// (i.e. a subdirectory of the trash root, but not the root itself).
     pub(in crate::app) fn cwd_is_inside_trash_subfolder(&self) -> bool {
         crate::elevated_session::trash_home_dir()
-            .and_then(|home| crate::fs::trash_dir(&home))
+            .and_then(|home| crate::places::trash_dir(&home))
             .is_some_and(|trash| {
                 self.navigation.cwd != trash && self.navigation.cwd.starts_with(&trash)
             })
@@ -25,13 +25,13 @@ impl App {
 
     pub(in crate::app) fn path_is_trash(path: &Path) -> bool {
         crate::elevated_session::trash_home_dir()
-            .and_then(|home| crate::fs::trash_dir(&home))
+            .and_then(|home| crate::places::trash_dir(&home))
             .is_some_and(|trash| path == trash)
     }
 
     pub(in crate::app) fn path_is_inside_trash(path: &Path) -> bool {
         crate::elevated_session::trash_home_dir()
-            .and_then(|home| crate::fs::trash_dir(&home))
+            .and_then(|home| crate::places::trash_dir(&home))
             .is_some_and(|trash| path.starts_with(&trash))
     }
 

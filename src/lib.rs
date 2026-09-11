@@ -5,6 +5,7 @@ mod elevated_session;
 mod file_classification;
 mod fs;
 mod opening;
+mod places;
 mod preview;
 mod terminal_runtime;
 mod theme;

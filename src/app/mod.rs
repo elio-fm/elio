@@ -52,9 +52,10 @@ pub use self::types::{
     CopyHit, DuplicateHit, EntryHit, FrameState, GoToHit, OpenWithHit, PathHit, SearchHit,
     SearchRow, SearchScope, ViewMetrics, ViewMode,
 };
+pub use crate::fs::{Entry, EntryKind, SortMode};
 #[cfg(test)]
-pub use crate::fs::SidebarItem;
-pub use crate::fs::{Entry, EntryKind, SidebarItemKind, SidebarRow, SortMode};
+pub use crate::places::PlaceItem;
+pub use crate::places::{PlaceKind, PlaceRow};
 
 impl App {
     pub fn set_frame_state(&mut self, mut frame_state: FrameState) -> bool {

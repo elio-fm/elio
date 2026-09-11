@@ -1,5 +1,5 @@
 use super::helpers;
-use crate::app::{App, FrameState, PathHit, SidebarRow};
+use crate::app::{App, FrameState, PathHit, PlaceRow};
 use crate::theme::Palette;
 use ratatui::{
     Frame,
@@ -37,7 +37,7 @@ pub(super) fn render_places_pane(
             height: row_height,
         };
         match item {
-            SidebarRow::Section { title } => {
+            PlaceRow::Section { title } => {
                 if icon_only {
                     continue;
                 }
@@ -57,7 +57,7 @@ pub(super) fn render_places_pane(
                     row,
                 );
             }
-            SidebarRow::Item(item) => {
+            PlaceRow::Item(item) => {
                 let active = helpers::path_is_active(&app.navigation.cwd, &item.identity_path);
                 let bg = if active {
                     palette.sidebar_active

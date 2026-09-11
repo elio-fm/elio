@@ -15,8 +15,11 @@ use super::{
 };
 use crate::fs::duplicates::{DuplicateGroup, DuplicateScanStats};
 use crate::fs::search::{SearchCandidate, SearchIndexStats};
-use crate::fs::{Entry, SidebarRow, SortMode};
 use crate::preview;
+use crate::{
+    fs::{Entry, SortMode},
+    places::PlaceRow,
+};
 
 #[derive(Clone, Debug)]
 pub(super) struct ClickState {
@@ -685,7 +688,7 @@ pub(crate) struct NavigationState {
     pub(crate) entries: Vec<Entry>,
     pub(in crate::app) unfiltered_entries: Vec<Entry>,
     pub(in crate::app) local_filter: LocalFilter,
-    pub(crate) sidebar: Vec<SidebarRow>,
+    pub(crate) sidebar: Vec<PlaceRow>,
     pub(crate) selected: usize,
     pub(crate) scroll_row: usize,
     pub(crate) view_mode: ViewMode,
@@ -999,7 +1002,7 @@ impl App {
             app.effective_show_hidden(),
             app.navigation.sort_mode,
         )?;
-        app.navigation.sidebar = crate::fs::build_sidebar_rows();
+        app.navigation.sidebar = crate::places::build_place_rows();
         app.navigation.last_sidebar_refresh_at = Instant::now();
         app.navigation.unfiltered_entries = snapshot.entries;
         app.apply_local_filter_preserving_selection();

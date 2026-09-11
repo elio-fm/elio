@@ -1,5 +1,4 @@
 use super::devices::mounted_device_items;
-use super::{SidebarItem, SidebarItemKind, SidebarRow};
 use crate::config::{BuiltinPlace, PlaceEntrySpec, PlacesConfig};
 #[cfg(all(unix, not(any(target_os = "macos", target_os = "ios"))))]
 use std::{collections::HashMap, ffi::OsString, os::unix::ffi::OsStringExt};
@@ -8,6 +7,64 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlaceItem {
+    pub kind: PlaceKind,
+    pub title: String,
+    pub icon: String,
+    /// Canonical comparison key for this path. `path` remains the path to open.
+    pub identity_path: PathBuf,
+    pub path: PathBuf,
+}
+
+impl PlaceItem {
+    pub fn new(
+        kind: PlaceKind,
+        title: impl Into<String>,
+        icon: impl Into<String>,
+        path: PathBuf,
+        identity_path: PathBuf,
+    ) -> Self {
+        Self {
+            kind,
+            title: title.into(),
+            icon: icon.into(),
+            identity_path,
+            path,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PlaceKind {
+    Home,
+    Desktop,
+    Documents,
+    Downloads,
+    Pictures,
+    Music,
+    Videos,
+    Root,
+    Trash,
+    Custom,
+    Device { removable: bool },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PlaceRow {
+    Section { title: &'static str },
+    Item(PlaceItem),
+}
+
+impl PlaceRow {
+    pub fn item(&self) -> Option<&PlaceItem> {
+        match self {
+            Self::Item(item) => Some(item),
+            Self::Section { .. } => None,
+        }
+    }
+}
 
 const CUSTOM_PLACE_ICON: &str = "󰉋";
 const SYMLINKED_PLACE_ICON: &str = "";
@@ -26,7 +83,7 @@ pub(super) struct PlaceResolutionContext {
     pub(super) trash: Option<PathBuf>,
 }
 
-pub(crate) fn build_sidebar_rows() -> Vec<SidebarRow> {
+pub(crate) fn build_place_rows() -> Vec<PlaceRow> {
     let home = crate::elevated_session::home_dir().unwrap_or_else(|| {
         #[cfg(windows)]
         return PathBuf::from("C:\\");
@@ -34,13 +91,13 @@ pub(crate) fn build_sidebar_rows() -> Vec<SidebarRow> {
         return PathBuf::from("/");
     });
     let context = system_place_resolution_context(home, dirs::home_dir());
-    build_sidebar_rows_with_context(crate::config::places(), &context)
+    build_place_rows_with_context(crate::config::places(), &context)
 }
 
-pub(super) fn build_sidebar_rows_with_context(
+pub(super) fn build_place_rows_with_context(
     places: &PlacesConfig,
     context: &PlaceResolutionContext,
-) -> Vec<SidebarRow> {
+) -> Vec<PlaceRow> {
     let pinned_items = build_pinned_sidebar_items(places, context);
     let pinned_paths = pinned_items
         .iter()
@@ -48,7 +105,7 @@ pub(super) fn build_sidebar_rows_with_context(
         .collect::<HashSet<_>>();
     let mut rows = pinned_items
         .into_iter()
-        .map(SidebarRow::Item)
+        .map(PlaceRow::Item)
         .collect::<Vec<_>>();
     let device_items = if places.show_devices {
         mounted_device_items(&context.home, &pinned_paths)
@@ -56,8 +113,8 @@ pub(super) fn build_sidebar_rows_with_context(
         Vec::new()
     };
     if !device_items.is_empty() {
-        rows.push(SidebarRow::Section { title: "Devices" });
-        rows.extend(device_items.into_iter().map(SidebarRow::Item));
+        rows.push(PlaceRow::Section { title: "Devices" });
+        rows.extend(device_items.into_iter().map(PlaceRow::Item));
     }
     rows
 }
@@ -209,7 +266,7 @@ fn configured_user_dir(_user_dirs: &(), _key: &str) -> Option<PathBuf> {
 fn build_pinned_sidebar_items(
     places: &PlacesConfig,
     context: &PlaceResolutionContext,
-) -> Vec<SidebarItem> {
+) -> Vec<PlaceItem> {
     let mut items = Vec::new();
     let mut seen_paths = HashSet::new();
 
@@ -228,13 +285,13 @@ fn build_pinned_sidebar_items(
 fn resolve_place_entry(
     entry: &PlaceEntrySpec,
     context: &PlaceResolutionContext,
-) -> Option<SidebarItem> {
+) -> Option<PlaceItem> {
     match entry {
         PlaceEntrySpec::Builtin { place, icon } => {
             resolve_builtin_place(*place, icon.as_deref(), context)
         }
-        PlaceEntrySpec::Custom { title, path, icon } => Some(sidebar_item(
-            SidebarItemKind::Custom,
+        PlaceEntrySpec::Custom { title, path, icon } => Some(place_item(
+            PlaceKind::Custom,
             title.clone(),
             place_icon(path, icon.as_deref(), CUSTOM_PLACE_ICON),
             path.clone(),
@@ -246,73 +303,73 @@ fn resolve_builtin_place(
     place: BuiltinPlace,
     icon_override: Option<&str>,
     context: &PlaceResolutionContext,
-) -> Option<SidebarItem> {
+) -> Option<PlaceItem> {
     match place {
-        BuiltinPlace::Home => Some(sidebar_item(
-            SidebarItemKind::Home,
+        BuiltinPlace::Home => Some(place_item(
+            PlaceKind::Home,
             "Home",
             place_icon(&context.home, icon_override, "󰋜"),
             context.home.clone(),
         )),
         BuiltinPlace::Desktop => context.desktop.clone().map(|path| {
-            sidebar_item(
-                SidebarItemKind::Desktop,
+            place_item(
+                PlaceKind::Desktop,
                 localized_place_title(&path, "Desktop"),
                 place_icon(&path, icon_override, "󰍹"),
                 path,
             )
         }),
         BuiltinPlace::Documents => context.documents.clone().map(|path| {
-            sidebar_item(
-                SidebarItemKind::Documents,
+            place_item(
+                PlaceKind::Documents,
                 localized_place_title(&path, "Documents"),
                 place_icon(&path, icon_override, "󰲃"),
                 path,
             )
         }),
         BuiltinPlace::Downloads => context.downloads.clone().map(|path| {
-            sidebar_item(
-                SidebarItemKind::Downloads,
+            place_item(
+                PlaceKind::Downloads,
                 localized_place_title(&path, "Downloads"),
                 place_icon(&path, icon_override, "󰉍"),
                 path,
             )
         }),
         BuiltinPlace::Pictures => context.pictures.clone().map(|path| {
-            sidebar_item(
-                SidebarItemKind::Pictures,
+            place_item(
+                PlaceKind::Pictures,
                 localized_place_title(&path, "Pictures"),
                 place_icon(&path, icon_override, "󰉏"),
                 path,
             )
         }),
         BuiltinPlace::Music => context.music.clone().map(|path| {
-            sidebar_item(
-                SidebarItemKind::Music,
+            place_item(
+                PlaceKind::Music,
                 localized_place_title(&path, "Music"),
                 place_icon(&path, icon_override, "󱍙"),
                 path,
             )
         }),
         BuiltinPlace::Videos => context.videos.clone().map(|path| {
-            sidebar_item(
-                SidebarItemKind::Videos,
+            place_item(
+                PlaceKind::Videos,
                 localized_place_title(&path, videos_label()),
                 place_icon(&path, icon_override, "󰕧"),
                 path,
             )
         }),
         BuiltinPlace::Root => context.root.clone().map(|path| {
-            sidebar_item(
-                SidebarItemKind::Root,
+            place_item(
+                PlaceKind::Root,
                 "Root",
                 place_icon(&path, icon_override, "󰋊"),
                 path,
             )
         }),
         BuiltinPlace::Trash => context.trash.clone().map(|path| {
-            sidebar_item(
-                SidebarItemKind::Trash,
+            place_item(
+                PlaceKind::Trash,
                 "Trash",
                 place_icon(&path, icon_override, "󰩺"),
                 path,
@@ -349,14 +406,14 @@ fn place_symlink_state(path: &Path) -> Option<PlaceSymlinkState> {
     )
 }
 
-pub(super) fn sidebar_item(
-    kind: SidebarItemKind,
+pub(super) fn place_item(
+    kind: PlaceKind,
     title: impl Into<String>,
     icon: impl Into<String>,
     path: PathBuf,
-) -> SidebarItem {
+) -> PlaceItem {
     let identity_path = path_identity_key(&path);
-    SidebarItem::new(kind, title, icon, path, identity_path)
+    PlaceItem::new(kind, title, icon, path, identity_path)
 }
 
 fn localized_place_title(path: &Path, fallback: &'static str) -> String {
