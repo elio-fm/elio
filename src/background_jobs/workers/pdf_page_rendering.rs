@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     preview::{documents::pdf, images::SixelDcsKey},
-    terminal_runtime::terminal_images,
+    terminal_images,
 };
 use std::{
     collections::{HashSet, VecDeque},

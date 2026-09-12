@@ -51,7 +51,8 @@ A brief overview of the repository layout:
 │   ├── places/                 # Places list and mounted-device discovery
 │   ├── preview/                # Preview construction, document/image processing, and tests
 │   ├── shell_integration/      # Shell scripts and install/uninstall support
-│   ├── terminal_runtime/       # Terminal lifecycle, drawing, image protocols, and session output
+│   ├── terminal_images/        # Terminal detection, image protocols, placement, and geometry
+│   ├── terminal_runtime/       # Terminal lifecycle, drawing, input acquisition, and session output
 │   ├── theme/                  # Theme loading and item styling
 │   ├── ui/                     # Terminal rendering, layout, overlays, and interaction
 │   ├── lib.rs                  # Public library API entrypoints

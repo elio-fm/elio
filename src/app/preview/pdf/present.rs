@@ -2,7 +2,7 @@ use super::DisplayedPdfPreview;
 use crate::app::App;
 use crate::preview::OverlayPresentState;
 use crate::preview::images::SixelDcsKey;
-use crate::terminal_runtime::terminal_images::{
+use crate::terminal_images::{
     ImageProtocol, place_sixel_from_dcs, place_terminal_image, preview_log,
 };
 use anyhow::{Context, Result};

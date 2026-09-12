@@ -1,6 +1,6 @@
 use super::super::*;
 pub(super) use crate::preview::PreviewKind;
-pub(super) use crate::terminal_runtime::terminal_images::{ImageProtocol, TerminalWindowSize};
+pub(super) use crate::terminal_images::{ImageProtocol, TerminalWindowSize};
 use std::{
     fs,
     path::Path,

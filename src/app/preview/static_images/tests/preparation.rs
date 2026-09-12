@@ -29,7 +29,7 @@ fn current_small_jpeg_queues_background_prepare_for_overlay() {
 
 #[test]
 fn current_large_jpeg_queues_background_prepare_when_ffmpeg_is_available() {
-    if !crate::terminal_runtime::terminal_images::command_exists("ffmpeg") {
+    if !crate::terminal_images::command_exists("ffmpeg") {
         return;
     }
 

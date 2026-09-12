@@ -8,7 +8,7 @@ use crate::preview::images::{
     static_image_format_for_path,
 };
 use crate::preview::{self, PreviewLoadState};
-use crate::terminal_runtime::terminal_images::{ImageProtocol, command_exists};
+use crate::terminal_images::{ImageProtocol, command_exists};
 use ratatui::layout::Rect;
 use std::time::{Duration, Instant};
 

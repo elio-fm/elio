@@ -2,7 +2,7 @@ use super::*;
 use crate::preview::{
     PreviewContent, PreviewKind, PreviewRequestOptions, default_code_preview_line_limit,
 };
-use crate::terminal_runtime::terminal_images::{ImageProtocol, TerminalIdentity};
+use crate::terminal_images::{ImageProtocol, TerminalIdentity};
 use std::{
     fs,
     path::PathBuf,

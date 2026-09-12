@@ -1,5 +1,5 @@
 use super::*;
-use crate::terminal_runtime::terminal_images::{ImageProtocol, place_terminal_image};
+use crate::terminal_images::{ImageProtocol, place_terminal_image};
 
 #[test]
 fn build_iterm_tmux_placement_wraps_absolute_cursor_and_inline_payload() {

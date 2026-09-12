@@ -1,5 +1,5 @@
 use super::*;
-use crate::terminal_runtime::terminal_images::RenderedImageDimensions;
+use crate::terminal_images::RenderedImageDimensions;
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage, Rgba, RgbaImage};
 use std::{
     fs,

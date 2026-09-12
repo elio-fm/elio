@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     filesystem::Entry,
-    terminal_runtime::terminal_images::{
+    terminal_images::{
         ImageProtocol, RenderedImageDimensions, TerminalIdentity, TerminalWindowSize,
     },
 };

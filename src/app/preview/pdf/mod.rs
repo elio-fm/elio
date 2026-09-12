@@ -14,7 +14,7 @@ pub(in crate::app::preview::pdf) use crate::preview::{
     DisplayedPdfPreview, PdfDocumentKey, PdfOverlayRequest, PdfPageKey, PdfSession,
 };
 #[cfg(test)]
-use crate::terminal_runtime::terminal_images::RenderedImageDimensions;
+use crate::terminal_images::RenderedImageDimensions;
 #[cfg(test)]
 use ratatui::layout::Rect;
 use std::time::Duration;

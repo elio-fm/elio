@@ -4,7 +4,7 @@ use super::{
 };
 use crate::app::{App, jobs};
 use crate::preview::documents::pdf::fit_pdf_page;
-use crate::terminal_runtime::terminal_images::{
+use crate::terminal_images::{
     ImageProtocol, RenderedImageDimensions, fit_image_area, read_png_dimensions,
 };
 use std::{

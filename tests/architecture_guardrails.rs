@@ -92,7 +92,7 @@ fn app_does_not_depend_on_input_handling() {
 
 #[test]
 fn terminal_images_do_not_depend_on_app() {
-    assert_tree_has_no_pattern("src/terminal_runtime/terminal_images", "crate::app", &[]);
+    assert_tree_has_no_pattern("src/terminal_images", "crate::app", &[]);
 }
 
 fn assert_tree_has_no_pattern(root: &str, forbidden: &str, allowed_files: &[&str]) {
