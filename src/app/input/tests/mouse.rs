@@ -35,6 +35,45 @@ fn entry_hit(index: usize, row: u16) -> EntryHit {
 }
 
 #[test]
+fn drag_offer_without_click_candidate_uses_entry_hit() {
+    let root = temp_path("drag-offer-entry-hit");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let item = root.join("item.txt");
+    fs::write(&item, "item").expect("failed to write item");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    let index = app
+        .file_browser
+        .entries
+        .iter()
+        .position(|entry| entry.path == item)
+        .expect("item should be visible");
+    app.set_frame_state(FrameState {
+        entry_hits: vec![entry_hit(index, 3)],
+        ..FrameState::default()
+    });
+
+    assert_eq!(app.take_drag_export_paths_at(2, 3), vec![item]);
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn drag_offer_outside_entry_exports_nothing() {
+    let root = temp_path("drag-offer-outside-entry");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("item.txt"), "item").expect("failed to write item");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    assert!(app.take_drag_export_paths_at(0, 0).is_empty());
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
 fn double_click_opens_clicked_file_not_multi_selection() {
     let root = temp_path("mouse-double-click-file-selection");
     fs::create_dir_all(&root).expect("failed to create temp root");

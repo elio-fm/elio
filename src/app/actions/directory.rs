@@ -1,6 +1,13 @@
 use super::*;
 
 impl App {
+    pub(crate) fn refresh_git_branch(&mut self) {
+        let (token, cwd) = self.file_browser.begin_git_status_refresh();
+        self.jobs
+            .scheduler
+            .submit_git_status(jobs::GitStatusRequest { token, cwd });
+    }
+
     pub fn reload(&mut self) -> Result<()> {
         self.queue_directory_reload(false)
     }

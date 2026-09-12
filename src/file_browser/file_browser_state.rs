@@ -1,6 +1,7 @@
 use super::{
     DirectoryCountViewport, DirectoryHistory, DirectoryItemCountKey, DirectoryRuntime,
-    DirectoryViewMemory, LocalFilter, SelectedPaths, ViewMode,
+    DirectoryViewMemory, LocalFilter, SelectedPaths, ViewMode, git_status::GitStatusState,
+    item_dragging::ItemDragState,
 };
 use crate::fs::{Entry, SortMode};
 use std::{
@@ -31,6 +32,8 @@ pub(crate) struct FileBrowserState {
     pub(crate) directory_item_count_ready_at: Option<Instant>,
     pub(crate) directory_view_memory: HashMap<PathBuf, DirectoryViewMemory>,
     pub(crate) directory_runtime: DirectoryRuntime,
+    pub(super) git_status: GitStatusState,
+    pub(super) item_drag: ItemDragState,
 }
 
 impl FileBrowserState {
@@ -60,6 +63,8 @@ impl FileBrowserState {
             directory_item_count_ready_at: None,
             directory_view_memory: HashMap::new(),
             directory_runtime: DirectoryRuntime::new(),
+            git_status: GitStatusState::new(),
+            item_drag: ItemDragState::default(),
         }
     }
 

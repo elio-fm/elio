@@ -3,6 +3,40 @@ use super::*;
 const HELP_WHEEL_LINES: isize = 2;
 
 impl App {
+    pub(in crate::app) fn remember_drag_candidate(&mut self, path: PathBuf) {
+        self.file_browser.remember_drag_candidate(path);
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn clear_drag_candidate(&mut self) {
+        self.file_browser.clear_drag_candidate();
+    }
+
+    pub(crate) fn clear_drag_state(&mut self) {
+        self.file_browser.clear_drag_state();
+    }
+
+    pub(in crate::app) fn suppress_drag_until_button_up(&mut self) {
+        self.file_browser.suppress_drag_until_button_up();
+    }
+
+    #[cfg(any(unix, test))]
+    pub(crate) fn take_drag_export_paths_at(&mut self, column: u16, row: u16) -> Vec<PathBuf> {
+        let fallback_candidate = self.entry_path_at(column, row);
+        self.file_browser.take_drag_export_paths(fallback_candidate)
+    }
+
+    #[cfg(any(unix, test))]
+    fn entry_path_at(&self, column: u16, row: u16) -> Option<PathBuf> {
+        self.input
+            .frame_state
+            .entry_hits
+            .iter()
+            .find(|hit| rect_contains(hit.rect, column, row))
+            .and_then(|hit| self.file_browser.entries.get(hit.index))
+            .map(|entry| entry.path.clone())
+    }
+
     pub(in crate::app) fn handle_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if self.overlays.trash.is_some() {
             return self.handle_trash_mouse(mouse);

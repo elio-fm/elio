@@ -1,8 +1,6 @@
 mod actions;
 mod constants;
 mod directory_counts;
-mod drag;
-mod git;
 mod input;
 mod job_results;
 mod local_filter;
@@ -118,6 +116,24 @@ impl App {
 
     pub fn selected_entry(&self) -> Option<&Entry> {
         self.file_browser.selected_entry()
+    }
+
+    pub(crate) fn git_branch(&self) -> Option<&str> {
+        self.file_browser.git_branch()
+    }
+
+    pub(crate) fn git_dirty(&self) -> bool {
+        self.file_browser.git_dirty()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_git_branch_for_test(&mut self, branch: Option<&str>) {
+        self.file_browser.set_git_branch_for_test(branch);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_git_dirty_for_test(&mut self, dirty: bool) {
+        self.file_browser.set_git_dirty_for_test(dirty);
     }
 
     pub fn has_pending_auto_reload(&self) -> bool {
