@@ -314,10 +314,10 @@ fn run_open_command_in_terminal(
     command.status()
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, test))]
 struct EditorTempCleanup(PathBuf);
 
-#[cfg(unix)]
+#[cfg(any(unix, test))]
 impl Drop for EditorTempCleanup {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);

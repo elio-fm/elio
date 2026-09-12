@@ -28,17 +28,19 @@ pub(crate) use copy_move::{
 };
 pub(crate) use copy_to_clipboard::CopyOverlay;
 pub(crate) use create::CreateOverlay;
-pub(crate) use editor_bulk_rename::{
-    BulkRenameConfirmation, EditorRenameConfirmOverlay, EditorRenameReview,
-};
+pub(crate) use editor_bulk_rename::{BulkRenameConfirmation, EditorRenameConfirmOverlay};
 #[cfg(unix)]
-pub(crate) use editor_bulk_rename::{BulkRenameEditorSession, EditorBulkRenameLaunch};
+pub(crate) use editor_bulk_rename::{
+    BulkRenameEditorSession, EditorBulkRenameLaunch, EditorRenameReview,
+};
 pub(crate) use file_operations_state::FileOperationsState;
 pub(crate) use rename::RenameOverlay;
 pub(crate) use restore::{RestoreConfirmation, RestoreOverlay, RestoreProgress, RestoreRequest};
+#[cfg(unix)]
+pub(crate) use trash_delete::likely_cross_device_trash;
 pub(crate) use trash_delete::{
-    TrashConfirmation, TrashTargetScope, likely_cross_device_trash, trash_target_from_path,
-    trash_target_is_inside_trash, trash_target_scope,
+    TrashConfirmation, TrashTargetScope, trash_target_from_path, trash_target_is_inside_trash,
+    trash_target_scope,
 };
 pub(crate) use trash_delete::{TrashOverlay, TrashProgress, TrashRequest, TrashTarget};
 

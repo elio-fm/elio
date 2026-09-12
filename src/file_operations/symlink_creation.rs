@@ -1,7 +1,9 @@
 use super::ClipOp;
 use super::FileOperationsState;
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(unix)]
+use std::path::PathBuf;
 
 pub(crate) struct SymlinkCompletion {
     pub(crate) created: bool,
@@ -75,7 +77,7 @@ impl FileOperationsState {
 
         #[cfg(not(unix))]
         {
-            let _ = relative;
+            let _ = (cwd, relative);
             Ok(SymlinkCompletion {
                 created: false,
                 status: "Symlinks are not supported on this platform".to_string(),
