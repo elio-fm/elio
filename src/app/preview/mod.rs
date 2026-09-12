@@ -1,6 +1,5 @@
 pub(super) mod comic;
 pub(super) mod epub;
-mod header;
 pub(crate) mod pdf;
 mod prefetch;
 mod preview_pane;

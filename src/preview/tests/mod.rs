@@ -22,6 +22,7 @@ mod font;
 mod helpers;
 mod markdown;
 mod plain_text;
+mod preview_header;
 mod torrent;
 mod video;
 
