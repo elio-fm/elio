@@ -11,7 +11,7 @@ fn confirm_restore_restores_file_from_trashinfo_and_queues_reload() {
     assert_eq!(app.restore_title(), "Restore 1 selected file?");
     app.confirm_restore().expect("restore should succeed");
 
-    assert!(app.overlays.restore.is_none());
+    assert!(app.file_operations.restore.is_none());
     assert!(app.file_browser.selected_paths.is_empty());
 
     // Restore is now async — wait for the background worker and
@@ -66,7 +66,7 @@ fn confirm_restore_bulk_restores_multiple_files_and_reports_count() {
     assert_eq!(app.restore_title(), "Restore 2 files?");
     app.confirm_restore().expect("restore should succeed");
 
-    assert!(app.overlays.restore.is_none());
+    assert!(app.file_operations.restore.is_none());
     assert!(app.file_browser.selected_paths.is_empty());
 
     wait_for_restore_and_reload(&mut app);
@@ -174,9 +174,9 @@ fn esc_during_restore_clears_chip_immediately() {
     );
 
     // Simulate Esc: chip clears immediately for per-item operations.
-    let token = app.jobs.restore_token;
+    let token = app.file_operations.restore_token;
     app.jobs.scheduler.cancel_restore(token);
-    app.jobs.restore_progress = None;
+    app.file_operations.restore_progress = None;
 
     assert!(
         app.restore_progress().is_none(),
@@ -189,7 +189,7 @@ fn esc_during_restore_clears_chip_immediately() {
     // taken and a directory reload is queued.
     for _ in 0..200 {
         let _ = app.process_background_jobs();
-        if app.jobs.restore_source_cwd.is_none()
+        if app.file_operations.restore_source_cwd.is_none()
             && app.file_browser.directory_runtime.pending_load.is_none()
         {
             break;
@@ -227,12 +227,12 @@ fn confirm_restore_while_in_progress_shows_status_and_dismisses_overlay() {
 
     // A second restore is attempted while the first is still in flight.
     app.open_restore_prompt();
-    assert!(app.overlays.restore.is_some(), "overlay should open");
+    assert!(app.file_operations.restore.is_some(), "overlay should open");
     app.confirm_restore()
         .expect("second confirm should not error");
 
     assert!(
-        app.overlays.restore.is_none(),
+        app.file_operations.restore.is_none(),
         "overlay should be dismissed by the in-progress guard"
     );
     assert_eq!(

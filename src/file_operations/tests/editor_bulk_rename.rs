@@ -73,8 +73,8 @@ fn invalid_editor_bulk_rename_aborts_without_review_overlay() {
     app.finish_editor_bulk_rename(session, Ok(status))
         .expect("editor rename finish should succeed");
 
-    assert!(app.overlays.bulk_rename.is_none());
-    assert!(app.overlays.editor_rename_confirm.is_none());
+    assert!(app.file_operations.bulk_rename.is_none());
+    assert!(app.file_operations.editor_rename_confirm.is_none());
     assert!(app.file_browser.selected_paths.contains(&file));
     assert_eq!(
         app.status_message(),
@@ -132,7 +132,7 @@ fn finish_editor_bulk_rename_opens_confirmation_with_relative_paths() {
         .expect("editor rename finish should succeed");
 
     let overlay = app
-        .overlays
+        .file_operations
         .editor_rename_confirm
         .as_ref()
         .expect("editor rename confirmation should open");

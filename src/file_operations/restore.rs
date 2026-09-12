@@ -52,9 +52,9 @@ impl App {
 
         self.overlays.help = false;
         self.overlays.search = None;
-        self.overlays.create = None;
-        self.overlays.trash = None;
-        self.overlays.restore = Some(RestoreOverlay {
+        self.file_operations.create = None;
+        self.file_operations.trash = None;
+        self.file_operations.restore = Some(RestoreOverlay {
             targets,
             scroll: 0,
             confirmed: true,
@@ -62,19 +62,19 @@ impl App {
     }
 
     pub fn restore_is_open(&self) -> bool {
-        self.overlays.restore.is_some()
+        self.file_operations.restore.is_some()
     }
 
     /// Returns `(completed, total)` for an in-progress restore, or `None` when idle.
     pub fn restore_progress(&self) -> Option<(usize, usize)> {
-        self.jobs
+        self.file_operations
             .restore_progress
             .as_ref()
             .map(|p| (p.completed, p.total))
     }
 
     pub fn restore_title(&self) -> String {
-        let Some(r) = &self.overlays.restore else {
+        let Some(r) = &self.file_operations.restore else {
             return String::new();
         };
         match r.targets.len() {
@@ -105,11 +105,14 @@ impl App {
     }
 
     pub fn restore_scroll(&self) -> usize {
-        self.overlays.restore.as_ref().map_or(0, |r| r.scroll)
+        self.file_operations
+            .restore
+            .as_ref()
+            .map_or(0, |r| r.scroll)
     }
 
     pub fn restore_target_count(&self) -> usize {
-        self.overlays
+        self.file_operations
             .restore
             .as_ref()
             .map_or(0, |r| r.targets.len())
@@ -120,7 +123,7 @@ impl App {
     }
 
     pub fn restore_target_name_at(&self, index: usize) -> Option<&str> {
-        self.overlays
+        self.file_operations
             .restore
             .as_ref()
             .and_then(|r| r.targets.get(index))
@@ -128,7 +131,7 @@ impl App {
     }
 
     pub fn restore_target_path_at(&self, index: usize) -> Option<&std::path::Path> {
-        self.overlays
+        self.file_operations
             .restore
             .as_ref()
             .and_then(|r| r.targets.get(index))
@@ -136,7 +139,7 @@ impl App {
     }
 
     pub fn restore_target_is_dir_at(&self, index: usize) -> bool {
-        self.overlays
+        self.file_operations
             .restore
             .as_ref()
             .and_then(|r| r.targets.get(index))
@@ -144,50 +147,58 @@ impl App {
     }
 
     pub fn restore_confirmed(&self) -> bool {
-        self.overlays.restore.as_ref().is_some_and(|r| r.confirmed)
+        self.file_operations
+            .restore
+            .as_ref()
+            .is_some_and(|r| r.confirmed)
     }
 
     pub(crate) fn handle_restore_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.overlays.restore = None;
+            self.file_operations.restore = None;
             return Ok(());
         }
         match key.code {
             KeyCode::Esc => {
-                self.overlays.restore = None;
+                self.file_operations.restore = None;
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if let Some(r) = &mut self.overlays.restore {
+                if let Some(r) = &mut self.file_operations.restore {
                     r.scroll = r.scroll.saturating_sub(1);
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if let Some(r) = &mut self.overlays.restore {
+                if let Some(r) = &mut self.file_operations.restore {
                     let visible = r.targets.len().min(8);
                     let max_scroll = r.targets.len().saturating_sub(visible);
                     r.scroll = (r.scroll + 1).min(max_scroll);
                 }
             }
             KeyCode::Left | KeyCode::Char('h') => {
-                if let Some(r) = &mut self.overlays.restore {
+                if let Some(r) = &mut self.file_operations.restore {
                     r.confirmed = true;
                 }
             }
             KeyCode::Right | KeyCode::Char('l') => {
-                if let Some(r) = &mut self.overlays.restore {
+                if let Some(r) = &mut self.file_operations.restore {
                     r.confirmed = false;
                 }
             }
             KeyCode::Tab => {
-                if let Some(r) = &mut self.overlays.restore {
+                if let Some(r) = &mut self.file_operations.restore {
                     r.confirmed = !r.confirmed;
                 }
             }
             KeyCode::Enter => {
-                if self.overlays.restore.as_ref().is_some_and(|r| r.confirmed) {
+                if self
+                    .file_operations
+                    .restore
+                    .as_ref()
+                    .is_some_and(|r| r.confirmed)
+                {
                     self.confirm_restore()?;
                 } else {
-                    self.overlays.restore = None;
+                    self.file_operations.restore = None;
                 }
             }
             _ => {}
@@ -204,7 +215,7 @@ impl App {
                     .restore_panel
                     .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
                 if !inside {
-                    self.overlays.restore = None;
+                    self.file_operations.restore = None;
                     return Ok(());
                 }
                 if self
@@ -220,16 +231,16 @@ impl App {
                     .restore_cancel_btn
                     .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
                 {
-                    self.overlays.restore = None;
+                    self.file_operations.restore = None;
                 }
             }
             MouseEventKind::ScrollUp => {
-                if let Some(r) = &mut self.overlays.restore {
+                if let Some(r) = &mut self.file_operations.restore {
                     r.scroll = r.scroll.saturating_sub(1);
                 }
             }
             MouseEventKind::ScrollDown => {
-                if let Some(r) = &mut self.overlays.restore {
+                if let Some(r) = &mut self.file_operations.restore {
                     let visible = r.targets.len().min(8);
                     let max_scroll = r.targets.len().saturating_sub(visible);
                     r.scroll = (r.scroll + 1).min(max_scroll);
@@ -241,12 +252,12 @@ impl App {
     }
 
     pub(super) fn confirm_restore(&mut self) -> Result<()> {
-        if self.jobs.restore_progress.is_some() {
+        if self.file_operations.restore_progress.is_some() {
             self.status = "Restore in progress — press Esc to cancel".to_string();
-            self.overlays.restore = None;
+            self.file_operations.restore = None;
             return Ok(());
         }
-        let Some(r) = self.overlays.restore.take() else {
+        let Some(r) = self.file_operations.restore.take() else {
             return Ok(());
         };
         if r.targets.is_empty() {
@@ -275,14 +286,14 @@ impl App {
             })
             .map(|(_, e)| e.path.clone());
 
-        let token = self.jobs.restore_token.wrapping_add(1);
-        self.jobs.restore_token = token;
-        self.jobs.restore_progress = Some(RestoreProgress {
+        let token = self.file_operations.restore_token.wrapping_add(1);
+        self.file_operations.restore_token = token;
+        self.file_operations.restore_progress = Some(RestoreProgress {
             completed: 0,
             total: r.targets.len(),
             next_selection,
         });
-        self.jobs.restore_source_cwd = Some(source_cwd.clone());
+        self.file_operations.restore_source_cwd = Some(source_cwd.clone());
 
         self.jobs.scheduler.submit_restore(RestoreRequest {
             token,

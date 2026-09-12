@@ -117,8 +117,8 @@ impl App {
     ) {
         self.overlays.help = false;
         self.overlays.search = None;
-        self.overlays.create = None;
-        self.overlays.trash = Some(TrashOverlay {
+        self.file_operations.create = None;
+        self.file_operations.trash = Some(TrashOverlay {
             targets,
             scroll: 0,
             confirmed: true,
@@ -130,8 +130,8 @@ impl App {
         self.overlays.help = false;
         self.overlays.search = None;
         self.overlays.duplicates = None;
-        self.overlays.create = None;
-        self.overlays.trash = Some(TrashOverlay {
+        self.file_operations.create = None;
+        self.file_operations.trash = Some(TrashOverlay {
             targets,
             scroll: 0,
             confirmed: true,
@@ -160,20 +160,20 @@ impl App {
     }
 
     pub fn trash_is_open(&self) -> bool {
-        self.overlays.trash.is_some()
+        self.file_operations.trash.is_some()
     }
 
     /// Returns `(completed, total, permanent)` for an in-progress
     /// trash/delete, or `None` when idle.
     pub fn trash_progress(&self) -> Option<(usize, usize, bool)> {
-        self.jobs
+        self.file_operations
             .trash_progress
             .as_ref()
             .map(|p| (p.completed, p.total, p.permanent))
     }
 
     pub fn trash_title(&self) -> String {
-        let Some(t) = &self.overlays.trash else {
+        let Some(t) = &self.file_operations.trash else {
             return String::new();
         };
         let verb = if t.permanent {
@@ -209,11 +209,14 @@ impl App {
     }
 
     pub fn trash_scroll(&self) -> usize {
-        self.overlays.trash.as_ref().map_or(0, |t| t.scroll)
+        self.file_operations.trash.as_ref().map_or(0, |t| t.scroll)
     }
 
     pub fn trash_target_count(&self) -> usize {
-        self.overlays.trash.as_ref().map_or(0, |t| t.targets.len())
+        self.file_operations
+            .trash
+            .as_ref()
+            .map_or(0, |t| t.targets.len())
     }
 
     pub fn trash_visible_rows(&self) -> usize {
@@ -222,7 +225,7 @@ impl App {
 
     pub fn trash_target_label_at(&self, index: usize) -> Option<String> {
         let target = self
-            .overlays
+            .file_operations
             .trash
             .as_ref()
             .and_then(|t| t.targets.get(index))?;
@@ -235,7 +238,7 @@ impl App {
     }
 
     fn trash_targets_need_path_labels(&self) -> bool {
-        self.overlays.trash.as_ref().is_some_and(|t| {
+        self.file_operations.trash.as_ref().is_some_and(|t| {
             t.targets
                 .iter()
                 .any(|target| target.path.parent() != Some(self.file_browser.cwd.as_path()))
@@ -243,7 +246,7 @@ impl App {
     }
 
     pub fn trash_target_path_at(&self, index: usize) -> Option<&std::path::Path> {
-        self.overlays
+        self.file_operations
             .trash
             .as_ref()
             .and_then(|t| t.targets.get(index))
@@ -251,7 +254,7 @@ impl App {
     }
 
     pub fn trash_target_is_dir_at(&self, index: usize) -> bool {
-        self.overlays
+        self.file_operations
             .trash
             .as_ref()
             .and_then(|t| t.targets.get(index))
@@ -259,50 +262,58 @@ impl App {
     }
 
     pub fn trash_confirmed(&self) -> bool {
-        self.overlays.trash.as_ref().is_some_and(|t| t.confirmed)
+        self.file_operations
+            .trash
+            .as_ref()
+            .is_some_and(|t| t.confirmed)
     }
 
     pub(crate) fn handle_trash_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.overlays.trash = None;
+            self.file_operations.trash = None;
             return Ok(());
         }
         match key.code {
             KeyCode::Esc => {
-                self.overlays.trash = None;
+                self.file_operations.trash = None;
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if let Some(t) = &mut self.overlays.trash {
+                if let Some(t) = &mut self.file_operations.trash {
                     t.scroll = t.scroll.saturating_sub(1);
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if let Some(t) = &mut self.overlays.trash {
+                if let Some(t) = &mut self.file_operations.trash {
                     let visible = t.targets.len().min(8);
                     let max_scroll = t.targets.len().saturating_sub(visible);
                     t.scroll = (t.scroll + 1).min(max_scroll);
                 }
             }
             KeyCode::Left | KeyCode::Char('h') => {
-                if let Some(t) = &mut self.overlays.trash {
+                if let Some(t) = &mut self.file_operations.trash {
                     t.confirmed = true;
                 }
             }
             KeyCode::Right | KeyCode::Char('l') => {
-                if let Some(t) = &mut self.overlays.trash {
+                if let Some(t) = &mut self.file_operations.trash {
                     t.confirmed = false;
                 }
             }
             KeyCode::Tab => {
-                if let Some(t) = &mut self.overlays.trash {
+                if let Some(t) = &mut self.file_operations.trash {
                     t.confirmed = !t.confirmed;
                 }
             }
             KeyCode::Enter => {
-                if self.overlays.trash.as_ref().is_some_and(|t| t.confirmed) {
+                if self
+                    .file_operations
+                    .trash
+                    .as_ref()
+                    .is_some_and(|t| t.confirmed)
+                {
                     self.confirm_trash()?;
                 } else {
-                    self.overlays.trash = None;
+                    self.file_operations.trash = None;
                 }
             }
             _ => {}
@@ -319,7 +330,7 @@ impl App {
                     .trash_panel
                     .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
                 if !inside {
-                    self.overlays.trash = None;
+                    self.file_operations.trash = None;
                     return Ok(());
                 }
                 if self
@@ -335,16 +346,16 @@ impl App {
                     .trash_cancel_btn
                     .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
                 {
-                    self.overlays.trash = None;
+                    self.file_operations.trash = None;
                 }
             }
             MouseEventKind::ScrollUp => {
-                if let Some(t) = &mut self.overlays.trash {
+                if let Some(t) = &mut self.file_operations.trash {
                     t.scroll = t.scroll.saturating_sub(1);
                 }
             }
             MouseEventKind::ScrollDown => {
-                if let Some(t) = &mut self.overlays.trash {
+                if let Some(t) = &mut self.file_operations.trash {
                     let visible = t.targets.len().min(8);
                     let max_scroll = t.targets.len().saturating_sub(visible);
                     t.scroll = (t.scroll + 1).min(max_scroll);
@@ -356,7 +367,7 @@ impl App {
     }
 
     pub(super) fn confirm_trash(&mut self) -> Result<()> {
-        if let Some(prog) = &self.jobs.trash_progress {
+        if let Some(prog) = &self.file_operations.trash_progress {
             self.status = if prog.permanent {
                 "Delete in progress — press Esc to cancel".to_string()
             } else {
@@ -364,10 +375,10 @@ impl App {
                 // reliably interrupted once started.
                 "Trash in progress".to_string()
             };
-            self.overlays.trash = None;
+            self.file_operations.trash = None;
             return Ok(());
         }
-        let Some(t) = self.overlays.trash.take() else {
+        let Some(t) = self.file_operations.trash.take() else {
             return Ok(());
         };
         if t.targets.is_empty() {
@@ -404,16 +415,16 @@ impl App {
             })
             .map(|(_, e)| e.path.clone());
 
-        let token = self.jobs.trash_token.wrapping_add(1);
-        self.jobs.trash_token = token;
-        self.jobs.trash_progress = Some(TrashProgress {
+        let token = self.file_operations.trash_token.wrapping_add(1);
+        self.file_operations.trash_token = token;
+        self.file_operations.trash_progress = Some(TrashProgress {
             completed: 0,
             total: t.targets.len(),
             permanent: t.permanent,
             duplicate_targets,
             next_selection,
         });
-        self.jobs.trash_source_cwd = Some(source_cwd.clone());
+        self.file_operations.trash_source_cwd = Some(source_cwd.clone());
 
         // Best-effort cross-device detection: if the source appears to be on a
         // different device than the home data dir (where the trash usually lives),

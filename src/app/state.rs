@@ -1,5 +1,4 @@
 use std::{
-    collections::VecDeque,
     env,
     path::PathBuf,
     time::{Duration, Instant},
@@ -8,17 +7,12 @@ use std::{
 use anyhow::{Context, Result};
 
 use super::types::*;
-use crate::background_jobs::{JobScheduler, job_requests::ArchiveExtractRequest};
+use crate::background_jobs::JobScheduler;
 use crate::duplicate_finder::DuplicateFinderState;
 use crate::file_browser::FileBrowserState;
 #[cfg(unix)]
 use crate::file_operations::BulkRenameEditorSession;
-use crate::file_operations::{
-    ArchiveCreateOverlay, ArchiveCreateProgress, ArchiveExtractProgress, ArchivePasswordOverlay,
-    BulkRenameOverlay, Clipboard, CopyOverlay, CreateOverlay, EditorRenameConfirmOverlay,
-    PasteProgress, QueuedPaste, RenameOverlay, RestoreOverlay, RestoreProgress, TrashOverlay,
-    TrashProgress,
-};
+use crate::file_operations::FileOperationsState;
 use crate::fuzzy_finder::{SearchCache, SearchState};
 use crate::goto_menu::GotoMenu;
 use crate::opening::open_with::ApplicationSelection;
@@ -93,16 +87,7 @@ pub(crate) enum NavigationRepeatKey {
 
 #[derive(Default)]
 pub(crate) struct OverlayState {
-    pub(crate) trash: Option<TrashOverlay>,
-    pub(crate) restore: Option<RestoreOverlay>,
-    pub(crate) archive_create: Option<ArchiveCreateOverlay>,
-    pub(crate) archive_password: Option<ArchivePasswordOverlay>,
-    pub(crate) create: Option<CreateOverlay>,
-    pub(crate) rename: Option<RenameOverlay>,
-    pub(crate) bulk_rename: Option<BulkRenameOverlay>,
-    pub(crate) editor_rename_confirm: Option<EditorRenameConfirmOverlay>,
     pub(crate) goto: Option<GotoMenu>,
-    pub(crate) copy: Option<CopyOverlay>,
     pub(crate) open_with: Option<ApplicationSelection>,
     pub(crate) search: Option<SearchState>,
     pub(crate) duplicates: Option<DuplicateFinderState>,
@@ -118,33 +103,6 @@ pub(crate) struct JobRuntime {
     pub(crate) search_cache: Option<SearchCache>,
     pub(crate) duplicate_token: u64,
     pub(crate) scheduler: JobScheduler,
-    pub(crate) clipboard: Option<Clipboard>,
-    pub(crate) archive_create_token: u64,
-    pub(crate) archive_create_progress: Option<ArchiveCreateProgress>,
-    pub(crate) archive_create_source_cwd: Option<PathBuf>,
-    pub(crate) archive_create_path: Option<PathBuf>,
-    pub(crate) archive_extract_token: u64,
-    pub(crate) archive_extract_progress: Option<ArchiveExtractProgress>,
-    pub(crate) archive_extract_source_cwd: Option<PathBuf>,
-    pub(crate) archive_extract_request: Option<ArchiveExtractRequest>,
-    pub(crate) paste_token: u64,
-    pub(crate) paste_progress: Option<PasteProgress>,
-    pub(crate) queued_pastes: VecDeque<QueuedPaste>,
-    /// Destination directory of the in-flight paste. Kept separately from
-    /// `paste_progress` so that cancelling the chip does not lose the context
-    /// needed by the completion handler to reload the right directory.
-    pub(crate) paste_dest_dir: Option<PathBuf>,
-    pub(crate) trash_token: u64,
-    pub(crate) trash_progress: Option<TrashProgress>,
-    /// Source directory of the in-flight trash. Kept separately from
-    /// `trash_progress` for the same reason as `paste_dest_dir`.
-    pub(crate) trash_source_cwd: Option<PathBuf>,
-    pub(crate) restore_token: u64,
-    pub(crate) restore_progress: Option<RestoreProgress>,
-    /// Source directory of the in-flight restore. Kept separately from
-    /// `restore_progress` so that cancelling the chip does not lose the
-    /// context needed by the completion handler.
-    pub(crate) restore_source_cwd: Option<PathBuf>,
 }
 
 pub(crate) struct InputRuntime {
@@ -197,6 +155,7 @@ pub struct App {
     pub(crate) file_browser: FileBrowserState,
     pub(crate) places: PlacesState,
     pub(crate) preview: PreviewRuntime,
+    pub(crate) file_operations: FileOperationsState,
     pub(crate) overlays: OverlayState,
     pub(crate) jobs: JobRuntime,
     pub(crate) input: InputRuntime,
@@ -235,6 +194,7 @@ impl App {
             ),
             places: PlacesState::new(),
             preview: PreviewRuntime::new(),
+            file_operations: FileOperationsState::default(),
             overlays: OverlayState::default(),
             jobs: JobRuntime {
                 directory_token: 0,
@@ -244,25 +204,6 @@ impl App {
                 search_cache: None,
                 duplicate_token: 0,
                 scheduler,
-                clipboard: None,
-                archive_create_token: 0,
-                archive_create_progress: None,
-                archive_create_source_cwd: None,
-                archive_create_path: None,
-                archive_extract_token: 0,
-                archive_extract_progress: None,
-                archive_extract_source_cwd: None,
-                archive_extract_request: None,
-                paste_token: 0,
-                paste_progress: None,
-                queued_pastes: VecDeque::new(),
-                paste_dest_dir: None,
-                trash_token: 0,
-                trash_progress: None,
-                trash_source_cwd: None,
-                restore_token: 0,
-                restore_progress: None,
-                restore_source_cwd: None,
             },
             input: InputRuntime {
                 frame_state: FrameState::default(),

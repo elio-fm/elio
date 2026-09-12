@@ -53,11 +53,11 @@ impl App {
             .collect();
         self.overlays.help = false;
         self.overlays.search = None;
-        self.overlays.create = None;
-        self.overlays.rename = None;
-        self.overlays.trash = None;
-        self.overlays.restore = None;
-        self.overlays.bulk_rename = Some(BulkRenameOverlay {
+        self.file_operations.create = None;
+        self.file_operations.rename = None;
+        self.file_operations.trash = None;
+        self.file_operations.restore = None;
+        self.file_operations.bulk_rename = Some(BulkRenameOverlay {
             items,
             new_names,
             root: None,
@@ -69,11 +69,11 @@ impl App {
     }
 
     pub fn bulk_rename_is_open(&self) -> bool {
-        self.overlays.bulk_rename.is_some()
+        self.file_operations.bulk_rename.is_some()
     }
 
     pub fn bulk_rename_title(&self) -> String {
-        let Some(r) = &self.overlays.bulk_rename else {
+        let Some(r) = &self.file_operations.bulk_rename else {
             return "Rename".to_string();
         };
         if r.items.len() == 1 {
@@ -95,14 +95,14 @@ impl App {
     }
 
     pub fn bulk_rename_item_count(&self) -> usize {
-        self.overlays
+        self.file_operations
             .bulk_rename
             .as_ref()
             .map_or(0, |r| r.items.len())
     }
 
     pub fn bulk_rename_new_name(&self, index: usize) -> &str {
-        self.overlays
+        self.file_operations
             .bulk_rename
             .as_ref()
             .and_then(|r| r.new_names.get(index))
@@ -111,7 +111,7 @@ impl App {
     }
 
     pub fn bulk_rename_item_is_dir(&self, index: usize) -> bool {
-        self.overlays
+        self.file_operations
             .bulk_rename
             .as_ref()
             .and_then(|r| r.items.get(index))
@@ -119,7 +119,7 @@ impl App {
     }
 
     pub fn bulk_rename_live_path(&self, index: usize) -> PathBuf {
-        self.overlays
+        self.file_operations
             .bulk_rename
             .as_ref()
             .and_then(|r| {
@@ -131,7 +131,7 @@ impl App {
     }
 
     pub fn bulk_rename_line_error(&self, index: usize) -> Option<&str> {
-        self.overlays
+        self.file_operations
             .bulk_rename
             .as_ref()
             .and_then(|r| r.line_errors.get(index))
@@ -139,14 +139,14 @@ impl App {
     }
 
     pub fn bulk_rename_cursor_line(&self) -> usize {
-        self.overlays
+        self.file_operations
             .bulk_rename
             .as_ref()
             .map_or(0, |r| r.cursor_line)
     }
 
     pub fn bulk_rename_cursor_col(&self) -> usize {
-        self.overlays
+        self.file_operations
             .bulk_rename
             .as_ref()
             .map_or(0, |r| r.cursor_col)
@@ -154,13 +154,13 @@ impl App {
 
     pub(crate) fn handle_bulk_rename_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.overlays.bulk_rename = None;
+            self.file_operations.bulk_rename = None;
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.overlays.bulk_rename = None;
+                self.file_operations.bulk_rename = None;
             }
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 self.confirm_bulk_rename()?;
@@ -175,7 +175,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.bulk_rename {
+                if let Some(r) = &mut self.file_operations.bulk_rename {
                     let new_col = previous_word_start(&r.new_names[r.cursor_line], r.cursor_col);
                     r.cursor_col = new_col;
                     r.preferred_col = new_col;
@@ -185,20 +185,20 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.bulk_rename {
+                if let Some(r) = &mut self.file_operations.bulk_rename {
                     let new_col = next_word_start(&r.new_names[r.cursor_line], r.cursor_col);
                     r.cursor_col = new_col;
                     r.preferred_col = new_col;
                 }
             }
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.bulk_rename {
+                if let Some(r) = &mut self.file_operations.bulk_rename {
                     r.cursor_col = r.cursor_col.saturating_sub(1);
                     r.preferred_col = r.cursor_col;
                 }
             }
             KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.bulk_rename {
+                if let Some(r) = &mut self.file_operations.bulk_rename {
                     let len = r.new_names[r.cursor_line].chars().count();
                     if r.cursor_col < len {
                         r.cursor_col += 1;
@@ -207,13 +207,13 @@ impl App {
                 }
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.bulk_rename {
+                if let Some(r) = &mut self.file_operations.bulk_rename {
                     r.cursor_col = 0;
                     r.preferred_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.bulk_rename {
+                if let Some(r) = &mut self.file_operations.bulk_rename {
                     r.cursor_col = r.new_names[r.cursor_line].chars().count();
                     r.preferred_col = r.cursor_col;
                 }
@@ -222,7 +222,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.bulk_rename
+                if let Some(r) = &mut self.file_operations.bulk_rename
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
@@ -236,7 +236,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.bulk_rename
+                if let Some(r) = &mut self.file_operations.bulk_rename
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
@@ -250,7 +250,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.bulk_rename {
+                if let Some(r) = &mut self.file_operations.bulk_rename {
                     let end = next_delete_end(&r.new_names[r.cursor_line], r.cursor_col);
                     remove_char_range(&mut r.new_names[r.cursor_line], r.cursor_col, end);
                     r.line_errors[r.cursor_line] = None;
@@ -260,14 +260,14 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                if let Some(r) = &mut self.overlays.bulk_rename {
+                if let Some(r) = &mut self.file_operations.bulk_rename {
                     let end = next_delete_end(&r.new_names[r.cursor_line], r.cursor_col);
                     remove_char_range(&mut r.new_names[r.cursor_line], r.cursor_col, end);
                     r.line_errors[r.cursor_line] = None;
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.bulk_rename
+                if let Some(r) = &mut self.file_operations.bulk_rename
                     && r.cursor_col > 0
                 {
                     let start = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col - 1);
@@ -279,7 +279,7 @@ impl App {
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.bulk_rename {
+                if let Some(r) = &mut self.file_operations.bulk_rename {
                     let len = r.new_names[r.cursor_line].chars().count();
                     if r.cursor_col < len {
                         let start = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col);
@@ -294,7 +294,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.bulk_rename {
+                if let Some(r) = &mut self.file_operations.bulk_rename {
                     let byte = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col);
                     r.new_names[r.cursor_line].insert(byte, ch);
                     r.cursor_col += 1;
@@ -308,7 +308,7 @@ impl App {
     }
 
     fn bulk_rename_move_vertical(&mut self, delta: isize) {
-        let Some(r) = &mut self.overlays.bulk_rename else {
+        let Some(r) = &mut self.file_operations.bulk_rename else {
             return;
         };
         let new_line =
@@ -330,7 +330,7 @@ impl App {
                     .rename_panel
                     .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
                 if !inside {
-                    self.overlays.bulk_rename = None;
+                    self.file_operations.bulk_rename = None;
                     return Ok(());
                 }
                 if let Some(list_area) = self.input.frame_state.bulk_rename_list_area
@@ -344,7 +344,7 @@ impl App {
                         let line_len = self.bulk_rename_new_name(line_idx).chars().count();
                         let char_col = (mouse.column.saturating_sub(list_area.x + 3)) as usize;
                         let cursor_col = char_col.min(line_len);
-                        if let Some(r) = &mut self.overlays.bulk_rename {
+                        if let Some(r) = &mut self.file_operations.bulk_rename {
                             r.cursor_line = line_idx;
                             r.cursor_col = cursor_col;
                             r.preferred_col = cursor_col;

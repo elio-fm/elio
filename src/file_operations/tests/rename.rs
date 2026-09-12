@@ -9,7 +9,7 @@ fn confirm_rename_renames_selected_entry_and_queues_reselect() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.open_rename_prompt();
     let overlay = app
-        .overlays
+        .file_operations
         .rename
         .as_mut()
         .expect("rename overlay should be open");
@@ -19,7 +19,7 @@ fn confirm_rename_renames_selected_entry_and_queues_reselect() {
 
     app.confirm_rename().expect("rename should succeed");
 
-    assert!(app.overlays.rename.is_none());
+    assert!(app.file_operations.rename.is_none());
     assert!(!root.join("report.txt").exists());
     assert!(root.join("summary.txt").is_file());
 

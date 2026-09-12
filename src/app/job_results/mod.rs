@@ -247,14 +247,14 @@ impl App {
                     dirty = true;
                 }
                 JobResult::ArchiveCreate(build) => {
-                    if build.token != self.jobs.archive_create_token {
+                    if build.token != self.file_operations.archive_create_token {
                         continue;
                     }
                     if build.done {
-                        self.jobs.archive_create_progress = None;
-                        self.jobs.archive_create_path = None;
+                        self.file_operations.archive_create_progress = None;
+                        self.file_operations.archive_create_path = None;
                         let source_cwd = self
-                            .jobs
+                            .file_operations
                             .archive_create_source_cwd
                             .take()
                             .unwrap_or_else(|| self.file_browser.cwd.clone());
@@ -283,18 +283,19 @@ impl App {
                         } else {
                             self.status = status;
                         }
-                    } else if let Some(progress) = &mut self.jobs.archive_create_progress {
+                    } else if let Some(progress) = &mut self.file_operations.archive_create_progress
+                    {
                         progress.completed = build.completed;
                         progress.total = build.total;
                     }
                     dirty = true;
                 }
                 JobResult::ArchiveExtract(build) => {
-                    if build.token != self.jobs.archive_extract_token {
+                    if build.token != self.file_operations.archive_extract_token {
                         continue;
                     }
                     if build.done {
-                        self.jobs.archive_extract_progress = None;
+                        self.file_operations.archive_extract_progress = None;
                         if let Some(prompt) = build.password_prompt {
                             if let Some(request) = build.password_request {
                                 let error = match prompt {
@@ -303,7 +304,8 @@ impl App {
                                         Some("Wrong password".to_string())
                                     }
                                 };
-                                self.jobs.archive_extract_request = Some(request.clone());
+                                self.file_operations.archive_extract_request =
+                                    Some(request.clone());
                                 self.open_archive_password_prompt(request, error);
                             } else {
                                 self.status = "Archive requires a password".to_string();
@@ -311,9 +313,9 @@ impl App {
                             dirty = true;
                             continue;
                         }
-                        self.jobs.archive_extract_request = None;
+                        self.file_operations.archive_extract_request = None;
                         let source_cwd = self
-                            .jobs
+                            .file_operations
                             .archive_extract_source_cwd
                             .take()
                             .unwrap_or_else(|| self.file_browser.cwd.clone());
@@ -342,28 +344,31 @@ impl App {
                         } else {
                             self.status = status;
                         }
-                    } else if let Some(prog) = &mut self.jobs.archive_extract_progress {
+                    } else if let Some(prog) = &mut self.file_operations.archive_extract_progress {
                         prog.completed = build.completed;
                         prog.total = build.total;
                     }
                     dirty = true;
                 }
                 JobResult::Paste(build) => {
-                    if build.token != self.jobs.paste_token {
+                    if build.token != self.file_operations.paste_token {
                         continue;
                     }
                     if build.done {
-                        let paste_origin =
-                            self.jobs.paste_progress.as_ref().map(|p| p.origin.clone());
-                        self.jobs.paste_progress = None;
+                        let paste_origin = self
+                            .file_operations
+                            .paste_progress
+                            .as_ref()
+                            .map(|p| p.origin.clone());
+                        self.file_operations.paste_progress = None;
                         let dest_dir = self
-                            .jobs
+                            .file_operations
                             .paste_dest_dir
                             .take()
                             .unwrap_or_else(|| self.file_browser.cwd.clone());
                         let status = build.status.unwrap_or_default();
                         let next_queued_dest = self
-                            .jobs
+                            .file_operations
                             .queued_pastes
                             .front()
                             .map(|queued| queued.dest_dir.as_path());
@@ -411,13 +416,13 @@ impl App {
                             self.status = status;
                         }
                         self.start_next_queued_paste();
-                    } else if let Some(prog) = &mut self.jobs.paste_progress {
+                    } else if let Some(prog) = &mut self.file_operations.paste_progress {
                         prog.completed = build.completed;
                     }
                     dirty = true;
                 }
                 JobResult::Trash(build) => {
-                    if build.token != self.jobs.trash_token {
+                    if build.token != self.file_operations.trash_token {
                         continue;
                     }
                     if build.done {
@@ -426,7 +431,7 @@ impl App {
                         // operations leave some entries intact, so using the
                         // pre-computed survivor path would move the cursor
                         // away from entries that are still present.
-                        let progress = self.jobs.trash_progress.take();
+                        let progress = self.file_operations.trash_progress.take();
                         let duplicate_targets = progress
                             .as_ref()
                             .and_then(|p| {
@@ -439,7 +444,7 @@ impl App {
                                 .flatten()
                         });
                         let source_cwd = self
-                            .jobs
+                            .file_operations
                             .trash_source_cwd
                             .take()
                             .unwrap_or_else(|| self.file_browser.cwd.clone());
@@ -476,23 +481,24 @@ impl App {
                             // Navigation will load source_cwd fresh if they return.
                             self.status = status;
                         }
-                    } else if let Some(prog) = &mut self.jobs.trash_progress {
+                    } else if let Some(prog) = &mut self.file_operations.trash_progress {
                         prog.completed = build.completed;
                     }
                     dirty = true;
                 }
                 JobResult::Restore(build) => {
-                    if build.token != self.jobs.restore_token {
+                    if build.token != self.file_operations.restore_token {
                         continue;
                     }
                     if build.done {
-                        let next_selection = self.jobs.restore_progress.take().and_then(|p| {
-                            (build.completed == p.total)
-                                .then_some(p.next_selection)
-                                .flatten()
-                        });
+                        let next_selection =
+                            self.file_operations.restore_progress.take().and_then(|p| {
+                                (build.completed == p.total)
+                                    .then_some(p.next_selection)
+                                    .flatten()
+                            });
                         let source_cwd = self
-                            .jobs
+                            .file_operations
                             .restore_source_cwd
                             .take()
                             .unwrap_or_else(|| self.file_browser.cwd.clone());
@@ -521,7 +527,7 @@ impl App {
                         } else {
                             self.status = status;
                         }
-                    } else if let Some(prog) = &mut self.jobs.restore_progress {
+                    } else if let Some(prog) = &mut self.file_operations.restore_progress {
                         prog.completed = build.completed;
                     }
                     dirty = true;

@@ -30,39 +30,39 @@ pub(crate) struct ArchiveCreateOverlay {
 
 impl App {
     pub fn archive_create_progress(&self) -> Option<(usize, usize)> {
-        self.jobs
+        self.file_operations
             .archive_create_progress
             .as_ref()
             .map(|progress| (progress.completed, progress.total))
     }
 
     pub fn archive_create_is_open(&self) -> bool {
-        self.overlays.archive_create.is_some()
+        self.file_operations.archive_create.is_some()
     }
 
     pub fn archive_create_input(&self) -> &str {
-        self.overlays
+        self.file_operations
             .archive_create
             .as_ref()
             .map_or("", |overlay| overlay.input.as_str())
     }
 
     pub fn archive_create_cursor_col(&self) -> usize {
-        self.overlays
+        self.file_operations
             .archive_create
             .as_ref()
             .map_or(0, |overlay| overlay.cursor_col)
     }
 
     pub fn archive_create_error(&self) -> Option<&str> {
-        self.overlays
+        self.file_operations
             .archive_create
             .as_ref()
             .and_then(|overlay| overlay.error.as_deref())
     }
 
     pub fn archive_create_protection_label(&self) -> &'static str {
-        let Some(overlay) = &self.overlays.archive_create else {
+        let Some(overlay) = &self.file_operations.archive_create else {
             return "";
         };
         if overlay.options.encryption.is_password_set() {
@@ -73,7 +73,7 @@ impl App {
     }
 
     pub fn archive_create_protection_hint(&self) -> &'static str {
-        let Some(overlay) = &self.overlays.archive_create else {
+        let Some(overlay) = &self.file_operations.archive_create else {
             return "";
         };
         match archive_create_effective_format(overlay) {
@@ -95,14 +95,14 @@ impl App {
     }
 
     pub fn archive_create_source_names(&self) -> &[String] {
-        self.overlays
+        self.file_operations
             .archive_create
             .as_ref()
             .map_or(&[], |overlay| overlay.source_names.as_slice())
     }
 
     pub fn archive_create_title(&self) -> String {
-        let Some(overlay) = &self.overlays.archive_create else {
+        let Some(overlay) = &self.file_operations.archive_create else {
             return "Create archive".to_string();
         };
         let files = overlay
@@ -125,7 +125,7 @@ impl App {
     }
 
     pub(crate) fn open_archive_create_prompt(&mut self) {
-        if self.jobs.archive_create_progress.is_some() {
+        if self.file_operations.archive_create_progress.is_some() {
             self.status = "Archive creation already in progress".to_string();
             return;
         }
@@ -134,18 +134,18 @@ impl App {
             return;
         };
         self.overlays.help = false;
-        self.overlays.trash = None;
-        self.overlays.restore = None;
-        self.overlays.archive_password = None;
-        self.overlays.create = None;
-        self.overlays.rename = None;
-        self.overlays.bulk_rename = None;
+        self.file_operations.trash = None;
+        self.file_operations.restore = None;
+        self.file_operations.archive_password = None;
+        self.file_operations.create = None;
+        self.file_operations.rename = None;
+        self.file_operations.bulk_rename = None;
         self.overlays.goto = None;
-        self.overlays.copy = None;
+        self.file_operations.copy = None;
         self.overlays.open_with = None;
         self.overlays.search = None;
         let cursor_col = archive_create_default_cursor_col(&default_name);
-        self.overlays.archive_create = Some(ArchiveCreateOverlay {
+        self.file_operations.archive_create = Some(ArchiveCreateOverlay {
             sources,
             source_names: names,
             source_scroll: 0,
@@ -178,12 +178,12 @@ impl App {
 
     pub(crate) fn handle_archive_create_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.overlays.archive_create = None;
+            self.file_operations.archive_create = None;
             return Ok(());
         }
 
         match key.code {
-            KeyCode::Esc => self.overlays.archive_create = None,
+            KeyCode::Esc => self.file_operations.archive_create = None,
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 self.confirm_archive_create()?
             }
@@ -209,7 +209,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     overlay.cursor_col = previous_word_start(&overlay.input, overlay.cursor_col);
                 }
             }
@@ -217,17 +217,17 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     overlay.cursor_col = next_word_start(&overlay.input, overlay.cursor_col);
                 }
             }
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     overlay.cursor_col = overlay.cursor_col.saturating_sub(1);
                 }
             }
             KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     let len = overlay.input.chars().count();
                     if overlay.cursor_col < len {
                         overlay.cursor_col += 1;
@@ -235,12 +235,12 @@ impl App {
                 }
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     overlay.cursor_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     overlay.cursor_col = overlay.input.chars().count();
                 }
             }
@@ -248,7 +248,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     let start = previous_delete_start(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, start, overlay.cursor_col);
                     overlay.cursor_col = start;
@@ -259,7 +259,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     let start = previous_delete_start(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, start, overlay.cursor_col);
                     overlay.cursor_col = start;
@@ -270,7 +270,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     let end = next_delete_end(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, overlay.cursor_col, end);
                     overlay.error = None;
@@ -280,14 +280,14 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     let end = next_delete_end(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, overlay.cursor_col, end);
                     overlay.error = None;
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_create
+                if let Some(overlay) = &mut self.file_operations.archive_create
                     && overlay.cursor_col > 0
                 {
                     let start = char_to_byte(&overlay.input, overlay.cursor_col - 1);
@@ -298,7 +298,7 @@ impl App {
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     let len = overlay.input.chars().count();
                     if overlay.cursor_col < len {
                         let start = char_to_byte(&overlay.input, overlay.cursor_col);
@@ -313,7 +313,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     let byte = char_to_byte(&overlay.input, overlay.cursor_col);
                     overlay.input.insert(byte, ch);
                     overlay.cursor_col += 1;
@@ -344,7 +344,7 @@ impl App {
                     .archive_create_panel
                     .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
                 if !inside {
-                    self.overlays.archive_create = None;
+                    self.file_operations.archive_create = None;
                 }
             }
             _ => {}
@@ -369,15 +369,18 @@ impl App {
     }
 
     pub fn archive_create_source_scroll(&self, visible_rows: usize) -> usize {
-        self.overlays.archive_create.as_ref().map_or(0, |overlay| {
-            overlay
-                .source_scroll
-                .min(overlay.source_names.len().saturating_sub(visible_rows))
-        })
+        self.file_operations
+            .archive_create
+            .as_ref()
+            .map_or(0, |overlay| {
+                overlay
+                    .source_scroll
+                    .min(overlay.source_names.len().saturating_sub(visible_rows))
+            })
     }
 
     fn scroll_archive_create_sources_by(&mut self, delta: isize, visible_rows: usize) {
-        let Some(overlay) = &mut self.overlays.archive_create else {
+        let Some(overlay) = &mut self.file_operations.archive_create else {
             return;
         };
         let max_scroll = overlay
@@ -391,13 +394,13 @@ impl App {
     }
 
     fn confirm_archive_create(&mut self) -> Result<()> {
-        let Some(overlay) = &self.overlays.archive_create else {
+        let Some(overlay) = &self.file_operations.archive_create else {
             return Ok(());
         };
         let (output_name, format) = match normalize_archive_output_name(&overlay.input) {
             Ok(normalized) => normalized,
             Err(error) => {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     overlay.error = Some(error.to_string());
                 }
                 return Ok(());
@@ -407,13 +410,13 @@ impl App {
         let mut options = overlay.options.clone();
         options.format = format;
         if options.encryption.is_password_set() && !options.format.supports_encryption() {
-            if let Some(overlay) = &mut self.overlays.archive_create {
+            if let Some(overlay) = &mut self.file_operations.archive_create {
                 overlay.error = None;
             }
             return Ok(());
         }
         if self.start_archive_create(sources, output_name, options)? {
-            self.overlays.archive_create = None;
+            self.file_operations.archive_create = None;
         }
         Ok(())
     }
@@ -424,7 +427,7 @@ impl App {
         output_name: String,
         options: CreateArchiveOptions,
     ) -> Result<bool> {
-        if self.jobs.archive_create_progress.is_some() {
+        if self.file_operations.archive_create_progress.is_some() {
             self.status = "Archive creation already in progress".to_string();
             return Ok(false);
         }
@@ -434,7 +437,7 @@ impl App {
             &output_name,
             options.clone(),
         ) {
-            if let Some(overlay) = &mut self.overlays.archive_create {
+            if let Some(overlay) = &mut self.file_operations.archive_create {
                 overlay.error = Some(error.to_string());
             } else {
                 self.status = error.to_string();
@@ -442,14 +445,14 @@ impl App {
             return Ok(false);
         }
 
-        let token = self.jobs.archive_create_token.wrapping_add(1);
-        self.jobs.archive_create_token = token;
-        self.jobs.archive_create_progress = Some(ArchiveCreateProgress {
+        let token = self.file_operations.archive_create_token.wrapping_add(1);
+        self.file_operations.archive_create_token = token;
+        self.file_operations.archive_create_progress = Some(ArchiveCreateProgress {
             completed: 0,
             total: 0,
         });
-        self.jobs.archive_create_source_cwd = Some(self.file_browser.cwd.clone());
-        self.jobs.archive_create_path = Some(self.file_browser.cwd.join(&output_name));
+        self.file_operations.archive_create_source_cwd = Some(self.file_browser.cwd.clone());
+        self.file_operations.archive_create_path = Some(self.file_browser.cwd.join(&output_name));
         self.status.clear();
 
         let submitted = self
@@ -463,9 +466,9 @@ impl App {
                 options,
             });
         if !submitted {
-            self.jobs.archive_create_progress = None;
-            self.jobs.archive_create_source_cwd = None;
-            self.jobs.archive_create_path = None;
+            self.file_operations.archive_create_progress = None;
+            self.file_operations.archive_create_source_cwd = None;
+            self.file_operations.archive_create_path = None;
             self.status = "Archive creation already in progress".to_string();
             return Ok(false);
         }
@@ -474,7 +477,7 @@ impl App {
     }
 
     fn open_archive_create_password_prompt(&mut self) {
-        let Some(overlay) = &self.overlays.archive_create else {
+        let Some(overlay) = &self.file_operations.archive_create else {
             return;
         };
         let password_set = overlay.options.encryption.is_password_set();
@@ -495,7 +498,7 @@ impl App {
             ArchiveEncryption::None => String::new(),
         };
         let cursor_col = input.chars().count();
-        self.overlays.archive_password = Some(ArchivePasswordOverlay {
+        self.file_operations.archive_password = Some(ArchivePasswordOverlay {
             purpose: ArchivePasswordPurpose::Create,
             input,
             cursor_col,
@@ -505,13 +508,13 @@ impl App {
     }
 
     fn show_archive_password_format_hint(&mut self) {
-        if let Some(overlay) = &mut self.overlays.archive_create {
+        if let Some(overlay) = &mut self.file_operations.archive_create {
             overlay.error = Some("Use ZIP or 7Z for passwords".to_string());
         }
     }
 
     fn remove_archive_create_password(&mut self) {
-        if let Some(overlay) = &mut self.overlays.archive_create
+        if let Some(overlay) = &mut self.file_operations.archive_create
             && overlay.options.encryption.is_password_set()
         {
             overlay.options.encryption = ArchiveEncryption::None;

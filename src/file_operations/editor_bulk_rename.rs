@@ -166,7 +166,7 @@ impl App {
                     self.status = "No files renamed".to_string();
                 }
                 Ok(_) => {
-                    self.overlays.editor_rename_confirm = Some(EditorRenameConfirmOverlay {
+                    self.file_operations.editor_rename_confirm = Some(EditorRenameConfirmOverlay {
                         items,
                         new_names: new_rows,
                         root,
@@ -200,34 +200,34 @@ impl App {
     fn close_transient_overlays(&mut self) {
         self.overlays.help = false;
         self.overlays.search = None;
-        self.overlays.create = None;
-        self.overlays.rename = None;
-        self.overlays.trash = None;
-        self.overlays.restore = None;
-        self.overlays.bulk_rename = None;
-        self.overlays.editor_rename_confirm = None;
+        self.file_operations.create = None;
+        self.file_operations.rename = None;
+        self.file_operations.trash = None;
+        self.file_operations.restore = None;
+        self.file_operations.bulk_rename = None;
+        self.file_operations.editor_rename_confirm = None;
     }
 
     pub fn editor_rename_confirm_is_open(&self) -> bool {
-        self.overlays.editor_rename_confirm.is_some()
+        self.file_operations.editor_rename_confirm.is_some()
     }
 
     pub fn editor_rename_confirm_count(&self) -> usize {
-        self.overlays
+        self.file_operations
             .editor_rename_confirm
             .as_ref()
             .map_or(0, |overlay| overlay.items.len())
     }
 
     pub fn editor_rename_confirm_scroll(&self) -> usize {
-        self.overlays
+        self.file_operations
             .editor_rename_confirm
             .as_ref()
             .map_or(0, |overlay| overlay.scroll)
     }
 
     pub fn editor_rename_confirm_row(&self, index: usize) -> Option<(String, String)> {
-        let overlay = self.overlays.editor_rename_confirm.as_ref()?;
+        let overlay = self.file_operations.editor_rename_confirm.as_ref()?;
         let item = overlay.items.get(index)?;
         let old = item
             .path
@@ -247,26 +247,26 @@ impl App {
     }
 
     pub fn editor_rename_confirmed(&self) -> bool {
-        self.overlays
+        self.file_operations
             .editor_rename_confirm
             .as_ref()
             .is_some_and(|overlay| overlay.confirmed)
     }
 
     pub(crate) fn cancel_editor_rename_confirm(&mut self) {
-        self.overlays.editor_rename_confirm = None;
+        self.file_operations.editor_rename_confirm = None;
         self.status = "Editor rename cancelled".to_string();
     }
 
     pub(crate) fn scroll_editor_rename_confirm(&mut self, delta: isize) {
-        if let Some(overlay) = &mut self.overlays.editor_rename_confirm {
+        if let Some(overlay) = &mut self.file_operations.editor_rename_confirm {
             let max_scroll = overlay.items.len().saturating_sub(1);
             overlay.scroll = overlay.scroll.saturating_add_signed(delta).min(max_scroll);
         }
     }
 
     pub(crate) fn confirm_editor_rename(&mut self) -> Result<()> {
-        let Some(overlay) = &self.overlays.editor_rename_confirm else {
+        let Some(overlay) = &self.file_operations.editor_rename_confirm else {
             return Ok(());
         };
         let root = overlay.root.clone();
@@ -296,7 +296,7 @@ impl App {
             .map(|op| (op.old_path.clone(), op.new_path.clone()))
             .collect::<Vec<_>>();
 
-        self.overlays.editor_rename_confirm = None;
+        self.file_operations.editor_rename_confirm = None;
         self.file_browser.selected_paths.clear();
         self.apply_duplicate_rename_pairs(duplicate_rename_pairs);
         self.queue_directory_load(PendingDirectoryLoad {
@@ -331,17 +331,17 @@ impl App {
                 }
             }
             KeyCode::Left | KeyCode::Char('h') if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.editor_rename_confirm {
+                if let Some(overlay) = &mut self.file_operations.editor_rename_confirm {
                     overlay.confirmed = true;
                 }
             }
             KeyCode::Right | KeyCode::Char('l') if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.editor_rename_confirm {
+                if let Some(overlay) = &mut self.file_operations.editor_rename_confirm {
                     overlay.confirmed = false;
                 }
             }
             KeyCode::Tab if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.editor_rename_confirm {
+                if let Some(overlay) = &mut self.file_operations.editor_rename_confirm {
                     overlay.confirmed = !overlay.confirmed;
                 }
             }
@@ -403,7 +403,7 @@ impl App {
 }
 
 pub(super) fn confirm_bulk_rename_overlay(app: &mut App) -> Result<()> {
-    let Some(r) = &app.overlays.bulk_rename else {
+    let Some(r) = &app.file_operations.bulk_rename else {
         return Ok(());
     };
 
@@ -411,7 +411,7 @@ pub(super) fn confirm_bulk_rename_overlay(app: &mut App) -> Result<()> {
     let plan = build_rename_plan(&r.items, &r.new_names, root.as_deref());
     if let Err(errors) = plan {
         if let Some(err_line) = errors.iter().position(Option::is_some)
-            && let Some(r) = &mut app.overlays.bulk_rename
+            && let Some(r) = &mut app.file_operations.bulk_rename
         {
             r.line_errors = errors;
             r.cursor_line = err_line;
@@ -441,7 +441,7 @@ pub(super) fn confirm_bulk_rename_overlay(app: &mut App) -> Result<()> {
         .map(|op| (op.old_path.clone(), op.new_path.clone()))
         .collect::<Vec<_>>();
 
-    app.overlays.bulk_rename = None;
+    app.file_operations.bulk_rename = None;
     app.file_browser.selected_paths.clear();
     app.apply_duplicate_rename_pairs(duplicate_rename_pairs);
 

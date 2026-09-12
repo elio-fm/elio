@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 impl App {
     pub(crate) fn link_yanked(&mut self, relative: bool) -> Result<()> {
-        let Some(clipboard) = &self.jobs.clipboard else {
+        let Some(clipboard) = &self.file_operations.clipboard else {
             self.status = "Nothing to link".to_string();
             return Ok(());
         };

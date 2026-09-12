@@ -39,35 +39,35 @@ impl App {
     }
 
     pub(crate) fn handle_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        if self.overlays.trash.is_some() {
+        if self.file_operations.trash.is_some() {
             return self.handle_trash_mouse(mouse);
         }
 
-        if self.overlays.restore.is_some() {
+        if self.file_operations.restore.is_some() {
             return self.handle_restore_mouse(mouse);
         }
 
-        if self.overlays.archive_password.is_some() {
+        if self.file_operations.archive_password.is_some() {
             return self.handle_archive_password_mouse(mouse);
         }
 
-        if self.overlays.archive_create.is_some() {
+        if self.file_operations.archive_create.is_some() {
             return self.handle_archive_create_mouse(mouse);
         }
 
-        if self.overlays.create.is_some() {
+        if self.file_operations.create.is_some() {
             return self.handle_create_mouse(mouse);
         }
 
-        if self.overlays.rename.is_some() {
+        if self.file_operations.rename.is_some() {
             return self.handle_rename_mouse(mouse);
         }
 
-        if self.overlays.bulk_rename.is_some() {
+        if self.file_operations.bulk_rename.is_some() {
             return self.handle_bulk_rename_mouse(mouse);
         }
 
-        if self.overlays.editor_rename_confirm.is_some() {
+        if self.file_operations.editor_rename_confirm.is_some() {
             return self.handle_editor_rename_confirm_mouse(mouse);
         }
 
@@ -75,7 +75,7 @@ impl App {
             return self.handle_goto_mouse(mouse);
         }
 
-        if self.overlays.copy.is_some() {
+        if self.file_operations.copy.is_some() {
             return self.handle_copy_mouse(mouse);
         }
 

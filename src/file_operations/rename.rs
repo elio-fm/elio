@@ -30,10 +30,10 @@ impl App {
         let cursor_col = cursor_before_extension(&name);
         self.overlays.help = false;
         self.overlays.search = None;
-        self.overlays.create = None;
-        self.overlays.trash = None;
-        self.overlays.restore = None;
-        self.overlays.rename = Some(RenameOverlay {
+        self.file_operations.create = None;
+        self.file_operations.trash = None;
+        self.file_operations.restore = None;
+        self.file_operations.rename = Some(RenameOverlay {
             is_dir,
             original_name: name.clone(),
             input: name,
@@ -43,30 +43,39 @@ impl App {
     }
 
     pub fn rename_is_open(&self) -> bool {
-        self.overlays.rename.is_some()
+        self.file_operations.rename.is_some()
     }
 
     pub fn rename_input(&self) -> &str {
-        self.overlays.rename.as_ref().map_or("", |r| &r.input)
+        self.file_operations
+            .rename
+            .as_ref()
+            .map_or("", |r| &r.input)
     }
 
     pub fn rename_cursor_col(&self) -> usize {
-        self.overlays.rename.as_ref().map_or(0, |r| r.cursor_col)
+        self.file_operations
+            .rename
+            .as_ref()
+            .map_or(0, |r| r.cursor_col)
     }
 
     pub fn rename_original_name(&self) -> &str {
-        self.overlays
+        self.file_operations
             .rename
             .as_ref()
             .map_or("", |r| &r.original_name)
     }
 
     pub fn rename_item_is_dir(&self) -> bool {
-        self.overlays.rename.as_ref().is_some_and(|r| r.is_dir)
+        self.file_operations
+            .rename
+            .as_ref()
+            .is_some_and(|r| r.is_dir)
     }
 
     pub fn rename_error(&self) -> Option<&str> {
-        self.overlays
+        self.file_operations
             .rename
             .as_ref()
             .and_then(|r| r.error.as_deref())
@@ -74,13 +83,13 @@ impl App {
 
     pub(crate) fn handle_rename_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.overlays.rename = None;
+            self.file_operations.rename = None;
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.overlays.rename = None;
+                self.file_operations.rename = None;
             }
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 self.confirm_rename()?;
@@ -89,7 +98,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.rename {
+                if let Some(r) = &mut self.file_operations.rename {
                     let new_col = previous_word_start(&r.input, r.cursor_col);
                     r.cursor_col = new_col;
                 }
@@ -98,18 +107,18 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.rename {
+                if let Some(r) = &mut self.file_operations.rename {
                     let new_col = next_word_start(&r.input, r.cursor_col);
                     r.cursor_col = new_col;
                 }
             }
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.rename {
+                if let Some(r) = &mut self.file_operations.rename {
                     r.cursor_col = r.cursor_col.saturating_sub(1);
                 }
             }
             KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.rename {
+                if let Some(r) = &mut self.file_operations.rename {
                     let len = r.input.chars().count();
                     if r.cursor_col < len {
                         r.cursor_col += 1;
@@ -117,12 +126,12 @@ impl App {
                 }
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.rename {
+                if let Some(r) = &mut self.file_operations.rename {
                     r.cursor_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.rename {
+                if let Some(r) = &mut self.file_operations.rename {
                     r.cursor_col = r.input.chars().count();
                 }
             }
@@ -130,7 +139,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.rename
+                if let Some(r) = &mut self.file_operations.rename
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.input, r.cursor_col);
@@ -143,7 +152,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.rename
+                if let Some(r) = &mut self.file_operations.rename
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.input, r.cursor_col);
@@ -156,7 +165,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.rename {
+                if let Some(r) = &mut self.file_operations.rename {
                     let end = next_delete_end(&r.input, r.cursor_col);
                     remove_char_range(&mut r.input, r.cursor_col, end);
                     r.error = None;
@@ -166,14 +175,14 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                if let Some(r) = &mut self.overlays.rename {
+                if let Some(r) = &mut self.file_operations.rename {
                     let end = next_delete_end(&r.input, r.cursor_col);
                     remove_char_range(&mut r.input, r.cursor_col, end);
                     r.error = None;
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.rename
+                if let Some(r) = &mut self.file_operations.rename
                     && r.cursor_col > 0
                 {
                     let start = char_to_byte(&r.input, r.cursor_col - 1);
@@ -184,7 +193,7 @@ impl App {
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.overlays.rename {
+                if let Some(r) = &mut self.file_operations.rename {
                     let len = r.input.chars().count();
                     if r.cursor_col < len {
                         let start = char_to_byte(&r.input, r.cursor_col);
@@ -199,7 +208,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.overlays.rename {
+                if let Some(r) = &mut self.file_operations.rename {
                     let byte = char_to_byte(&r.input, r.cursor_col);
                     r.input.insert(byte, ch);
                     r.cursor_col += 1;
@@ -219,33 +228,33 @@ impl App {
                 .rename_panel
                 .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
             if !inside {
-                self.overlays.rename = None;
+                self.file_operations.rename = None;
             }
         }
         Ok(())
     }
 
     pub(super) fn confirm_rename(&mut self) -> Result<()> {
-        let Some(r) = &self.overlays.rename else {
+        let Some(r) = &self.file_operations.rename else {
             return Ok(());
         };
         let new_name = r.input.trim().to_string();
         let original_name = r.original_name.clone();
 
         if new_name.is_empty() {
-            if let Some(r) = &mut self.overlays.rename {
+            if let Some(r) = &mut self.file_operations.rename {
                 r.error = Some("Name cannot be empty".to_string());
             }
             return Ok(());
         }
         if new_name.contains('/') {
-            if let Some(r) = &mut self.overlays.rename {
+            if let Some(r) = &mut self.file_operations.rename {
                 r.error = Some("Name cannot contain /".to_string());
             }
             return Ok(());
         }
         if new_name == original_name {
-            self.overlays.rename = None;
+            self.file_operations.rename = None;
             return Ok(());
         }
         if self.duplicates_is_open() {
@@ -253,7 +262,7 @@ impl App {
         }
         let new_path = self.file_browser.cwd.join(&new_name);
         if new_path.exists() {
-            if let Some(r) = &mut self.overlays.rename {
+            if let Some(r) = &mut self.file_operations.rename {
                 r.error = Some(format!("\"{}\" already exists", new_name));
             }
             return Ok(());
@@ -265,7 +274,7 @@ impl App {
             .iter()
             .find(|entry| entry.name == original_name)
         else {
-            self.overlays.rename = None;
+            self.file_operations.rename = None;
             return Ok(());
         };
         let old_path = entry.path.clone();
@@ -277,13 +286,13 @@ impl App {
                 }
                 _ => format!("Could not rename: {error}"),
             };
-            if let Some(r) = &mut self.overlays.rename {
+            if let Some(r) = &mut self.file_operations.rename {
                 r.error = Some(msg);
             }
             return Ok(());
         }
 
-        self.overlays.rename = None;
+        self.file_operations.rename = None;
         let status = format!("Renamed \"{}\" → \"{}\"", original_name, new_name);
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,

@@ -39,25 +39,28 @@ pub(crate) struct QueuedPaste {
 impl App {
     /// Returns `(count, op)` for the current clipboard, or `None` if empty.
     pub fn clipboard_info(&self) -> Option<(usize, ClipOp)> {
-        self.jobs.clipboard.as_ref().map(|c| (c.paths.len(), c.op))
+        self.file_operations
+            .clipboard
+            .as_ref()
+            .map(|c| (c.paths.len(), c.op))
     }
 
     /// Returns `(completed, total, op)` for an in-progress paste, or `None`.
     pub fn paste_progress(&self) -> Option<(usize, usize, ClipOp)> {
-        self.jobs
+        self.file_operations
             .paste_progress
             .as_ref()
             .map(|p| (p.completed, p.total, p.op))
     }
 
     pub fn queued_paste_count(&self) -> usize {
-        self.jobs.queued_pastes.len()
+        self.file_operations.queued_pastes.len()
     }
 
     /// Returns the clipboard operation for a specific path, if it is in the
     /// clipboard.
     pub fn clipboard_op_for(&self, path: &Path) -> Option<ClipOp> {
-        self.jobs
+        self.file_operations
             .clipboard
             .as_ref()
             .filter(|c| c.paths.iter().any(|p| p == path))
@@ -70,7 +73,7 @@ impl App {
         if paths.is_empty() {
             return;
         }
-        self.jobs.clipboard = Some(Clipboard {
+        self.file_operations.clipboard = Some(Clipboard {
             paths,
             op: ClipOp::Yank,
         });
@@ -84,7 +87,7 @@ impl App {
         if paths.is_empty() {
             return;
         }
-        self.jobs.clipboard = Some(Clipboard {
+        self.file_operations.clipboard = Some(Clipboard {
             paths,
             op: ClipOp::Cut,
         });
@@ -95,7 +98,8 @@ impl App {
     /// Paste the clipboard contents into the current directory (async with
     /// progress reporting).
     pub(crate) fn paste(&mut self) -> Result<()> {
-        if self.jobs.paste_progress.is_some() && self.jobs.clipboard.is_none() {
+        if self.file_operations.paste_progress.is_some() && self.file_operations.clipboard.is_none()
+        {
             self.status = "Paste in progress — yank or cut another item to queue it".to_string();
             return Ok(());
         }
@@ -106,7 +110,7 @@ impl App {
         };
 
         if paste_would_copy_directory_into_itself(&request) {
-            self.jobs.clipboard = Some(Clipboard {
+            self.file_operations.clipboard = Some(Clipboard {
                 paths: request.paths,
                 op: request.op,
             });
@@ -114,9 +118,9 @@ impl App {
             return Ok(());
         }
 
-        if self.jobs.paste_progress.is_some() {
-            self.jobs.queued_pastes.push_back(request);
-            let pending = self.jobs.queued_pastes.len();
+        if self.file_operations.paste_progress.is_some() {
+            self.file_operations.queued_pastes.push_back(request);
+            let pending = self.file_operations.queued_pastes.len();
             self.status = if pending == 1 {
                 "Queued paste (1 pending)".to_string()
             } else {
@@ -158,9 +162,9 @@ impl App {
             self.status = "Cannot drop a folder into itself".to_string();
             return Ok(false);
         }
-        if self.jobs.paste_progress.is_some() {
-            self.jobs.queued_pastes.push_back(request);
-            let pending = self.jobs.queued_pastes.len();
+        if self.file_operations.paste_progress.is_some() {
+            self.file_operations.queued_pastes.push_back(request);
+            let pending = self.file_operations.queued_pastes.len();
             self.status = if pending == 1 {
                 "Queued drop (1 pending)".to_string()
             } else {
@@ -174,13 +178,13 @@ impl App {
     }
 
     pub(crate) fn clear_queued_pastes(&mut self) -> usize {
-        let queued = self.jobs.queued_pastes.len();
-        self.jobs.queued_pastes.clear();
+        let queued = self.file_operations.queued_pastes.len();
+        self.file_operations.queued_pastes.clear();
         queued
     }
 
     pub(crate) fn start_next_queued_paste(&mut self) -> bool {
-        let Some(request) = self.jobs.queued_pastes.pop_front() else {
+        let Some(request) = self.file_operations.queued_pastes.pop_front() else {
             return false;
         };
         self.start_paste_request(request);
@@ -188,7 +192,7 @@ impl App {
     }
 
     fn take_clipboard_paste(&mut self) -> Option<QueuedPaste> {
-        let clipboard = self.jobs.clipboard.take()?;
+        let clipboard = self.file_operations.clipboard.take()?;
         if clipboard.paths.is_empty() {
             return None;
         }
@@ -201,15 +205,15 @@ impl App {
     }
 
     fn start_paste_request(&mut self, request: QueuedPaste) {
-        let token = self.jobs.paste_token.wrapping_add(1);
-        self.jobs.paste_token = token;
-        self.jobs.paste_progress = Some(PasteProgress {
+        let token = self.file_operations.paste_token.wrapping_add(1);
+        self.file_operations.paste_token = token;
+        self.file_operations.paste_progress = Some(PasteProgress {
             completed: 0,
             total: request.paths.len(),
             op: request.op,
             origin: request.origin.clone(),
         });
-        self.jobs.paste_dest_dir = Some(request.dest_dir.clone());
+        self.file_operations.paste_dest_dir = Some(request.dest_dir.clone());
 
         self.jobs.scheduler.submit_paste(PasteRequest {
             token,

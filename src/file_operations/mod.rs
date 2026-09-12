@@ -5,6 +5,7 @@ mod copy_move;
 mod copy_to_clipboard;
 mod create;
 mod editor_bulk_rename;
+mod file_operations_state;
 mod rename;
 mod restore;
 mod symlink_creation;
@@ -20,6 +21,7 @@ pub(crate) use create::CreateOverlay;
 #[cfg(unix)]
 pub(crate) use editor_bulk_rename::BulkRenameEditorSession;
 pub(crate) use editor_bulk_rename::EditorRenameConfirmOverlay;
+pub(crate) use file_operations_state::FileOperationsState;
 pub(crate) use rename::RenameOverlay;
 pub(crate) use restore::{RestoreOverlay, RestoreProgress};
 pub(crate) use trash_delete::{TrashOverlay, TrashProgress, TrashTarget};
