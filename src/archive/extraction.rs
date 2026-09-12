@@ -122,18 +122,21 @@ fn unique_destination(parent: &Path, stem: &str) -> PathBuf {
     unreachable!("unique destination search should not overflow")
 }
 
+#[cfg(all(test, unix))]
+use super::external_commands::run_seven_zip_command as run_external_seven_zip_command;
 #[cfg(test)]
 use super::{
     external_commands::{
         available_seven_zip as available_external_seven_zip,
         parse_seven_zip_entries as parse_external_seven_zip_entries,
-        run_seven_zip_command as run_external_seven_zip_command,
         validate_entry_path as validate_external_entry_path,
     },
     path_safety::checked_output_path,
 };
 #[cfg(test)]
-use std::{fs::File, process::Command};
+use std::fs::File;
+#[cfg(all(test, unix))]
+use std::process::Command;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ExtractPlan {

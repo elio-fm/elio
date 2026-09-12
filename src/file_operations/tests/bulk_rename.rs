@@ -208,11 +208,15 @@ fn bulk_rename_allows_same_new_name_in_different_directories() {
 #[cfg(unix)]
 #[test]
 fn bulk_rename_refuses_selection_containing_trash_item() {
-    let _env_guard = env_lock()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _env_guard = env_lock();
     let root = temp_path("bulk-rename-refuses-trash-selection");
+    #[cfg(target_os = "macos")]
+    let home = root.join("home");
+    #[cfg(not(target_os = "macos"))]
     let data_home = root.join("data");
+    #[cfg(target_os = "macos")]
+    let trash_files = home.join(".Trash");
+    #[cfg(not(target_os = "macos"))]
     let trash_files = data_home.join("Trash/files");
     let normal_dir = root.join("normal");
     let normal = normal_dir.join("normal.txt");
@@ -222,6 +226,9 @@ fn bulk_rename_refuses_selection_containing_trash_item() {
     fs::write(&normal, "normal").expect("failed to write normal file");
     fs::write(&trashed, "trashed").expect("failed to write trashed file");
 
+    #[cfg(target_os = "macos")]
+    let _home = EnvVarGuard::set_path("HOME", &home);
+    #[cfg(not(target_os = "macos"))]
     let _xdg_data_home = EnvVarGuard::set_path("XDG_DATA_HOME", &data_home);
 
     let mut app = App::new_at(normal_dir.clone()).expect("failed to create app");

@@ -9,12 +9,13 @@ use anyhow::{Context, Result};
 use std::os::unix::fs::MetadataExt;
 #[cfg(not(unix))]
 use std::path::PathBuf;
+#[cfg(unix)]
+use std::time::Duration;
 use std::{
     collections::HashMap,
     fs::{self, File},
     io::{BufReader, Read},
     path::Path,
-    time::Duration,
 };
 
 const HASH_CHUNK_SIZE: usize = 1024 * 1024;

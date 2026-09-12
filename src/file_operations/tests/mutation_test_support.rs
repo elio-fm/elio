@@ -10,7 +10,7 @@ pub(super) use crate::{app::PendingTerminalTask, file_operations::BulkRenameEdit
 pub(super) use std::{
     env,
     ffi::OsString,
-    sync::{Mutex, OnceLock},
+    sync::{Mutex, MutexGuard, OnceLock},
 };
 pub(super) use std::{
     fs,
@@ -19,9 +19,11 @@ pub(super) use std::{
 };
 
 #[cfg(unix)]
-pub(super) fn env_lock() -> &'static Mutex<()> {
+pub(super) fn env_lock() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 #[cfg(unix)]

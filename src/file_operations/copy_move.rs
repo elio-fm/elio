@@ -48,6 +48,7 @@ pub(crate) struct PastePreparation {
     pub(crate) status: Option<String>,
 }
 
+#[cfg(any(unix, test))]
 pub(crate) struct DropPreparation {
     pub(crate) accepted: bool,
     pub(crate) request: Option<PasteRequest>,

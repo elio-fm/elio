@@ -1,8 +1,9 @@
-use anyhow::{Context, Result, anyhow, bail};
-use std::{
-    fs, io,
-    path::{Component, Path, PathBuf},
-};
+#[cfg(unix)]
+use anyhow::{Context, anyhow};
+use anyhow::{Result, bail};
+use std::path::{Component, Path, PathBuf};
+#[cfg(unix)]
+use std::{fs, io};
 
 pub(super) struct DeferredSymlink {
     pub(super) path: PathBuf,

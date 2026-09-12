@@ -30,6 +30,7 @@ impl super::FileBrowserState {
         self.item_drag.suppressed_until_up = true;
     }
 
+    #[cfg(any(unix, test))]
     pub(crate) fn take_drag_export_paths(
         &mut self,
         fallback_candidate: Option<PathBuf>,

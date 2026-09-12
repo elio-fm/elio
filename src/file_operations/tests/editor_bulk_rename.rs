@@ -3,9 +3,7 @@ use super::mutation_test_support::*;
 #[cfg(unix)]
 #[test]
 fn editor_bulk_rename_file_preserves_selection_order() {
-    let _env_guard = env_lock()
-        .lock()
-        .expect("failed to lock process environment for test");
+    let _env_guard = env_lock();
     let _visual_guard = EnvVarGuard::set_path("VISUAL", Path::new("true"));
 
     let root = temp_path("editor-bulk-rename-order");

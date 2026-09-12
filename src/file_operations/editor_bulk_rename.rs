@@ -43,6 +43,7 @@ pub(crate) struct EditorBulkRenameLaunch {
     pub(crate) session: BulkRenameEditorSession,
 }
 
+#[cfg(unix)]
 pub(crate) enum EditorRenameReview {
     Ready,
     Status(String),
