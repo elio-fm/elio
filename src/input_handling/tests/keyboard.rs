@@ -268,7 +268,7 @@ fn pasted_text_does_not_reach_local_filter_under_non_text_overlay() {
     app.handle_event(Event::Paste("hidden".to_string()))
         .expect("paste event should be ignored by non-text overlay");
 
-    assert!(app.copy_is_open());
+    assert!(app.file_operations.copy_is_open());
     assert_eq!(app.local_filter_query(), "");
 
     cleanup_app_temp_root(app, root);
@@ -283,12 +283,12 @@ fn pasted_text_updates_create_prompt_without_submitting() {
     app.handle_event(Event::Paste("one.txt\ntwo.txt".to_string()))
         .expect("paste event should update create prompt");
 
-    assert!(app.create_is_open());
-    assert_eq!(app.create_line_count(), 2);
-    assert_eq!(app.create_line(0), "one.txt");
-    assert_eq!(app.create_line(1), "two.txt");
-    assert_eq!(app.create_cursor_line(), 1);
-    assert_eq!(app.create_cursor_col(), 7);
+    assert!(app.file_operations.create_is_open());
+    assert_eq!(app.file_operations.create_line_count(), 2);
+    assert_eq!(app.file_operations.create_line(0), "one.txt");
+    assert_eq!(app.file_operations.create_line(1), "two.txt");
+    assert_eq!(app.file_operations.create_cursor_line(), 1);
+    assert_eq!(app.file_operations.create_cursor_col(), 7);
 
     cleanup_app_temp_root(app, root);
 }
@@ -304,8 +304,11 @@ fn pasted_text_updates_rename_prompt_at_cursor() {
     app.handle_event(Event::Paste("-final".to_string()))
         .expect("paste event should update rename prompt");
 
-    assert_eq!(app.rename_input(), "report-final.txt");
-    assert_eq!(app.rename_cursor_col(), "report-final".chars().count());
+    assert_eq!(app.file_operations.rename_input(), "report-final.txt");
+    assert_eq!(
+        app.file_operations.rename_cursor_col(),
+        "report-final".chars().count()
+    );
 
     cleanup_app_temp_root(app, root);
 }
@@ -328,9 +331,15 @@ fn pasted_text_updates_bulk_rename_prompt_at_active_row() {
     app.handle_event(Event::Paste("renamed-".to_string()))
         .expect("paste event should update bulk rename prompt");
 
-    assert_eq!(app.bulk_rename_new_name(0), "renamed-alpha.txt");
-    assert_eq!(app.bulk_rename_new_name(1), "beta.txt");
-    assert_eq!(app.bulk_rename_cursor_col(), "renamed-".chars().count());
+    assert_eq!(
+        app.file_operations.bulk_rename_new_name(0),
+        "renamed-alpha.txt"
+    );
+    assert_eq!(app.file_operations.bulk_rename_new_name(1), "beta.txt");
+    assert_eq!(
+        app.file_operations.bulk_rename_cursor_col(),
+        "renamed-".chars().count()
+    );
 
     cleanup_app_temp_root(app, root);
 }
@@ -346,9 +355,12 @@ fn pasted_text_updates_archive_create_name_at_cursor() {
     app.handle_event(Event::Paste("-backup".to_string()))
         .expect("paste event should update archive create prompt");
 
-    assert_eq!(app.archive_create_input(), "alpha.txt-backup.zip");
     assert_eq!(
-        app.archive_create_cursor_col(),
+        app.file_operations.archive_create_input(),
+        "alpha.txt-backup.zip"
+    );
+    assert_eq!(
+        app.file_operations.archive_create_cursor_col(),
         "alpha.txt-backup".chars().count()
     );
 
@@ -372,8 +384,11 @@ fn pasted_text_updates_archive_password_and_flattens_newlines() {
     app.handle_event(Event::Paste("pa\nss".to_string()))
         .expect("paste event should update archive password prompt");
 
-    assert_eq!(app.archive_password_input(), "pa ss");
-    assert_eq!(app.archive_password_cursor_col(), "pa ss".chars().count());
+    assert_eq!(app.file_operations.archive_password_input(), "pa ss");
+    assert_eq!(
+        app.file_operations.archive_password_cursor_col(),
+        "pa ss".chars().count()
+    );
 
     cleanup_app_temp_root(app, root);
 }
@@ -488,14 +503,14 @@ fn f2_renames_outside_trash_but_not_inside_trash() {
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::F(2))))
         .expect("F2 should open rename outside trash");
-    assert!(app.rename_is_open());
+    assert!(app.file_operations.rename_is_open());
     app.file_operations.rename = None;
 
     app.file_browser.in_trash = true;
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::F(2))))
         .expect("F2 should be ignored in trash");
-    assert!(!app.rename_is_open());
-    assert!(!app.restore_is_open());
+    assert!(!app.file_operations.rename_is_open());
+    assert!(!app.file_operations.restore_is_open());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -511,14 +526,14 @@ fn r_renames_outside_trash_and_restores_inside_trash() {
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('r'))))
         .expect("r should open rename outside trash");
-    assert!(app.rename_is_open());
+    assert!(app.file_operations.rename_is_open());
     app.file_operations.rename = None;
 
     app.file_browser.in_trash = true;
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('r'))))
         .expect("r should open restore inside trash");
-    assert!(!app.rename_is_open());
-    assert!(app.restore_is_open());
+    assert!(!app.file_operations.rename_is_open());
+    assert!(app.file_operations.restore_is_open());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -847,7 +862,7 @@ fn fullscreen_preview_exits_for_explicit_overlays_and_terminal_tasks() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('c'))))
         .expect("CopyPath should exit fullscreen and open copy overlay");
     assert!(!app.preview_fullscreen());
-    assert!(app.copy_is_open());
+    assert!(app.file_operations.copy_is_open());
     app.file_operations.copy = None;
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('P'))))
@@ -877,7 +892,7 @@ fn fullscreen_preview_exits_for_explicit_overlays_and_terminal_tasks() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
         .expect("Trash should exit fullscreen and open trash prompt");
     assert!(!app.preview_fullscreen());
-    assert!(app.trash_is_open());
+    assert!(app.file_operations.trash_is_open());
 
     fs::remove_dir_all(root).ok();
 }
@@ -1263,8 +1278,11 @@ fn capital_d_opens_permanent_delete_prompt_outside_trash() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('D'))))
         .expect("D should open permanent delete prompt");
 
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Delete permanently 1 selected file?"
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1286,8 +1304,11 @@ fn capital_d_permanent_delete_prompt_uses_selection() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('D'))))
         .expect("D should open permanent delete prompt");
 
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_title(), "Delete permanently 2 files?");
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Delete permanently 2 files?"
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1300,9 +1321,15 @@ fn trash_prompt_uses_selection_when_selection_is_offscreen() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
         .expect("d should open trash prompt");
 
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_title(), "Trash 1 selected folder?");
-    assert_eq!(app.trash_target_path_at(0), Some(offscreen.as_path()));
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Trash 1 selected folder?"
+    );
+    assert_eq!(
+        app.file_operations.trash_target_path_at(0),
+        Some(offscreen.as_path())
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1323,11 +1350,15 @@ fn trash_prompt_keeps_normal_selection_non_permanent_from_trash() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
         .expect("d should open trash prompt");
 
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_title(), "Trash 1 selected file?");
-    assert_eq!(app.trash_target_path_at(0), Some(normal.as_path()));
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(app.file_operations.trash_title(), "Trash 1 selected file?");
     assert_eq!(
-        app.trash_target_label_at(0),
+        app.file_operations.trash_target_path_at(0),
+        Some(normal.as_path())
+    );
+    assert_eq!(
+        app.file_operations
+            .trash_target_label_at(&app.file_browser.cwd, 0),
         Some(normal.display().to_string())
     );
 
@@ -1349,9 +1380,15 @@ fn trash_prompt_permanently_deletes_trash_only_selection() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
         .expect("d should open permanent delete prompt");
 
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
-    assert_eq!(app.trash_target_path_at(0), Some(trashed.as_path()));
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Delete permanently 1 selected file?"
+    );
+    assert_eq!(
+        app.file_operations.trash_target_path_at(0),
+        Some(trashed.as_path())
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1363,7 +1400,7 @@ fn trash_prompt_refuses_mixed_trash_and_normal_selection() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
         .expect("d should reject mixed selection");
 
-    assert!(!app.trash_is_open());
+    assert!(!app.file_operations.trash_is_open());
     assert_eq!(
         app.status_message(),
         "Selection mixes trash and normal files"
@@ -1379,8 +1416,11 @@ fn permanent_delete_prompt_accepts_mixed_trash_and_normal_selection() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('D'))))
         .expect("D should open permanent delete prompt");
 
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_title(), "Delete permanently 2 files?");
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Delete permanently 2 files?"
+    );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1760,11 +1800,11 @@ fn c_opens_and_esc_closes_copy_overlay() {
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('c'))))
         .expect("c should open copy overlay");
-    assert!(app.copy_is_open());
+    assert!(app.file_operations.copy_is_open());
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Esc)))
         .expect("esc should close copy overlay");
-    assert!(!app.copy_is_open());
+    assert!(!app.file_operations.copy_is_open());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

@@ -8,7 +8,10 @@ fn confirm_restore_restores_file_from_trashinfo_and_queues_reload() {
     app.file_browser.in_trash = true;
     app.open_restore_prompt();
 
-    assert_eq!(app.restore_title(), "Restore 1 selected file?");
+    assert_eq!(
+        app.file_operations.restore_title(),
+        "Restore 1 selected file?"
+    );
     app.confirm_restore().expect("restore should succeed");
 
     assert!(app.file_operations.restore.is_none());
@@ -63,7 +66,7 @@ fn confirm_restore_bulk_restores_multiple_files_and_reports_count() {
         .insert(trash_files.join("beta.txt"));
     app.open_restore_prompt();
 
-    assert_eq!(app.restore_title(), "Restore 2 files?");
+    assert_eq!(app.file_operations.restore_title(), "Restore 2 files?");
     app.confirm_restore().expect("restore should succeed");
 
     assert!(app.file_operations.restore.is_none());
@@ -95,7 +98,7 @@ fn restore_refuses_normal_selection_from_trash() {
     app.file_browser.selected_paths.insert(normal);
     app.open_restore_prompt();
 
-    assert!(!app.restore_is_open());
+    assert!(!app.file_operations.restore_is_open());
     assert_eq!(app.status_message(), "Cannot restore normal files");
 
     app.file_browser.directory_runtime.watch = None;
@@ -119,7 +122,7 @@ fn restore_refuses_mixed_trash_and_normal_selection() {
     app.file_browser.selected_paths.insert(normal);
     app.open_restore_prompt();
 
-    assert!(!app.restore_is_open());
+    assert!(!app.file_operations.restore_is_open());
     assert_eq!(
         app.status_message(),
         "Selection mixes trash and normal files"
@@ -144,10 +147,13 @@ fn restore_allows_selected_parent_of_current_directory() {
     app.file_browser.selected_paths.insert(parent);
     app.open_restore_prompt();
 
-    assert!(app.restore_is_open());
-    assert_eq!(app.restore_title(), "Restore 1 selected folder?");
+    assert!(app.file_operations.restore_is_open());
     assert_eq!(
-        app.restore_target_path_at(0),
+        app.file_operations.restore_title(),
+        "Restore 1 selected folder?"
+    );
+    assert_eq!(
+        app.file_operations.restore_target_path_at(0),
         Some(trash_files.join("parent").as_path())
     );
 
@@ -169,7 +175,7 @@ fn esc_during_restore_clears_chip_immediately() {
     app.confirm_restore().expect("restore should succeed");
 
     assert!(
-        app.restore_progress().is_some(),
+        app.file_operations.restore_progress().is_some(),
         "chip should be visible after submit"
     );
 
@@ -179,7 +185,7 @@ fn esc_during_restore_clears_chip_immediately() {
     app.file_operations.restore_progress = None;
 
     assert!(
-        app.restore_progress().is_none(),
+        app.file_operations.restore_progress().is_none(),
         "chip should clear immediately after Esc for restore"
     );
 
@@ -243,7 +249,7 @@ fn confirm_restore_while_in_progress_shows_status_and_dismisses_overlay() {
     // Clean up the background worker.
     for _ in 0..200 {
         let _ = app.process_background_jobs();
-        if app.restore_progress().is_none()
+        if app.file_operations.restore_progress().is_none()
             && app.file_browser.directory_runtime.pending_load.is_none()
         {
             break;

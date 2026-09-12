@@ -1,4 +1,4 @@
-use crate::app::App;
+use super::FileOperationsState;
 use anyhow::{Result, anyhow};
 use base64::Engine as _;
 use std::{
@@ -22,88 +22,30 @@ pub(crate) struct CopyOverlay {
     pub(crate) rows: Vec<CopyOverlayRow>,
 }
 
-impl App {
-    pub fn copy_is_open(&self) -> bool {
-        self.file_operations.copy.is_some()
-    }
-
-    pub fn copy_title(&self) -> &str {
-        self.file_operations
-            .copy
-            .as_ref()
-            .map(|overlay| overlay.title.as_str())
-            .unwrap_or("")
-    }
-
-    pub fn copy_row_count(&self) -> usize {
-        self.file_operations
-            .copy
-            .as_ref()
-            .map(|overlay| overlay.rows.len())
-            .unwrap_or(0)
-    }
-
-    pub fn copy_row_label(&self, index: usize) -> &str {
-        self.file_operations
-            .copy
-            .as_ref()
-            .and_then(|overlay| overlay.rows.get(index))
-            .map(|row| row.label.as_str())
-            .unwrap_or("")
-    }
-
-    pub fn copy_row_shortcut(&self, index: usize) -> Option<char> {
-        self.file_operations
-            .copy
-            .as_ref()
-            .and_then(|overlay| overlay.rows.get(index))
-            .map(|row| row.shortcut)
-    }
-}
-
-impl App {
-    pub(crate) fn open_copy_overlay(&mut self) {
-        let paths = self.clipboard_target_paths();
+impl FileOperationsState {
+    pub(crate) fn open_copy_overlay(&mut self, cwd: &Path, paths: &[PathBuf]) -> bool {
         if paths.is_empty() {
-            self.status = "Nothing to copy".to_string();
-            return;
+            return false;
         }
-
-        self.open_copy_overlay_for_paths(paths);
+        self.copy = Some(build_copy_overlay(cwd, paths));
+        true
     }
 
-    pub(crate) fn open_copy_overlay_for_paths(&mut self, paths: Vec<PathBuf>) {
-        if paths.is_empty() {
-            self.status = "Nothing to copy".to_string();
-            return;
-        }
-
-        self.overlays.help = false;
-        self.file_operations.copy = Some(build_copy_overlay(&self.file_browser.cwd, &paths));
-        self.status.clear();
-    }
-
-    pub(crate) fn confirm_copy_index(&mut self, index: usize) -> Result<()> {
-        let Some((value, status_label)) = self.file_operations.copy.as_ref().and_then(|overlay| {
+    pub(crate) fn confirm_copy_index(&mut self, index: usize) -> Option<String> {
+        let (value, status_label) = self.copy.as_ref().and_then(|overlay| {
             overlay
                 .rows
                 .get(index)
                 .map(|row| (row.value.clone(), row.status_label.clone()))
-        }) else {
-            return Ok(());
-        };
+        })?;
 
-        match write_text_to_system_clipboard(&value) {
+        Some(match write_text_to_system_clipboard(&value) {
             Ok(()) => {
-                self.file_operations.copy = None;
-                self.status = format!("Copied {status_label}");
+                self.copy = None;
+                format!("Copied {status_label}")
             }
-            Err(error) => {
-                self.status = clipboard_status_message(&error);
-            }
-        }
-
-        Ok(())
+            Err(error) => clipboard_status_message(&error),
+        })
     }
 }
 
@@ -446,4 +388,39 @@ fn clipboard_command_candidates() -> Vec<(String, Vec<String>)> {
     }
 
     commands
+}
+
+impl FileOperationsState {
+    pub fn copy_is_open(&self) -> bool {
+        self.copy.is_some()
+    }
+
+    pub fn copy_title(&self) -> &str {
+        self.copy
+            .as_ref()
+            .map(|overlay| overlay.title.as_str())
+            .unwrap_or("")
+    }
+
+    pub fn copy_row_count(&self) -> usize {
+        self.copy
+            .as_ref()
+            .map(|overlay| overlay.rows.len())
+            .unwrap_or(0)
+    }
+
+    pub fn copy_row_label(&self, index: usize) -> &str {
+        self.copy
+            .as_ref()
+            .and_then(|overlay| overlay.rows.get(index))
+            .map(|row| row.label.as_str())
+            .unwrap_or("")
+    }
+
+    pub fn copy_row_shortcut(&self, index: usize) -> Option<char> {
+        self.copy
+            .as_ref()
+            .and_then(|overlay| overlay.rows.get(index))
+            .map(|row| row.shortcut)
+    }
 }

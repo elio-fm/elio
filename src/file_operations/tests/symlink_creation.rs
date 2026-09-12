@@ -19,7 +19,10 @@ fn link_yanked_creates_absolute_symlink_in_current_directory() {
     let link = dst_dir.join("repo");
     assert_eq!(fs::read_link(&link).unwrap(), source);
     assert_eq!(app.status_message(), "Created symlink \"repo\"");
-    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Yank)));
+    assert_eq!(
+        app.file_operations.clipboard_info(),
+        Some((1, ClipOp::Yank))
+    );
 
     fs::remove_dir_all(&src_dir).unwrap();
     fs::remove_dir_all(&dst_dir).unwrap();
@@ -92,7 +95,7 @@ fn link_yanked_refuses_cut_clipboard() {
 
     assert_eq!(app.status_message(), "Yank items before linking");
     assert!(!dst_dir.join("move.txt").exists());
-    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Cut)));
+    assert_eq!(app.file_operations.clipboard_info(), Some((1, ClipOp::Cut)));
 
     fs::remove_dir_all(&src_dir).unwrap();
     fs::remove_dir_all(&dst_dir).unwrap();

@@ -111,6 +111,15 @@ impl super::FileBrowserState {
         paths
     }
 
+    pub(crate) fn selected_or_focused_paths_sorted(&self) -> Vec<PathBuf> {
+        if !self.selected_paths.is_empty() {
+            return self.selected_paths_sorted();
+        }
+        self.selected_entry()
+            .map(|entry| vec![entry.path.clone()])
+            .unwrap_or_default()
+    }
+
     #[cfg(unix)]
     pub(crate) fn selected_paths_in_selection_order(&self) -> Vec<PathBuf> {
         self.selected_paths.ordered().cloned().collect()

@@ -146,7 +146,7 @@ fn e_skips_password_archive_on_cancel_and_continues_batch() {
         if alpha_file.exists()
             && beta_file.exists()
             && app.file_operations.archive_extract_progress.is_none()
-            && !app.archive_password_is_open()
+            && !app.file_operations.archive_password_is_open()
         {
             break;
         }
@@ -178,8 +178,8 @@ fn e_prompts_and_retries_encrypted_seven_zip_archive() {
         .expect("e should start archive extraction");
     wait_for_archive_password_prompt(&mut app);
 
-    assert!(app.archive_password_is_open());
-    assert_eq!(app.archive_password_error(), None);
+    assert!(app.file_operations.archive_password_is_open());
+    assert_eq!(app.file_operations.archive_password_error(), None);
     assert!(!root.join("sample").exists());
 
     type_archive_password(&mut app, &wrong_password);
@@ -187,9 +187,12 @@ fn e_prompts_and_retries_encrypted_seven_zip_archive() {
         .expect("enter should submit wrong password");
     wait_for_archive_password_prompt(&mut app);
 
-    assert!(app.archive_password_is_open());
-    assert_eq!(app.archive_password_error(), Some("Wrong password"));
-    assert_eq!(app.archive_password_input(), "");
+    assert!(app.file_operations.archive_password_is_open());
+    assert_eq!(
+        app.file_operations.archive_password_error(),
+        Some("Wrong password")
+    );
+    assert_eq!(app.file_operations.archive_password_input(), "");
 
     type_archive_password(&mut app, &password);
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
@@ -200,7 +203,7 @@ fn e_prompts_and_retries_encrypted_seven_zip_archive() {
         let _ = app.process_background_jobs();
         if extracted_file.exists()
             && app.file_operations.archive_extract_progress.is_none()
-            && !app.archive_password_is_open()
+            && !app.file_operations.archive_password_is_open()
         {
             break;
         }
@@ -234,8 +237,8 @@ fn e_prompts_and_retries_encrypted_rar_archive() {
         .expect("e should start archive extraction");
     wait_for_archive_password_prompt(&mut app);
 
-    assert!(app.archive_password_is_open());
-    assert_eq!(app.archive_password_error(), None);
+    assert!(app.file_operations.archive_password_is_open());
+    assert_eq!(app.file_operations.archive_password_error(), None);
     assert!(!root.join("sample").exists());
 
     type_archive_password(&mut app, &wrong_password);
@@ -243,9 +246,12 @@ fn e_prompts_and_retries_encrypted_rar_archive() {
         .expect("enter should submit wrong password");
     wait_for_archive_password_prompt(&mut app);
 
-    assert!(app.archive_password_is_open());
-    assert_eq!(app.archive_password_error(), Some("Wrong password"));
-    assert_eq!(app.archive_password_input(), "");
+    assert!(app.file_operations.archive_password_is_open());
+    assert_eq!(
+        app.file_operations.archive_password_error(),
+        Some("Wrong password")
+    );
+    assert_eq!(app.file_operations.archive_password_input(), "");
 
     type_archive_password(&mut app, &password);
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
@@ -256,7 +262,7 @@ fn e_prompts_and_retries_encrypted_rar_archive() {
         let _ = app.process_background_jobs();
         if extracted_file.exists()
             && app.file_operations.archive_extract_progress.is_none()
-            && !app.archive_password_is_open()
+            && !app.file_operations.archive_password_is_open()
         {
             break;
         }
@@ -290,8 +296,8 @@ fn e_prompts_and_retries_encrypted_zip_archive() {
         .expect("e should start archive extraction");
     wait_for_archive_password_prompt(&mut app);
 
-    assert!(app.archive_password_is_open());
-    assert_eq!(app.archive_password_error(), None);
+    assert!(app.file_operations.archive_password_is_open());
+    assert_eq!(app.file_operations.archive_password_error(), None);
     assert!(!root.join("sample").exists());
 
     type_archive_password(&mut app, &wrong_password);
@@ -299,9 +305,12 @@ fn e_prompts_and_retries_encrypted_zip_archive() {
         .expect("enter should submit wrong password");
     wait_for_archive_password_prompt(&mut app);
 
-    assert!(app.archive_password_is_open());
-    assert_eq!(app.archive_password_error(), Some("Wrong password"));
-    assert_eq!(app.archive_password_input(), "");
+    assert!(app.file_operations.archive_password_is_open());
+    assert_eq!(
+        app.file_operations.archive_password_error(),
+        Some("Wrong password")
+    );
+    assert_eq!(app.file_operations.archive_password_input(), "");
 
     type_archive_password(&mut app, &password);
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
@@ -312,7 +321,7 @@ fn e_prompts_and_retries_encrypted_zip_archive() {
         let _ = app.process_background_jobs();
         if extracted_file.exists()
             && app.file_operations.archive_extract_progress.is_none()
-            && !app.archive_password_is_open()
+            && !app.file_operations.archive_password_is_open()
         {
             break;
         }
@@ -345,19 +354,19 @@ fn archive_password_visibility_can_be_toggled() {
         .expect("e should start archive extraction");
     wait_for_archive_password_prompt(&mut app);
 
-    assert!(!app.archive_password_is_visible());
+    assert!(!app.file_operations.archive_password_is_visible());
     app.handle_event(Event::Key(KeyEvent::new(
         KeyCode::Char('v'),
         KeyModifiers::ALT,
     )))
     .expect("visibility binding should be handled");
-    assert!(app.archive_password_is_visible());
+    assert!(app.file_operations.archive_password_is_visible());
     app.handle_event(Event::Key(KeyEvent::new(
         KeyCode::Char('v'),
         KeyModifiers::ALT,
     )))
     .expect("visibility binding should toggle back");
-    assert!(!app.archive_password_is_visible());
+    assert!(!app.file_operations.archive_password_is_visible());
 
     cleanup_app_temp_root(app, root);
 }
@@ -399,9 +408,12 @@ fn c_create_archive_clears_selection_when_started() {
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('C'))))
         .expect("C should open archive creation");
-    assert!(app.archive_create_is_open());
-    assert_eq!(app.archive_create_input(), "archive.zip");
-    assert_eq!(app.archive_create_cursor_col(), "archive".chars().count());
+    assert!(app.file_operations.archive_create_is_open());
+    assert_eq!(app.file_operations.archive_create_input(), "archive.zip");
+    assert_eq!(
+        app.file_operations.archive_create_cursor_col(),
+        "archive".chars().count()
+    );
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
         .expect("enter should start archive creation");
 
@@ -442,28 +454,37 @@ fn archive_create_password_returns_to_create_overlay_before_creating() {
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('C'))))
         .expect("C should open archive creation");
-    assert_eq!(app.archive_create_protection_label(), "");
-    assert_eq!(app.archive_create_protection_hint(), "Alt+P add password");
+    assert_eq!(app.file_operations.archive_create_protection_label(), "");
+    assert_eq!(
+        app.file_operations.archive_create_protection_hint(),
+        "Alt+P add password"
+    );
 
     app.handle_event(Event::Key(KeyEvent::new(
         KeyCode::Char('p'),
         KeyModifiers::ALT,
     )))
     .expect("Alt+P should open password prompt");
-    assert!(app.archive_password_is_open());
-    assert_eq!(app.archive_password_title_prefix(), "New password for");
+    assert!(app.file_operations.archive_password_is_open());
+    assert_eq!(
+        app.file_operations.archive_password_title_prefix(),
+        "New password for"
+    );
 
     let password = archive_test_password(&root);
     type_archive_password(&mut app, &password);
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
         .expect("password Enter should return to create overlay");
 
-    assert!(!app.archive_password_is_open());
-    assert!(app.archive_create_is_open());
+    assert!(!app.file_operations.archive_password_is_open());
+    assert!(app.file_operations.archive_create_is_open());
     assert!(!root.join("alpha.zip").exists());
-    assert_eq!(app.archive_create_protection_label(), "Password set");
     assert_eq!(
-        app.archive_create_protection_hint(),
+        app.file_operations.archive_create_protection_label(),
+        "Password set"
+    );
+    assert_eq!(
+        app.file_operations.archive_create_protection_hint(),
         "Alt+P change  Alt+R remove"
     );
 
@@ -517,7 +538,10 @@ fn archive_create_password_can_be_removed_before_creating() {
     type_archive_password(&mut app, &archive_test_password(&root));
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
         .expect("password Enter should return to create overlay");
-    assert_eq!(app.archive_create_protection_label(), "Password set");
+    assert_eq!(
+        app.file_operations.archive_create_protection_label(),
+        "Password set"
+    );
 
     app.handle_event(Event::Key(KeyEvent::new(
         KeyCode::Char('r'),
@@ -525,8 +549,11 @@ fn archive_create_password_can_be_removed_before_creating() {
     )))
     .expect("Alt+R should remove password");
 
-    assert_eq!(app.archive_create_protection_label(), "");
-    assert_eq!(app.archive_create_protection_hint(), "Alt+P add password");
+    assert_eq!(app.file_operations.archive_create_protection_label(), "");
+    assert_eq!(
+        app.file_operations.archive_create_protection_hint(),
+        "Alt+P add password"
+    );
     assert_eq!(app.status_message(), "Archive password removed");
 
     cleanup_app_temp_root(app, root);
@@ -541,17 +568,17 @@ fn archive_create_unsupported_format_disables_password_prompt() {
         let (root, mut app) = archive_create_app(label);
         open_archive_create_with_input(&mut app, input);
 
-        assert_eq!(app.archive_create_protection_label(), "");
-        assert_eq!(app.archive_create_protection_hint(), "");
+        assert_eq!(app.file_operations.archive_create_protection_label(), "");
+        assert_eq!(app.file_operations.archive_create_protection_hint(), "");
         app.handle_event(Event::Key(KeyEvent::new(
             KeyCode::Char('p'),
             KeyModifiers::ALT,
         )))
         .expect("Alt+P should be handled");
 
-        assert!(!app.archive_password_is_open());
+        assert!(!app.file_operations.archive_password_is_open());
         assert_eq!(
-            app.archive_create_error(),
+            app.file_operations.archive_create_error(),
             Some("Use ZIP or 7Z for passwords")
         );
 
@@ -573,18 +600,24 @@ fn archive_create_tar_with_existing_password_shows_actionable_conflict() {
         .expect("password Enter should return to create overlay");
     set_archive_create_input(&mut app, "alpha.tar");
 
-    assert_eq!(app.archive_create_protection_label(), "Password set");
     assert_eq!(
-        app.archive_create_protection_hint(),
+        app.file_operations.archive_create_protection_label(),
+        "Password set"
+    );
+    assert_eq!(
+        app.file_operations.archive_create_protection_hint(),
         "Switch format or remove"
     );
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
         .expect("Enter should validate archive creation");
-    assert_eq!(app.archive_create_error(), None);
-    assert_eq!(app.archive_create_protection_label(), "Password set");
+    assert_eq!(app.file_operations.archive_create_error(), None);
     assert_eq!(
-        app.archive_create_protection_hint(),
+        app.file_operations.archive_create_protection_label(),
+        "Password set"
+    );
+    assert_eq!(
+        app.file_operations.archive_create_protection_hint(),
         "Switch format or remove"
     );
 
@@ -722,7 +755,8 @@ fn archive_test_password(root: &std::path::Path) -> String {
 fn wait_for_archive_password_prompt(app: &mut App) {
     for _ in 0..200 {
         let _ = app.process_background_jobs();
-        if app.archive_password_is_open() && app.file_operations.archive_extract_progress.is_none()
+        if app.file_operations.archive_password_is_open()
+            && app.file_operations.archive_extract_progress.is_none()
         {
             return;
         }

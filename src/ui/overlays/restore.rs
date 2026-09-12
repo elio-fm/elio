@@ -18,9 +18,9 @@ pub(in crate::ui) fn render_restore_overlay(
     state: &mut ScreenRegions,
     palette: Palette,
 ) {
-    let block_title = format!(" {} ", app.restore_title());
-    let count = app.restore_target_count();
-    let list_rows = app.restore_visible_rows().max(1) as u16;
+    let block_title = format!(" {} ", app.file_operations.restore_title());
+    let count = app.file_operations.restore_target_count();
+    let list_rows = app.file_operations.restore_visible_rows().max(1) as u16;
     let popup_height = (list_rows + 2) + 1 + 2;
     let popup_width = area.width.saturating_sub(8).clamp(40, 60);
     let popup = helpers::centered_rect(area, popup_width, popup_height);
@@ -46,8 +46,8 @@ pub(in crate::ui) fn render_restore_overlay(
         horizontal: 1,
         vertical: 1,
     });
-    let visible = app.restore_visible_rows().max(1);
-    let scroll = app.restore_scroll();
+    let visible = app.file_operations.restore_visible_rows().max(1);
+    let scroll = app.file_operations.restore_scroll();
 
     let show_scrollbar = count > visible;
     let thumb_size = if show_scrollbar {
@@ -64,11 +64,12 @@ pub(in crate::ui) fn render_restore_overlay(
 
     for row_offset in 0..visible {
         let item_index = scroll + row_offset;
-        let Some(name) = app.restore_target_name_at(item_index) else {
+        let Some(name) = app.file_operations.restore_target_name_at(item_index) else {
             break;
         };
-        let is_dir = app.restore_target_is_dir_at(item_index);
+        let is_dir = app.file_operations.restore_target_is_dir_at(item_index);
         let (icon, icon_color) = app
+            .file_operations
             .restore_target_path_at(item_index)
             .map(|path| {
                 (
@@ -124,7 +125,7 @@ pub(in crate::ui) fn render_restore_overlay(
         }
     }
 
-    let confirmed = app.restore_confirmed();
+    let confirmed = app.file_operations.restore_confirmed();
     let confirm_style = if confirmed {
         Style::default()
             .bg(palette.selected_bg)

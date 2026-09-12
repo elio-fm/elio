@@ -15,7 +15,7 @@ pub(in crate::ui) fn render_copy_to_clipboard_overlay(
     state: &mut ScreenRegions,
     palette: Palette,
 ) {
-    let row_count = app.copy_row_count().max(1);
+    let row_count = app.file_operations.copy_row_count().max(1);
     let popup_width = area.width.saturating_sub(8).clamp(56, 104);
     let popup_height = 5;
     let popup = Rect {
@@ -30,7 +30,7 @@ pub(in crate::ui) fn render_copy_to_clipboard_overlay(
     frame.render_widget(
         Block::default()
             .title(Span::styled(
-                format!(" {} ", app.copy_title()),
+                format!(" {} ", app.file_operations.copy_title()),
                 Style::default().fg(palette.muted),
             ))
             .title_alignment(Alignment::Center)
@@ -67,11 +67,12 @@ pub(in crate::ui) fn render_copy_to_clipboard_overlay(
     for index in 0..row_count.min(4) {
         let rect = columns[index * 2];
         let shortcut = app
+            .file_operations
             .copy_row_shortcut(index)
             .unwrap_or('?')
             .to_ascii_lowercase();
         let label = helpers::clamp_label(
-            display_label(shortcut, app.copy_row_label(index)),
+            display_label(shortcut, app.file_operations.copy_row_label(index)),
             rect.width.saturating_sub(5) as usize,
         );
 

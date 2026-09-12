@@ -114,25 +114,25 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut ScreenRegions) {
         );
     }
 
-    if app.trash_is_open() {
+    if app.file_operations.trash_is_open() {
         overlays::render_trash_delete_overlay(frame, area, app, state, palette);
-    } else if app.restore_is_open() {
+    } else if app.file_operations.restore_is_open() {
         overlays::render_restore_overlay(frame, area, app, state, palette);
-    } else if app.archive_password_is_open() {
+    } else if app.file_operations.archive_password_is_open() {
         overlays::render_archive_password_overlay(frame, area, app, state, palette);
-    } else if app.archive_create_is_open() {
+    } else if app.file_operations.archive_create_is_open() {
         overlays::render_archive_create_overlay(frame, area, app, state, palette);
-    } else if app.create_is_open() {
+    } else if app.file_operations.create_is_open() {
         overlays::render_create_overlay(frame, area, app, state, palette);
-    } else if app.rename_is_open() {
+    } else if app.file_operations.rename_is_open() {
         overlays::render_rename_overlay(frame, area, app, state, palette);
-    } else if app.bulk_rename_is_open() {
+    } else if app.file_operations.bulk_rename_is_open() {
         overlays::render_bulk_rename_overlay(frame, area, app, state, palette);
-    } else if app.editor_rename_confirm_is_open() {
+    } else if app.file_operations.editor_rename_confirm_is_open() {
         overlays::render_editor_rename_confirm_overlay(frame, area, app, state, palette);
     } else if app.goto_is_open() {
         overlays::render_goto_overlay(frame, area, app, state, palette);
-    } else if app.copy_is_open() {
+    } else if app.file_operations.copy_is_open() {
         overlays::render_copy_to_clipboard_overlay(frame, area, app, state, palette);
     } else if app.open_with_is_open() {
         overlays::render_open_with_overlay(frame, area, app, state, palette);

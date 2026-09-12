@@ -30,7 +30,9 @@ pub(super) fn temp_path(label: &str) -> PathBuf {
 pub(super) fn wait_for_paste(app: &mut App) {
     for _ in 0..500 {
         let _ = app.process_background_jobs();
-        if app.paste_progress().is_none() && app.file_operations.queued_pastes.is_empty() {
+        if app.file_operations.paste_progress().is_none()
+            && app.file_operations.queued_pastes.is_empty()
+        {
             return;
         }
         std::thread::sleep(Duration::from_millis(10));
@@ -41,7 +43,7 @@ pub(super) fn wait_for_paste(app: &mut App) {
 pub(super) fn wait_for_paste_and_reload(app: &mut App) {
     for _ in 0..500 {
         let _ = app.process_background_jobs();
-        if app.paste_progress().is_none()
+        if app.file_operations.paste_progress().is_none()
             && app.file_operations.queued_pastes.is_empty()
             && app.file_browser.directory_runtime.pending_load.is_none()
         {

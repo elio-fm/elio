@@ -208,7 +208,7 @@ impl App {
             chooser: ChooserState::default(),
             pending_terminal_task: None,
         };
-        app.file_browser.in_trash = App::path_is_trash(&app.file_browser.cwd);
+        app.file_browser.in_trash = crate::places::path_is_trash(&app.file_browser.cwd);
         let snapshot = crate::filesystem::load_directory_snapshot(
             &app.file_browser.cwd,
             app.effective_show_hidden(),

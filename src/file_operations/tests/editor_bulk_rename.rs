@@ -141,8 +141,11 @@ fn finish_editor_bulk_rename_opens_confirmation_with_relative_paths() {
         overlay.new_names,
         vec!["left/renamed-alpha.txt", "right/renamed-beta.txt"]
     );
-    assert_eq!(app.editor_rename_confirm_title(), "Confirm 2 renames?");
-    assert!(app.editor_rename_confirmed());
+    assert_eq!(
+        app.file_operations.editor_rename_confirm_title(),
+        "Confirm 2 renames?"
+    );
+    assert!(app.file_operations.editor_rename_confirmed());
     assert_eq!(app.status_message(), "");
     assert!(!temp_file.exists());
 

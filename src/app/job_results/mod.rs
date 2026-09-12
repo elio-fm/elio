@@ -313,37 +313,10 @@ impl App {
                             dirty = true;
                             continue;
                         }
-                        self.file_operations.archive_extract_request = None;
-                        let source_cwd = self
-                            .file_operations
-                            .archive_extract_source_cwd
-                            .take()
-                            .unwrap_or_else(|| self.file_browser.cwd.clone());
-                        let status = build.status.unwrap_or_default();
-                        let nav_target = self
-                            .file_browser
-                            .directory_runtime
-                            .pending_load
-                            .as_ref()
-                            .map(|l| l.target_cwd.as_path());
-                        let nav_to_source = nav_target == Some(source_cwd.as_path());
-                        if nav_to_source
-                            || (source_cwd == self.file_browser.cwd && nav_target.is_none())
-                        {
-                            let _ = self.queue_directory_load(PendingDirectoryLoad {
-                                token: 0,
-                                target_cwd: source_cwd,
-                                previous_cwd: self.file_browser.cwd.clone(),
-                                previous_selected_path: None,
-                                previous_selection_name: None,
-                                reselect_path: build.dest_dir,
-                                history_mode: DirectoryHistoryMode::None,
-                                refresh_search: false,
-                                completion: DirectoryLoadCompletion::Status(status),
-                            });
-                        } else {
-                            self.status = status;
-                        }
+                        self.finish_archive_extract(
+                            build.status.unwrap_or_default(),
+                            build.dest_dir,
+                        );
                     } else if let Some(prog) = &mut self.file_operations.archive_extract_progress {
                         prog.completed = build.completed;
                         prog.total = build.total;
@@ -415,7 +388,9 @@ impl App {
                             // snapshot.
                             self.status = status;
                         }
-                        self.start_next_queued_paste();
+                        if let Some(request) = self.file_operations.start_next_queued_paste() {
+                            self.job_scheduler.submit_paste(request);
+                        }
                     } else if let Some(prog) = &mut self.file_operations.paste_progress {
                         prog.completed = build.completed;
                     }

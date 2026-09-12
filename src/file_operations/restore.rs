@@ -1,6 +1,5 @@
+use super::FileOperationsState;
 use super::trash_delete::TrashTarget;
-use crate::app::App;
-use anyhow::Result;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
@@ -23,62 +22,66 @@ pub(crate) struct RestoreRequest {
     pub(crate) targets: Vec<TrashTarget>,
 }
 
-impl App {
-    pub(crate) fn open_restore_prompt(&mut self) {
-        if !self.file_browser.in_trash {
-            return;
-        }
-        let targets = self.selected_trash_targets();
+pub(crate) enum RestoreConfirmation {
+    None,
+    InProgress,
+    Targets(RestoreOverlay),
+}
 
-        if targets.is_empty() {
-            return;
-        }
-
-        if !self.file_browser.selected_paths.is_empty() {
-            let has_trash = targets
-                .iter()
-                .any(|target| self.trash_target_is_inside_trash(&target.path));
-            let has_normal = targets
-                .iter()
-                .any(|target| !self.trash_target_is_inside_trash(&target.path));
-            match (has_trash, has_normal) {
-                (true, true) => {
-                    self.status = "Selection mixes trash and normal files".to_string();
-                    return;
-                }
-                (false, true) => {
-                    self.status = "Cannot restore normal files".to_string();
-                    return;
-                }
-                _ => {}
-            }
-        }
-
-        self.overlays.help = false;
-        self.fuzzy_finder.search = None;
-        self.file_operations.create = None;
-        self.file_operations.trash = None;
-        self.file_operations.restore = Some(RestoreOverlay {
+impl FileOperationsState {
+    pub(crate) fn open_restore_prompt(&mut self, targets: Vec<TrashTarget>) {
+        self.create = None;
+        self.trash = None;
+        self.restore = Some(RestoreOverlay {
             targets,
             scroll: 0,
             confirmed: true,
         });
     }
 
-    pub fn restore_is_open(&self) -> bool {
-        self.file_operations.restore.is_some()
+    pub(crate) fn take_restore_confirmation(&mut self) -> RestoreConfirmation {
+        if self.restore_progress.is_some() {
+            self.restore = None;
+            return RestoreConfirmation::InProgress;
+        }
+        match self.restore.take() {
+            Some(overlay) if !overlay.targets.is_empty() => RestoreConfirmation::Targets(overlay),
+            _ => RestoreConfirmation::None,
+        }
     }
 
-    /// Returns `(completed, total)` for an in-progress restore, or `None` when idle.
+    pub(crate) fn start_restore(
+        &mut self,
+        overlay: RestoreOverlay,
+        source_cwd: PathBuf,
+        next_selection: Option<PathBuf>,
+    ) -> RestoreRequest {
+        let token = self.restore_token.wrapping_add(1);
+        self.restore_token = token;
+        self.restore_progress = Some(RestoreProgress {
+            completed: 0,
+            total: overlay.targets.len(),
+            next_selection,
+        });
+        self.restore_source_cwd = Some(source_cwd);
+        RestoreRequest {
+            token,
+            targets: overlay.targets,
+        }
+    }
+
+    pub fn restore_is_open(&self) -> bool {
+        self.restore.is_some()
+    }
+
     pub fn restore_progress(&self) -> Option<(usize, usize)> {
-        self.file_operations
-            .restore_progress
+        self.restore_progress
             .as_ref()
             .map(|p| (p.completed, p.total))
     }
 
     pub fn restore_title(&self) -> String {
-        let Some(r) = &self.file_operations.restore else {
+        let Some(r) = &self.restore else {
             return String::new();
         };
         match r.targets.len() {
@@ -109,17 +112,11 @@ impl App {
     }
 
     pub fn restore_scroll(&self) -> usize {
-        self.file_operations
-            .restore
-            .as_ref()
-            .map_or(0, |r| r.scroll)
+        self.restore.as_ref().map_or(0, |r| r.scroll)
     }
 
     pub fn restore_target_count(&self) -> usize {
-        self.file_operations
-            .restore
-            .as_ref()
-            .map_or(0, |r| r.targets.len())
+        self.restore.as_ref().map_or(0, |r| r.targets.len())
     }
 
     pub fn restore_visible_rows(&self) -> usize {
@@ -127,85 +124,27 @@ impl App {
     }
 
     pub fn restore_target_name_at(&self, index: usize) -> Option<&str> {
-        self.file_operations
-            .restore
+        self.restore
             .as_ref()
             .and_then(|r| r.targets.get(index))
             .map(|target| target.name.as_str())
     }
 
     pub fn restore_target_path_at(&self, index: usize) -> Option<&std::path::Path> {
-        self.file_operations
-            .restore
+        self.restore
             .as_ref()
             .and_then(|r| r.targets.get(index))
             .map(|target| target.path.as_path())
     }
 
     pub fn restore_target_is_dir_at(&self, index: usize) -> bool {
-        self.file_operations
-            .restore
+        self.restore
             .as_ref()
             .and_then(|r| r.targets.get(index))
             .is_some_and(|target| target.is_dir)
     }
 
     pub fn restore_confirmed(&self) -> bool {
-        self.file_operations
-            .restore
-            .as_ref()
-            .is_some_and(|r| r.confirmed)
-    }
-
-    pub(crate) fn confirm_restore(&mut self) -> Result<()> {
-        if self.file_operations.restore_progress.is_some() {
-            self.status = "Restore in progress — press Esc to cancel".to_string();
-            self.file_operations.restore = None;
-            return Ok(());
-        }
-        let Some(r) = self.file_operations.restore.take() else {
-            return Ok(());
-        };
-        if r.targets.is_empty() {
-            return Ok(());
-        }
-        self.file_browser.selected_paths.clear();
-        let target_paths: Vec<PathBuf> =
-            r.targets.iter().map(|target| target.path.clone()).collect();
-        let source_cwd = self.queue_directory_escape_for_paths(&target_paths)?;
-
-        let restored_paths: std::collections::HashSet<_> =
-            r.targets.iter().map(|t| &t.path).collect();
-        let next_selection = self
-            .file_browser
-            .entries
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| !restored_paths.contains(&e.path))
-            .find(|(i, _)| *i >= self.file_browser.selected)
-            .or_else(|| {
-                self.file_browser
-                    .entries
-                    .iter()
-                    .enumerate()
-                    .rfind(|(_, e)| !restored_paths.contains(&e.path))
-            })
-            .map(|(_, e)| e.path.clone());
-
-        let token = self.file_operations.restore_token.wrapping_add(1);
-        self.file_operations.restore_token = token;
-        self.file_operations.restore_progress = Some(RestoreProgress {
-            completed: 0,
-            total: r.targets.len(),
-            next_selection,
-        });
-        self.file_operations.restore_source_cwd = Some(source_cwd.clone());
-
-        self.job_scheduler.submit_restore(RestoreRequest {
-            token,
-            targets: r.targets,
-        });
-
-        Ok(())
+        self.restore.as_ref().is_some_and(|r| r.confirmed)
     }
 }

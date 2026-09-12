@@ -505,11 +505,11 @@ fn run_app(
 
         let wants_search_cursor = app.search_is_open()
             || app.local_filter_is_editing()
-            || app.create_is_open()
-            || app.rename_is_open()
-            || app.bulk_rename_is_open()
-            || app.archive_create_is_open()
-            || app.archive_password_is_open();
+            || app.file_operations.create_is_open()
+            || app.file_operations.rename_is_open()
+            || app.file_operations.bulk_rename_is_open()
+            || app.file_operations.archive_create_is_open()
+            || app.file_operations.archive_password_is_open();
         if wants_search_cursor != search_cursor_active {
             if wants_search_cursor {
                 terminal.show_cursor()?;

@@ -41,14 +41,14 @@ pub(super) fn render_status_bar(frame: &mut Frame<'_>, area: Rect, app: &App, pa
         return;
     }
 
-    let clip = app.clipboard_info();
+    let clip = app.file_operations.clipboard_info();
     let sel_count = app.selection_count();
-    let paste_prog = app.paste_progress();
-    let archive_create_prog = app.archive_create_progress();
-    let archive_prog = app.archive_extract_progress();
-    let queued_pastes = app.queued_paste_count();
-    let trash_prog = app.trash_progress();
-    let restore_prog = app.restore_progress();
+    let paste_prog = app.file_operations.paste_progress();
+    let archive_create_prog = app.file_operations.archive_create_progress();
+    let archive_prog = app.file_operations.archive_extract_progress();
+    let queued_pastes = app.file_operations.queued_paste_count();
+    let trash_prog = app.file_operations.trash_progress();
+    let restore_prog = app.file_operations.restore_progress();
 
     // Build the left line: optional progress chips (trash takes priority,
     // then restore, then paste; all take over the clipboard slot), optional

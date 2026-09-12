@@ -21,7 +21,7 @@ pub(in crate::ui) fn render_bulk_rename_overlay(
     state: &mut ScreenRegions,
     palette: Palette,
 ) {
-    let item_count = app.bulk_rename_item_count();
+    let item_count = app.file_operations.bulk_rename_item_count();
     let visible_lines = visible_edit_rows(area, item_count, 5);
     let popup_width = area.width.saturating_sub(8).clamp(40, 68);
     let popup_height = visible_lines + 5;
@@ -31,7 +31,7 @@ pub(in crate::ui) fn render_bulk_rename_overlay(
     frame.render_widget(Clear, popup);
     frame.render_widget(
         helpers::panel_block(
-            &format!(" {} ", app.bulk_rename_title()),
+            &format!(" {} ", app.file_operations.bulk_rename_title()),
             palette.chrome_alt,
             palette,
         ),
@@ -53,8 +53,8 @@ pub(in crate::ui) fn render_bulk_rename_overlay(
         vertical: 1,
     });
 
-    let cursor_line = app.bulk_rename_cursor_line();
-    let cursor_col = app.bulk_rename_cursor_col();
+    let cursor_line = app.file_operations.bulk_rename_cursor_line();
+    let cursor_col = app.file_operations.bulk_rename_cursor_col();
 
     let scroll_top = scroll_top_for_cursor(cursor_line, visible_lines as usize);
     state.bulk_rename_list_area = Some(list_area);
@@ -75,11 +75,13 @@ pub(in crate::ui) fn render_bulk_rename_overlay(
             break;
         }
 
-        let new_name = app.bulk_rename_new_name(line_idx);
-        let is_dir = app.bulk_rename_item_is_dir(line_idx);
+        let new_name = app.file_operations.bulk_rename_new_name(line_idx);
+        let is_dir = app.file_operations.bulk_rename_item_is_dir(line_idx);
         let is_cursor_line = line_idx == cursor_line;
 
-        let live_path = app.bulk_rename_live_path(line_idx);
+        let live_path = app
+            .file_operations
+            .bulk_rename_live_path(&app.file_browser.cwd, line_idx);
         let (icon, icon_color) = (
             theme::path_symbol(&live_path, is_dir),
             theme::path_color(&live_path, is_dir, palette),
@@ -146,7 +148,7 @@ pub(in crate::ui) fn render_bulk_rename_overlay(
         );
     }
 
-    if let Some(error) = app.bulk_rename_line_error(cursor_line) {
+    if let Some(error) = app.file_operations.bulk_rename_line_error(cursor_line) {
         frame.render_widget(
             Paragraph::new(Line::from(vec![Span::styled(
                 helpers::clamp_label(error, rows[1].width.saturating_sub(2) as usize),

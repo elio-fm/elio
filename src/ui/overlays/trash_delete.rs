@@ -18,9 +18,9 @@ pub(in crate::ui) fn render_trash_delete_overlay(
     state: &mut ScreenRegions,
     palette: Palette,
 ) {
-    let block_title = format!(" {} ", app.trash_title());
-    let count = app.trash_target_count();
-    let list_rows = app.trash_visible_rows().max(1) as u16;
+    let block_title = format!(" {} ", app.file_operations.trash_title());
+    let count = app.file_operations.trash_target_count();
+    let list_rows = app.file_operations.trash_visible_rows().max(1) as u16;
     let popup_height = (list_rows + 2) + 1 + 2;
     let popup_width = area.width.saturating_sub(8).clamp(40, 60);
     let popup = helpers::centered_rect(area, popup_width, popup_height);
@@ -46,8 +46,8 @@ pub(in crate::ui) fn render_trash_delete_overlay(
         horizontal: 1,
         vertical: 1,
     });
-    let visible = app.trash_visible_rows().max(1);
-    let scroll = app.trash_scroll();
+    let visible = app.file_operations.trash_visible_rows().max(1);
+    let scroll = app.file_operations.trash_scroll();
 
     let show_scrollbar = count > visible;
     let thumb_size = if show_scrollbar {
@@ -64,11 +64,15 @@ pub(in crate::ui) fn render_trash_delete_overlay(
 
     for row_offset in 0..visible {
         let item_index = scroll + row_offset;
-        let Some(label) = app.trash_target_label_at(item_index) else {
+        let Some(label) = app
+            .file_operations
+            .trash_target_label_at(&app.file_browser.cwd, item_index)
+        else {
             break;
         };
-        let is_dir = app.trash_target_is_dir_at(item_index);
+        let is_dir = app.file_operations.trash_target_is_dir_at(item_index);
         let (icon, icon_color) = app
+            .file_operations
             .trash_target_path_at(item_index)
             .map(|path| {
                 (
@@ -124,7 +128,7 @@ pub(in crate::ui) fn render_trash_delete_overlay(
         }
     }
 
-    let confirmed = app.trash_confirmed();
+    let confirmed = app.file_operations.trash_confirmed();
     let confirm_style = if confirmed {
         Style::default()
             .bg(palette.selected_bg)

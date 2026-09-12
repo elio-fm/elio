@@ -1,6 +1,5 @@
+use super::FileOperationsState;
 use super::bulk_rename::BulkRenameItem;
-use crate::app::App;
-use crate::file_browser::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
 #[cfg(unix)]
 use anyhow::Context;
 use anyhow::{Result, bail};
@@ -37,45 +36,55 @@ use std::{
 #[cfg(unix)]
 const MAX_EDITOR_RENAME_BYTES: u64 = 1024 * 1024;
 
-impl App {
+#[cfg(unix)]
+pub(crate) struct EditorBulkRenameLaunch {
+    pub(crate) program: String,
+    pub(crate) args: Vec<String>,
+    pub(crate) session: BulkRenameEditorSession,
+}
+
+pub(crate) enum EditorRenameReview {
+    Ready,
+    Status(String),
+}
+
+pub(crate) enum BulkRenameConfirmation {
+    None,
+    Status(String),
+    Applied(BulkRenameCompletion),
+}
+
+pub(crate) struct BulkRenameCompletion {
+    pub(crate) changed_old_paths: Vec<PathBuf>,
+    pub(crate) duplicate_rename_pairs: Vec<(PathBuf, PathBuf)>,
+    pub(crate) reselect_path: Option<PathBuf>,
+    pub(crate) status: String,
+}
+
+impl FileOperationsState {
     #[cfg(unix)]
-    pub(crate) fn open_editor_bulk_rename(&mut self) -> Result<()> {
-        if self.file_browser.in_trash || self.cwd_is_inside_trash_subfolder() {
-            return Ok(());
-        }
-
-        let selected_paths = self.editor_bulk_rename_targets();
-        if selected_paths.is_empty() {
-            return Ok(());
-        }
-        if selected_paths
-            .iter()
-            .any(|path| self.trash_target_is_inside_trash(path))
-        {
-            self.status = "Cannot rename items from Trash".to_string();
-            return Ok(());
-        }
-
+    pub(crate) fn prepare_editor_bulk_rename(
+        &mut self,
+        selected_paths: Vec<PathBuf>,
+    ) -> Result<EditorBulkRenameLaunch> {
         let root = common_root(&selected_paths);
-        let mut rows = Vec::with_capacity(selected_paths.len());
-        for path in &selected_paths {
-            rows.push(
+        let rows = selected_paths
+            .iter()
+            .map(|path| {
                 path.strip_prefix(&root)
                     .unwrap_or(path)
                     .to_string_lossy()
-                    .into_owned(),
-            );
-        }
-
-        let context = crate::elevated_session::context();
-        let invoking_user = editor_temp_owner(context)?;
+                    .into_owned()
+            })
+            .collect::<Vec<_>>();
+        let invoking_user = editor_temp_owner(crate::elevated_session::context())?;
         let expected_temp_owner = invoking_user.map(|(uid, _)| uid);
         let temp_path = create_temp_file(&rows, invoking_user)?;
         let (program, mut args) = editor_command();
         args.push(temp_path.to_string_lossy().into_owned());
 
-        self.close_transient_overlays();
-        self.pending_terminal_task = Some(crate::app::PendingTerminalTask::EditorBulkRename {
+        self.close_rename_overlays();
+        Ok(EditorBulkRenameLaunch {
             program,
             args,
             session: BulkRenameEditorSession {
@@ -87,15 +96,7 @@ impl App {
                     .map(bulk_rename_item_from_path)
                     .collect(),
             },
-        });
-        self.status.clear();
-        Ok(())
-    }
-
-    #[cfg(not(unix))]
-    pub(crate) fn open_editor_bulk_rename(&mut self) -> Result<()> {
-        self.status = "Editor batch rename is only supported on Unix-like systems".to_string();
-        Ok(())
+        })
     }
 
     #[cfg(unix)]
@@ -103,7 +104,7 @@ impl App {
         &mut self,
         session: BulkRenameEditorSession,
         launch_result: std::io::Result<std::process::ExitStatus>,
-    ) -> Result<()> {
+    ) -> Result<EditorRenameReview> {
         let BulkRenameEditorSession {
             root,
             temp_path,
@@ -111,20 +112,21 @@ impl App {
             items,
         } = session;
 
-        let result = (|| -> Result<()> {
+        let result = (|| -> Result<EditorRenameReview> {
             match launch_result {
                 Ok(status) if status.success() => {}
                 Ok(status) => {
-                    self.status = format!("Editor exited with {status}");
-                    return Ok(());
+                    return Ok(EditorRenameReview::Status(format!(
+                        "Editor exited with {status}"
+                    )));
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    self.status = "Editor not found".to_string();
-                    return Ok(());
+                    return Ok(EditorRenameReview::Status("Editor not found".to_string()));
                 }
                 Err(error) => {
-                    self.status = format!("Could not run editor: {error}");
-                    return Ok(());
+                    return Ok(EditorRenameReview::Status(format!(
+                        "Could not run editor: {error}"
+                    )));
                 }
             }
 
@@ -136,16 +138,15 @@ impl App {
             }
 
             if new_rows.len() != items.len() {
-                self.status = format!(
+                return Ok(EditorRenameReview::Status(format!(
                     "Editor rename aborted: expected {} line{}, got {}",
                     items.len(),
                     if items.len() == 1 { "" } else { "s" },
                     new_rows.len()
-                );
-                return Ok(());
+                )));
             }
 
-            let original_rows: Vec<String> = items
+            let original_rows = items
                 .iter()
                 .map(|item| {
                     item.path
@@ -154,220 +155,109 @@ impl App {
                         .to_string_lossy()
                         .into_owned()
                 })
-                .collect();
+                .collect::<Vec<_>>();
             if new_rows == original_rows {
-                self.status = "No files renamed".to_string();
-                return Ok(());
+                return Ok(EditorRenameReview::Status("No files renamed".to_string()));
             }
 
             match build_rename_plan(&items, &new_rows, Some(&root)) {
                 Ok(plan) if plan.is_empty() => {
-                    self.status = "No files renamed".to_string();
+                    Ok(EditorRenameReview::Status("No files renamed".to_string()))
                 }
                 Ok(_) => {
-                    self.file_operations.editor_rename_confirm = Some(EditorRenameConfirmOverlay {
+                    self.editor_rename_confirm = Some(EditorRenameConfirmOverlay {
                         items,
                         new_names: new_rows,
                         root,
                         scroll: 0,
                         confirmed: true,
                     });
-                    self.status.clear();
+                    Ok(EditorRenameReview::Ready)
                 }
-                Err(errors) => {
-                    self.status = editor_validation_status(&errors);
-                }
+                Err(errors) => Ok(EditorRenameReview::Status(editor_validation_status(
+                    &errors,
+                ))),
             }
-            Ok(())
         })();
 
         let _ = fs::remove_file(&temp_path);
         result
     }
 
-    #[cfg(unix)]
-    fn editor_bulk_rename_targets(&self) -> Vec<PathBuf> {
-        if !self.file_browser.selected_paths.is_empty() {
-            return self.selected_paths_in_selection_order();
-        }
-        self.selected_entry()
-            .map(|entry| vec![entry.path.clone()])
-            .unwrap_or_default()
-    }
-
-    #[cfg(unix)]
-    fn close_transient_overlays(&mut self) {
-        self.overlays.help = false;
-        self.fuzzy_finder.search = None;
-        self.file_operations.create = None;
-        self.file_operations.rename = None;
-        self.file_operations.trash = None;
-        self.file_operations.restore = None;
-        self.file_operations.bulk_rename = None;
-        self.file_operations.editor_rename_confirm = None;
-    }
-
-    pub fn editor_rename_confirm_is_open(&self) -> bool {
-        self.file_operations.editor_rename_confirm.is_some()
-    }
-
-    pub fn editor_rename_confirm_count(&self) -> usize {
-        self.file_operations
-            .editor_rename_confirm
-            .as_ref()
-            .map_or(0, |overlay| overlay.items.len())
-    }
-
-    pub fn editor_rename_confirm_scroll(&self) -> usize {
-        self.file_operations
-            .editor_rename_confirm
-            .as_ref()
-            .map_or(0, |overlay| overlay.scroll)
-    }
-
-    pub fn editor_rename_confirm_row(&self, index: usize) -> Option<(String, String)> {
-        let overlay = self.file_operations.editor_rename_confirm.as_ref()?;
-        let item = overlay.items.get(index)?;
-        let old = item
-            .path
-            .strip_prefix(&overlay.root)
-            .unwrap_or(&item.path)
-            .to_string_lossy()
-            .into_owned();
-        let new = overlay.new_names.get(index)?.clone();
-        Some((old, new))
-    }
-
-    pub fn editor_rename_confirm_title(&self) -> String {
-        match self.editor_rename_confirm_count() {
-            1 => "Confirm rename?".to_string(),
-            count => format!("Confirm {count} renames?"),
-        }
-    }
-
-    pub fn editor_rename_confirmed(&self) -> bool {
-        self.file_operations
-            .editor_rename_confirm
-            .as_ref()
-            .is_some_and(|overlay| overlay.confirmed)
-    }
-
-    pub(crate) fn cancel_editor_rename_confirm(&mut self) {
-        self.file_operations.editor_rename_confirm = None;
-        self.status = "Editor rename cancelled".to_string();
-    }
-
-    pub(crate) fn scroll_editor_rename_confirm(&mut self, delta: isize) {
-        if let Some(overlay) = &mut self.file_operations.editor_rename_confirm {
-            let max_scroll = overlay.items.len().saturating_sub(1);
-            overlay.scroll = overlay.scroll.saturating_add_signed(delta).min(max_scroll);
-        }
-    }
-
-    pub(crate) fn confirm_editor_rename(&mut self) -> Result<()> {
-        let Some(overlay) = &self.file_operations.editor_rename_confirm else {
-            return Ok(());
+    pub(crate) fn confirm_editor_rename(&mut self) -> BulkRenameConfirmation {
+        let Some(overlay) = &self.editor_rename_confirm else {
+            return BulkRenameConfirmation::None;
         };
-        let root = overlay.root.clone();
-        let plan = match build_rename_plan(&overlay.items, &overlay.new_names, Some(&root)) {
+        let plan = match build_rename_plan(&overlay.items, &overlay.new_names, Some(&overlay.root))
+        {
             Ok(plan) => plan,
             Err(errors) => {
-                self.status = editor_validation_status(&errors);
-                return Ok(());
+                return BulkRenameConfirmation::Status(editor_validation_status(&errors));
             }
         };
-        let changed_old_paths: Vec<PathBuf> = plan.iter().map(|op| op.old_path.clone()).collect();
-        let reload_cwd = self
-            .current_directory_escape_for_paths(&changed_old_paths)
-            .unwrap_or_else(|| self.file_browser.cwd.clone());
-
-        let applied = match apply_rename_ops(&plan) {
-            Ok(applied) => applied,
-            Err(error) => {
-                self.status = error.to_string();
-                return Ok(());
+        match apply_rename_plan(&plan) {
+            Ok(completion) => {
+                self.editor_rename_confirm = None;
+                BulkRenameConfirmation::Applied(completion)
             }
-        };
-        let last_new_path = applied.last_new_path.clone();
-        let status = rename_status(&plan, &applied);
-        let duplicate_rename_pairs = plan
-            .iter()
-            .map(|op| (op.old_path.clone(), op.new_path.clone()))
-            .collect::<Vec<_>>();
+            Err(error) => BulkRenameConfirmation::Status(error.to_string()),
+        }
+    }
 
-        self.file_operations.editor_rename_confirm = None;
-        self.file_browser.selected_paths.clear();
-        self.apply_duplicate_rename_pairs(duplicate_rename_pairs);
-        self.queue_directory_load(PendingDirectoryLoad {
-            token: 0,
-            target_cwd: reload_cwd,
-            previous_cwd: self.file_browser.cwd.clone(),
-            previous_selected_path: None,
-            previous_selection_name: None,
-            reselect_path: last_new_path,
-            history_mode: DirectoryHistoryMode::None,
-            refresh_search: false,
-            completion: DirectoryLoadCompletion::Status(status),
-        })?;
-        Ok(())
+    #[cfg(unix)]
+    fn close_rename_overlays(&mut self) {
+        self.create = None;
+        self.rename = None;
+        self.trash = None;
+        self.restore = None;
+        self.bulk_rename = None;
+        self.editor_rename_confirm = None;
     }
 }
 
-pub(super) fn confirm_bulk_rename_overlay(app: &mut App) -> Result<()> {
-    let Some(r) = &app.file_operations.bulk_rename else {
-        return Ok(());
+pub(super) fn confirm_bulk_rename_overlay(
+    overlay: &mut Option<super::bulk_rename::BulkRenameOverlay>,
+) -> BulkRenameConfirmation {
+    let Some(rename) = overlay else {
+        return BulkRenameConfirmation::None;
     };
-
-    let root = r.root.clone();
-    let plan = build_rename_plan(&r.items, &r.new_names, root.as_deref());
-    if let Err(errors) = plan {
-        if let Some(err_line) = errors.iter().position(Option::is_some)
-            && let Some(r) = &mut app.file_operations.bulk_rename
-        {
-            r.line_errors = errors;
-            r.cursor_line = err_line;
-            r.cursor_col = r.cursor_col.min(r.new_names[err_line].chars().count());
-            r.preferred_col = r.cursor_col;
+    let plan = build_rename_plan(&rename.items, &rename.new_names, rename.root.as_deref());
+    let ops = match plan {
+        Ok(ops) => ops,
+        Err(errors) => {
+            if let Some(error_line) = errors.iter().position(Option::is_some) {
+                rename.line_errors = errors;
+                rename.cursor_line = error_line;
+                rename.cursor_col = rename
+                    .cursor_col
+                    .min(rename.new_names[error_line].chars().count());
+                rename.preferred_col = rename.cursor_col;
+            }
+            return BulkRenameConfirmation::None;
         }
-        return Ok(());
+    };
+    match apply_rename_plan(&ops) {
+        Ok(completion) => {
+            *overlay = None;
+            BulkRenameConfirmation::Applied(completion)
+        }
+        Err(error) => BulkRenameConfirmation::Status(error.to_string()),
     }
+}
 
-    let ops = plan.expect("rename plan was checked");
-    let changed_old_paths: Vec<PathBuf> = ops.iter().map(|op| op.old_path.clone()).collect();
-    let reload_cwd = app
-        .current_directory_escape_for_paths(&changed_old_paths)
-        .unwrap_or_else(|| app.file_browser.cwd.clone());
-
-    let applied = match apply_rename_ops(&ops) {
-        Ok(applied) => applied,
-        Err(error) => {
-            app.status = error.to_string();
-            return Ok(());
-        }
-    };
-    let last_new_path = applied.last_new_path.clone();
-    let status = rename_status(&ops, &applied);
+fn apply_rename_plan(ops: &[RenameOp]) -> Result<BulkRenameCompletion> {
+    let changed_old_paths = ops.iter().map(|op| op.old_path.clone()).collect();
     let duplicate_rename_pairs = ops
         .iter()
         .map(|op| (op.old_path.clone(), op.new_path.clone()))
-        .collect::<Vec<_>>();
-
-    app.file_operations.bulk_rename = None;
-    app.file_browser.selected_paths.clear();
-    app.apply_duplicate_rename_pairs(duplicate_rename_pairs);
-
-    app.queue_directory_load(PendingDirectoryLoad {
-        token: 0,
-        target_cwd: reload_cwd,
-        previous_cwd: app.file_browser.cwd.clone(),
-        previous_selected_path: None,
-        previous_selection_name: None,
-        reselect_path: last_new_path,
-        history_mode: DirectoryHistoryMode::None,
-        refresh_search: false,
-        completion: DirectoryLoadCompletion::Status(status),
-    })?;
-    Ok(())
+        .collect();
+    let applied = apply_rename_ops(ops)?;
+    Ok(BulkRenameCompletion {
+        changed_old_paths,
+        duplicate_rename_pairs,
+        reselect_path: applied.last_new_path.clone(),
+        status: rename_status(ops, &applied),
+    })
 }
 
 fn editor_validation_status(errors: &[Option<String>]) -> String {
@@ -812,3 +702,58 @@ fn split_program_args(tokens: Vec<String>) -> Option<(String, Vec<String>)> {
 #[cfg(test)]
 #[path = "tests/editor_bulk_rename_unit.rs"]
 mod tests;
+
+impl FileOperationsState {
+    pub fn editor_rename_confirm_is_open(&self) -> bool {
+        self.editor_rename_confirm.is_some()
+    }
+
+    pub fn editor_rename_confirm_count(&self) -> usize {
+        self.editor_rename_confirm
+            .as_ref()
+            .map_or(0, |overlay| overlay.items.len())
+    }
+
+    pub fn editor_rename_confirm_scroll(&self) -> usize {
+        self.editor_rename_confirm
+            .as_ref()
+            .map_or(0, |overlay| overlay.scroll)
+    }
+
+    pub fn editor_rename_confirm_row(&self, index: usize) -> Option<(String, String)> {
+        let overlay = self.editor_rename_confirm.as_ref()?;
+        let item = overlay.items.get(index)?;
+        let old = item
+            .path
+            .strip_prefix(&overlay.root)
+            .unwrap_or(&item.path)
+            .to_string_lossy()
+            .into_owned();
+        let new = overlay.new_names.get(index)?.clone();
+        Some((old, new))
+    }
+
+    pub fn editor_rename_confirm_title(&self) -> String {
+        match self.editor_rename_confirm_count() {
+            1 => "Confirm rename?".to_string(),
+            count => format!("Confirm {count} renames?"),
+        }
+    }
+
+    pub fn editor_rename_confirmed(&self) -> bool {
+        self.editor_rename_confirm
+            .as_ref()
+            .is_some_and(|overlay| overlay.confirmed)
+    }
+
+    pub(crate) fn dismiss_editor_rename_confirm(&mut self) {
+        self.editor_rename_confirm = None;
+    }
+
+    pub(crate) fn scroll_editor_rename_confirm(&mut self, delta: isize) {
+        if let Some(overlay) = &mut self.editor_rename_confirm {
+            let max_scroll = overlay.items.len().saturating_sub(1);
+            overlay.scroll = overlay.scroll.saturating_add_signed(delta).min(max_scroll);
+        }
+    }
+}

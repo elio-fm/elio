@@ -17,7 +17,8 @@ pub(crate) use archive_creation::{
 #[cfg(test)]
 pub(crate) use archive_extraction::ArchiveExtractBatchState;
 pub(crate) use archive_extraction::{
-    ArchiveExtractProgress, ArchiveExtractRequest, ArchivePasswordOverlay,
+    ArchiveExtractPreparation, ArchiveExtractProgress, ArchiveExtractRequest,
+    ArchivePasswordCancellation, ArchivePasswordConfirmation, ArchivePasswordOverlay,
 };
 pub(crate) use bulk_rename::{BulkRenameItem, BulkRenameOverlay};
 pub(crate) use copy_move::{
@@ -25,12 +26,18 @@ pub(crate) use copy_move::{
 };
 pub(crate) use copy_to_clipboard::CopyOverlay;
 pub(crate) use create::CreateOverlay;
+pub(crate) use editor_bulk_rename::{
+    BulkRenameConfirmation, EditorRenameConfirmOverlay, EditorRenameReview,
+};
 #[cfg(unix)]
-pub(crate) use editor_bulk_rename::BulkRenameEditorSession;
-pub(crate) use editor_bulk_rename::EditorRenameConfirmOverlay;
+pub(crate) use editor_bulk_rename::{BulkRenameEditorSession, EditorBulkRenameLaunch};
 pub(crate) use file_operations_state::FileOperationsState;
 pub(crate) use rename::RenameOverlay;
-pub(crate) use restore::{RestoreOverlay, RestoreProgress, RestoreRequest};
+pub(crate) use restore::{RestoreConfirmation, RestoreOverlay, RestoreProgress, RestoreRequest};
+pub(crate) use trash_delete::{
+    TrashConfirmation, TrashTargetScope, likely_cross_device_trash, trash_target_from_path,
+    trash_target_is_inside_trash, trash_target_scope,
+};
 pub(crate) use trash_delete::{TrashOverlay, TrashProgress, TrashRequest, TrashTarget};
 
 #[cfg(test)]

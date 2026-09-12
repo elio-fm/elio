@@ -17,7 +17,7 @@ fn yank_and_paste_copies_file_to_destination() {
     // Yank the selected entry.
     app.yank();
     assert_eq!(
-        app.clipboard_info(),
+        app.file_operations.clipboard_info(),
         Some((1, ClipOp::Yank)),
         "clipboard should hold the yanked path"
     );
@@ -29,16 +29,16 @@ fn yank_and_paste_copies_file_to_destination() {
 
     // paste() should immediately set up paste_progress.
     assert!(
-        app.paste_progress().is_some(),
+        app.file_operations.paste_progress().is_some(),
         "paste_progress should be set while paste is in flight"
     );
-    let (_, total, op) = app.paste_progress().unwrap();
+    let (_, total, op) = app.file_operations.paste_progress().unwrap();
     assert_eq!(total, 1);
     assert_eq!(op, ClipOp::Yank);
 
     // Clipboard is consumed immediately on paste().
     assert!(
-        app.clipboard_info().is_none(),
+        app.file_operations.clipboard_info().is_none(),
         "clipboard should be cleared after paste"
     );
 
@@ -149,7 +149,7 @@ fn cut_and_paste_moves_file_to_destination() {
     assert_eq!(app.file_browser.entries.len(), 1);
 
     app.cut();
-    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Cut)));
+    assert_eq!(app.file_operations.clipboard_info(), Some((1, ClipOp::Cut)));
 
     app.file_browser.cwd = dst_dir.clone();
     app.paste().unwrap();
@@ -181,7 +181,10 @@ fn yank_allows_selected_parent_of_current_directory() {
     app.yank();
 
     assert_eq!(app.status_message(), "");
-    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Yank)));
+    assert_eq!(
+        app.file_operations.clipboard_info(),
+        Some((1, ClipOp::Yank))
+    );
     assert!(app.file_browser.selected_paths.is_empty());
 
     fs::remove_dir_all(&root).unwrap();
@@ -200,7 +203,7 @@ fn cut_allows_selected_parent_of_current_directory() {
     app.cut();
 
     assert_eq!(app.status_message(), "");
-    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Cut)));
+    assert_eq!(app.file_operations.clipboard_info(), Some((1, ClipOp::Cut)));
     assert!(app.file_browser.selected_paths.is_empty());
 
     fs::remove_dir_all(&root).unwrap();
@@ -222,8 +225,11 @@ fn paste_refuses_folder_into_itself() {
     app.paste().unwrap();
 
     assert_eq!(app.status_message(), "Cannot paste a folder into itself");
-    assert!(app.paste_progress().is_none());
-    assert_eq!(app.clipboard_info(), Some((1, ClipOp::Yank)));
+    assert!(app.file_operations.paste_progress().is_none());
+    assert_eq!(
+        app.file_operations.clipboard_info(),
+        Some((1, ClipOp::Yank))
+    );
     assert!(!child.join("source").exists());
 
     fs::remove_dir_all(&root).unwrap();
@@ -256,7 +262,7 @@ fn paste_progress_reflects_total_and_is_cleared_after_completion() {
 
     // Immediately after paste() the progress should be live with total = 2.
     assert_eq!(
-        app.paste_progress().map(|(_, t, _)| t),
+        app.file_operations.paste_progress().map(|(_, t, _)| t),
         Some(2),
         "paste_progress total should match the number of yanked items"
     );
@@ -264,7 +270,7 @@ fn paste_progress_reflects_total_and_is_cleared_after_completion() {
     wait_for_paste(&mut app);
 
     assert!(
-        app.paste_progress().is_none(),
+        app.file_operations.paste_progress().is_none(),
         "paste_progress should be None after done"
     );
     assert!(dst_dir.join("a.txt").exists());
@@ -302,7 +308,7 @@ fn stale_token_paste_results_are_ignored() {
     }
 
     assert!(
-        app.paste_progress().is_none(),
+        app.file_operations.paste_progress().is_none(),
         "stale results must not update paste_progress"
     );
 
@@ -326,7 +332,7 @@ fn cancelling_paste_clears_progress_and_stops_worker() {
     app.paste().unwrap();
 
     assert!(
-        app.paste_progress().is_some(),
+        app.file_operations.paste_progress().is_some(),
         "progress should be live before cancel"
     );
 
@@ -336,7 +342,7 @@ fn cancelling_paste_clears_progress_and_stops_worker() {
     app.file_operations.paste_progress = None;
 
     assert!(
-        app.paste_progress().is_none(),
+        app.file_operations.paste_progress().is_none(),
         "progress should be gone immediately after cancel"
     );
 
@@ -350,7 +356,7 @@ fn cancelling_paste_clears_progress_and_stops_worker() {
     }
 
     assert!(
-        app.paste_progress().is_none(),
+        app.file_operations.paste_progress().is_none(),
         "paste_progress must stay None after cancel drain"
     );
 
@@ -427,7 +433,7 @@ fn yank_paste_then_yank_paste_queues_the_second_snapshot() {
     app.paste().unwrap();
 
     let token_after_first = app.file_operations.paste_token;
-    assert!(app.paste_progress().is_some());
+    assert!(app.file_operations.paste_progress().is_some());
 
     // Queue a second paste after changing both the source selection and the
     // destination directory.  The queued snapshot must preserve both.
@@ -545,8 +551,8 @@ fn queued_same_destination_pastes_defer_reload_until_queue_drains() {
         if app.file_operations.paste_token != first_token {
             queued_started = true;
             let reload_queued = app.file_browser.directory_runtime.pending_load.is_some();
-            let queue_drained =
-                app.paste_progress().is_none() && app.file_operations.queued_pastes.is_empty();
+            let queue_drained = app.file_operations.paste_progress().is_none()
+                && app.file_operations.queued_pastes.is_empty();
             assert!(
                 !reload_queued || queue_drained,
                 "reload should stay deferred until the queued paste to the same destination has finished"
@@ -600,7 +606,7 @@ fn esc_cancels_active_paste_and_clears_queued_pastes() {
     ))
     .unwrap();
 
-    assert!(app.paste_progress().is_none());
+    assert!(app.file_operations.paste_progress().is_none());
     assert!(
         app.file_operations.queued_pastes.is_empty(),
         "Esc should clear queued pastes as well as the active paste"
@@ -632,7 +638,7 @@ fn paste_with_empty_clipboard_sets_status_and_leaves_no_progress() {
     app.paste().unwrap();
 
     assert_eq!(app.status, "Nothing to paste");
-    assert!(app.paste_progress().is_none());
+    assert!(app.file_operations.paste_progress().is_none());
 
     fs::remove_dir_all(&dir).unwrap();
 }

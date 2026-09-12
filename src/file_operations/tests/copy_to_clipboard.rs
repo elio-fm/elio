@@ -10,13 +10,19 @@ fn copy_overlay_populates_expected_rows_for_selected_file() {
     let mut app = App::new_at(root.join("docs")).expect("failed to create app");
     app.open_copy_overlay();
 
-    assert!(app.copy_is_open(), "copy overlay should open");
-    assert_eq!(app.copy_title(), "Copy to clipboard");
-    assert_eq!(app.copy_row_count(), 4);
-    assert_eq!(app.copy_row_label(0), "Copy file name");
-    assert_eq!(app.copy_row_label(1), "Name without extension");
-    assert_eq!(app.copy_row_label(2), "File path");
-    assert_eq!(app.copy_row_label(3), "Directory path");
+    assert!(
+        app.file_operations.copy_is_open(),
+        "copy overlay should open"
+    );
+    assert_eq!(app.file_operations.copy_title(), "Copy to clipboard");
+    assert_eq!(app.file_operations.copy_row_count(), 4);
+    assert_eq!(app.file_operations.copy_row_label(0), "Copy file name");
+    assert_eq!(
+        app.file_operations.copy_row_label(1),
+        "Name without extension"
+    );
+    assert_eq!(app.file_operations.copy_row_label(2), "File path");
+    assert_eq!(app.file_operations.copy_row_label(3), "Directory path");
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -52,7 +58,7 @@ fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {
     );
     assert_eq!(app.status, "Copied file path");
     assert!(
-        !app.copy_is_open(),
+        !app.file_operations.copy_is_open(),
         "successful copy should close the overlay"
     );
 
@@ -94,7 +100,7 @@ fn copy_overlay_shortcut_uses_osc52_when_no_clipboard_tool_is_installed() {
     );
     assert_eq!(app.status, "Copied file path");
     assert!(
-        !app.copy_is_open(),
+        !app.file_operations.copy_is_open(),
         "successful copy should close the overlay"
     );
 
@@ -136,7 +142,7 @@ fn copy_overlay_shortcut_uses_osc52_in_alacritty_without_clipboard_tool() {
     );
     assert_eq!(app.status, "Copied file path");
     assert!(
-        !app.copy_is_open(),
+        !app.file_operations.copy_is_open(),
         "successful copy should close the overlay"
     );
 
@@ -178,7 +184,7 @@ fn copy_overlay_shortcut_uses_osc52_override_for_unknown_terminals() {
     );
     assert_eq!(app.status, "Copied file path");
     assert!(
-        !app.copy_is_open(),
+        !app.file_operations.copy_is_open(),
         "successful copy should close the overlay"
     );
 
@@ -251,7 +257,7 @@ fn copy_overlay_reports_short_error_when_no_clipboard_backend_is_available() {
 
     assert_eq!(app.status, "Clipboard helper not found");
     assert!(
-        app.copy_is_open(),
+        app.file_operations.copy_is_open(),
         "copy overlay should remain open when clipboard copy fails"
     );
 

@@ -1,9 +1,8 @@
+use super::FileOperationsState;
 use super::archive_extraction::{ArchivePasswordOverlay, ArchivePasswordPurpose};
-use crate::app::*;
 use crate::archive::{
     ArchiveEncryption, CreateArchiveFormat, CreateArchiveOptions, normalize_archive_output_name,
 };
-use anyhow::Result;
 use std::path::PathBuf;
 
 pub(crate) struct ArchiveCreateProgress {
@@ -31,295 +30,6 @@ pub(crate) struct ArchiveCreateOverlay {
     pub(crate) error: Option<String>,
 }
 
-impl App {
-    pub fn archive_create_progress(&self) -> Option<(usize, usize)> {
-        self.file_operations
-            .archive_create_progress
-            .as_ref()
-            .map(|progress| (progress.completed, progress.total))
-    }
-
-    pub fn archive_create_is_open(&self) -> bool {
-        self.file_operations.archive_create.is_some()
-    }
-
-    pub fn archive_create_input(&self) -> &str {
-        self.file_operations
-            .archive_create
-            .as_ref()
-            .map_or("", |overlay| overlay.input.as_str())
-    }
-
-    pub fn archive_create_cursor_col(&self) -> usize {
-        self.file_operations
-            .archive_create
-            .as_ref()
-            .map_or(0, |overlay| overlay.cursor_col)
-    }
-
-    pub fn archive_create_error(&self) -> Option<&str> {
-        self.file_operations
-            .archive_create
-            .as_ref()
-            .and_then(|overlay| overlay.error.as_deref())
-    }
-
-    pub fn archive_create_protection_label(&self) -> &'static str {
-        let Some(overlay) = &self.file_operations.archive_create else {
-            return "";
-        };
-        if overlay.options.encryption.is_password_set() {
-            "Password set"
-        } else {
-            ""
-        }
-    }
-
-    pub fn archive_create_protection_hint(&self) -> &'static str {
-        let Some(overlay) = &self.file_operations.archive_create else {
-            return "";
-        };
-        match archive_create_effective_format(overlay) {
-            Some(format) if format.supports_encryption() => {
-                if overlay.options.encryption.is_password_set() {
-                    "Alt+P change  Alt+R remove"
-                } else {
-                    "Alt+P add password"
-                }
-            }
-            Some(_) | None => {
-                if overlay.options.encryption.is_password_set() {
-                    "Switch format or remove"
-                } else {
-                    ""
-                }
-            }
-        }
-    }
-
-    pub fn archive_create_source_names(&self) -> &[String] {
-        self.file_operations
-            .archive_create
-            .as_ref()
-            .map_or(&[], |overlay| overlay.source_names.as_slice())
-    }
-
-    pub fn archive_create_title(&self) -> String {
-        let Some(overlay) = &self.file_operations.archive_create else {
-            return "Create archive".to_string();
-        };
-        let files = overlay
-            .source_names
-            .iter()
-            .filter(|name| !name.ends_with('/'))
-            .count();
-        let dirs = overlay.source_names.len().saturating_sub(files);
-        match (files, dirs) {
-            (1, 0) => "Create archive from 1 file".to_string(),
-            (0, 1) => "Create archive from 1 folder".to_string(),
-            (f, 0) => format!("Create archive from {f} files"),
-            (0, d) => format!("Create archive from {d} folders"),
-            (f, d) => format!(
-                "Create archive from {f} file{} and {d} folder{}",
-                if f == 1 { "" } else { "s" },
-                if d == 1 { "" } else { "s" },
-            ),
-        }
-    }
-
-    pub(crate) fn open_archive_create_prompt(&mut self) {
-        if self.file_operations.archive_create_progress.is_some() {
-            self.status = "Archive creation already in progress".to_string();
-            return;
-        }
-        let Some((sources, names, default_name)) = self.archive_create_targets() else {
-            self.status = "Select items to archive".to_string();
-            return;
-        };
-        self.overlays.help = false;
-        self.file_operations.trash = None;
-        self.file_operations.restore = None;
-        self.file_operations.archive_password = None;
-        self.file_operations.create = None;
-        self.file_operations.rename = None;
-        self.file_operations.bulk_rename = None;
-        self.overlays.goto = None;
-        self.file_operations.copy = None;
-        self.overlays.open_with = None;
-        self.fuzzy_finder.search = None;
-        let cursor_col = archive_create_default_cursor_col(&default_name);
-        self.file_operations.archive_create = Some(ArchiveCreateOverlay {
-            sources,
-            source_names: names,
-            source_scroll: 0,
-            cursor_col,
-            input: default_name,
-            options: CreateArchiveOptions::default(),
-            error: None,
-        });
-        self.status.clear();
-    }
-
-    fn archive_create_targets(&self) -> Option<(Vec<PathBuf>, Vec<String>, String)> {
-        if !self.file_browser.selected_paths.is_empty() {
-            let sources = self.selected_paths_sorted();
-            let names = sources
-                .iter()
-                .map(|path| archive_source_label(path))
-                .collect::<Vec<_>>();
-            return Some((sources, names, "archive.zip".to_string()));
-        }
-        let entry = self.selected_entry()?;
-        let name = entry.name.clone();
-        let default = format!("{name}.zip");
-        Some((
-            vec![entry.path.clone()],
-            vec![archive_source_label(&entry.path)],
-            default,
-        ))
-    }
-
-    pub fn archive_create_source_scroll(&self, visible_rows: usize) -> usize {
-        self.file_operations
-            .archive_create
-            .as_ref()
-            .map_or(0, |overlay| {
-                overlay
-                    .source_scroll
-                    .min(overlay.source_names.len().saturating_sub(visible_rows))
-            })
-    }
-
-    pub(crate) fn confirm_archive_create(&mut self) -> Result<()> {
-        let Some(overlay) = &self.file_operations.archive_create else {
-            return Ok(());
-        };
-        let (output_name, format) = match normalize_archive_output_name(&overlay.input) {
-            Ok(normalized) => normalized,
-            Err(error) => {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    overlay.error = Some(error.to_string());
-                }
-                return Ok(());
-            }
-        };
-        let sources = overlay.sources.clone();
-        let mut options = overlay.options.clone();
-        options.format = format;
-        if options.encryption.is_password_set() && !options.format.supports_encryption() {
-            if let Some(overlay) = &mut self.file_operations.archive_create {
-                overlay.error = None;
-            }
-            return Ok(());
-        }
-        if self.start_archive_create(sources, output_name, options)? {
-            self.file_operations.archive_create = None;
-        }
-        Ok(())
-    }
-
-    fn start_archive_create(
-        &mut self,
-        sources: Vec<PathBuf>,
-        output_name: String,
-        options: CreateArchiveOptions,
-    ) -> Result<bool> {
-        if self.file_operations.archive_create_progress.is_some() {
-            self.status = "Archive creation already in progress".to_string();
-            return Ok(false);
-        }
-        if let Err(error) = crate::archive::plan_create_archive(
-            &self.file_browser.cwd,
-            sources.clone(),
-            &output_name,
-            options.clone(),
-        ) {
-            if let Some(overlay) = &mut self.file_operations.archive_create {
-                overlay.error = Some(error.to_string());
-            } else {
-                self.status = error.to_string();
-            }
-            return Ok(false);
-        }
-
-        let token = self.file_operations.archive_create_token.wrapping_add(1);
-        self.file_operations.archive_create_token = token;
-        self.file_operations.archive_create_progress = Some(ArchiveCreateProgress {
-            completed: 0,
-            total: 0,
-        });
-        self.file_operations.archive_create_source_cwd = Some(self.file_browser.cwd.clone());
-        self.file_operations.archive_create_path = Some(self.file_browser.cwd.join(&output_name));
-        self.status.clear();
-
-        let submitted = self
-            .job_scheduler
-            .submit_archive_create(ArchiveCreateRequest {
-                token,
-                cwd: self.file_browser.cwd.clone(),
-                sources,
-                output_name,
-                options,
-            });
-        if !submitted {
-            self.file_operations.archive_create_progress = None;
-            self.file_operations.archive_create_source_cwd = None;
-            self.file_operations.archive_create_path = None;
-            self.status = "Archive creation already in progress".to_string();
-            return Ok(false);
-        }
-        self.clear_selection();
-        Ok(true)
-    }
-
-    pub(crate) fn open_archive_create_password_prompt(&mut self) {
-        let Some(overlay) = &self.file_operations.archive_create else {
-            return;
-        };
-        let password_set = overlay.options.encryption.is_password_set();
-        let Some(format) = archive_create_effective_format(overlay) else {
-            if !password_set {
-                self.show_archive_password_format_hint();
-            }
-            return;
-        };
-        if !format.supports_encryption() {
-            if !password_set {
-                self.show_archive_password_format_hint();
-            }
-            return;
-        }
-        let input = match &overlay.options.encryption {
-            ArchiveEncryption::Password(password) => password.as_str().to_string(),
-            ArchiveEncryption::None => String::new(),
-        };
-        let cursor_col = input.chars().count();
-        self.file_operations.archive_password = Some(ArchivePasswordOverlay {
-            purpose: ArchivePasswordPurpose::Create,
-            input,
-            cursor_col,
-            visible: false,
-            error: None,
-        });
-    }
-
-    fn show_archive_password_format_hint(&mut self) {
-        if let Some(overlay) = &mut self.file_operations.archive_create {
-            overlay.error = Some("Use ZIP or 7Z for passwords".to_string());
-        }
-    }
-
-    pub(crate) fn remove_archive_create_password(&mut self) {
-        if let Some(overlay) = &mut self.file_operations.archive_create
-            && overlay.options.encryption.is_password_set()
-        {
-            overlay.options.encryption = ArchiveEncryption::None;
-            overlay.error = None;
-            self.status = "Archive password removed".to_string();
-        }
-    }
-}
-
 fn archive_create_default_cursor_col(name: &str) -> usize {
     let base = name.strip_suffix(".zip").unwrap_or(name);
     base.chars().count()
@@ -343,4 +53,236 @@ fn archive_source_label(path: &std::path::Path) -> String {
         name.push('/');
     }
     name
+}
+
+impl FileOperationsState {
+    pub(crate) fn open_archive_create_prompt(
+        &mut self,
+        sources: Vec<PathBuf>,
+        default_name: String,
+    ) {
+        let source_names = sources
+            .iter()
+            .map(|path| archive_source_label(path))
+            .collect();
+        self.trash = None;
+        self.restore = None;
+        self.archive_password = None;
+        self.create = None;
+        self.rename = None;
+        self.bulk_rename = None;
+        self.copy = None;
+        self.archive_create = Some(ArchiveCreateOverlay {
+            sources,
+            source_names,
+            source_scroll: 0,
+            cursor_col: archive_create_default_cursor_col(&default_name),
+            input: default_name,
+            options: CreateArchiveOptions::default(),
+            error: None,
+        });
+    }
+
+    pub(crate) fn confirm_archive_create(
+        &mut self,
+        cwd: &std::path::Path,
+    ) -> Option<ArchiveCreateRequest> {
+        let overlay = self.archive_create.as_ref()?;
+        let (output_name, format) = match normalize_archive_output_name(&overlay.input) {
+            Ok(normalized) => normalized,
+            Err(error) => {
+                if let Some(overlay) = &mut self.archive_create {
+                    overlay.error = Some(error.to_string());
+                }
+                return None;
+            }
+        };
+        let sources = overlay.sources.clone();
+        let mut options = overlay.options.clone();
+        options.format = format;
+        if options.encryption.is_password_set() && !options.format.supports_encryption() {
+            if let Some(overlay) = &mut self.archive_create {
+                overlay.error = None;
+            }
+            return None;
+        }
+        if let Err(error) =
+            crate::archive::plan_create_archive(cwd, sources.clone(), &output_name, options.clone())
+        {
+            if let Some(overlay) = &mut self.archive_create {
+                overlay.error = Some(error.to_string());
+            }
+            return None;
+        }
+        let token = self.archive_create_token.wrapping_add(1);
+        self.archive_create_token = token;
+        self.archive_create_progress = Some(ArchiveCreateProgress {
+            completed: 0,
+            total: 0,
+        });
+        self.archive_create_source_cwd = Some(cwd.to_path_buf());
+        self.archive_create_path = Some(cwd.join(&output_name));
+        Some(ArchiveCreateRequest {
+            token,
+            cwd: cwd.to_path_buf(),
+            sources,
+            output_name,
+            options,
+        })
+    }
+
+    pub(crate) fn accept_archive_create_submission(&mut self) {
+        self.archive_create = None;
+    }
+
+    pub(crate) fn reject_archive_create_submission(&mut self) {
+        self.archive_create_progress = None;
+        self.archive_create_source_cwd = None;
+        self.archive_create_path = None;
+    }
+
+    pub(crate) fn open_archive_create_password_prompt(&mut self) {
+        let Some(overlay) = &self.archive_create else {
+            return;
+        };
+        let password_set = overlay.options.encryption.is_password_set();
+        let Some(format) = archive_create_effective_format(overlay) else {
+            if !password_set {
+                self.show_archive_password_format_hint();
+            }
+            return;
+        };
+        if !format.supports_encryption() {
+            if !password_set {
+                self.show_archive_password_format_hint();
+            }
+            return;
+        }
+        let input = match &overlay.options.encryption {
+            ArchiveEncryption::Password(password) => password.as_str().to_string(),
+            ArchiveEncryption::None => String::new(),
+        };
+        self.archive_password = Some(ArchivePasswordOverlay {
+            purpose: ArchivePasswordPurpose::Create,
+            cursor_col: input.chars().count(),
+            input,
+            visible: false,
+            error: None,
+        });
+    }
+
+    fn show_archive_password_format_hint(&mut self) {
+        if let Some(overlay) = &mut self.archive_create {
+            overlay.error = Some("Use ZIP or 7Z for passwords".to_string());
+        }
+    }
+
+    pub(crate) fn remove_archive_create_password(&mut self) -> bool {
+        if let Some(overlay) = &mut self.archive_create
+            && overlay.options.encryption.is_password_set()
+        {
+            overlay.options.encryption = ArchiveEncryption::None;
+            overlay.error = None;
+            return true;
+        }
+        false
+    }
+
+    pub fn archive_create_progress(&self) -> Option<(usize, usize)> {
+        self.archive_create_progress
+            .as_ref()
+            .map(|progress| (progress.completed, progress.total))
+    }
+
+    pub fn archive_create_is_open(&self) -> bool {
+        self.archive_create.is_some()
+    }
+
+    pub fn archive_create_input(&self) -> &str {
+        self.archive_create
+            .as_ref()
+            .map_or("", |overlay| overlay.input.as_str())
+    }
+
+    pub fn archive_create_cursor_col(&self) -> usize {
+        self.archive_create
+            .as_ref()
+            .map_or(0, |overlay| overlay.cursor_col)
+    }
+
+    pub fn archive_create_error(&self) -> Option<&str> {
+        self.archive_create
+            .as_ref()
+            .and_then(|overlay| overlay.error.as_deref())
+    }
+
+    pub fn archive_create_protection_label(&self) -> &'static str {
+        let Some(overlay) = &self.archive_create else {
+            return "";
+        };
+        if overlay.options.encryption.is_password_set() {
+            "Password set"
+        } else {
+            ""
+        }
+    }
+
+    pub fn archive_create_protection_hint(&self) -> &'static str {
+        let Some(overlay) = &self.archive_create else {
+            return "";
+        };
+        match archive_create_effective_format(overlay) {
+            Some(format) if format.supports_encryption() => {
+                if overlay.options.encryption.is_password_set() {
+                    "Alt+P change  Alt+R remove"
+                } else {
+                    "Alt+P add password"
+                }
+            }
+            Some(_) | None => {
+                if overlay.options.encryption.is_password_set() {
+                    "Switch format or remove"
+                } else {
+                    ""
+                }
+            }
+        }
+    }
+
+    pub fn archive_create_source_names(&self) -> &[String] {
+        self.archive_create
+            .as_ref()
+            .map_or(&[], |overlay| overlay.source_names.as_slice())
+    }
+
+    pub fn archive_create_title(&self) -> String {
+        let Some(overlay) = &self.archive_create else {
+            return "Create archive".to_string();
+        };
+        let files = overlay
+            .source_names
+            .iter()
+            .filter(|name| !name.ends_with('/'))
+            .count();
+        let dirs = overlay.source_names.len().saturating_sub(files);
+        match (files, dirs) {
+            (1, 0) => "Create archive from 1 file".to_string(),
+            (0, 1) => "Create archive from 1 folder".to_string(),
+            (f, 0) => format!("Create archive from {f} files"),
+            (0, d) => format!("Create archive from {d} folders"),
+            (f, d) => format!(
+                "Create archive from {f} file{} and {d} folder{}",
+                if f == 1 { "" } else { "s" },
+                if d == 1 { "" } else { "s" },
+            ),
+        }
+    }
+
+    pub fn archive_create_source_scroll(&self, visible_rows: usize) -> usize {
+        self.archive_create.as_ref().map_or(0, |overlay| {
+            overlay
+                .source_scroll
+                .min(overlay.source_names.len().saturating_sub(visible_rows))
+        })
+    }
 }

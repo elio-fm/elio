@@ -1,5 +1,4 @@
-use crate::app::App;
-use anyhow::Result;
+use super::FileOperationsState;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
@@ -33,152 +32,158 @@ pub(crate) struct TrashOverlay {
     pub(crate) permanent: bool,
 }
 
-impl App {
-    pub(crate) fn cwd_is_trash(&self) -> bool {
-        self.file_browser.in_trash
-    }
+pub(crate) enum TrashConfirmation {
+    None,
+    InProgress { permanent: bool },
+    Targets(TrashOverlay),
+}
 
-    /// Returns `true` when the current directory is *inside* a trashed folder
-    /// (i.e. a subdirectory of the trash root, but not the root itself).
-    pub(crate) fn cwd_is_inside_trash_subfolder(&self) -> bool {
-        crate::elevated_session::trash_home_dir()
-            .and_then(|home| crate::places::trash_dir(&home))
-            .is_some_and(|trash| {
-                self.file_browser.cwd != trash && self.file_browser.cwd.starts_with(&trash)
-            })
-    }
+pub(crate) fn trash_target_from_path(path: PathBuf) -> TrashTarget {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(str::to_owned)
+        .unwrap_or_else(|| path.display().to_string());
+    let is_dir = path.is_dir();
+    TrashTarget { path, name, is_dir }
+}
 
-    pub(crate) fn path_is_trash(path: &Path) -> bool {
-        crate::elevated_session::trash_home_dir()
-            .and_then(|home| crate::places::trash_dir(&home))
-            .is_some_and(|trash| path == trash)
-    }
+pub(crate) enum TrashTargetScope {
+    Normal,
+    Trash,
+    Mixed,
+}
 
-    pub(crate) fn path_is_inside_trash(path: &Path) -> bool {
-        crate::elevated_session::trash_home_dir()
-            .and_then(|home| crate::places::trash_dir(&home))
-            .is_some_and(|trash| path.starts_with(&trash))
-    }
-
-    pub(crate) fn effective_show_hidden(&self) -> bool {
-        self.file_browser.show_hidden || self.file_browser.in_trash
-    }
-
-    pub(crate) fn effective_show_hidden_for(&self, path: &Path) -> bool {
-        self.file_browser.show_hidden || Self::path_is_trash(path)
+pub(crate) fn trash_target_scope(
+    targets: &[TrashTarget],
+    cwd: &Path,
+    cwd_is_trash: bool,
+) -> TrashTargetScope {
+    let has_trash = targets
+        .iter()
+        .any(|target| trash_target_is_inside_trash(&target.path, cwd, cwd_is_trash));
+    let has_normal = targets
+        .iter()
+        .any(|target| !trash_target_is_inside_trash(&target.path, cwd, cwd_is_trash));
+    match (has_trash, has_normal) {
+        (true, true) => TrashTargetScope::Mixed,
+        (true, false) => TrashTargetScope::Trash,
+        _ => TrashTargetScope::Normal,
     }
 }
 
-impl App {
-    pub(super) fn selected_trash_targets(&self) -> Vec<TrashTarget> {
-        if !self.file_browser.selected_paths.is_empty() {
-            self.selected_paths_sorted()
-                .into_iter()
-                .map(trash_target_from_path)
-                .collect()
+pub(crate) fn trash_target_is_inside_trash(path: &Path, cwd: &Path, cwd_is_trash: bool) -> bool {
+    crate::places::path_is_inside_trash(path) || (cwd_is_trash && path.starts_with(cwd))
+}
+
+/// Returns `true` when the first trash target appears to be on a different
+/// device than `dirs::data_dir()` (i.e. `~/.local/share` on Linux), which is
+/// where the home trash typically lives.
+///
+/// This is a best-effort heuristic.  The freedesktop trash spec may use a
+/// per-mount `.Trash-UID` directory instead of the home trash, so false
+/// positives are possible — in that case the user sees "Copying to trash…"
+/// briefly before the fast rename completes.  The heuristic is UI-only and
+/// never affects behaviour.
+#[cfg(unix)]
+pub(crate) fn likely_cross_device_trash(targets: &[TrashTarget]) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let source_dev = targets
+        .first()
+        .and_then(|t| std::fs::metadata(&t.path).ok())
+        .map(|m| m.dev());
+    let data_dev = dirs::data_dir()
+        .and_then(|d| std::fs::metadata(&d).ok())
+        .map(|m| m.dev());
+    match (source_dev, data_dev) {
+        (Some(s), Some(d)) => s != d,
+        _ => false,
+    }
+}
+
+impl FileOperationsState {
+    pub(crate) fn open_trash_prompt(&mut self, targets: Vec<TrashTarget>, permanent: bool) {
+        self.create = None;
+        self.trash = Some(TrashOverlay {
+            targets,
+            scroll: 0,
+            confirmed: true,
+            permanent,
+        });
+    }
+
+    pub(crate) fn trash_target_label_at(&self, cwd: &Path, index: usize) -> Option<String> {
+        let target = self
+            .trash
+            .as_ref()
+            .and_then(|trash| trash.targets.get(index))?;
+        if self.trash.as_ref().is_some_and(|trash| {
+            trash
+                .targets
+                .iter()
+                .any(|target| target.path.parent() != Some(cwd))
+        }) {
+            Some(target.path.display().to_string())
         } else {
-            self.selected_entry()
-                .map(|entry| {
-                    vec![TrashTarget {
-                        path: entry.path.clone(),
-                        name: entry.name.clone(),
-                        is_dir: entry.is_dir(),
-                    }]
-                })
-                .unwrap_or_default()
+            Some(target.name.clone())
         }
     }
 
-    pub(crate) fn open_trash_prompt(&mut self) {
-        let targets = self.selected_trash_targets();
-
-        if targets.is_empty() {
-            return;
+    pub(crate) fn take_trash_confirmation(&mut self) -> TrashConfirmation {
+        if let Some(progress) = &self.trash_progress {
+            let permanent = progress.permanent;
+            self.trash = None;
+            return TrashConfirmation::InProgress { permanent };
         }
-
-        match self.trash_target_scope(&targets) {
-            TrashTargetScope::Normal => self.open_trash_prompt_for_targets(targets, false),
-            TrashTargetScope::Trash => self.open_trash_prompt_for_targets(targets, true),
-            TrashTargetScope::Mixed => {
-                self.status = "Selection mixes trash and normal files".to_string();
-            }
+        match self.trash.take() {
+            Some(overlay) if !overlay.targets.is_empty() => TrashConfirmation::Targets(overlay),
+            _ => TrashConfirmation::None,
         }
     }
 
-    pub(crate) fn open_delete_permanently_prompt(&mut self) {
-        let targets = self.selected_trash_targets();
-
-        if targets.is_empty() {
-            return;
-        }
-
-        self.open_trash_prompt_for_targets(targets, true);
-    }
-
-    pub(crate) fn open_trash_prompt_for_explicit_targets(
+    pub(crate) fn start_trash(
         &mut self,
-        targets: Vec<TrashTarget>,
-        permanent: bool,
-    ) {
-        self.overlays.help = false;
-        self.fuzzy_finder.search = None;
-        self.file_operations.create = None;
-        self.file_operations.trash = Some(TrashOverlay {
-            targets,
-            scroll: 0,
-            confirmed: true,
-            permanent,
+        overlay: TrashOverlay,
+        source_cwd: PathBuf,
+        next_selection: Option<PathBuf>,
+        duplicate_session_open: bool,
+    ) -> TrashRequest {
+        let duplicate_targets = duplicate_session_open.then(|| {
+            overlay
+                .targets
+                .iter()
+                .map(|target| target.path.clone())
+                .collect()
         });
-    }
-
-    fn open_trash_prompt_for_targets(&mut self, targets: Vec<TrashTarget>, permanent: bool) {
-        self.overlays.help = false;
-        self.fuzzy_finder.search = None;
-        self.duplicate_finder.session = None;
-        self.file_operations.create = None;
-        self.file_operations.trash = Some(TrashOverlay {
-            targets,
-            scroll: 0,
-            confirmed: true,
-            permanent,
+        let token = self.trash_token.wrapping_add(1);
+        self.trash_token = token;
+        self.trash_progress = Some(TrashProgress {
+            completed: 0,
+            total: overlay.targets.len(),
+            permanent: overlay.permanent,
+            duplicate_targets,
+            next_selection,
         });
-    }
-
-    fn trash_target_scope(&self, targets: &[TrashTarget]) -> TrashTargetScope {
-        let has_trash = targets
-            .iter()
-            .any(|target| self.trash_target_is_inside_trash(&target.path));
-        let has_normal = targets
-            .iter()
-            .any(|target| !self.trash_target_is_inside_trash(&target.path));
-
-        match (has_trash, has_normal) {
-            (true, true) => TrashTargetScope::Mixed,
-            (true, false) => TrashTargetScope::Trash,
-            _ => TrashTargetScope::Normal,
+        self.trash_source_cwd = Some(source_cwd);
+        TrashRequest {
+            token,
+            targets: overlay.targets,
+            permanent: overlay.permanent,
         }
-    }
-
-    pub(crate) fn trash_target_is_inside_trash(&self, path: &Path) -> bool {
-        Self::path_is_inside_trash(path)
-            || (self.file_browser.in_trash && path.starts_with(&self.file_browser.cwd))
     }
 
     pub fn trash_is_open(&self) -> bool {
-        self.file_operations.trash.is_some()
+        self.trash.is_some()
     }
 
-    /// Returns `(completed, total, permanent)` for an in-progress
-    /// trash/delete, or `None` when idle.
     pub fn trash_progress(&self) -> Option<(usize, usize, bool)> {
-        self.file_operations
-            .trash_progress
+        self.trash_progress
             .as_ref()
             .map(|p| (p.completed, p.total, p.permanent))
     }
 
     pub fn trash_title(&self) -> String {
-        let Some(t) = &self.file_operations.trash else {
+        let Some(t) = &self.trash else {
             return String::new();
         };
         let verb = if t.permanent {
@@ -214,182 +219,32 @@ impl App {
     }
 
     pub fn trash_scroll(&self) -> usize {
-        self.file_operations.trash.as_ref().map_or(0, |t| t.scroll)
+        self.trash.as_ref().map_or(0, |t| t.scroll)
     }
 
     pub fn trash_target_count(&self) -> usize {
-        self.file_operations
-            .trash
-            .as_ref()
-            .map_or(0, |t| t.targets.len())
+        self.trash.as_ref().map_or(0, |t| t.targets.len())
     }
 
     pub fn trash_visible_rows(&self) -> usize {
         self.trash_target_count().min(8)
     }
 
-    pub fn trash_target_label_at(&self, index: usize) -> Option<String> {
-        let target = self
-            .file_operations
-            .trash
-            .as_ref()
-            .and_then(|t| t.targets.get(index))?;
-
-        if self.trash_targets_need_path_labels() {
-            Some(target.path.display().to_string())
-        } else {
-            Some(target.name.clone())
-        }
-    }
-
-    fn trash_targets_need_path_labels(&self) -> bool {
-        self.file_operations.trash.as_ref().is_some_and(|t| {
-            t.targets
-                .iter()
-                .any(|target| target.path.parent() != Some(self.file_browser.cwd.as_path()))
-        })
-    }
-
     pub fn trash_target_path_at(&self, index: usize) -> Option<&std::path::Path> {
-        self.file_operations
-            .trash
+        self.trash
             .as_ref()
             .and_then(|t| t.targets.get(index))
             .map(|target| target.path.as_path())
     }
 
     pub fn trash_target_is_dir_at(&self, index: usize) -> bool {
-        self.file_operations
-            .trash
+        self.trash
             .as_ref()
             .and_then(|t| t.targets.get(index))
             .is_some_and(|target| target.is_dir)
     }
 
     pub fn trash_confirmed(&self) -> bool {
-        self.file_operations
-            .trash
-            .as_ref()
-            .is_some_and(|t| t.confirmed)
-    }
-
-    pub(crate) fn confirm_trash(&mut self) -> Result<()> {
-        if let Some(prog) = &self.file_operations.trash_progress {
-            self.status = if prog.permanent {
-                "Delete in progress — press Esc to cancel".to_string()
-            } else {
-                // Batched trash is a single atomic OS call that cannot be
-                // reliably interrupted once started.
-                "Trash in progress".to_string()
-            };
-            self.file_operations.trash = None;
-            return Ok(());
-        }
-        let Some(t) = self.file_operations.trash.take() else {
-            return Ok(());
-        };
-        if t.targets.is_empty() {
-            return Ok(());
-        }
-        let duplicate_targets = self
-            .duplicate_finder
-            .session
-            .is_some()
-            .then(|| t.targets.iter().map(|target| target.path.clone()).collect());
-        self.file_browser.selected_paths.clear();
-        let target_paths: Vec<PathBuf> =
-            t.targets.iter().map(|target| target.path.clone()).collect();
-        let source_cwd = self.queue_directory_escape_for_paths(&target_paths)?;
-
-        // Compute which entry to land on after deletion: first surviving entry
-        // at or after the current cursor, falling back to the last surviving
-        // entry before it.
-        let deleted_paths: std::collections::HashSet<_> =
-            t.targets.iter().map(|tgt| &tgt.path).collect();
-        let next_selection = self
-            .file_browser
-            .entries
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| !deleted_paths.contains(&e.path))
-            .find(|(i, _)| *i >= self.file_browser.selected)
-            .or_else(|| {
-                self.file_browser
-                    .entries
-                    .iter()
-                    .enumerate()
-                    .rfind(|(_, e)| !deleted_paths.contains(&e.path))
-            })
-            .map(|(_, e)| e.path.clone());
-
-        let token = self.file_operations.trash_token.wrapping_add(1);
-        self.file_operations.trash_token = token;
-        self.file_operations.trash_progress = Some(TrashProgress {
-            completed: 0,
-            total: t.targets.len(),
-            permanent: t.permanent,
-            duplicate_targets,
-            next_selection,
-        });
-        self.file_operations.trash_source_cwd = Some(source_cwd.clone());
-
-        // Best-effort cross-device detection: if the source appears to be on a
-        // different device than the home data dir (where the trash usually lives),
-        // the trash crate will fall back to a copy+delete instead of a fast
-        // rename.  Show a more informative status in that case.  This is UI-only
-        // — behaviour is unchanged regardless of the heuristic's outcome.
-        #[cfg(unix)]
-        if !t.permanent && likely_cross_device_trash(&t.targets) {
-            self.status = "Copying to trash…".to_string();
-        }
-
-        self.job_scheduler.submit_trash(TrashRequest {
-            token,
-            targets: t.targets,
-            permanent: t.permanent,
-        });
-
-        Ok(())
-    }
-}
-
-fn trash_target_from_path(path: PathBuf) -> TrashTarget {
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(str::to_owned)
-        .unwrap_or_else(|| path.display().to_string());
-    let is_dir = path.is_dir();
-    TrashTarget { path, name, is_dir }
-}
-
-enum TrashTargetScope {
-    Normal,
-    Trash,
-    Mixed,
-}
-
-/// Returns `true` when the first trash target appears to be on a different
-/// device than `dirs::data_dir()` (i.e. `~/.local/share` on Linux), which is
-/// where the home trash typically lives.
-///
-/// This is a best-effort heuristic.  The freedesktop trash spec may use a
-/// per-mount `.Trash-UID` directory instead of the home trash, so false
-/// positives are possible — in that case the user sees "Copying to trash…"
-/// briefly before the fast rename completes.  The heuristic is UI-only and
-/// never affects behaviour.
-#[cfg(unix)]
-fn likely_cross_device_trash(targets: &[TrashTarget]) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    let source_dev = targets
-        .first()
-        .and_then(|t| std::fs::metadata(&t.path).ok())
-        .map(|m| m.dev());
-    let data_dev = dirs::data_dir()
-        .and_then(|d| std::fs::metadata(&d).ok())
-        .map(|m| m.dev());
-    match (source_dev, data_dev) {
-        (Some(s), Some(d)) => s != d,
-        _ => false,
+        self.trash.as_ref().is_some_and(|t| t.confirmed)
     }
 }

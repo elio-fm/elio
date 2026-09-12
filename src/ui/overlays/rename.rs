@@ -18,7 +18,7 @@ pub(in crate::ui) fn render_rename_overlay(
     state: &mut ScreenRegions,
     palette: Palette,
 ) {
-    let original = app.rename_original_name();
+    let original = app.file_operations.rename_original_name();
     let block_title = format!(" Rename \"{}\" ", helpers::clamp_label(original, 30));
     let popup_width = area.width.saturating_sub(8).clamp(40, 64);
     let popup_height = 6u16;
@@ -46,11 +46,14 @@ pub(in crate::ui) fn render_rename_overlay(
         vertical: 1,
     });
 
-    let input = app.rename_input();
-    let cursor_col = app.rename_cursor_col();
+    let input = app.file_operations.rename_input();
+    let cursor_col = app.file_operations.rename_cursor_col();
 
-    let is_dir = app.rename_item_is_dir();
-    let live_path = app.file_browser.cwd.join(app.rename_input());
+    let is_dir = app.file_operations.rename_item_is_dir();
+    let live_path = app
+        .file_browser
+        .cwd
+        .join(app.file_operations.rename_input());
     let (icon, icon_color) = (
         theme::path_symbol(&live_path, is_dir),
         theme::path_color(&live_path, is_dir, palette),
@@ -92,7 +95,7 @@ pub(in crate::ui) fn render_rename_overlay(
         .min(input_area.x + input_area.width.saturating_sub(1));
     frame.set_cursor_position((cursor_x, input_area.y));
 
-    if let Some(error) = app.rename_error() {
+    if let Some(error) = app.file_operations.rename_error() {
         frame.render_widget(
             Paragraph::new(Line::from(vec![Span::styled(
                 helpers::clamp_label(error, rows[1].width.saturating_sub(2) as usize),
