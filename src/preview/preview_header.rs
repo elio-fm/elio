@@ -1,16 +1,17 @@
-use super::*;
-use crate::preview::{PreviewKind, PreviewLineCoverage};
+use super::{PreviewKind, PreviewLineCoverage};
+use crate::fs::{format_item_count, format_size, sanitize_terminal_text};
+use crate::preview::state::{PreviewDirectoryStatsState, PreviewRuntime};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 const FITTED_HEADER_SEPARATOR: &str = " • ";
 const FREEFORM_COMPACT_WIDTH: usize = 18;
-const HEADER_SCORE_NAVIGATION: u32 = 12_000;
+pub(super) const HEADER_SCORE_NAVIGATION: u32 = 12_000;
 const HEADER_SCORE_STATUS: u32 = 9_000;
-const HEADER_SCORE_DETAIL: u32 = 8_000;
+pub(super) const HEADER_SCORE_DETAIL: u32 = 8_000;
 const HEADER_SCORE_LINE_COVERAGE: u32 = 7_000;
-const HEADER_SCORE_TITLE: u32 = 3_500;
-const HEADER_SCORE_CONTEXT: u32 = 2_000;
-const HEADER_SCORE_AUXILIARY: u32 = 500;
+pub(super) const HEADER_SCORE_TITLE: u32 = 3_500;
+pub(super) const HEADER_SCORE_CONTEXT: u32 = 2_000;
+pub(super) const HEADER_SCORE_AUXILIARY: u32 = 500;
 
 #[derive(Clone, Debug)]
 pub(super) struct PreviewHeaderSegment {
@@ -24,7 +25,7 @@ struct PreviewHeaderVariant {
 }
 
 impl PreviewHeaderSegment {
-    fn new(weight: u32, full: String, compact: Option<String>) -> Self {
+    pub(super) fn new(weight: u32, full: String, compact: Option<String>) -> Self {
         let mut variants = vec![PreviewHeaderVariant {
             text: Some(full.clone()),
             score: weight + 20,
@@ -45,10 +46,28 @@ impl PreviewHeaderSegment {
     }
 }
 
-impl App {
-    pub(super) fn preview_header_segments(&self, visible_rows: usize) -> Vec<PreviewHeaderSegment> {
+impl PreviewRuntime {
+    pub(crate) fn header_detail_for_width(
+        &self,
+        visible_rows: usize,
+        visible_cols: usize,
+        pdf_detail: Option<&str>,
+        image_detail: Option<&str>,
+        available_width: usize,
+    ) -> Option<String> {
+        let segments = self.header_segments(visible_rows, visible_cols, pdf_detail, image_detail);
+        fit_preview_header_segments(&segments, available_width)
+    }
+
+    fn header_segments(
+        &self,
+        visible_rows: usize,
+        visible_cols: usize,
+        pdf_detail: Option<&str>,
+        image_detail: Option<&str>,
+    ) -> Vec<PreviewHeaderSegment> {
         let mut segments = Vec::new();
-        let content = &self.preview.state.content;
+        let content = &self.state.content;
         let directory_stats_detail = self.preview_directory_stats_header_detail();
         let directory_stats_note = self.preview_directory_stats_status_note();
 
@@ -67,8 +86,13 @@ impl App {
             ));
         }
 
-        if let Some(segment) = self.pdf_preview_header_segment() {
-            segments.push(segment);
+        if let Some(full) = pdf_detail {
+            let compact = full.strip_prefix("Page ").map(str::to_string);
+            segments.push(PreviewHeaderSegment::new(
+                HEADER_SCORE_NAVIGATION,
+                full.to_string(),
+                compact,
+            ));
         }
 
         if let Some((full, compact)) = directory_stats_detail.clone() {
@@ -154,8 +178,8 @@ impl App {
             } else if !has_primary_parts && content.kind != PreviewKind::Directory {
                 let rendered_total = content.total_lines();
                 if rendered_total > 0 {
-                    let start = self.preview.state.scroll.saturating_add(1);
-                    let end = (self.preview.state.scroll + visible_rows.max(1)).min(rendered_total);
+                    let start = self.state.scroll.saturating_add(1);
+                    let end = (self.state.scroll + visible_rows.max(1)).min(rendered_total);
                     let range = if rendered_total > visible_rows.max(1) {
                         format!("{start}-{end} / {rendered_total}")
                     } else {
@@ -172,10 +196,10 @@ impl App {
             ));
         }
 
-        if let Some(image_detail) = self.static_image_preview_header_detail() {
+        if let Some(image_detail) = image_detail {
             segments.push(PreviewHeaderSegment::new(
                 HEADER_SCORE_CONTEXT,
-                image_detail,
+                image_detail.to_string(),
                 None,
             ));
         }
@@ -185,9 +209,9 @@ impl App {
                 content.kind == PreviewKind::Directory && directory_stats_detail.is_none();
             let wrapped_note = if content.truncation_note.is_none()
                 && !suppress_directory_truncation_note
-                && self.input.frame_state.preview_cols_visible > 0
+                && visible_cols > 0
             {
-                content.wrapped_truncation_note(self.input.frame_state.preview_cols_visible)
+                content.wrapped_truncation_note(visible_cols)
             } else {
                 None
             };
@@ -221,24 +245,11 @@ impl App {
         segments
     }
 
-    fn pdf_preview_header_segment(&self) -> Option<PreviewHeaderSegment> {
-        let full = self.pdf_preview_header_detail()?;
-        let compact = full.strip_prefix("Page ").map(str::to_string);
-
-        Some(PreviewHeaderSegment::new(
-            HEADER_SCORE_NAVIGATION,
-            full,
-            compact,
-        ))
-    }
-
     fn preview_directory_stats_header_detail(&self) -> Option<(String, Option<String>)> {
-        if self.preview.state.content.kind != PreviewKind::Directory
-            || self.preview.state.load_state.is_some()
-        {
+        if self.state.content.kind != PreviewKind::Directory || self.state.load_state.is_some() {
             return None;
         }
-        match self.preview.state.directory_stats.as_ref()? {
+        match self.state.directory_stats.as_ref()? {
             PreviewDirectoryStatsState::Loading { .. } => None,
             PreviewDirectoryStatsState::Complete { stats, .. } => {
                 let size = format_size(stats.total_size_bytes);
@@ -265,12 +276,10 @@ impl App {
     }
 
     fn preview_directory_stats_status_note(&self) -> Option<(String, Option<String>)> {
-        if self.preview.state.content.kind != PreviewKind::Directory
-            || self.preview.state.load_state.is_some()
-        {
+        if self.state.content.kind != PreviewKind::Directory || self.state.load_state.is_some() {
             return None;
         }
-        match self.preview.state.directory_stats.as_ref()? {
+        match self.state.directory_stats.as_ref()? {
             PreviewDirectoryStatsState::Loading { .. } => None,
             PreviewDirectoryStatsState::Complete { .. } => None,
             PreviewDirectoryStatsState::Incomplete { error, .. } => {
@@ -359,7 +368,7 @@ fn fallback_preview_header_segment(segments: &[PreviewHeaderSegment]) -> Option<
         .map(|(_, label)| label)
 }
 
-fn compact_preview_header_label(label: &str) -> Option<String> {
+pub(super) fn compact_preview_header_label(label: &str) -> Option<String> {
     let compact = match label {
         "Comic ZIP archive" => "CBZ".to_string(),
         "Comic RAR archive" => "CBR".to_string(),
@@ -477,7 +486,7 @@ fn format_header_count(count: usize) -> String {
 }
 
 #[cfg(test)]
-fn compact_preview_header_note(note: &str) -> Option<String> {
+pub(super) fn compact_preview_header_note(note: &str) -> Option<String> {
     let compact = note
         .split("  •  ")
         .map(|part| compact_preview_header_note_part(part).unwrap_or_else(|| part.to_string()))
@@ -578,101 +587,4 @@ fn clamp_header_text(text: &str, max_width: usize) -> String {
     }
     result.push('…');
     result
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn header_segment(weight: u32, full: &str, compact: Option<&str>) -> PreviewHeaderSegment {
-        PreviewHeaderSegment::new(weight, full.to_string(), compact.map(str::to_string))
-    }
-
-    #[test]
-    fn fitted_preview_header_prefers_compact_type_and_drops_auxiliary_notes() {
-        let detail = header_segment(HEADER_SCORE_DETAIL, "Rust source file", Some("Rust"));
-        let lines = header_segment(HEADER_SCORE_CONTEXT, "300 lines", Some("300l"));
-        let truncated = header_segment(
-            HEADER_SCORE_AUXILIARY,
-            "truncated to 64 KiB",
-            Some("64 KiB cap"),
-        );
-
-        let fitted = fit_preview_header_segments(&[detail, lines, truncated], 20);
-
-        assert_eq!(fitted.as_deref(), Some("Rust • 300 lines"));
-    }
-
-    #[test]
-    fn fitted_preview_header_keeps_navigation_before_optional_title() {
-        let navigation = header_segment(HEADER_SCORE_NAVIGATION, "Section 2/14", Some("2/14"));
-        let detail = header_segment(HEADER_SCORE_DETAIL, "EPUB ebook", Some("EPUB"));
-        let title = header_segment(
-            HEADER_SCORE_TITLE,
-            "The Boy From The Wastes",
-            Some("The Boy From The…"),
-        );
-
-        let fitted = fit_preview_header_segments(&[navigation, detail, title], 14);
-
-        assert_eq!(fitted.as_deref(), Some("2/14 • EPUB"));
-    }
-
-    #[test]
-    fn compact_preview_header_note_shortens_common_truncation_phrases() {
-        let line_limit = crate::preview::default_code_preview_line_limit();
-        let note = format!("truncated to 64 KiB  •  showing first {line_limit} lines");
-        let expected = format!("64 KiB cap • {line_limit}-line cap");
-        assert_eq!(
-            compact_preview_header_note(&note).as_deref(),
-            Some(expected.as_str())
-        );
-    }
-
-    #[test]
-    fn compact_preview_header_note_shortens_directory_items_shown() {
-        let line_limit = crate::preview::default_code_preview_line_limit();
-        let note = format!("{line_limit} items shown");
-        let expected = format!("{line_limit} shown");
-        assert_eq!(
-            compact_preview_header_note(&note).as_deref(),
-            Some(expected.as_str())
-        );
-    }
-
-    #[test]
-    fn compact_preview_header_label_shortens_comic_rar_archive() {
-        assert_eq!(
-            compact_preview_header_label("Comic RAR archive").as_deref(),
-            Some("CBR")
-        );
-    }
-
-    #[test]
-    fn fitted_preview_header_clamps_fallback_segment_when_nothing_fits() {
-        let detail = header_segment(HEADER_SCORE_DETAIL, "Rust source file", Some("Rust"));
-        let line_limit = crate::preview::default_code_preview_line_limit();
-        let full = format!("{line_limit} lines shown");
-        let compact = format!("{line_limit} shown");
-        let lines = header_segment(HEADER_SCORE_CONTEXT, full.as_str(), Some(compact.as_str()));
-
-        let fitted = fit_preview_header_segments(&[detail, lines], 3);
-
-        assert_eq!(fitted.as_deref(), Some("Ru…"));
-    }
-
-    #[test]
-    fn fitted_preview_header_prefers_directory_item_count_over_items_shown_when_narrow() {
-        let detail = header_segment(
-            HEADER_SCORE_DETAIL,
-            "4,240 items • 90 MB",
-            Some("4,240 items"),
-        );
-        let truncation =
-            header_segment(HEADER_SCORE_AUXILIARY, "800 items shown", Some("800 shown"));
-
-        let fitted = fit_preview_header_segments(&[detail, truncation], 11);
-
-        assert_eq!(fitted.as_deref(), Some("4,240 items"));
-    }
 }

@@ -13,6 +13,7 @@ mod markdown;
 mod plain_text;
 mod preview_building;
 mod preview_content;
+mod preview_header;
 mod state;
 mod structured_text;
 mod tabular_data;

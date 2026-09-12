@@ -95,7 +95,14 @@ impl App {
         visible_rows: usize,
         available_width: usize,
     ) -> Option<String> {
-        let segments = self.preview_header_segments(visible_rows);
-        super::header::fit_preview_header_segments(&segments, available_width)
+        let pdf_detail = self.pdf_preview_header_detail();
+        let image_detail = self.static_image_preview_header_detail();
+        self.preview.header_detail_for_width(
+            visible_rows,
+            self.input.frame_state.preview_cols_visible,
+            pdf_detail.as_deref(),
+            image_detail.as_deref(),
+            available_width,
+        )
     }
 }
