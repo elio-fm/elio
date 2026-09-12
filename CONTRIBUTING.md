@@ -49,13 +49,13 @@ A brief overview of the repository layout:
 │   ├── input_handling/         # Keyboard, mouse, paste, and wheel interaction handling
 │   ├── opening/                # Open rules, application launching, and Open With discovery
 │   ├── places/                 # Places list and mounted-device discovery
-│   ├── preview/                # Preview construction, document/image processing, and tests
+│   ├── preview/                # Preview construction and format-specific processing
 │   ├── shell_integration/      # Shell scripts and install/uninstall support
 │   ├── terminal_images/        # Terminal detection, image protocols, placement, and geometry
 │   ├── terminal_runtime/       # Terminal lifecycle, drawing, input acquisition, and session output
 │   ├── theme/                  # Theme loading and item styling
-│   ├── ui/                     # Terminal rendering, layout, overlays, and interaction
-│   ├── lib.rs                  # Public library API entrypoints
+│   ├── ui/                     # Terminal rendering, panes, overlays, and layout
+│   ├── lib.rs                  # Public library API and startup orchestration
 │   └── main.rs                 # Binary entrypoint
 ├── tests/                      # Integration tests and architecture guardrails
 ├── build.rs                    # Build-time asset preparation
@@ -96,6 +96,8 @@ cargo test --locked --test architecture_guardrails
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
+rustup target add i686-unknown-linux-gnu
+cargo check --locked --target i686-unknown-linux-gnu
 ```
 
 ## Pull Requests

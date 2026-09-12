@@ -3,6 +3,7 @@
 This crate is organized around focused subsystems.
 
 - `cli` and `shell_integration`: command-line behavior and shell setup.
+- `config`: configuration loading, validation, and key bindings.
 - `filesystem` and `file_classification`: filesystem access and file, format, and code-language
   identification.
 - `file_browser`: current-directory state, loading, navigation, selection, filtering, and item
@@ -13,17 +14,18 @@ This crate is organized around focused subsystems.
 - `chooser`: chooser-mode selection, confirmed or cancelled outcome, and selected-path output.
 - `fuzzy_finder` and `duplicate_finder`: feature state and behavior for finding items.
 - `goto_menu`: configured Go To entries and destination resolution.
+- `places`: configured places and mounted-device discovery.
 - `input_handling`: application-level keyboard, mouse, paste, and wheel interpretation.
 - `archive` and `opening`: archive operations and launching items with applications.
-- `preview`: preview construction plus document and image inspection, preparation, and rendering.
+- `preview`: preview construction plus format-specific inspection, preparation, and rendering.
 - `theme`: palettes and file appearance rules shared by rendered interfaces.
 - `app`: remaining cross-subsystem state, preview coordination, actions, and application of
   background-job results.
 - `elevated_session`: privileged filesystem operations through sudo or doas.
 - `terminal_images`: terminal detection, image protocols, placement, clearing, and geometry.
-- `terminal_runtime`: application startup, terminal lifecycle, raw input acquisition, event loop,
-  drawing, and session output.
-- `ui`: terminal rendering and layout.
+- `terminal_runtime`: terminal lifecycle, raw input acquisition, event loop, drawing, and session
+  output.
+- `ui`: terminal rendering, panes, overlays, and layout.
 
 Current boundary rules:
 
@@ -43,6 +45,8 @@ Current boundary rules:
   background jobs, navigation, and side effects.
 - Chooser selection resolution and output belong to `chooser`; `app` only supplies the current
   browser selection and coordinates application exit.
+- Top-level startup orchestration initializes `config` and `theme` before handing control to
+  `terminal_runtime`.
 - Raw Crossterm and Kitty input acquisition belongs to `terminal_runtime`; mapping those events to
   Elio behavior belongs to `input_handling`.
 - `filesystem` and `file_classification` should not depend on `app`.
@@ -53,8 +57,8 @@ Current boundary rules:
   `app/preview` code coordinates that state with application navigation and terminal presentation.
 - `preview` should not reach into `theme` directly. The explicit adapter boundary for theme
   access is `src/preview/appearance.rs`.
-- `app` owns behavior; it should not be the home for generic data model types that other
-  layers need.
+- `app` owns cross-subsystem coordination; generic data model types belong to the narrowest
+  subsystem responsible for them.
 
-These rules are enforced by the architecture guardrail test and CI. Keep this document focused on
-rules that the codebase actually follows and that tooling can check.
+Key dependency rules are enforced by the architecture guardrail test and CI. Keep this document
+focused on boundaries the codebase actually follows.

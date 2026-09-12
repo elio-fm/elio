@@ -149,8 +149,8 @@ pub struct App {
     pub(crate) should_quit: bool,
     pub(crate) should_change_directory_on_quit: bool,
     pub(crate) chooser: ChooserState,
-    /// Set by features that need direct terminal control.  The event loop in
-    /// `lib.rs` drains this, suspends the TUI, runs the task, then restores the TUI.
+    /// Set by features that need direct terminal control. The terminal runtime
+    /// drains this, suspends the TUI, runs the task, then restores the TUI.
     pub(crate) pending_terminal_task: Option<PendingTerminalTask>,
 }
 

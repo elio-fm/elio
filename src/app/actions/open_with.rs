@@ -126,7 +126,7 @@ impl App {
     ///
     /// `launch_app` is called only for GUI apps (`requires_terminal == false`).
     /// Terminal apps set `pending_terminal_task` on `self` directly so that
-    /// the caller in `lib.rs` can suspend the TUI before running them.
+    /// the terminal runtime can suspend the TUI before running them.
     pub(crate) fn handle_discovered_open_with_apps<F, G>(
         &mut self,
         path: &Path,
