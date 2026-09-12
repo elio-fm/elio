@@ -1,30 +1,9 @@
 use super::*;
-use crate::preview::{self, preview_work_class};
-use std::{
-    path::PathBuf,
-    time::{Instant, SystemTime},
-};
+use crate::preview::{self, ComicSession, preview_work_class};
+use std::time::Instant;
 
 const COMIC_PAGE_PREFETCH_OFFSETS: [isize; 3] = [1, 2, -1];
 const COMIC_ENTRY_PREFETCH_OFFSETS: [isize; 2] = [1, -1];
-
-#[derive(Clone, Debug, Default)]
-pub(in crate::app) struct ComicPreviewState {
-    session: Option<ComicSession>,
-    /// Path of the comic file whose page image is currently displayed in the
-    /// inline overlay.  Set when a page image is rendered so we can decide
-    /// whether to keep or clear the stale overlay when the selection changes.
-    displayed_page_source: Option<PathBuf>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct ComicSession {
-    path: PathBuf,
-    size: u64,
-    modified: Option<SystemTime>,
-    current_page: usize,
-    total_pages: Option<usize>,
-}
 
 impl App {
     pub(in crate::app) fn sync_comic_preview_selection(&mut self) {

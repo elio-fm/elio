@@ -1,4 +1,4 @@
-use super::types::StaticImagePreloadViewport;
+use super::StaticImagePreloadViewport;
 use super::{StaticImageKey, StaticImageOverlayRequest};
 use crate::app::{App, jobs};
 use crate::background_jobs::job_results as background_job_results;

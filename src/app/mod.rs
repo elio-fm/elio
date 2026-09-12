@@ -38,6 +38,9 @@ use crate::background_jobs::job_requests::{
 #[cfg(unix)]
 pub(crate) use crate::background_jobs::run_user_trash_helper;
 pub(crate) use crate::file_operations::ClipOp;
+#[cfg(test)]
+pub(in crate::app) use crate::preview::PreviewDirectoryStatsState;
+pub(in crate::app) use crate::preview::{PreviewLoadState, PreviewRefreshMode};
 use anyhow::Result;
 #[cfg(test)]
 use ratatui::layout::Rect;
@@ -49,15 +52,15 @@ use std::{
 
 pub use self::state::App;
 
-#[cfg(unix)]
-#[cfg(test)]
-pub use self::state::PreviewMetricsSnapshot;
 pub(crate) use self::state::{ChooserExit, DuplicateRow, PendingTerminalTask};
 pub(crate) use crate::file_classification::FileClass;
 pub(crate) use crate::fs::{
     format_item_count, format_size, format_size_parts, format_time_ago, rect_contains,
     sanitize_terminal_text,
 };
+#[cfg(unix)]
+#[cfg(test)]
+pub use crate::preview::PreviewMetricsSnapshot;
 
 pub use self::types::{
     CopyHit, DuplicateHit, EntryHit, FrameState, GoToHit, OpenWithHit, PathHit, SearchHit,

@@ -12,6 +12,7 @@ mod markdown;
 mod plain_text;
 mod preview_building;
 mod preview_content;
+mod state;
 mod structured_text;
 mod tabular_data;
 mod text_rendering;
@@ -38,6 +39,15 @@ pub(crate) use self::preview_content::{
     MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT, PreviewContent, PreviewKind, PreviewLineCoverage,
     PreviewRequestOptions, PreviewVisual, PreviewVisualKind, PreviewVisualLayout, PreviewWorkClass,
     clamp_code_preview_line_limit, default_code_preview_line_limit,
+};
+#[cfg(test)]
+pub use self::state::PreviewMetricsSnapshot;
+pub(crate) use self::state::{
+    CachedPreview, ComicSession, DisplayedPdfPreview, DisplayedStaticImagePreview, EpubSession,
+    OverlayPresentState, PdfDocumentKey, PdfOverlayRequest, PdfPageKey, PdfSession,
+    PreparedStaticImage, PreviewCacheKey, PreviewDirectoryStatsState, PreviewLineCountKey,
+    PreviewLoadState, PreviewRefreshMode, PreviewRuntime, StaticImageOverlayMode,
+    StaticImageOverlayPreparation, StaticImageOverlayRequest, StaticImagePreloadViewport,
 };
 pub(crate) use self::text_rendering::{expand_tabs, line_number_span, line_number_width};
 

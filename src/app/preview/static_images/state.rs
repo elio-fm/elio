@@ -2,13 +2,12 @@ use super::{
     StaticImageKey, StaticImageOverlayMode, StaticImageOverlayRequest, image_target_height_px,
     image_target_width_px, static_image_detail_label,
 };
-use crate::app::state::PreviewLoadState;
 use crate::app::{App, Entry};
-use crate::preview;
 use crate::preview::images::{
     StaticImageFormat, static_image_can_prepare_inline, static_image_format_for_cached_path,
     static_image_format_for_path, static_image_supports_iterm_source_passthrough,
 };
+use crate::preview::{self, PreviewLoadState};
 use crate::terminal_runtime::terminal_images::{ImageProtocol, command_exists};
 use ratatui::layout::Rect;
 use std::time::{Duration, Instant};

@@ -2,20 +2,22 @@ mod cache;
 mod preload;
 mod present;
 mod state;
-mod types;
 
 use super::super::*;
 use crate::{
     preview::images::read_raster_dimensions, terminal_runtime::terminal_images::read_png_dimensions,
 };
 
-pub(in crate::app) use self::types::{
-    ImagePreviewState, PreparedStaticImage, StaticImageOverlayMode, StaticImageOverlayPreparation,
-    StaticImageOverlayRequest,
-};
 pub(crate) use crate::preview::images::{
     SixelDcsKey, StaticImageKey, image_target_height_px, image_target_width_px,
     static_image_detail_label,
+};
+pub(in crate::app::preview::static_images) use crate::preview::{
+    DisplayedStaticImagePreview, StaticImagePreloadViewport,
+};
+pub(in crate::app) use crate::preview::{
+    PreparedStaticImage, StaticImageOverlayMode, StaticImageOverlayPreparation,
+    StaticImageOverlayRequest,
 };
 
 const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 64;

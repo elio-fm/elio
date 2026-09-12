@@ -1,26 +1,9 @@
 use super::*;
 use crate::file_classification::{self, DocumentFormat};
-use crate::preview::{self, preview_work_class};
-use std::{
-    path::PathBuf,
-    time::{Instant, SystemTime},
-};
+use crate::preview::{self, EpubSession, preview_work_class};
+use std::time::Instant;
 
 const EPUB_SECTION_PREFETCH_OFFSETS: [isize; 3] = [1, 2, -1];
-
-#[derive(Clone, Debug, Default)]
-pub(in crate::app) struct EpubPreviewState {
-    session: Option<EpubSession>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct EpubSession {
-    path: PathBuf,
-    size: u64,
-    modified: Option<SystemTime>,
-    current_section: usize,
-    total_sections: Option<usize>,
-}
 
 impl App {
     pub(in crate::app) fn sync_epub_preview_selection(&mut self) {

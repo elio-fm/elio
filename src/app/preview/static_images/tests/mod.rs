@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::preview::terminal_image_previews::OverlayPresentState;
+use crate::preview::OverlayPresentState;
 use crate::terminal_runtime::terminal_images::{
     ImageProtocol, RenderedImageDimensions, TerminalIdentity, TerminalWindowSize,
 };
@@ -593,7 +593,7 @@ fn kitty_resize_requests_full_screen_clear_for_displayed_overlay() {
     let (mut app, root, _image_path) =
         build_selected_static_image_app("kitty-resize-clear", "demo.png");
     let request = ready_static_image_overlay(&mut app);
-    app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+    app.preview.image.displayed = Some(DisplayedStaticImagePreview::from_request(
         &request,
         request.area,
         request.area,
@@ -621,7 +621,7 @@ fn iterm_resize_requests_full_screen_clear_for_displayed_overlay() {
         build_selected_static_image_app("iterm-resize-clear", "demo.png");
     let request = ready_static_image_overlay(&mut app);
     app.preview.terminal_images.protocol = ImageProtocol::ItermInline;
-    app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+    app.preview.image.displayed = Some(DisplayedStaticImagePreview::from_request(
         &request,
         request.area,
         request.area,
@@ -642,7 +642,7 @@ fn konsole_resize_does_not_request_full_screen_clear() {
         build_selected_static_image_app("konsole-resize-no-clear", "demo.png");
     let request = ready_static_image_overlay(&mut app);
     app.preview.terminal_images.protocol = ImageProtocol::KittyDirectGraphics;
-    app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+    app.preview.image.displayed = Some(DisplayedStaticImagePreview::from_request(
         &request,
         request.area,
         request.area,
@@ -662,7 +662,7 @@ fn sixel_resize_requests_full_screen_clear_for_displayed_overlay() {
         build_selected_static_image_app("sixel-resize-clear", "demo.png");
     let request = ready_static_image_overlay(&mut app);
     app.preview.terminal_images.protocol = ImageProtocol::Sixel;
-    app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+    app.preview.image.displayed = Some(DisplayedStaticImagePreview::from_request(
         &request,
         request.area,
         request.area,
@@ -964,7 +964,7 @@ fn foot_sixel_focus_gain_with_popup_does_not_clear_displayed_image_without_resiz
     app.handle_terminal_image_focus_gained();
     assert!(!app.take_pending_resize_clear());
 
-    app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+    app.preview.image.displayed = Some(DisplayedStaticImagePreview::from_request(
         &request,
         request.area,
         request.area,
@@ -990,7 +990,7 @@ fn foot_sixel_resize_under_popup_repaints_image_behind_modal() {
         build_selected_static_image_app("foot-sixel-resize-popup", "demo.png");
     let request = ready_static_image_overlay(&mut app);
     app.set_terminal_image_protocol_for_tests(ImageProtocol::Sixel, TerminalIdentity::Foot);
-    app.preview.image.displayed = Some(types::DisplayedStaticImagePreview::from_request(
+    app.preview.image.displayed = Some(DisplayedStaticImagePreview::from_request(
         &request,
         request.area,
         request.area,
