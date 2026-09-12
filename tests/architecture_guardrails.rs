@@ -35,6 +35,11 @@ fn file_classification_does_not_depend_on_app() {
 }
 
 #[test]
+fn file_browser_does_not_depend_on_app() {
+    assert_tree_has_no_pattern("src/file_browser", "app::", &[]);
+}
+
+#[test]
 fn fuzzy_finder_does_not_depend_on_app() {
     assert_tree_has_no_pattern("src/fuzzy_finder", "app::", &[]);
 }

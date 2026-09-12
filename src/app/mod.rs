@@ -20,7 +20,6 @@ use self::constants::*;
 #[cfg(test)]
 pub(crate) use self::state::DuplicateFinderOverlay;
 use self::state::*;
-pub(crate) use self::state::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
 pub(crate) use self::text_edit::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
@@ -37,6 +36,12 @@ use crate::background_jobs::job_requests::{
 };
 #[cfg(unix)]
 pub(crate) use crate::background_jobs::run_user_trash_helper;
+#[cfg(test)]
+pub(crate) use crate::file_browser::HistoryEntry;
+pub(crate) use crate::file_browser::{
+    DirectoryHistoryMode, DirectoryLoadCompletion, DirectoryViewMemory, LocalFilter,
+    PendingDirectoryFingerprintScan, PendingDirectoryLoad, SelectionChange,
+};
 pub(crate) use crate::file_operations::ClipOp;
 #[cfg(test)]
 pub(in crate::app) use crate::preview::PreviewDirectoryStatsState;
@@ -64,8 +69,9 @@ pub use crate::preview::PreviewMetricsSnapshot;
 
 pub use self::types::{
     CopyHit, DuplicateHit, EntryHit, FrameState, GoToHit, OpenWithHit, PathHit, SearchHit,
-    SearchRow, SearchScope, ViewMetrics, ViewMode,
+    SearchRow, SearchScope, ViewMetrics,
 };
+pub use crate::file_browser::ViewMode;
 pub use crate::fs::{Entry, EntryKind};
 #[cfg(test)]
 pub use crate::places::PlaceItem;
@@ -111,11 +117,11 @@ impl App {
     }
 
     pub fn selected_entry(&self) -> Option<&Entry> {
-        self.navigation.entries.get(self.navigation.selected)
+        self.file_browser.selected_entry()
     }
 
     pub fn has_pending_auto_reload(&self) -> bool {
-        self.navigation
+        self.file_browser
             .directory_runtime
             .pending_reload_at
             .is_some()

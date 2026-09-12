@@ -205,8 +205,12 @@ fn pasted_text_updates_bulk_rename_prompt_at_active_row() {
     fs::write(root.join("beta.txt"), "beta").expect("failed to write beta");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(root.join("alpha.txt"));
-    app.navigation.selected_paths.insert(root.join("beta.txt"));
+    app.file_browser
+        .selected_paths
+        .insert(root.join("alpha.txt"));
+    app.file_browser
+        .selected_paths
+        .insert(root.join("beta.txt"));
     app.open_bulk_rename_prompt();
 
     app.handle_event(Event::Paste("renamed-".to_string()))
@@ -272,7 +276,7 @@ fn app_with_offscreen_selected_dir(label: &str) -> (PathBuf, PathBuf, App) {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(offscreen.clone());
+    app.file_browser.selected_paths.insert(offscreen.clone());
     app.set_dir(child).expect("entering child should succeed");
     wait_for_directory_load(&mut app);
 
@@ -290,9 +294,9 @@ fn app_with_trash_and_normal_selection(label: &str) -> (PathBuf, App) {
 
     let mut app = App::new_at(trash_root).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.in_trash = true;
-    app.navigation.selected_paths.insert(trashed);
-    app.navigation.selected_paths.insert(normal);
+    app.file_browser.in_trash = true;
+    app.file_browser.selected_paths.insert(trashed);
+    app.file_browser.selected_paths.insert(normal);
 
     (root, app)
 }
@@ -307,7 +311,7 @@ fn app_in_empty_dir_with_offscreen_file(label: &str) -> (PathBuf, PathBuf, App) 
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(file_path.clone());
+    app.file_browser.selected_paths.insert(file_path.clone());
     app.set_dir(empty)
         .expect("entering empty dir should succeed");
     wait_for_directory_load(&mut app);
@@ -321,13 +325,13 @@ fn minus_zooms_grid_when_no_yanked_clipboard() {
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::Grid;
-    app.navigation.zoom_level = 1;
+    app.file_browser.view_mode = ViewMode::Grid;
+    app.file_browser.zoom_level = 1;
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('-'))))
         .expect("minus should zoom out without a yanked clipboard");
 
-    assert_eq!(app.navigation.zoom_level, 0);
+    assert_eq!(app.file_browser.zoom_level, 0);
     assert_eq!(app.status_message(), "Grid zoom set to 0");
 
     fs::remove_dir_all(&root).unwrap();
@@ -347,15 +351,15 @@ fn minus_links_yanked_paths_in_grid_view() {
     let mut app = App::new_at(source_dir.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
     app.yank();
-    app.navigation.cwd = dest_dir.clone();
-    app.navigation.view_mode = ViewMode::Grid;
-    app.navigation.zoom_level = 1;
+    app.file_browser.cwd = dest_dir.clone();
+    app.file_browser.view_mode = ViewMode::Grid;
+    app.file_browser.zoom_level = 1;
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('-'))))
         .expect("minus should link with a yanked clipboard");
 
     assert_eq!(fs::read_link(dest_dir.join("note.txt")).unwrap(), source);
-    assert_eq!(app.navigation.zoom_level, 1);
+    assert_eq!(app.file_browser.zoom_level, 1);
     assert_eq!(app.status_message(), "Created symlink \"note.txt\"");
 
     fs::remove_dir_all(&root).unwrap();
@@ -375,7 +379,7 @@ fn f2_renames_outside_trash_but_not_inside_trash() {
     assert!(app.rename_is_open());
     app.overlays.rename = None;
 
-    app.navigation.in_trash = true;
+    app.file_browser.in_trash = true;
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::F(2))))
         .expect("F2 should be ignored in trash");
     assert!(!app.rename_is_open());
@@ -398,7 +402,7 @@ fn r_renames_outside_trash_and_restores_inside_trash() {
     assert!(app.rename_is_open());
     app.overlays.rename = None;
 
-    app.navigation.in_trash = true;
+    app.file_browser.in_trash = true;
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('r'))))
         .expect("r should open restore inside trash");
     assert!(!app.rename_is_open());
@@ -503,10 +507,10 @@ fn fullscreen_preview_ignores_hidden_browser_actions_but_keeps_preview_controls(
     fs::write(&beta, "beta").expect("failed to write beta");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     wait_for_directory_load(&mut app);
     let alpha_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == alpha)
@@ -536,7 +540,7 @@ fn fullscreen_preview_ignores_hidden_browser_actions_but_keeps_preview_controls(
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('s'))))
         .expect("sort should be ignored in fullscreen preview");
-    assert_eq!(app.navigation.selected_paths.len(), 0);
+    assert_eq!(app.file_browser.selected_paths.len(), 0);
     assert!(app.preview_fullscreen());
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('?'))))
@@ -554,12 +558,12 @@ fn fullscreen_preview_ignores_hidden_browser_actions_but_keeps_preview_controls(
     )))
     .expect("preview scroll should work in fullscreen preview");
     assert!(app.preview.state.scroll > 0);
-    assert_eq!(app.navigation.selected, alpha_index);
+    assert_eq!(app.file_browser.selected, alpha_index);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('j'))))
         .expect("j should navigate inside fullscreen preview");
     assert!(app.preview_fullscreen());
-    assert_eq!(app.navigation.selected, alpha_index + 1);
+    assert_eq!(app.file_browser.selected, alpha_index + 1);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -588,13 +592,13 @@ fn fullscreen_preview_preserves_browser_viewport_to_avoid_exit_flicker() {
         ..FrameState::default()
     });
     let logo_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == root.join("logo.png"))
         .expect("logo should be visible");
     app.select_index(logo_index);
-    assert_eq!(app.navigation.scroll_row, 0);
+    assert_eq!(app.file_browser.scroll_row, 0);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('P'))))
         .expect("P should fullscreen preview");
@@ -611,13 +615,13 @@ fn fullscreen_preview_preserves_browser_viewport_to_avoid_exit_flicker() {
     });
 
     assert_eq!(
-        app.navigation.scroll_row, 0,
+        app.file_browser.scroll_row, 0,
         "fullscreen frames should not collapse the browser viewport to the selected row"
     );
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Esc)))
         .expect("Esc should leave fullscreen preview");
-    assert_eq!(app.navigation.scroll_row, 0);
+    assert_eq!(app.file_browser.scroll_row, 0);
 
     fs::remove_dir_all(root).ok();
 }
@@ -637,14 +641,14 @@ fn fullscreen_preview_exits_for_selection_actions() {
         .path
         .clone();
 
-    let selected_index = app.navigation.selected;
+    let selected_index = app.file_browser.selected;
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('P'))))
         .expect("P should fullscreen preview");
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(' '))))
         .expect("ToggleSelection should stay fullscreen and toggle selection");
     assert!(app.preview_fullscreen());
-    assert_eq!(app.navigation.selected, selected_index);
-    assert!(app.navigation.selected_paths.contains(&selected));
+    assert_eq!(app.file_browser.selected, selected_index);
+    assert!(app.file_browser.selected_paths.contains(&selected));
 
     app.clear_selection();
     app.handle_event(Event::Key(KeyEvent::new(
@@ -654,8 +658,8 @@ fn fullscreen_preview_exits_for_selection_actions() {
     .expect("SelectAll should exit fullscreen and select visible entries");
     assert!(!app.preview_fullscreen());
     assert_eq!(
-        app.navigation.selected_paths.len(),
-        app.navigation.entries.len()
+        app.file_browser.selected_paths.len(),
+        app.file_browser.entries.len()
     );
 
     fs::remove_dir_all(root).ok();
@@ -671,7 +675,7 @@ fn fullscreen_preview_stays_for_same_directory_navigation() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.set_frame_state(FrameState {
         metrics: ViewMetrics {
             cols: 1,
@@ -685,14 +689,17 @@ fn fullscreen_preview_stays_for_same_directory_navigation() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::End)))
         .expect("JumpLast should stay fullscreen and select last entry");
     assert!(app.preview_fullscreen());
-    assert_eq!(app.navigation.selected, app.navigation.entries.len() - 1);
+    assert_eq!(
+        app.file_browser.selected,
+        app.file_browser.entries.len() - 1
+    );
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::PageUp)))
         .expect("PageUp should stay fullscreen and move selection");
     assert!(app.preview_fullscreen());
-    assert!(app.navigation.selected < app.navigation.entries.len() - 1);
+    assert!(app.file_browser.selected < app.file_browser.entries.len() - 1);
 
-    app.navigation.view_mode = ViewMode::Grid;
+    app.file_browser.view_mode = ViewMode::Grid;
     app.set_frame_state(FrameState {
         metrics: ViewMetrics {
             cols: 2,
@@ -704,11 +711,11 @@ fn fullscreen_preview_stays_for_same_directory_navigation() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Right)))
         .expect("grid NavRight should stay fullscreen and move selection");
     assert!(app.preview_fullscreen());
-    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.file_browser.selected, 1);
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Left)))
         .expect("grid NavLeft should stay fullscreen and move selection");
     assert!(app.preview_fullscreen());
-    assert_eq!(app.navigation.selected, 0);
+    assert_eq!(app.file_browser.selected, 0);
 
     fs::remove_dir_all(root).ok();
 }
@@ -775,7 +782,7 @@ fn fullscreen_preview_allows_file_open_and_exits_first() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
     let file_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == file_path)
@@ -809,7 +816,7 @@ fn fullscreen_preview_allows_folder_open_and_exits_first() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
     let folder_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == folder)
@@ -824,7 +831,7 @@ fn fullscreen_preview_allows_folder_open_and_exits_first() {
         .expect("Open should launch selected folder from fullscreen preview");
 
     assert!(!app.preview_fullscreen());
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
     let opened = read_open_capture(&capture);
     assert_eq!(opened, folder.display().to_string());
 
@@ -843,7 +850,7 @@ fn fullscreen_preview_allows_file_open_with_and_directory_enter() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
     let file_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == file_path)
@@ -860,7 +867,7 @@ fn fullscreen_preview_allows_file_open_with_and_directory_enter() {
             .expect("Esc should close Open With overlay");
     }
     let folder_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == folder)
@@ -881,11 +888,11 @@ fn fullscreen_preview_allows_file_open_with_and_directory_enter() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
         .expect("Enter should enter folders before leaving fullscreen");
     assert!(app.preview_fullscreen());
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
     wait_for_directory_load(&mut app);
 
     assert!(!app.preview_fullscreen());
-    assert_eq!(app.navigation.cwd, folder);
+    assert_eq!(app.file_browser.cwd, folder);
 
     fs::remove_dir_all(root).ok();
 }
@@ -948,10 +955,10 @@ fn chooser_enter_confirms_sorted_selection() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(gamma.clone());
-    app.navigation.selected_paths.insert(alpha.clone());
+    app.file_browser.selected_paths.insert(gamma.clone());
+    app.file_browser.selected_paths.insert(alpha.clone());
     let beta_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == beta)
@@ -985,8 +992,8 @@ fn chooser_enter_confirms_selection_from_multiple_directories() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(alpha.clone());
-    app.navigation.selected_paths.insert(beta.clone());
+    app.file_browser.selected_paths.insert(alpha.clone());
+    app.file_browser.selected_paths.insert(beta.clone());
     app.enable_chooser_mode();
 
     app.handle_event(Event::Key(KeyEvent::new(
@@ -1029,7 +1036,7 @@ fn chooser_esc_keeps_normal_selection_clear_behavior() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(file_path);
+    app.file_browser.selected_paths.insert(file_path);
     app.enable_chooser_mode();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Esc)))
         .expect("esc should keep normal selection behavior");
@@ -1037,7 +1044,7 @@ fn chooser_esc_keeps_normal_selection_clear_behavior() {
     assert!(!app.should_quit);
     assert!(app.should_change_directory_on_quit);
     assert_eq!(app.chooser_exit, None);
-    assert!(app.navigation.selected_paths.is_empty());
+    assert!(app.file_browser.selected_paths.is_empty());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1051,7 +1058,7 @@ fn chooser_right_enters_directory_instead_of_confirming() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     app.enable_chooser_mode();
 
@@ -1059,7 +1066,7 @@ fn chooser_right_enters_directory_instead_of_confirming() {
         .expect("right should enter the selected directory");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, nested);
+    assert_eq!(app.file_browser.cwd, nested);
     assert!(!app.should_quit);
     assert_eq!(app.chooser_exit, None);
 
@@ -1075,7 +1082,7 @@ fn chooser_open_or_enter_action_keeps_normal_behavior() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     app.enable_chooser_mode();
 
@@ -1083,7 +1090,7 @@ fn chooser_open_or_enter_action_keeps_normal_behavior() {
         .expect("open_or_enter should keep normal behavior in chooser mode");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, nested);
+    assert_eq!(app.file_browser.cwd, nested);
     assert!(!app.should_quit);
     assert_eq!(app.chooser_exit, None);
 
@@ -1161,8 +1168,8 @@ fn capital_d_permanent_delete_prompt_uses_selection() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(alpha);
-    app.navigation.selected_paths.insert(beta);
+    app.file_browser.selected_paths.insert(alpha);
+    app.file_browser.selected_paths.insert(beta);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('D'))))
         .expect("D should open permanent delete prompt");
@@ -1198,8 +1205,8 @@ fn trash_prompt_keeps_normal_selection_non_permanent_from_trash() {
 
     let mut app = App::new_at(trash_root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.in_trash = true;
-    app.navigation.selected_paths.insert(normal.clone());
+    app.file_browser.in_trash = true;
+    app.file_browser.selected_paths.insert(normal.clone());
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
         .expect("d should open trash prompt");
@@ -1224,8 +1231,8 @@ fn trash_prompt_permanently_deletes_trash_only_selection() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.in_trash = true;
-    app.navigation.selected_paths.insert(trashed.clone());
+    app.file_browser.in_trash = true;
+    app.file_browser.selected_paths.insert(trashed.clone());
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('d'))))
         .expect("d should open permanent delete prompt");
@@ -1500,10 +1507,10 @@ fn enter_opens_selected_entries_with_system_opener() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(gamma.clone());
-    app.navigation.selected_paths.insert(alpha.clone());
+    app.file_browser.selected_paths.insert(gamma.clone());
+    app.file_browser.selected_paths.insert(alpha.clone());
     let beta_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == beta)
@@ -1541,8 +1548,8 @@ fn open_action_opens_selected_entries_with_system_opener() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(alpha.clone());
-    app.navigation.selected_paths.insert(beta.clone());
+    app.file_browser.selected_paths.insert(alpha.clone());
+    app.file_browser.selected_paths.insert(beta.clone());
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('o'))))
         .expect("o should open selected entries");
@@ -1573,8 +1580,8 @@ fn open_action_opens_selected_entries_from_multiple_directories() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(alpha.clone());
-    app.navigation.selected_paths.insert(beta.clone());
+    app.file_browser.selected_paths.insert(alpha.clone());
+    app.file_browser.selected_paths.insert(beta.clone());
     app.set_dir(child.clone())
         .expect("entering child should succeed");
     wait_for_directory_load(&mut app);
@@ -1613,8 +1620,8 @@ fn open_action_keeps_system_opener_for_multiple_selection_with_terminal_default(
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(alpha.clone());
-    app.navigation.selected_paths.insert(beta.clone());
+    app.file_browser.selected_paths.insert(alpha.clone());
+    app.file_browser.selected_paths.insert(beta.clone());
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('o'))))
         .expect("o should use system opener for multiple selection");
@@ -1661,7 +1668,7 @@ fn g_opens_goto_overlay_and_goto_shortcuts_keep_g_for_top() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.jump_last();
     assert_eq!(
-        app.navigation.selected, 2,
+        app.file_browser.selected, 2,
         "G behavior should still reach the last item"
     );
 
@@ -1669,7 +1676,7 @@ fn g_opens_goto_overlay_and_goto_shortcuts_keep_g_for_top() {
         .expect("g should open go-to overlay");
     assert!(app.goto_is_open());
     assert_eq!(
-        app.navigation.selected, 2,
+        app.file_browser.selected, 2,
         "opening the go-to overlay should not move selection"
     );
 
@@ -1677,14 +1684,14 @@ fn g_opens_goto_overlay_and_goto_shortcuts_keep_g_for_top() {
         .expect("g inside go-to overlay should jump to top");
     assert!(!app.goto_is_open());
     assert_eq!(
-        app.navigation.selected, 0,
+        app.file_browser.selected, 0,
         "go-to g shortcut should move to the top item"
     );
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('G'))))
         .expect("capital G should still move to the last item");
     assert_eq!(
-        app.navigation.selected, 2,
+        app.file_browser.selected, 2,
         "capital G should keep the old bottom-jump behavior"
     );
 
@@ -1727,34 +1734,34 @@ fn tab_and_shift_tab_cycle_sidebar_locations_and_skip_section_rows() {
     };
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.sidebar = sidebar_rows();
+    app.places.rows = sidebar_rows();
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
         .expect("tab should cycle sidebar locations");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.navigation.cwd, downloads);
+    assert_eq!(app.file_browser.cwd, downloads);
 
-    app.navigation.sidebar = sidebar_rows();
+    app.places.rows = sidebar_rows();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
         .expect("tab should continue into device rows");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.navigation.cwd, usb);
+    assert_eq!(app.file_browser.cwd, usb);
 
-    app.navigation.sidebar = sidebar_rows();
+    app.places.rows = sidebar_rows();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
         .expect("tab should wrap back to the first sidebar location");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
 
-    app.navigation.sidebar = sidebar_rows();
+    app.places.rows = sidebar_rows();
     app.set_dir(usb.clone()).expect("device path should open");
     wait_for_directory_load(&mut app);
 
-    app.navigation.sidebar = sidebar_rows();
+    app.places.rows = sidebar_rows();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::BackTab)))
         .expect("shift-tab should walk sidebar locations in reverse");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.navigation.cwd, downloads);
+    assert_eq!(app.file_browser.cwd, downloads);
 
     cleanup_app_temp_root(app, root);
 }
@@ -1805,30 +1812,30 @@ fn tab_and_shift_tab_match_symlinked_sidebar_locations_by_identity() {
     app.set_dir(linked.clone())
         .expect("symlinked place should open");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.navigation.cwd, target_identity);
+    assert_eq!(app.file_browser.cwd, target_identity);
 
-    app.navigation.sidebar = sidebar_rows();
+    app.places.rows = sidebar_rows();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
         .expect("tab should advance past the symlinked sidebar location");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.navigation.cwd, next_identity);
+    assert_eq!(app.file_browser.cwd, next_identity);
 
     app.set_dir(linked.clone())
         .expect("symlinked place should reopen");
     wait_for_directory_load(&mut app);
-    app.navigation.sidebar = sidebar_rows();
+    app.places.rows = sidebar_rows();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::BackTab)))
         .expect("shift-tab should walk backward from the symlinked sidebar location");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.navigation.cwd, root_identity);
+    assert_eq!(app.file_browser.cwd, root_identity);
 
     app.set_dir(next.clone()).expect("next place should open");
     wait_for_directory_load(&mut app);
-    app.navigation.sidebar = sidebar_rows();
+    app.places.rows = sidebar_rows();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::BackTab)))
         .expect("shift-tab should open the symlinked sidebar location");
     wait_for_directory_load(&mut app);
-    assert_eq!(app.navigation.cwd, target_identity);
+    assert_eq!(app.file_browser.cwd, target_identity);
 
     cleanup_app_temp_root(app, root);
 }
@@ -1842,7 +1849,7 @@ fn repeated_down_arrow_is_throttled_without_starving_hold_repeat() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
 
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
@@ -1856,7 +1863,7 @@ fn repeated_down_arrow_is_throttled_without_starving_hold_repeat() {
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
         .expect("second down arrow should be handled");
 
-    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.file_browser.selected, 1);
     assert_eq!(
         app.input
             .last_navigation_key
@@ -1872,7 +1879,7 @@ fn repeated_down_arrow_is_throttled_without_starving_hold_repeat() {
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
         .expect("third down arrow should be handled");
 
-    assert_eq!(app.navigation.selected, 2);
+    assert_eq!(app.file_browser.selected, 2);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1889,7 +1896,7 @@ fn high_frequency_alt_right_scrolls_preview_instead_of_history() {
     .expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::HighFrequency;
     app.input.last_wheel_target = Some(WheelTarget::Entries);
     app.select_index(0);
@@ -1911,7 +1918,7 @@ fn high_frequency_alt_right_scrolls_preview_instead_of_history() {
         .expect("alt-right should be handled");
 
     assert!(app.preview.state.horizontal_scroll > 0);
-    assert_eq!(app.navigation.selected, 0);
+    assert_eq!(app.file_browser.selected, 0);
     assert_eq!(app.input.last_wheel_target, Some(WheelTarget::Preview));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -1926,7 +1933,7 @@ fn high_frequency_down_arrow_keeps_browser_navigation() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
     app.input.last_wheel_target = Some(WheelTarget::Preview);
@@ -1947,7 +1954,7 @@ fn high_frequency_down_arrow_keeps_browser_navigation() {
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
         .expect("down arrow should be handled");
 
-    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.file_browser.selected, 1);
     assert_eq!(app.preview.state.scroll, 0);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -1960,7 +1967,7 @@ fn high_frequency_right_arrow_in_list_view_still_enters_directory() {
     fs::create_dir_all(&child).expect("failed to create child dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
     app.input.last_wheel_target = Some(WheelTarget::Preview);
@@ -1972,7 +1979,7 @@ fn high_frequency_right_arrow_in_list_view_still_enters_directory() {
     .expect("right arrow should be handled");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, child);
+    assert_eq!(app.file_browser.cwd, child);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1986,7 +1993,7 @@ fn rapid_audio_navigation_defers_second_cold_heavy_preview_refresh() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.set_media_ffprobe_available_for_tests(false);
     app.set_media_ffmpeg_available_for_tests(false);
     app.input.last_selection_change_at =
@@ -1996,13 +2003,13 @@ fn rapid_audio_navigation_defers_second_cold_heavy_preview_refresh() {
     app.move_vertical(1);
 
     // Cold heavy audio is always deferred regardless of burst window state.
-    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.file_browser.selected, 1);
     assert_eq!(app.preview.state.token, initial_token);
     assert!(app.preview.state.deferred_refresh_at.is_some());
 
     app.move_vertical(1);
 
-    assert_eq!(app.navigation.selected, 2);
+    assert_eq!(app.file_browser.selected, 2);
     assert_eq!(app.preview.state.token, initial_token);
     assert!(app.preview.state.deferred_refresh_at.is_some());
 
@@ -2022,13 +2029,13 @@ fn rapid_key_navigation_defers_preview_for_non_heavy_files() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
 
     // First move: last_key_nav_at is in the past → Immediate preview.
     let token_before = app.preview.state.token;
     app.move_vertical_keyboard(1);
-    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.file_browser.selected, 1);
     assert!(
         app.preview.state.token > token_before,
         "first move should trigger an immediate preview refresh"
@@ -2041,7 +2048,7 @@ fn rapid_key_navigation_defers_preview_for_non_heavy_files() {
     // Second move within KEY_NAV_RAPID_THRESHOLD → Deferred preview.
     let token_before = app.preview.state.token;
     app.move_vertical_keyboard(1);
-    assert_eq!(app.navigation.selected, 2);
+    assert_eq!(app.file_browser.selected, 2);
     assert_eq!(
         app.preview.state.token, token_before,
         "second rapid move should not immediately refresh preview"
@@ -2072,7 +2079,7 @@ fn rapid_key_navigation_clears_directory_totals_until_deferred_refresh_runs() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     wait_for_background_preview(&mut app);
     for _ in 0..100 {
@@ -2095,7 +2102,7 @@ fn rapid_key_navigation_clears_directory_totals_until_deferred_refresh_runs() {
     let token_before = app.preview.state.token;
     app.move_vertical_keyboard(1);
 
-    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.file_browser.selected, 1);
     assert_eq!(app.preview.state.token, token_before);
     assert!(app.preview.state.deferred_refresh_at.is_some());
     assert!(app.preview.state.directory_stats.is_none());
@@ -2127,7 +2134,7 @@ fn high_frequency_alt_right_does_not_trigger_history_navigation() {
     fs::create_dir_all(&child).expect("failed to create child dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
     app.open_selected()
@@ -2139,7 +2146,7 @@ fn high_frequency_alt_right_does_not_trigger_history_navigation() {
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT)))
         .expect("alt-right should be handled");
 
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(child.as_path())
@@ -2313,7 +2320,7 @@ fn zoxide_selection_opens_directory() {
     app.open_zoxide_selection(target.clone());
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, target);
+    assert_eq!(app.file_browser.cwd, target);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -2327,7 +2334,7 @@ fn missing_zoxide_selection_reports_error() {
     app.open_zoxide_selection(missing);
 
     assert!(app.status_message().starts_with("Cannot open "));
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -2537,9 +2544,9 @@ fn shift_arrow_keys_scroll_text_preview_vertically() {
     fs::write(&long_file, &contents).expect("failed to write long file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     let long_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|e| e.path == long_file)
@@ -2597,9 +2604,9 @@ fn shift_j_k_step_epub_sections_on_paged_preview() {
     );
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     let archive_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|e| e.path == archive)
@@ -2661,9 +2668,9 @@ fn shift_j_k_scroll_text_preview_vertically() {
     fs::write(&long_file, &contents).expect("failed to write long file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     let long_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|e| e.path == long_file)
@@ -2682,7 +2689,7 @@ fn shift_j_k_scroll_text_preview_vertically() {
     });
     wait_for_background_preview(&mut app);
 
-    let selected_before = app.navigation.selected;
+    let selected_before = app.file_browser.selected;
 
     app.handle_event(Event::Key(KeyEvent::new(
         KeyCode::Char('J'),
@@ -2695,7 +2702,7 @@ fn shift_j_k_scroll_text_preview_vertically() {
         "Shift+J should scroll the text preview down, got {after_down}"
     );
     assert_eq!(
-        app.navigation.selected, selected_before,
+        app.file_browser.selected, selected_before,
         "Shift+J must not move the file selection"
     );
 

@@ -334,7 +334,7 @@ pub(super) fn wait_for_preview_total_line_count(app: &mut App, expected_total: u
 pub(super) fn wait_for_directory_load(app: &mut App) {
     for _ in 0..200 {
         let _ = app.process_background_jobs();
-        if app.navigation.directory_runtime.pending_load.is_none() {
+        if app.file_browser.directory_runtime.pending_load.is_none() {
             return;
         }
         thread::sleep(Duration::from_millis(10));

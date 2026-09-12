@@ -3,6 +3,7 @@ mod browser_wheel;
 mod errors;
 mod helpers;
 mod keyboard;
+mod local_filter;
 mod mouse;
 mod navigation;
 mod preview;

@@ -19,7 +19,7 @@ pub(crate) struct RenameOverlay {
 
 impl App {
     pub(crate) fn open_rename_prompt(&mut self) {
-        if self.navigation.in_trash {
+        if self.file_browser.in_trash {
             return;
         }
         let Some(entry) = self.selected_entry() else {
@@ -251,7 +251,7 @@ impl App {
         if self.duplicates_is_open() {
             return self.confirm_duplicate_rename(original_name, new_name);
         }
-        let new_path = self.navigation.cwd.join(&new_name);
+        let new_path = self.file_browser.cwd.join(&new_name);
         if new_path.exists() {
             if let Some(r) = &mut self.overlays.rename {
                 r.error = Some(format!("\"{}\" already exists", new_name));
@@ -260,7 +260,7 @@ impl App {
         }
 
         let Some(entry) = self
-            .navigation
+            .file_browser
             .entries
             .iter()
             .find(|entry| entry.name == original_name)
@@ -287,8 +287,8 @@ impl App {
         let status = format!("Renamed \"{}\" → \"{}\"", original_name, new_name);
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
-            target_cwd: self.navigation.cwd.clone(),
-            previous_cwd: self.navigation.cwd.clone(),
+            target_cwd: self.file_browser.cwd.clone(),
+            previous_cwd: self.file_browser.cwd.clone(),
             previous_selected_path: None,
             previous_selection_name: None,
             reselect_path: Some(new_path),

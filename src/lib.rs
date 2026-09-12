@@ -4,6 +4,7 @@ mod background_jobs;
 mod config;
 mod duplicate_finder;
 mod elevated_session;
+mod file_browser;
 mod file_classification;
 mod file_operations;
 mod fs;

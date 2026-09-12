@@ -113,10 +113,10 @@ impl App {
             .search_cache
             .as_ref()
             .filter(|cache| {
-                cache.cwd == self.navigation.cwd
+                cache.cwd == self.file_browser.cwd
                     && cache.scope == scope
                     && cache.show_hidden == show_hidden
-                    && cache.fingerprint == self.navigation.directory_runtime.fingerprint
+                    && cache.fingerprint == self.file_browser.directory_runtime.fingerprint
             })
             .map(|cache| (cache.candidates.clone(), cache.stats));
         let (candidates, stats) = cached.clone().unwrap_or_else(|| {
@@ -161,10 +161,10 @@ impl App {
         self.jobs.search_cache = None;
         let request = SearchRequest {
             token: self.jobs.search_token,
-            cwd: self.navigation.cwd.clone(),
+            cwd: self.file_browser.cwd.clone(),
             scope,
             show_hidden: self.effective_show_hidden(),
-            fingerprint: self.navigation.directory_runtime.fingerprint,
+            fingerprint: self.file_browser.directory_runtime.fingerprint,
         };
         if !self.jobs.scheduler.submit_search(request) {
             self.jobs.search_loading = false;

@@ -21,7 +21,7 @@ pub(crate) struct RestoreOverlay {
 
 impl App {
     pub(crate) fn open_restore_prompt(&mut self) {
-        if !self.navigation.in_trash {
+        if !self.file_browser.in_trash {
             return;
         }
         let targets = self.selected_trash_targets();
@@ -30,7 +30,7 @@ impl App {
             return;
         }
 
-        if !self.navigation.selected_paths.is_empty() {
+        if !self.file_browser.selected_paths.is_empty() {
             let has_trash = targets
                 .iter()
                 .any(|target| self.trash_target_is_inside_trash(&target.path));
@@ -252,7 +252,7 @@ impl App {
         if r.targets.is_empty() {
             return Ok(());
         }
-        self.navigation.selected_paths.clear();
+        self.file_browser.selected_paths.clear();
         let target_paths: Vec<PathBuf> =
             r.targets.iter().map(|target| target.path.clone()).collect();
         let source_cwd = self.queue_directory_escape_for_paths(&target_paths)?;
@@ -260,14 +260,14 @@ impl App {
         let restored_paths: std::collections::HashSet<_> =
             r.targets.iter().map(|t| &t.path).collect();
         let next_selection = self
-            .navigation
+            .file_browser
             .entries
             .iter()
             .enumerate()
             .filter(|(_, e)| !restored_paths.contains(&e.path))
-            .find(|(i, _)| *i >= self.navigation.selected)
+            .find(|(i, _)| *i >= self.file_browser.selected)
             .or_else(|| {
-                self.navigation
+                self.file_browser
                     .entries
                     .iter()
                     .enumerate()

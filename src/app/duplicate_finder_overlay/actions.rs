@@ -79,13 +79,13 @@ impl App {
         if paths.is_empty() {
             return Ok(());
         }
-        let saved_selection = self.navigation.selected_paths.clone();
-        self.navigation.selected_paths.clear();
+        let saved_selection = self.file_browser.selected_paths.clone();
+        self.file_browser.selected_paths.clear();
         for path in paths {
-            self.navigation.selected_paths.insert(path);
+            self.file_browser.selected_paths.insert(path);
         }
         let result = self.open_editor_bulk_rename();
-        self.navigation.selected_paths = saved_selection;
+        self.file_browser.selected_paths = saved_selection;
         result
     }
     pub(in crate::app::duplicate_finder_overlay) fn open_duplicate_trash_prompt(&mut self) {

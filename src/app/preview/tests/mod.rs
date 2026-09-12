@@ -35,7 +35,7 @@ fn refresh_preview_reuses_stale_cached_preview_while_refreshing() {
     let preview = PreviewContent::new(PreviewKind::Code, vec![Line::from("stale preview")])
         .with_detail("Rust source file");
     app.cache_preview_result(&entry, &variant, &preview);
-    app.navigation.entries[app.navigation.selected].size += 1;
+    app.file_browser.entries[app.file_browser.selected].size += 1;
 
     app.refresh_preview();
 

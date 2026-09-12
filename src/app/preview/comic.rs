@@ -418,10 +418,10 @@ impl App {
         COMIC_ENTRY_PREFETCH_OFFSETS
             .into_iter()
             .filter_map(|offset| {
-                let target = self.navigation.selected as isize + offset;
+                let target = self.file_browser.selected as isize + offset;
                 (target >= 0)
                     .then_some(target as usize)
-                    .and_then(|index| self.navigation.entries.get(index))
+                    .and_then(|index| self.file_browser.entries.get(index))
                     .filter(|candidate| is_comic_entry(candidate))
                     .cloned()
             })
@@ -432,14 +432,14 @@ impl App {
         let mut candidates = self
             .visible_entry_indices()
             .into_iter()
-            .filter(|&index| index != self.navigation.selected)
+            .filter(|&index| index != self.file_browser.selected)
             .filter_map(|index| {
-                self.navigation
+                self.file_browser
                     .entries
                     .get(index)
                     .filter(|entry| is_comic_entry(entry))
                     .cloned()
-                    .map(|entry| (index.abs_diff(self.navigation.selected), entry))
+                    .map(|entry| (index.abs_diff(self.file_browser.selected), entry))
             })
             .collect::<Vec<_>>();
         candidates.sort_by_key(|(distance, _)| *distance);

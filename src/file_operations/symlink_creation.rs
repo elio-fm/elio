@@ -25,9 +25,9 @@ impl App {
             let mut created = Vec::new();
             let mut first_error = None;
             for source in paths {
-                let link_path = unique_link_dest(&self.navigation.cwd, &source);
+                let link_path = unique_link_dest(&self.file_browser.cwd, &source);
                 let target = if relative {
-                    relative_path(&self.navigation.cwd, &source)
+                    relative_path(&self.file_browser.cwd, &source)
                 } else {
                     source.clone()
                 };

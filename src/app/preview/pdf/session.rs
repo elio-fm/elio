@@ -393,14 +393,14 @@ impl App {
         let mut candidates = self
             .visible_entry_indices()
             .into_iter()
-            .filter(|&index| index != self.navigation.selected)
+            .filter(|&index| index != self.file_browser.selected)
             .filter_map(|index| {
-                self.navigation
+                self.file_browser
                     .entries
                     .get(index)
                     .filter(|entry| is_pdf_entry(entry))
                     .cloned()
-                    .map(|entry| (index.abs_diff(self.navigation.selected), entry))
+                    .map(|entry| (index.abs_diff(self.file_browser.selected), entry))
             })
             .collect::<Vec<_>>();
         candidates.sort_by_key(|(distance, _)| *distance);

@@ -30,7 +30,6 @@ pub(super) const SEARCH_CACHE_LIMIT: usize = 32;
 pub(super) const PREVIEW_CACHE_LIMIT: usize = 24;
 pub(super) const PREVIEW_LINE_COUNT_CACHE_LIMIT: usize = 64;
 pub(super) const PREVIEW_PREFETCH_LIMIT: usize = 2;
-pub(super) const DIRECTORY_ITEM_COUNT_CACHE_LIMIT: usize = 128;
 pub(super) const AUTO_RELOAD_INTERVAL_SMALL: Duration = Duration::from_millis(500);
 pub(super) const AUTO_RELOAD_INTERVAL_MEDIUM: Duration = Duration::from_secs(1);
 pub(super) const AUTO_RELOAD_INTERVAL_LARGE: Duration = Duration::from_secs(2);

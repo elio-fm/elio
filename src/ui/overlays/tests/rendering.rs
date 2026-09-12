@@ -151,7 +151,7 @@ fn bulk_rename_overlay_scrolls_to_keep_the_active_row_visible() {
     }
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    app.navigation.view_mode = crate::app::ViewMode::List;
+    app.file_browser.view_mode = crate::app::ViewMode::List;
     let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
 
     for _ in 0..14 {
@@ -332,7 +332,7 @@ fn open_with_overlay_renders_expected_hits() {
     // Wait for the directory to load so the file entry is visible.
     for _ in 0..100 {
         let _ = app.process_background_jobs();
-        if !app.navigation.entries.is_empty() {
+        if !app.file_browser.entries.is_empty() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));

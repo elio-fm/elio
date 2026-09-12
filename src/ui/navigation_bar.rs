@@ -78,7 +78,7 @@ pub(super) fn render_navigation_bar(
     helpers::render_button(frame, nav_buttons[2], "Up", "󰁝", true, palette);
     frame.render_widget(
         Paragraph::new(Line::from(vec![helpers::chip_span(
-            &format!("Sort: {}", app.navigation.sort_mode.label()),
+            &format!("Sort: {}", app.file_browser.sort_mode.label()),
             palette.button_bg,
             palette.text,
             true,
@@ -90,7 +90,7 @@ pub(super) fn render_navigation_bar(
     helpers::render_button(
         frame,
         meta[1],
-        if app.navigation.show_hidden {
+        if app.file_browser.show_hidden {
             "Hidden On"
         } else {
             "Hidden Off"
@@ -102,7 +102,7 @@ pub(super) fn render_navigation_bar(
     helpers::render_button(
         frame,
         meta[2],
-        app.navigation.view_mode.label(),
+        app.file_browser.view_mode.label(),
         "󰕮",
         true,
         palette,

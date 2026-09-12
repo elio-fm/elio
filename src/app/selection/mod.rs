@@ -3,33 +3,27 @@ use std::path::{Path, PathBuf};
 
 impl App {
     pub fn is_selected(&self, path: &std::path::Path) -> bool {
-        self.navigation.selected_paths.contains(path)
+        self.file_browser.is_selected(path)
     }
 
     pub fn selection_count(&self) -> usize {
         if let Some(overlay) = &self.overlays.duplicates {
             return overlay.selected_paths.len();
         }
-        self.navigation.selected_paths.len()
+        self.file_browser.selection_count()
     }
 
     pub(crate) fn selected_paths_sorted(&self) -> Vec<PathBuf> {
-        let mut paths: Vec<PathBuf> = self.navigation.selected_paths.iter().cloned().collect();
-        paths.sort();
-        paths
+        self.file_browser.selected_paths_sorted()
     }
 
     #[cfg(unix)]
     pub(crate) fn selected_paths_in_selection_order(&self) -> Vec<PathBuf> {
-        self.navigation.selected_paths.ordered().cloned().collect()
+        self.file_browser.selected_paths_in_selection_order()
     }
 
     pub(crate) fn current_directory_escape_for_paths(&self, paths: &[PathBuf]) -> Option<PathBuf> {
-        paths
-            .iter()
-            .filter(|path| self.navigation.cwd == **path || self.navigation.cwd.starts_with(path))
-            .filter_map(|path| path.parent().map(Path::to_path_buf))
-            .min_by_key(|path| path.components().count())
+        self.file_browser.current_directory_escape_for_paths(paths)
     }
 
     pub(in crate::app) fn toggle_selection(&mut self) {
@@ -37,40 +31,21 @@ impl App {
             return;
         };
         let path = entry.path.clone();
-        if self.navigation.selected_paths.remove(&path) {
-            self.status.clear();
-            if self.navigation.view_mode == ViewMode::List && !self.preview_fullscreen() {
-                self.move_vertical(1);
+        match self.file_browser.toggle_selected_path(path) {
+            SelectionChange::NestingConflict => {
+                self.status = "Cannot select nested paths".to_string();
             }
-            return;
-        }
-
-        if self.has_selection_nesting_conflict(&path) {
-            self.status = "Cannot select nested paths".to_string();
-            return;
-        }
-
-        self.navigation.selected_paths.insert(path);
-        self.status.clear();
-        if self.navigation.view_mode == ViewMode::List && !self.preview_fullscreen() {
-            self.move_vertical(1);
+            SelectionChange::Inserted | SelectionChange::Removed => {
+                self.status.clear();
+                if self.file_browser.view_mode == ViewMode::List && !self.preview_fullscreen() {
+                    self.move_vertical(1);
+                }
+            }
         }
     }
 
     pub(in crate::app) fn select_all(&mut self) {
-        let mut blocked = false;
-        for path in self
-            .navigation
-            .entries
-            .iter()
-            .map(|entry| entry.path.clone())
-        {
-            if self.has_selection_nesting_conflict(&path) {
-                blocked = true;
-                continue;
-            }
-            self.navigation.selected_paths.insert(path);
-        }
+        let blocked = self.file_browser.select_all_visible();
         if blocked {
             self.status = "Cannot select nested paths".to_string();
         } else {
@@ -79,8 +54,7 @@ impl App {
     }
 
     pub(crate) fn clear_selection(&mut self) {
-        if !self.navigation.selected_paths.is_empty() {
-            self.navigation.selected_paths.clear();
+        if self.file_browser.clear_selection() {
             self.status.clear();
         }
     }
@@ -122,7 +96,7 @@ impl App {
     }
 
     fn chooser_selection_paths(&self) -> Vec<PathBuf> {
-        if self.navigation.selected_paths.is_empty() {
+        if self.file_browser.selected_paths.is_empty() {
             return self
                 .selected_entry()
                 .map(|entry| vec![self.absolute_chooser_path(&entry.path)])
@@ -143,57 +117,7 @@ impl App {
         if path.is_absolute() {
             path.to_path_buf()
         } else {
-            self.navigation.cwd.join(path)
+            self.file_browser.cwd.join(path)
         }
-    }
-
-    fn has_selection_nesting_conflict(&self, path: &Path) -> bool {
-        self.navigation.selected_paths.has_nesting_conflict(path)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::state::SelectedPaths;
-    use std::path::PathBuf;
-
-    #[test]
-    fn selected_paths_tracks_nested_conflicts_without_scanning_selected_siblings() {
-        let mut selected = SelectedPaths::default();
-        let siblings: Vec<PathBuf> = (0..1_000)
-            .map(|index| PathBuf::from(format!("/tmp/elio-selection/file-{index}")))
-            .collect();
-
-        for path in siblings.iter().cloned() {
-            assert!(selected.insert(path));
-        }
-        assert_eq!(selected.len(), siblings.len());
-        assert!(selected.has_nesting_conflict(PathBuf::from("/tmp/elio-selection").as_path()));
-        assert!(!selected.has_nesting_conflict(PathBuf::from("/tmp/other").as_path()));
-
-        assert!(selected.remove(&siblings[0]));
-        assert!(!selected.contains(&siblings[0]));
-        assert_eq!(selected.len(), siblings.len() - 1);
-        assert!(selected.has_nesting_conflict(PathBuf::from("/tmp/elio-selection").as_path()));
-
-        selected.clear();
-        assert!(selected.is_empty());
-        assert!(!selected.has_nesting_conflict(PathBuf::from("/tmp/elio-selection").as_path()));
-    }
-
-    #[test]
-    fn selected_paths_rejects_parent_child_mixes() {
-        let mut selected = SelectedPaths::default();
-        let parent = PathBuf::from("/tmp/elio-selection");
-        let child = parent.join("child");
-        let sibling = PathBuf::from("/tmp/other");
-
-        assert!(selected.insert(child.clone()));
-        assert!(!selected.insert(parent.clone()));
-        assert!(selected.insert(sibling));
-
-        assert!(selected.remove(&child));
-        assert!(selected.insert(parent.clone()));
-        assert!(!selected.insert(parent.join("nested")));
     }
 }

@@ -11,7 +11,7 @@ fn app_in_child_with_parent_selection(label: &str) -> (PathBuf, PathBuf, PathBuf
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(selected.clone());
+    app.file_browser.selected_paths.insert(selected.clone());
     app.set_dir(child.clone())
         .expect("entering child should succeed");
     wait_for_directory_load(&mut app);
@@ -22,7 +22,7 @@ fn app_in_child_with_parent_selection(label: &str) -> (PathBuf, PathBuf, PathBuf
 fn assert_clear_selection_after_directory_change(label: &str, key: KeyEvent) {
     let (root, child, _, mut app) = app_in_child_with_parent_selection(label);
 
-    assert_eq!(app.navigation.cwd, child);
+    assert_eq!(app.file_browser.cwd, child);
     assert_eq!(app.selection_count(), 1);
 
     app.handle_event(Event::Key(key))
@@ -50,7 +50,7 @@ fn right_arrow_does_not_open_selected_file_in_list_view() {
     fs::write(&file_path, "hello").expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
 
     app.handle_event(Event::Key(KeyEvent::new(
@@ -59,7 +59,7 @@ fn right_arrow_does_not_open_selected_file_in_list_view() {
     )))
     .expect("right arrow should be handled");
 
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(file_path.as_path())
@@ -76,7 +76,7 @@ fn right_arrow_enters_selected_directory_in_list_view() {
     fs::create_dir_all(&child).expect("failed to create temp dirs");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
 
     app.handle_event(Event::Key(KeyEvent::new(
@@ -86,7 +86,7 @@ fn right_arrow_enters_selected_directory_in_list_view() {
     .expect("right arrow should be handled");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, child);
+    assert_eq!(app.file_browser.cwd, child);
 
     cleanup_app_temp_root(app, root);
 }
@@ -100,8 +100,8 @@ fn right_arrow_enters_focused_directory_even_when_selection_exists() {
     fs::write(&file, "hello").expect("failed to write selected file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
-    app.navigation.selected_paths.insert(file.clone());
+    app.file_browser.view_mode = ViewMode::List;
+    app.file_browser.selected_paths.insert(file.clone());
     app.select_index(0);
 
     app.handle_event(Event::Key(KeyEvent::new(
@@ -111,8 +111,8 @@ fn right_arrow_enters_focused_directory_even_when_selection_exists() {
     .expect("right arrow should be handled");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, child);
-    assert!(app.navigation.selected_paths.contains(&file));
+    assert_eq!(app.file_browser.cwd, child);
+    assert!(app.file_browser.selected_paths.contains(&file));
 
     cleanup_app_temp_root(app, root);
 }
@@ -122,14 +122,14 @@ fn selection_persists_after_entering_and_leaving_directory() {
     let (root, child, selected, mut app) =
         app_in_child_with_parent_selection("persistent-selection-nav");
 
-    assert_eq!(app.navigation.cwd, child);
-    assert!(app.navigation.selected_paths.contains(&selected));
+    assert_eq!(app.file_browser.cwd, child);
+    assert!(app.file_browser.selected_paths.contains(&selected));
 
     app.go_parent().expect("going parent should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, root);
-    assert!(app.navigation.selected_paths.contains(&selected));
+    assert_eq!(app.file_browser.cwd, root);
+    assert!(app.file_browser.selected_paths.contains(&selected));
 
     cleanup_app_temp_root(app, root);
 }
@@ -164,7 +164,7 @@ fn select_all_extends_cross_directory_selection() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(selected.clone());
+    app.file_browser.selected_paths.insert(selected.clone());
     app.set_dir(child.clone())
         .expect("entering child should succeed");
     wait_for_directory_load(&mut app);
@@ -175,9 +175,9 @@ fn select_all_extends_cross_directory_selection() {
     )))
     .expect("Ctrl+A should select all visible entries");
 
-    assert!(app.navigation.selected_paths.contains(&selected));
-    assert!(app.navigation.selected_paths.contains(&beta));
-    assert!(app.navigation.selected_paths.contains(&gamma));
+    assert!(app.file_browser.selected_paths.contains(&selected));
+    assert!(app.file_browser.selected_paths.contains(&beta));
+    assert!(app.file_browser.selected_paths.contains(&gamma));
     assert_eq!(app.selection_count(), 3);
 
     cleanup_app_temp_root(app, root);
@@ -190,7 +190,7 @@ fn selecting_child_inside_selected_folder_is_blocked() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
     let folder_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == folder)
@@ -206,8 +206,8 @@ fn selecting_child_inside_selected_folder_is_blocked() {
         .expect("space should reject nested child selection");
 
     assert_eq!(app.status_message(), "Cannot select nested paths");
-    assert!(app.navigation.selected_paths.contains(&folder));
-    assert!(!app.navigation.selected_paths.contains(&child));
+    assert!(app.file_browser.selected_paths.contains(&folder));
+    assert!(!app.file_browser.selected_paths.contains(&child));
     assert_eq!(app.selection_count(), 1);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
@@ -229,7 +229,7 @@ fn selecting_folder_containing_selected_child_is_blocked() {
     app.go_parent().expect("going parent should succeed");
     wait_for_directory_load(&mut app);
     let folder_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == folder)
@@ -239,8 +239,8 @@ fn selecting_folder_containing_selected_child_is_blocked() {
         .expect("space should reject nested folder selection");
 
     assert_eq!(app.status_message(), "Cannot select nested paths");
-    assert!(app.navigation.selected_paths.contains(&child));
-    assert!(!app.navigation.selected_paths.contains(&folder));
+    assert!(app.file_browser.selected_paths.contains(&child));
+    assert!(!app.file_browser.selected_paths.contains(&folder));
     assert_eq!(app.selection_count(), 1);
 
     cleanup_app_temp_root(app, root);
@@ -258,7 +258,7 @@ fn select_all_skips_entries_inside_selected_folder() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(folder.clone());
+    app.file_browser.selected_paths.insert(folder.clone());
     app.set_dir(folder.clone())
         .expect("entering folder should succeed");
     wait_for_directory_load(&mut app);
@@ -270,9 +270,9 @@ fn select_all_skips_entries_inside_selected_folder() {
     .expect("Ctrl+A should skip nested entries");
 
     assert_eq!(app.status_message(), "Cannot select nested paths");
-    assert!(app.navigation.selected_paths.contains(&folder));
-    assert!(!app.navigation.selected_paths.contains(&alpha));
-    assert!(!app.navigation.selected_paths.contains(&beta));
+    assert!(app.file_browser.selected_paths.contains(&folder));
+    assert!(!app.file_browser.selected_paths.contains(&alpha));
+    assert!(!app.file_browser.selected_paths.contains(&beta));
     assert_eq!(app.selection_count(), 1);
 
     cleanup_app_temp_root(app, root);
@@ -289,13 +289,13 @@ fn enter_uses_focused_entry_when_selection_is_offscreen() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(selected.clone());
+    app.file_browser.selected_paths.insert(selected.clone());
     app.set_dir(child.clone())
         .expect("entering child should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, child);
-    assert!(app.navigation.selected_paths.contains(&selected));
+    assert_eq!(app.file_browser.cwd, child);
+    assert!(app.file_browser.selected_paths.contains(&selected));
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(grandchild.as_path())
@@ -308,8 +308,8 @@ fn enter_uses_focused_entry_when_selection_is_offscreen() {
     .expect("Enter should open focused directory");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, grandchild);
-    assert!(app.navigation.selected_paths.contains(&selected));
+    assert_eq!(app.file_browser.cwd, grandchild);
+    assert!(app.file_browser.selected_paths.contains(&selected));
 
     cleanup_app_temp_root(app, root);
 }
@@ -324,9 +324,9 @@ fn enter_uses_focused_directory_when_selection_is_visible() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(selected.clone());
+    app.file_browser.selected_paths.insert(selected.clone());
     let child_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == child)
@@ -340,8 +340,8 @@ fn enter_uses_focused_directory_when_selection_is_visible() {
     .expect("Enter should enter focused directory");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, child);
-    assert!(app.navigation.selected_paths.contains(&selected));
+    assert_eq!(app.file_browser.cwd, child);
+    assert!(app.file_browser.selected_paths.contains(&selected));
 
     cleanup_app_temp_root(app, root);
 }
@@ -355,7 +355,7 @@ fn left_arrow_in_list_view_reselects_previous_directory_in_parent() {
     fs::create_dir_all(&child).expect("failed to create child dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(1);
     app.open_selected()
         .expect("opening selected directory should succeed");
@@ -365,7 +365,7 @@ fn left_arrow_in_list_view_reselects_previous_directory_in_parent() {
         .expect("left arrow should be handled");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(child.as_path())
@@ -383,7 +383,7 @@ fn go_back_reselects_previous_directory_in_parent() {
     fs::create_dir_all(&child).expect("failed to create child dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(1);
     app.open_selected()
         .expect("opening selected directory should succeed");
@@ -392,7 +392,7 @@ fn go_back_reselects_previous_directory_in_parent() {
     app.go_back().expect("go back should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(child.as_path())
@@ -408,7 +408,7 @@ fn go_forward_reselects_previous_directory_in_parent() {
     fs::create_dir_all(&child).expect("failed to create child dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     app.open_selected()
         .expect("opening selected directory should succeed");
@@ -419,7 +419,7 @@ fn go_forward_reselects_previous_directory_in_parent() {
     app.go_forward().expect("go forward should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, child);
+    assert_eq!(app.file_browser.cwd, child);
     assert!(app.selected_entry().is_none());
 
     cleanup_app_temp_root(app, root);
@@ -436,7 +436,7 @@ fn go_forward_restores_last_selected_entry_in_directory() {
     fs::write(&beta, "beta").expect("failed to write beta");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     app.open_selected()
         .expect("opening selected directory should succeed");
@@ -454,7 +454,7 @@ fn go_forward_restores_last_selected_entry_in_directory() {
     app.go_forward().expect("go forward should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, child);
+    assert_eq!(app.file_browser.cwd, child);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(beta.as_path())
@@ -474,7 +474,7 @@ fn reopening_directory_restores_last_selected_entry() {
     fs::write(&beta, "beta").expect("failed to write beta");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     app.open_selected()
         .expect("opening selected directory should succeed");
@@ -492,7 +492,7 @@ fn reopening_directory_restores_last_selected_entry() {
         .expect("reopening selected directory should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, child);
+    assert_eq!(app.file_browser.cwd, child);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(beta.as_path())
@@ -512,7 +512,7 @@ fn reopening_directory_restores_scroll_position() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.set_frame_state(FrameState {
         metrics: ViewMetrics {
             cols: 1,
@@ -526,7 +526,7 @@ fn reopening_directory_restores_scroll_position() {
     wait_for_directory_load(&mut app);
 
     app.select_index(6);
-    assert_eq!(app.navigation.scroll_row, 4);
+    assert_eq!(app.file_browser.scroll_row, 4);
 
     app.go_parent().expect("go parent should succeed");
     wait_for_directory_load(&mut app);
@@ -534,9 +534,9 @@ fn reopening_directory_restores_scroll_position() {
         .expect("reopening selected directory should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, child);
-    assert_eq!(app.navigation.selected, 6);
-    assert_eq!(app.navigation.scroll_row, 4);
+    assert_eq!(app.file_browser.cwd, child);
+    assert_eq!(app.file_browser.selected, 6);
+    assert_eq!(app.file_browser.scroll_row, 4);
 
     cleanup_app_temp_root(app, root);
 }
@@ -551,7 +551,7 @@ fn reopening_parent_restores_last_selected_child_directory() {
     fs::create_dir_all(&regueiro).expect("failed to create regueiro dir");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     app.open_selected().expect("opening home should succeed");
     wait_for_directory_load(&mut app);
@@ -573,7 +573,7 @@ fn reopening_parent_restores_last_selected_child_directory() {
     app.open_selected().expect("reopening home should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, home);
+    assert_eq!(app.file_browser.cwd, home);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(regueiro.as_path())
@@ -594,7 +594,7 @@ fn reopening_parent_restores_scroll_position() {
     }
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.set_frame_state(FrameState {
         metrics: ViewMetrics {
             cols: 1,
@@ -607,7 +607,7 @@ fn reopening_parent_restores_scroll_position() {
     wait_for_directory_load(&mut app);
 
     app.select_index(6);
-    assert_eq!(app.navigation.scroll_row, 4);
+    assert_eq!(app.file_browser.scroll_row, 4);
 
     app.open_selected()
         .expect("opening remembered child should succeed");
@@ -620,9 +620,9 @@ fn reopening_parent_restores_scroll_position() {
     app.open_selected().expect("reopening home should succeed");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, home);
-    assert_eq!(app.navigation.selected, 6);
-    assert_eq!(app.navigation.scroll_row, 4);
+    assert_eq!(app.file_browser.cwd, home);
+    assert_eq!(app.file_browser.selected, 6);
+    assert_eq!(app.file_browser.scroll_row, 4);
 
     cleanup_app_temp_root(app, root);
 }

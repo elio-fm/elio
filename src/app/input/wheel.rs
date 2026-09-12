@@ -75,7 +75,7 @@ impl App {
             dirty |= self.flush_entry_vertical_scroll();
             dirty |= self.flush_preview_scroll();
             dirty |= self.flush_preview_horizontal_scroll();
-            if self.navigation.view_mode == ViewMode::Grid {
+            if self.file_browser.view_mode == ViewMode::Grid {
                 dirty |= self.flush_entry_horizontal_scroll();
             } else {
                 self.input.wheel_scroll.horizontal.pending = 0;
@@ -145,7 +145,7 @@ impl App {
             }
             Some(WheelTarget::Entries) | None => {
                 self.focus_entry_scroll();
-                if self.navigation.view_mode == ViewMode::Grid
+                if self.file_browser.view_mode == ViewMode::Grid
                     && mouse.modifiers.contains(KeyModifiers::SHIFT)
                 {
                     let tuning = self.entry_horizontal_wheel_tuning();
@@ -190,7 +190,7 @@ impl App {
                 }
             }
             Some(WheelTarget::Entries) | None => {
-                if self.navigation.view_mode != ViewMode::Grid {
+                if self.file_browser.view_mode != ViewMode::Grid {
                     return;
                 }
                 self.focus_entry_scroll();
@@ -308,9 +308,9 @@ impl App {
                 self.input.wheel_scroll.vertical.pending -= step;
             }
 
-            let previous = self.navigation.selected;
+            let previous = self.file_browser.selected;
             self.move_vertical_with_preview_mode(step, self.entry_wheel_preview_mode());
-            dirty |= previous != self.navigation.selected;
+            dirty |= previous != self.file_browser.selected;
         }
         dirty
     }
@@ -323,9 +323,9 @@ impl App {
             return false;
         };
 
-        let previous = self.navigation.selected;
+        let previous = self.file_browser.selected;
         self.move_by(step);
-        previous != self.navigation.selected
+        previous != self.file_browser.selected
     }
 
     fn scroll_entry_immediately(&mut self, delta: isize) -> bool {
@@ -339,9 +339,9 @@ impl App {
         } else {
             PreviewRefreshMode::Deferred
         };
-        let previous = self.navigation.selected;
+        let previous = self.file_browser.selected;
         self.move_vertical_with_preview_mode(delta * step, preview_mode);
-        previous != self.navigation.selected
+        previous != self.file_browser.selected
     }
 
     fn entry_wheel_preview_mode(&self) -> PreviewRefreshMode {
@@ -549,7 +549,7 @@ impl App {
         }
 
         if self.input.wheel_profile == WheelProfile::HighFrequency
-            && self.navigation.view_mode == ViewMode::Grid
+            && self.file_browser.view_mode == ViewMode::Grid
         {
             self.input.last_wheel_target = Some(WheelTarget::Entries);
             self.focus_entry_scroll();

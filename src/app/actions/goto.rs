@@ -225,8 +225,8 @@ fn config_label() -> &'static str {
 }
 
 fn downloads_destination(app: &App) -> Option<PathBuf> {
-    app.navigation
-        .sidebar
+    app.places
+        .rows
         .iter()
         .filter_map(|row| row.item())
         .find(|item| item.kind == PlaceKind::Downloads)
@@ -244,8 +244,8 @@ fn config_directory() -> Option<PathBuf> {
 }
 
 fn trash_destination(app: &App) -> Option<PathBuf> {
-    app.navigation
-        .sidebar
+    app.places
+        .rows
         .iter()
         .filter_map(|row| row.item())
         .find(|item| item.kind == PlaceKind::Trash)
@@ -281,7 +281,7 @@ mod tests {
         app.handle_goto_key(caps_lock_char('w', KeyModifiers::NONE))
             .expect("caps-lock W shortcut should activate");
 
-        assert_eq!(app.navigation.selected, 0);
+        assert_eq!(app.file_browser.selected, 0);
         assert!(app.overlays.goto.is_none());
 
         fs::remove_dir_all(root).expect("failed to remove temp dir");

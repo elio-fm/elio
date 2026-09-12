@@ -218,7 +218,7 @@ fn refresh_preview_preloads_current_and_visible_nearby_static_images() {
     let expected = app
         .visible_entry_indices()
         .into_iter()
-        .filter_map(|index| app.navigation.entries.get(index))
+        .filter_map(|index| app.file_browser.entries.get(index))
         .filter(|entry| crate::preview::images::static_image_detail_label(entry).is_some())
         .filter(|entry| {
             crate::file_classification::inspect_path_cached(

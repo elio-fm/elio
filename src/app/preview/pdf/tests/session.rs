@@ -176,8 +176,8 @@ fn sync_pdf_preview_selection_reuses_cached_total_page_count() {
         modified: None,
         readonly: false,
     };
-    app.navigation.entries = vec![entry.clone()];
-    app.navigation.selected = 0;
+    app.file_browser.entries = vec![entry.clone()];
+    app.file_browser.selected = 0;
     configure_terminal_image_support(&mut app);
     app.preview.pdf.pdf_tools_available = true;
     app.preview
@@ -214,8 +214,8 @@ fn sync_pdf_preview_selection_prefetches_forward_probe_window_when_page_count_is
         modified: None,
         readonly: false,
     };
-    app.navigation.entries = vec![entry.clone()];
-    app.navigation.selected = 0;
+    app.file_browser.entries = vec![entry.clone()];
+    app.file_browser.selected = 0;
     configure_terminal_image_support(&mut app);
     app.preview.pdf.pdf_tools_available = true;
     app.preview
@@ -256,8 +256,8 @@ fn sync_pdf_preview_selection_queues_initial_probe_for_current_page() {
         modified: None,
         readonly: false,
     };
-    app.navigation.entries = vec![entry.clone()];
-    app.navigation.selected = 0;
+    app.file_browser.entries = vec![entry.clone()];
+    app.file_browser.selected = 0;
     configure_terminal_image_support(&mut app);
     app.preview.pdf.pdf_tools_available = true;
 

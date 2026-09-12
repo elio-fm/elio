@@ -181,7 +181,7 @@ fn render_contents_list(
         .enumerate()
     {
         let is_dir = name.ends_with('/');
-        let live_path = app.navigation.cwd.join(name.trim_end_matches('/'));
+        let live_path = app.file_browser.cwd.join(name.trim_end_matches('/'));
         let (icon, icon_color) = (
             theme::path_symbol(&live_path, is_dir),
             theme::path_color(&live_path, is_dir, palette),

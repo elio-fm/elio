@@ -65,7 +65,8 @@ impl Drop for EnvVarGuard {
 pub(super) fn wait_for_trash_and_reload(app: &mut App) {
     for _ in 0..500 {
         let _ = app.process_background_jobs();
-        if app.trash_progress().is_none() && app.navigation.directory_runtime.pending_load.is_none()
+        if app.trash_progress().is_none()
+            && app.file_browser.directory_runtime.pending_load.is_none()
         {
             return;
         }
@@ -78,7 +79,7 @@ pub(super) fn wait_for_restore_and_reload(app: &mut App) {
     for _ in 0..500 {
         let _ = app.process_background_jobs();
         if app.restore_progress().is_none()
-            && app.navigation.directory_runtime.pending_load.is_none()
+            && app.file_browser.directory_runtime.pending_load.is_none()
         {
             return;
         }
@@ -97,7 +98,7 @@ pub(super) fn temp_path(label: &str) -> PathBuf {
 
 pub(super) fn take_pending_status(app: &mut App) -> (String, Option<PathBuf>) {
     let load = app
-        .navigation
+        .file_browser
         .directory_runtime
         .pending_load
         .take()

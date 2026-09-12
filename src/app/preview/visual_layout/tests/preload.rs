@@ -59,7 +59,7 @@ fn cached_adjacent_comic_page_queues_background_image_prepare() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.navigation.entries = vec![Entry {
+    app.file_browser.entries = vec![Entry {
         path: archive.clone(),
         name: "issue.cbz".to_string(),
         name_key: "issue.cbz".to_string(),
@@ -69,7 +69,7 @@ fn cached_adjacent_comic_page_queues_background_image_prepare() {
         modified: archive_metadata.modified().ok(),
         readonly: false,
     }];
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
@@ -141,7 +141,7 @@ fn cached_adjacent_epub_section_queues_background_image_prepare() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.navigation.entries = vec![Entry {
+    app.file_browser.entries = vec![Entry {
         path: epub.clone(),
         name: "story.epub".to_string(),
         name_key: "story.epub".to_string(),
@@ -151,7 +151,7 @@ fn cached_adjacent_epub_section_queues_background_image_prepare() {
         modified: epub_metadata.modified().ok(),
         readonly: false,
     }];
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
@@ -227,7 +227,7 @@ fn cached_adjacent_audio_cover_queues_background_image_prepare() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.preview.terminal_images.protocol = ImageProtocol::ItermInline;
-    app.navigation.entries = vec![
+    app.file_browser.entries = vec![
         Entry {
             path: first.clone(),
             name: "001.mp3".to_string(),
@@ -249,7 +249,7 @@ fn cached_adjacent_audio_cover_queues_background_image_prepare() {
             readonly: false,
         },
     ];
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
@@ -275,7 +275,7 @@ fn cached_adjacent_audio_cover_queues_background_image_prepare() {
             size: next_cover_metadata.len(),
             modified: next_cover_metadata.modified().ok(),
         });
-    let adjacent_entry = app.navigation.entries[1].clone();
+    let adjacent_entry = app.file_browser.entries[1].clone();
     app.cache_preview_result(
         &adjacent_entry,
         &preview::PreviewRequestOptions::Default,

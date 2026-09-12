@@ -640,7 +640,7 @@ fn run_app(
             if let Some(task) = app.pending_terminal_task.take() {
                 let zoxide_result = match task {
                     PendingTerminalTask::Command { program, args } => {
-                        let cwd = app.navigation.cwd.clone();
+                        let cwd = app.file_browser.cwd.clone();
                         pause_runtime_input(&input_reader, true);
                         suspend_terminal(terminal, drainer, true, kitty_dnd)?;
                         let result = run_open_command_in_terminal(&program, &args, &cwd);
@@ -653,7 +653,7 @@ fn run_app(
                         None
                     }
                     PendingTerminalTask::Commands(commands) => {
-                        let cwd = app.navigation.cwd.clone();
+                        let cwd = app.file_browser.cwd.clone();
                         pause_runtime_input(&input_reader, true);
                         suspend_terminal(terminal, drainer, true, kitty_dnd)?;
                         let mut last_error = None;
@@ -703,7 +703,7 @@ fn run_app(
                         None
                     }
                     PendingTerminalTask::Zoxide => {
-                        let cwd = app.navigation.cwd.clone();
+                        let cwd = app.file_browser.cwd.clone();
                         if let Some(result) = zoxide::preflight(&cwd) {
                             Some(result)
                         } else {
@@ -727,7 +727,7 @@ fn run_app(
 
     let final_cwd = app
         .should_change_directory_on_quit
-        .then(|| app.navigation.cwd.clone());
+        .then(|| app.file_browser.cwd.clone());
     let chooser = app.take_chooser_exit();
     app.queue_forced_iterm_preview_erase();
     let mut overlay_bytes = app.clear_preview_overlay()?;

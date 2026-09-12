@@ -108,7 +108,7 @@ impl App {
             password: None,
         };
         if self.start_archive_extract(request)? {
-            self.navigation.selected_paths.clear();
+            self.file_browser.selected_paths.clear();
         }
         Ok(())
     }
@@ -451,20 +451,20 @@ impl App {
             .jobs
             .archive_extract_source_cwd
             .take()
-            .unwrap_or_else(|| self.navigation.cwd.clone());
+            .unwrap_or_else(|| self.file_browser.cwd.clone());
         self.jobs.archive_extract_request = None;
         let nav_target = self
-            .navigation
+            .file_browser
             .directory_runtime
             .pending_load
             .as_ref()
             .map(|l| l.target_cwd.as_path());
         let nav_to_source = nav_target == Some(source_cwd.as_path());
-        if nav_to_source || (source_cwd == self.navigation.cwd && nav_target.is_none()) {
+        if nav_to_source || (source_cwd == self.file_browser.cwd && nav_target.is_none()) {
             let _ = self.queue_directory_load(PendingDirectoryLoad {
                 token: 0,
                 target_cwd: source_cwd,
-                previous_cwd: self.navigation.cwd.clone(),
+                previous_cwd: self.file_browser.cwd.clone(),
                 previous_selected_path: None,
                 previous_selection_name: None,
                 reselect_path: dest_dir,
@@ -491,7 +491,7 @@ impl App {
             total: Some(request.batch.total_archives),
         });
         if self.jobs.archive_extract_source_cwd.is_none() {
-            self.jobs.archive_extract_source_cwd = Some(self.navigation.cwd.clone());
+            self.jobs.archive_extract_source_cwd = Some(self.file_browser.cwd.clone());
         }
         self.jobs.archive_extract_request = Some(request.clone());
         self.status.clear();
