@@ -4,7 +4,7 @@ mod kindle;
 mod metadata_formatting;
 mod metadata_preview;
 mod office;
-mod pdf;
+pub(crate) mod pdf;
 mod xml_parsing;
 mod zip_reading;
 

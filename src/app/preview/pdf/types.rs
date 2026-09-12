@@ -1,4 +1,5 @@
 use crate::app::Entry;
+use crate::preview::documents::pdf::{FittedPdfPlacement, PdfPageDimensions, PdfRenderKey};
 use crate::terminal_runtime::terminal_images::RenderedImageDimensions;
 use ratatui::layout::Rect;
 use std::{
@@ -50,22 +51,6 @@ pub(super) struct PdfPageKey {
     pub(super) page: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct PdfPageDimensions {
-    pub(super) width_pts: f32,
-    pub(super) height_pts: f32,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(super) struct PdfRenderKey {
-    pub(super) path: PathBuf,
-    pub(super) size: u64,
-    pub(super) modified: Option<SystemTime>,
-    pub(super) page: usize,
-    pub(super) width_px: u32,
-    pub(super) height_px: u32,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct DisplayedPdfPreview {
     pub(super) path: PathBuf,
@@ -86,27 +71,13 @@ pub(super) struct PdfOverlayRequest {
     pub(super) area: Rect,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(super) struct FittedPdfPlacement {
-    pub(super) image_area: Rect,
-    pub(super) render_width_px: u32,
-    pub(super) render_height_px: u32,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub(crate) struct PdfProbeResult {
-    pub total_pages: Option<usize>,
-    pub width_pts: Option<f32>,
-    pub height_pts: Option<f32>,
-}
-
-impl PdfRenderKey {
-    pub(super) fn from_request(request: &PdfOverlayRequest, placement: FittedPdfPlacement) -> Self {
-        Self {
-            path: request.path.clone(),
-            size: request.size,
-            modified: request.modified,
-            page: request.page,
+impl PdfOverlayRequest {
+    pub(super) fn render_key(&self, placement: FittedPdfPlacement) -> PdfRenderKey {
+        PdfRenderKey {
+            path: self.path.clone(),
+            size: self.size,
+            modified: self.modified,
+            page: self.page,
             width_px: placement.render_width_px,
             height_px: placement.render_height_px,
         }

@@ -1,5 +1,8 @@
 use super::*;
-use crate::{app::preview::pdf, preview::images::SixelDcsKey, terminal_runtime::terminal_images};
+use crate::{
+    preview::{documents::pdf, images::SixelDcsKey},
+    terminal_runtime::terminal_images,
+};
 use std::{
     collections::{HashSet, VecDeque},
     path::{Path, PathBuf},

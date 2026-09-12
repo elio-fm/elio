@@ -1,5 +1,3 @@
-mod geometry;
+mod cache_updates;
 mod helpers;
-mod pipeline;
-mod protocols;
 mod session;

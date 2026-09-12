@@ -46,7 +46,7 @@ A brief overview of the repository layout:
 │   ├── fuzzy_finder/           # Candidate indexing and fuzzy matching
 │   ├── opening/                # Open rules, application launching, and Open With discovery
 │   ├── places/                 # Places list and mounted-device discovery
-│   ├── preview/                # Preview construction, image processing, and tests
+│   ├── preview/                # Preview construction, document/image processing, and tests
 │   ├── shell_integration/      # Shell scripts and install/uninstall support
 │   ├── terminal_runtime/       # Terminal lifecycle, drawing, image protocols, and session output
 │   ├── theme/                  # Theme loading and item styling

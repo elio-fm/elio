@@ -1,29 +1,22 @@
 mod cache;
-mod geometry;
-mod pipeline;
 mod prefetch;
 mod present;
 mod session;
 mod types;
 
-pub(crate) use self::pipeline::{probe_pdf_page, render_pdf_page_to_cache};
 pub(in crate::app) use self::types::PdfPreviewState;
-pub(crate) use self::types::PdfProbeResult;
 pub(in crate::app::preview::pdf) use self::types::{
-    DisplayedPdfPreview, FittedPdfPlacement, PdfDocumentKey, PdfOverlayRequest, PdfPageDimensions,
-    PdfPageKey, PdfRenderKey, PdfSession,
-};
-#[cfg(test)]
-use self::{
-    geometry::{bucket_render_dimensions, fit_pdf_page},
-    pipeline::{parse_pdfinfo_page_count, parse_pdfinfo_page_dimensions},
+    DisplayedPdfPreview, PdfDocumentKey, PdfOverlayRequest, PdfPageKey, PdfSession,
 };
 #[cfg(test)]
 use super::super::*;
 #[cfg(test)]
-use crate::terminal_runtime::terminal_images::{
-    RenderedImageDimensions, fit_image_area, read_png_dimensions,
+use crate::preview::documents::pdf::PdfProbeResult;
+pub(in crate::app::preview::pdf) use crate::preview::documents::pdf::{
+    FittedPdfPlacement, PdfPageDimensions, PdfRenderKey,
 };
+#[cfg(test)]
+use crate::terminal_runtime::terminal_images::RenderedImageDimensions;
 #[cfg(test)]
 use ratatui::layout::Rect;
 use std::time::Duration;
@@ -31,8 +24,6 @@ use std::time::Duration;
 use std::{fs, path::PathBuf, time::Instant};
 
 const PDF_RENDER_CACHE_LIMIT: usize = 12;
-const PDF_RENDER_BUCKET_PX: u32 = 64;
-const PDF_RENDER_MIN_DIMENSION_PX: u32 = 96;
 const PDF_PAGE_MIN: usize = 1;
 const PDF_PAGE_STATUS_PREFIX: &str = "PDF page ";
 const PDF_PROBE_PREFETCH_AHEAD_DISTANCE: usize = 2;

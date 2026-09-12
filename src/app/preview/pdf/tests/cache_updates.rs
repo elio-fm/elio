@@ -117,7 +117,7 @@ fn apply_pdf_probe_build_queues_render_for_current_page() {
     let placement = app
         .overlay_placement_for_request(&request)
         .expect("overlay placement should be available after probe");
-    let render_key = PdfRenderKey::from_request(&request, placement);
+    let render_key = request.render_key(placement);
 
     assert!(dirty);
     assert!(app.preview.pdf.pending_renders.contains(&render_key));
@@ -151,7 +151,7 @@ fn apply_pdf_probe_build_queues_render_even_before_selection_activation_is_ready
     let placement = app
         .overlay_placement_for_request(&request)
         .expect("overlay placement should be available after probe");
-    let render_key = PdfRenderKey::from_request(&request, placement);
+    let render_key = request.render_key(placement);
 
     assert!(dirty);
     assert!(app.preview.pdf.pending_renders.contains(&render_key));

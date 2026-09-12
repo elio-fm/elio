@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::preview::pdf;
+use crate::preview::documents::pdf;
 use std::{
     collections::{HashSet, VecDeque},
     path::{Path, PathBuf},

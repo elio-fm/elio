@@ -92,3 +92,7 @@ pub(crate) fn intersect_rect(a: Rect, b: Rect) -> Option<Rect> {
         height: bottom.saturating_sub(top),
     })
 }
+
+#[cfg(test)]
+#[path = "tests/geometry.rs"]
+mod tests;

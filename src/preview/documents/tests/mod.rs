@@ -6,4 +6,3 @@ mod epub;
 mod kindle;
 #[path = "../office/tests/mod.rs"]
 mod office;
-mod pdf;

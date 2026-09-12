@@ -36,6 +36,17 @@ fn configure_terminal_image_support(app: &mut App) {
     });
 }
 
+fn configure_iterm_image_support(app: &mut App) {
+    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
+    app.preview.terminal_images.protocol = ImageProtocol::ItermInline;
+    app.preview.terminal_images.window = Some(TerminalWindowSize {
+        cells_width,
+        cells_height,
+        pixels_width: 1920,
+        pixels_height: 1080,
+    });
+}
+
 fn blank_frame_buffer() -> Buffer {
     Buffer::empty(Rect {
         x: 0,
@@ -108,6 +119,20 @@ fn ready_static_image_overlay(app: &mut App) -> StaticImageOverlayRequest {
     app.sync_image_preview_selection_activation();
     app.active_static_image_overlay_request()
         .expect("static image overlay request should exist")
+}
+
+fn wait_for_displayed_static_image_overlay(app: &mut App) {
+    for _ in 0..200 {
+        let _ = app.process_background_jobs();
+        let _ = app.process_image_preview_timers();
+        app.present_preview_overlay()
+            .expect("presenting static image overlay should not fail");
+        if app.static_image_overlay_displayed() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for static image overlay");
 }
 
 fn displayed_sixel_static_image_overlay(
