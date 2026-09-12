@@ -172,7 +172,7 @@ impl App {
                     self.remember_drag_candidate(path.clone());
                     self.select_index(hit.index);
                     if self.is_double_click(&path) {
-                        if self.chooser_mode && !is_dir {
+                        if self.chooser_mode() && !is_dir {
                             self.confirm_chooser_path(&path);
                         } else {
                             self.open_entry_at_index(hit.index)?;

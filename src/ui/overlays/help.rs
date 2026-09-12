@@ -26,7 +26,7 @@ pub(in crate::ui) fn render_help_overlay(
     state: &mut FrameState,
     palette: Palette,
 ) {
-    let mode = if app.chooser_mode {
+    let mode = if app.chooser_mode() {
         HelpMode::Chooser
     } else {
         HelpMode::Normal

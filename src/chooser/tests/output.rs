@@ -1,4 +1,4 @@
-use super::{file_is_stdout, write_if_requested};
+use super::super::output::{file_is_stdout, write_selected_paths};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -15,7 +15,7 @@ fn temp_path(label: &str) -> PathBuf {
 
 #[test]
 fn chooser_file_is_not_written_when_absent() {
-    write_if_requested(None, &[PathBuf::from("/tmp/example")])
+    write_selected_paths(None, &[PathBuf::from("/tmp/example")])
         .expect("absent chooser file should be a no-op");
 }
 
@@ -37,7 +37,7 @@ fn chooser_file_writes_paths_with_trailing_newline() {
     let alpha = root.join("alpha.txt");
     let beta = root.join("beta.txt");
 
-    write_if_requested(Some(&chooser_file), &[alpha.clone(), beta.clone()])
+    write_selected_paths(Some(&chooser_file), &[alpha.clone(), beta.clone()])
         .expect("chooser file should be written");
 
     let bytes = fs::read(&chooser_file).expect("chooser file should be readable");
@@ -54,7 +54,7 @@ fn chooser_file_truncates_on_empty_confirmation() {
     let chooser_file = root.join("selection");
     fs::write(&chooser_file, "stale\n").expect("chooser file should be primed");
 
-    write_if_requested(Some(&chooser_file), &[])
+    write_selected_paths(Some(&chooser_file), &[])
         .expect("empty chooser confirmation should be written");
 
     let bytes = fs::read(&chooser_file).expect("chooser file should be readable");

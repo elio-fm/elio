@@ -1,4 +1,5 @@
 use super::*;
+use crate::chooser::ChooserExit;
 use std::path::{Path, PathBuf};
 
 impl App {
@@ -60,64 +61,45 @@ impl App {
     }
 
     pub(crate) fn enable_chooser_mode(&mut self) {
-        self.chooser_mode = true;
+        self.chooser.enable();
         self.status = "Chooser mode".to_string();
     }
 
     pub(crate) fn take_chooser_exit(&mut self) -> Option<ChooserExit> {
-        self.chooser_exit.take()
+        self.chooser.take_exit()
+    }
+
+    pub(crate) fn chooser_mode(&self) -> bool {
+        self.chooser.is_enabled()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn chooser_exit(&self) -> Option<&ChooserExit> {
+        self.chooser.exit()
     }
 
     pub(crate) fn confirm_chooser(&mut self) {
-        if !self.chooser_mode {
-            return;
+        let cwd = self.file_browser.cwd.clone();
+        let focused_path = self.selected_entry().map(|entry| entry.path.clone());
+        let selected_paths = self.selected_paths_sorted();
+        if self
+            .chooser
+            .confirm_selection(&cwd, focused_path.as_deref(), selected_paths)
+        {
+            self.should_quit = true;
         }
-        self.chooser_exit = Some(ChooserExit::Confirmed(self.chooser_selection_paths()));
-        self.should_quit = true;
     }
 
     pub(crate) fn confirm_chooser_path(&mut self, path: &Path) {
-        if !self.chooser_mode {
-            return;
+        if self.chooser.confirm_path(&self.file_browser.cwd, path) {
+            self.should_quit = true;
         }
-        self.chooser_exit = Some(ChooserExit::Confirmed(vec![
-            self.absolute_chooser_path(path),
-        ]));
-        self.should_quit = true;
     }
 
     pub(crate) fn cancel_chooser(&mut self) {
-        if !self.chooser_mode {
-            return;
-        }
-        self.chooser_exit = Some(ChooserExit::Cancelled);
-        self.should_change_directory_on_quit = false;
-        self.should_quit = true;
-    }
-
-    fn chooser_selection_paths(&self) -> Vec<PathBuf> {
-        if self.file_browser.selected_paths.is_empty() {
-            return self
-                .selected_entry()
-                .map(|entry| vec![self.absolute_chooser_path(&entry.path)])
-                .unwrap_or_default();
-        }
-
-        let mut paths: Vec<PathBuf> = self
-            .selected_paths_sorted()
-            .iter()
-            .map(|path| self.absolute_chooser_path(path))
-            .collect();
-        paths.sort();
-        paths.dedup();
-        paths
-    }
-
-    fn absolute_chooser_path(&self, path: &Path) -> PathBuf {
-        if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            self.file_browser.cwd.join(path)
+        if self.chooser.cancel() {
+            self.should_change_directory_on_quit = false;
+            self.should_quit = true;
         }
     }
 }

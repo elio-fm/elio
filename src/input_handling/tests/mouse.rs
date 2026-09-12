@@ -218,14 +218,14 @@ fn chooser_double_click_confirms_clicked_file() {
 
     app.handle_event(left_click(1, 1))
         .expect("first click should focus clicked file");
-    assert_eq!(app.chooser_exit, None);
+    assert_eq!(app.chooser_exit(), None);
 
     app.handle_event(left_click(1, 1))
         .expect("second click should choose clicked file");
 
     assert!(app.should_quit);
     assert_eq!(
-        app.chooser_exit.as_ref(),
+        app.chooser_exit(),
         Some(&ChooserExit::Confirmed(vec![beta]))
     );
 
@@ -260,7 +260,7 @@ fn chooser_double_click_enters_clicked_directory() {
 
     assert_eq!(app.file_browser.cwd, child);
     assert!(!app.should_quit);
-    assert_eq!(app.chooser_exit, None);
+    assert_eq!(app.chooser_exit(), None);
 
     fs::remove_dir_all(root).ok();
 }

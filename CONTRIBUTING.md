@@ -36,6 +36,7 @@ A brief overview of the repository layout:
 │   ├── app/                    # Remaining application state and cross-feature coordination
 │   ├── archive/                # Archive creation, extraction, and format handling
 │   ├── background_jobs/        # Shared job scheduling, workers, requests, and results
+│   ├── chooser/                # Chooser-mode selection, outcome, and output writing
 │   ├── cli/                    # Command-line arguments, options, help, and shell commands
 │   ├── config/                 # Configuration loading, validation, and key bindings
 │   ├── duplicate_finder/       # Duplicate candidate collection and content verification

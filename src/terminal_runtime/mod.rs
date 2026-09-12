@@ -1,5 +1,4 @@
 mod cd_on_exit;
-mod chooser_output;
 mod input_reader;
 mod kitty_dnd;
 mod shell_here;
