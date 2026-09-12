@@ -342,7 +342,7 @@ impl App {
                     .input
                     .frame_state
                     .archive_create_panel
-                    .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+                    .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
                     self.file_operations.archive_create = None;
                 }
@@ -357,7 +357,7 @@ impl App {
             .frame_state
             .archive_create_list_area
             .or(self.input.frame_state.archive_create_panel)
-            .is_some_and(|area| rect_contains(area, column, row))
+            .is_some_and(|area| area.contains((column, row).into()))
     }
 
     fn archive_create_visible_rows(&self) -> usize {

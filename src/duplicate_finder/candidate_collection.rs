@@ -57,7 +57,7 @@ pub(super) fn collect_size_candidates(
             let Ok(entry) = entry else {
                 continue;
             };
-            if !show_hidden && crate::fs::is_hidden_entry(&entry) {
+            if !show_hidden && crate::filesystem::is_hidden_entry(&entry) {
                 continue;
             }
             let Ok(file_type) = entry.file_type() else {
@@ -98,7 +98,7 @@ pub(super) fn collect_size_candidates(
                 cache_key: duplicate_hash_cache_key(&path, &metadata),
             });
         }
-        nodes.sort_by(|a, b| crate::fs::natural_cmp(&a.0, &b.0));
+        nodes.sort_by(|a, b| crate::filesystem::natural_cmp(&a.0, &b.0));
         for (_, path, is_dir) in nodes {
             if is_dir {
                 queue.push_back(path);

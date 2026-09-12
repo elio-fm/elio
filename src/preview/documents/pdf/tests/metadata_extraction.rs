@@ -1,5 +1,5 @@
 use crate::{
-    fs::{Entry, EntryKind},
+    filesystem::{Entry, EntryKind},
     preview::{PreviewKind, build_preview},
 };
 use ratatui::text::Line;

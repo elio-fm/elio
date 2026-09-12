@@ -59,7 +59,7 @@ impl DirectoryFingerprintPool {
             workers.push(thread::spawn(move || {
                 while let Some((request, canceled)) = DirectoryFingerprintShared::pop(&shared) {
                     let key = DirectoryFingerprintJobKey::from_request(&request);
-                    let result = crate::fs::scan_directory_fingerprint_cancellable(
+                    let result = crate::filesystem::scan_directory_fingerprint_cancellable(
                         &request.cwd,
                         request.show_hidden,
                         &|| canceled.load(Ordering::Relaxed),
@@ -79,7 +79,7 @@ impl DirectoryFingerprintPool {
                         Err((true, _)) => continue,
                         Err((false, error)) => Err(error
                             .downcast_ref::<std::io::Error>()
-                            .map(crate::fs::describe_io_error)
+                            .map(crate::filesystem::describe_io_error)
                             .unwrap_or("Read error")
                             .to_string()),
                     };

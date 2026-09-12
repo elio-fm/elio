@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::fs::{Entry, EntryKind};
+use crate::filesystem::{Entry, EntryKind};
 
 use super::{
     DuplicateFile, DuplicateGroup, DuplicateScanBatch, DuplicateScanResult, DuplicateScanStats,

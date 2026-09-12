@@ -3,7 +3,7 @@ use std::{ffi::OsString, path::PathBuf};
 use crate::{
     config::{self, OpenPlatform, OpenRule, OpenTargetType},
     file_classification::{self, FileClass, PreviewKind},
-    fs::{Entry, EntryKind},
+    filesystem::{Entry, EntryKind},
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]

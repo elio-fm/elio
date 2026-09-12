@@ -204,7 +204,7 @@ impl App {
                     .frame_state
                     .duplicate_hits
                     .iter()
-                    .find(|hit| crate::fs::rect_contains(hit.rect, mouse.column, mouse.row))
+                    .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))
                     .cloned()
                 {
                     self.set_duplicate_selection(hit.index);
@@ -221,7 +221,7 @@ impl App {
                     .input
                     .frame_state
                     .duplicate_panel
-                    .is_none_or(|rect| !crate::fs::rect_contains(rect, mouse.column, mouse.row))
+                    .is_none_or(|rect| !rect.contains((mouse.column, mouse.row).into()))
                 {
                     self.close_duplicate_finder();
                 }
@@ -231,7 +231,7 @@ impl App {
                     .input
                     .frame_state
                     .preview_panel
-                    .is_some_and(|rect| crate::fs::rect_contains(rect, mouse.column, mouse.row))
+                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
                 {
                     self.scroll_preview_lines(1);
                 } else {
@@ -243,7 +243,7 @@ impl App {
                     .input
                     .frame_state
                     .preview_panel
-                    .is_some_and(|rect| crate::fs::rect_contains(rect, mouse.column, mouse.row))
+                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
                 {
                     self.scroll_preview_lines(-1);
                 } else {

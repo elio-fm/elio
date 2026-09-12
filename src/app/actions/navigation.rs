@@ -28,7 +28,10 @@ impl App {
                     suffix,
                 )
             }
-            None => format!("0/0  {}", crate::fs::display_path(&self.file_browser.cwd)),
+            None => format!(
+                "0/0  {}",
+                crate::filesystem::display_path(&self.file_browser.cwd)
+            ),
         }
     }
 
@@ -630,7 +633,7 @@ impl App {
 fn open_status_name(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| crate::fs::display_path(path))
+        .unwrap_or_else(|| crate::filesystem::display_path(path))
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -640,7 +643,7 @@ fn entry_from_existing_file(path: &Path) -> Option<Entry> {
 
 fn entry_from_existing_path(path: &Path) -> Option<Entry> {
     let name = path.file_name()?.to_string_lossy().into_owned();
-    crate::fs::entry_from_path(path.to_path_buf(), name).ok()
+    crate::filesystem::entry_from_path(path.to_path_buf(), name).ok()
 }
 
 #[cfg(test)]

@@ -56,7 +56,7 @@ impl App {
         &mut self,
         token: u64,
         path: &std::path::Path,
-        result: crate::fs::DirectoryStatsScanResult,
+        result: crate::filesystem::DirectoryStatsScanResult,
     ) -> bool {
         let Some(current_entry) = self.active_preview_entry() else {
             return false;
@@ -80,7 +80,7 @@ impl App {
 
         self.preview.state.directory_stats_ready_at = None;
         match result {
-            crate::fs::DirectoryStatsScanResult::Complete(stats) => {
+            crate::filesystem::DirectoryStatsScanResult::Complete(stats) => {
                 self.preview.state.directory_stats = Some(PreviewDirectoryStatsState::Complete {
                     token,
                     path: path.to_path_buf(),
@@ -88,7 +88,7 @@ impl App {
                 });
                 true
             }
-            crate::fs::DirectoryStatsScanResult::Incomplete { partial, error } => {
+            crate::filesystem::DirectoryStatsScanResult::Incomplete { partial, error } => {
                 self.preview.state.directory_stats = Some(PreviewDirectoryStatsState::Incomplete {
                     token,
                     path: path.to_path_buf(),
@@ -97,7 +97,7 @@ impl App {
                 });
                 true
             }
-            crate::fs::DirectoryStatsScanResult::Canceled => false,
+            crate::filesystem::DirectoryStatsScanResult::Canceled => false,
         }
     }
 

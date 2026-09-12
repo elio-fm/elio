@@ -98,7 +98,7 @@ fn audio_preview_falls_back_to_file_metadata_without_tools() {
     assert_eq!(line_texts.first().map(String::as_str), Some("Details"));
     assert!(preview.preview_visual.is_none());
     assert!(line_texts.iter().any(|line| line.contains("File Size")
-        && line.contains(&crate::fs::format_size(contents.len() as u64))));
+        && line.contains(&crate::filesystem::format_size(contents.len() as u64))));
     assert!(line_texts.iter().all(|line| !line.contains("Title")));
     assert!(
         line_texts

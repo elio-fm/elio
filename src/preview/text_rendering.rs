@@ -1,4 +1,4 @@
-use crate::fs as browser_support;
+use crate::filesystem as browser_support;
 use ratatui::{
     layout::Alignment,
     style::Style,

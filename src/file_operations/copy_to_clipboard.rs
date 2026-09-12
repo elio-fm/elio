@@ -1,5 +1,4 @@
 use crate::app::App;
-use crate::fs::rect_contains;
 use anyhow::{Result, anyhow};
 use base64::Engine as _;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
@@ -116,7 +115,7 @@ impl App {
                 .input
                 .frame_state
                 .copy_panel
-                .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+                .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
             if !inside {
                 self.file_operations.copy = None;
                 return Ok(());
@@ -127,7 +126,7 @@ impl App {
                 .frame_state
                 .copy_hits
                 .iter()
-                .find(|hit| rect_contains(hit.rect, mouse.column, mouse.row))
+                .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))
                 .cloned()
             {
                 self.confirm_copy_index(hit.index)?;

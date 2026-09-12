@@ -379,5 +379,7 @@ fn fingerprint_time(time: Option<SystemTime>) -> Option<(u64, u32)> {
             .map(|duration| (duration.as_secs(), duration.subsec_nanos()))
     })
 }
+
 #[cfg(test)]
+#[path = "tests/directory_scanning.rs"]
 mod tests;

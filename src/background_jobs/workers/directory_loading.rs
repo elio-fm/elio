@@ -1,5 +1,5 @@
 use super::*;
-use crate::fs::SortMode;
+use crate::filesystem::SortMode;
 use std::{
     path::PathBuf,
     sync::{
@@ -66,7 +66,7 @@ impl DirectoryPool {
                 while let Some((request, canceled)) = DirectoryShared::pop(&shared) {
                     let key = DirectoryJobKey::from_request(&request);
                     let started_at = Instant::now();
-                    let result = crate::fs::load_directory_snapshot_cancellable(
+                    let result = crate::filesystem::load_directory_snapshot_cancellable(
                         &request.cwd,
                         request.show_hidden,
                         request.sort_mode,
@@ -88,7 +88,7 @@ impl DirectoryPool {
                         Err((true, _)) => continue,
                         Err((false, error)) => Err(error
                             .downcast_ref::<std::io::Error>()
-                            .map(crate::fs::describe_io_error)
+                            .map(crate::filesystem::describe_io_error)
                             .unwrap_or("Read error")
                             .to_string()),
                     };

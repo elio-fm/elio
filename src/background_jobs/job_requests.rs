@@ -1,5 +1,5 @@
 use crate::file_operations::ClipOp;
-use crate::fs::{Entry, SortMode};
+use crate::filesystem::{Entry, SortMode};
 use crate::fuzzy_finder::SearchScope;
 use crate::{preview, preview::PreviewWorkClass};
 use std::{path::PathBuf, time::SystemTime};
@@ -30,7 +30,7 @@ pub(crate) struct SearchRequest {
     pub(crate) cwd: PathBuf,
     pub(crate) scope: SearchScope,
     pub(crate) show_hidden: bool,
-    pub(crate) fingerprint: crate::fs::DirectoryFingerprint,
+    pub(crate) fingerprint: crate::filesystem::DirectoryFingerprint,
 }
 
 #[derive(Clone, Debug)]

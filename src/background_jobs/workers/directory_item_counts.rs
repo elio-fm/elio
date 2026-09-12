@@ -55,8 +55,11 @@ impl DirectoryItemCountPool {
             workers.push(thread::spawn(move || {
                 while let Some(request) = DirectoryItemCountShared::pop(&shared) {
                     let key = DirectoryItemCountJobKey::from_request(&request);
-                    let item_count =
-                        crate::fs::count_directory_items(&request.path, request.show_hidden).ok();
+                    let item_count = crate::filesystem::count_directory_items(
+                        &request.path,
+                        request.show_hidden,
+                    )
+                    .ok();
                     DirectoryItemCountShared::finish(&shared, &key);
                     if result_tx
                         .send(JobResult::DirectoryItemCount(DirectoryItemCountBuild {

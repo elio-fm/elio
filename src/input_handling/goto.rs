@@ -1,4 +1,4 @@
-use crate::{app::App, fs::rect_contains};
+use crate::app::App;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
@@ -31,7 +31,7 @@ impl App {
                 .input
                 .frame_state
                 .goto_panel
-                .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+                .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
             if !inside {
                 self.overlays.goto = None;
                 return Ok(());
@@ -42,7 +42,7 @@ impl App {
                 .frame_state
                 .goto_hits
                 .iter()
-                .find(|hit| rect_contains(hit.rect, mouse.column, mouse.row))
+                .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))
                 .cloned()
             {
                 self.confirm_goto_index(hit.index)?;

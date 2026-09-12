@@ -55,9 +55,8 @@ pub(crate) use self::state::{
 pub(crate) use crate::chooser::ChooserExit;
 pub use crate::duplicate_finder::DuplicateRow;
 pub(crate) use crate::file_classification::FileClass;
-pub(crate) use crate::fs::{
-    format_item_count, format_size, format_size_parts, format_time_ago, rect_contains,
-    sanitize_terminal_text,
+pub(crate) use crate::filesystem::{
+    format_item_count, format_size, format_size_parts, format_time_ago, sanitize_terminal_text,
 };
 #[cfg(unix)]
 #[cfg(test)]
@@ -68,9 +67,9 @@ pub use self::types::{
     SearchScope, ViewMetrics,
 };
 pub use crate::file_browser::ViewMode;
-pub use crate::fs::Entry;
+pub use crate::filesystem::Entry;
 #[cfg(test)]
-pub use crate::fs::EntryKind;
+pub use crate::filesystem::EntryKind;
 pub use crate::fuzzy_finder::SearchRow;
 #[cfg(test)]
 pub use crate::places::PlaceItem;

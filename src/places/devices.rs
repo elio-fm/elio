@@ -73,7 +73,7 @@ pub(super) fn mounted_device_items(
     }
 
     items.sort_by(|left, right| {
-        crate::fs::natural_cmp(
+        crate::filesystem::natural_cmp(
             &left.title.to_ascii_lowercase(),
             &right.title.to_ascii_lowercase(),
         )
@@ -158,7 +158,7 @@ pub(super) fn mounted_device_items(home: &Path, pinned_paths: &HashSet<PathBuf>)
     }
 
     items.sort_by(|left, right| {
-        crate::fs::natural_cmp(
+        crate::filesystem::natural_cmp(
             &left.title.to_ascii_lowercase(),
             &right.title.to_ascii_lowercase(),
         )

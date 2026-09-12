@@ -1,5 +1,4 @@
 use crate::app::{App, TrashRequest};
-use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::{Path, PathBuf};
@@ -328,7 +327,7 @@ impl App {
                     .input
                     .frame_state
                     .trash_panel
-                    .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+                    .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
                     self.file_operations.trash = None;
                     return Ok(());
@@ -337,14 +336,14 @@ impl App {
                     .input
                     .frame_state
                     .trash_confirm_btn
-                    .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
+                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
                 {
                     self.confirm_trash()?;
                 } else if self
                     .input
                     .frame_state
                     .trash_cancel_btn
-                    .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row))
+                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
                 {
                     self.file_operations.trash = None;
                 }

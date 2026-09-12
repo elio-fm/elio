@@ -3,7 +3,7 @@ use super::{
     appearance as theme,
     external_commands::{run_command_capture_stdout_cancellable, run_command_status_cancellable},
 };
-use crate::fs::Entry;
+use crate::filesystem::Entry;
 use ratatui::{
     style::Style,
     text::{Line, Span},
@@ -167,7 +167,7 @@ fn render_video_metadata_lines(
     byte_size: u64,
 ) -> Vec<Line<'static>> {
     let palette = theme::palette();
-    let mut fields = vec![("File Size", crate::fs::format_size(byte_size))];
+    let mut fields = vec![("File Size", crate::filesystem::format_size(byte_size))];
     if let Some((width, height)) = metadata.and_then(|metadata| metadata.dimensions) {
         fields.insert(0, ("Dimensions", format!("{width}x{height}")));
     }

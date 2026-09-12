@@ -1,5 +1,4 @@
 use crate::app::{App, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
-use crate::fs::rect_contains;
 use crate::input_handling::text_editing::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
@@ -226,7 +225,7 @@ impl App {
                 .input
                 .frame_state
                 .rename_panel
-                .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+                .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
             if !inside {
                 self.file_operations.rename = None;
             }

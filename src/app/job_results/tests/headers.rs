@@ -70,8 +70,8 @@ fn directory_header_marks_incomplete_totals_without_claiming_exactness() {
         .defer_result(JobResult::DirectoryStats(DirectoryStatsBuild {
             token,
             path: entry.path.clone(),
-            result: crate::fs::DirectoryStatsScanResult::Incomplete {
-                partial: crate::fs::DirectoryStats {
+            result: crate::filesystem::DirectoryStatsScanResult::Incomplete {
+                partial: crate::filesystem::DirectoryStats {
                     item_count: 4,
                     folder_count: 1,
                     file_count: 3,
@@ -118,12 +118,14 @@ fn stale_directory_totals_result_is_ignored_after_selection_changes() {
         .defer_result(JobResult::DirectoryStats(DirectoryStatsBuild {
             token: stale_token,
             path: stale_entry.path.clone(),
-            result: crate::fs::DirectoryStatsScanResult::Complete(crate::fs::DirectoryStats {
-                item_count: 999,
-                folder_count: 0,
-                file_count: 999,
-                total_size_bytes: 9_990_000_000,
-            }),
+            result: crate::filesystem::DirectoryStatsScanResult::Complete(
+                crate::filesystem::DirectoryStats {
+                    item_count: 999,
+                    folder_count: 0,
+                    file_count: 999,
+                    total_size_bytes: 9_990_000_000,
+                },
+            ),
         }));
 
     let _ = app.process_background_jobs();

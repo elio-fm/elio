@@ -1,7 +1,7 @@
 use super::*;
 use crate::preview::{PreviewRequestOptions, PreviewWorkClass, default_code_preview_line_limit};
 use crate::{
-    fs::{Entry, EntryKind},
+    filesystem::{Entry, EntryKind},
     fuzzy_finder::SearchScope,
 };
 use std::path::PathBuf;
@@ -82,14 +82,14 @@ fn search_pool_replaces_pending_request_with_latest_distinct_job() {
         cwd: PathBuf::from("/tmp/a"),
         scope: SearchScope::Files,
         show_hidden: false,
-        fingerprint: crate::fs::DirectoryFingerprint::default(),
+        fingerprint: crate::filesystem::DirectoryFingerprint::default(),
     }));
     assert!(scheduler.submit_search(SearchRequest {
         token: 2,
         cwd: PathBuf::from("/tmp/b"),
         scope: SearchScope::Files,
         show_hidden: false,
-        fingerprint: crate::fs::DirectoryFingerprint::default(),
+        fingerprint: crate::filesystem::DirectoryFingerprint::default(),
     }));
     assert_eq!(
         scheduler.snapshot().search_pending,
@@ -97,7 +97,7 @@ fn search_pool_replaces_pending_request_with_latest_distinct_job() {
             cwd: PathBuf::from("/tmp/b"),
             scope: SearchScope::Files,
             show_hidden: false,
-            fingerprint: crate::fs::DirectoryFingerprint::default(),
+            fingerprint: crate::filesystem::DirectoryFingerprint::default(),
         })
     );
 }
@@ -423,7 +423,7 @@ fn scheduler_reports_pending_work_when_jobs_are_queued() {
         cwd: PathBuf::from("/tmp/a"),
         scope: SearchScope::Files,
         show_hidden: false,
-        fingerprint: crate::fs::DirectoryFingerprint::default(),
+        fingerprint: crate::filesystem::DirectoryFingerprint::default(),
     }));
     assert!(scheduler.has_pending_work());
 }
@@ -436,7 +436,7 @@ fn scheduler_can_cancel_pending_search_work() {
         cwd: PathBuf::from("/tmp/a"),
         scope: SearchScope::Files,
         show_hidden: false,
-        fingerprint: crate::fs::DirectoryFingerprint::default(),
+        fingerprint: crate::filesystem::DirectoryFingerprint::default(),
     }));
 
     scheduler.cancel_search();
@@ -453,7 +453,7 @@ fn scheduler_reports_pending_work_for_buffered_results() {
         cwd: PathBuf::from("/tmp/search"),
         scope: SearchScope::Files,
         show_hidden: false,
-        fingerprint: crate::fs::DirectoryFingerprint::default(),
+        fingerprint: crate::filesystem::DirectoryFingerprint::default(),
         result: Ok(crate::fuzzy_finder::SearchIndex {
             candidates: Vec::new(),
             stats: crate::fuzzy_finder::SearchIndexStats::default(),

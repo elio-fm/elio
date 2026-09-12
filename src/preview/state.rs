@@ -4,7 +4,7 @@ use super::{
     images::{SixelDcsKey, StaticImageKey},
 };
 use crate::{
-    fs::Entry,
+    filesystem::Entry,
     terminal_runtime::terminal_images::{
         ImageProtocol, RenderedImageDimensions, TerminalIdentity, TerminalWindowSize,
     },
@@ -93,12 +93,12 @@ pub(crate) enum PreviewDirectoryStatsState {
     Complete {
         token: u64,
         path: PathBuf,
-        stats: crate::fs::DirectoryStats,
+        stats: crate::filesystem::DirectoryStats,
     },
     Incomplete {
         token: u64,
         path: PathBuf,
-        partial: crate::fs::DirectoryStats,
+        partial: crate::filesystem::DirectoryStats,
         error: String,
     },
 }

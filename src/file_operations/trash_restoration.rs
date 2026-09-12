@@ -89,7 +89,7 @@ fn restore_trash_item_freedesktop(entry_path: &Path, info_dir: PathBuf) -> anyho
     let content =
         fs::read_to_string(&info_path).with_context(|| format!("cannot read {:?}", info_path))?;
 
-    let original = crate::fs::parse_original_path(&content)
+    let original = crate::filesystem::parse_original_path(&content)
         .ok_or_else(|| anyhow::anyhow!("cannot parse original path from {:?}", info_path))?;
 
     if original.exists() {

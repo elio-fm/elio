@@ -3,7 +3,7 @@ use super::{
     appearance as theme,
     external_commands::{run_command_capture_stdout_cancellable, run_command_status_cancellable},
 };
-use crate::fs::Entry;
+use crate::filesystem::Entry;
 use ratatui::{
     style::Style,
     text::{Line, Span},
@@ -520,7 +520,7 @@ fn render_audio_metadata_lines(
     if let Some(channels) = metadata.and_then(|metadata| metadata.channels) {
         fields.push(("Channels", format_channels(channels)));
     }
-    fields.push(("File Size", crate::fs::format_size(byte_size)));
+    fields.push(("File Size", crate::filesystem::format_size(byte_size)));
 
     let label_width = fields
         .iter()

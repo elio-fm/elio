@@ -8,7 +8,7 @@ mod elevated_session;
 mod file_browser;
 mod file_classification;
 mod file_operations;
-mod fs;
+mod filesystem;
 mod fuzzy_finder;
 mod goto_menu;
 mod input_handling;

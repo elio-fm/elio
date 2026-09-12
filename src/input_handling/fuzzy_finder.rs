@@ -96,7 +96,7 @@ impl App {
                     .frame_state
                     .search_hits
                     .iter()
-                    .find(|hit| rect_contains(hit.rect, mouse.column, mouse.row))
+                    .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))
                     .cloned()
                 {
                     self.select_search_index(hit.index);
@@ -105,7 +105,7 @@ impl App {
                     .input
                     .frame_state
                     .search_panel
-                    .is_none_or(|rect| !rect_contains(rect, mouse.column, mouse.row))
+                    .is_none_or(|rect| !rect.contains((mouse.column, mouse.row).into()))
                 {
                     self.close_search_overlay();
                     self.status.clear();

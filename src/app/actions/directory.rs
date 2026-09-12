@@ -18,14 +18,14 @@ impl App {
     pub fn process_auto_reload(&mut self) -> Result<bool> {
         while let Ok(event) = self.file_browser.directory_runtime.watch_rx.try_recv() {
             match event {
-                crate::fs::DirectoryWatchEvent::Changed(paths)
-                    if !crate::fs::event_affects_visible_entries(
+                crate::filesystem::DirectoryWatchEvent::Changed(paths)
+                    if !crate::filesystem::event_affects_visible_entries(
                         &paths,
                         self.effective_show_hidden(),
                     ) => {}
                 _ => {
                     self.file_browser.directory_runtime.pending_reload_at =
-                        Some(Instant::now() + crate::fs::directory_watch_debounce());
+                        Some(Instant::now() + crate::filesystem::directory_watch_debounce());
                 }
             }
         }
@@ -134,7 +134,7 @@ impl App {
     pub(crate) fn apply_directory_snapshot(
         &mut self,
         load: PendingDirectoryLoad,
-        snapshot: crate::fs::DirectorySnapshot,
+        snapshot: crate::filesystem::DirectorySnapshot,
     ) {
         let should_refresh_open_search = self.fuzzy_finder.search.is_some();
         self.invalidate_search_index_for_directory_snapshot(&load.target_cwd);
@@ -255,12 +255,15 @@ impl App {
         let metadata = std::fs::metadata(&path).map_err(|error| {
             anyhow!(
                 "Cannot open {}: {}",
-                crate::fs::display_path(&path),
-                crate::fs::describe_io_error(&error)
+                crate::filesystem::display_path(&path),
+                crate::filesystem::describe_io_error(&error)
             )
         })?;
         if !metadata.is_dir() {
-            bail!("{} is not a directory", crate::fs::display_path(&path));
+            bail!(
+                "{} is not a directory",
+                crate::filesystem::display_path(&path)
+            );
         }
         let normalized = path.canonicalize().unwrap_or(path);
         if normalized == self.file_browser.cwd
@@ -274,7 +277,7 @@ impl App {
             }
             self.status = format!(
                 "Already in {}",
-                crate::fs::display_path(&self.file_browser.cwd)
+                crate::filesystem::display_path(&self.file_browser.cwd)
             );
             return Ok(());
         }
@@ -291,7 +294,10 @@ impl App {
                 }
                 load.completion = completion;
             }
-            self.status = format!("Already opening {}", crate::fs::display_path(&normalized));
+            self.status = format!(
+                "Already opening {}",
+                crate::filesystem::display_path(&normalized)
+            );
             return Ok(());
         }
 
@@ -361,7 +367,7 @@ impl App {
             .is_ok()
         {}
 
-        match crate::fs::start_directory_watcher(
+        match crate::filesystem::start_directory_watcher(
             &self.file_browser.cwd,
             &self.file_browser.directory_runtime.watch_tx,
         ) {

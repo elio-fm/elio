@@ -3,7 +3,7 @@ use super::{
     DirectoryViewMemory, LocalFilter, SelectedPaths, ViewMode, git_status::GitStatusState,
     item_dragging::ItemDragState,
 };
-use crate::fs::{Entry, SortMode};
+use crate::filesystem::{Entry, SortMode};
 use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,

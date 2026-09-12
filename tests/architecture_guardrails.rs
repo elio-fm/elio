@@ -20,13 +20,13 @@ fn preview_theme_access_stays_behind_preview_appearance_adapter() {
 }
 
 #[test]
-fn fs_does_not_depend_on_app() {
-    assert_tree_has_no_pattern("src/fs", "app::", &[]);
+fn filesystem_does_not_depend_on_app() {
+    assert_tree_has_no_pattern("src/filesystem", "app::", &[]);
 }
 
 #[test]
-fn fs_does_not_depend_on_file_operations() {
-    assert_tree_has_no_pattern("src/fs", "file_operations::", &[]);
+fn filesystem_does_not_depend_on_file_operations() {
+    assert_tree_has_no_pattern("src/filesystem", "file_operations::", &[]);
 }
 
 #[test]

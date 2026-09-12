@@ -38,7 +38,7 @@ pub(crate) struct SearchCache {
     pub(crate) cwd: PathBuf,
     pub(crate) scope: SearchScope,
     pub(crate) show_hidden: bool,
-    pub(crate) fingerprint: crate::fs::DirectoryFingerprint,
+    pub(crate) fingerprint: crate::filesystem::DirectoryFingerprint,
     pub(crate) candidates: Arc<Vec<SearchCandidate>>,
     pub(crate) stats: SearchIndexStats,
 }
@@ -50,7 +50,7 @@ pub struct SearchRow {
     pub name: String,
     pub relative: String,
     pub is_dir: bool,
-    pub symlink: Option<crate::fs::SymlinkInfo>,
+    pub symlink: Option<crate::filesystem::SymlinkInfo>,
     pub selected: bool,
 }
 

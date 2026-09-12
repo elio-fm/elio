@@ -1,6 +1,6 @@
 use super::job_requests::ArchiveExtractRequest;
 use crate::duplicate_finder::{DuplicateScanBatch, DuplicateScanResult};
-use crate::fs::Entry;
+use crate::filesystem::Entry;
 use crate::fuzzy_finder::{SearchIndex, SearchIndexBatch, SearchScope};
 use crate::preview::{
     self,
@@ -15,7 +15,7 @@ pub(crate) struct SearchBuild {
     pub(crate) cwd: PathBuf,
     pub(crate) scope: SearchScope,
     pub(crate) show_hidden: bool,
-    pub(crate) fingerprint: crate::fs::DirectoryFingerprint,
+    pub(crate) fingerprint: crate::filesystem::DirectoryFingerprint,
     pub(crate) result: Result<SearchIndex, String>,
 }
 
@@ -25,7 +25,7 @@ pub(crate) struct SearchBatchBuild {
     pub(crate) cwd: PathBuf,
     pub(crate) scope: SearchScope,
     pub(crate) show_hidden: bool,
-    pub(crate) fingerprint: crate::fs::DirectoryFingerprint,
+    pub(crate) fingerprint: crate::filesystem::DirectoryFingerprint,
     pub(crate) batch: SearchIndexBatch,
 }
 
@@ -49,7 +49,7 @@ pub(crate) struct DuplicateScanBatchBuild {
 pub(crate) struct DirectoryBuild {
     pub(crate) token: u64,
     pub(crate) cwd: PathBuf,
-    pub(crate) result: Result<crate::fs::DirectorySnapshot, String>,
+    pub(crate) result: Result<crate::filesystem::DirectorySnapshot, String>,
 }
 
 #[derive(Debug)]
@@ -64,7 +64,7 @@ pub(crate) struct DirectoryItemCountBuild {
 pub(crate) struct DirectoryStatsBuild {
     pub(crate) token: u64,
     pub(crate) path: PathBuf,
-    pub(crate) result: crate::fs::DirectoryStatsScanResult,
+    pub(crate) result: crate::filesystem::DirectoryStatsScanResult,
 }
 
 #[derive(Debug)]
@@ -72,7 +72,7 @@ pub(crate) struct DirectoryFingerprintBuild {
     pub(crate) token: u64,
     pub(crate) cwd: PathBuf,
     pub(crate) show_hidden: bool,
-    pub(crate) result: Result<crate::fs::DirectoryFingerprint, String>,
+    pub(crate) result: Result<crate::filesystem::DirectoryFingerprint, String>,
 }
 
 #[derive(Debug)]

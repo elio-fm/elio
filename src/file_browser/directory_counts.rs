@@ -1,4 +1,4 @@
-use crate::fs::{DirectoryFingerprint, Entry};
+use crate::filesystem::{DirectoryFingerprint, Entry};
 use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},

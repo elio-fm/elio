@@ -1,5 +1,5 @@
 use super::{appearance, *};
-use crate::fs::{self as browser_support, Entry, EntryKind};
+use crate::filesystem::{self as browser_support, Entry, EntryKind};
 use ratatui::{
     style::Style,
     text::{Line, Span},

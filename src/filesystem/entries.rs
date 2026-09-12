@@ -1,5 +1,28 @@
 use std::{path::PathBuf, time::SystemTime};
 
+fn is_hidden(file_name: &std::ffi::OsStr) -> bool {
+    file_name.to_string_lossy().starts_with('.')
+}
+
+/// Returns `true` if the directory entry should be treated as hidden.
+///
+/// On all platforms, entries whose names begin with `.` are hidden.
+/// On Windows, entries with the `FILE_ATTRIBUTE_HIDDEN` attribute are also hidden.
+pub(crate) fn is_hidden_entry(entry: &std::fs::DirEntry) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
+        if entry
+            .metadata()
+            .is_ok_and(|m| m.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0)
+        {
+            return true;
+        }
+    }
+    is_hidden(entry.file_name().as_os_str())
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum EntryKind {
     Directory,
