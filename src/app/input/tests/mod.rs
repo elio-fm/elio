@@ -1,10 +1,13 @@
 mod archive;
 mod browser_wheel;
+mod duplicate_finder;
 mod errors;
+mod fuzzy_finder;
 mod helpers;
 mod keyboard;
 mod local_filter;
 mod mouse;
 mod navigation;
+mod open_with;
 mod preview;
 mod preview_wheel;

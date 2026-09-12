@@ -112,14 +112,3 @@ impl Default for ViewMetrics {
         }
     }
 }
-
-#[derive(Clone, Debug)]
-pub struct SearchRow {
-    pub index: usize,
-    pub path: std::path::PathBuf,
-    pub name: String,
-    pub relative: String,
-    pub is_dir: bool,
-    pub symlink: Option<crate::fs::SymlinkInfo>,
-    pub selected: bool,
-}

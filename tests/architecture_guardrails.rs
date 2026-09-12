@@ -50,6 +50,11 @@ fn duplicate_finder_does_not_depend_on_app() {
 }
 
 #[test]
+fn opening_does_not_depend_on_app() {
+    assert_tree_has_no_pattern("src/opening", "app::", &[]);
+}
+
+#[test]
 fn background_jobs_do_not_depend_on_app() {
     assert_tree_has_no_pattern("src/background_jobs", "app::", &[]);
 }

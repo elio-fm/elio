@@ -1,5 +1,8 @@
+mod duplicate_finder;
+mod fuzzy_finder;
 mod keyboard;
 mod mouse;
+mod open_with;
 mod wheel;
 
 use super::*;

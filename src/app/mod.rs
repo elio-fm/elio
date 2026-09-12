@@ -2,13 +2,10 @@ mod actions;
 mod constants;
 mod directory_counts;
 mod drag;
-mod duplicate_finder_overlay;
-mod fuzzy_finder_overlay;
 mod git;
 mod input;
 mod job_results;
 mod local_filter;
-mod open_with_overlay;
 pub(crate) mod preview;
 use crate::config;
 mod selection;
@@ -17,8 +14,6 @@ mod text_edit;
 mod types;
 
 use self::constants::*;
-#[cfg(test)]
-pub(crate) use self::state::DuplicateFinderOverlay;
 use self::state::*;
 pub(crate) use self::text_edit::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
@@ -43,6 +38,7 @@ pub(crate) use crate::file_browser::{
     PendingDirectoryFingerprintScan, PendingDirectoryLoad, SelectionChange,
 };
 pub(crate) use crate::file_operations::ClipOp;
+use crate::fuzzy_finder::SearchCache;
 #[cfg(test)]
 pub(in crate::app) use crate::preview::PreviewDirectoryStatsState;
 pub(in crate::app) use crate::preview::{PreviewLoadState, PreviewRefreshMode};
@@ -57,7 +53,8 @@ use std::{
 
 pub use self::state::App;
 
-pub(crate) use self::state::{ChooserExit, DuplicateRow, PendingTerminalTask};
+pub(crate) use self::state::{ChooserExit, PendingTerminalTask};
+pub use crate::duplicate_finder::DuplicateRow;
 pub(crate) use crate::file_classification::FileClass;
 pub(crate) use crate::fs::{
     format_item_count, format_size, format_size_parts, format_time_ago, rect_contains,
@@ -69,10 +66,13 @@ pub use crate::preview::PreviewMetricsSnapshot;
 
 pub use self::types::{
     CopyHit, DuplicateHit, EntryHit, FrameState, GoToHit, OpenWithHit, PathHit, SearchHit,
-    SearchRow, SearchScope, ViewMetrics,
+    SearchScope, ViewMetrics,
 };
 pub use crate::file_browser::ViewMode;
-pub use crate::fs::{Entry, EntryKind};
+pub use crate::fs::Entry;
+#[cfg(test)]
+pub use crate::fs::EntryKind;
+pub use crate::fuzzy_finder::SearchRow;
 #[cfg(test)]
 pub use crate::places::PlaceItem;
 pub use crate::places::{PlaceKind, PlaceRow};

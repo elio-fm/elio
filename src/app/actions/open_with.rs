@@ -1,9 +1,6 @@
 use std::path::Path;
 
-use super::super::{
-    App,
-    state::{OpenWithOverlay, OpenWithRow, PendingTerminalTask},
-};
+use super::super::{App, state::PendingTerminalTask};
 #[cfg(any(test, target_os = "macos", not(unix)))]
 use crate::opening::open_in_system;
 use crate::opening::{
@@ -92,19 +89,19 @@ impl App {
         });
     }
 
-    pub(super) fn confirm_open_with_index(&mut self, index: usize) -> Result<()> {
-        let Some(row) = self
+    pub(in crate::app) fn confirm_open_with_index(&mut self, index: usize) -> Result<()> {
+        let Some(application) = self
             .overlays
             .open_with
             .as_ref()
-            .and_then(|overlay| overlay.rows.get(index))
+            .and_then(|selection| selection.application_at(index))
         else {
             return Ok(());
         };
-        let display_name = row.app.display_name.clone();
-        let program = row.app.program.clone();
-        let args = row.app.args.clone();
-        let requires_terminal = row.app.requires_terminal;
+        let display_name = application.display_name.clone();
+        let program = application.program.clone();
+        let args = application.args.clone();
+        let requires_terminal = application.requires_terminal;
 
         self.overlays.open_with = None;
 
@@ -172,7 +169,7 @@ impl App {
             }
             _ => {
                 self.overlays.help = false;
-                self.overlays.open_with = Some(build_open_with_overlay(
+                self.overlays.open_with = Some(open_with::ApplicationSelection::new(
                     apps,
                     &crate::config::key_bindings().open_with_reserved_shortcuts(),
                 ));
@@ -182,16 +179,9 @@ impl App {
     }
 
     pub(in crate::app) fn move_open_with_selection(&mut self, delta: isize) {
-        let Some(overlay) = self.overlays.open_with.as_mut() else {
-            return;
-        };
-        if overlay.rows.is_empty() {
-            overlay.selected = 0;
-            return;
+        if let Some(selection) = self.overlays.open_with.as_mut() {
+            selection.move_selection(delta);
         }
-
-        let max = overlay.rows.len().saturating_sub(1) as isize;
-        overlay.selected = (overlay.selected as isize + delta).clamp(0, max) as usize;
     }
 
     pub(in crate::app) fn confirm_selected_open_with_row(&mut self) -> Result<()> {
@@ -206,49 +196,6 @@ impl App {
 
         self.confirm_open_with_index(index)
     }
-}
-
-fn build_open_with_overlay(
-    apps: Vec<OpenWithApplication>,
-    reserved_shortcuts: &[char],
-) -> OpenWithOverlay {
-    let mut shortcuts = open_with_shortcuts(reserved_shortcuts);
-    let rows = apps
-        .into_iter()
-        .map(|app| {
-            let shortcut = shortcuts.next();
-            let mut label = app.display_name.clone();
-            if app.requires_terminal && !is_env_editor_label(&label) {
-                label.push_str(" (terminal)");
-            }
-            if app.is_default {
-                label.push_str(" (default)");
-            }
-            OpenWithRow {
-                shortcut,
-                label,
-                app,
-            }
-        })
-        .collect();
-
-    OpenWithOverlay {
-        title: "Open With".to_string(),
-        rows,
-        selected: 0,
-    }
-}
-
-const OPEN_WITH_SHORTCUTS: &str = "123456789abcdefghijklmnopqrstuvwxyz";
-
-fn open_with_shortcuts(reserved: &[char]) -> impl Iterator<Item = char> + '_ {
-    OPEN_WITH_SHORTCUTS
-        .chars()
-        .filter(move |shortcut| !reserved.contains(shortcut))
-}
-
-fn is_env_editor_label(display_name: &str) -> bool {
-    display_name.contains("($VISUAL)") || display_name.contains("($EDITOR)")
 }
 
 fn open_with_fallback(path: &Path) -> std::result::Result<FallbackOpenOutcome, String> {
@@ -296,29 +243,6 @@ impl App {
         &mut self,
         rows: Vec<(String, String, Vec<String>, bool)>,
     ) {
-        use super::super::state::{OpenWithOverlay, OpenWithRow};
-        use crate::opening::open_with::OpenWithApplication;
-        self.overlays.open_with = Some(OpenWithOverlay {
-            title: "Open With".to_string(),
-            rows: rows
-                .into_iter()
-                .enumerate()
-                .map(
-                    |(index, (display_name, program, args, requires_terminal))| OpenWithRow {
-                        shortcut: char::from_digit((index + 1) as u32, 10),
-                        label: display_name.clone(),
-                        app: OpenWithApplication {
-                            display_name,
-                            application_id: None,
-                            program,
-                            args,
-                            is_default: false,
-                            requires_terminal,
-                        },
-                    },
-                )
-                .collect(),
-            selected: 0,
-        });
+        self.overlays.open_with = Some(open_with::ApplicationSelection::from_test_rows(rows));
     }
 }

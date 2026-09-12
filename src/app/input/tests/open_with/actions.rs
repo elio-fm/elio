@@ -1,6 +1,6 @@
 use super::{fake_open_with_app, fake_terminal_app, temp_dir_path};
 use crate::app::state::PendingTerminalTask;
-use crate::app::{App, open_with_overlay::overlay::FallbackOpenOutcome};
+use crate::app::{App, actions::open_with::FallbackOpenOutcome};
 use std::{
     cell::{Cell, RefCell},
     fs,

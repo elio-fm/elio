@@ -71,12 +71,9 @@ impl App {
     }
 
     fn open_with_row_index_for_shortcut(&self, ch: char) -> Option<usize> {
-        let needle = ch.to_ascii_lowercase();
-        self.overlays.open_with.as_ref().and_then(|overlay| {
-            overlay.rows.iter().position(|row| {
-                row.shortcut
-                    .is_some_and(|shortcut| shortcut.to_ascii_lowercase() == needle)
-            })
-        })
+        self.overlays
+            .open_with
+            .as_ref()
+            .and_then(|selection| selection.row_index_for_shortcut(ch))
     }
 }

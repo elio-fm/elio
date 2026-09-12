@@ -146,7 +146,7 @@ fn finish_editor_bulk_rename_opens_confirmation_with_relative_paths() {
     assert_eq!(app.status_message(), "");
     assert!(!temp_file.exists());
 
-    app.overlays.duplicates = Some(DuplicateFinderOverlay {
+    app.overlays.duplicates = Some(DuplicateFinderState {
         cwd: root.clone(),
         groups: vec![crate::duplicate_finder::DuplicateGroup {
             id: 1,
