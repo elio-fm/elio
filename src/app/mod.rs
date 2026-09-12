@@ -4,7 +4,7 @@ mod directory_counts;
 mod drag;
 mod duplicate_finder_overlay;
 mod fuzzy_finder_overlay;
-pub(crate) mod git;
+mod git;
 mod input;
 mod job_results;
 mod local_filter;

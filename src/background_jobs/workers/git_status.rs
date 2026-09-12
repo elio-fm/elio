@@ -1,5 +1,7 @@
 use super::*;
 use std::{
+    path::Path,
+    process::Command,
     sync::{Arc, Condvar, Mutex, mpsc},
     thread,
 };
@@ -33,7 +35,7 @@ impl GitStatusPool {
         let worker_shared = Arc::clone(&shared);
         let worker = thread::spawn(move || {
             while let Some(request) = GitStatusShared::pop(&worker_shared) {
-                let (branch, dirty) = crate::app::git::current_status(&request.cwd);
+                let (branch, dirty) = current_status(&request.cwd);
                 GitStatusShared::finish(&worker_shared);
                 if result_tx
                     .send(JobResult::GitStatus(GitStatusBuild {
@@ -105,3 +107,45 @@ impl GitStatusShared {
         shared.available.notify_all();
     }
 }
+
+fn current_status(cwd: &Path) -> (Option<String>, bool) {
+    if git_command(cwd, ["rev-parse", "--is-inside-work-tree"])
+        .is_none_or(|output| output.trim() != "true")
+    {
+        return (None, false);
+    }
+
+    let branch = git_command(cwd, ["branch", "--show-current"])
+        .and_then(non_empty_trimmed)
+        .or_else(|| git_command(cwd, ["rev-parse", "--short", "HEAD"]).and_then(non_empty_trimmed));
+    let dirty = git_command(
+        cwd,
+        ["status", "--porcelain=v1", "--untracked-files=normal"],
+    )
+    .is_some_and(|output| !output.trim().is_empty());
+
+    (branch, dirty)
+}
+
+fn git_command<const N: usize>(cwd: &Path, args: [&str; N]) -> Option<String> {
+    let output = Command::new("git")
+        .arg("--no-optional-locks")
+        .arg("-C")
+        .arg(cwd)
+        .args(args)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn non_empty_trimmed(output: String) -> Option<String> {
+    let branch = output.trim();
+    (!branch.is_empty()).then(|| branch.to_string())
+}
+
+#[cfg(test)]
+#[path = "tests/git_status.rs"]
+mod tests;
