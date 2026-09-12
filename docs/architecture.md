@@ -31,7 +31,8 @@ Current boundary rules:
   a generic shared module.
 - User-facing filesystem-mutation state and requests belong to `file_operations`; reusable
   filesystem primitives, including trash metadata and restoration, belong to `filesystem`.
-  Background workers remain centralized in `background_jobs` with Elio's other workers.
+  Keyboard and mouse interpretation belongs to `input_handling`; background workers remain
+  centralized in `background_jobs` with Elio's other workers.
 - Current-directory browsing state and pure browser transitions belong to `file_browser`; places
   pane state remains in `places`. Git status for the current directory and the browser-item drag
   selection also belong to `file_browser`; job execution, mouse hit testing, and terminal drag

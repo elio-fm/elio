@@ -1,7 +1,6 @@
 use super::trash_delete::TrashTarget;
 use crate::app::App;
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
@@ -158,105 +157,7 @@ impl App {
             .is_some_and(|r| r.confirmed)
     }
 
-    pub(crate) fn handle_restore_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.file_operations.restore = None;
-            return Ok(());
-        }
-        match key.code {
-            KeyCode::Esc => {
-                self.file_operations.restore = None;
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                if let Some(r) = &mut self.file_operations.restore {
-                    r.scroll = r.scroll.saturating_sub(1);
-                }
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if let Some(r) = &mut self.file_operations.restore {
-                    let visible = r.targets.len().min(8);
-                    let max_scroll = r.targets.len().saturating_sub(visible);
-                    r.scroll = (r.scroll + 1).min(max_scroll);
-                }
-            }
-            KeyCode::Left | KeyCode::Char('h') => {
-                if let Some(r) = &mut self.file_operations.restore {
-                    r.confirmed = true;
-                }
-            }
-            KeyCode::Right | KeyCode::Char('l') => {
-                if let Some(r) = &mut self.file_operations.restore {
-                    r.confirmed = false;
-                }
-            }
-            KeyCode::Tab => {
-                if let Some(r) = &mut self.file_operations.restore {
-                    r.confirmed = !r.confirmed;
-                }
-            }
-            KeyCode::Enter => {
-                if self
-                    .file_operations
-                    .restore
-                    .as_ref()
-                    .is_some_and(|r| r.confirmed)
-                {
-                    self.confirm_restore()?;
-                } else {
-                    self.file_operations.restore = None;
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    pub(crate) fn handle_restore_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        match mouse.kind {
-            MouseEventKind::Down(MouseButton::Left) => {
-                let inside = self
-                    .input
-                    .screen_regions
-                    .restore_panel
-                    .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
-                if !inside {
-                    self.file_operations.restore = None;
-                    return Ok(());
-                }
-                if self
-                    .input
-                    .screen_regions
-                    .restore_confirm_btn
-                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
-                {
-                    self.confirm_restore()?;
-                } else if self
-                    .input
-                    .screen_regions
-                    .restore_cancel_btn
-                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
-                {
-                    self.file_operations.restore = None;
-                }
-            }
-            MouseEventKind::ScrollUp => {
-                if let Some(r) = &mut self.file_operations.restore {
-                    r.scroll = r.scroll.saturating_sub(1);
-                }
-            }
-            MouseEventKind::ScrollDown => {
-                if let Some(r) = &mut self.file_operations.restore {
-                    let visible = r.targets.len().min(8);
-                    let max_scroll = r.targets.len().saturating_sub(visible);
-                    r.scroll = (r.scroll + 1).min(max_scroll);
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    pub(super) fn confirm_restore(&mut self) -> Result<()> {
+    pub(crate) fn confirm_restore(&mut self) -> Result<()> {
         if self.file_operations.restore_progress.is_some() {
             self.status = "Restore in progress — press Esc to cancel".to_string();
             self.file_operations.restore = None;

@@ -1,4 +1,5 @@
 mod duplicate_finder;
+mod file_operations;
 mod fuzzy_finder;
 mod goto;
 mod keyboard;
