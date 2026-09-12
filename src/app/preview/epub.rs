@@ -1,5 +1,7 @@
-use super::*;
+use super::App;
+use crate::background_jobs::job_requests::PreviewPriority;
 use crate::file_classification::{self, DocumentFormat};
+use crate::filesystem::Entry;
 #[cfg(test)]
 use crate::preview::PreviewCacheKey;
 use crate::preview::{self, EpubSession, preview_work_class};

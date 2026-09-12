@@ -1,7 +1,9 @@
-use super::*;
+use super::{App, HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY, IMAGE_SELECTION_ACTIVATION_DELAY};
+use crate::background_jobs::job_requests::PreviewPriority;
+use crate::filesystem::Entry;
 #[cfg(test)]
 use crate::preview::PreviewCacheKey;
-use crate::preview::{self, ComicSession, preview_work_class};
+use crate::preview::{self, ComicSession, PreviewRefreshMode, preview_work_class};
 use std::time::Instant;
 
 const COMIC_PAGE_PREFETCH_OFFSETS: [isize; 3] = [1, 2, -1];

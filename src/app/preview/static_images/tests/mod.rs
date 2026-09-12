@@ -1,4 +1,6 @@
 use super::*;
+use crate::file_browser::ViewMode;
+use crate::filesystem::{Entry, EntryKind};
 use crate::preview::OverlayPresentState;
 use crate::terminal_images::{
     ImageProtocol, RenderedImageDimensions, TerminalIdentity, TerminalWindowSize,

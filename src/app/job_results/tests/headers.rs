@@ -1,5 +1,7 @@
-use super::super::*;
 use super::helpers::*;
+use super::*;
+use crate::app::ScreenRegions;
+use crate::preview::PreviewDirectoryStatsState;
 use crate::preview::{PreviewContent, PreviewKind, default_code_preview_line_limit};
 use ratatui::text::Line;
 

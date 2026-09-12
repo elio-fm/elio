@@ -1,4 +1,8 @@
-use super::super::*;
+use super::super::{App, SearchScope};
+use crate::background_jobs::job_requests::SearchRequest;
+use crate::file_browser::{DirectoryHistoryMode, DirectoryLoadCompletion};
+use crate::fuzzy_finder::SearchRow;
+use anyhow::Result;
 use std::{ffi::OsStr, path::PathBuf, sync::Arc};
 
 impl App {

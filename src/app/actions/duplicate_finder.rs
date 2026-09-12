@@ -1,6 +1,8 @@
-use super::super::*;
+use super::super::App;
 use crate::background_jobs::job_requests::DuplicateScanRequest;
+use crate::duplicate_finder::DuplicateRow;
 use crate::file_operations::TrashTarget;
+use crate::filesystem::Entry;
 use anyhow::Result;
 use std::{
     fs,

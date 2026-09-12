@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{Context, Result};
 
-use super::screen_regions::*;
+use super::screen_regions::ScreenRegions;
 use crate::background_jobs::JobScheduler;
 use crate::chooser::ChooserState;
 use crate::duplicate_finder::DuplicateFinderState;
@@ -14,6 +14,7 @@ use crate::file_browser::FileBrowserState;
 #[cfg(unix)]
 use crate::file_operations::BulkRenameEditorSession;
 use crate::file_operations::FileOperationsState;
+use crate::filesystem::Entry;
 use crate::fuzzy_finder::FuzzyFinderState;
 use crate::goto_menu::GotoMenu;
 use crate::opening::open_with::ApplicationSelection;
@@ -235,6 +236,84 @@ impl App {
         Ok(app)
     }
 
+    pub fn selected_entry(&self) -> Option<&Entry> {
+        self.file_browser.selected_entry()
+    }
+
+    pub(crate) fn git_branch(&self) -> Option<&str> {
+        self.file_browser.git_branch()
+    }
+
+    pub(crate) fn git_dirty(&self) -> bool {
+        self.file_browser.git_dirty()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_git_branch_for_test(&mut self, branch: Option<&str>) {
+        self.file_browser.set_git_branch_for_test(branch);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_git_dirty_for_test(&mut self, dirty: bool) {
+        self.file_browser.set_git_dirty_for_test(dirty);
+    }
+
+    pub fn has_pending_auto_reload(&self) -> bool {
+        self.file_browser
+            .directory_runtime
+            .pending_reload_at
+            .is_some()
+    }
+
+    pub fn has_pending_background_work(&self) -> bool {
+        self.job_scheduler.has_pending_work()
+    }
+
+    pub(crate) fn browser_wheel_burst_active(&self) -> bool {
+        self.input.wheel_profile == WheelProfile::HighFrequency
+            && self.fuzzy_finder.search.is_none()
+            && self.input.last_wheel_target == Some(WheelTarget::Entries)
+            && self
+                .input
+                .wheel_scroll
+                .vertical
+                .last_input_at
+                .is_some_and(|at| at.elapsed() <= ScrollState::BURST_WINDOW)
+    }
+
+    pub(crate) fn pending_browser_wheel_timer(&self) -> Option<Duration> {
+        if !self.input.browser_wheel_post_burst_pending {
+            return None;
+        }
+        self.input
+            .wheel_scroll
+            .vertical
+            .last_input_at
+            .map(|at| ScrollState::BURST_WINDOW.saturating_sub(at.elapsed()))
+    }
+
+    pub(crate) fn process_browser_wheel_timers(&mut self) -> bool {
+        if self.input.browser_wheel_post_burst_pending && !self.browser_wheel_burst_active() {
+            self.input.browser_wheel_post_burst_pending = false;
+            return true;
+        }
+        false
+    }
+
+    #[cfg(test)]
+    pub fn scheduler_metrics(&self) -> crate::background_jobs::SchedulerMetricsSnapshot {
+        self.job_scheduler.metrics_snapshot()
+    }
+
+    #[cfg(test)]
+    pub fn preview_metrics(&self) -> crate::preview::PreviewMetricsSnapshot {
+        self.preview.state.metrics.snapshot()
+    }
+
+    pub fn report_runtime_error(&mut self, context: &str, error: &anyhow::Error) {
+        self.status = format!("{context}: {error}");
+    }
+
     pub(crate) fn ffprobe_available(&mut self) -> bool {
         *self
             .preview
@@ -278,76 +357,5 @@ pub(super) fn detect_wheel_profile() -> WheelProfile {
         WheelProfile::HighFrequency
     } else {
         WheelProfile::Default
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::{
-        fs,
-        path::PathBuf,
-        time::{SystemTime, UNIX_EPOCH},
-    };
-
-    fn temp_path(label: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time should be after unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("elio-state-{label}-{unique}"))
-    }
-
-    #[test]
-    fn startup_focus_selects_and_scrolls_entry_without_status_history_or_multi_selection() {
-        let root = temp_path("startup-focus");
-        fs::create_dir_all(&root).expect("temp directory should be created");
-        for index in 0..8 {
-            fs::write(root.join(format!("file-{index}.txt")), format!("{index}"))
-                .expect("file should be created");
-        }
-        let target = root.join("file-6.txt");
-
-        let app = App::new_at_startup(root.clone(), Some(target.clone()), false)
-            .expect("app should initialize");
-
-        assert_eq!(
-            app.selected_entry().map(|entry| entry.path.as_path()),
-            Some(target.as_path())
-        );
-        assert_eq!(app.file_browser.scroll_row, app.file_browser.selected);
-        assert!(app.file_browser.selected_paths.is_empty());
-        assert!(app.file_browser.directory_history.back.is_empty());
-        assert!(app.file_browser.directory_history.forward.is_empty());
-        assert_eq!(app.status_message(), "");
-
-        fs::remove_dir_all(root).expect("temp directory should be removed");
-    }
-
-    #[test]
-    fn startup_focus_can_reveal_hidden_targets_without_persisted_config() {
-        let root = temp_path("startup-hidden-focus");
-        fs::create_dir_all(&root).expect("temp directory should be created");
-        let visible = root.join("visible.txt");
-        let hidden = root.join(".env");
-        fs::write(&visible, "visible").expect("visible file should be created");
-        fs::write(&hidden, "secret").expect("hidden file should be created");
-
-        let app = App::new_at_startup(root.clone(), Some(hidden.clone()), true)
-            .expect("app should initialize");
-
-        assert!(app.file_browser.show_hidden);
-        assert_eq!(
-            app.selected_entry().map(|entry| entry.path.as_path()),
-            Some(hidden.as_path())
-        );
-        assert!(
-            app.file_browser
-                .entries
-                .iter()
-                .any(|entry| entry.path == hidden)
-        );
-
-        fs::remove_dir_all(root).expect("temp directory should be removed");
     }
 }

@@ -1,5 +1,10 @@
-use super::*;
-use std::{path::Path, time::Instant};
+use super::App;
+use crate::background_jobs::job_requests as jobs;
+use crate::filesystem::{Entry, format_item_count};
+use std::{
+    path::{Path, PathBuf},
+    time::{Instant, SystemTime},
+};
 
 pub(crate) const DIRECTORY_ITEM_COUNT_IDLE_DELAY: std::time::Duration =
     std::time::Duration::from_millis(120);

@@ -2,7 +2,8 @@ use super::{
     FittedPdfPlacement, PDF_RENDER_CACHE_LIMIT, PdfOverlayRequest, PdfPageDimensions, PdfPageKey,
     PdfRenderKey,
 };
-use crate::app::{App, jobs};
+use crate::app::App;
+use crate::background_jobs::job_requests as jobs;
 use crate::preview::documents::pdf::fit_pdf_page;
 use crate::terminal_images::{
     ImageProtocol, RenderedImageDimensions, fit_image_area, read_png_dimensions,

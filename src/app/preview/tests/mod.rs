@@ -1,14 +1,18 @@
 use super::*;
+use crate::background_jobs::job_requests::PreviewPriority;
 use crate::preview::{
-    PreviewContent, PreviewKind, PreviewRequestOptions, default_code_preview_line_limit,
+    PreviewContent, PreviewKind, PreviewLineCountKey, PreviewLoadState, PreviewRequestOptions,
+    default_code_preview_line_limit,
 };
 use crate::terminal_images::{ImageProtocol, TerminalIdentity};
+use ratatui::text::Line;
 use std::{
     fs,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
+mod preview_pane;
 mod terminal_image_previews;
 
 fn temp_path(label: &str) -> PathBuf {

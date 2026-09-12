@@ -1,6 +1,7 @@
 use super::StaticImagePreloadViewport;
 use super::{StaticImageKey, StaticImageOverlayRequest};
-use crate::app::{App, jobs};
+use crate::app::App;
+use crate::background_jobs::job_requests as jobs;
 use crate::background_jobs::job_results as background_job_results;
 use crate::terminal_images::ImageProtocol;
 use std::collections::HashSet;

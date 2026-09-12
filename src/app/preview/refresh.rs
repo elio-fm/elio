@@ -1,7 +1,10 @@
-use super::*;
-use crate::background_jobs::job_requests::DirectoryStatsRequest;
+use super::App;
+use crate::background_jobs::job_requests::{
+    DirectoryStatsRequest, PreviewLineCountRequest, PreviewPriority,
+};
 use crate::preview::{PreviewContent, PreviewKind, loading_preview_for, preview_work_class};
-use std::time::{Duration, Instant};
+use crate::preview::{PreviewDirectoryStatsState, PreviewLineCountKey, PreviewLoadState};
+use std::time::{Duration, Instant, SystemTime};
 
 const DIRECTORY_STATS_IDLE_DELAY: Duration = Duration::from_millis(180);
 

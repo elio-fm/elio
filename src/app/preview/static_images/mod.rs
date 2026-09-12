@@ -2,7 +2,7 @@ mod preload;
 mod present;
 mod state;
 
-use super::super::*;
+use crate::app::App;
 use crate::{preview::images::read_raster_dimensions, terminal_images::read_png_dimensions};
 
 pub(crate) use crate::preview::images::{

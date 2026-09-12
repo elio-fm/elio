@@ -2,7 +2,8 @@ use super::{
     StaticImageKey, StaticImageOverlayMode, StaticImageOverlayRequest, image_target_height_px,
     image_target_width_px, static_image_detail_label,
 };
-use crate::app::{App, Entry};
+use crate::app::App;
+use crate::filesystem::Entry;
 use crate::preview::images::{
     StaticImageFormat, static_image_can_prepare_inline, static_image_format_for_cached_path,
     static_image_format_for_path,

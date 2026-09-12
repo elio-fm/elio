@@ -3,6 +3,7 @@ use crate::app::preview::static_images::{
     StaticImageKey, StaticImageOverlayMode, StaticImageOverlayRequest, image_target_height_px,
     image_target_width_px,
 };
+use crate::filesystem::{Entry, EntryKind};
 use crate::preview::{
     PreviewContent, PreviewKind, PreviewRequestOptions, PreviewVisual, PreviewVisualKind,
     PreviewVisualLayout,
