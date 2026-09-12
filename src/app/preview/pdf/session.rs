@@ -317,7 +317,9 @@ impl App {
                 if let (Some(sixel_dcs), Some(sixel_dcs_key)) =
                     (build.sixel_dcs, build.sixel_dcs_key)
                 {
-                    self.remember_sixel_dcs(sixel_dcs_key, sixel_dcs);
+                    self.preview
+                        .image
+                        .remember_sixel_dcs(sixel_dcs_key, sixel_dcs);
                 }
                 let dirty = is_current_key;
                 self.refresh_pdf_prefetch_window();

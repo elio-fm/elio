@@ -34,7 +34,17 @@ fn refresh_preview_reuses_stale_cached_preview_while_refreshing() {
     let variant = app.current_preview_request_options();
     let preview = PreviewContent::new(PreviewKind::Code, vec![Line::from("stale preview")])
         .with_detail("Rust source file");
-    app.cache_preview_result(&entry, &variant, &preview);
+    let code_line_limit = app.preview_code_line_limit_for_entry(&entry);
+    let ffmpeg_available =
+        app.terminal_image_overlay_available() && app.preview.media.ffmpeg_available != Some(false);
+    app.preview.state.remember_preview(
+        &entry,
+        &variant,
+        code_line_limit,
+        code_line_limit,
+        ffmpeg_available,
+        &preview,
+    );
     app.file_browser.entries[app.file_browser.selected].size += 1;
 
     app.refresh_preview();
@@ -52,42 +62,6 @@ fn refresh_preview_reuses_stale_cached_preview_while_refreshing() {
             .iter()
             .any(|line| line.to_string() == "stale preview")
     );
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[test]
-fn preview_result_cache_evicts_oldest_entry_at_limit() {
-    let root = temp_path("result-cache-limit");
-    fs::create_dir_all(&root).expect("failed to create temp root");
-
-    let mut app = App::new_at(root.clone()).expect("failed to create app");
-    let variant = PreviewRequestOptions::Default;
-    let oldest_path = root.join("0.txt");
-    let newest_path = root.join(format!("{PREVIEW_CACHE_LIMIT}.txt"));
-
-    for index in 0..=PREVIEW_CACHE_LIMIT {
-        let path = root.join(format!("{index}.txt"));
-        let entry = Entry {
-            path: path.clone(),
-            name: format!("{index}.txt"),
-            name_key: format!("{index}.txt"),
-            kind: EntryKind::File,
-            symlink: None,
-            size: index as u64 + 1,
-            modified: None,
-            readonly: false,
-        };
-        let preview = PreviewContent::new(
-            PreviewKind::Text,
-            vec![Line::from(format!("preview {index}"))],
-        );
-        app.cache_preview_result_with_code_line_limit(&entry, &variant, 0, &preview);
-    }
-
-    assert_eq!(app.preview.state.result_cache.len(), PREVIEW_CACHE_LIMIT);
-    assert!(!app.has_cached_preview_for_path(&oldest_path));
-    assert!(app.has_cached_preview_for_path(&newest_path));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -161,42 +135,6 @@ fn apply_preview_line_count_result_clears_pending_state_for_current_entry_withou
         app.preview_header_detail_for_width(8, 40).as_deref(),
         Some(expected.as_str())
     );
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[test]
-fn preview_line_count_cache_evicts_oldest_entry_at_limit() {
-    let root = temp_path("line-count-cache-limit");
-    fs::create_dir_all(&root).expect("failed to create temp root");
-
-    let mut app = App::new_at(root.clone()).expect("failed to create app");
-    let oldest_key = PreviewLineCountKey {
-        path: root.join("0.txt"),
-        size: 1,
-        modified: None,
-    };
-    let newest_key = PreviewLineCountKey {
-        path: root.join(format!("{PREVIEW_LINE_COUNT_CACHE_LIMIT}.txt")),
-        size: PREVIEW_LINE_COUNT_CACHE_LIMIT as u64 + 1,
-        modified: None,
-    };
-
-    for index in 0..=PREVIEW_LINE_COUNT_CACHE_LIMIT {
-        app.cache_preview_line_count(
-            root.join(format!("{index}.txt")),
-            index as u64 + 1,
-            None,
-            index + 1,
-        );
-    }
-
-    assert_eq!(
-        app.preview.state.line_count_cache.len(),
-        PREVIEW_LINE_COUNT_CACHE_LIMIT
-    );
-    assert!(!app.preview.state.line_count_cache.contains_key(&oldest_key));
-    assert!(app.preview.state.line_count_cache.contains_key(&newest_key));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -276,7 +214,7 @@ fn cached_startup_video_without_ffmpeg_is_not_reused_after_image_support() {
         .expect("video entry should be selected");
     let variant = app.current_preview_request_options();
     let stale_without_thumbnail = PreviewContent::new(PreviewKind::Video, Vec::new());
-    app.cache_preview_result_with_limits(
+    app.preview.state.remember_preview(
         &entry,
         &variant,
         default_code_preview_line_limit(),

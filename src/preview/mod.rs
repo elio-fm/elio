@@ -2,6 +2,7 @@ mod appearance;
 mod archives;
 mod audio;
 mod binary;
+mod cache;
 pub(crate) mod code;
 mod directory;
 pub(crate) mod documents;
@@ -19,6 +20,8 @@ mod text_rendering;
 mod torrent;
 mod video;
 
+#[cfg(test)]
+pub(crate) use self::cache::{PREVIEW_CACHE_LIMIT, PREVIEW_LINE_COUNT_CACHE_LIMIT};
 pub(crate) use self::plain_text::count_total_text_lines;
 use self::plain_text::{
     collect_preview_lines_with_limit, combine_preview_notes, count_source_lines,
@@ -41,13 +44,15 @@ pub(crate) use self::preview_content::{
     clamp_code_preview_line_limit, default_code_preview_line_limit,
 };
 #[cfg(test)]
+pub(crate) use self::state::PreviewCacheKey;
+#[cfg(test)]
 pub use self::state::PreviewMetricsSnapshot;
 pub(crate) use self::state::{
-    CachedPreview, ComicSession, DisplayedPdfPreview, DisplayedStaticImagePreview, EpubSession,
+    ComicSession, DisplayedPdfPreview, DisplayedStaticImagePreview, EpubSession,
     OverlayPresentState, PdfDocumentKey, PdfOverlayRequest, PdfPageKey, PdfSession,
-    PreparedStaticImage, PreviewCacheKey, PreviewDirectoryStatsState, PreviewLineCountKey,
-    PreviewLoadState, PreviewRefreshMode, PreviewRuntime, StaticImageOverlayMode,
-    StaticImageOverlayPreparation, StaticImageOverlayRequest, StaticImagePreloadViewport,
+    PreparedStaticImage, PreviewDirectoryStatsState, PreviewLineCountKey, PreviewLoadState,
+    PreviewRefreshMode, PreviewRuntime, StaticImageOverlayMode, StaticImageOverlayPreparation,
+    StaticImageOverlayRequest, StaticImagePreloadViewport,
 };
 pub(crate) use self::text_rendering::{expand_tabs, line_number_span, line_number_width};
 

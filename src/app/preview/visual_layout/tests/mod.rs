@@ -4,7 +4,8 @@ use crate::app::preview::static_images::{
     image_target_width_px,
 };
 use crate::preview::{
-    PreviewContent, PreviewKind, PreviewVisual, PreviewVisualKind, PreviewVisualLayout,
+    PreviewContent, PreviewKind, PreviewRequestOptions, PreviewVisual, PreviewVisualKind,
+    PreviewVisualLayout,
 };
 use crate::terminal_runtime::terminal_images::{ImageProtocol, TerminalWindowSize};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
@@ -38,6 +39,25 @@ fn configure_terminal_image_support(app: &mut App) {
         pixels_width: 1920,
         pixels_height: 1080,
     });
+}
+
+fn cache_preview(
+    app: &mut App,
+    entry: &Entry,
+    variant: &PreviewRequestOptions,
+    content: &PreviewContent,
+) {
+    let code_line_limit = app.preview_code_line_limit_for_entry(entry);
+    let ffmpeg_available =
+        app.terminal_image_overlay_available() && app.preview.media.ffmpeg_available != Some(false);
+    app.preview.state.remember_preview(
+        entry,
+        variant,
+        code_line_limit,
+        code_line_limit,
+        ffmpeg_available,
+        content,
+    );
 }
 
 fn write_test_raster_image(path: &Path, format: ImageFormat, width_px: u32, height_px: u32) {

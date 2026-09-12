@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(test)]
+use crate::preview::PreviewCacheKey;
 use crate::preview::{self, ComicSession, preview_work_class};
 use std::time::Instant;
 

@@ -1,3 +1,4 @@
+mod image_cache;
 mod image_inspection;
 mod image_preparation;
 mod image_preview;

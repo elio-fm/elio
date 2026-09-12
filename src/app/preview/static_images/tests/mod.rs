@@ -242,11 +242,18 @@ fn cached_rendered_overlay_reuses_cached_path_and_inline_payload() {
             height_px: 180,
         },
     );
-    app.remember_rendered_static_image(key.clone(), rendered_path.clone());
-    app.remember_static_image_inline_payload(key.clone(), Arc::clone(&payload));
+    app.preview
+        .image
+        .remember_rendered_image(key.clone(), rendered_path.clone());
+    app.preview
+        .image
+        .remember_inline_payload(key.clone(), Arc::clone(&payload));
 
+    let protocol = app.preview.terminal_images.protocol;
     let prepared = app
-        .cached_prepared_static_image_for_overlay(&key, &request)
+        .preview
+        .image
+        .cached_prepared_image(&key, &request, protocol)
         .expect("cached rendered overlay should be reused");
 
     assert_eq!(prepared.display_path, rendered_path);

@@ -1,9 +1,41 @@
 use super::*;
 use crate::preview::{
-    MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT, PreviewRequestOptions, default_code_preview_line_limit,
+    MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT, PreviewContent, PreviewRequestOptions,
+    default_code_preview_line_limit,
 };
 
 impl App {
+    pub(in crate::app) fn cached_preview_for(
+        &self,
+        entry: &Entry,
+        variant: &PreviewRequestOptions,
+    ) -> Option<PreviewContent> {
+        self.preview.state.cached_preview(
+            entry,
+            variant,
+            self.preview_code_line_limit_for_entry(entry),
+            self.preview_cache_ffmpeg_available(),
+        )
+    }
+
+    pub(super) fn stale_cached_preview_for(
+        &self,
+        entry: &Entry,
+        variant: &PreviewRequestOptions,
+    ) -> Option<PreviewContent> {
+        self.preview.state.stale_cached_preview(
+            entry,
+            variant,
+            self.preview_code_line_limit_for_entry(entry),
+            self.preview_cache_ffmpeg_available(),
+        )
+    }
+
+    fn preview_cache_ffmpeg_available(&self) -> bool {
+        self.terminal_image_overlay_available()
+            && self.preview.media.ffmpeg_available != Some(false)
+    }
+
     pub(in crate::app) fn build_preview_request(
         &mut self,
         entry: Entry,

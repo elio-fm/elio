@@ -1,4 +1,3 @@
-mod cache;
 mod preload;
 mod present;
 mod state;
@@ -20,9 +19,6 @@ pub(in crate::app) use crate::preview::{
     StaticImageOverlayRequest,
 };
 
-const STATIC_IMAGE_RENDER_CACHE_LIMIT: usize = 64;
-const STATIC_IMAGE_INLINE_PAYLOAD_CACHE_LIMIT: usize = 16;
-const SIXEL_DCS_CACHE_LIMIT: usize = 128;
 const STATIC_IMAGE_PRELOAD_LIMIT: usize = 12;
 const STATIC_IMAGE_PRELOAD_LIMIT_SLOW_SIXEL: usize = 2;
 
@@ -32,7 +28,12 @@ impl App {
         request: &StaticImageOverlayRequest,
     ) -> StaticImageOverlayPreparation {
         let key = StaticImageKey::from_request(request);
-        if let Some(prepared) = self.cached_prepared_static_image_for_overlay(&key, request) {
+        let protocol = self.preview.terminal_images.protocol;
+        if let Some(prepared) = self
+            .preview
+            .image
+            .cached_prepared_image(&key, request, protocol)
+        {
             return StaticImageOverlayPreparation::Ready(prepared);
         }
         if let Some(prepared) = self.direct_static_image_for_overlay(request) {

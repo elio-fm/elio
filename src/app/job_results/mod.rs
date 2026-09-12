@@ -527,7 +527,7 @@ impl App {
                     dirty = true;
                 }
                 JobResult::Preview(build) => {
-                    self.cache_preview_result_with_limits(
+                    self.preview.state.remember_preview(
                         &build.entry,
                         &build.variant,
                         build.code_line_limit,

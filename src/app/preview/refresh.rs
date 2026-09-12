@@ -278,7 +278,12 @@ impl App {
             }
             return false;
         };
-        self.cache_preview_line_count(key.path.clone(), key.size, key.modified, total_lines);
+        self.preview.state.remember_line_count(
+            key.path.clone(),
+            key.size,
+            key.modified,
+            total_lines,
+        );
 
         let is_current_entry = self.active_preview_entry().is_some_and(|entry| {
             entry.path == key.path && entry.size == key.size && entry.modified == key.modified
