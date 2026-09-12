@@ -6,7 +6,8 @@ This crate is organized around focused subsystems.
 - `fs` and `file_classification`: filesystem access and file, format, and code-language identification.
 - `file_browser`: current-directory state, loading, navigation, selection, filtering, and item
   counts.
-- `file_operations`: workflows that create, rename, copy, move, trash, restore, or archive items.
+- `file_operations`: state and actions for creating, renaming, copying, moving, trashing,
+  restoring, or archiving items.
 - `background_jobs`: shared job scheduling, workers, requests, and result messages.
 - `fuzzy_finder` and `duplicate_finder`: feature state and behavior for finding items.
 - `goto_menu`: configured Go To entries and destination resolution.
@@ -25,8 +26,8 @@ Current boundary rules:
 
 - Shared model types live in the narrowest subsystem that owns their responsibility rather than in
   a generic shared module.
-- Filesystem mutations belong to `file_operations`; their background workers remain centralized in
-  `background_jobs` with Elio's other workers.
+- Filesystem mutations and their UI/runtime state belong to `file_operations`; their background
+  workers remain centralized in `background_jobs` with Elio's other workers.
 - Current-directory browsing state and pure browser transitions belong to `file_browser`; places
   pane state remains in `places`. Git status for the current directory and the browser-item drag
   selection also belong to `file_browser`; job execution, mouse hit testing, and terminal drag

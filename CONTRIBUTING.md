@@ -41,7 +41,7 @@ A brief overview of the repository layout:
 │   ├── duplicate_finder/       # Duplicate candidate collection and content verification
 │   ├── elevated_session/       # Privileged filesystem operations through sudo or doas
 │   ├── file_classification/    # File, format, and code-language identification
-│   ├── file_operations/        # Create, rename, copy, move, trash, restore, and archive workflows
+│   ├── file_operations/        # File-operation state plus create, rename, copy, move, trash, restore, and archive actions
 │   ├── fs/                     # Directory access, entries, sorting, watching, and metadata
 │   ├── fuzzy_finder/           # Candidate indexing and fuzzy matching
 │   ├── goto_menu/              # Configured Go To entries and destination resolution

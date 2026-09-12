@@ -16,7 +16,7 @@ fn confirm_trash_permanently_deletes_selected_items_inside_trash() {
     assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
     app.confirm_trash().expect("trash should succeed");
 
-    assert!(app.overlays.trash.is_none());
+    assert!(app.file_operations.trash.is_none());
     assert!(app.file_browser.selected_paths.is_empty());
 
     // Deletion is async — wait for the background worker *and* the
@@ -47,7 +47,7 @@ fn confirm_delete_permanently_removes_selected_items_outside_trash() {
     assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
     app.confirm_trash().expect("delete should succeed");
 
-    assert!(app.overlays.trash.is_none());
+    assert!(app.file_operations.trash.is_none());
     assert!(app.file_browser.selected_paths.is_empty());
 
     wait_for_trash_and_reload(&mut app);
@@ -75,7 +75,7 @@ fn confirm_delete_selected_parent_of_current_directory_moves_to_parent() {
     assert_eq!(app.trash_title(), "Delete permanently 1 selected folder?");
     app.confirm_trash().expect("delete should succeed");
 
-    assert!(app.overlays.trash.is_none());
+    assert!(app.file_operations.trash.is_none());
     assert!(app.file_browser.selected_paths.is_empty());
 
     wait_for_trash_and_reload(&mut app);
@@ -170,7 +170,9 @@ fn cancelled_delete_does_not_move_cursor_away_from_surviving_entry() {
     app.confirm_trash().expect("trash should succeed");
 
     // Cancel before the worker starts processing.
-    app.jobs.scheduler.cancel_trash(app.jobs.trash_token);
+    app.jobs
+        .scheduler
+        .cancel_trash(app.file_operations.trash_token);
 
     wait_for_trash_and_reload(&mut app);
 
@@ -225,7 +227,7 @@ fn confirm_trash_batch_trashes_multiple_files_and_reports_count() {
     assert_eq!(app.trash_title(), "Trash 3 files?");
     app.confirm_trash().expect("trash should succeed");
 
-    assert!(app.overlays.trash.is_none());
+    assert!(app.file_operations.trash.is_none());
     assert!(app.file_browser.selected_paths.is_empty());
 
     wait_for_trash_and_reload(&mut app);
@@ -271,7 +273,7 @@ fn confirm_trash_batch_single_file_shows_quoted_name() {
     assert_eq!(app.trash_title(), "Trash 1 selected file?");
     app.confirm_trash().expect("trash should succeed");
 
-    assert!(app.overlays.trash.is_none());
+    assert!(app.file_operations.trash.is_none());
     assert!(app.file_browser.selected_paths.is_empty());
 
     wait_for_trash_and_reload(&mut app);
@@ -321,7 +323,9 @@ fn esc_during_batched_trash_keeps_chip_visible_until_done() {
     );
 
     // Simulate Esc: cancel_trash is called but chip must NOT be cleared.
-    app.jobs.scheduler.cancel_trash(app.jobs.trash_token);
+    app.jobs
+        .scheduler
+        .cancel_trash(app.file_operations.trash_token);
     // trash_progress is still Some — chip stays visible.
     assert!(
         app.trash_progress().is_some(),
@@ -385,9 +389,9 @@ fn esc_during_permanent_delete_clears_chip_immediately() {
     );
 
     // Simulate Esc for permanent delete: chip clears immediately.
-    let token = app.jobs.trash_token;
+    let token = app.file_operations.trash_token;
     app.jobs.scheduler.cancel_trash(token);
-    app.jobs.trash_progress = None;
+    app.file_operations.trash_progress = None;
 
     assert!(
         app.trash_progress().is_none(),

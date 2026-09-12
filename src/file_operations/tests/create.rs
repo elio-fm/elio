@@ -8,7 +8,7 @@ fn confirm_create_creates_files_and_folders_and_reselects_last_created_path() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.open_create_prompt();
     let overlay = app
-        .overlays
+        .file_operations
         .create
         .as_mut()
         .expect("create overlay should be open");
@@ -17,7 +17,7 @@ fn confirm_create_creates_files_and_folders_and_reselects_last_created_path() {
 
     app.confirm_create().expect("create should succeed");
 
-    assert!(app.overlays.create.is_none());
+    assert!(app.file_operations.create.is_none());
     assert!(root.join("notes.txt").is_file());
     assert!(root.join("docs").is_dir());
 
@@ -38,7 +38,7 @@ fn confirm_create_reports_duplicate_names_after_dir_marker_normalization() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.open_create_prompt();
     let overlay = app
-        .overlays
+        .file_operations
         .create
         .as_mut()
         .expect("create overlay should be open");
@@ -49,7 +49,7 @@ fn confirm_create_reports_duplicate_names_after_dir_marker_normalization() {
         .expect("create validation should succeed");
 
     let overlay = app
-        .overlays
+        .file_operations
         .create
         .as_ref()
         .expect("create overlay should stay open");

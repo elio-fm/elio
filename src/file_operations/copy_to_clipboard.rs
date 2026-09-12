@@ -26,11 +26,11 @@ pub(crate) struct CopyOverlay {
 
 impl App {
     pub fn copy_is_open(&self) -> bool {
-        self.overlays.copy.is_some()
+        self.file_operations.copy.is_some()
     }
 
     pub fn copy_title(&self) -> &str {
-        self.overlays
+        self.file_operations
             .copy
             .as_ref()
             .map(|overlay| overlay.title.as_str())
@@ -38,7 +38,7 @@ impl App {
     }
 
     pub fn copy_row_count(&self) -> usize {
-        self.overlays
+        self.file_operations
             .copy
             .as_ref()
             .map(|overlay| overlay.rows.len())
@@ -46,7 +46,7 @@ impl App {
     }
 
     pub fn copy_row_label(&self, index: usize) -> &str {
-        self.overlays
+        self.file_operations
             .copy
             .as_ref()
             .and_then(|overlay| overlay.rows.get(index))
@@ -55,7 +55,7 @@ impl App {
     }
 
     pub fn copy_row_shortcut(&self, index: usize) -> Option<char> {
-        self.overlays
+        self.file_operations
             .copy
             .as_ref()
             .and_then(|overlay| overlay.rows.get(index))
@@ -81,19 +81,19 @@ impl App {
         }
 
         self.overlays.help = false;
-        self.overlays.copy = Some(build_copy_overlay(&self.file_browser.cwd, &paths));
+        self.file_operations.copy = Some(build_copy_overlay(&self.file_browser.cwd, &paths));
         self.status.clear();
     }
 
     pub(crate) fn handle_copy_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.overlays.copy = None;
+            self.file_operations.copy = None;
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.overlays.copy = None;
+                self.file_operations.copy = None;
             }
             KeyCode::Char(ch)
                 if !key
@@ -118,7 +118,7 @@ impl App {
                 .copy_panel
                 .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
             if !inside {
-                self.overlays.copy = None;
+                self.file_operations.copy = None;
                 return Ok(());
             }
 
@@ -139,7 +139,7 @@ impl App {
 
     fn copy_row_index_for_shortcut(&self, ch: char) -> Option<usize> {
         let needle = ch.to_ascii_lowercase();
-        self.overlays.copy.as_ref().and_then(|overlay| {
+        self.file_operations.copy.as_ref().and_then(|overlay| {
             overlay
                 .rows
                 .iter()
@@ -148,7 +148,7 @@ impl App {
     }
 
     fn confirm_copy_index(&mut self, index: usize) -> Result<()> {
-        let Some((value, status_label)) = self.overlays.copy.as_ref().and_then(|overlay| {
+        let Some((value, status_label)) = self.file_operations.copy.as_ref().and_then(|overlay| {
             overlay
                 .rows
                 .get(index)
@@ -159,7 +159,7 @@ impl App {
 
         match write_text_to_system_clipboard(&value) {
             Ok(()) => {
-                self.overlays.copy = None;
+                self.file_operations.copy = None;
                 self.status = format!("Copied {status_label}");
             }
             Err(error) => {

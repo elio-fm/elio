@@ -17,7 +17,7 @@ fn confirm_bulk_rename_renames_changed_entries_and_skips_unchanged_rows() {
     app.open_bulk_rename_prompt();
 
     let overlay = app
-        .overlays
+        .file_operations
         .bulk_rename
         .as_mut()
         .expect("bulk rename overlay should be open");
@@ -27,7 +27,7 @@ fn confirm_bulk_rename_renames_changed_entries_and_skips_unchanged_rows() {
     app.confirm_bulk_rename()
         .expect("bulk rename should succeed");
 
-    assert!(app.overlays.bulk_rename.is_none());
+    assert!(app.file_operations.bulk_rename.is_none());
     assert!(root.join("gamma.txt").is_file());
     assert!(root.join("beta.txt").is_file());
     assert!(!root.join("alpha.txt").exists());
@@ -59,7 +59,7 @@ fn confirm_bulk_rename_reports_duplicate_destination_names() {
     app.open_bulk_rename_prompt();
 
     let overlay = app
-        .overlays
+        .file_operations
         .bulk_rename
         .as_mut()
         .expect("bulk rename overlay should be open");
@@ -69,7 +69,7 @@ fn confirm_bulk_rename_reports_duplicate_destination_names() {
         .expect("bulk rename validation should succeed");
 
     let overlay = app
-        .overlays
+        .file_operations
         .bulk_rename
         .as_ref()
         .expect("bulk rename overlay should stay open");
@@ -95,7 +95,7 @@ fn confirm_bulk_rename_apply_failure_keeps_review_context() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.file_browser.selected_paths.insert(missing.clone());
-    app.overlays.bulk_rename = Some(BulkRenameOverlay {
+    app.file_operations.bulk_rename = Some(BulkRenameOverlay {
         items: vec![BulkRenameItem {
             path: missing.clone(),
             original_name: "missing.txt".to_string(),
@@ -112,7 +112,7 @@ fn confirm_bulk_rename_apply_failure_keeps_review_context() {
     app.confirm_bulk_rename()
         .expect("apply failure should be reported as status");
 
-    assert!(app.overlays.bulk_rename.is_some());
+    assert!(app.file_operations.bulk_rename.is_some());
     assert!(app.file_browser.selected_paths.contains(&missing));
     assert!(
         app.status_message()
@@ -141,7 +141,7 @@ fn bulk_rename_uses_selection_from_multiple_directories() {
     app.open_bulk_rename_prompt();
 
     let overlay = app
-        .overlays
+        .file_operations
         .bulk_rename
         .as_mut()
         .expect("bulk rename overlay should be open");
@@ -187,7 +187,7 @@ fn bulk_rename_allows_same_new_name_in_different_directories() {
     app.open_bulk_rename_prompt();
 
     let overlay = app
-        .overlays
+        .file_operations
         .bulk_rename
         .as_mut()
         .expect("bulk rename overlay should be open");
@@ -196,7 +196,7 @@ fn bulk_rename_allows_same_new_name_in_different_directories() {
     app.confirm_bulk_rename()
         .expect("bulk rename should succeed");
 
-    assert!(app.overlays.bulk_rename.is_none());
+    assert!(app.file_operations.bulk_rename.is_none());
     assert!(left.join("new.txt").is_file());
     assert!(right.join("new.txt").is_file());
 
@@ -253,7 +253,7 @@ fn bulk_rename_selected_parent_of_current_directory_reloads_parent() {
     assert_eq!(app.bulk_rename_item_count(), 1);
 
     let overlay = app
-        .overlays
+        .file_operations
         .bulk_rename
         .as_mut()
         .expect("bulk rename overlay should be open");

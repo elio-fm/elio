@@ -214,7 +214,7 @@ fn paste_refuses_folder_into_itself() {
     fs::create_dir_all(&child).unwrap();
 
     let mut app = App::new_at(child.clone()).unwrap();
-    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
+    app.file_operations.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![source.clone()],
         op: ClipOp::Yank,
     });
@@ -291,8 +291,8 @@ fn stale_token_paste_results_are_ignored() {
 
     // Simulate a newer paste superseding the old one: bump paste_token and
     // clear paste_progress manually so we can verify nothing revives it.
-    app.jobs.paste_token = app.jobs.paste_token.wrapping_add(1);
-    app.jobs.paste_progress = None;
+    app.file_operations.paste_token = app.file_operations.paste_token.wrapping_add(1);
+    app.file_operations.paste_progress = None;
 
     // Drain all incoming results.  Because none carry the current token they
     // must all be silently discarded.
@@ -331,8 +331,10 @@ fn cancelling_paste_clears_progress_and_stops_worker() {
     );
 
     // Simulate Esc: cancel the current paste token and clear progress immediately.
-    app.jobs.scheduler.cancel_paste(app.jobs.paste_token);
-    app.jobs.paste_progress = None;
+    app.jobs
+        .scheduler
+        .cancel_paste(app.file_operations.paste_token);
+    app.file_operations.paste_progress = None;
 
     assert!(
         app.paste_progress().is_none(),
@@ -375,14 +377,14 @@ fn new_paste_after_cancel_is_not_affected_by_old_cancel_token() {
     app.yank();
     app.file_browser.cwd = dst1.clone();
     app.paste().unwrap();
-    let cancelled_token = app.jobs.paste_token; // == 1
+    let cancelled_token = app.file_operations.paste_token; // == 1
     app.jobs.scheduler.cancel_paste(cancelled_token);
-    app.jobs.paste_progress = None;
+    app.file_operations.paste_progress = None;
 
     // Re-yank and start a second paste to a different destination.  Its token
     // is 2; cancel_token stored in PasteShared is still 1, so the second
     // paste must NOT be stopped.
-    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
+    app.file_operations.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![src_dir.join("file.txt")],
         op: ClipOp::Yank,
     });
@@ -390,7 +392,7 @@ fn new_paste_after_cancel_is_not_affected_by_old_cancel_token() {
     app.paste().unwrap();
 
     assert_ne!(
-        app.jobs.paste_token, cancelled_token,
+        app.file_operations.paste_token, cancelled_token,
         "new paste should have a different token"
     );
 
@@ -425,7 +427,7 @@ fn yank_paste_then_yank_paste_queues_the_second_snapshot() {
     app.file_browser.cwd = dst1.clone();
     app.paste().unwrap();
 
-    let token_after_first = app.jobs.paste_token;
+    let token_after_first = app.file_operations.paste_token;
     assert!(app.paste_progress().is_some());
 
     // Queue a second paste after changing both the source selection and the
@@ -437,11 +439,11 @@ fn yank_paste_then_yank_paste_queues_the_second_snapshot() {
     app.paste().unwrap();
 
     assert_eq!(
-        app.jobs.paste_token, token_after_first,
+        app.file_operations.paste_token, token_after_first,
         "paste_token must not change until the queued paste actually starts"
     );
     assert_eq!(
-        app.jobs.queued_pastes.len(),
+        app.file_operations.queued_pastes.len(),
         1,
         "second paste should be queued"
     );
@@ -449,8 +451,11 @@ fn yank_paste_then_yank_paste_queues_the_second_snapshot() {
         app.status.contains("Queued paste"),
         "status should indicate that the second paste was queued"
     );
-    assert_eq!(app.jobs.queued_pastes[0].dest_dir, dst2);
-    assert_eq!(app.jobs.queued_pastes[0].paths, vec![src_dir.join("b.txt")]);
+    assert_eq!(app.file_operations.queued_pastes[0].dest_dir, dst2);
+    assert_eq!(
+        app.file_operations.queued_pastes[0].paths,
+        vec![src_dir.join("b.txt")]
+    );
 
     wait_for_paste(&mut app);
 
@@ -480,21 +485,21 @@ fn queued_paste_with_missing_destination_fails_and_later_queue_continues() {
     app.file_browser.cwd = dst1.clone();
     app.paste().unwrap();
 
-    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
+    app.file_operations.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![src_dir.join("b.txt")],
         op: ClipOp::Yank,
     });
     app.file_browser.cwd = missing_dst.clone();
     app.paste().unwrap();
 
-    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
+    app.file_operations.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![src_dir.join("c.txt")],
         op: ClipOp::Yank,
     });
     app.file_browser.cwd = dst3.clone();
     app.paste().unwrap();
 
-    assert_eq!(app.jobs.queued_pastes.len(), 2);
+    assert_eq!(app.file_operations.queued_pastes.len(), 2);
 
     wait_for_paste(&mut app);
 
@@ -526,9 +531,9 @@ fn queued_same_destination_pastes_defer_reload_until_queue_drains() {
     app.yank();
     app.file_browser.cwd = dst_dir.clone();
     app.paste().unwrap();
-    let first_token = app.jobs.paste_token;
+    let first_token = app.file_operations.paste_token;
 
-    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
+    app.file_operations.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![src_dir.join("b.txt")],
         op: ClipOp::Yank,
     });
@@ -538,10 +543,11 @@ fn queued_same_destination_pastes_defer_reload_until_queue_drains() {
     let mut queued_started = false;
     for _ in 0..500 {
         let _ = app.process_background_jobs();
-        if app.jobs.paste_token != first_token {
+        if app.file_operations.paste_token != first_token {
             queued_started = true;
             let reload_queued = app.file_browser.directory_runtime.pending_load.is_some();
-            let queue_drained = app.paste_progress().is_none() && app.jobs.queued_pastes.is_empty();
+            let queue_drained =
+                app.paste_progress().is_none() && app.file_operations.queued_pastes.is_empty();
             assert!(
                 !reload_queued || queue_drained,
                 "reload should stay deferred until the queued paste to the same destination has finished"
@@ -582,13 +588,13 @@ fn esc_cancels_active_paste_and_clears_queued_pastes() {
     app.file_browser.cwd = dst1.clone();
     app.paste().unwrap();
 
-    app.jobs.clipboard = Some(crate::file_operations::Clipboard {
+    app.file_operations.clipboard = Some(crate::file_operations::Clipboard {
         paths: vec![src_dir.join("b.txt")],
         op: ClipOp::Yank,
     });
     app.file_browser.cwd = dst2.clone();
     app.paste().unwrap();
-    assert_eq!(app.jobs.queued_pastes.len(), 1);
+    assert_eq!(app.file_operations.queued_pastes.len(), 1);
 
     app.handle_event(crossterm::event::Event::Key(
         crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Esc),
@@ -597,7 +603,7 @@ fn esc_cancels_active_paste_and_clears_queued_pastes() {
 
     assert!(app.paste_progress().is_none());
     assert!(
-        app.jobs.queued_pastes.is_empty(),
+        app.file_operations.queued_pastes.is_empty(),
         "Esc should clear queued pastes as well as the active paste"
     );
 
@@ -645,10 +651,10 @@ fn paste_during_active_paste_without_clipboard_explains_how_to_queue() {
     app.file_browser.cwd = dst_dir.clone();
     app.paste().unwrap();
 
-    let token = app.jobs.paste_token;
+    let token = app.file_operations.paste_token;
     app.paste().unwrap();
 
-    assert_eq!(app.jobs.paste_token, token);
+    assert_eq!(app.file_operations.paste_token, token);
     assert_eq!(
         app.status,
         "Paste in progress — yank or cut another item to queue it"

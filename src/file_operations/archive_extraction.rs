@@ -44,14 +44,14 @@ impl fmt::Debug for ArchivePasswordOverlay {
 
 impl App {
     pub fn archive_extract_progress(&self) -> Option<(usize, Option<usize>)> {
-        self.jobs
+        self.file_operations
             .archive_extract_progress
             .as_ref()
             .map(|progress| (progress.completed, progress.total))
     }
 
     pub(crate) fn extract_focused_archive(&mut self) -> Result<()> {
-        if self.jobs.archive_extract_progress.is_some() {
+        if self.file_operations.archive_extract_progress.is_some() {
             self.status = "Extraction already in progress".to_string();
             return Ok(());
         }
@@ -114,11 +114,11 @@ impl App {
     }
 
     pub fn archive_password_is_open(&self) -> bool {
-        self.overlays.archive_password.is_some()
+        self.file_operations.archive_password.is_some()
     }
 
     pub fn archive_password_archive_name(&self) -> String {
-        let Some(overlay) = &self.overlays.archive_password else {
+        let Some(overlay) = &self.file_operations.archive_password else {
             return "archive".to_string();
         };
         match &overlay.purpose {
@@ -134,14 +134,14 @@ impl App {
     }
 
     pub fn archive_password_title_prefix(&self) -> &'static str {
-        let Some(overlay) = &self.overlays.archive_password else {
+        let Some(overlay) = &self.file_operations.archive_password else {
             return "Password for";
         };
         match overlay.purpose {
             ArchivePasswordPurpose::Extract { .. } => "Password for",
             ArchivePasswordPurpose::Create
                 if self
-                    .overlays
+                    .file_operations
                     .archive_create
                     .as_ref()
                     .is_some_and(|create| create.options.encryption.is_password_set()) =>
@@ -153,7 +153,7 @@ impl App {
     }
 
     pub fn archive_password_placeholder(&self) -> &'static str {
-        let Some(overlay) = &self.overlays.archive_password else {
+        let Some(overlay) = &self.file_operations.archive_password else {
             return "password…";
         };
         match overlay.purpose {
@@ -163,21 +163,21 @@ impl App {
     }
 
     pub fn archive_password_input(&self) -> &str {
-        self.overlays
+        self.file_operations
             .archive_password
             .as_ref()
             .map_or("", |overlay| &overlay.input)
     }
 
     pub fn archive_password_cursor_col(&self) -> usize {
-        self.overlays
+        self.file_operations
             .archive_password
             .as_ref()
             .map_or(0, |overlay| overlay.cursor_col)
     }
 
     pub fn archive_password_error(&self) -> Option<&str> {
-        self.overlays
+        self.file_operations
             .archive_password
             .as_ref()
             .and_then(|overlay| overlay.error.as_deref())
@@ -189,16 +189,16 @@ impl App {
         error: Option<String>,
     ) {
         self.overlays.help = false;
-        self.overlays.trash = None;
-        self.overlays.restore = None;
-        self.overlays.create = None;
-        self.overlays.rename = None;
-        self.overlays.bulk_rename = None;
+        self.file_operations.trash = None;
+        self.file_operations.restore = None;
+        self.file_operations.create = None;
+        self.file_operations.rename = None;
+        self.file_operations.bulk_rename = None;
         self.overlays.goto = None;
-        self.overlays.copy = None;
+        self.file_operations.copy = None;
         self.overlays.open_with = None;
         self.overlays.search = None;
-        self.overlays.archive_password = Some(ArchivePasswordOverlay {
+        self.file_operations.archive_password = Some(ArchivePasswordOverlay {
             purpose: ArchivePasswordPurpose::Extract { request },
             input: String::new(),
             cursor_col: 0,
@@ -209,14 +209,14 @@ impl App {
     }
 
     pub fn archive_password_is_visible(&self) -> bool {
-        self.overlays
+        self.file_operations
             .archive_password
             .as_ref()
             .is_some_and(|overlay| overlay.visible)
     }
 
     pub(crate) fn toggle_archive_password_visibility(&mut self) {
-        if let Some(overlay) = &mut self.overlays.archive_password {
+        if let Some(overlay) = &mut self.file_operations.archive_password {
             overlay.visible = !overlay.visible;
         }
     }
@@ -243,7 +243,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_password {
+                if let Some(overlay) = &mut self.file_operations.archive_password {
                     overlay.cursor_col = previous_word_start(&overlay.input, overlay.cursor_col);
                 }
             }
@@ -251,17 +251,17 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_password {
+                if let Some(overlay) = &mut self.file_operations.archive_password {
                     overlay.cursor_col = next_word_start(&overlay.input, overlay.cursor_col);
                 }
             }
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_password {
+                if let Some(overlay) = &mut self.file_operations.archive_password {
                     overlay.cursor_col = overlay.cursor_col.saturating_sub(1);
                 }
             }
             KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_password {
+                if let Some(overlay) = &mut self.file_operations.archive_password {
                     let len = overlay.input.chars().count();
                     if overlay.cursor_col < len {
                         overlay.cursor_col += 1;
@@ -269,12 +269,12 @@ impl App {
                 }
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_password {
+                if let Some(overlay) = &mut self.file_operations.archive_password {
                     overlay.cursor_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_password {
+                if let Some(overlay) = &mut self.file_operations.archive_password {
                     overlay.cursor_col = overlay.input.chars().count();
                 }
             }
@@ -282,7 +282,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_password
+                if let Some(overlay) = &mut self.file_operations.archive_password
                     && overlay.cursor_col > 0
                 {
                     let start = previous_delete_start(&overlay.input, overlay.cursor_col);
@@ -295,7 +295,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_password
+                if let Some(overlay) = &mut self.file_operations.archive_password
                     && overlay.cursor_col > 0
                 {
                     let start = previous_delete_start(&overlay.input, overlay.cursor_col);
@@ -308,7 +308,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_password {
+                if let Some(overlay) = &mut self.file_operations.archive_password {
                     let end = next_delete_end(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, overlay.cursor_col, end);
                     overlay.error = None;
@@ -318,14 +318,14 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_password {
+                if let Some(overlay) = &mut self.file_operations.archive_password {
                     let end = next_delete_end(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, overlay.cursor_col, end);
                     overlay.error = None;
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_password
+                if let Some(overlay) = &mut self.file_operations.archive_password
                     && overlay.cursor_col > 0
                 {
                     let start = char_to_byte(&overlay.input, overlay.cursor_col - 1);
@@ -336,7 +336,7 @@ impl App {
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.overlays.archive_password {
+                if let Some(overlay) = &mut self.file_operations.archive_password {
                     let len = overlay.input.chars().count();
                     if overlay.cursor_col < len {
                         let start = char_to_byte(&overlay.input, overlay.cursor_col);
@@ -351,7 +351,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.overlays.archive_password {
+                if let Some(overlay) = &mut self.file_operations.archive_password {
                     let byte = char_to_byte(&overlay.input, overlay.cursor_col);
                     overlay.input.insert(byte, ch);
                     overlay.cursor_col += 1;
@@ -388,12 +388,12 @@ impl App {
     }
 
     fn confirm_archive_password(&mut self) -> Result<()> {
-        let Some(overlay) = &self.overlays.archive_password else {
+        let Some(overlay) = &self.file_operations.archive_password else {
             return Ok(());
         };
         let password = overlay.input.clone();
         if password.is_empty() {
-            if let Some(overlay) = &mut self.overlays.archive_password {
+            if let Some(overlay) = &mut self.file_operations.archive_password {
                 overlay.error = Some("Password cannot be empty".to_string());
             }
             return Ok(());
@@ -404,24 +404,24 @@ impl App {
                 let mut request = request.clone();
                 request.password = Some(ArchivePassword::new(password));
                 if self.start_archive_extract(request)? {
-                    self.overlays.archive_password = None;
+                    self.file_operations.archive_password = None;
                 }
             }
             ArchivePasswordPurpose::Create => {
-                if let Some(overlay) = &mut self.overlays.archive_create {
+                if let Some(overlay) = &mut self.file_operations.archive_create {
                     overlay.options.encryption =
                         ArchiveEncryption::Password(ArchivePassword::new(password));
                     overlay.error = None;
                     self.status.clear();
                 }
-                self.overlays.archive_password = None;
+                self.file_operations.archive_password = None;
             }
         }
         Ok(())
     }
 
     fn cancel_archive_password_prompt(&mut self) -> Result<()> {
-        let Some(overlay) = self.overlays.archive_password.take() else {
+        let Some(overlay) = self.file_operations.archive_password.take() else {
             return Ok(());
         };
         if let ArchivePasswordPurpose::Extract { request } = overlay.purpose {
@@ -448,11 +448,11 @@ impl App {
         let status = batch.status();
         let dest_dir = batch.reselect_path();
         let source_cwd = self
-            .jobs
+            .file_operations
             .archive_extract_source_cwd
             .take()
             .unwrap_or_else(|| self.file_browser.cwd.clone());
-        self.jobs.archive_extract_request = None;
+        self.file_operations.archive_extract_request = None;
         let nav_target = self
             .file_browser
             .directory_runtime
@@ -478,29 +478,29 @@ impl App {
     }
 
     fn start_archive_extract(&mut self, mut request: ArchiveExtractRequest) -> Result<bool> {
-        if self.jobs.archive_extract_progress.is_some() {
+        if self.file_operations.archive_extract_progress.is_some() {
             self.status = "Extraction already in progress".to_string();
             return Ok(false);
         }
 
-        let token = self.jobs.archive_extract_token.wrapping_add(1);
-        self.jobs.archive_extract_token = token;
+        let token = self.file_operations.archive_extract_token.wrapping_add(1);
+        self.file_operations.archive_extract_token = token;
         request.token = token;
-        self.jobs.archive_extract_progress = Some(ArchiveExtractProgress {
+        self.file_operations.archive_extract_progress = Some(ArchiveExtractProgress {
             completed: request.batch.finished_archives(),
             total: Some(request.batch.total_archives),
         });
-        if self.jobs.archive_extract_source_cwd.is_none() {
-            self.jobs.archive_extract_source_cwd = Some(self.file_browser.cwd.clone());
+        if self.file_operations.archive_extract_source_cwd.is_none() {
+            self.file_operations.archive_extract_source_cwd = Some(self.file_browser.cwd.clone());
         }
-        self.jobs.archive_extract_request = Some(request.clone());
+        self.file_operations.archive_extract_request = Some(request.clone());
         self.status.clear();
 
         let submitted = self.jobs.scheduler.submit_archive_extract(request);
         if !submitted {
-            self.jobs.archive_extract_progress = None;
-            self.jobs.archive_extract_source_cwd = None;
-            self.jobs.archive_extract_request = None;
+            self.file_operations.archive_extract_progress = None;
+            self.file_operations.archive_extract_source_cwd = None;
+            self.file_operations.archive_extract_request = None;
             self.status = "Extraction already in progress".to_string();
             return Ok(false);
         }

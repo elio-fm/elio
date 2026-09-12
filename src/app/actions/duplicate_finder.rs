@@ -13,7 +13,7 @@ impl App {
         if targets.is_empty() {
             return Ok(());
         }
-        self.jobs.clipboard = None;
+        self.file_operations.clipboard = None;
         self.open_paths_in_system(targets)
     }
     pub(crate) fn open_duplicate_open_with_overlay(&mut self) {
@@ -36,7 +36,7 @@ impl App {
         let Some(entry) = self.duplicate_focused_entry() else {
             return;
         };
-        self.overlays.rename = Some(RenameOverlay {
+        self.file_operations.rename = Some(RenameOverlay {
             is_dir: false,
             original_name: entry.name.clone(),
             input: entry.name,
@@ -66,7 +66,7 @@ impl App {
             .map(|item| item.original_name.clone())
             .collect::<Vec<_>>();
         let count = items.len();
-        self.overlays.bulk_rename = Some(BulkRenameOverlay {
+        self.file_operations.bulk_rename = Some(BulkRenameOverlay {
             items,
             new_names,
             root: None,
@@ -156,11 +156,11 @@ impl App {
         new_name: String,
     ) -> Result<()> {
         let Some(old_path) = self.duplicate_focused_path() else {
-            self.overlays.rename = None;
+            self.file_operations.rename = None;
             return Ok(());
         };
         if old_path.file_name().and_then(|name| name.to_str()) != Some(original_name.as_str()) {
-            self.overlays.rename = None;
+            self.file_operations.rename = None;
             return Ok(());
         }
         let new_path = old_path
@@ -168,7 +168,7 @@ impl App {
             .map(|parent| parent.join(&new_name))
             .unwrap_or_else(|| PathBuf::from(&new_name));
         if new_path.exists() {
-            if let Some(r) = &mut self.overlays.rename {
+            if let Some(r) = &mut self.file_operations.rename {
                 r.error = Some(format!("\"{}\" already exists", new_name));
             }
             return Ok(());
@@ -180,12 +180,12 @@ impl App {
                 }
                 _ => format!("Could not rename: {error}"),
             };
-            if let Some(r) = &mut self.overlays.rename {
+            if let Some(r) = &mut self.file_operations.rename {
                 r.error = Some(msg);
             }
             return Ok(());
         }
-        self.overlays.rename = None;
+        self.file_operations.rename = None;
         self.apply_duplicate_rename_pairs(vec![(old_path, new_path)]);
         self.status = format!("Renamed \"{}\" → \"{}\"", original_name, new_name);
         Ok(())

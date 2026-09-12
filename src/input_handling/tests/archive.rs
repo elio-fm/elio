@@ -21,7 +21,7 @@ fn e_extracts_focused_zip_archive() {
     let extracted_file = root.join("sample/dir/file.txt");
     for _ in 0..200 {
         let _ = app.process_background_jobs();
-        if extracted_file.exists() && app.jobs.archive_extract_progress.is_none() {
+        if extracted_file.exists() && app.file_operations.archive_extract_progress.is_none() {
             break;
         }
         thread::sleep(Duration::from_millis(10));
@@ -66,7 +66,9 @@ fn e_extracts_selected_archives_as_one_batch_and_skips_other_files() {
     let beta_file = root.join("beta/file.txt");
     for _ in 0..300 {
         let _ = app.process_background_jobs();
-        if alpha_file.exists() && beta_file.exists() && app.jobs.archive_extract_progress.is_none()
+        if alpha_file.exists()
+            && beta_file.exists()
+            && app.file_operations.archive_extract_progress.is_none()
         {
             break;
         }
@@ -99,7 +101,7 @@ fn e_reports_no_archives_selected_for_non_archive_selection() {
         .expect("e should handle non-archive selection");
 
     assert_eq!(app.status_message(), "No archives selected");
-    assert!(app.jobs.archive_extract_progress.is_none());
+    assert!(app.file_operations.archive_extract_progress.is_none());
     assert_eq!(
         app.file_browser.selected_paths.len(),
         1,
@@ -143,7 +145,7 @@ fn e_skips_password_archive_on_cancel_and_continues_batch() {
         let _ = app.process_background_jobs();
         if alpha_file.exists()
             && beta_file.exists()
-            && app.jobs.archive_extract_progress.is_none()
+            && app.file_operations.archive_extract_progress.is_none()
             && !app.archive_password_is_open()
         {
             break;
@@ -197,7 +199,7 @@ fn e_prompts_and_retries_encrypted_seven_zip_archive() {
     for _ in 0..200 {
         let _ = app.process_background_jobs();
         if extracted_file.exists()
-            && app.jobs.archive_extract_progress.is_none()
+            && app.file_operations.archive_extract_progress.is_none()
             && !app.archive_password_is_open()
         {
             break;
@@ -253,7 +255,7 @@ fn e_prompts_and_retries_encrypted_rar_archive() {
     for _ in 0..200 {
         let _ = app.process_background_jobs();
         if extracted_file.exists()
-            && app.jobs.archive_extract_progress.is_none()
+            && app.file_operations.archive_extract_progress.is_none()
             && !app.archive_password_is_open()
         {
             break;
@@ -309,7 +311,7 @@ fn e_prompts_and_retries_encrypted_zip_archive() {
     for _ in 0..200 {
         let _ = app.process_background_jobs();
         if extracted_file.exists()
-            && app.jobs.archive_extract_progress.is_none()
+            && app.file_operations.archive_extract_progress.is_none()
             && !app.archive_password_is_open()
         {
             break;
@@ -376,7 +378,7 @@ fn e_reports_unsupported_archive_format() {
         app.status_message(),
         "Extraction supports ZIP, 7z, RAR, TAR, TAR.GZ, TAR.XZ, TAR.BZ2, and TAR.ZST"
     );
-    assert!(app.jobs.archive_extract_progress.is_none());
+    assert!(app.file_operations.archive_extract_progress.is_none());
 
     cleanup_app_temp_root(app, root);
 }
@@ -411,7 +413,7 @@ fn c_create_archive_clears_selection_when_started() {
     let archive = root.join("archive.zip");
     for _ in 0..200 {
         let _ = app.process_background_jobs();
-        if archive.exists() && app.jobs.archive_create_progress.is_none() {
+        if archive.exists() && app.file_operations.archive_create_progress.is_none() {
             break;
         }
         thread::sleep(Duration::from_millis(10));
@@ -471,7 +473,7 @@ fn archive_create_password_returns_to_create_overlay_before_creating() {
     let archive = root.join("alpha.txt.zip");
     for _ in 0..200 {
         let _ = app.process_background_jobs();
-        if archive.exists() && app.jobs.archive_create_progress.is_none() {
+        if archive.exists() && app.file_operations.archive_create_progress.is_none() {
             break;
         }
         thread::sleep(Duration::from_millis(10));
@@ -606,17 +608,18 @@ fn cancel_keys_clear_selection_before_cancelling_archive_creation() {
         let mut app = App::new_at(root.clone()).expect("failed to create app");
         wait_for_directory_load(&mut app);
         app.file_browser.selected_paths.insert(alpha);
-        app.jobs.archive_create_progress = Some(crate::file_operations::ArchiveCreateProgress {
-            completed: 0,
-            total: 1,
-        });
+        app.file_operations.archive_create_progress =
+            Some(crate::file_operations::ArchiveCreateProgress {
+                completed: 0,
+                total: 1,
+            });
 
         app.handle_event(Event::Key(key))
             .expect("cancel key should be handled");
 
         assert!(app.file_browser.selected_paths.is_empty());
         assert!(
-            app.jobs.archive_create_progress.is_some(),
+            app.file_operations.archive_create_progress.is_some(),
             "first cancel key should clear selection instead of cancelling archive creation"
         );
 
@@ -655,7 +658,7 @@ fn archive_create_contents_list_scrolls_with_mouse_wheel() {
     .expect("scroll down should be handled");
 
     assert_eq!(
-        app.overlays
+        app.file_operations
             .archive_create
             .as_ref()
             .expect("archive create overlay should remain open")
@@ -672,7 +675,7 @@ fn archive_create_contents_list_scrolls_with_mouse_wheel() {
     .expect("scroll up should be handled");
 
     assert_eq!(
-        app.overlays
+        app.file_operations
             .archive_create
             .as_ref()
             .expect("archive create overlay should remain open")
@@ -700,7 +703,7 @@ fn open_archive_create_with_input(app: &mut App, input: &str) {
 
 fn set_archive_create_input(app: &mut App, input: &str) {
     let overlay = app
-        .overlays
+        .file_operations
         .archive_create
         .as_mut()
         .expect("archive create overlay should be open");
@@ -718,7 +721,8 @@ fn archive_test_password(root: &std::path::Path) -> String {
 fn wait_for_archive_password_prompt(app: &mut App) {
     for _ in 0..200 {
         let _ = app.process_background_jobs();
-        if app.archive_password_is_open() && app.jobs.archive_extract_progress.is_none() {
+        if app.archive_password_is_open() && app.file_operations.archive_extract_progress.is_none()
+        {
             return;
         }
         thread::sleep(Duration::from_millis(10));
