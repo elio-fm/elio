@@ -229,7 +229,7 @@ fn bulk_rename_refuses_selection_containing_trash_item() {
     app.file_browser.selected_paths.insert(trashed);
     app.open_bulk_rename_prompt();
 
-    assert!(!app.bulk_rename_is_open());
+    assert!(!app.file_operations.bulk_rename_is_open());
     assert_eq!(app.status_message(), "Cannot rename items from Trash");
 
     app.file_browser.directory_runtime.watch = None;
@@ -249,8 +249,8 @@ fn bulk_rename_selected_parent_of_current_directory_reloads_parent() {
     app.file_browser.selected_paths.insert(parent.clone());
     app.open_bulk_rename_prompt();
 
-    assert!(app.bulk_rename_is_open());
-    assert_eq!(app.bulk_rename_item_count(), 1);
+    assert!(app.file_operations.bulk_rename_is_open());
+    assert_eq!(app.file_operations.bulk_rename_item_count(), 1);
 
     let overlay = app
         .file_operations

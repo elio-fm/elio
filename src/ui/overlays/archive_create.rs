@@ -21,7 +21,7 @@ pub(in crate::ui) fn render_archive_create_overlay(
     state: &mut ScreenRegions,
     palette: Palette,
 ) {
-    let item_count = app.archive_create_source_names().len();
+    let item_count = app.file_operations.archive_create_source_names().len();
     let visible_lines = visible_edit_rows(area, item_count, 8);
     let popup_width = area.width.saturating_sub(8).clamp(40, 68);
     let max_height = (visible_lines + 8).min(area.height.max(4));
@@ -47,7 +47,7 @@ pub(in crate::ui) fn render_archive_create_overlay(
     frame.render_widget(Clear, popup);
     frame.render_widget(
         helpers::panel_block(
-            &format!(" {} ", app.archive_create_title()),
+            &format!(" {} ", app.file_operations.archive_create_title()),
             palette.chrome_alt,
             palette,
         ),
@@ -75,7 +75,7 @@ pub(in crate::ui) fn render_archive_create_overlay(
 }
 
 fn render_protection_row(frame: &mut Frame<'_>, area: Rect, app: &App, palette: Palette) {
-    if let Some(error) = app.archive_create_error() {
+    if let Some(error) = app.file_operations.archive_create_error() {
         frame.render_widget(
             Paragraph::new(Line::from(vec![Span::styled(
                 helpers::clamp_label(error, area.width as usize),
@@ -87,8 +87,8 @@ fn render_protection_row(frame: &mut Frame<'_>, area: Rect, app: &App, palette: 
         return;
     }
 
-    let label = app.archive_create_protection_label();
-    let hint = app.archive_create_protection_hint();
+    let label = app.file_operations.archive_create_protection_label();
+    let hint = app.file_operations.archive_create_protection_hint();
     let hint_width = hint.chars().count() as u16;
     let columns = Layout::default()
         .direction(Direction::Horizontal)
@@ -117,8 +117,8 @@ fn render_name_input(frame: &mut Frame<'_>, area: Rect, app: &App, palette: Pale
         vertical: 1,
     });
 
-    let input = app.archive_create_input();
-    let cursor_col = app.archive_create_cursor_col();
+    let input = app.file_operations.archive_create_input();
+    let cursor_col = app.file_operations.archive_create_cursor_col();
     let (visible_text, visible_cursor_col) =
         helpers::input_window(input, cursor_col, input_area.width);
 
@@ -162,14 +162,16 @@ fn render_contents_list(
         vertical: 1,
     });
     state.archive_create_list_area = Some(list_area);
-    let source_names = app.archive_create_source_names();
+    let source_names = app.file_operations.archive_create_source_names();
     let show_scrollbar = source_names.len() > visible_lines;
     let scrollbar_area = show_scrollbar.then_some(Rect {
         x: list_area.x + list_area.width.saturating_sub(1),
         width: 1,
         ..list_area
     });
-    let scroll_top = app.archive_create_source_scroll(visible_lines);
+    let scroll_top = app
+        .file_operations
+        .archive_create_source_scroll(visible_lines);
     let row_width = list_area
         .width
         .saturating_sub(if show_scrollbar { 1 } else { 0 });

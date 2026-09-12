@@ -1,23 +1,34 @@
 use super::ClipOp;
-use crate::app::App;
+use super::FileOperationsState;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
-impl App {
-    pub(crate) fn link_yanked(&mut self, relative: bool) -> Result<()> {
-        let Some(clipboard) = &self.file_operations.clipboard else {
-            self.status = "Nothing to link".to_string();
-            return Ok(());
+pub(crate) struct SymlinkCompletion {
+    pub(crate) created: bool,
+    pub(crate) status: String,
+}
+
+impl FileOperationsState {
+    pub(crate) fn create_symlinks(&self, cwd: &Path, relative: bool) -> Result<SymlinkCompletion> {
+        let Some(clipboard) = &self.clipboard else {
+            return Ok(SymlinkCompletion {
+                created: false,
+                status: "Nothing to link".to_string(),
+            });
         };
         if clipboard.op != ClipOp::Yank {
-            self.status = "Yank items before linking".to_string();
-            return Ok(());
+            return Ok(SymlinkCompletion {
+                created: false,
+                status: "Yank items before linking".to_string(),
+            });
         }
 
         let paths = clipboard.paths.clone();
         if paths.is_empty() {
-            self.status = "Nothing to link".to_string();
-            return Ok(());
+            return Ok(SymlinkCompletion {
+                created: false,
+                status: "Nothing to link".to_string(),
+            });
         }
 
         #[cfg(unix)]
@@ -25,9 +36,9 @@ impl App {
             let mut created = Vec::new();
             let mut first_error = None;
             for source in paths {
-                let link_path = unique_link_dest(&self.file_browser.cwd, &source);
+                let link_path = unique_link_dest(cwd, &source);
                 let target = if relative {
-                    relative_path(&self.file_browser.cwd, &source)
+                    relative_path(cwd, &source)
                 } else {
                     source.clone()
                 };
@@ -44,10 +55,7 @@ impl App {
                 }
             }
 
-            if !created.is_empty() {
-                let _ = self.queue_directory_reload(false);
-            }
-            self.status = match (created.len(), first_error) {
+            let status = match (created.len(), first_error) {
                 (0, Some(error)) => error,
                 (1, None) => format!(
                     "Created symlink \"{}\"",
@@ -59,15 +67,20 @@ impl App {
                 (n, None) => format!("Created {n} symlinks"),
                 (n, Some(error)) => format!("Created {n} symlinks; last error: {error}"),
             };
+            Ok(SymlinkCompletion {
+                created: !created.is_empty(),
+                status,
+            })
         }
 
         #[cfg(not(unix))]
         {
             let _ = relative;
-            self.status = "Symlinks are not supported on this platform".to_string();
+            Ok(SymlinkCompletion {
+                created: false,
+                status: "Symlinks are not supported on this platform".to_string(),
+            })
         }
-
-        Ok(())
     }
 }
 

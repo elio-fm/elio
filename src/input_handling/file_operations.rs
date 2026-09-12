@@ -3,10 +3,663 @@ use super::text_editing::{
     remove_char_range,
 };
 use crate::app::App;
+use crate::file_browser::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
+use crate::file_operations::ClipOp;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use std::{collections::HashSet, path::PathBuf};
 
 impl App {
+    pub(crate) fn extract_focused_archive(&mut self) -> Result<()> {
+        let selection_active = self.selection_count() > 0;
+        let focused_is_dir =
+            !selection_active && self.selected_entry().is_some_and(|entry| entry.is_dir());
+        let paths = if selection_active {
+            self.selected_paths_sorted()
+        } else {
+            self.selected_entry()
+                .map(|entry| vec![entry.path.clone()])
+                .unwrap_or_default()
+        };
+        match self
+            .file_operations
+            .prepare_archive_extract(paths, selection_active, focused_is_dir)
+        {
+            crate::file_operations::ArchiveExtractPreparation::Ready(request) => {
+                if self.start_archive_extract(request) && selection_active {
+                    self.file_browser.selected_paths.clear();
+                }
+            }
+            crate::file_operations::ArchiveExtractPreparation::Rejected(status) => {
+                self.status = status;
+            }
+        }
+        Ok(())
+    }
+
+    fn start_archive_extract(
+        &mut self,
+        request: crate::file_operations::ArchiveExtractRequest,
+    ) -> bool {
+        let Some(request) = self
+            .file_operations
+            .start_archive_extract(request, self.file_browser.cwd.clone())
+        else {
+            self.status = "Extraction already in progress".to_string();
+            return false;
+        };
+        self.status.clear();
+        if self.job_scheduler.submit_archive_extract(request) {
+            true
+        } else {
+            self.file_operations.reject_archive_extract_submission();
+            self.status = "Extraction already in progress".to_string();
+            false
+        }
+    }
+
+    pub(crate) fn open_archive_password_prompt(
+        &mut self,
+        request: crate::file_operations::ArchiveExtractRequest,
+        error: Option<String>,
+    ) {
+        self.overlays.help = false;
+        self.overlays.goto = None;
+        self.overlays.open_with = None;
+        self.fuzzy_finder.search = None;
+        self.file_operations
+            .open_archive_password_prompt(request, error);
+        self.status.clear();
+    }
+
+    pub(crate) fn confirm_archive_password(&mut self) -> Result<()> {
+        match self.file_operations.confirm_archive_password() {
+            crate::file_operations::ArchivePasswordConfirmation::None => {}
+            crate::file_operations::ArchivePasswordConfirmation::Create { applied } => {
+                if applied {
+                    self.status.clear();
+                }
+            }
+            crate::file_operations::ArchivePasswordConfirmation::Extract(request) => {
+                if self.start_archive_extract(request) {
+                    self.file_operations.accept_archive_password();
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn cancel_archive_password_prompt(&mut self) -> Result<()> {
+        match self.file_operations.cancel_archive_password_prompt() {
+            crate::file_operations::ArchivePasswordCancellation::None => {}
+            crate::file_operations::ArchivePasswordCancellation::Continue(request) => {
+                self.start_archive_extract(request);
+            }
+            crate::file_operations::ArchivePasswordCancellation::Finished(batch) => {
+                self.finish_archive_extract(batch.status(), batch.reselect_path());
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn finish_archive_extract(
+        &mut self,
+        status: String,
+        reselect_path: Option<PathBuf>,
+    ) {
+        let completion = self.file_operations.finish_archive_extract(
+            self.file_browser.cwd.clone(),
+            status,
+            reselect_path,
+        );
+        let nav_target = self
+            .file_browser
+            .directory_runtime
+            .pending_load
+            .as_ref()
+            .map(|load| load.target_cwd.as_path());
+        let nav_to_source = nav_target == Some(completion.source_cwd.as_path());
+        if nav_to_source || (completion.source_cwd == self.file_browser.cwd && nav_target.is_none())
+        {
+            let _ = self.queue_directory_load(PendingDirectoryLoad {
+                token: 0,
+                target_cwd: completion.source_cwd,
+                previous_cwd: self.file_browser.cwd.clone(),
+                previous_selected_path: None,
+                previous_selection_name: None,
+                reselect_path: completion.reselect_path,
+                history_mode: DirectoryHistoryMode::None,
+                refresh_search: false,
+                completion: DirectoryLoadCompletion::Status(completion.status),
+            });
+        } else {
+            self.status = completion.status;
+        }
+    }
+
+    pub(crate) fn open_archive_create_prompt(&mut self) {
+        if self.file_operations.archive_create_progress.is_some() {
+            self.status = "Archive creation already in progress".to_string();
+            return;
+        }
+        let (sources, default_name) = if self.file_browser.selected_paths.is_empty() {
+            let Some(entry) = self.selected_entry() else {
+                self.status = "Select items to archive".to_string();
+                return;
+            };
+            (vec![entry.path.clone()], format!("{}.zip", entry.name))
+        } else {
+            (self.selected_paths_sorted(), "archive.zip".to_string())
+        };
+        self.overlays.help = false;
+        self.overlays.goto = None;
+        self.overlays.open_with = None;
+        self.fuzzy_finder.search = None;
+        self.file_operations
+            .open_archive_create_prompt(sources, default_name);
+        self.status.clear();
+    }
+
+    fn confirm_archive_create(&mut self) {
+        let Some(request) = self
+            .file_operations
+            .confirm_archive_create(&self.file_browser.cwd)
+        else {
+            return;
+        };
+        if self.job_scheduler.submit_archive_create(request) {
+            self.file_operations.accept_archive_create_submission();
+            self.file_browser.clear_selection();
+            self.status.clear();
+        } else {
+            self.file_operations.reject_archive_create_submission();
+            self.status = "Archive creation already in progress".to_string();
+        }
+    }
+
+    fn open_archive_create_password_prompt(&mut self) {
+        self.file_operations.open_archive_create_password_prompt();
+    }
+
+    fn remove_archive_create_password(&mut self) {
+        if self.file_operations.remove_archive_create_password() {
+            self.status = "Archive password removed".to_string();
+        }
+    }
+
+    pub(crate) fn open_restore_prompt(&mut self) {
+        if !self.file_browser.in_trash {
+            return;
+        }
+        let targets = self.selected_trash_targets();
+        if targets.is_empty() {
+            return;
+        }
+        if !self.file_browser.selected_paths.is_empty() {
+            match crate::file_operations::trash_target_scope(
+                &targets,
+                &self.file_browser.cwd,
+                self.file_browser.in_trash,
+            ) {
+                crate::file_operations::TrashTargetScope::Mixed => {
+                    self.status = "Selection mixes trash and normal files".to_string();
+                    return;
+                }
+                crate::file_operations::TrashTargetScope::Normal => {
+                    self.status = "Cannot restore normal files".to_string();
+                    return;
+                }
+                crate::file_operations::TrashTargetScope::Trash => {}
+            }
+        }
+        self.overlays.help = false;
+        self.fuzzy_finder.search = None;
+        self.file_operations.open_restore_prompt(targets);
+    }
+
+    pub(crate) fn confirm_restore(&mut self) -> Result<()> {
+        let overlay = match self.file_operations.take_restore_confirmation() {
+            crate::file_operations::RestoreConfirmation::None => return Ok(()),
+            crate::file_operations::RestoreConfirmation::InProgress => {
+                self.status = "Restore in progress — press Esc to cancel".to_string();
+                return Ok(());
+            }
+            crate::file_operations::RestoreConfirmation::Targets(overlay) => overlay,
+        };
+        self.file_browser.selected_paths.clear();
+        let target_paths = overlay
+            .targets
+            .iter()
+            .map(|target| target.path.clone())
+            .collect::<Vec<_>>();
+        let source_cwd = self.queue_directory_escape_for_paths(&target_paths)?;
+        let restored_paths = overlay
+            .targets
+            .iter()
+            .map(|target| &target.path)
+            .collect::<HashSet<_>>();
+        let next_selection = self
+            .file_browser
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| !restored_paths.contains(&entry.path))
+            .find(|(index, _)| *index >= self.file_browser.selected)
+            .or_else(|| {
+                self.file_browser
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .rfind(|(_, entry)| !restored_paths.contains(&entry.path))
+            })
+            .map(|(_, entry)| entry.path.clone());
+        let request = self
+            .file_operations
+            .start_restore(overlay, source_cwd, next_selection);
+        self.job_scheduler.submit_restore(request);
+        Ok(())
+    }
+
+    pub(crate) fn selected_trash_targets(&self) -> Vec<crate::file_operations::TrashTarget> {
+        if !self.file_browser.selected_paths.is_empty() {
+            return self
+                .selected_paths_sorted()
+                .into_iter()
+                .map(crate::file_operations::trash_target_from_path)
+                .collect();
+        }
+        self.selected_entry()
+            .map(|entry| {
+                vec![crate::file_operations::TrashTarget {
+                    path: entry.path.clone(),
+                    name: entry.name.clone(),
+                    is_dir: entry.is_dir(),
+                }]
+            })
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn trash_target_is_inside_trash(&self, path: &std::path::Path) -> bool {
+        crate::file_operations::trash_target_is_inside_trash(
+            path,
+            &self.file_browser.cwd,
+            self.file_browser.in_trash,
+        )
+    }
+
+    pub(crate) fn open_trash_prompt(&mut self) {
+        let targets = self.selected_trash_targets();
+        if targets.is_empty() {
+            return;
+        }
+        match crate::file_operations::trash_target_scope(
+            &targets,
+            &self.file_browser.cwd,
+            self.file_browser.in_trash,
+        ) {
+            crate::file_operations::TrashTargetScope::Normal => {
+                self.open_trash_prompt_for_targets(targets, false, true)
+            }
+            crate::file_operations::TrashTargetScope::Trash => {
+                self.open_trash_prompt_for_targets(targets, true, true)
+            }
+            crate::file_operations::TrashTargetScope::Mixed => {
+                self.status = "Selection mixes trash and normal files".to_string();
+            }
+        }
+    }
+
+    pub(crate) fn open_delete_permanently_prompt(&mut self) {
+        let targets = self.selected_trash_targets();
+        if !targets.is_empty() {
+            self.open_trash_prompt_for_targets(targets, true, true);
+        }
+    }
+
+    pub(crate) fn open_trash_prompt_for_explicit_targets(
+        &mut self,
+        targets: Vec<crate::file_operations::TrashTarget>,
+        permanent: bool,
+    ) {
+        self.open_trash_prompt_for_targets(targets, permanent, false);
+    }
+
+    fn open_trash_prompt_for_targets(
+        &mut self,
+        targets: Vec<crate::file_operations::TrashTarget>,
+        permanent: bool,
+        close_duplicates: bool,
+    ) {
+        self.overlays.help = false;
+        self.fuzzy_finder.search = None;
+        if close_duplicates {
+            self.duplicate_finder.session = None;
+        }
+        self.file_operations.open_trash_prompt(targets, permanent);
+    }
+
+    pub(crate) fn confirm_trash(&mut self) -> Result<()> {
+        let overlay = match self.file_operations.take_trash_confirmation() {
+            crate::file_operations::TrashConfirmation::None => return Ok(()),
+            crate::file_operations::TrashConfirmation::InProgress { permanent } => {
+                self.status = if permanent {
+                    "Delete in progress — press Esc to cancel".to_string()
+                } else {
+                    "Trash in progress".to_string()
+                };
+                return Ok(());
+            }
+            crate::file_operations::TrashConfirmation::Targets(overlay) => overlay,
+        };
+        self.file_browser.selected_paths.clear();
+        let target_paths = overlay
+            .targets
+            .iter()
+            .map(|target| target.path.clone())
+            .collect::<Vec<_>>();
+        let source_cwd = self.queue_directory_escape_for_paths(&target_paths)?;
+        let deleted_paths = overlay
+            .targets
+            .iter()
+            .map(|target| &target.path)
+            .collect::<HashSet<_>>();
+        let next_selection = self
+            .file_browser
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| !deleted_paths.contains(&entry.path))
+            .find(|(index, _)| *index >= self.file_browser.selected)
+            .or_else(|| {
+                self.file_browser
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .rfind(|(_, entry)| !deleted_paths.contains(&entry.path))
+            })
+            .map(|(_, entry)| entry.path.clone());
+        #[cfg(unix)]
+        if !overlay.permanent && crate::file_operations::likely_cross_device_trash(&overlay.targets)
+        {
+            self.status = "Copying to trash…".to_string();
+        }
+        let request = self.file_operations.start_trash(
+            overlay,
+            source_cwd,
+            next_selection,
+            self.duplicate_finder.session.is_some(),
+        );
+        self.job_scheduler.submit_trash(request);
+        Ok(())
+    }
+
+    pub(crate) fn yank(&mut self) {
+        self.set_clipboard(ClipOp::Yank);
+    }
+
+    pub(crate) fn cut(&mut self) {
+        self.set_clipboard(ClipOp::Cut);
+    }
+
+    fn set_clipboard(&mut self, op: ClipOp) {
+        let paths = self.file_browser.selected_or_focused_paths_sorted();
+        if self.file_operations.set_clipboard(paths, op) {
+            self.file_browser.selected_paths.clear();
+            self.status.clear();
+        }
+    }
+
+    pub(crate) fn paste(&mut self) -> Result<()> {
+        let preparation = self.file_operations.prepare_paste(&self.file_browser.cwd);
+        if let Some(request) = preparation.request {
+            self.job_scheduler.submit_paste(request);
+        }
+        if let Some(status) = preparation.status {
+            self.status = status;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn drop_external_paths(&mut self, paths: Vec<PathBuf>, op: ClipOp) -> Result<bool> {
+        let preparation = self
+            .file_operations
+            .prepare_drop(&self.file_browser.cwd, paths, op);
+        if let Some(request) = preparation.request {
+            self.job_scheduler.submit_paste(request);
+        }
+        self.status = preparation.status;
+        Ok(preparation.accepted)
+    }
+
+    pub(crate) fn link_yanked(&mut self, relative: bool) -> Result<()> {
+        let completion = self
+            .file_operations
+            .create_symlinks(&self.file_browser.cwd, relative)?;
+        if completion.created {
+            let _ = self.queue_directory_reload(false);
+        }
+        self.status = completion.status;
+        Ok(())
+    }
+
+    pub(crate) fn open_rename_prompt(&mut self) {
+        if self.file_browser.in_trash {
+            return;
+        }
+        let Some(entry) = self.selected_entry() else {
+            return;
+        };
+        let name = entry.name.clone();
+        let is_dir = entry.is_dir();
+        self.overlays.help = false;
+        self.fuzzy_finder.search = None;
+        self.file_operations.open_rename_prompt(name, is_dir);
+    }
+
+    pub(crate) fn open_bulk_rename_prompt(&mut self) {
+        if self.file_browser.in_trash {
+            return;
+        }
+        let selected_paths = self.selected_paths_sorted();
+        if selected_paths
+            .iter()
+            .any(|path| self.trash_target_is_inside_trash(path))
+        {
+            self.status = "Cannot rename items from Trash".to_string();
+            return;
+        }
+        if selected_paths.is_empty() {
+            return;
+        }
+        self.overlays.help = false;
+        self.fuzzy_finder.search = None;
+        self.file_operations.open_bulk_rename_prompt(selected_paths);
+    }
+
+    pub(crate) fn confirm_bulk_rename(&mut self) -> Result<()> {
+        let confirmation = self.file_operations.confirm_bulk_rename();
+        self.apply_bulk_rename_confirmation(confirmation)
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn open_editor_bulk_rename(&mut self) -> Result<()> {
+        if self.file_browser.in_trash || self.cwd_is_inside_trash_subfolder() {
+            return Ok(());
+        }
+        let selected_paths = if self.file_browser.selected_paths.is_empty() {
+            self.selected_entry()
+                .map(|entry| vec![entry.path.clone()])
+                .unwrap_or_default()
+        } else {
+            self.selected_paths_in_selection_order()
+        };
+        if selected_paths.is_empty() {
+            return Ok(());
+        }
+        if selected_paths
+            .iter()
+            .any(|path| self.trash_target_is_inside_trash(path))
+        {
+            self.status = "Cannot rename items from Trash".to_string();
+            return Ok(());
+        }
+
+        let launch: crate::file_operations::EditorBulkRenameLaunch = self
+            .file_operations
+            .prepare_editor_bulk_rename(selected_paths)?;
+        self.overlays.help = false;
+        self.fuzzy_finder.search = None;
+        self.pending_terminal_task = Some(crate::app::PendingTerminalTask::EditorBulkRename {
+            program: launch.program,
+            args: launch.args,
+            session: launch.session,
+        });
+        self.status.clear();
+        Ok(())
+    }
+
+    #[cfg(not(unix))]
+    pub(crate) fn open_editor_bulk_rename(&mut self) -> Result<()> {
+        self.status = "Editor batch rename is only supported on Unix-like systems".to_string();
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn finish_editor_bulk_rename(
+        &mut self,
+        session: crate::file_operations::BulkRenameEditorSession,
+        launch_result: std::io::Result<std::process::ExitStatus>,
+    ) -> Result<()> {
+        match self
+            .file_operations
+            .finish_editor_bulk_rename(session, launch_result)?
+        {
+            crate::file_operations::EditorRenameReview::Ready => self.status.clear(),
+            crate::file_operations::EditorRenameReview::Status(status) => self.status = status,
+        }
+        Ok(())
+    }
+
+    pub(crate) fn confirm_editor_rename(&mut self) -> Result<()> {
+        let confirmation = self.file_operations.confirm_editor_rename();
+        self.apply_bulk_rename_confirmation(confirmation)
+    }
+
+    fn apply_bulk_rename_confirmation(
+        &mut self,
+        confirmation: crate::file_operations::BulkRenameConfirmation,
+    ) -> Result<()> {
+        let completion = match confirmation {
+            crate::file_operations::BulkRenameConfirmation::None => return Ok(()),
+            crate::file_operations::BulkRenameConfirmation::Status(status) => {
+                self.status = status;
+                return Ok(());
+            }
+            crate::file_operations::BulkRenameConfirmation::Applied(completion) => completion,
+        };
+        let reload_cwd = self
+            .current_directory_escape_for_paths(&completion.changed_old_paths)
+            .unwrap_or_else(|| self.file_browser.cwd.clone());
+        self.file_browser.selected_paths.clear();
+        self.apply_duplicate_rename_pairs(completion.duplicate_rename_pairs);
+        self.queue_directory_load(PendingDirectoryLoad {
+            token: 0,
+            target_cwd: reload_cwd,
+            previous_cwd: self.file_browser.cwd.clone(),
+            previous_selected_path: None,
+            previous_selection_name: None,
+            reselect_path: completion.reselect_path,
+            history_mode: DirectoryHistoryMode::None,
+            refresh_search: false,
+            completion: DirectoryLoadCompletion::Status(completion.status),
+        })?;
+        Ok(())
+    }
+
+    pub(crate) fn confirm_rename(&mut self) -> Result<()> {
+        let Some((original_name, new_name)) = self.file_operations.prepare_rename_names() else {
+            return Ok(());
+        };
+        if self.duplicates_is_open() {
+            return self.confirm_duplicate_rename(original_name, new_name);
+        }
+        let old_path = self
+            .file_browser
+            .entries
+            .iter()
+            .find(|entry| entry.name == original_name)
+            .map(|entry| entry.path.clone());
+        let cwd = self.file_browser.cwd.clone();
+        let Some(completion) = self.file_operations.confirm_rename(&cwd, old_path) else {
+            return Ok(());
+        };
+        self.queue_directory_load(PendingDirectoryLoad {
+            token: 0,
+            target_cwd: cwd.clone(),
+            previous_cwd: cwd,
+            previous_selected_path: None,
+            previous_selection_name: None,
+            reselect_path: Some(completion.new_path),
+            history_mode: DirectoryHistoryMode::None,
+            refresh_search: false,
+            completion: DirectoryLoadCompletion::Status(completion.status),
+        })?;
+        Ok(())
+    }
+
+    pub(crate) fn open_create_prompt(&mut self) {
+        self.overlays.help = false;
+        self.fuzzy_finder.search = None;
+        self.file_operations.open_create_prompt();
+    }
+
+    pub(crate) fn confirm_create(&mut self) -> Result<()> {
+        let cwd = self.file_browser.cwd.clone();
+        let Some(completion) = self.file_operations.confirm_create(&cwd)? else {
+            return Ok(());
+        };
+        self.queue_directory_load(PendingDirectoryLoad {
+            token: 0,
+            target_cwd: cwd.clone(),
+            previous_cwd: cwd,
+            previous_selected_path: self.selected_entry().map(|entry| entry.path.clone()),
+            previous_selection_name: self.selected_entry().map(|entry| entry.name.clone()),
+            reselect_path: completion.reselect_path,
+            history_mode: DirectoryHistoryMode::None,
+            refresh_search: false,
+            completion: DirectoryLoadCompletion::Status(completion.status),
+        })?;
+        Ok(())
+    }
+
+    pub(crate) fn open_copy_overlay(&mut self) {
+        let paths = self.file_browser.selected_or_focused_paths_sorted();
+        self.open_copy_overlay_for_paths(paths);
+    }
+
+    pub(crate) fn open_copy_overlay_for_paths(&mut self, paths: Vec<PathBuf>) {
+        if !self
+            .file_operations
+            .open_copy_overlay(&self.file_browser.cwd, &paths)
+        {
+            self.status = "Nothing to copy".to_string();
+            return;
+        }
+        self.overlays.help = false;
+        self.status.clear();
+    }
+
+    fn confirm_copy_index(&mut self, index: usize) {
+        if let Some(status) = self.file_operations.confirm_copy_index(index) {
+            self.status = status;
+        }
+    }
+
+    fn cancel_editor_rename_confirm(&mut self) {
+        self.file_operations.dismiss_editor_rename_confirm();
+        self.status = "Editor rename cancelled".to_string();
+    }
+
     pub(crate) fn handle_archive_create_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.file_operations.archive_create = None;
@@ -15,9 +668,7 @@ impl App {
 
         match key.code {
             KeyCode::Esc => self.file_operations.archive_create = None,
-            KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
-                self.confirm_archive_create()?
-            }
+            KeyCode::Enter if key.modifiers == KeyModifiers::NONE => self.confirm_archive_create(),
             KeyCode::Char('p' | 'P')
                 if key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL) =>
@@ -220,7 +871,7 @@ impl App {
         }
 
         if key.modifiers == KeyModifiers::ALT && matches!(key.code, KeyCode::Char('v' | 'V')) {
-            self.toggle_archive_password_visibility();
+            self.file_operations.toggle_archive_password_visibility();
             return Ok(());
         }
 
@@ -363,7 +1014,7 @@ impl App {
                 .archive_password_visibility_btn
                 .is_some_and(|btn| btn.contains((mouse.column, mouse.row).into()))
             {
-                self.toggle_archive_password_visibility();
+                self.file_operations.toggle_archive_password_visibility();
                 return Ok(());
             }
 
@@ -566,9 +1217,13 @@ impl App {
                     let scroll_top = self.input.screen_regions.bulk_rename_scroll_top;
                     let row_offset = (mouse.row - list_area.y) as usize;
                     let line_idx = scroll_top + row_offset;
-                    let count = self.bulk_rename_item_count();
+                    let count = self.file_operations.bulk_rename_item_count();
                     if line_idx < count {
-                        let line_len = self.bulk_rename_new_name(line_idx).chars().count();
+                        let line_len = self
+                            .file_operations
+                            .bulk_rename_new_name(line_idx)
+                            .chars()
+                            .count();
                         let char_col = (mouse.column.saturating_sub(list_area.x + 3)) as usize;
                         let cursor_col = char_col.min(line_len);
                         if let Some(r) = &mut self.file_operations.bulk_rename {
@@ -606,7 +1261,7 @@ impl App {
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 if let Some(index) = self.copy_row_index_for_shortcut(ch) {
-                    self.confirm_copy_index(index)?;
+                    self.confirm_copy_index(index);
                 }
             }
             _ => {}
@@ -635,7 +1290,7 @@ impl App {
                 .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))
                 .cloned()
             {
-                self.confirm_copy_index(hit.index)?;
+                self.confirm_copy_index(hit.index);
             }
         }
 
@@ -909,9 +1564,9 @@ impl App {
                     let scroll_top = self.input.screen_regions.create_scroll_top;
                     let row_offset = (mouse.row - list_area.y) as usize;
                     let line_idx = scroll_top + row_offset;
-                    let line_count = self.create_line_count();
+                    let line_count = self.file_operations.create_line_count();
                     if line_idx < line_count {
-                        let line_len = self.create_line(line_idx).chars().count();
+                        let line_len = self.file_operations.create_line(line_idx).chars().count();
                         let char_col = (mouse.column.saturating_sub(list_area.x + 3)) as usize;
                         let cursor_col = char_col.min(line_len);
                         if let Some(c) = &mut self.file_operations.create {
@@ -944,7 +1599,7 @@ impl App {
                 self.cancel_editor_rename_confirm();
             }
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
-                if self.editor_rename_confirmed() {
+                if self.file_operations.editor_rename_confirmed() {
                     self.confirm_editor_rename()?;
                 } else {
                     self.cancel_editor_rename_confirm();
@@ -966,16 +1621,16 @@ impl App {
                 }
             }
             KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
-                self.scroll_editor_rename_confirm(-1);
+                self.file_operations.scroll_editor_rename_confirm(-1);
             }
             KeyCode::Down | KeyCode::Char('j') if key.modifiers == KeyModifiers::NONE => {
-                self.scroll_editor_rename_confirm(1);
+                self.file_operations.scroll_editor_rename_confirm(1);
             }
             KeyCode::PageUp if key.modifiers == KeyModifiers::NONE => {
-                self.scroll_editor_rename_confirm(-10);
+                self.file_operations.scroll_editor_rename_confirm(-10);
             }
             KeyCode::PageDown if key.modifiers == KeyModifiers::NONE => {
-                self.scroll_editor_rename_confirm(10);
+                self.file_operations.scroll_editor_rename_confirm(10);
             }
             _ => {}
         }
@@ -1011,10 +1666,10 @@ impl App {
                 self.cancel_editor_rename_confirm();
             }
             MouseEventKind::ScrollUp if inside => {
-                self.scroll_editor_rename_confirm(-1);
+                self.file_operations.scroll_editor_rename_confirm(-1);
             }
             MouseEventKind::ScrollDown if inside => {
-                self.scroll_editor_rename_confirm(1);
+                self.file_operations.scroll_editor_rename_confirm(1);
             }
             _ => {}
         }

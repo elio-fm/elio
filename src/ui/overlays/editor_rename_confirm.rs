@@ -18,7 +18,7 @@ pub(in crate::ui) fn render_editor_rename_confirm_overlay(
     state: &mut ScreenRegions,
     palette: Palette,
 ) {
-    let item_count = app.editor_rename_confirm_count();
+    let item_count = app.file_operations.editor_rename_confirm_count();
     let visible_lines = area
         .height
         .saturating_sub(7)
@@ -32,7 +32,7 @@ pub(in crate::ui) fn render_editor_rename_confirm_overlay(
     frame.render_widget(Clear, popup);
     frame.render_widget(
         helpers::panel_block(
-            &format!(" {} ", app.editor_rename_confirm_title()),
+            &format!(" {} ", app.file_operations.editor_rename_confirm_title()),
             palette.chrome_alt,
             palette,
         ),
@@ -56,7 +56,10 @@ pub(in crate::ui) fn render_editor_rename_confirm_overlay(
     state.bulk_rename_list_area = Some(list_area);
 
     let max_scroll = item_count.saturating_sub(visible_lines as usize);
-    let scroll_top = app.editor_rename_confirm_scroll().min(max_scroll);
+    let scroll_top = app
+        .file_operations
+        .editor_rename_confirm_scroll()
+        .min(max_scroll);
     state.bulk_rename_scroll_top = scroll_top;
     let show_scrollbar = item_count > visible_lines as usize;
     let row_width = list_area
@@ -65,7 +68,7 @@ pub(in crate::ui) fn render_editor_rename_confirm_overlay(
 
     for row_offset in 0..visible_lines as usize {
         let index = scroll_top + row_offset;
-        let Some((old, new)) = app.editor_rename_confirm_row(index) else {
+        let Some((old, new)) = app.file_operations.editor_rename_confirm_row(index) else {
             break;
         };
         let available = row_width as usize;
@@ -107,7 +110,7 @@ pub(in crate::ui) fn render_editor_rename_confirm_overlay(
         );
     }
 
-    let confirmed = app.editor_rename_confirmed();
+    let confirmed = app.file_operations.editor_rename_confirmed();
     let confirm_style = if confirmed {
         Style::default()
             .bg(palette.selected_bg)

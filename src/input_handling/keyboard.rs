@@ -337,7 +337,7 @@ impl App {
                 self.job_scheduler
                     .cancel_paste(self.file_operations.paste_token);
                 self.file_operations.paste_progress = None;
-                self.clear_queued_pastes();
+                self.file_operations.clear_queued_pastes();
             } else {
                 self.clear_selection();
                 self.file_operations.clipboard = None;
@@ -461,7 +461,7 @@ impl App {
                     self.job_scheduler
                         .cancel_paste(self.file_operations.paste_token);
                     self.file_operations.paste_progress = None;
-                    self.clear_queued_pastes();
+                    self.file_operations.clear_queued_pastes();
                 } else {
                     self.clear_selection();
                     self.file_operations.clipboard = None;

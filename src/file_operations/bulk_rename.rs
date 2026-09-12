@@ -1,6 +1,5 @@
-use super::editor_bulk_rename::confirm_bulk_rename_overlay;
-use crate::app::App;
-use anyhow::Result;
+use super::FileOperationsState;
+use super::editor_bulk_rename::{BulkRenameConfirmation, confirm_bulk_rename_overlay};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -20,23 +19,12 @@ pub(crate) struct BulkRenameOverlay {
     pub(crate) line_errors: Vec<Option<String>>,
 }
 
-impl App {
-    pub(crate) fn open_bulk_rename_prompt(&mut self) {
-        if self.file_browser.in_trash {
-            return;
-        }
-        let selected_paths = self.selected_paths_sorted();
-        if selected_paths
-            .iter()
-            .any(|path| self.trash_target_is_inside_trash(path))
-        {
-            self.status = "Cannot rename items from Trash".to_string();
-            return;
-        }
-        let items: Vec<BulkRenameItem> = selected_paths
+impl FileOperationsState {
+    pub(crate) fn open_bulk_rename_prompt(&mut self, selected_paths: Vec<PathBuf>) {
+        let items = selected_paths
             .into_iter()
             .map(bulk_rename_item_from_path)
-            .collect();
+            .collect::<Vec<_>>();
         if items.is_empty() {
             return;
         }
@@ -45,13 +33,11 @@ impl App {
             .iter()
             .map(|item| item.original_name.clone())
             .collect();
-        self.overlays.help = false;
-        self.fuzzy_finder.search = None;
-        self.file_operations.create = None;
-        self.file_operations.rename = None;
-        self.file_operations.trash = None;
-        self.file_operations.restore = None;
-        self.file_operations.bulk_rename = Some(BulkRenameOverlay {
+        self.create = None;
+        self.rename = None;
+        self.trash = None;
+        self.restore = None;
+        self.bulk_rename = Some(BulkRenameOverlay {
             items,
             new_names,
             root: None,
@@ -62,12 +48,46 @@ impl App {
         });
     }
 
+    pub fn bulk_rename_live_path(&self, cwd: &Path, index: usize) -> PathBuf {
+        self.bulk_rename
+            .as_ref()
+            .and_then(|r| {
+                r.new_names
+                    .get(index)
+                    .map(|name| r.root.as_deref().unwrap_or(cwd).join(name))
+            })
+            .unwrap_or_else(|| cwd.to_path_buf())
+    }
+
+    pub(crate) fn confirm_bulk_rename(&mut self) -> BulkRenameConfirmation {
+        confirm_bulk_rename_overlay(&mut self.bulk_rename)
+    }
+}
+
+fn bulk_rename_item_from_path(path: PathBuf) -> BulkRenameItem {
+    let original_name = path_name(&path);
+    let is_dir = path.is_dir();
+    BulkRenameItem {
+        path,
+        original_name,
+        is_dir,
+    }
+}
+
+fn path_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(str::to_owned)
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+impl FileOperationsState {
     pub fn bulk_rename_is_open(&self) -> bool {
-        self.file_operations.bulk_rename.is_some()
+        self.bulk_rename.is_some()
     }
 
     pub fn bulk_rename_title(&self) -> String {
-        let Some(r) = &self.file_operations.bulk_rename else {
+        let Some(r) = &self.bulk_rename else {
             return "Rename".to_string();
         };
         if r.items.len() == 1 {
@@ -89,15 +109,11 @@ impl App {
     }
 
     pub fn bulk_rename_item_count(&self) -> usize {
-        self.file_operations
-            .bulk_rename
-            .as_ref()
-            .map_or(0, |r| r.items.len())
+        self.bulk_rename.as_ref().map_or(0, |r| r.items.len())
     }
 
     pub fn bulk_rename_new_name(&self, index: usize) -> &str {
-        self.file_operations
-            .bulk_rename
+        self.bulk_rename
             .as_ref()
             .and_then(|r| r.new_names.get(index))
             .map(String::as_str)
@@ -105,65 +121,24 @@ impl App {
     }
 
     pub fn bulk_rename_item_is_dir(&self, index: usize) -> bool {
-        self.file_operations
-            .bulk_rename
+        self.bulk_rename
             .as_ref()
             .and_then(|r| r.items.get(index))
             .is_some_and(|item| item.is_dir)
     }
 
-    pub fn bulk_rename_live_path(&self, index: usize) -> PathBuf {
-        self.file_operations
-            .bulk_rename
-            .as_ref()
-            .and_then(|r| {
-                r.new_names
-                    .get(index)
-                    .map(|name| r.root.as_ref().unwrap_or(&self.file_browser.cwd).join(name))
-            })
-            .unwrap_or_else(|| self.file_browser.cwd.clone())
-    }
-
     pub fn bulk_rename_line_error(&self, index: usize) -> Option<&str> {
-        self.file_operations
-            .bulk_rename
+        self.bulk_rename
             .as_ref()
             .and_then(|r| r.line_errors.get(index))
             .and_then(Option::as_deref)
     }
 
     pub fn bulk_rename_cursor_line(&self) -> usize {
-        self.file_operations
-            .bulk_rename
-            .as_ref()
-            .map_or(0, |r| r.cursor_line)
+        self.bulk_rename.as_ref().map_or(0, |r| r.cursor_line)
     }
 
     pub fn bulk_rename_cursor_col(&self) -> usize {
-        self.file_operations
-            .bulk_rename
-            .as_ref()
-            .map_or(0, |r| r.cursor_col)
+        self.bulk_rename.as_ref().map_or(0, |r| r.cursor_col)
     }
-
-    pub(crate) fn confirm_bulk_rename(&mut self) -> Result<()> {
-        confirm_bulk_rename_overlay(self)
-    }
-}
-
-fn bulk_rename_item_from_path(path: PathBuf) -> BulkRenameItem {
-    let original_name = path_name(&path);
-    let is_dir = path.is_dir();
-    BulkRenameItem {
-        path,
-        original_name,
-        is_dir,
-    }
-}
-
-fn path_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .map(str::to_owned)
-        .unwrap_or_else(|| path.display().to_string())
 }

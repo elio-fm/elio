@@ -5,6 +5,23 @@ const AUTO_RELOAD_INTERVAL_MEDIUM: Duration = Duration::from_secs(1);
 const AUTO_RELOAD_INTERVAL_LARGE: Duration = Duration::from_secs(2);
 
 impl App {
+    pub(crate) fn cwd_is_trash(&self) -> bool {
+        self.file_browser.in_trash
+    }
+
+    pub(crate) fn cwd_is_inside_trash_subfolder(&self) -> bool {
+        !crate::places::path_is_trash(&self.file_browser.cwd)
+            && crate::places::path_is_inside_trash(&self.file_browser.cwd)
+    }
+
+    pub(crate) fn effective_show_hidden(&self) -> bool {
+        self.file_browser.show_hidden || self.file_browser.in_trash
+    }
+
+    pub(crate) fn effective_show_hidden_for(&self, path: &std::path::Path) -> bool {
+        self.file_browser.show_hidden || crate::places::path_is_trash(path)
+    }
+
     pub(crate) fn refresh_git_branch(&mut self) {
         let (token, cwd) = self.file_browser.begin_git_status_refresh();
         self.job_scheduler
@@ -149,7 +166,7 @@ impl App {
             self.clear_local_filter_for_directory_change();
         }
         self.file_browser.cwd = load.target_cwd.clone();
-        self.file_browser.in_trash = Self::path_is_trash(&self.file_browser.cwd);
+        self.file_browser.in_trash = crate::places::path_is_trash(&self.file_browser.cwd);
         self.file_browser.unfiltered_entries = snapshot.entries;
         self.apply_local_filter();
         self.places.refresh();

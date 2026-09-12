@@ -13,7 +13,10 @@ fn confirm_trash_permanently_deletes_selected_items_inside_trash() {
         .insert(root.join("gone.txt"));
     app.open_trash_prompt();
 
-    assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Delete permanently 1 selected file?"
+    );
     app.confirm_trash().expect("trash should succeed");
 
     assert!(app.file_operations.trash.is_none());
@@ -44,7 +47,10 @@ fn confirm_delete_permanently_removes_selected_items_outside_trash() {
         .insert(root.join("gone.txt"));
     app.open_delete_permanently_prompt();
 
-    assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Delete permanently 1 selected file?"
+    );
     app.confirm_trash().expect("delete should succeed");
 
     assert!(app.file_operations.trash.is_none());
@@ -72,7 +78,10 @@ fn confirm_delete_selected_parent_of_current_directory_moves_to_parent() {
     app.file_browser.selected_paths.insert(parent.clone());
     app.open_delete_permanently_prompt();
 
-    assert_eq!(app.trash_title(), "Delete permanently 1 selected folder?");
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Delete permanently 1 selected folder?"
+    );
     app.confirm_trash().expect("delete should succeed");
 
     assert!(app.file_operations.trash.is_none());
@@ -223,7 +232,7 @@ fn confirm_trash_batch_trashes_multiple_files_and_reports_count() {
         .insert(root.join("gamma.txt"));
     app.open_trash_prompt();
 
-    assert_eq!(app.trash_title(), "Trash 3 files?");
+    assert_eq!(app.file_operations.trash_title(), "Trash 3 files?");
     app.confirm_trash().expect("trash should succeed");
 
     assert!(app.file_operations.trash.is_none());
@@ -269,7 +278,7 @@ fn confirm_trash_batch_single_file_shows_quoted_name() {
         .insert(root.join("notes.txt"));
     app.open_trash_prompt();
 
-    assert_eq!(app.trash_title(), "Trash 1 selected file?");
+    assert_eq!(app.file_operations.trash_title(), "Trash 1 selected file?");
     app.confirm_trash().expect("trash should succeed");
 
     assert!(app.file_operations.trash.is_none());
@@ -317,7 +326,7 @@ fn esc_during_batched_trash_keeps_chip_visible_until_done() {
 
     // Chip is showing immediately after submit.
     assert!(
-        app.trash_progress().is_some(),
+        app.file_operations.trash_progress().is_some(),
         "chip should be visible after submit"
     );
 
@@ -326,7 +335,7 @@ fn esc_during_batched_trash_keeps_chip_visible_until_done() {
         .cancel_trash(app.file_operations.trash_token);
     // trash_progress is still Some — chip stays visible.
     assert!(
-        app.trash_progress().is_some(),
+        app.file_operations.trash_progress().is_some(),
         "chip must remain visible after Esc for batched trash"
     );
 
@@ -335,7 +344,7 @@ fn esc_during_batched_trash_keeps_chip_visible_until_done() {
 
     // Chip is gone once done=true is processed.
     assert!(
-        app.trash_progress().is_none(),
+        app.file_operations.trash_progress().is_none(),
         "chip should be gone after completion"
     );
 
@@ -382,7 +391,7 @@ fn esc_during_permanent_delete_clears_chip_immediately() {
     app.confirm_trash().expect("trash should succeed");
 
     assert!(
-        app.trash_progress().is_some(),
+        app.file_operations.trash_progress().is_some(),
         "chip should be visible after submit"
     );
 
@@ -392,7 +401,7 @@ fn esc_during_permanent_delete_clears_chip_immediately() {
     app.file_operations.trash_progress = None;
 
     assert!(
-        app.trash_progress().is_none(),
+        app.file_operations.trash_progress().is_none(),
         "chip should clear immediately for permanent delete"
     );
 

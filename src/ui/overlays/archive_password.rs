@@ -15,10 +15,10 @@ pub(in crate::ui) fn render_archive_password_overlay(
     state: &mut ScreenRegions,
     palette: Palette,
 ) {
-    let archive_name = app.archive_password_archive_name();
+    let archive_name = app.file_operations.archive_password_archive_name();
     let block_title = format!(
         " {} \"{}\" ",
-        app.archive_password_title_prefix(),
+        app.file_operations.archive_password_title_prefix(),
         helpers::clamp_label(&archive_name, 30)
     );
     let popup_width = area.width.saturating_sub(8).clamp(40, 64);
@@ -60,9 +60,9 @@ pub(in crate::ui) fn render_archive_password_overlay(
         vertical: 1,
     });
 
-    let input = app.archive_password_input();
-    let cursor_col = app.archive_password_cursor_col();
-    let password_visible = app.archive_password_is_visible();
+    let input = app.file_operations.archive_password_input();
+    let cursor_col = app.file_operations.archive_password_cursor_col();
+    let password_visible = app.file_operations.archive_password_is_visible();
     let toggle_icon = if password_visible { "" } else { "" };
     let toggle_width = 3u16.min(input_area.width);
     let input_columns = Layout::default()
@@ -84,7 +84,7 @@ pub(in crate::ui) fn render_archive_password_overlay(
 
     let line = if input.is_empty() {
         Line::from(Span::styled(
-            app.archive_password_placeholder(),
+            app.file_operations.archive_password_placeholder(),
             Style::default().fg(palette.muted),
         ))
     } else {
@@ -137,7 +137,7 @@ pub(in crate::ui) fn render_archive_password_overlay(
         footer_columns[1],
     );
 
-    if let Some(error) = app.archive_password_error() {
+    if let Some(error) = app.file_operations.archive_password_error() {
         frame.render_widget(
             Paragraph::new(Line::from(vec![Span::styled(
                 helpers::clamp_label(error, footer_columns[0].width.saturating_sub(1) as usize),

@@ -21,7 +21,7 @@ pub(in crate::ui) fn render_create_overlay(
     state: &mut ScreenRegions,
     palette: Palette,
 ) {
-    let line_count = app.create_line_count().max(1);
+    let line_count = app.file_operations.create_line_count().max(1);
     let visible_lines = visible_edit_rows(area, line_count, 5);
     let popup_width = area.width.saturating_sub(8).clamp(36, 64);
     let popup_height = visible_lines + 5;
@@ -31,7 +31,7 @@ pub(in crate::ui) fn render_create_overlay(
     frame.render_widget(Clear, popup);
     frame.render_widget(
         helpers::panel_block(
-            &format!(" {} ", app.create_title()),
+            &format!(" {} ", app.file_operations.create_title()),
             palette.chrome_alt,
             palette,
         ),
@@ -53,8 +53,8 @@ pub(in crate::ui) fn render_create_overlay(
         vertical: 1,
     });
 
-    let cursor_line = app.create_cursor_line();
-    let cursor_col = app.create_cursor_col();
+    let cursor_line = app.file_operations.create_cursor_line();
+    let cursor_col = app.file_operations.create_cursor_col();
     let scroll_top = scroll_top_for_cursor(cursor_line, visible_lines as usize);
     state.create_list_area = Some(list_area);
     state.create_scroll_top = scroll_top;
@@ -73,7 +73,7 @@ pub(in crate::ui) fn render_create_overlay(
         if line_idx >= line_count {
             break;
         }
-        let line_text = app.create_line(line_idx);
+        let line_text = app.file_operations.create_line(line_idx);
         let is_cursor_line = line_idx == cursor_line;
 
         let is_dir = line_text.starts_with('/') || line_text.ends_with('/');
@@ -165,7 +165,7 @@ pub(in crate::ui) fn render_create_overlay(
         );
     }
 
-    if let Some(error) = app.create_line_error(cursor_line) {
+    if let Some(error) = app.file_operations.create_line_error(cursor_line) {
         frame.render_widget(
             Paragraph::new(Line::from(vec![Span::styled(
                 helpers::clamp_label(error, rows[1].width.saturating_sub(2) as usize),

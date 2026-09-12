@@ -156,7 +156,7 @@ fn render_list_view(
         };
         let selected = entry_index == app.file_browser.selected;
         let multi_selected = app.is_selected(&entry.path);
-        let clip_op = app.clipboard_op_for(&entry.path);
+        let clip_op = app.file_operations.clipboard_op_for(&entry.path);
         let appearance = theme::resolve_browser_entry(entry);
         let icon_color = appearance.color;
         let bg = if selected {
@@ -271,7 +271,7 @@ pub(super) fn render_compact_list_row(
     const COMPACT_SYMLINK_INLINE_MIN_WIDTH: usize = 12;
 
     let multi_selected = app.is_selected(&entry.path);
-    let clip_op = app.clipboard_op_for(&entry.path);
+    let clip_op = app.file_operations.clipboard_op_for(&entry.path);
     // All mark states take priority over the cursor colour for the bar — the
     // cursor position is already communicated by the row background.
     let marker_color = if clip_op == Some(ClipOp::Yank) {
@@ -709,7 +709,7 @@ fn render_grid_view(
         let tile_state = TileState {
             selected: entry_index == app.file_browser.selected,
             multi_selected: app.is_selected(&entry.path),
-            clip_op: app.clipboard_op_for(&entry.path),
+            clip_op: app.file_operations.clipboard_op_for(&entry.path),
         };
         render_tile(frame, rect, app, entry, tile_state, palette, spec);
         state.entry_hits.push(EntryHit {

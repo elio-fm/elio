@@ -40,6 +40,18 @@ fn file_operations_do_not_depend_on_input_handling() {
 }
 
 #[test]
+fn file_operations_do_not_depend_on_app() {
+    assert_tree_has_no_pattern(
+        "src/file_operations",
+        "app::",
+        &[
+            "src/file_operations/tests/clipboard_test_support.rs",
+            "src/file_operations/tests/mutation_test_support.rs",
+        ],
+    );
+}
+
+#[test]
 fn elevated_session_does_not_depend_on_app_or_file_operations() {
     assert_tree_has_no_pattern("src/elevated_session", "app::", &[]);
     assert_tree_has_no_pattern("src/elevated_session", "background_jobs::", &[]);

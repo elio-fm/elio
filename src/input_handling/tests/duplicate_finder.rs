@@ -79,7 +79,7 @@ fn duplicate_finder_binding_closes_duplicate_overlay() {
         .expect("Alt+D should close duplicate finder");
 
     assert!(!app.duplicates_is_open());
-    assert!(!app.trash_is_open());
+    assert!(!app.file_operations.trash_is_open());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -158,8 +158,11 @@ fn duplicate_scan_stop_keeps_sorted_partial_results_and_unlocks_actions() {
     assert_eq!(app.status_message(), "Duplicate scan stopped");
 
     app.open_duplicate_delete_permanently_prompt();
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Delete permanently 1 selected file?"
+    );
 
     app.close_duplicate_finder();
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -369,10 +372,13 @@ fn duplicate_trash_prompt_opens_on_top_of_duplicate_overlay() {
     app.open_duplicate_trash_prompt();
 
     assert!(app.duplicates_is_open());
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_title(), "Trash 1 selected file?");
-    assert_eq!(app.trash_target_count(), 1);
-    assert_eq!(app.trash_target_path_at(0), Some(Path::new("alpha.txt")));
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(app.file_operations.trash_title(), "Trash 1 selected file?");
+    assert_eq!(app.file_operations.trash_target_count(), 1);
+    assert_eq!(
+        app.file_operations.trash_target_path_at(0),
+        Some(Path::new("alpha.txt"))
+    );
 
     app.close_duplicate_finder();
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -402,10 +408,16 @@ fn duplicate_trash_prompt_uses_selected_rows_when_selection_exists() {
     app.open_duplicate_trash_prompt();
 
     assert!(app.duplicates_is_open());
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_target_count(), 2);
-    assert_eq!(app.trash_target_path_at(0), Some(Path::new("beta.txt")));
-    assert_eq!(app.trash_target_path_at(1), Some(Path::new("gamma.txt")));
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(app.file_operations.trash_target_count(), 2);
+    assert_eq!(
+        app.file_operations.trash_target_path_at(0),
+        Some(Path::new("beta.txt"))
+    );
+    assert_eq!(
+        app.file_operations.trash_target_path_at(1),
+        Some(Path::new("gamma.txt"))
+    );
 
     app.close_duplicate_finder();
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -436,8 +448,11 @@ fn duplicate_trash_binding_permanently_deletes_when_results_are_inside_trash() {
         .expect("trash binding should open permanent delete prompt for trash results");
 
     assert!(app.duplicates_is_open());
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Delete permanently 1 selected file?"
+    );
     assert!(
         app.file_operations
             .trash
@@ -476,7 +491,7 @@ fn duplicate_trash_binding_blocks_mixed_trash_and_normal_results() {
         .expect("mixed trash binding should be handled");
 
     assert!(app.duplicates_is_open());
-    assert!(!app.trash_is_open());
+    assert!(!app.file_operations.trash_is_open());
     assert_eq!(
         app.status_message(),
         "Selection mixes trash and normal files"
@@ -532,8 +547,11 @@ fn duplicate_permanent_delete_prompt_opens_on_top_after_scan() {
         .expect("D should open permanent delete prompt from Duplicate Finder");
 
     assert!(app.duplicates_is_open());
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Delete permanently 1 selected file?"
+    );
     assert!(
         app.file_operations
             .trash
@@ -579,17 +597,17 @@ fn duplicate_permanent_delete_keeps_finder_open_and_keeps_singleton_remainder() 
         .expect("permanent delete should be submitted");
 
     assert!(app.duplicates_is_open());
-    assert!(!app.trash_is_open());
+    assert!(!app.file_operations.trash_is_open());
 
     for _ in 0..500 {
         let _ = app.process_background_jobs();
-        if app.trash_progress().is_none() {
+        if app.file_operations.trash_progress().is_none() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
 
-    assert!(app.trash_progress().is_none());
+    assert!(app.file_operations.trash_progress().is_none());
 
     assert!(app.duplicates_is_open());
     assert!(!root.join("alpha.txt").exists());
@@ -619,7 +637,7 @@ fn duplicate_permanent_delete_waits_for_scan_completion() {
     app.open_duplicate_delete_permanently_prompt();
 
     assert!(app.duplicates_is_open());
-    assert!(!app.trash_is_open());
+    assert!(!app.file_operations.trash_is_open());
     assert_eq!(
         app.status_message(),
         "Wait for duplicate scan to finish before deleting results"
@@ -653,12 +671,24 @@ fn duplicate_permanent_delete_allows_selected_rows_even_when_they_are_a_whole_gr
     app.open_duplicate_delete_permanently_prompt();
 
     assert!(app.duplicates_is_open());
-    assert!(app.trash_is_open());
-    assert_eq!(app.trash_title(), "Delete permanently 3 files?");
-    assert_eq!(app.trash_target_count(), 3);
-    assert_eq!(app.trash_target_path_at(0), Some(Path::new("alpha.txt")));
-    assert_eq!(app.trash_target_path_at(1), Some(Path::new("beta.txt")));
-    assert_eq!(app.trash_target_path_at(2), Some(Path::new("gamma.txt")));
+    assert!(app.file_operations.trash_is_open());
+    assert_eq!(
+        app.file_operations.trash_title(),
+        "Delete permanently 3 files?"
+    );
+    assert_eq!(app.file_operations.trash_target_count(), 3);
+    assert_eq!(
+        app.file_operations.trash_target_path_at(0),
+        Some(Path::new("alpha.txt"))
+    );
+    assert_eq!(
+        app.file_operations.trash_target_path_at(1),
+        Some(Path::new("beta.txt"))
+    );
+    assert_eq!(
+        app.file_operations.trash_target_path_at(2),
+        Some(Path::new("gamma.txt"))
+    );
 
     app.close_duplicate_finder();
     fs::remove_dir_all(root).expect("failed to remove temp root");
