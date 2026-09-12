@@ -48,9 +48,11 @@ pub use self::state::App;
 #[cfg(test)]
 pub(crate) use self::actions::open_with::FallbackOpenOutcome;
 pub(crate) use self::state::{
-    ChooserExit, ClickState, NavigationRepeatKey, PendingTerminalTask, ScrollLane, ScrollState,
-    WheelProfile, WheelTarget,
+    ClickState, NavigationRepeatKey, PendingTerminalTask, ScrollLane, ScrollState, WheelProfile,
+    WheelTarget,
 };
+#[cfg(test)]
+pub(crate) use crate::chooser::ChooserExit;
 pub use crate::duplicate_finder::DuplicateRow;
 pub(crate) use crate::file_classification::FileClass;
 pub(crate) use crate::fs::{

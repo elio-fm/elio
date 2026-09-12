@@ -1045,7 +1045,7 @@ fn chooser_enter_confirms_hovered_entry() {
     assert!(app.should_quit);
     assert!(app.should_change_directory_on_quit);
     assert_eq!(
-        app.chooser_exit.as_ref(),
+        app.chooser_exit(),
         Some(&ChooserExit::Confirmed(vec![file_path]))
     );
 
@@ -1083,7 +1083,7 @@ fn chooser_enter_confirms_sorted_selection() {
     .expect("enter should confirm selected chooser paths");
 
     assert_eq!(
-        app.chooser_exit.as_ref(),
+        app.chooser_exit(),
         Some(&ChooserExit::Confirmed(vec![alpha, gamma]))
     );
 
@@ -1113,7 +1113,7 @@ fn chooser_enter_confirms_selection_from_multiple_directories() {
     .expect("enter should confirm selected chooser paths");
 
     assert_eq!(
-        app.chooser_exit.as_ref(),
+        app.chooser_exit(),
         Some(&ChooserExit::Confirmed(vec![alpha, beta]))
     );
 
@@ -1132,7 +1132,7 @@ fn chooser_quit_cancels_without_cd() {
 
     assert!(app.should_quit);
     assert!(!app.should_change_directory_on_quit);
-    assert_eq!(app.chooser_exit.as_ref(), Some(&ChooserExit::Cancelled));
+    assert_eq!(app.chooser_exit(), Some(&ChooserExit::Cancelled));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1153,7 +1153,7 @@ fn chooser_esc_keeps_normal_selection_clear_behavior() {
 
     assert!(!app.should_quit);
     assert!(app.should_change_directory_on_quit);
-    assert_eq!(app.chooser_exit, None);
+    assert_eq!(app.chooser_exit(), None);
     assert!(app.file_browser.selected_paths.is_empty());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -1178,7 +1178,7 @@ fn chooser_right_enters_directory_instead_of_confirming() {
 
     assert_eq!(app.file_browser.cwd, nested);
     assert!(!app.should_quit);
-    assert_eq!(app.chooser_exit, None);
+    assert_eq!(app.chooser_exit(), None);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -1202,7 +1202,7 @@ fn chooser_open_or_enter_action_keeps_normal_behavior() {
 
     assert_eq!(app.file_browser.cwd, nested);
     assert!(!app.should_quit);
-    assert_eq!(app.chooser_exit, None);
+    assert_eq!(app.chooser_exit(), None);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

@@ -1,5 +1,5 @@
 use super::{
-    cd_on_exit, chooser_output,
+    cd_on_exit,
     input_reader::{InputEvent, InputReader},
     kitty_dnd, shell_here,
     tui_drawing::{AppTerminal, Drainer, ThreadedWriter, draw_terminal_frame},
@@ -7,7 +7,8 @@ use super::{
 };
 use crate::{
     RunOptions, RunOutcome,
-    app::{App, ChooserExit, PendingTerminalTask},
+    app::{App, PendingTerminalTask},
+    chooser::{self, ChooserExit},
 };
 use anyhow::Result;
 use crossterm::{
@@ -291,7 +292,7 @@ pub(crate) fn run_with_startup_state(
     }
     match app_exit.chooser {
         Some(ChooserExit::Confirmed(paths)) => {
-            chooser_output::write_if_requested(chooser_file.as_deref(), &paths)?;
+            chooser::write_selected_paths(chooser_file.as_deref(), &paths)?;
             Ok(RunOutcome::Success)
         }
         Some(ChooserExit::Cancelled) => Ok(RunOutcome::Cancelled),

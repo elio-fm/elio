@@ -9,6 +9,7 @@ This crate is organized around focused subsystems.
 - `file_operations`: state and actions for creating, renaming, copying, moving, trashing,
   restoring, or archiving items.
 - `background_jobs`: shared job scheduling, workers, requests, and result messages.
+- `chooser`: chooser-mode selection, confirmed or cancelled outcome, and selected-path output.
 - `fuzzy_finder` and `duplicate_finder`: feature state and behavior for finding items.
 - `goto_menu`: configured Go To entries and destination resolution.
 - `input_handling`: application-level keyboard, mouse, paste, and wheel interpretation.
@@ -35,6 +36,8 @@ Current boundary rules:
 - Fuzzy-finder, duplicate-finder, Go To menu, and Open With state and pure transitions belong to
   their feature subsystems; `input_handling` interprets user interaction, while `app` coordinates
   background jobs, navigation, and side effects.
+- Chooser selection resolution and output belong to `chooser`; `app` only supplies the current
+  browser selection and coordinates application exit.
 - Raw Crossterm and Kitty input acquisition belongs to `terminal_runtime`; mapping those events to
   Elio behavior belongs to `input_handling`.
 - `fs` and `file_classification` should not depend on `app`.

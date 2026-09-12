@@ -358,7 +358,7 @@ impl App {
             }
         }
 
-        let configured_action = if self.chooser_mode {
+        let configured_action = if self.chooser_mode() {
             match crate::config::key_bindings().chooser_action_for_key(key, self.key_context()) {
                 Some(crate::config::ChooserKeyAction::Choose) => {
                     self.confirm_chooser();

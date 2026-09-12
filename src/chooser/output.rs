@@ -4,15 +4,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) fn write_if_requested(chooser_file: Option<&Path>, paths: &[PathBuf]) -> Result<()> {
+pub(crate) fn write_selected_paths(chooser_file: Option<&Path>, paths: &[PathBuf]) -> Result<()> {
     let Some(chooser_file) = chooser_file else {
         return Ok(());
     };
 
-    write(chooser_file, paths)
-}
-
-fn write(chooser_file: &Path, paths: &[PathBuf]) -> Result<()> {
     let bytes = output_bytes(paths);
     if file_is_stdout(chooser_file) {
         let mut stdout = io::stdout().lock();
@@ -24,7 +20,7 @@ fn write(chooser_file: &Path, paths: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
-fn file_is_stdout(chooser_file: &Path) -> bool {
+pub(super) fn file_is_stdout(chooser_file: &Path) -> bool {
     chooser_file == Path::new("-") || file_is_dev_stdout(chooser_file)
 }
 
@@ -59,7 +55,3 @@ fn output_bytes(paths: &[PathBuf]) -> Vec<u8> {
     }
     bytes
 }
-
-#[cfg(test)]
-#[path = "tests/chooser_output.rs"]
-mod tests;

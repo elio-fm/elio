@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 
 use super::types::*;
 use crate::background_jobs::JobScheduler;
+use crate::chooser::ChooserState;
 use crate::duplicate_finder::DuplicateFinderState;
 use crate::file_browser::FileBrowserState;
 #[cfg(unix)]
@@ -133,12 +134,6 @@ pub(crate) enum PendingTerminalTask {
     Zoxide,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ChooserExit {
-    Confirmed(Vec<PathBuf>),
-    Cancelled,
-}
-
 pub struct App {
     pub(crate) file_browser: FileBrowserState,
     pub(crate) places: PlacesState,
@@ -152,8 +147,7 @@ pub struct App {
     pub(crate) status: String,
     pub(crate) should_quit: bool,
     pub(crate) should_change_directory_on_quit: bool,
-    pub(crate) chooser_mode: bool,
-    pub(crate) chooser_exit: Option<ChooserExit>,
+    pub(crate) chooser: ChooserState,
     /// Set by features that need direct terminal control.  The event loop in
     /// `lib.rs` drains this, suspends the TUI, runs the task, then restores the TUI.
     pub(crate) pending_terminal_task: Option<PendingTerminalTask>,
@@ -211,8 +205,7 @@ impl App {
             status: String::new(),
             should_quit: false,
             should_change_directory_on_quit: true,
-            chooser_mode: false,
-            chooser_exit: None,
+            chooser: ChooserState::default(),
             pending_terminal_task: None,
         };
         app.file_browser.in_trash = App::path_is_trash(&app.file_browser.cwd);

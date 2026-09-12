@@ -1,6 +1,7 @@
 mod app;
 mod archive;
 mod background_jobs;
+mod chooser;
 mod config;
 mod duplicate_finder;
 mod elevated_session;
