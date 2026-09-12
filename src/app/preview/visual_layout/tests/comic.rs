@@ -30,7 +30,7 @@ fn comic_jpeg_page_prepares_in_background_before_display() {
     app.set_ffmpeg_available_for_tests(true);
     app.file_browser.entries.clear();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -79,7 +79,7 @@ fn comic_overlay_keeps_previous_page_visible_while_next_page_waits() {
     app.set_ffmpeg_available_for_tests(true);
     app.file_browser.entries.clear();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -144,7 +144,7 @@ fn comic_overlay_clears_previous_file_page_while_next_comic_preview_loads() {
     configure_terminal_image_support(&mut app);
     app.file_browser.entries.clear();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -235,7 +235,7 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
     }];
     app.file_browser.selected = 0;
     app.sync_epub_preview_selection();
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,

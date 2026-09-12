@@ -1,5 +1,5 @@
 use crate::{
-    app::{App, FrameState},
+    app::{App, ScreenRegions},
     theme,
     ui::{self, helpers},
 };
@@ -19,13 +19,13 @@ fn temp_path(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!("elio-overlay-{label}-{unique}"))
 }
 
-fn draw_ui(terminal: &mut Terminal<TestBackend>, app: &mut App) -> FrameState {
-    let mut frame_state = FrameState::default();
+fn draw_ui(terminal: &mut Terminal<TestBackend>, app: &mut App) -> ScreenRegions {
+    let mut screen_regions = ScreenRegions::default();
     terminal
-        .draw(|frame| ui::render(frame, app, &mut frame_state))
+        .draw(|frame| ui::render(frame, app, &mut screen_regions))
         .expect("ui should render");
-    app.set_frame_state(frame_state.clone());
-    frame_state
+    app.set_screen_regions(screen_regions.clone());
+    screen_regions
 }
 
 fn wait_for_search_index(app: &mut App) {
@@ -678,7 +678,7 @@ fn compact_help_overlay_scrolls_instead_of_truncating_small_terminals() {
     app.overlays.help = true;
     let mut terminal = Terminal::new(TestBackend::new(60, 18)).expect("terminal should init");
 
-    let frame_state = draw_ui(&mut terminal, &mut app);
+    let screen_regions = draw_ui(&mut terminal, &mut app);
     let rendered = buffer_text(terminal.backend().buffer());
 
     assert!(
@@ -694,11 +694,11 @@ fn compact_help_overlay_scrolls_instead_of_truncating_small_terminals() {
         "scrollable compact help should draw a right-side scrollbar, got: {rendered:?}"
     );
     assert!(
-        frame_state.help_scroll_max > 0,
+        screen_regions.help_scroll_max > 0,
         "compact help should publish its real scroll limit"
     );
-    let max_scroll = frame_state.help_scroll_max;
-    let page_step = frame_state.help_rows_visible.saturating_sub(2).max(1);
+    let max_scroll = screen_regions.help_scroll_max;
+    let page_step = screen_regions.help_rows_visible.saturating_sub(2).max(1);
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::End)))
         .expect("End should jump to the bottom of help");
     assert_eq!(

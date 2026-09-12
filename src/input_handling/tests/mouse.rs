@@ -49,9 +49,9 @@ fn drag_offer_without_click_candidate_uses_entry_hit() {
         .iter()
         .position(|entry| entry.path == item)
         .expect("item should be visible");
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entry_hits: vec![entry_hit(index, 3)],
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     assert_eq!(app.take_drag_export_paths_at(2, 3), vec![item]);
@@ -96,9 +96,9 @@ fn double_click_opens_clicked_file_not_multi_selection() {
         .iter()
         .position(|entry| entry.path == beta)
         .expect("beta should be visible");
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entry_hits: vec![entry_hit(beta_index, 1)],
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(left_click(1, 1))
@@ -133,9 +133,9 @@ fn double_click_suppresses_drag_from_held_second_click() {
         .iter()
         .position(|entry| entry.path == beta)
         .expect("beta should be visible");
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entry_hits: vec![entry_hit(beta_index, 1)],
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(left_click(1, 1)).expect("first click");
@@ -174,9 +174,9 @@ fn double_click_enters_clicked_directory_not_multi_selection() {
         .iter()
         .position(|entry| entry.path == child)
         .expect("child should be visible");
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entry_hits: vec![entry_hit(child_index, 1)],
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(left_click(1, 1))
@@ -211,9 +211,9 @@ fn chooser_double_click_confirms_clicked_file() {
         .iter()
         .position(|entry| entry.path == beta)
         .expect("beta should be visible");
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entry_hits: vec![entry_hit(beta_index, 1)],
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(left_click(1, 1))
@@ -247,9 +247,9 @@ fn chooser_double_click_enters_clicked_directory() {
         .iter()
         .position(|entry| entry.path == child)
         .expect("child should be visible");
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entry_hits: vec![entry_hit(child_index, 1)],
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(left_click(1, 1))

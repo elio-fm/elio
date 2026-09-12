@@ -626,7 +626,7 @@ fn fullscreen_preview_ignores_hidden_browser_actions_but_keeps_preview_controls(
         .position(|entry| entry.path == alpha)
         .expect("alpha should be visible");
     app.select_index(alpha_index);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -635,7 +635,7 @@ fn fullscreen_preview_ignores_hidden_browser_actions_but_keeps_preview_controls(
         }),
         preview_rows_visible: 16,
         preview_cols_visible: 58,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     app.preview.state.content = crate::preview::PreviewContent::new(
         crate::preview::PreviewKind::Text,
@@ -688,7 +688,7 @@ fn fullscreen_preview_preserves_browser_viewport_to_avoid_exit_flicker() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -699,7 +699,7 @@ fn fullscreen_preview_preserves_browser_viewport_to_avoid_exit_flicker() {
             cols: 1,
             rows_visible: 18,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     let logo_index = app
         .file_browser
@@ -712,7 +712,7 @@ fn fullscreen_preview_preserves_browser_viewport_to_avoid_exit_flicker() {
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('P'))))
         .expect("P should fullscreen preview");
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -721,7 +721,7 @@ fn fullscreen_preview_preserves_browser_viewport_to_avoid_exit_flicker() {
         }),
         preview_rows_visible: 18,
         preview_cols_visible: 78,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     assert_eq!(
@@ -786,12 +786,12 @@ fn fullscreen_preview_stays_for_same_directory_navigation() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
     app.file_browser.view_mode = ViewMode::List;
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         metrics: ViewMetrics {
             cols: 1,
             rows_visible: 2,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('P'))))
@@ -810,12 +810,12 @@ fn fullscreen_preview_stays_for_same_directory_navigation() {
     assert!(app.file_browser.selected < app.file_browser.entries.len() - 1);
 
     app.file_browser.view_mode = ViewMode::Grid;
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         metrics: ViewMetrics {
             cols: 2,
             rows_visible: 2,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     app.select_index(0);
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Right)))
@@ -2043,7 +2043,7 @@ fn high_frequency_alt_right_scrolls_preview_instead_of_history() {
     app.select_index(0);
     app.input.last_selection_change_at =
         Instant::now() - PREVIEW_AUTO_FOCUS_DELAY - Duration::from_millis(1);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_panel: Some(Rect {
             x: 21,
             y: 0,
@@ -2052,7 +2052,7 @@ fn high_frequency_alt_right_scrolls_preview_instead_of_history() {
         }),
         preview_rows_visible: 6,
         preview_cols_visible: 12,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT)))
@@ -2080,7 +2080,7 @@ fn high_frequency_down_arrow_keeps_browser_navigation() {
     app.input.last_wheel_target = Some(WheelTarget::Preview);
     app.input.last_selection_change_at =
         Instant::now() - PREVIEW_AUTO_FOCUS_DELAY - Duration::from_millis(1);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_panel: Some(Rect {
             x: 21,
             y: 0,
@@ -2089,7 +2089,7 @@ fn high_frequency_down_arrow_keeps_browser_navigation() {
         }),
         preview_rows_visible: 4,
         preview_cols_visible: 20,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
@@ -2696,7 +2696,7 @@ fn shift_arrow_keys_scroll_text_preview_vertically() {
         .position(|e| e.path == long_file)
         .expect("long.txt should be in entries");
     app.select_index(long_index);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_panel: Some(Rect {
             x: 21,
             y: 0,
@@ -2705,7 +2705,7 @@ fn shift_arrow_keys_scroll_text_preview_vertically() {
         }),
         preview_rows_visible: 16,
         preview_cols_visible: 38,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 
@@ -2757,7 +2757,7 @@ fn shift_j_k_step_epub_sections_on_paged_preview() {
         .expect("story.epub should be in entries");
     app.select_index(archive_index);
     wait_for_background_preview(&mut app);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_panel: Some(Rect {
             x: 21,
             y: 0,
@@ -2766,7 +2766,7 @@ fn shift_j_k_step_epub_sections_on_paged_preview() {
         }),
         preview_rows_visible: 16,
         preview_cols_visible: 38,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     assert_eq!(
@@ -2820,7 +2820,7 @@ fn shift_j_k_scroll_text_preview_vertically() {
         .position(|e| e.path == long_file)
         .expect("long.txt should be in entries");
     app.select_index(long_index);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_panel: Some(Rect {
             x: 21,
             y: 0,
@@ -2829,7 +2829,7 @@ fn shift_j_k_scroll_text_preview_vertically() {
         }),
         preview_rows_visible: 16,
         preview_cols_visible: 38,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 

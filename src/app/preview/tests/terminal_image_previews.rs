@@ -1,5 +1,5 @@
 use super::super::terminal_image_previews::{expand_raster_erase_area, push_blank_cell_runs};
-use crate::app::FrameState;
+use crate::app::ScreenRegions;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -50,7 +50,7 @@ fn modal_mask_only_targets_reset_background_blank_cells() {
 
 #[test]
 fn raster_erase_area_can_grow_right_and_bottom_within_preview_bounds() {
-    let frame_state = FrameState {
+    let screen_regions = ScreenRegions {
         preview_panel: Some(Rect {
             x: 10,
             y: 5,
@@ -63,7 +63,7 @@ fn raster_erase_area_can_grow_right_and_bottom_within_preview_bounds() {
             width: 30,
             height: 10,
         }),
-        ..FrameState::default()
+        ..ScreenRegions::default()
     };
     let area = Rect {
         x: 12,
@@ -73,7 +73,7 @@ fn raster_erase_area_can_grow_right_and_bottom_within_preview_bounds() {
     };
 
     assert_eq!(
-        expand_raster_erase_area(&frame_state, area, 1, 1),
+        expand_raster_erase_area(&screen_regions, area, 1, 1),
         Rect {
             x: 12,
             y: 7,
@@ -85,7 +85,7 @@ fn raster_erase_area_can_grow_right_and_bottom_within_preview_bounds() {
 
 #[test]
 fn raster_erase_area_does_not_grow_into_preview_border() {
-    let frame_state = FrameState {
+    let screen_regions = ScreenRegions {
         preview_panel: Some(Rect {
             x: 10,
             y: 5,
@@ -98,7 +98,7 @@ fn raster_erase_area_does_not_grow_into_preview_border() {
             width: 30,
             height: 10,
         }),
-        ..FrameState::default()
+        ..ScreenRegions::default()
     };
     let area = Rect {
         x: 12,
@@ -108,7 +108,7 @@ fn raster_erase_area_does_not_grow_into_preview_border() {
     };
 
     assert_eq!(
-        expand_raster_erase_area(&frame_state, area, 1, 2),
+        expand_raster_erase_area(&screen_regions, area, 1, 2),
         Rect {
             x: 12,
             y: 14,

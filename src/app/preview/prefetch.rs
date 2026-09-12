@@ -2,9 +2,11 @@ use super::*;
 use crate::app::FileClass;
 use crate::file_classification;
 use crate::preview::{PreviewWorkClass, preview_work_class, should_build_preview_in_background};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 const AUDIO_ENTRY_PREFETCH_OFFSETS: [isize; 4] = [1, -1, 2, -2];
+const PREVIEW_PREFETCH_IDLE_DELAY: Duration = Duration::from_millis(200);
+const PREVIEW_PREFETCH_LIMIT: usize = 2;
 const VISIBLE_HEAVY_PREVIEW_PREFETCH_LIMIT: usize = 4;
 const VISIBLE_MIXED_HEAVY_PREVIEW_PREFETCH_LIMIT: usize = 3;
 
@@ -131,7 +133,7 @@ impl App {
         if !is_audio_entry(entry) {
             return Vec::new();
         }
-        let Some(area) = self.input.frame_state.preview_media_area else {
+        let Some(area) = self.input.screen_regions.preview_media_area else {
             return Vec::new();
         };
 

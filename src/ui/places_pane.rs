@@ -1,7 +1,7 @@
 use super::helpers;
 use crate::theme::Palette;
 use crate::{
-    app::{App, FrameState, PathHit},
+    app::{App, PathHit, ScreenRegions},
     places::PlaceRow,
 };
 use ratatui::{
@@ -18,7 +18,7 @@ pub(super) fn render_places_pane(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let inner = helpers::inner_with_padding(area);

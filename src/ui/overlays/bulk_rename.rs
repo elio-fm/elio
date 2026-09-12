@@ -1,5 +1,5 @@
 use crate::{
-    app::{App, FrameState},
+    app::{App, ScreenRegions},
     theme::{self, Palette},
     ui::{
         helpers,
@@ -18,7 +18,7 @@ pub(in crate::ui) fn render_bulk_rename_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let item_count = app.bulk_rename_item_count();

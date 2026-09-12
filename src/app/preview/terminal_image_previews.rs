@@ -362,7 +362,7 @@ impl App {
             terminal_images::push_unique_rect(
                 &mut expanded_areas,
                 expand_raster_erase_area(
-                    &self.input.frame_state,
+                    &self.input.screen_regions,
                     area,
                     expand_right,
                     expand_bottom,
@@ -533,37 +533,37 @@ impl App {
 
     pub(crate) fn collect_popup_rects(&self) -> Vec<Rect> {
         let mut rects = Vec::new();
-        if let Some(r) = self.input.frame_state.trash_panel {
+        if let Some(r) = self.input.screen_regions.trash_panel {
             rects.push(r);
         }
-        if let Some(r) = self.input.frame_state.restore_panel {
+        if let Some(r) = self.input.screen_regions.restore_panel {
             rects.push(r);
         }
-        if let Some(r) = self.input.frame_state.archive_password_panel {
+        if let Some(r) = self.input.screen_regions.archive_password_panel {
             rects.push(r);
         }
-        if let Some(r) = self.input.frame_state.archive_create_panel {
+        if let Some(r) = self.input.screen_regions.archive_create_panel {
             rects.push(r);
         }
-        if let Some(r) = self.input.frame_state.create_panel {
+        if let Some(r) = self.input.screen_regions.create_panel {
             rects.push(r);
         }
-        if let Some(r) = self.input.frame_state.rename_panel {
+        if let Some(r) = self.input.screen_regions.rename_panel {
             rects.push(r);
         }
-        if let Some(r) = self.input.frame_state.goto_panel {
+        if let Some(r) = self.input.screen_regions.goto_panel {
             rects.push(r);
         }
-        if let Some(r) = self.input.frame_state.copy_panel {
+        if let Some(r) = self.input.screen_regions.copy_panel {
             rects.push(r);
         }
-        if let Some(r) = self.input.frame_state.open_with_panel {
+        if let Some(r) = self.input.screen_regions.open_with_panel {
             rects.push(r);
         }
-        if let Some(r) = self.input.frame_state.search_panel {
+        if let Some(r) = self.input.screen_regions.search_panel {
             rects.push(r);
         }
-        if let Some(r) = self.input.frame_state.help_panel {
+        if let Some(r) = self.input.screen_regions.help_panel {
             rects.push(r);
         }
         rects
@@ -732,14 +732,14 @@ pub(super) fn push_blank_cell_runs(rects: &mut Vec<Rect>, area: Rect, frame_buff
 }
 
 pub(super) fn expand_raster_erase_area(
-    frame_state: &crate::app::FrameState,
+    screen_regions: &crate::app::ScreenRegions,
     area: Rect,
     expand_right: u16,
     expand_bottom: u16,
 ) -> Rect {
-    let bounds = frame_state
+    let bounds = screen_regions
         .preview_body_area
-        .or(frame_state.preview_content_area)
+        .or(screen_regions.preview_content_area)
         .unwrap_or(area);
     // Only erase inside the preview body/content, never into the pane border.
     // Ratatui may skip unchanged border cells on the following draw, so erasing

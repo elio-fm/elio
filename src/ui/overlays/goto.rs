@@ -1,4 +1,4 @@
-use crate::app::{App, FrameState, GoToHit};
+use crate::app::{App, GoToHit, ScreenRegions};
 use crate::{theme::Palette, ui::helpers};
 use ratatui::{
     Frame,
@@ -14,7 +14,7 @@ pub(in crate::ui) fn render_goto_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let row_count = app.goto_row_count();
@@ -94,7 +94,7 @@ pub(in crate::ui) fn render_goto_overlay(
 fn render_goto_entry(
     frame: &mut Frame<'_>,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
     rect: Rect,
     index: usize,

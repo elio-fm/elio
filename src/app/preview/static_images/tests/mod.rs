@@ -84,14 +84,14 @@ fn set_single_test_entry(app: &mut App, path: &Path) {
         readonly: false,
     }];
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.input.frame_state.metrics.cols = 1;
-    app.input.frame_state.metrics.rows_visible = 6;
+    app.input.screen_regions.metrics.cols = 1;
+    app.input.screen_regions.metrics.rows_visible = 6;
 }
 
 fn set_single_unmodified_test_entry(app: &mut App, path: &Path) {
@@ -412,14 +412,14 @@ fn sixel_preloads_visible_static_images_before_selection_lands_on_them() {
         })
         .collect();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.input.frame_state.metrics.cols = 1;
-    app.input.frame_state.metrics.rows_visible = 6;
+    app.input.screen_regions.metrics.cols = 1;
+    app.input.screen_regions.metrics.rows_visible = 6;
     app.refresh_preview();
     app.refresh_static_image_preloads();
 
@@ -476,14 +476,14 @@ fn foot_sixel_limits_nearby_static_image_preloads() {
         })
         .collect();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.input.frame_state.metrics.cols = 1;
-    app.input.frame_state.metrics.rows_visible = 10;
+    app.input.screen_regions.metrics.cols = 1;
+    app.input.screen_regions.metrics.rows_visible = 10;
     app.refresh_preview();
     app.refresh_static_image_preloads();
 
@@ -534,14 +534,14 @@ fn windows_terminal_sixel_limits_nearby_static_image_preloads() {
         })
         .collect();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.input.frame_state.metrics.cols = 1;
-    app.input.frame_state.metrics.rows_visible = 10;
+    app.input.screen_regions.metrics.cols = 1;
+    app.input.screen_regions.metrics.rows_visible = 10;
     app.refresh_preview();
     app.refresh_static_image_preloads();
 
@@ -583,7 +583,7 @@ fn newly_shown_static_image_preview_prefers_image_surface_before_frame_area_exis
         build_selected_static_image_app("shown-image-surface-before-area", "demo.png");
 
     app.toggle_preview_pane();
-    app.input.frame_state.preview_content_area = None;
+    app.input.screen_regions.preview_content_area = None;
     app.toggle_preview_pane();
 
     assert!(app.active_static_image_overlay_request().is_none());
@@ -752,7 +752,7 @@ fn open_with_overlay_updates_kitty_exclusions_and_closing_it_restores_them() {
         !erase.is_empty(),
         "opening a transparent popup over a Kitty placeholder image should erase covered cells"
     );
-    app.input.frame_state.open_with_panel = Some(popup);
+    app.input.screen_regions.open_with_panel = Some(popup);
 
     let with_popup = String::from_utf8(
         app.present_preview_overlay()
@@ -766,7 +766,7 @@ fn open_with_overlay_updates_kitty_exclusions_and_closing_it_restores_them() {
     assert_eq!(app.preview.image.displayed_excluded, vec![popup]);
 
     app.overlays.open_with = None;
-    app.input.frame_state.open_with_panel = None;
+    app.input.screen_regions.open_with_panel = None;
 
     let restored = String::from_utf8(
         app.present_preview_overlay()
@@ -815,7 +815,7 @@ fn sixel_popup_skips_post_draw_masking_for_foot_performance() {
     assert!(app.static_image_overlay_displayed());
 
     app.overlays.open_with = None;
-    app.input.frame_state.open_with_panel = None;
+    app.input.screen_regions.open_with_panel = None;
 
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut restored = Vec::new();
@@ -876,7 +876,7 @@ fn foot_sixel_popup_erases_collision_and_repaints_after_close() {
     );
 
     app.overlays.open_with = None;
-    app.input.frame_state.open_with_panel = None;
+    app.input.screen_regions.open_with_panel = None;
 
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut restored = Vec::new();
@@ -938,7 +938,7 @@ fn windows_terminal_sixel_popup_erases_collision_and_repaints_after_close() {
     );
 
     app.overlays.open_with = None;
-    app.input.frame_state.open_with_panel = None;
+    app.input.screen_regions.open_with_panel = None;
 
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut restored = Vec::new();
@@ -1076,7 +1076,7 @@ fn open_with_overlay_clears_konsole_image_and_closing_it_redraws_it() {
     assert!(app.static_image_overlay_displayed());
 
     app.inject_open_with_for_test("Preview", "/usr/bin/true", vec![], false);
-    app.input.frame_state.open_with_panel = Some(Rect {
+    app.input.screen_regions.open_with_panel = Some(Rect {
         x: 4,
         y: 5,
         width: 12,
@@ -1098,7 +1098,7 @@ fn open_with_overlay_clears_konsole_image_and_closing_it_redraws_it() {
     );
 
     app.overlays.open_with = None;
-    app.input.frame_state.open_with_panel = None;
+    app.input.screen_regions.open_with_panel = None;
 
     let restored = String::from_utf8(
         app.present_preview_overlay()

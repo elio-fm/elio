@@ -1,7 +1,10 @@
 use super::*;
 use crate::app::FileClass;
+use crate::app::preview::{HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY, IMAGE_SELECTION_ACTIVATION_DELAY};
 use crate::file_classification;
 use crate::preview::{PreviewContent, PreviewWorkClass, preview_work_class};
+
+const KEY_NAV_RAPID_THRESHOLD: std::time::Duration = std::time::Duration::from_millis(250);
 
 impl App {
     pub fn selection_summary(&self) -> String {
@@ -209,7 +212,7 @@ impl App {
     }
 
     pub(crate) fn page(&mut self, direction: isize) {
-        let rows = self.input.frame_state.metrics.rows_visible.max(1) as isize;
+        let rows = self.input.screen_regions.metrics.rows_visible.max(1) as isize;
         let mode = self.rapid_nav_preview_mode(PreviewRefreshMode::Immediate);
         let prev = self.file_browser.selected;
         if self.file_browser.view_mode == ViewMode::Grid {
@@ -274,7 +277,7 @@ impl App {
 
         let Some(target_index) = self
             .file_browser
-            .grid_selection_offset(rows, self.input.frame_state.metrics.cols)
+            .grid_selection_offset(rows, self.input.screen_regions.metrics.cols)
         else {
             return;
         };
@@ -311,8 +314,8 @@ impl App {
 
     pub(crate) fn sync_scroll(&mut self) -> bool {
         self.file_browser.sync_scroll(
-            self.input.frame_state.metrics.cols,
-            self.input.frame_state.metrics.rows_visible,
+            self.input.screen_regions.metrics.cols,
+            self.input.screen_regions.metrics.rows_visible,
         )
     }
 

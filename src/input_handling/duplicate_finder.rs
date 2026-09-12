@@ -138,7 +138,7 @@ impl App {
         self.refresh_duplicate_preview();
     }
     pub(crate) fn page_duplicate_selection(&mut self, direction: isize) {
-        let visible = self.input.frame_state.duplicate_rows_visible.max(1) as isize;
+        let visible = self.input.screen_regions.duplicate_rows_visible.max(1) as isize;
         self.move_duplicate_selection(direction * visible);
     }
     pub(crate) fn set_duplicate_selection(&mut self, index: usize) {
@@ -149,7 +149,7 @@ impl App {
         self.refresh_duplicate_preview();
     }
     pub(crate) fn sync_duplicate_scroll(&mut self) -> bool {
-        let rows_visible = self.input.frame_state.duplicate_rows_visible;
+        let rows_visible = self.input.screen_regions.duplicate_rows_visible;
         self.duplicate_finder
             .session
             .as_mut()
@@ -201,7 +201,7 @@ impl App {
             MouseEventKind::Down(MouseButton::Left) => {
                 if let Some(hit) = self
                     .input
-                    .frame_state
+                    .screen_regions
                     .duplicate_hits
                     .iter()
                     .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))
@@ -219,7 +219,7 @@ impl App {
                     }
                 } else if self
                     .input
-                    .frame_state
+                    .screen_regions
                     .duplicate_panel
                     .is_none_or(|rect| !rect.contains((mouse.column, mouse.row).into()))
                 {
@@ -229,7 +229,7 @@ impl App {
             MouseEventKind::ScrollDown => {
                 if self
                     .input
-                    .frame_state
+                    .screen_regions
                     .preview_panel
                     .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
                 {
@@ -241,7 +241,7 @@ impl App {
             MouseEventKind::ScrollUp => {
                 if self
                     .input
-                    .frame_state
+                    .screen_regions
                     .preview_panel
                     .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
                 {

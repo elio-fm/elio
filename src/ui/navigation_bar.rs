@@ -1,5 +1,5 @@
 use super::helpers;
-use crate::app::{App, FrameState};
+use crate::app::{App, ScreenRegions};
 use crate::theme::Palette;
 use ratatui::{
     Frame,
@@ -13,7 +13,7 @@ pub(super) fn render_navigation_bar(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     helpers::fill_area(frame, area, palette.chrome, palette.text);

@@ -415,7 +415,7 @@ impl App {
 
     fn preview_scroll_step(&self) -> usize {
         self.input
-            .frame_state
+            .screen_regions
             .preview_rows_visible
             .saturating_div(6)
             .clamp(2, 4)
@@ -423,7 +423,7 @@ impl App {
 
     fn preview_horizontal_scroll_step(&self) -> usize {
         self.input
-            .frame_state
+            .screen_regions
             .preview_cols_visible
             .saturating_div(8)
             .clamp(2, 6)
@@ -432,8 +432,8 @@ impl App {
     pub(crate) fn sync_preview_scroll(&mut self) -> bool {
         let previous = self.preview.state.scroll;
         let previous_horizontal = self.preview.state.horizontal_scroll;
-        let visible_rows = self.input.frame_state.preview_rows_visible;
-        let visible_cols = self.input.frame_state.preview_cols_visible;
+        let visible_rows = self.input.screen_regions.preview_rows_visible;
+        let visible_cols = self.input.screen_regions.preview_cols_visible;
         let max_scroll = self
             .preview_total_lines(visible_cols)
             .saturating_sub(visible_rows.max(1));
@@ -460,7 +460,7 @@ impl App {
             return;
         };
         let scroll = self.preview.state.scroll;
-        let visible_rows = self.input.frame_state.preview_rows_visible;
+        let visible_rows = self.input.screen_regions.preview_rows_visible;
         let bottom_edge = scroll.saturating_add(visible_rows);
         if bottom_edge + INCREMENTAL_RENDER_LOOKAHEAD < render_limit {
             return;
@@ -540,7 +540,7 @@ impl App {
             }
             if self.preview_allows_horizontal_scroll()
                 && self.preview_max_horizontal_scroll(
-                    self.input.frame_state.preview_cols_visible.max(1),
+                    self.input.screen_regions.preview_cols_visible.max(1),
                 ) > 0
             {
                 return self.scroll_preview_columns(delta);
@@ -597,8 +597,8 @@ impl App {
             return true;
         }
 
-        let visible_cols = self.input.frame_state.preview_cols_visible.max(1);
-        let visible_rows = self.input.frame_state.preview_rows_visible.max(1);
+        let visible_cols = self.input.screen_regions.preview_cols_visible.max(1);
+        let visible_rows = self.input.screen_regions.preview_rows_visible.max(1);
         let total_lines = self.preview_total_lines(visible_cols);
         if total_lines <= visible_rows {
             return true;
@@ -625,8 +625,8 @@ impl App {
     }
 
     fn preview_has_vertical_overflow(&self) -> bool {
-        let visible_cols = self.input.frame_state.preview_cols_visible.max(1);
-        let visible_rows = self.input.frame_state.preview_rows_visible.max(1);
+        let visible_cols = self.input.screen_regions.preview_cols_visible.max(1);
+        let visible_rows = self.input.screen_regions.preview_rows_visible.max(1);
         self.preview_total_lines(visible_cols) > visible_rows
     }
 
@@ -637,9 +637,9 @@ impl App {
 
     fn preview_horizontal_auto_focus_ready(&self) -> bool {
         self.preview_allows_horizontal_scroll()
-            && self
-                .preview_max_horizontal_scroll(self.input.frame_state.preview_cols_visible.max(1))
-                > 0
+            && self.preview_max_horizontal_scroll(
+                self.input.screen_regions.preview_cols_visible.max(1),
+            ) > 0
             && self.input.last_selection_change_at.elapsed() >= PREVIEW_AUTO_FOCUS_DELAY
     }
 

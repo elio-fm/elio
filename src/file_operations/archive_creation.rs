@@ -340,7 +340,7 @@ impl App {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
                     .input
-                    .frame_state
+                    .screen_regions
                     .archive_create_panel
                     .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
@@ -354,15 +354,15 @@ impl App {
 
     fn archive_create_mouse_in_list(&self, column: u16, row: u16) -> bool {
         self.input
-            .frame_state
+            .screen_regions
             .archive_create_list_area
-            .or(self.input.frame_state.archive_create_panel)
+            .or(self.input.screen_regions.archive_create_panel)
             .is_some_and(|area| area.contains((column, row).into()))
     }
 
     fn archive_create_visible_rows(&self) -> usize {
         self.input
-            .frame_state
+            .screen_regions
             .archive_create_list_area
             .map_or(8, |area| area.height as usize)
             .max(1)

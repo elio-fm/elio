@@ -5,7 +5,7 @@ use ratatui::layout::Rect;
 pub use crate::fuzzy_finder::SearchScope;
 
 #[derive(Clone, Debug, Default)]
-pub struct FrameState {
+pub struct ScreenRegions {
     pub sidebar_hits: Vec<PathHit>,
     pub entry_hits: Vec<EntryHit>,
     pub search_hits: Vec<SearchHit>,

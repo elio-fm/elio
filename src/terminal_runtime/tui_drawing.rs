@@ -198,7 +198,7 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
             terminal.backend_mut().write_all(&pre_erase)?;
             terminal.backend_mut().write_all(&kitty_erase)?;
         }
-        let mut frame_state = app::FrameState::default();
+        let mut screen_regions = app::ScreenRegions::default();
         let (
             dirty,
             image_behind_modal,
@@ -207,8 +207,8 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
             modal_erase,
             skip_overlay_present,
         ) = {
-            let completed = terminal.draw(|frame| ui::render(frame, app, &mut frame_state))?;
-            let dirty = app.set_frame_state(frame_state);
+            let completed = terminal.draw(|frame| ui::render(frame, app, &mut screen_regions))?;
+            let dirty = app.set_screen_regions(screen_regions);
             let modal_rects = app.collect_popup_rects();
             if !app.browser_wheel_burst_active()
                 && app.should_repaint_iterm_inline_under_modal(&modal_rects)

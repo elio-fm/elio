@@ -1,4 +1,4 @@
-use crate::app::{App, FrameState};
+use crate::app::{App, ScreenRegions};
 use crate::{theme::Palette, ui::helpers};
 use ratatui::{
     Frame,
@@ -12,7 +12,7 @@ pub(in crate::ui) fn render_archive_password_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let archive_name = app.archive_password_archive_name();

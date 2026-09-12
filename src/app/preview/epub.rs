@@ -202,7 +202,7 @@ impl App {
         if !is_epub_entry(entry) {
             return Vec::new();
         }
-        let Some(area) = self.input.frame_state.preview_media_area else {
+        let Some(area) = self.input.screen_regions.preview_media_area else {
             return Vec::new();
         };
 
@@ -224,7 +224,7 @@ impl App {
     pub(crate) fn nearby_epub_entry_preview_visual_overlay_requests(
         &self,
     ) -> Vec<crate::app::preview::static_images::StaticImageOverlayRequest> {
-        let Some(area) = self.input.frame_state.preview_media_area else {
+        let Some(area) = self.input.screen_regions.preview_media_area else {
             return Vec::new();
         };
 

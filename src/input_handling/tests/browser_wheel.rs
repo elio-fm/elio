@@ -54,7 +54,7 @@ fn browser_wheel_updates_selection_and_preview_immediately() {
     app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::Default;
     app.select_index(0);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -65,7 +65,7 @@ fn browser_wheel_updates_selection_and_preview_immediately() {
             cols: 1,
             rows_visible: 1,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     let initial_preview_token = app.preview.state.token;
 
@@ -97,7 +97,7 @@ fn high_frequency_browser_wheel_moves_selection_immediately() {
     app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -108,7 +108,7 @@ fn high_frequency_browser_wheel_moves_selection_immediately() {
             cols: 1,
             rows_visible: 1,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     let initial_preview_token = app.preview.state.token;
 
@@ -141,7 +141,7 @@ fn high_frequency_browser_wheel_keeps_large_flick_distance() {
     app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -152,7 +152,7 @@ fn high_frequency_browser_wheel_keeps_large_flick_distance() {
             cols: 1,
             rows_visible: 1,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     for _ in 0..4 {
@@ -184,7 +184,7 @@ fn high_frequency_browser_wheel_defers_preview_refresh_during_burst() {
     app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -195,7 +195,7 @@ fn high_frequency_browser_wheel_defers_preview_refresh_during_burst() {
             cols: 1,
             rows_visible: 1,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     let initial_token = app.preview.state.token;
@@ -239,7 +239,7 @@ fn high_frequency_browser_wheel_requests_post_burst_redraw() {
     app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -250,7 +250,7 @@ fn high_frequency_browser_wheel_requests_post_burst_redraw() {
             cols: 1,
             rows_visible: 1,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(Event::Mouse(MouseEvent {
@@ -281,7 +281,7 @@ fn browser_wheel_preserves_preview_when_selection_does_not_change() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.file_browser.view_mode = ViewMode::List;
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -292,7 +292,7 @@ fn browser_wheel_preserves_preview_when_selection_does_not_change() {
             cols: 1,
             rows_visible: 2,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     app.select_index(0);
     let initial_preview_token = app.preview.state.token;
@@ -327,7 +327,7 @@ fn high_frequency_browser_wheel_keeps_visible_directory_counts_live_during_burst
     app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::HighFrequency;
     app.select_index(0);
-    let frame_state = FrameState {
+    let screen_regions = ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -338,9 +338,9 @@ fn high_frequency_browser_wheel_keeps_visible_directory_counts_live_during_burst
             cols: 1,
             rows_visible: 1,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     };
-    app.set_frame_state(frame_state.clone());
+    app.set_screen_regions(screen_regions.clone());
 
     app.handle_event(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
@@ -350,7 +350,7 @@ fn high_frequency_browser_wheel_keeps_visible_directory_counts_live_during_burst
     }))
     .expect("scroll down should be handled");
     assert!(app.browser_wheel_burst_active());
-    app.set_frame_state(frame_state);
+    app.set_screen_regions(screen_regions);
 
     app.file_browser.directory_item_count_ready_at = Some(Instant::now());
     assert!(app.browser_wheel_burst_active());
@@ -379,7 +379,7 @@ fn directory_count_timer_uses_latest_viewport_without_debouncing_every_scroll_st
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.file_browser.view_mode = ViewMode::List;
-    let frame_state = FrameState {
+    let screen_regions = ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -390,14 +390,14 @@ fn directory_count_timer_uses_latest_viewport_without_debouncing_every_scroll_st
             cols: 1,
             rows_visible: 1,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     };
     app.select_index(0);
-    app.set_frame_state(frame_state.clone());
+    app.set_screen_regions(screen_regions.clone());
 
     thread::sleep(DIRECTORY_ITEM_COUNT_IDLE_DELAY / 2);
     app.select_index(1);
-    app.set_frame_state(frame_state);
+    app.set_screen_regions(screen_regions);
     thread::sleep(DIRECTORY_ITEM_COUNT_IDLE_DELAY / 2 + Duration::from_millis(10));
 
     let _ = app.process_directory_item_count_timer();
@@ -423,7 +423,7 @@ fn directory_count_timer_is_not_blocked_by_deferred_preview_refresh() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -434,7 +434,7 @@ fn directory_count_timer_is_not_blocked_by_deferred_preview_refresh() {
             cols: 1,
             rows_visible: 1,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     app.preview.state.deferred_refresh_at =
         Some(Instant::now() + HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY);
@@ -469,7 +469,7 @@ fn foot_sixel_browser_wheel_defers_preview_refresh() {
         crate::terminal_runtime::terminal_images::TerminalIdentity::Foot,
     );
     app.select_index(0);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -486,7 +486,7 @@ fn foot_sixel_browser_wheel_defers_preview_refresh() {
             cols: 1,
             rows_visible: 1,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     let initial_preview_token = app.preview.state.token;
 
@@ -526,7 +526,7 @@ fn windows_terminal_sixel_browser_wheel_defers_preview_refresh() {
         crate::terminal_runtime::terminal_images::TerminalIdentity::WindowsTerminal,
     );
     app.select_index(0);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -543,7 +543,7 @@ fn windows_terminal_sixel_browser_wheel_defers_preview_refresh() {
             cols: 1,
             rows_visible: 1,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     let initial_preview_token = app.preview.state.token;
 

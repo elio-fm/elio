@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{Context, Result};
 
-use super::types::*;
+use super::screen_regions::*;
 use crate::background_jobs::JobScheduler;
 use crate::chooser::ChooserState;
 use crate::duplicate_finder::DuplicateFinderState;
@@ -95,7 +95,7 @@ pub(crate) struct OverlayState {
 }
 
 pub(crate) struct InputRuntime {
-    pub(crate) frame_state: FrameState,
+    pub(crate) screen_regions: ScreenRegions,
     pub(crate) last_click: Option<ClickState>,
     pub(crate) wheel_scroll: ScrollState,
     pub(crate) wheel_profile: WheelProfile,
@@ -184,7 +184,7 @@ impl App {
             overlays: OverlayState::default(),
             job_scheduler: scheduler,
             input: InputRuntime {
-                frame_state: FrameState::default(),
+                screen_regions: ScreenRegions::default(),
                 last_click: None,
                 wheel_scroll: ScrollState {
                     horizontal: ScrollLane::new(),

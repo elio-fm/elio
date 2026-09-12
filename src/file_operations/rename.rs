@@ -223,7 +223,7 @@ impl App {
         if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
             let inside = self
                 .input
-                .frame_state
+                .screen_regions
                 .rename_panel
                 .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
             if !inside {

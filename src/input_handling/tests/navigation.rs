@@ -513,12 +513,12 @@ fn reopening_directory_restores_scroll_position() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.file_browser.view_mode = ViewMode::List;
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         metrics: ViewMetrics {
             cols: 1,
             rows_visible: 3,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     app.select_index(0);
     app.open_selected()
@@ -595,12 +595,12 @@ fn reopening_parent_restores_scroll_position() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.file_browser.view_mode = ViewMode::List;
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         metrics: ViewMetrics {
             cols: 1,
             rows_visible: 3,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     app.select_index(0);
     app.open_selected().expect("opening home should succeed");

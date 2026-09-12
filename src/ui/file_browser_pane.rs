@@ -1,7 +1,7 @@
 use super::helpers;
 use super::scrollbars::{render_browser_scrollbar, split_scrollbar_area};
 use crate::app::{
-    App, ClipOp, Entry, EntryHit, FrameState, ViewMetrics, format_size, format_size_parts,
+    App, ClipOp, Entry, EntryHit, ScreenRegions, ViewMetrics, format_size, format_size_parts,
     format_time_ago, sanitize_terminal_text,
 };
 use crate::filesystem::symlink_target_display_label;
@@ -18,7 +18,7 @@ pub(super) fn render_file_browser_pane(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     state.entries_panel = Some(area);
@@ -113,7 +113,7 @@ fn render_list_view(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let (content_area, scrollbar_area) = split_scrollbar_area(area);
@@ -649,7 +649,7 @@ fn render_grid_view(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let (content_area, scrollbar_area) = split_scrollbar_area(area);

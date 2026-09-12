@@ -1,4 +1,4 @@
-use crate::app::{App, CopyHit, FrameState};
+use crate::app::{App, CopyHit, ScreenRegions};
 use crate::{theme::Palette, ui::helpers};
 use ratatui::{
     Frame,
@@ -12,7 +12,7 @@ pub(in crate::ui) fn render_copy_to_clipboard_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let row_count = app.copy_row_count().max(1);

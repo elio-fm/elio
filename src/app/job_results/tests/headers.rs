@@ -183,10 +183,10 @@ fn wrapped_text_header_reports_visual_cap_compactly() {
     fs::write(&text, "word ".repeat(5_000)).expect("failed to write text");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_rows_visible: 8,
         preview_cols_visible: 20,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 
@@ -265,10 +265,10 @@ fn source_truncated_text_header_prefers_line_limit_over_wrapped_cap_note() {
     fs::write(&text, contents).expect("failed to write text");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_rows_visible: 8,
         preview_cols_visible: 20,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 

@@ -157,19 +157,19 @@ impl App {
     }
 
     fn help_scroll_max(&self) -> usize {
-        if self.input.frame_state.help_rows_visible == 0 {
+        if self.input.screen_regions.help_rows_visible == 0 {
             HELP_FALLBACK_SCROLL_MAX
         } else {
-            self.input.frame_state.help_scroll_max
+            self.input.screen_regions.help_scroll_max
         }
     }
 
     fn help_page_step(&self) -> usize {
-        if self.input.frame_state.help_rows_visible == 0 {
+        if self.input.screen_regions.help_rows_visible == 0 {
             HELP_FALLBACK_PAGE_STEP
         } else {
             self.input
-                .frame_state
+                .screen_regions
                 .help_rows_visible
                 .saturating_sub(2)
                 .max(1)

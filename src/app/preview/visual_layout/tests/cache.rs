@@ -25,7 +25,7 @@ fn page_image_overlay_request_uses_asset_metadata_without_forcing_render_cache()
         readonly: false,
     }];
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -64,7 +64,7 @@ fn oversized_page_overlay_request_forces_rendered_cache() {
     app.set_ffmpeg_available_for_tests(true);
     app.file_browser.entries.clear();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -162,7 +162,7 @@ fn current_comic_prepare_build_marks_preview_dirty() {
     app.set_ffmpeg_available_for_tests(true);
     app.file_browser.entries.clear();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -184,14 +184,14 @@ fn current_comic_prepare_build_marks_preview_dirty() {
             modified: None,
             target_width_px: image_target_width_px(
                 app.input
-                    .frame_state
+                    .screen_regions
                     .preview_media_area
                     .expect("preview media area should exist"),
                 app.cached_terminal_window(),
             ),
             target_height_px: image_target_height_px(
                 app.input
-                    .frame_state
+                    .screen_regions
                     .preview_media_area
                     .expect("preview media area should exist"),
                 app.cached_terminal_window(),

@@ -49,7 +49,7 @@ impl App {
         // but we want them full — they pass code_line_limit as the render limit,
         // which happens to equal code_line_limit and therefore produces a complete render.
         let code_render_limit =
-            initial_code_render_limit(self.input.frame_state.preview_rows_visible)
+            initial_code_render_limit(self.input.screen_regions.preview_rows_visible)
                 .min(code_line_limit);
         PreviewRequest {
             token: self.preview.state.token,
@@ -133,7 +133,7 @@ impl App {
     pub(crate) fn preview_code_line_limit_for_entry(&self, entry: &Entry) -> usize {
         self.preview_code_line_limit_for_entry_with_rows(
             entry,
-            self.input.frame_state.preview_rows_visible,
+            self.input.screen_regions.preview_rows_visible,
         )
     }
 

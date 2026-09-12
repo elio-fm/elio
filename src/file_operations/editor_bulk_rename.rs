@@ -364,7 +364,7 @@ impl App {
     pub(crate) fn handle_editor_rename_confirm_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         let inside = self
             .input
-            .frame_state
+            .screen_regions
             .rename_panel
             .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
         match mouse.kind {
@@ -374,7 +374,7 @@ impl App {
             MouseEventKind::Down(MouseButton::Left)
                 if self
                     .input
-                    .frame_state
+                    .screen_regions
                     .editor_rename_confirm_btn
                     .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into())) =>
             {
@@ -383,7 +383,7 @@ impl App {
             MouseEventKind::Down(MouseButton::Left)
                 if self
                     .input
-                    .frame_state
+                    .screen_regions
                     .editor_rename_cancel_btn
                     .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into())) =>
             {
