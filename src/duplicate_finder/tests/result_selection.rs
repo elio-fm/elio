@@ -1,8 +1,8 @@
 use super::*;
 use crate::duplicate_finder::{DuplicateFile, DuplicateGroup};
 
-fn state() -> DuplicateFinderState {
-    let mut state = DuplicateFinderState::new(PathBuf::from("root"));
+fn state() -> DuplicateFinderSession {
+    let mut state = DuplicateFinderSession::new(PathBuf::from("root"));
     state.groups = vec![DuplicateGroup {
         id: 1,
         size: 1,

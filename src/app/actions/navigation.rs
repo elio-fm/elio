@@ -5,7 +5,7 @@ use crate::preview::{PreviewContent, PreviewWorkClass, preview_work_class};
 
 impl App {
     pub fn selection_summary(&self) -> String {
-        if let Some(overlay) = &self.overlays.duplicates {
+        if let Some(overlay) = &self.duplicate_finder.session {
             return match self.duplicate_focused_entry() {
                 Some(entry) => format!(
                     "{}/{}  {}",

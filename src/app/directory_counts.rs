@@ -72,7 +72,7 @@ impl App {
         requests.sort_by_key(|(distance, index, _)| (*distance, *index));
 
         for (_, _, request) in requests {
-            let _ = self.jobs.scheduler.submit_directory_item_count(request);
+            let _ = self.job_scheduler.submit_directory_item_count(request);
         }
     }
 

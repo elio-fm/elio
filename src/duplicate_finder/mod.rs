@@ -5,8 +5,8 @@ mod duplicate_scanning;
 mod result_selection;
 
 pub(crate) use content_comparison::DuplicateHashCache;
-pub(crate) use duplicate_results::DuplicateFinderState;
 pub use duplicate_results::DuplicateRow;
+pub(crate) use duplicate_results::{DuplicateFinderSession, DuplicateFinderState};
 #[cfg(test)]
 pub(crate) use duplicate_scanning::DuplicateScanPhase;
 pub(crate) use duplicate_scanning::{

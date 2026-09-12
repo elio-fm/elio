@@ -58,6 +58,8 @@ pub(crate) struct PendingDirectoryFingerprintScan {
 }
 
 pub(crate) struct DirectoryRuntime {
+    pub(crate) load_token: u64,
+    pub(crate) fingerprint_token: u64,
     pub(crate) fingerprint: crate::fs::DirectoryFingerprint,
     pub(crate) watch_tx: Sender<crate::fs::DirectoryWatchEvent>,
     pub(crate) watch_rx: Receiver<crate::fs::DirectoryWatchEvent>,
@@ -73,6 +75,8 @@ impl DirectoryRuntime {
     pub(super) fn new() -> Self {
         let (watch_tx, watch_rx) = std::sync::mpsc::channel();
         Self {
+            load_token: 0,
+            fingerprint_token: 0,
             fingerprint: crate::fs::DirectoryFingerprint::default(),
             watch_tx,
             watch_rx,

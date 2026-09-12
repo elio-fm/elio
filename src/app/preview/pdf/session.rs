@@ -24,7 +24,7 @@ impl App {
             if !self.preview.pdf.page_dimensions.contains_key(&page_key)
                 && !self.preview.pdf.pending_page_probes.contains(&page_key)
                 && !self.preview.pdf.failed_page_probes.contains(&page_key)
-                && self.jobs.scheduler.submit_pdf_probe(
+                && self.job_scheduler.submit_pdf_probe(
                     jobs::PdfProbeRequest {
                         path: request.path.clone(),
                         size: request.size,
@@ -64,7 +64,7 @@ impl App {
                 None
             };
 
-            if self.jobs.scheduler.submit_pdf_render(
+            if self.job_scheduler.submit_pdf_render(
                 jobs::PdfRenderRequest {
                     path: render_key.path.clone(),
                     size: render_key.size,
@@ -365,7 +365,7 @@ impl App {
     pub(super) fn clear_pending_pdf_work(&mut self) {
         self.preview.pdf.pending_page_probes.clear();
         self.preview.pdf.pending_renders.clear();
-        self.jobs.scheduler.clear_pending_pdf_jobs();
+        self.job_scheduler.clear_pending_pdf_jobs();
     }
 
     fn pdf_overlay_request_for_entry_page(

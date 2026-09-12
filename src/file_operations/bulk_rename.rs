@@ -52,7 +52,7 @@ impl App {
             .map(|item| item.original_name.clone())
             .collect();
         self.overlays.help = false;
-        self.overlays.search = None;
+        self.fuzzy_finder.search = None;
         self.file_operations.create = None;
         self.file_operations.rename = None;
         self.file_operations.trash = None;

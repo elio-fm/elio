@@ -3,8 +3,7 @@ use super::*;
 impl App {
     pub(crate) fn refresh_git_branch(&mut self) {
         let (token, cwd) = self.file_browser.begin_git_status_refresh();
-        self.jobs
-            .scheduler
+        self.job_scheduler
             .submit_git_status(jobs::GitStatusRequest { token, cwd });
     }
 
@@ -71,18 +70,22 @@ impl App {
 
     pub(crate) fn queue_directory_load(&mut self, mut load: PendingDirectoryLoad) -> Result<()> {
         self.file_browser.directory_runtime.pending_fingerprint_scan = None;
-        self.jobs.scheduler.cancel_directory_fingerprints();
-        self.jobs.scheduler.cancel_directory_stats();
+        self.job_scheduler.cancel_directory_fingerprints();
+        self.job_scheduler.cancel_directory_stats();
         self.preview.state.directory_stats_ready_at = None;
-        self.jobs.directory_token = self.jobs.directory_token.wrapping_add(1);
-        load.token = self.jobs.directory_token;
+        self.file_browser.directory_runtime.load_token = self
+            .file_browser
+            .directory_runtime
+            .load_token
+            .wrapping_add(1);
+        load.token = self.file_browser.directory_runtime.load_token;
         let request = jobs::DirectoryRequest {
             token: load.token,
             cwd: load.target_cwd.clone(),
             show_hidden: self.effective_show_hidden_for(&load.target_cwd),
             sort_mode: self.file_browser.sort_mode,
         };
-        if !self.jobs.scheduler.submit_directory(request) {
+        if !self.job_scheduler.submit_directory(request) {
             bail!("Directory worker unavailable");
         }
         self.file_browser.directory_runtime.pending_load = Some(load);
@@ -133,7 +136,7 @@ impl App {
         load: PendingDirectoryLoad,
         snapshot: crate::fs::DirectorySnapshot,
     ) {
-        let should_refresh_open_search = self.overlays.search.is_some();
+        let should_refresh_open_search = self.fuzzy_finder.search.is_some();
         self.invalidate_search_index_for_directory_snapshot(&load.target_cwd);
         self.file_browser.directory_runtime.pending_fingerprint_scan = None;
         let cwd_changed = load.target_cwd != self.file_browser.cwd;
@@ -212,17 +215,17 @@ impl App {
 
     fn invalidate_search_index_for_directory_snapshot(&mut self, cwd: &Path) {
         if self
-            .jobs
-            .search_cache
+            .fuzzy_finder
+            .cache
             .as_ref()
             .is_some_and(|cache| cache.cwd == cwd)
         {
-            self.jobs.search_cache = None;
+            self.fuzzy_finder.cache = None;
         }
 
-        self.jobs.search_loading = false;
-        self.jobs.search_token = self.jobs.search_token.wrapping_add(1);
-        self.jobs.scheduler.cancel_search();
+        self.fuzzy_finder.loading = false;
+        self.fuzzy_finder.token = self.fuzzy_finder.token.wrapping_add(1);
+        self.job_scheduler.cancel_search();
     }
 
     fn remembered_view_for(&self, cwd: &Path) -> Option<DirectoryViewMemory> {
@@ -349,7 +352,7 @@ impl App {
         self.file_browser.directory_runtime.watch = None;
         self.file_browser.directory_runtime.pending_reload_at = None;
         self.file_browser.directory_runtime.pending_fingerprint_scan = None;
-        self.jobs.scheduler.cancel_directory_fingerprints();
+        self.job_scheduler.cancel_directory_fingerprints();
         while self
             .file_browser
             .directory_runtime
@@ -383,13 +386,15 @@ impl App {
             return Ok(false);
         }
         let show_hidden = self.effective_show_hidden();
-        self.jobs.directory_fingerprint_token =
-            self.jobs.directory_fingerprint_token.wrapping_add(1);
-        let token = self.jobs.directory_fingerprint_token;
+        self.file_browser.directory_runtime.fingerprint_token = self
+            .file_browser
+            .directory_runtime
+            .fingerprint_token
+            .wrapping_add(1);
+        let token = self.file_browser.directory_runtime.fingerprint_token;
         let cwd = self.file_browser.cwd.clone();
         if !self
-            .jobs
-            .scheduler
+            .job_scheduler
             .submit_directory_fingerprint(jobs::DirectoryFingerprintRequest {
                 token,
                 cwd: cwd.clone(),
@@ -420,11 +425,11 @@ impl App {
     }
 
     fn refresh_search_after_directory_reload(&mut self) {
-        let Some(scope) = self.overlays.search.as_ref().map(|search| search.scope) else {
+        let Some(scope) = self.fuzzy_finder.search.as_ref().map(|search| search.scope) else {
             return;
         };
 
-        if let Some(search) = &mut self.overlays.search {
+        if let Some(search) = &mut self.fuzzy_finder.search {
             search.restart_loading();
         }
         self.prewarm_search_index(scope);

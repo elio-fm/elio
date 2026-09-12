@@ -131,7 +131,7 @@ impl App {
         if self.duplicate_file_count() == 0 {
             return;
         }
-        if let Some(duplicates) = &mut self.overlays.duplicates {
+        if let Some(duplicates) = &mut self.duplicate_finder.session {
             duplicates.move_selection(delta);
         }
         self.sync_duplicate_scroll();
@@ -142,7 +142,7 @@ impl App {
         self.move_duplicate_selection(direction * visible);
     }
     pub(crate) fn set_duplicate_selection(&mut self, index: usize) {
-        if let Some(duplicates) = &mut self.overlays.duplicates {
+        if let Some(duplicates) = &mut self.duplicate_finder.session {
             duplicates.set_selection(index);
         }
         self.sync_duplicate_scroll();
@@ -150,15 +150,15 @@ impl App {
     }
     pub(crate) fn sync_duplicate_scroll(&mut self) -> bool {
         let rows_visible = self.input.frame_state.duplicate_rows_visible;
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_mut()
             .is_some_and(|duplicates| duplicates.sync_scroll(rows_visible))
     }
     pub(crate) fn toggle_duplicate_selection(&mut self) {
         let changed =
-            self.overlays.duplicates.as_mut().is_some_and(
-                crate::duplicate_finder::DuplicateFinderState::toggle_focused_selection,
+            self.duplicate_finder.session.as_mut().is_some_and(
+                crate::duplicate_finder::DuplicateFinderSession::toggle_focused_selection,
             );
         if changed {
             self.status.clear();
@@ -166,17 +166,17 @@ impl App {
         }
     }
     pub(crate) fn select_all_duplicates(&mut self) {
-        if let Some(duplicates) = &mut self.overlays.duplicates {
+        if let Some(duplicates) = &mut self.duplicate_finder.session {
             duplicates.select_all();
             self.status.clear();
         }
     }
     pub(crate) fn clear_duplicate_selection_or_close(&mut self) {
         if self
-            .overlays
-            .duplicates
+            .duplicate_finder
+            .session
             .as_mut()
-            .is_some_and(crate::duplicate_finder::DuplicateFinderState::clear_selection)
+            .is_some_and(crate::duplicate_finder::DuplicateFinderSession::clear_selection)
         {
             self.status.clear();
             return;
@@ -257,7 +257,7 @@ impl App {
     pub(crate) fn toggle_duplicate_preview(&mut self) {
         self.queue_terminal_image_geometry_clear();
         let mut hidden = false;
-        if let Some(overlay) = &mut self.overlays.duplicates {
+        if let Some(overlay) = &mut self.duplicate_finder.session {
             overlay.preview_visible = !overlay.preview_visible;
             hidden = !overlay.preview_visible;
             if hidden {

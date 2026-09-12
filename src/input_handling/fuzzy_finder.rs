@@ -16,22 +16,22 @@ impl App {
             }
             KeyCode::Enter => self.confirm_search_selection()?,
             KeyCode::Left if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(search) = &mut self.overlays.search {
+                if let Some(search) = &mut self.fuzzy_finder.search {
                     search.move_cursor_to_previous_word();
                 }
             }
             KeyCode::Right if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some(search) = &mut self.overlays.search {
+                if let Some(search) = &mut self.fuzzy_finder.search {
                     search.move_cursor_to_next_word();
                 }
             }
             KeyCode::Left => {
-                if let Some(search) = &mut self.overlays.search {
+                if let Some(search) = &mut self.fuzzy_finder.search {
                     search.move_cursor(-1);
                 }
             }
             KeyCode::Right => {
-                if let Some(search) = &mut self.overlays.search {
+                if let Some(search) = &mut self.fuzzy_finder.search {
                     search.move_cursor(1);
                 }
             }
@@ -40,35 +40,35 @@ impl App {
             KeyCode::PageUp => self.page_search(-1),
             KeyCode::PageDown => self.page_search(1),
             KeyCode::Home => {
-                if let Some(search) = &mut self.overlays.search {
+                if let Some(search) = &mut self.fuzzy_finder.search {
                     search.move_cursor_to(0);
                 }
             }
             KeyCode::End => {
-                if let Some(search) = &mut self.overlays.search {
+                if let Some(search) = &mut self.fuzzy_finder.search {
                     search.move_cursor_to_end();
                 }
             }
             _ if search_key_deletes_previous_word(key) => {
-                if let Some(search) = &mut self.overlays.search {
+                if let Some(search) = &mut self.fuzzy_finder.search {
                     search.delete_word_before_cursor();
                 }
                 self.sync_search_scroll();
             }
             KeyCode::Backspace => {
-                if let Some(search) = &mut self.overlays.search {
+                if let Some(search) = &mut self.fuzzy_finder.search {
                     search.delete_char_before_cursor();
                 }
                 self.sync_search_scroll();
             }
             _ if search_key_deletes_next_word(key) => {
-                if let Some(search) = &mut self.overlays.search {
+                if let Some(search) = &mut self.fuzzy_finder.search {
                     search.delete_word_at_cursor();
                 }
                 self.sync_search_scroll();
             }
             KeyCode::Delete => {
-                if let Some(search) = &mut self.overlays.search {
+                if let Some(search) = &mut self.fuzzy_finder.search {
                     search.delete_char_at_cursor();
                 }
                 self.sync_search_scroll();
@@ -78,7 +78,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(search) = &mut self.overlays.search {
+                if let Some(search) = &mut self.fuzzy_finder.search {
                     search.insert_char(ch);
                 }
                 self.sync_search_scroll();

@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use super::DuplicateFinderState;
+use super::DuplicateFinderSession;
 
-impl DuplicateFinderState {
+impl DuplicateFinderSession {
     pub(crate) fn move_selection(&mut self, delta: isize) {
         let count = self.file_count();
         if count == 0 {

@@ -19,7 +19,7 @@ fn group(names: &[&str]) -> DuplicateGroup {
 
 #[test]
 fn rows_preserve_group_context_when_scrolled() {
-    let mut finder = DuplicateFinderState::new(PathBuf::from("root"));
+    let mut finder = DuplicateFinderSession::new(PathBuf::from("root"));
     finder.groups = vec![group(&["a", "b", "c"]), group(&["d", "e"])];
     finder.scroll = 1;
     finder.selected = 2;
@@ -38,7 +38,7 @@ fn rows_preserve_group_context_when_scrolled() {
 
 #[test]
 fn removing_paths_drops_empty_groups_and_clamps_empty_state() {
-    let mut finder = DuplicateFinderState::new(PathBuf::from("root"));
+    let mut finder = DuplicateFinderSession::new(PathBuf::from("root"));
     finder.groups = vec![group(&["a"])];
     finder.selected = 4;
     finder.scroll = 3;

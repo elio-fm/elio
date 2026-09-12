@@ -77,8 +77,8 @@ pub use crate::places::{PlaceKind, PlaceRow};
 
 impl App {
     pub fn set_frame_state(&mut self, mut frame_state: FrameState) -> bool {
-        let duplicate_preview_was_rendered =
-            self.overlays.duplicates.is_some() && self.input.frame_state.preview_panel.is_some();
+        let duplicate_preview_was_rendered = self.duplicate_finder.session.is_some()
+            && self.input.frame_state.preview_panel.is_some();
         let previous_code_line_limit = self.active_preview_entry().map(|entry| {
             self.preview_code_line_limit_for_entry_with_rows(
                 &entry,
@@ -90,8 +90,8 @@ impl App {
         }
         self.input.frame_state = frame_state;
         let mut dirty = self.sync_scroll() | self.sync_search_scroll() | self.sync_preview_scroll();
-        let duplicate_preview_is_rendered =
-            self.overlays.duplicates.is_some() && self.input.frame_state.preview_panel.is_some();
+        let duplicate_preview_is_rendered = self.duplicate_finder.session.is_some()
+            && self.input.frame_state.preview_panel.is_some();
         if duplicate_preview_was_rendered && !duplicate_preview_is_rendered {
             self.queue_terminal_image_geometry_clear();
             self.clear_image_preview_selection_activation();
@@ -144,12 +144,12 @@ impl App {
     }
 
     pub fn has_pending_background_work(&self) -> bool {
-        self.jobs.scheduler.has_pending_work()
+        self.job_scheduler.has_pending_work()
     }
 
     pub(crate) fn browser_wheel_burst_active(&self) -> bool {
         self.input.wheel_profile == WheelProfile::HighFrequency
-            && self.overlays.search.is_none()
+            && self.fuzzy_finder.search.is_none()
             && self.input.last_wheel_target == Some(WheelTarget::Entries)
             && self
                 .input
@@ -180,7 +180,7 @@ impl App {
 
     #[cfg(test)]
     pub fn scheduler_metrics(&self) -> SchedulerMetricsSnapshot {
-        self.jobs.scheduler.metrics_snapshot()
+        self.job_scheduler.metrics_snapshot()
     }
 
     #[cfg(test)]

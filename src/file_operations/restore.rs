@@ -51,7 +51,7 @@ impl App {
         }
 
         self.overlays.help = false;
-        self.overlays.search = None;
+        self.fuzzy_finder.search = None;
         self.file_operations.create = None;
         self.file_operations.trash = None;
         self.file_operations.restore = Some(RestoreOverlay {
@@ -295,7 +295,7 @@ impl App {
         });
         self.file_operations.restore_source_cwd = Some(source_cwd.clone());
 
-        self.jobs.scheduler.submit_restore(RestoreRequest {
+        self.job_scheduler.submit_restore(RestoreRequest {
             token,
             targets: r.targets,
         });

@@ -331,8 +331,7 @@ fn cancelling_paste_clears_progress_and_stops_worker() {
     );
 
     // Simulate Esc: cancel the current paste token and clear progress immediately.
-    app.jobs
-        .scheduler
+    app.job_scheduler
         .cancel_paste(app.file_operations.paste_token);
     app.file_operations.paste_progress = None;
 
@@ -378,7 +377,7 @@ fn new_paste_after_cancel_is_not_affected_by_old_cancel_token() {
     app.file_browser.cwd = dst1.clone();
     app.paste().unwrap();
     let cancelled_token = app.file_operations.paste_token; // == 1
-    app.jobs.scheduler.cancel_paste(cancelled_token);
+    app.job_scheduler.cancel_paste(cancelled_token);
     app.file_operations.paste_progress = None;
 
     // Re-yank and start a second paste to a different destination.  Its token

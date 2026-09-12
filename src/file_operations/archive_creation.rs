@@ -143,7 +143,7 @@ impl App {
         self.overlays.goto = None;
         self.file_operations.copy = None;
         self.overlays.open_with = None;
-        self.overlays.search = None;
+        self.fuzzy_finder.search = None;
         let cursor_col = archive_create_default_cursor_col(&default_name);
         self.file_operations.archive_create = Some(ArchiveCreateOverlay {
             sources,
@@ -456,8 +456,7 @@ impl App {
         self.status.clear();
 
         let submitted = self
-            .jobs
-            .scheduler
+            .job_scheduler
             .submit_archive_create(ArchiveCreateRequest {
                 token,
                 cwd: self.file_browser.cwd.clone(),

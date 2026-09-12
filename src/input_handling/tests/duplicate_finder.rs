@@ -121,8 +121,8 @@ fn duplicate_scan_stop_keeps_sorted_partial_results_and_unlocks_actions() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.open_duplicate_finder();
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![
@@ -144,8 +144,8 @@ fn duplicate_scan_stop_keeps_sorted_partial_results_and_unlocks_actions() {
         .expect("Esc should stop duplicate scan");
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_ref()
         .expect("duplicate overlay should remain open");
     assert!(!overlay.loading);
@@ -179,8 +179,8 @@ fn duplicate_open_with_binding_opens_open_with_overlay_on_top() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.open_duplicate_finder();
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(42, 10, &["alpha.txt", "beta.txt"])]
@@ -216,8 +216,8 @@ fn duplicate_finder_help_overlay_consumes_mouse_wheel() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(
@@ -243,7 +243,7 @@ fn duplicate_finder_help_overlay_consumes_mouse_wheel() {
     assert!(app.duplicates_is_open());
     assert!(app.overlays.help);
     assert_eq!(app.overlays.help_scroll, 2);
-    assert_eq!(app.overlays.duplicates.as_ref().unwrap().selected, 1);
+    assert_eq!(app.duplicate_finder.session.as_ref().unwrap().selected, 1);
 
     app.close_duplicate_finder();
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -261,8 +261,8 @@ fn duplicate_rows_render_display_rank_not_stable_group_id() {
         duplicate_group(7, 5, &["small-a.txt", "small-b.txt"]),
     ];
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = groups;
@@ -293,8 +293,8 @@ fn duplicate_rows_can_start_inside_group_without_losing_group_context() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![
@@ -330,8 +330,8 @@ fn selection_summary_tracks_duplicate_focus() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![
@@ -359,8 +359,8 @@ fn duplicate_trash_prompt_opens_on_top_of_duplicate_overlay() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(42, 10, &["alpha.txt", "beta.txt"])];
@@ -386,8 +386,8 @@ fn duplicate_trash_prompt_uses_selected_rows_when_selection_exists() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![
@@ -420,8 +420,8 @@ fn duplicate_trash_binding_permanently_deletes_when_results_are_inside_trash() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group_at(
@@ -460,8 +460,8 @@ fn duplicate_trash_binding_blocks_mixed_trash_and_normal_results() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![
@@ -496,8 +496,8 @@ fn duplicate_finder_uses_normal_action_bindings_even_when_browser_is_in_trash() 
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(42, 10, &["alpha.txt", "beta.txt"])];
@@ -521,8 +521,8 @@ fn duplicate_permanent_delete_prompt_opens_on_top_after_scan() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(42, 10, &["alpha.txt", "beta.txt"])];
@@ -554,12 +554,12 @@ fn duplicate_permanent_delete_keeps_finder_open_and_keeps_singleton_remainder() 
     }
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.open_duplicate_finder();
-    app.jobs.duplicate_token = app.jobs.duplicate_token.wrapping_add(1);
-    app.jobs.scheduler.cancel_duplicate_scan();
+    app.duplicate_finder.scan_token = app.duplicate_finder.scan_token.wrapping_add(1);
+    app.job_scheduler.cancel_duplicate_scan();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![
@@ -609,8 +609,8 @@ fn duplicate_permanent_delete_waits_for_scan_completion() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(42, 10, &["alpha.txt", "beta.txt"])];
@@ -637,8 +637,8 @@ fn duplicate_permanent_delete_allows_selected_rows_even_when_they_are_a_whole_gr
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![
@@ -672,8 +672,8 @@ fn duplicate_select_all_selects_every_duplicate_row() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![
@@ -730,8 +730,8 @@ fn duplicate_final_result_resets_focus_to_top_after_reorder() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(
@@ -753,8 +753,8 @@ fn duplicate_final_result_resets_focus_to_top_after_reorder() {
     }));
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_ref()
         .expect("duplicate overlay should stay open");
     assert_eq!(overlay.selected, 0);
@@ -783,8 +783,8 @@ fn duplicate_actions_use_selected_rows_before_focus() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![
@@ -812,11 +812,11 @@ fn duplicate_rename_while_loading_patches_paths_without_restarting_scan() {
     fs::create_dir_all(&root).expect("failed to create temp root");
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.open_duplicate_finder();
-    let old_token = app.jobs.duplicate_token;
+    let old_token = app.duplicate_finder.scan_token;
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(42, 10, &["alpha.txt", "beta.txt"])];
@@ -833,11 +833,11 @@ fn duplicate_rename_while_loading_patches_paths_without_restarting_scan() {
     ]);
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_ref()
         .expect("duplicate overlay should stay open");
-    assert_eq!(app.jobs.duplicate_token, old_token);
+    assert_eq!(app.duplicate_finder.scan_token, old_token);
     assert!(overlay.loading);
     assert_eq!(
         overlay.groups[0].files[0].path,
@@ -867,8 +867,8 @@ fn hidden_duplicate_preview_layout_keeps_content_target_but_no_image_surface() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(42, 10, &["alpha.webp", "beta.webp"])];
@@ -921,8 +921,8 @@ fn duplicate_scroll_clamps_when_visible_rows_increase() {
         .collect::<Vec<_>>();
     let refs = names.iter().map(String::as_str).collect::<Vec<_>>();
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(1, 10, &refs)];
@@ -948,8 +948,8 @@ fn duplicate_finder_shift_nav_does_not_move_file_focus() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(1, 10, &["alpha.webp", "beta.webp"])];
@@ -960,8 +960,8 @@ fn duplicate_finder_shift_nav_does_not_move_file_focus() {
         .expect("Shift+Down should not move Duplicate Finder focus");
 
     assert_eq!(
-        app.overlays
-            .duplicates
+        app.duplicate_finder
+            .session
             .as_ref()
             .expect("duplicate overlay should remain open")
             .selected,
@@ -980,8 +980,8 @@ fn duplicate_finder_shift_v_toggles_preview_without_moving_focus() {
     app.open_duplicate_finder();
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_mut()
         .expect("duplicate overlay should be open");
     overlay.groups = vec![duplicate_group(1, 10, &["alpha.webp", "beta.webp"])];
@@ -993,8 +993,8 @@ fn duplicate_finder_shift_v_toggles_preview_without_moving_focus() {
         .expect("Shift+V should toggle Duplicate Finder preview");
 
     let overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_ref()
         .expect("duplicate overlay should remain open");
     assert_eq!(overlay.selected, 0);

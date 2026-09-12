@@ -254,7 +254,7 @@ impl App {
                 PreviewPriority::Low,
                 preview_work_class(&entry, &variant),
             );
-            let _ = self.jobs.scheduler.submit_preview(request);
+            let _ = self.job_scheduler.submit_preview(request);
         }
     }
 
@@ -285,7 +285,7 @@ impl App {
                 PreviewPriority::Low,
                 preview_work_class(&entry, &variant),
             );
-            let _ = self.jobs.scheduler.submit_preview(request);
+            let _ = self.job_scheduler.submit_preview(request);
         }
     }
 
@@ -303,7 +303,7 @@ impl App {
                 PreviewPriority::Low,
                 preview_work_class(&entry, &variant),
             );
-            let _ = self.jobs.scheduler.submit_preview(request);
+            let _ = self.job_scheduler.submit_preview(request);
         }
     }
 

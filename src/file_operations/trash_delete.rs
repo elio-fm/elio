@@ -116,7 +116,7 @@ impl App {
         permanent: bool,
     ) {
         self.overlays.help = false;
-        self.overlays.search = None;
+        self.fuzzy_finder.search = None;
         self.file_operations.create = None;
         self.file_operations.trash = Some(TrashOverlay {
             targets,
@@ -128,8 +128,8 @@ impl App {
 
     fn open_trash_prompt_for_targets(&mut self, targets: Vec<TrashTarget>, permanent: bool) {
         self.overlays.help = false;
-        self.overlays.search = None;
-        self.overlays.duplicates = None;
+        self.fuzzy_finder.search = None;
+        self.duplicate_finder.session = None;
         self.file_operations.create = None;
         self.file_operations.trash = Some(TrashOverlay {
             targets,
@@ -385,8 +385,8 @@ impl App {
             return Ok(());
         }
         let duplicate_targets = self
-            .overlays
-            .duplicates
+            .duplicate_finder
+            .session
             .is_some()
             .then(|| t.targets.iter().map(|target| target.path.clone()).collect());
         self.file_browser.selected_paths.clear();
@@ -436,7 +436,7 @@ impl App {
             self.status = "Copying to trash…".to_string();
         }
 
-        self.jobs.scheduler.submit_trash(TrashRequest {
+        self.job_scheduler.submit_trash(TrashRequest {
             token,
             targets: t.targets,
             permanent: t.permanent,

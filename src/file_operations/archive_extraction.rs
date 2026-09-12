@@ -197,7 +197,7 @@ impl App {
         self.overlays.goto = None;
         self.file_operations.copy = None;
         self.overlays.open_with = None;
-        self.overlays.search = None;
+        self.fuzzy_finder.search = None;
         self.file_operations.archive_password = Some(ArchivePasswordOverlay {
             purpose: ArchivePasswordPurpose::Extract { request },
             input: String::new(),
@@ -496,7 +496,7 @@ impl App {
         self.file_operations.archive_extract_request = Some(request.clone());
         self.status.clear();
 
-        let submitted = self.jobs.scheduler.submit_archive_extract(request);
+        let submitted = self.job_scheduler.submit_archive_extract(request);
         if !submitted {
             self.file_operations.archive_extract_progress = None;
             self.file_operations.archive_extract_source_cwd = None;

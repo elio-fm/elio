@@ -10,8 +10,14 @@ use super::{
     sort_duplicate_groups,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Default)]
 pub(crate) struct DuplicateFinderState {
+    pub(crate) session: Option<DuplicateFinderSession>,
+    pub(crate) scan_token: u64,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct DuplicateFinderSession {
     pub(crate) cwd: PathBuf,
     pub(crate) groups: Vec<DuplicateGroup>,
     pub(crate) stats: DuplicateScanStats,
@@ -38,7 +44,7 @@ pub struct DuplicateRow {
     pub focused: bool,
 }
 
-impl DuplicateFinderState {
+impl DuplicateFinderSession {
     pub(crate) fn new(cwd: PathBuf) -> Self {
         Self {
             cwd,

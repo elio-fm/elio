@@ -7,7 +7,7 @@ impl App {
     pub(crate) fn clear_preview_directory_stats(&mut self) {
         self.preview.state.directory_stats = None;
         self.preview.state.directory_stats_ready_at = None;
-        self.jobs.scheduler.cancel_directory_stats();
+        self.job_scheduler.cancel_directory_stats();
     }
 
     fn queue_current_directory_stats(&mut self) {
@@ -27,8 +27,7 @@ impl App {
             path: entry.path.clone(),
         });
         if !self
-            .jobs
-            .scheduler
+            .job_scheduler
             .submit_directory_stats(DirectoryStatsRequest {
                 token,
                 path: entry.path,
@@ -48,7 +47,7 @@ impl App {
             return;
         }
         self.preview.state.directory_stats = None;
-        self.jobs.scheduler.cancel_directory_stats();
+        self.job_scheduler.cancel_directory_stats();
         self.preview.state.directory_stats_ready_at =
             Some(Instant::now() + DIRECTORY_STATS_IDLE_DELAY);
     }
@@ -144,7 +143,7 @@ impl App {
                         )
                     {
                         let entry_path = entry.path.clone();
-                        if self.jobs.scheduler.submit_preview(request) {
+                        if self.job_scheduler.submit_preview(request) {
                             self.preview.state.incremental_render_in_flight = true;
                             self.preview.state.incremental_render_path = Some(entry_path);
                         }
@@ -162,7 +161,7 @@ impl App {
                         PreviewPriority::High,
                         work_class,
                     );
-                    if !self.jobs.scheduler.submit_preview(request) {
+                    if !self.job_scheduler.submit_preview(request) {
                         self.preview.state.load_state = None;
                         stale_preview.with_status_note("Refresh unavailable")
                     } else {
@@ -186,7 +185,7 @@ impl App {
                         PreviewPriority::High,
                         work_class,
                     );
-                    if !self.jobs.scheduler.submit_preview(request) {
+                    if !self.job_scheduler.submit_preview(request) {
                         self.preview.state.load_state = None;
                         PreviewContent::placeholder("Preview worker unavailable")
                     } else {
@@ -326,8 +325,7 @@ impl App {
 
         let pending = self.preview.state.pending_line_counts.contains(&key)
             || self
-                .jobs
-                .scheduler
+                .job_scheduler
                 .submit_preview_line_count(PreviewLineCountRequest {
                     path: entry.path,
                     size: entry.size,

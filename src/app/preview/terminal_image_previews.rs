@@ -580,7 +580,7 @@ impl App {
             || self.overlays.goto.is_some()
             || self.file_operations.copy.is_some()
             || self.overlays.open_with.is_some()
-            || self.overlays.search.is_some()
+            || self.fuzzy_finder.search.is_some()
             || self.overlays.help
     }
 

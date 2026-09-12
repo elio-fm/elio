@@ -77,7 +77,7 @@ impl App {
     pub fn process_pending_scroll(&mut self) -> bool {
         let mut dirty = false;
 
-        if self.overlays.search.is_some() {
+        if self.fuzzy_finder.search.is_some() {
             self.input.wheel_scroll.vertical.pending = 0;
             self.input.wheel_scroll.horizontal.pending = 0;
             self.input.wheel_scroll.preview.pending = 0;
@@ -370,13 +370,13 @@ impl App {
         };
 
         let previous = self
-            .overlays
+            .fuzzy_finder
             .search
             .as_ref()
             .map(|search| search.selected)
             .unwrap_or(0);
         self.move_search_selection(step);
-        self.overlays
+        self.fuzzy_finder
             .search
             .as_ref()
             .map(|search| search.selected != previous)
@@ -478,7 +478,7 @@ impl App {
             return;
         };
         let entry_path = entry.path.clone();
-        if self.jobs.scheduler.submit_preview(request) {
+        if self.job_scheduler.submit_preview(request) {
             self.preview.state.incremental_render_in_flight = true;
             self.preview.state.incremental_render_path = Some(entry_path);
         }
