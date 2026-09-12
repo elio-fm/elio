@@ -44,6 +44,7 @@ A brief overview of the repository layout:
 │   ├── file_operations/        # Create, rename, copy, move, trash, restore, and archive workflows
 │   ├── fs/                     # Directory access, entries, sorting, watching, and metadata
 │   ├── fuzzy_finder/           # Candidate indexing and fuzzy matching
+│   ├── goto_menu/              # Configured Go To entries and destination resolution
 │   ├── opening/                # Open rules, application launching, and Open With discovery
 │   ├── places/                 # Places list and mounted-device discovery
 │   ├── preview/                # Preview construction, document/image processing, and tests

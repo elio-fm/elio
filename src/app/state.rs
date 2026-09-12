@@ -20,6 +20,7 @@ use crate::file_operations::{
     TrashProgress,
 };
 use crate::fuzzy_finder::{SearchCache, SearchState};
+use crate::goto_menu::GotoMenu;
 use crate::opening::open_with::ApplicationSelection;
 use crate::places::PlacesState;
 use crate::preview::PreviewRuntime;
@@ -86,26 +87,6 @@ pub(super) enum NavigationRepeatKey {
     End,
 }
 
-#[derive(Clone, Debug)]
-pub(super) enum GoToDestination {
-    Top,
-    Path(PathBuf),
-    Missing(String),
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct GoToOverlayRow {
-    pub(super) shortcut: char,
-    pub(super) label: String,
-    pub(super) destination: GoToDestination,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct GoToOverlay {
-    pub(in crate::app) title: String,
-    pub(in crate::app) rows: Vec<GoToOverlayRow>,
-}
-
 #[derive(Default)]
 pub(crate) struct OverlayState {
     pub(crate) trash: Option<TrashOverlay>,
@@ -116,7 +97,7 @@ pub(crate) struct OverlayState {
     pub(crate) rename: Option<RenameOverlay>,
     pub(crate) bulk_rename: Option<BulkRenameOverlay>,
     pub(crate) editor_rename_confirm: Option<EditorRenameConfirmOverlay>,
-    pub(crate) goto: Option<GoToOverlay>,
+    pub(crate) goto: Option<GotoMenu>,
     pub(crate) copy: Option<CopyOverlay>,
     pub(crate) open_with: Option<ApplicationSelection>,
     pub(crate) search: Option<SearchState>,

@@ -9,6 +9,7 @@ This crate is organized around focused subsystems.
 - `file_operations`: workflows that create, rename, copy, move, trash, restore, or archive items.
 - `background_jobs`: shared job scheduling, workers, requests, and result messages.
 - `fuzzy_finder` and `duplicate_finder`: feature state and behavior for finding items.
+- `goto_menu`: configured Go To entries and destination resolution.
 - `archive` and `opening`: archive operations and launching items with applications.
 - `preview`: preview construction plus document and image inspection, preparation, and rendering.
 - `theme`: palettes and file appearance rules shared by rendered interfaces.
@@ -29,8 +30,9 @@ Current boundary rules:
   pane state remains in `places`. Git status for the current directory and the browser-item drag
   selection also belong to `file_browser`; job execution, mouse hit testing, and terminal drag
   protocols remain at their respective boundaries.
-- Fuzzy-finder, duplicate-finder, and Open With state and pure transitions belong to their feature
-  subsystems; `app` only coordinates their input, background jobs, navigation, and side effects.
+- Fuzzy-finder, duplicate-finder, Go To menu, and Open With state and pure transitions belong to
+  their feature subsystems; `app` only coordinates their input, background jobs, navigation, and
+  side effects.
 - `fs` and `file_classification` should not depend on `app`.
 - Code-language recognition belongs to `file_classification`, not to a preview renderer.
 - Preview construction and media processing in `preview` should not depend on `app` or

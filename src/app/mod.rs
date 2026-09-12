@@ -73,6 +73,7 @@ pub use crate::fs::EntryKind;
 pub use crate::fuzzy_finder::SearchRow;
 #[cfg(test)]
 pub use crate::places::PlaceItem;
+#[cfg(test)]
 pub use crate::places::{PlaceKind, PlaceRow};
 
 impl App {

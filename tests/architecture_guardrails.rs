@@ -61,6 +61,11 @@ fn duplicate_finder_does_not_depend_on_app() {
 }
 
 #[test]
+fn goto_menu_does_not_depend_on_app() {
+    assert_tree_has_no_pattern("src/goto_menu", "app::", &[]);
+}
+
+#[test]
 fn opening_does_not_depend_on_app() {
     assert_tree_has_no_pattern("src/opening", "app::", &[]);
 }
