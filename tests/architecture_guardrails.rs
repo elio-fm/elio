@@ -40,6 +40,17 @@ fn file_browser_does_not_depend_on_app() {
 }
 
 #[test]
+fn file_browser_does_not_depend_on_background_jobs() {
+    assert_tree_has_no_pattern("src/file_browser", "background_jobs::", &[]);
+}
+
+#[test]
+fn file_browser_does_not_depend_on_terminal_runtime_or_ui() {
+    assert_tree_has_no_pattern("src/file_browser", "terminal_runtime::", &[]);
+    assert_tree_has_no_pattern("src/file_browser", "crate::ui::", &[]);
+}
+
+#[test]
 fn fuzzy_finder_does_not_depend_on_app() {
     assert_tree_has_no_pattern("src/fuzzy_finder", "app::", &[]);
 }

@@ -26,7 +26,9 @@ Current boundary rules:
 - Filesystem mutations belong to `file_operations`; their background workers remain centralized in
   `background_jobs` with Elio's other workers.
 - Current-directory browsing state and pure browser transitions belong to `file_browser`; places
-  pane state remains in `places`.
+  pane state remains in `places`. Git status for the current directory and the browser-item drag
+  selection also belong to `file_browser`; job execution, mouse hit testing, and terminal drag
+  protocols remain at their respective boundaries.
 - Fuzzy-finder, duplicate-finder, and Open With state and pure transitions belong to their feature
   subsystems; `app` only coordinates their input, background jobs, navigation, and side effects.
 - `fs` and `file_classification` should not depend on `app`.

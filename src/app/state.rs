@@ -165,9 +165,6 @@ pub(crate) struct JobRuntime {
 pub(crate) struct InputRuntime {
     pub(crate) frame_state: FrameState,
     pub(in crate::app) last_click: Option<ClickState>,
-    pub(in crate::app) drag_candidate: Option<PathBuf>,
-    pub(in crate::app) drag_paths: Vec<PathBuf>,
-    pub(in crate::app) drag_suppressed_until_up: bool,
     pub(in crate::app) wheel_scroll: ScrollState,
     pub(in crate::app) wheel_profile: WheelProfile,
     pub(in crate::app) last_wheel_target: Option<WheelTarget>,
@@ -211,13 +208,6 @@ pub(crate) enum ChooserExit {
     Cancelled,
 }
 
-pub(in crate::app) struct GitRuntime {
-    pub(in crate::app) token: u64,
-    pub(in crate::app) cwd: PathBuf,
-    pub(in crate::app) branch: Option<String>,
-    pub(in crate::app) dirty: bool,
-}
-
 pub struct App {
     pub(crate) file_browser: FileBrowserState,
     pub(crate) places: PlacesState,
@@ -225,7 +215,6 @@ pub struct App {
     pub(crate) overlays: OverlayState,
     pub(crate) jobs: JobRuntime,
     pub(crate) input: InputRuntime,
-    pub(in crate::app) git: GitRuntime,
     pub(crate) status: String,
     pub(crate) should_quit: bool,
     pub(crate) should_change_directory_on_quit: bool,
@@ -293,9 +282,6 @@ impl App {
             input: InputRuntime {
                 frame_state: FrameState::default(),
                 last_click: None,
-                drag_candidate: None,
-                drag_paths: Vec::new(),
-                drag_suppressed_until_up: false,
                 wheel_scroll: ScrollState {
                     horizontal: ScrollLane::new(),
                     vertical: ScrollLane::new(),
@@ -311,12 +297,6 @@ impl App {
                 last_selection_change_at: Instant::now(),
                 // Initialize to far past so the first keypress is always Immediate.
                 last_key_nav_at: Instant::now() - Duration::from_secs(1),
-            },
-            git: GitRuntime {
-                token: 0,
-                cwd: PathBuf::new(),
-                branch: None,
-                dirty: false,
             },
             status: String::new(),
             should_quit: false,

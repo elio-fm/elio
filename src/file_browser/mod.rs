@@ -2,6 +2,8 @@ mod directory_counts;
 mod directory_loading;
 mod file_browser_state;
 mod filtering;
+mod git_status;
+mod item_dragging;
 mod selection;
 mod selection_navigation;
 

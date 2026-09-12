@@ -135,7 +135,12 @@ impl App {
                     );
                 }
                 JobResult::GitStatus(build) => {
-                    dirty |= self.apply_git_status_result(build);
+                    dirty |= self.file_browser.apply_git_status(
+                        build.token,
+                        build.cwd,
+                        build.branch,
+                        build.dirty,
+                    );
                 }
                 JobResult::PreviewLineCount(build) => {
                     dirty |= self.apply_preview_line_count_result(
