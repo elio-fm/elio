@@ -28,7 +28,20 @@ pub(crate) enum RestoreConfirmation {
     Targets(RestoreOverlay),
 }
 
+pub(crate) struct RestoreJobCompletion {
+    pub(crate) next_selection: Option<PathBuf>,
+    pub(crate) source_cwd: Option<PathBuf>,
+}
+
 impl FileOperationsState {
+    pub(crate) fn restore_overlay_mut(&mut self) -> Option<&mut RestoreOverlay> {
+        self.restore.as_mut()
+    }
+
+    pub(crate) fn dismiss_restore(&mut self) {
+        self.restore = None;
+    }
+
     pub(crate) fn open_restore_prompt(&mut self, targets: Vec<TrashTarget>) {
         self.create = None;
         self.trash = None;
@@ -68,6 +81,33 @@ impl FileOperationsState {
             token,
             targets: overlay.targets,
         }
+    }
+
+    pub(crate) fn restore_job_is_current(&self, token: u64) -> bool {
+        token == self.restore_token
+    }
+
+    pub(crate) fn update_restore_progress(&mut self, completed: usize) {
+        if let Some(progress) = &mut self.restore_progress {
+            progress.completed = completed;
+        }
+    }
+
+    pub(crate) fn finish_restore_job(&mut self, completed: usize) -> RestoreJobCompletion {
+        let next_selection = self.restore_progress.take().and_then(|progress| {
+            (completed == progress.total)
+                .then_some(progress.next_selection)
+                .flatten()
+        });
+        RestoreJobCompletion {
+            next_selection,
+            source_cwd: self.restore_source_cwd.take(),
+        }
+    }
+
+    pub(crate) fn cancel_restore_job(&mut self) -> Option<u64> {
+        self.restore_progress.take()?;
+        Some(self.restore_token)
     }
 
     pub fn restore_is_open(&self) -> bool {

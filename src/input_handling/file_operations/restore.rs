@@ -106,50 +106,45 @@ impl App {
 
     pub(crate) fn handle_restore_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.file_operations.restore = None;
+            self.file_operations.dismiss_restore();
             return Ok(());
         }
         match key.code {
             KeyCode::Esc => {
-                self.file_operations.restore = None;
+                self.file_operations.dismiss_restore();
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if let Some(r) = &mut self.file_operations.restore {
+                if let Some(r) = self.file_operations.restore_overlay_mut() {
                     r.scroll = r.scroll.saturating_sub(1);
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if let Some(r) = &mut self.file_operations.restore {
+                if let Some(r) = self.file_operations.restore_overlay_mut() {
                     let visible = r.targets.len().min(8);
                     let max_scroll = r.targets.len().saturating_sub(visible);
                     r.scroll = (r.scroll + 1).min(max_scroll);
                 }
             }
             KeyCode::Left | KeyCode::Char('h') => {
-                if let Some(r) = &mut self.file_operations.restore {
+                if let Some(r) = self.file_operations.restore_overlay_mut() {
                     r.confirmed = true;
                 }
             }
             KeyCode::Right | KeyCode::Char('l') => {
-                if let Some(r) = &mut self.file_operations.restore {
+                if let Some(r) = self.file_operations.restore_overlay_mut() {
                     r.confirmed = false;
                 }
             }
             KeyCode::Tab => {
-                if let Some(r) = &mut self.file_operations.restore {
+                if let Some(r) = self.file_operations.restore_overlay_mut() {
                     r.confirmed = !r.confirmed;
                 }
             }
             KeyCode::Enter => {
-                if self
-                    .file_operations
-                    .restore
-                    .as_ref()
-                    .is_some_and(|r| r.confirmed)
-                {
+                if self.file_operations.restore_confirmed() {
                     self.confirm_restore()?;
                 } else {
-                    self.file_operations.restore = None;
+                    self.file_operations.dismiss_restore();
                 }
             }
             _ => {}
@@ -166,7 +161,7 @@ impl App {
                     .restore_panel
                     .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
-                    self.file_operations.restore = None;
+                    self.file_operations.dismiss_restore();
                     return Ok(());
                 }
                 if self
@@ -182,16 +177,16 @@ impl App {
                     .restore_cancel_btn
                     .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
                 {
-                    self.file_operations.restore = None;
+                    self.file_operations.dismiss_restore();
                 }
             }
             MouseEventKind::ScrollUp => {
-                if let Some(r) = &mut self.file_operations.restore {
+                if let Some(r) = self.file_operations.restore_overlay_mut() {
                     r.scroll = r.scroll.saturating_sub(1);
                 }
             }
             MouseEventKind::ScrollDown => {
-                if let Some(r) = &mut self.file_operations.restore {
+                if let Some(r) = self.file_operations.restore_overlay_mut() {
                     let visible = r.targets.len().min(8);
                     let max_scroll = r.targets.len().saturating_sub(visible);
                     r.scroll = (r.scroll + 1).min(max_scroll);

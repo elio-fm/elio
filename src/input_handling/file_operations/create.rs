@@ -34,7 +34,7 @@ impl App {
     }
 
     pub(crate) fn create_insert_newline(&mut self) {
-        let Some(create) = &mut self.file_operations.create else {
+        let Some(create) = self.file_operations.create_overlay_mut() else {
             return;
         };
         let tail = {
@@ -49,7 +49,7 @@ impl App {
     }
 
     fn create_move_horizontal(&mut self, delta: isize) {
-        let Some(create) = &mut self.file_operations.create else {
+        let Some(create) = self.file_operations.create_overlay_mut() else {
             return;
         };
         if delta < 0 {
@@ -72,7 +72,7 @@ impl App {
     }
 
     fn create_move_word(&mut self, direction: isize) {
-        let Some(create) = &mut self.file_operations.create else {
+        let Some(create) = self.file_operations.create_overlay_mut() else {
             return;
         };
         let line = &create.lines[create.cursor_line];
@@ -86,7 +86,7 @@ impl App {
     }
 
     fn create_move_vertical(&mut self, delta: isize) {
-        let Some(create) = &mut self.file_operations.create else {
+        let Some(create) = self.file_operations.create_overlay_mut() else {
             return;
         };
         let new_line = (create.cursor_line as isize + delta)
@@ -100,7 +100,7 @@ impl App {
     }
 
     fn create_backspace(&mut self) {
-        let Some(create) = &mut self.file_operations.create else {
+        let Some(create) = self.file_operations.create_overlay_mut() else {
             return;
         };
         if create.cursor_col > 0 {
@@ -122,7 +122,7 @@ impl App {
     }
 
     fn create_delete(&mut self) {
-        let Some(create) = &mut self.file_operations.create else {
+        let Some(create) = self.file_operations.create_overlay_mut() else {
             return;
         };
         let len = create.lines[create.cursor_line].chars().count();
@@ -140,7 +140,7 @@ impl App {
     }
 
     fn create_delete_word_back(&mut self) {
-        let Some(create) = &mut self.file_operations.create else {
+        let Some(create) = self.file_operations.create_overlay_mut() else {
             return;
         };
         if create.cursor_col == 0 {
@@ -155,7 +155,7 @@ impl App {
     }
 
     fn create_delete_word_forward(&mut self) {
-        let Some(create) = &mut self.file_operations.create else {
+        let Some(create) = self.file_operations.create_overlay_mut() else {
             return;
         };
         let line = &mut create.lines[create.cursor_line];
@@ -166,13 +166,13 @@ impl App {
 
     pub(crate) fn handle_create_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.file_operations.create = None;
+            self.file_operations.dismiss_create();
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.file_operations.create = None;
+                self.file_operations.dismiss_create();
             }
             KeyCode::Enter
                 if (key.modifiers.contains(KeyModifiers::ALT)
@@ -206,13 +206,13 @@ impl App {
                 self.create_move_horizontal(1);
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(c) = &mut self.file_operations.create {
+                if let Some(c) = self.file_operations.create_overlay_mut() {
                     c.cursor_col = 0;
                     c.preferred_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(c) = &mut self.file_operations.create {
+                if let Some(c) = self.file_operations.create_overlay_mut() {
                     let len = c.lines[c.cursor_line].chars().count();
                     c.cursor_col = len;
                     c.preferred_col = len;
@@ -259,7 +259,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(c) = &mut self.file_operations.create {
+                if let Some(c) = self.file_operations.create_overlay_mut() {
                     let byte = char_to_byte(&c.lines[c.cursor_line], c.cursor_col);
                     c.lines[c.cursor_line].insert(byte, ch);
                     c.cursor_col += 1;
@@ -281,7 +281,7 @@ impl App {
                     .create_panel
                     .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
-                    self.file_operations.create = None;
+                    self.file_operations.dismiss_create();
                     return Ok(());
                 }
                 if let Some(list_area) = self.input.screen_regions.create_list_area
@@ -295,7 +295,7 @@ impl App {
                         let line_len = self.file_operations.create_line(line_idx).chars().count();
                         let char_col = (mouse.column.saturating_sub(list_area.x + 3)) as usize;
                         let cursor_col = char_col.min(line_len);
-                        if let Some(c) = &mut self.file_operations.create {
+                        if let Some(c) = self.file_operations.create_overlay_mut() {
                             c.cursor_line = line_idx;
                             c.cursor_col = cursor_col;
                             c.preferred_col = cursor_col;

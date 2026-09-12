@@ -23,6 +23,14 @@ pub(crate) struct CopyOverlay {
 }
 
 impl FileOperationsState {
+    pub(crate) fn copy_overlay(&self) -> Option<&CopyOverlay> {
+        self.copy.as_ref()
+    }
+
+    pub(crate) fn dismiss_copy(&mut self) {
+        self.copy = None;
+    }
+
     pub(crate) fn open_copy_overlay(&mut self, cwd: &Path, paths: &[PathBuf]) -> bool {
         if paths.is_empty() {
             return false;

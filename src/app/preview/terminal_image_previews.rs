@@ -568,15 +568,8 @@ impl App {
     }
 
     fn any_modal_overlay_open(&self) -> bool {
-        self.file_operations.trash.is_some()
-            || self.file_operations.restore.is_some()
-            || self.file_operations.archive_password.is_some()
-            || self.file_operations.archive_create.is_some()
-            || self.file_operations.create.is_some()
-            || self.file_operations.rename.is_some()
-            || self.file_operations.bulk_rename.is_some()
+        self.file_operations.overlay_blocks_terminal_images()
             || self.overlays.goto.is_some()
-            || self.file_operations.copy.is_some()
             || self.overlays.open_with.is_some()
             || self.fuzzy_finder.search.is_some()
             || self.overlays.help

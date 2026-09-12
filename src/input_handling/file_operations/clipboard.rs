@@ -79,13 +79,13 @@ impl App {
 
     pub(crate) fn handle_copy_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.file_operations.copy = None;
+            self.file_operations.dismiss_copy();
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.file_operations.copy = None;
+                self.file_operations.dismiss_copy();
             }
             KeyCode::Char(ch)
                 if !key
@@ -110,7 +110,7 @@ impl App {
                 .copy_panel
                 .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
             if !inside {
-                self.file_operations.copy = None;
+                self.file_operations.dismiss_copy();
                 return Ok(());
             }
 
@@ -131,7 +131,7 @@ impl App {
 
     fn copy_row_index_for_shortcut(&self, ch: char) -> Option<usize> {
         let needle = ch.to_ascii_lowercase();
-        self.file_operations.copy.as_ref().and_then(|overlay| {
+        self.file_operations.copy_overlay().and_then(|overlay| {
             overlay
                 .rows
                 .iter()

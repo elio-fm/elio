@@ -54,6 +54,12 @@ pub(crate) struct DropPreparation {
     pub(crate) status: String,
 }
 
+pub(crate) struct PasteJobCompletion {
+    pub(crate) origin: Option<PasteOrigin>,
+    pub(crate) dest_dir: Option<PathBuf>,
+    pub(crate) next_queued_dest: Option<PathBuf>,
+}
+
 impl FileOperationsState {
     /// Yank (copy-mark) the current selection or the focused entry.
     pub(crate) fn set_clipboard(&mut self, paths: Vec<PathBuf>, op: ClipOp) -> bool {
@@ -62,6 +68,44 @@ impl FileOperationsState {
         }
         self.clipboard = Some(Clipboard { paths, op });
         true
+    }
+
+    pub(crate) fn clear_clipboard(&mut self) {
+        self.clipboard = None;
+    }
+
+    pub(crate) fn clipboard_has_yanked_paths(&self) -> bool {
+        self.clipboard
+            .as_ref()
+            .is_some_and(|clipboard| clipboard.op == ClipOp::Yank && !clipboard.paths.is_empty())
+    }
+
+    pub(crate) fn paste_job_is_current(&self, token: u64) -> bool {
+        token == self.paste_token
+    }
+
+    pub(crate) fn update_paste_progress(&mut self, completed: usize) {
+        if let Some(progress) = &mut self.paste_progress {
+            progress.completed = completed;
+        }
+    }
+
+    pub(crate) fn finish_paste_job(&mut self) -> PasteJobCompletion {
+        let origin = self.paste_progress.take().map(|progress| progress.origin);
+        PasteJobCompletion {
+            origin,
+            dest_dir: self.paste_dest_dir.take(),
+            next_queued_dest: self
+                .queued_pastes
+                .front()
+                .map(|queued| queued.dest_dir.clone()),
+        }
+    }
+
+    pub(crate) fn cancel_paste_job(&mut self) -> Option<u64> {
+        self.paste_progress.take()?;
+        self.queued_pastes.clear();
+        Some(self.paste_token)
     }
 
     /// Paste the clipboard contents into the current directory (async with
@@ -228,6 +272,13 @@ impl FileOperationsState {
         self.clipboard.as_ref().map(|c| (c.paths.len(), c.op))
     }
 
+    #[cfg(test)]
+    pub(crate) fn clipboard_paths(&self) -> Option<&[PathBuf]> {
+        self.clipboard
+            .as_ref()
+            .map(|clipboard| clipboard.paths.as_slice())
+    }
+
     /// Returns `(completed, total, op)` for an in-progress paste, or `None`.
     pub fn paste_progress(&self) -> Option<(usize, usize, ClipOp)> {
         self.paste_progress
@@ -246,11 +297,5 @@ impl FileOperationsState {
             .as_ref()
             .filter(|c| c.paths.iter().any(|p| p == path))
             .map(|c| c.op)
-    }
-
-    pub(crate) fn clear_queued_pastes(&mut self) -> usize {
-        let queued = self.queued_pastes.len();
-        self.queued_pastes.clear();
-        queued
     }
 }

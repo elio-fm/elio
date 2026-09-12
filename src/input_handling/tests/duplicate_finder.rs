@@ -453,12 +453,7 @@ fn duplicate_trash_binding_permanently_deletes_when_results_are_inside_trash() {
         app.file_operations.trash_title(),
         "Delete permanently 1 selected file?"
     );
-    assert!(
-        app.file_operations
-            .trash
-            .as_ref()
-            .is_some_and(|trash| trash.permanent)
-    );
+    assert!(app.file_operations.trash_is_permanent());
 
     app.close_duplicate_finder();
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -522,7 +517,7 @@ fn duplicate_finder_uses_normal_action_bindings_even_when_browser_is_in_trash() 
         .expect("rename binding should work inside Duplicate Finder");
 
     assert!(app.duplicates_is_open());
-    assert!(app.file_operations.rename.is_some());
+    assert!(app.file_operations.rename_is_open());
 
     app.close_duplicate_finder();
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -552,12 +547,7 @@ fn duplicate_permanent_delete_prompt_opens_on_top_after_scan() {
         app.file_operations.trash_title(),
         "Delete permanently 1 selected file?"
     );
-    assert!(
-        app.file_operations
-            .trash
-            .as_ref()
-            .is_some_and(|trash| trash.permanent)
-    );
+    assert!(app.file_operations.trash_is_permanent());
 
     app.close_duplicate_finder();
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -589,8 +579,7 @@ fn duplicate_permanent_delete_keeps_finder_open_and_keeps_singleton_remainder() 
 
     app.open_duplicate_delete_permanently_prompt();
     app.file_operations
-        .trash
-        .as_mut()
+        .trash_overlay_mut()
         .expect("trash prompt should be open")
         .confirmed = true;
     app.handle_trash_key(KeyEvent::from(KeyCode::Enter))

@@ -137,7 +137,7 @@ impl App {
     }
 
     pub(crate) fn open_archive_create_prompt(&mut self) {
-        if self.file_operations.archive_create_progress.is_some() {
+        if self.file_operations.archive_creation_in_progress() {
             self.status = "Archive creation already in progress".to_string();
             return;
         }
@@ -188,12 +188,12 @@ impl App {
 
     pub(crate) fn handle_archive_create_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.file_operations.archive_create = None;
+            self.file_operations.dismiss_archive_create();
             return Ok(());
         }
 
         match key.code {
-            KeyCode::Esc => self.file_operations.archive_create = None,
+            KeyCode::Esc => self.file_operations.dismiss_archive_create(),
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => self.confirm_archive_create(),
             KeyCode::Char('p' | 'P')
                 if key.modifiers.contains(KeyModifiers::ALT)
@@ -217,7 +217,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     overlay.cursor_col = previous_word_start(&overlay.input, overlay.cursor_col);
                 }
             }
@@ -225,17 +225,17 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     overlay.cursor_col = next_word_start(&overlay.input, overlay.cursor_col);
                 }
             }
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     overlay.cursor_col = overlay.cursor_col.saturating_sub(1);
                 }
             }
             KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     let len = overlay.input.chars().count();
                     if overlay.cursor_col < len {
                         overlay.cursor_col += 1;
@@ -243,12 +243,12 @@ impl App {
                 }
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     overlay.cursor_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     overlay.cursor_col = overlay.input.chars().count();
                 }
             }
@@ -256,7 +256,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     let start = previous_delete_start(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, start, overlay.cursor_col);
                     overlay.cursor_col = start;
@@ -267,7 +267,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     let start = previous_delete_start(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, start, overlay.cursor_col);
                     overlay.cursor_col = start;
@@ -278,7 +278,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     let end = next_delete_end(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, overlay.cursor_col, end);
                     overlay.error = None;
@@ -288,14 +288,14 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     let end = next_delete_end(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, overlay.cursor_col, end);
                     overlay.error = None;
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut()
                     && overlay.cursor_col > 0
                 {
                     let start = char_to_byte(&overlay.input, overlay.cursor_col - 1);
@@ -306,7 +306,7 @@ impl App {
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     let len = overlay.input.chars().count();
                     if overlay.cursor_col < len {
                         let start = char_to_byte(&overlay.input, overlay.cursor_col);
@@ -321,7 +321,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
+                if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
                     let byte = char_to_byte(&overlay.input, overlay.cursor_col);
                     overlay.input.insert(byte, ch);
                     overlay.cursor_col += 1;
@@ -352,7 +352,7 @@ impl App {
                     .archive_create_panel
                     .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
-                    self.file_operations.archive_create = None;
+                    self.file_operations.dismiss_archive_create();
                 }
             }
             _ => {}
@@ -377,7 +377,7 @@ impl App {
     }
 
     fn scroll_archive_create_sources_by(&mut self, delta: isize, visible_rows: usize) {
-        let Some(overlay) = &mut self.file_operations.archive_create else {
+        let Some(overlay) = self.file_operations.archive_create_overlay_mut() else {
             return;
         };
         let max_scroll = overlay
@@ -412,7 +412,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
                     overlay.cursor_col = previous_word_start(&overlay.input, overlay.cursor_col);
                 }
             }
@@ -420,17 +420,17 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
                     overlay.cursor_col = next_word_start(&overlay.input, overlay.cursor_col);
                 }
             }
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
                     overlay.cursor_col = overlay.cursor_col.saturating_sub(1);
                 }
             }
             KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
                     let len = overlay.input.chars().count();
                     if overlay.cursor_col < len {
                         overlay.cursor_col += 1;
@@ -438,12 +438,12 @@ impl App {
                 }
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
                     overlay.cursor_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
                     overlay.cursor_col = overlay.input.chars().count();
                 }
             }
@@ -451,7 +451,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_password
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut()
                     && overlay.cursor_col > 0
                 {
                     let start = previous_delete_start(&overlay.input, overlay.cursor_col);
@@ -464,7 +464,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_password
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut()
                     && overlay.cursor_col > 0
                 {
                     let start = previous_delete_start(&overlay.input, overlay.cursor_col);
@@ -477,7 +477,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
                     let end = next_delete_end(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, overlay.cursor_col, end);
                     overlay.error = None;
@@ -487,14 +487,14 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
                     let end = next_delete_end(&overlay.input, overlay.cursor_col);
                     remove_char_range(&mut overlay.input, overlay.cursor_col, end);
                     overlay.error = None;
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut()
                     && overlay.cursor_col > 0
                 {
                     let start = char_to_byte(&overlay.input, overlay.cursor_col - 1);
@@ -505,7 +505,7 @@ impl App {
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
                     let len = overlay.input.chars().count();
                     if overlay.cursor_col < len {
                         let start = char_to_byte(&overlay.input, overlay.cursor_col);
@@ -520,7 +520,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
+                if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
                     let byte = char_to_byte(&overlay.input, overlay.cursor_col);
                     overlay.input.insert(byte, ch);
                     overlay.cursor_col += 1;

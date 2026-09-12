@@ -20,6 +20,14 @@ pub(crate) struct BulkRenameOverlay {
 }
 
 impl FileOperationsState {
+    pub(crate) fn bulk_rename_overlay_mut(&mut self) -> Option<&mut BulkRenameOverlay> {
+        self.bulk_rename.as_mut()
+    }
+
+    pub(crate) fn dismiss_bulk_rename(&mut self) {
+        self.bulk_rename = None;
+    }
+
     pub(crate) fn open_bulk_rename_prompt(&mut self, selected_paths: Vec<PathBuf>) {
         let items = selected_paths
             .into_iter()
@@ -37,6 +45,31 @@ impl FileOperationsState {
         self.rename = None;
         self.trash = None;
         self.restore = None;
+        self.bulk_rename = Some(BulkRenameOverlay {
+            items,
+            new_names,
+            root: None,
+            cursor_line: 0,
+            cursor_col: 0,
+            preferred_col: 0,
+            line_errors: vec![None; count],
+        });
+    }
+
+    pub(crate) fn open_duplicate_bulk_rename_prompt(&mut self, paths: Vec<PathBuf>) {
+        let items = paths
+            .into_iter()
+            .map(|path| BulkRenameItem {
+                original_name: path_name(&path),
+                is_dir: false,
+                path,
+            })
+            .collect::<Vec<_>>();
+        let new_names = items
+            .iter()
+            .map(|item| item.original_name.clone())
+            .collect::<Vec<_>>();
+        let count = items.len();
         self.bulk_rename = Some(BulkRenameOverlay {
             items,
             new_names,

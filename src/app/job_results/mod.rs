@@ -247,16 +247,16 @@ impl App {
                     dirty = true;
                 }
                 JobResult::ArchiveCreate(build) => {
-                    if build.token != self.file_operations.archive_create_token {
+                    if !self
+                        .file_operations
+                        .archive_create_job_is_current(build.token)
+                    {
                         continue;
                     }
                     if build.done {
-                        self.file_operations.archive_create_progress = None;
-                        self.file_operations.archive_create_path = None;
                         let source_cwd = self
                             .file_operations
-                            .archive_create_source_cwd
-                            .take()
+                            .finish_archive_create_job()
                             .unwrap_or_else(|| self.file_browser.cwd.clone());
                         let status = build.status.unwrap_or_default();
                         let nav_target = self
@@ -283,19 +283,21 @@ impl App {
                         } else {
                             self.status = status;
                         }
-                    } else if let Some(progress) = &mut self.file_operations.archive_create_progress
-                    {
-                        progress.completed = build.completed;
-                        progress.total = build.total;
+                    } else {
+                        self.file_operations
+                            .update_archive_create_progress(build.completed, build.total);
                     }
                     dirty = true;
                 }
                 JobResult::ArchiveExtract(build) => {
-                    if build.token != self.file_operations.archive_extract_token {
+                    if !self
+                        .file_operations
+                        .archive_extract_job_is_current(build.token)
+                    {
                         continue;
                     }
                     if build.done {
-                        self.file_operations.archive_extract_progress = None;
+                        self.file_operations.finish_archive_extract_job();
                         if let Some(prompt) = build.password_prompt {
                             if let Some(request) = build.password_request {
                                 let error = match prompt {
@@ -304,8 +306,8 @@ impl App {
                                         Some("Wrong password".to_string())
                                     }
                                 };
-                                self.file_operations.archive_extract_request =
-                                    Some(request.clone());
+                                self.file_operations
+                                    .remember_archive_extract_request(request.clone());
                                 self.open_archive_password_prompt(request, error);
                             } else {
                                 self.status = "Archive requires a password".to_string();
@@ -317,36 +319,24 @@ impl App {
                             build.status.unwrap_or_default(),
                             build.dest_dir,
                         );
-                    } else if let Some(prog) = &mut self.file_operations.archive_extract_progress {
-                        prog.completed = build.completed;
-                        prog.total = build.total;
+                    } else {
+                        self.file_operations
+                            .update_archive_extract_progress(build.completed, build.total);
                     }
                     dirty = true;
                 }
                 JobResult::Paste(build) => {
-                    if build.token != self.file_operations.paste_token {
+                    if !self.file_operations.paste_job_is_current(build.token) {
                         continue;
                     }
                     if build.done {
-                        let paste_origin = self
-                            .file_operations
-                            .paste_progress
-                            .as_ref()
-                            .map(|p| p.origin.clone());
-                        self.file_operations.paste_progress = None;
-                        let dest_dir = self
-                            .file_operations
-                            .paste_dest_dir
-                            .take()
+                        let completion = self.file_operations.finish_paste_job();
+                        let dest_dir = completion
+                            .dest_dir
                             .unwrap_or_else(|| self.file_browser.cwd.clone());
                         let status = build.status.unwrap_or_default();
-                        let next_queued_dest = self
-                            .file_operations
-                            .queued_pastes
-                            .front()
-                            .map(|queued| queued.dest_dir.as_path());
                         let defer_reload_for_same_dest =
-                            next_queued_dest == Some(dest_dir.as_path());
+                            completion.next_queued_dest.as_deref() == Some(dest_dir.as_path());
                         // Only reload in-place when the user is still in the
                         // destination directory and not mid-navigation to
                         // somewhere else (which would cancel their navigation).
@@ -361,7 +351,7 @@ impl App {
                             && (nav_target.is_none() || nav_to_dest)
                             && !defer_reload_for_same_dest
                         {
-                            let reselect_path = if paste_origin
+                            let reselect_path = if completion.origin
                                 == Some(crate::file_operations::PasteOrigin::Drop)
                             {
                                 build.destination_paths.first().cloned()
@@ -391,13 +381,13 @@ impl App {
                         if let Some(request) = self.file_operations.start_next_queued_paste() {
                             self.job_scheduler.submit_paste(request);
                         }
-                    } else if let Some(prog) = &mut self.file_operations.paste_progress {
-                        prog.completed = build.completed;
+                    } else {
+                        self.file_operations.update_paste_progress(build.completed);
                     }
                     dirty = true;
                 }
                 JobResult::Trash(build) => {
-                    if build.token != self.file_operations.trash_token {
+                    if !self.file_operations.trash_job_is_current(build.token) {
                         continue;
                     }
                     if build.done {
@@ -406,25 +396,12 @@ impl App {
                         // operations leave some entries intact, so using the
                         // pre-computed survivor path would move the cursor
                         // away from entries that are still present.
-                        let progress = self.file_operations.trash_progress.take();
-                        let duplicate_targets = progress
-                            .as_ref()
-                            .and_then(|p| {
-                                (build.completed == p.total).then(|| p.duplicate_targets.clone())
-                            })
-                            .flatten();
-                        let next_selection = progress.and_then(|p| {
-                            (build.completed == p.total)
-                                .then_some(p.next_selection)
-                                .flatten()
-                        });
-                        let source_cwd = self
-                            .file_operations
-                            .trash_source_cwd
-                            .take()
+                        let completion = self.file_operations.finish_trash_job(build.completed);
+                        let source_cwd = completion
+                            .source_cwd
                             .unwrap_or_else(|| self.file_browser.cwd.clone());
                         let status = build.status.unwrap_or_default();
-                        if let Some(paths) = duplicate_targets.as_ref() {
+                        if let Some(paths) = completion.duplicate_targets.as_ref() {
                             self.remove_duplicate_paths(paths);
                         }
                         // Only reload in-place when the user is still in the
@@ -446,7 +423,7 @@ impl App {
                                 previous_cwd: self.file_browser.cwd.clone(),
                                 previous_selected_path: None,
                                 previous_selection_name: None,
-                                reselect_path: next_selection,
+                                reselect_path: completion.next_selection,
                                 history_mode: DirectoryHistoryMode::None,
                                 refresh_search: false,
                                 completion: DirectoryLoadCompletion::Status(status),
@@ -456,26 +433,19 @@ impl App {
                             // Navigation will load source_cwd fresh if they return.
                             self.status = status;
                         }
-                    } else if let Some(prog) = &mut self.file_operations.trash_progress {
-                        prog.completed = build.completed;
+                    } else {
+                        self.file_operations.update_trash_progress(build.completed);
                     }
                     dirty = true;
                 }
                 JobResult::Restore(build) => {
-                    if build.token != self.file_operations.restore_token {
+                    if !self.file_operations.restore_job_is_current(build.token) {
                         continue;
                     }
                     if build.done {
-                        let next_selection =
-                            self.file_operations.restore_progress.take().and_then(|p| {
-                                (build.completed == p.total)
-                                    .then_some(p.next_selection)
-                                    .flatten()
-                            });
-                        let source_cwd = self
-                            .file_operations
-                            .restore_source_cwd
-                            .take()
+                        let completion = self.file_operations.finish_restore_job(build.completed);
+                        let source_cwd = completion
+                            .source_cwd
                             .unwrap_or_else(|| self.file_browser.cwd.clone());
                         let status = build.status.unwrap_or_default();
                         let nav_target = self
@@ -494,7 +464,7 @@ impl App {
                                 previous_cwd: self.file_browser.cwd.clone(),
                                 previous_selected_path: None,
                                 previous_selection_name: None,
-                                reselect_path: next_selection,
+                                reselect_path: completion.next_selection,
                                 history_mode: DirectoryHistoryMode::None,
                                 refresh_search: false,
                                 completion: DirectoryLoadCompletion::Status(status),
@@ -502,8 +472,9 @@ impl App {
                         } else {
                             self.status = status;
                         }
-                    } else if let Some(prog) = &mut self.file_operations.restore_progress {
-                        prog.completed = build.completed;
+                    } else {
+                        self.file_operations
+                            .update_restore_progress(build.completed);
                     }
                     dirty = true;
                 }

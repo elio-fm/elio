@@ -112,50 +112,45 @@ impl App {
 
     pub(crate) fn handle_trash_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.file_operations.trash = None;
+            self.file_operations.dismiss_trash();
             return Ok(());
         }
         match key.code {
             KeyCode::Esc => {
-                self.file_operations.trash = None;
+                self.file_operations.dismiss_trash();
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if let Some(t) = &mut self.file_operations.trash {
+                if let Some(t) = self.file_operations.trash_overlay_mut() {
                     t.scroll = t.scroll.saturating_sub(1);
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if let Some(t) = &mut self.file_operations.trash {
+                if let Some(t) = self.file_operations.trash_overlay_mut() {
                     let visible = t.targets.len().min(8);
                     let max_scroll = t.targets.len().saturating_sub(visible);
                     t.scroll = (t.scroll + 1).min(max_scroll);
                 }
             }
             KeyCode::Left | KeyCode::Char('h') => {
-                if let Some(t) = &mut self.file_operations.trash {
+                if let Some(t) = self.file_operations.trash_overlay_mut() {
                     t.confirmed = true;
                 }
             }
             KeyCode::Right | KeyCode::Char('l') => {
-                if let Some(t) = &mut self.file_operations.trash {
+                if let Some(t) = self.file_operations.trash_overlay_mut() {
                     t.confirmed = false;
                 }
             }
             KeyCode::Tab => {
-                if let Some(t) = &mut self.file_operations.trash {
+                if let Some(t) = self.file_operations.trash_overlay_mut() {
                     t.confirmed = !t.confirmed;
                 }
             }
             KeyCode::Enter => {
-                if self
-                    .file_operations
-                    .trash
-                    .as_ref()
-                    .is_some_and(|t| t.confirmed)
-                {
+                if self.file_operations.trash_confirmed() {
                     self.confirm_trash()?;
                 } else {
-                    self.file_operations.trash = None;
+                    self.file_operations.dismiss_trash();
                 }
             }
             _ => {}
@@ -172,7 +167,7 @@ impl App {
                     .trash_panel
                     .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
-                    self.file_operations.trash = None;
+                    self.file_operations.dismiss_trash();
                     return Ok(());
                 }
                 if self
@@ -188,16 +183,16 @@ impl App {
                     .trash_cancel_btn
                     .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
                 {
-                    self.file_operations.trash = None;
+                    self.file_operations.dismiss_trash();
                 }
             }
             MouseEventKind::ScrollUp => {
-                if let Some(t) = &mut self.file_operations.trash {
+                if let Some(t) = self.file_operations.trash_overlay_mut() {
                     t.scroll = t.scroll.saturating_sub(1);
                 }
             }
             MouseEventKind::ScrollDown => {
-                if let Some(t) = &mut self.file_operations.trash {
+                if let Some(t) = self.file_operations.trash_overlay_mut() {
                     let visible = t.targets.len().min(8);
                     let max_scroll = t.targets.len().saturating_sub(visible);
                     t.scroll = (t.scroll + 1).min(max_scroll);
