@@ -1,12 +1,7 @@
 use crate::app::*;
 use crate::archive::{ArchiveEncryption, ArchivePassword};
 use crate::file_browser::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
-use crate::input_handling::text_editing::{
-    char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
-    remove_char_range,
-};
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::{fmt, path::PathBuf};
 
 #[derive(Clone, Debug)]
@@ -308,173 +303,7 @@ impl App {
         }
     }
 
-    pub(crate) fn handle_archive_password_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.cancel_archive_password_prompt()?;
-            return Ok(());
-        }
-
-        if key.modifiers == KeyModifiers::ALT && matches!(key.code, KeyCode::Char('v' | 'V')) {
-            self.toggle_archive_password_visibility();
-            return Ok(());
-        }
-
-        match key.code {
-            KeyCode::Esc => {
-                self.cancel_archive_password_prompt()?;
-            }
-            KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
-                self.confirm_archive_password()?;
-            }
-            KeyCode::Left
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
-                    overlay.cursor_col = previous_word_start(&overlay.input, overlay.cursor_col);
-                }
-            }
-            KeyCode::Right
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
-                    overlay.cursor_col = next_word_start(&overlay.input, overlay.cursor_col);
-                }
-            }
-            KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
-                    overlay.cursor_col = overlay.cursor_col.saturating_sub(1);
-                }
-            }
-            KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
-                    let len = overlay.input.chars().count();
-                    if overlay.cursor_col < len {
-                        overlay.cursor_col += 1;
-                    }
-                }
-            }
-            KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
-                    overlay.cursor_col = 0;
-                }
-            }
-            KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
-                    overlay.cursor_col = overlay.input.chars().count();
-                }
-            }
-            KeyCode::Backspace
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_password
-                    && overlay.cursor_col > 0
-                {
-                    let start = previous_delete_start(&overlay.input, overlay.cursor_col);
-                    remove_char_range(&mut overlay.input, start, overlay.cursor_col);
-                    overlay.cursor_col = start;
-                    overlay.error = None;
-                }
-            }
-            KeyCode::Char('h' | 'w')
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_password
-                    && overlay.cursor_col > 0
-                {
-                    let start = previous_delete_start(&overlay.input, overlay.cursor_col);
-                    remove_char_range(&mut overlay.input, start, overlay.cursor_col);
-                    overlay.cursor_col = start;
-                    overlay.error = None;
-                }
-            }
-            KeyCode::Delete
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
-                    let end = next_delete_end(&overlay.input, overlay.cursor_col);
-                    remove_char_range(&mut overlay.input, overlay.cursor_col, end);
-                    overlay.error = None;
-                }
-            }
-            KeyCode::Char('d')
-                if key.modifiers.contains(KeyModifiers::ALT)
-                    && !key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
-                    let end = next_delete_end(&overlay.input, overlay.cursor_col);
-                    remove_char_range(&mut overlay.input, overlay.cursor_col, end);
-                    overlay.error = None;
-                }
-            }
-            KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password
-                    && overlay.cursor_col > 0
-                {
-                    let start = char_to_byte(&overlay.input, overlay.cursor_col - 1);
-                    let end = char_to_byte(&overlay.input, overlay.cursor_col);
-                    overlay.input.replace_range(start..end, "");
-                    overlay.cursor_col -= 1;
-                    overlay.error = None;
-                }
-            }
-            KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
-                    let len = overlay.input.chars().count();
-                    if overlay.cursor_col < len {
-                        let start = char_to_byte(&overlay.input, overlay.cursor_col);
-                        let end = char_to_byte(&overlay.input, overlay.cursor_col + 1);
-                        overlay.input.replace_range(start..end, "");
-                        overlay.error = None;
-                    }
-                }
-            }
-            KeyCode::Char(ch)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_password {
-                    let byte = char_to_byte(&overlay.input, overlay.cursor_col);
-                    overlay.input.insert(byte, ch);
-                    overlay.cursor_col += 1;
-                    overlay.error = None;
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    pub(crate) fn handle_archive_password_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
-            if self
-                .input
-                .screen_regions
-                .archive_password_visibility_btn
-                .is_some_and(|btn| btn.contains((mouse.column, mouse.row).into()))
-            {
-                self.toggle_archive_password_visibility();
-                return Ok(());
-            }
-
-            let inside = self
-                .input
-                .screen_regions
-                .archive_password_panel
-                .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
-            if !inside {
-                self.cancel_archive_password_prompt()?;
-            }
-        }
-        Ok(())
-    }
-
-    fn confirm_archive_password(&mut self) -> Result<()> {
+    pub(crate) fn confirm_archive_password(&mut self) -> Result<()> {
         let Some(overlay) = &self.file_operations.archive_password else {
             return Ok(());
         };
@@ -507,7 +336,7 @@ impl App {
         Ok(())
     }
 
-    fn cancel_archive_password_prompt(&mut self) -> Result<()> {
+    pub(crate) fn cancel_archive_password_prompt(&mut self) -> Result<()> {
         let Some(overlay) = self.file_operations.archive_password.take() else {
             return Ok(());
         };

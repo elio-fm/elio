@@ -4,7 +4,6 @@ use crate::file_browser::{DirectoryHistoryMode, DirectoryLoadCompletion, Pending
 #[cfg(unix)]
 use anyhow::Context;
 use anyhow::{Result, bail};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::{
     collections::HashSet,
     fs,
@@ -310,94 +309,6 @@ impl App {
             refresh_search: false,
             completion: DirectoryLoadCompletion::Status(status),
         })?;
-        Ok(())
-    }
-
-    pub(crate) fn handle_editor_rename_confirm_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.cancel_editor_rename_confirm();
-            return Ok(());
-        }
-
-        match key.code {
-            KeyCode::Esc if key.modifiers == KeyModifiers::NONE => {
-                self.cancel_editor_rename_confirm();
-            }
-            KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
-                if self.editor_rename_confirmed() {
-                    self.confirm_editor_rename()?;
-                } else {
-                    self.cancel_editor_rename_confirm();
-                }
-            }
-            KeyCode::Left | KeyCode::Char('h') if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.editor_rename_confirm {
-                    overlay.confirmed = true;
-                }
-            }
-            KeyCode::Right | KeyCode::Char('l') if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.editor_rename_confirm {
-                    overlay.confirmed = false;
-                }
-            }
-            KeyCode::Tab if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.editor_rename_confirm {
-                    overlay.confirmed = !overlay.confirmed;
-                }
-            }
-            KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
-                self.scroll_editor_rename_confirm(-1);
-            }
-            KeyCode::Down | KeyCode::Char('j') if key.modifiers == KeyModifiers::NONE => {
-                self.scroll_editor_rename_confirm(1);
-            }
-            KeyCode::PageUp if key.modifiers == KeyModifiers::NONE => {
-                self.scroll_editor_rename_confirm(-10);
-            }
-            KeyCode::PageDown if key.modifiers == KeyModifiers::NONE => {
-                self.scroll_editor_rename_confirm(10);
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    pub(crate) fn handle_editor_rename_confirm_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        let inside = self
-            .input
-            .screen_regions
-            .rename_panel
-            .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
-        match mouse.kind {
-            MouseEventKind::Down(MouseButton::Left) if !inside => {
-                self.cancel_editor_rename_confirm();
-            }
-            MouseEventKind::Down(MouseButton::Left)
-                if self
-                    .input
-                    .screen_regions
-                    .editor_rename_confirm_btn
-                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into())) =>
-            {
-                self.confirm_editor_rename()?;
-            }
-            MouseEventKind::Down(MouseButton::Left)
-                if self
-                    .input
-                    .screen_regions
-                    .editor_rename_cancel_btn
-                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into())) =>
-            {
-                self.cancel_editor_rename_confirm();
-            }
-            MouseEventKind::ScrollUp if inside => {
-                self.scroll_editor_rename_confirm(-1);
-            }
-            MouseEventKind::ScrollDown if inside => {
-                self.scroll_editor_rename_confirm(1);
-            }
-            _ => {}
-        }
         Ok(())
     }
 }

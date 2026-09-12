@@ -3,12 +3,7 @@ use crate::app::*;
 use crate::archive::{
     ArchiveEncryption, CreateArchiveFormat, CreateArchiveOptions, normalize_archive_output_name,
 };
-use crate::input_handling::text_editing::{
-    char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
-    remove_char_range,
-};
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::PathBuf;
 
 pub(crate) struct ArchiveCreateProgress {
@@ -184,198 +179,6 @@ impl App {
         ))
     }
 
-    pub(crate) fn handle_archive_create_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.file_operations.archive_create = None;
-            return Ok(());
-        }
-
-        match key.code {
-            KeyCode::Esc => self.file_operations.archive_create = None,
-            KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
-                self.confirm_archive_create()?
-            }
-            KeyCode::Char('p' | 'P')
-                if key.modifiers.contains(KeyModifiers::ALT)
-                    && !key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                self.open_archive_create_password_prompt();
-            }
-            KeyCode::Char('r' | 'R')
-                if key.modifiers.contains(KeyModifiers::ALT)
-                    && !key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                self.remove_archive_create_password();
-            }
-            KeyCode::PageUp if key.modifiers == KeyModifiers::NONE => {
-                self.scroll_archive_create_sources_by(-8, 8);
-            }
-            KeyCode::PageDown if key.modifiers == KeyModifiers::NONE => {
-                self.scroll_archive_create_sources_by(8, 8);
-            }
-            KeyCode::Left
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    overlay.cursor_col = previous_word_start(&overlay.input, overlay.cursor_col);
-                }
-            }
-            KeyCode::Right
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    overlay.cursor_col = next_word_start(&overlay.input, overlay.cursor_col);
-                }
-            }
-            KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    overlay.cursor_col = overlay.cursor_col.saturating_sub(1);
-                }
-            }
-            KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    let len = overlay.input.chars().count();
-                    if overlay.cursor_col < len {
-                        overlay.cursor_col += 1;
-                    }
-                }
-            }
-            KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    overlay.cursor_col = 0;
-                }
-            }
-            KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    overlay.cursor_col = overlay.input.chars().count();
-                }
-            }
-            KeyCode::Backspace
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    let start = previous_delete_start(&overlay.input, overlay.cursor_col);
-                    remove_char_range(&mut overlay.input, start, overlay.cursor_col);
-                    overlay.cursor_col = start;
-                    overlay.error = None;
-                }
-            }
-            KeyCode::Char('h' | 'w')
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    let start = previous_delete_start(&overlay.input, overlay.cursor_col);
-                    remove_char_range(&mut overlay.input, start, overlay.cursor_col);
-                    overlay.cursor_col = start;
-                    overlay.error = None;
-                }
-            }
-            KeyCode::Delete
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    let end = next_delete_end(&overlay.input, overlay.cursor_col);
-                    remove_char_range(&mut overlay.input, overlay.cursor_col, end);
-                    overlay.error = None;
-                }
-            }
-            KeyCode::Char('d')
-                if key.modifiers.contains(KeyModifiers::ALT)
-                    && !key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    let end = next_delete_end(&overlay.input, overlay.cursor_col);
-                    remove_char_range(&mut overlay.input, overlay.cursor_col, end);
-                    overlay.error = None;
-                }
-            }
-            KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create
-                    && overlay.cursor_col > 0
-                {
-                    let start = char_to_byte(&overlay.input, overlay.cursor_col - 1);
-                    let end = char_to_byte(&overlay.input, overlay.cursor_col);
-                    overlay.input.replace_range(start..end, "");
-                    overlay.cursor_col -= 1;
-                    overlay.error = None;
-                }
-            }
-            KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    let len = overlay.input.chars().count();
-                    if overlay.cursor_col < len {
-                        let start = char_to_byte(&overlay.input, overlay.cursor_col);
-                        let end = char_to_byte(&overlay.input, overlay.cursor_col + 1);
-                        overlay.input.replace_range(start..end, "");
-                        overlay.error = None;
-                    }
-                }
-            }
-            KeyCode::Char(ch)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                if let Some(overlay) = &mut self.file_operations.archive_create {
-                    let byte = char_to_byte(&overlay.input, overlay.cursor_col);
-                    overlay.input.insert(byte, ch);
-                    overlay.cursor_col += 1;
-                    overlay.error = None;
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    pub(crate) fn handle_archive_create_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        match mouse.kind {
-            MouseEventKind::ScrollDown
-                if self.archive_create_mouse_in_list(mouse.column, mouse.row) =>
-            {
-                self.scroll_archive_create_sources_by(3, self.archive_create_visible_rows());
-            }
-            MouseEventKind::ScrollUp
-                if self.archive_create_mouse_in_list(mouse.column, mouse.row) =>
-            {
-                self.scroll_archive_create_sources_by(-3, self.archive_create_visible_rows());
-            }
-            MouseEventKind::Down(MouseButton::Left) => {
-                let inside = self
-                    .input
-                    .screen_regions
-                    .archive_create_panel
-                    .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
-                if !inside {
-                    self.file_operations.archive_create = None;
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    fn archive_create_mouse_in_list(&self, column: u16, row: u16) -> bool {
-        self.input
-            .screen_regions
-            .archive_create_list_area
-            .or(self.input.screen_regions.archive_create_panel)
-            .is_some_and(|area| area.contains((column, row).into()))
-    }
-
-    fn archive_create_visible_rows(&self) -> usize {
-        self.input
-            .screen_regions
-            .archive_create_list_area
-            .map_or(8, |area| area.height as usize)
-            .max(1)
-    }
-
     pub fn archive_create_source_scroll(&self, visible_rows: usize) -> usize {
         self.file_operations
             .archive_create
@@ -387,21 +190,7 @@ impl App {
             })
     }
 
-    fn scroll_archive_create_sources_by(&mut self, delta: isize, visible_rows: usize) {
-        let Some(overlay) = &mut self.file_operations.archive_create else {
-            return;
-        };
-        let max_scroll = overlay
-            .source_names
-            .len()
-            .saturating_sub(visible_rows.max(1));
-        overlay.source_scroll = overlay
-            .source_scroll
-            .saturating_add_signed(delta)
-            .min(max_scroll);
-    }
-
-    fn confirm_archive_create(&mut self) -> Result<()> {
+    pub(crate) fn confirm_archive_create(&mut self) -> Result<()> {
         let Some(overlay) = &self.file_operations.archive_create else {
             return Ok(());
         };
@@ -483,7 +272,7 @@ impl App {
         Ok(true)
     }
 
-    fn open_archive_create_password_prompt(&mut self) {
+    pub(crate) fn open_archive_create_password_prompt(&mut self) {
         let Some(overlay) = &self.file_operations.archive_create else {
             return;
         };
@@ -520,7 +309,7 @@ impl App {
         }
     }
 
-    fn remove_archive_create_password(&mut self) {
+    pub(crate) fn remove_archive_create_password(&mut self) {
         if let Some(overlay) = &mut self.file_operations.archive_create
             && overlay.options.encryption.is_password_set()
         {

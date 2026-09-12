@@ -35,6 +35,11 @@ fn file_operations_do_not_depend_on_background_jobs() {
 }
 
 #[test]
+fn file_operations_do_not_depend_on_input_handling() {
+    assert_tree_has_no_pattern("src/file_operations", "input_handling::", &[]);
+}
+
+#[test]
 fn elevated_session_does_not_depend_on_app_or_file_operations() {
     assert_tree_has_no_pattern("src/elevated_session", "app::", &[]);
     assert_tree_has_no_pattern("src/elevated_session", "background_jobs::", &[]);

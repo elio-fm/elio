@@ -1,6 +1,5 @@
 use crate::app::App;
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
@@ -274,105 +273,7 @@ impl App {
             .is_some_and(|t| t.confirmed)
     }
 
-    pub(crate) fn handle_trash_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.file_operations.trash = None;
-            return Ok(());
-        }
-        match key.code {
-            KeyCode::Esc => {
-                self.file_operations.trash = None;
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                if let Some(t) = &mut self.file_operations.trash {
-                    t.scroll = t.scroll.saturating_sub(1);
-                }
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if let Some(t) = &mut self.file_operations.trash {
-                    let visible = t.targets.len().min(8);
-                    let max_scroll = t.targets.len().saturating_sub(visible);
-                    t.scroll = (t.scroll + 1).min(max_scroll);
-                }
-            }
-            KeyCode::Left | KeyCode::Char('h') => {
-                if let Some(t) = &mut self.file_operations.trash {
-                    t.confirmed = true;
-                }
-            }
-            KeyCode::Right | KeyCode::Char('l') => {
-                if let Some(t) = &mut self.file_operations.trash {
-                    t.confirmed = false;
-                }
-            }
-            KeyCode::Tab => {
-                if let Some(t) = &mut self.file_operations.trash {
-                    t.confirmed = !t.confirmed;
-                }
-            }
-            KeyCode::Enter => {
-                if self
-                    .file_operations
-                    .trash
-                    .as_ref()
-                    .is_some_and(|t| t.confirmed)
-                {
-                    self.confirm_trash()?;
-                } else {
-                    self.file_operations.trash = None;
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    pub(crate) fn handle_trash_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        match mouse.kind {
-            MouseEventKind::Down(MouseButton::Left) => {
-                let inside = self
-                    .input
-                    .screen_regions
-                    .trash_panel
-                    .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
-                if !inside {
-                    self.file_operations.trash = None;
-                    return Ok(());
-                }
-                if self
-                    .input
-                    .screen_regions
-                    .trash_confirm_btn
-                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
-                {
-                    self.confirm_trash()?;
-                } else if self
-                    .input
-                    .screen_regions
-                    .trash_cancel_btn
-                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
-                {
-                    self.file_operations.trash = None;
-                }
-            }
-            MouseEventKind::ScrollUp => {
-                if let Some(t) = &mut self.file_operations.trash {
-                    t.scroll = t.scroll.saturating_sub(1);
-                }
-            }
-            MouseEventKind::ScrollDown => {
-                if let Some(t) = &mut self.file_operations.trash {
-                    let visible = t.targets.len().min(8);
-                    let max_scroll = t.targets.len().saturating_sub(visible);
-                    t.scroll = (t.scroll + 1).min(max_scroll);
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    pub(super) fn confirm_trash(&mut self) -> Result<()> {
+    pub(crate) fn confirm_trash(&mut self) -> Result<()> {
         if let Some(prog) = &self.file_operations.trash_progress {
             self.status = if prog.permanent {
                 "Delete in progress — press Esc to cancel".to_string()
