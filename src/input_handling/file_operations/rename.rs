@@ -180,13 +180,13 @@ impl App {
 
     pub(crate) fn handle_bulk_rename_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.file_operations.bulk_rename = None;
+            self.file_operations.dismiss_bulk_rename();
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.file_operations.bulk_rename = None;
+                self.file_operations.dismiss_bulk_rename();
             }
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 self.confirm_bulk_rename()?;
@@ -201,7 +201,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.bulk_rename {
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut() {
                     let new_col = previous_word_start(&r.new_names[r.cursor_line], r.cursor_col);
                     r.cursor_col = new_col;
                     r.preferred_col = new_col;
@@ -211,20 +211,20 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.bulk_rename {
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut() {
                     let new_col = next_word_start(&r.new_names[r.cursor_line], r.cursor_col);
                     r.cursor_col = new_col;
                     r.preferred_col = new_col;
                 }
             }
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.bulk_rename {
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut() {
                     r.cursor_col = r.cursor_col.saturating_sub(1);
                     r.preferred_col = r.cursor_col;
                 }
             }
             KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.bulk_rename {
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut() {
                     let len = r.new_names[r.cursor_line].chars().count();
                     if r.cursor_col < len {
                         r.cursor_col += 1;
@@ -233,13 +233,13 @@ impl App {
                 }
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.bulk_rename {
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut() {
                     r.cursor_col = 0;
                     r.preferred_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.bulk_rename {
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut() {
                     r.cursor_col = r.new_names[r.cursor_line].chars().count();
                     r.preferred_col = r.cursor_col;
                 }
@@ -248,7 +248,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.bulk_rename
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut()
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
@@ -262,7 +262,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.bulk_rename
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut()
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.new_names[r.cursor_line], r.cursor_col);
@@ -276,7 +276,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.bulk_rename {
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut() {
                     let end = next_delete_end(&r.new_names[r.cursor_line], r.cursor_col);
                     remove_char_range(&mut r.new_names[r.cursor_line], r.cursor_col, end);
                     r.line_errors[r.cursor_line] = None;
@@ -286,14 +286,14 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                if let Some(r) = &mut self.file_operations.bulk_rename {
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut() {
                     let end = next_delete_end(&r.new_names[r.cursor_line], r.cursor_col);
                     remove_char_range(&mut r.new_names[r.cursor_line], r.cursor_col, end);
                     r.line_errors[r.cursor_line] = None;
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.bulk_rename
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut()
                     && r.cursor_col > 0
                 {
                     let start = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col - 1);
@@ -305,7 +305,7 @@ impl App {
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.bulk_rename {
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut() {
                     let len = r.new_names[r.cursor_line].chars().count();
                     if r.cursor_col < len {
                         let start = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col);
@@ -320,7 +320,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.bulk_rename {
+                if let Some(r) = self.file_operations.bulk_rename_overlay_mut() {
                     let byte = char_to_byte(&r.new_names[r.cursor_line], r.cursor_col);
                     r.new_names[r.cursor_line].insert(byte, ch);
                     r.cursor_col += 1;
@@ -334,7 +334,7 @@ impl App {
     }
 
     fn bulk_rename_move_vertical(&mut self, delta: isize) {
-        let Some(r) = &mut self.file_operations.bulk_rename else {
+        let Some(r) = self.file_operations.bulk_rename_overlay_mut() else {
             return;
         };
         let new_line =
@@ -356,7 +356,7 @@ impl App {
                     .rename_panel
                     .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
-                    self.file_operations.bulk_rename = None;
+                    self.file_operations.dismiss_bulk_rename();
                     return Ok(());
                 }
                 if let Some(list_area) = self.input.screen_regions.bulk_rename_list_area
@@ -374,7 +374,7 @@ impl App {
                             .count();
                         let char_col = (mouse.column.saturating_sub(list_area.x + 3)) as usize;
                         let cursor_col = char_col.min(line_len);
-                        if let Some(r) = &mut self.file_operations.bulk_rename {
+                        if let Some(r) = self.file_operations.bulk_rename_overlay_mut() {
                             r.cursor_line = line_idx;
                             r.cursor_col = cursor_col;
                             r.preferred_col = cursor_col;
@@ -411,17 +411,17 @@ impl App {
                 }
             }
             KeyCode::Left | KeyCode::Char('h') if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.editor_rename_confirm {
+                if let Some(overlay) = self.file_operations.editor_rename_confirm_overlay_mut() {
                     overlay.confirmed = true;
                 }
             }
             KeyCode::Right | KeyCode::Char('l') if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.editor_rename_confirm {
+                if let Some(overlay) = self.file_operations.editor_rename_confirm_overlay_mut() {
                     overlay.confirmed = false;
                 }
             }
             KeyCode::Tab if key.modifiers == KeyModifiers::NONE => {
-                if let Some(overlay) = &mut self.file_operations.editor_rename_confirm {
+                if let Some(overlay) = self.file_operations.editor_rename_confirm_overlay_mut() {
                     overlay.confirmed = !overlay.confirmed;
                 }
             }
@@ -483,13 +483,13 @@ impl App {
 
     pub(crate) fn handle_rename_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.file_operations.rename = None;
+            self.file_operations.dismiss_rename();
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.file_operations.rename = None;
+                self.file_operations.dismiss_rename();
             }
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 self.confirm_rename()?;
@@ -498,7 +498,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.rename {
+                if let Some(r) = self.file_operations.rename_overlay_mut() {
                     let new_col = previous_word_start(&r.input, r.cursor_col);
                     r.cursor_col = new_col;
                 }
@@ -507,18 +507,18 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.rename {
+                if let Some(r) = self.file_operations.rename_overlay_mut() {
                     let new_col = next_word_start(&r.input, r.cursor_col);
                     r.cursor_col = new_col;
                 }
             }
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.rename {
+                if let Some(r) = self.file_operations.rename_overlay_mut() {
                     r.cursor_col = r.cursor_col.saturating_sub(1);
                 }
             }
             KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.rename {
+                if let Some(r) = self.file_operations.rename_overlay_mut() {
                     let len = r.input.chars().count();
                     if r.cursor_col < len {
                         r.cursor_col += 1;
@@ -526,12 +526,12 @@ impl App {
                 }
             }
             KeyCode::Home if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.rename {
+                if let Some(r) = self.file_operations.rename_overlay_mut() {
                     r.cursor_col = 0;
                 }
             }
             KeyCode::End if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.rename {
+                if let Some(r) = self.file_operations.rename_overlay_mut() {
                     r.cursor_col = r.input.chars().count();
                 }
             }
@@ -539,7 +539,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.rename
+                if let Some(r) = self.file_operations.rename_overlay_mut()
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.input, r.cursor_col);
@@ -552,7 +552,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.rename
+                if let Some(r) = self.file_operations.rename_overlay_mut()
                     && r.cursor_col > 0
                 {
                     let start = previous_delete_start(&r.input, r.cursor_col);
@@ -565,7 +565,7 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.rename {
+                if let Some(r) = self.file_operations.rename_overlay_mut() {
                     let end = next_delete_end(&r.input, r.cursor_col);
                     remove_char_range(&mut r.input, r.cursor_col, end);
                     r.error = None;
@@ -575,14 +575,14 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                if let Some(r) = &mut self.file_operations.rename {
+                if let Some(r) = self.file_operations.rename_overlay_mut() {
                     let end = next_delete_end(&r.input, r.cursor_col);
                     remove_char_range(&mut r.input, r.cursor_col, end);
                     r.error = None;
                 }
             }
             KeyCode::Backspace if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.rename
+                if let Some(r) = self.file_operations.rename_overlay_mut()
                     && r.cursor_col > 0
                 {
                     let start = char_to_byte(&r.input, r.cursor_col - 1);
@@ -593,7 +593,7 @@ impl App {
                 }
             }
             KeyCode::Delete if key.modifiers == KeyModifiers::NONE => {
-                if let Some(r) = &mut self.file_operations.rename {
+                if let Some(r) = self.file_operations.rename_overlay_mut() {
                     let len = r.input.chars().count();
                     if r.cursor_col < len {
                         let start = char_to_byte(&r.input, r.cursor_col);
@@ -608,7 +608,7 @@ impl App {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                if let Some(r) = &mut self.file_operations.rename {
+                if let Some(r) = self.file_operations.rename_overlay_mut() {
                     let byte = char_to_byte(&r.input, r.cursor_col);
                     r.input.insert(byte, ch);
                     r.cursor_col += 1;
@@ -628,7 +628,7 @@ impl App {
                 .rename_panel
                 .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
             if !inside {
-                self.file_operations.rename = None;
+                self.file_operations.dismiss_rename();
             }
         }
         Ok(())

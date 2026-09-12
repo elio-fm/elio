@@ -39,35 +39,35 @@ impl App {
     }
 
     pub(crate) fn handle_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        if self.file_operations.trash.is_some() {
+        if self.file_operations.trash_is_open() {
             return self.handle_trash_mouse(mouse);
         }
 
-        if self.file_operations.restore.is_some() {
+        if self.file_operations.restore_is_open() {
             return self.handle_restore_mouse(mouse);
         }
 
-        if self.file_operations.archive_password.is_some() {
+        if self.file_operations.archive_password_is_open() {
             return self.handle_archive_password_mouse(mouse);
         }
 
-        if self.file_operations.archive_create.is_some() {
+        if self.file_operations.archive_create_is_open() {
             return self.handle_archive_create_mouse(mouse);
         }
 
-        if self.file_operations.create.is_some() {
+        if self.file_operations.create_is_open() {
             return self.handle_create_mouse(mouse);
         }
 
-        if self.file_operations.rename.is_some() {
+        if self.file_operations.rename_is_open() {
             return self.handle_rename_mouse(mouse);
         }
 
-        if self.file_operations.bulk_rename.is_some() {
+        if self.file_operations.bulk_rename_is_open() {
             return self.handle_bulk_rename_mouse(mouse);
         }
 
-        if self.file_operations.editor_rename_confirm.is_some() {
+        if self.file_operations.editor_rename_confirm_is_open() {
             return self.handle_editor_rename_confirm_mouse(mouse);
         }
 
@@ -75,7 +75,7 @@ impl App {
             return self.handle_goto_mouse(mouse);
         }
 
-        if self.file_operations.copy.is_some() {
+        if self.file_operations.copy_is_open() {
             return self.handle_copy_mouse(mouse);
         }
 

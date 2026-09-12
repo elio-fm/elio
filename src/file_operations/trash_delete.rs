@@ -38,6 +38,12 @@ pub(crate) enum TrashConfirmation {
     Targets(TrashOverlay),
 }
 
+pub(crate) struct TrashJobCompletion {
+    pub(crate) duplicate_targets: Option<Vec<PathBuf>>,
+    pub(crate) next_selection: Option<PathBuf>,
+    pub(crate) source_cwd: Option<PathBuf>,
+}
+
 pub(crate) fn trash_target_from_path(path: PathBuf) -> TrashTarget {
     let name = path
         .file_name()
@@ -102,6 +108,14 @@ pub(crate) fn likely_cross_device_trash(targets: &[TrashTarget]) -> bool {
 }
 
 impl FileOperationsState {
+    pub(crate) fn trash_overlay_mut(&mut self) -> Option<&mut TrashOverlay> {
+        self.trash.as_mut()
+    }
+
+    pub(crate) fn dismiss_trash(&mut self) {
+        self.trash = None;
+    }
+
     pub(crate) fn open_trash_prompt(&mut self, targets: Vec<TrashTarget>, permanent: bool) {
         self.create = None;
         self.trash = Some(TrashOverlay {
@@ -172,8 +186,52 @@ impl FileOperationsState {
         }
     }
 
+    pub(crate) fn trash_job_is_current(&self, token: u64) -> bool {
+        token == self.trash_token
+    }
+
+    pub(crate) fn update_trash_progress(&mut self, completed: usize) {
+        if let Some(progress) = &mut self.trash_progress {
+            progress.completed = completed;
+        }
+    }
+
+    pub(crate) fn finish_trash_job(&mut self, completed: usize) -> TrashJobCompletion {
+        let progress = self.trash_progress.take();
+        let duplicate_targets = progress
+            .as_ref()
+            .and_then(|progress| {
+                (completed == progress.total).then(|| progress.duplicate_targets.clone())
+            })
+            .flatten();
+        let next_selection = progress.and_then(|progress| {
+            (completed == progress.total)
+                .then_some(progress.next_selection)
+                .flatten()
+        });
+        TrashJobCompletion {
+            duplicate_targets,
+            next_selection,
+            source_cwd: self.trash_source_cwd.take(),
+        }
+    }
+
+    pub(crate) fn cancel_trash_job(&mut self) -> Option<u64> {
+        let progress = self.trash_progress.as_ref()?;
+        let token = self.trash_token;
+        if progress.permanent {
+            self.trash_progress = None;
+        }
+        Some(token)
+    }
+
     pub fn trash_is_open(&self) -> bool {
         self.trash.is_some()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn trash_is_permanent(&self) -> bool {
+        self.trash.as_ref().is_some_and(|trash| trash.permanent)
     }
 
     pub fn trash_progress(&self) -> Option<(usize, usize, bool)> {

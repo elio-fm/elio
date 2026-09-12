@@ -16,6 +16,24 @@ pub(crate) struct RenameCompletion {
 }
 
 impl FileOperationsState {
+    pub(crate) fn rename_overlay_mut(&mut self) -> Option<&mut RenameOverlay> {
+        self.rename.as_mut()
+    }
+
+    pub(crate) fn dismiss_rename(&mut self) {
+        self.rename = None;
+    }
+
+    pub(crate) fn open_duplicate_rename_prompt(&mut self, name: String, cursor_col: usize) {
+        self.rename = Some(RenameOverlay {
+            is_dir: false,
+            original_name: name.clone(),
+            input: name,
+            cursor_col,
+            error: None,
+        });
+    }
+
     pub(crate) fn open_rename_prompt(&mut self, name: String, is_dir: bool) {
         let cursor_col = cursor_before_extension(&name);
         self.create = None;

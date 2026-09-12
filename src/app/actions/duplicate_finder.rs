@@ -1,6 +1,6 @@
 use super::super::*;
 use crate::background_jobs::job_requests::DuplicateScanRequest;
-use crate::file_operations::{BulkRenameItem, BulkRenameOverlay, RenameOverlay, TrashTarget};
+use crate::file_operations::TrashTarget;
 use anyhow::Result;
 use std::{
     fs,
@@ -13,7 +13,7 @@ impl App {
         if targets.is_empty() {
             return Ok(());
         }
-        self.file_operations.clipboard = None;
+        self.file_operations.clear_clipboard();
         self.open_paths_in_system(targets)
     }
     pub(crate) fn open_duplicate_open_with_overlay(&mut self) {
@@ -36,45 +36,16 @@ impl App {
         let Some(entry) = self.duplicate_focused_entry() else {
             return;
         };
-        self.file_operations.rename = Some(RenameOverlay {
-            is_dir: false,
-            original_name: entry.name.clone(),
-            input: entry.name,
-            cursor_col: entry.name_key.chars().count(),
-            error: None,
-        });
+        self.file_operations
+            .open_duplicate_rename_prompt(entry.name, entry.name_key.chars().count());
     }
     pub(crate) fn open_duplicate_bulk_rename(&mut self) {
         let paths = self.duplicate_action_paths();
         if paths.is_empty() {
             return;
         }
-        let items = paths
-            .into_iter()
-            .map(|path| BulkRenameItem {
-                original_name: path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| path.display().to_string()),
-                is_dir: false,
-                path,
-            })
-            .collect::<Vec<_>>();
-        let new_names = items
-            .iter()
-            .map(|item| item.original_name.clone())
-            .collect::<Vec<_>>();
-        let count = items.len();
-        self.file_operations.bulk_rename = Some(BulkRenameOverlay {
-            items,
-            new_names,
-            root: None,
-            cursor_line: 0,
-            cursor_col: 0,
-            preferred_col: 0,
-            line_errors: vec![None; count],
-        });
+        self.file_operations
+            .open_duplicate_bulk_rename_prompt(paths);
     }
     pub(crate) fn open_duplicate_editor_bulk_rename(&mut self) -> Result<()> {
         let paths = self.duplicate_action_paths();
@@ -156,11 +127,11 @@ impl App {
         new_name: String,
     ) -> Result<()> {
         let Some(old_path) = self.duplicate_focused_path() else {
-            self.file_operations.rename = None;
+            self.file_operations.dismiss_rename();
             return Ok(());
         };
         if old_path.file_name().and_then(|name| name.to_str()) != Some(original_name.as_str()) {
-            self.file_operations.rename = None;
+            self.file_operations.dismiss_rename();
             return Ok(());
         }
         let new_path = old_path
@@ -168,7 +139,7 @@ impl App {
             .map(|parent| parent.join(&new_name))
             .unwrap_or_else(|| PathBuf::from(&new_name));
         if new_path.exists() {
-            if let Some(r) = &mut self.file_operations.rename {
+            if let Some(r) = self.file_operations.rename_overlay_mut() {
                 r.error = Some(format!("\"{}\" already exists", new_name));
             }
             return Ok(());
@@ -180,12 +151,12 @@ impl App {
                 }
                 _ => format!("Could not rename: {error}"),
             };
-            if let Some(r) = &mut self.file_operations.rename {
+            if let Some(r) = self.file_operations.rename_overlay_mut() {
                 r.error = Some(msg);
             }
             return Ok(());
         }
-        self.file_operations.rename = None;
+        self.file_operations.dismiss_rename();
         self.apply_duplicate_rename_pairs(vec![(old_path, new_path)]);
         self.status = format!("Renamed \"{}\" → \"{}\"", original_name, new_name);
         Ok(())

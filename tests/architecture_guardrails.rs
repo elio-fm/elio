@@ -52,6 +52,31 @@ fn file_operations_do_not_depend_on_app() {
 }
 
 #[test]
+fn file_operation_state_fields_stay_inside_file_operations() {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("src/file_operations/file_operations_state.rs");
+    let contents = fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+    let fields = contents
+        .split_once("pub(crate) struct FileOperationsState {")
+        .expect("FileOperationsState declaration should exist")
+        .1
+        .split_once("\n}")
+        .expect("FileOperationsState declaration should close")
+        .0;
+    let exposed_fields = fields
+        .lines()
+        .filter(|line| line.trim().starts_with("pub(crate)"))
+        .collect::<Vec<_>>();
+
+    assert!(
+        exposed_fields.is_empty(),
+        "FileOperationsState fields must remain scoped to file_operations:\n{}",
+        exposed_fields.join("\n")
+    );
+}
+
+#[test]
 fn elevated_session_does_not_depend_on_app_or_file_operations() {
     assert_tree_has_no_pattern("src/elevated_session", "app::", &[]);
     assert_tree_has_no_pattern("src/elevated_session", "background_jobs::", &[]);

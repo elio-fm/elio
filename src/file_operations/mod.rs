@@ -20,7 +20,9 @@ pub(crate) use archive_extraction::{
     ArchiveExtractPreparation, ArchiveExtractProgress, ArchiveExtractRequest,
     ArchivePasswordCancellation, ArchivePasswordConfirmation, ArchivePasswordOverlay,
 };
-pub(crate) use bulk_rename::{BulkRenameItem, BulkRenameOverlay};
+#[cfg(test)]
+pub(crate) use bulk_rename::BulkRenameItem;
+pub(crate) use bulk_rename::BulkRenameOverlay;
 pub(crate) use copy_move::{
     ClipOp, Clipboard, PasteOrigin, PasteProgress, PasteRequest, QueuedPaste,
 };

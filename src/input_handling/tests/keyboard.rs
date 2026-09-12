@@ -6,6 +6,7 @@ use super::helpers::{
     wait_for_directory_load, write_epub_fixture,
 };
 use crate::config::Action;
+use crate::file_operations::ClipOp;
 use crate::goto_menu::{GotoDestination, GotoMenu, GotoMenuEntry};
 use crate::input_handling::keyboard::{
     fullscreen_preview_dispatches_and_stays, fullscreen_preview_dispatches_then_exits,
@@ -504,7 +505,7 @@ fn f2_renames_outside_trash_but_not_inside_trash() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::F(2))))
         .expect("F2 should open rename outside trash");
     assert!(app.file_operations.rename_is_open());
-    app.file_operations.rename = None;
+    app.file_operations.dismiss_rename();
 
     app.file_browser.in_trash = true;
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::F(2))))
@@ -527,7 +528,7 @@ fn r_renames_outside_trash_and_restores_inside_trash() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('r'))))
         .expect("r should open rename outside trash");
     assert!(app.file_operations.rename_is_open());
-    app.file_operations.rename = None;
+    app.file_operations.dismiss_rename();
 
     app.file_browser.in_trash = true;
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('r'))))
@@ -863,7 +864,7 @@ fn fullscreen_preview_exits_for_explicit_overlays_and_terminal_tasks() {
         .expect("CopyPath should exit fullscreen and open copy overlay");
     assert!(!app.preview_fullscreen());
     assert!(app.file_operations.copy_is_open());
-    app.file_operations.copy = None;
+    app.file_operations.dismiss_copy();
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('P'))))
         .expect("P should fullscreen preview");
@@ -878,14 +879,15 @@ fn fullscreen_preview_exits_for_explicit_overlays_and_terminal_tasks() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('y'))))
         .expect("Yank should exit fullscreen and yank focused entry");
     assert!(!app.preview_fullscreen());
-    let clipboard = app
-        .file_operations
-        .clipboard
-        .as_ref()
-        .expect("yank should set clipboard");
-    assert_eq!(clipboard.op, ClipOp::Yank);
-    assert_eq!(clipboard.paths, vec![file_path]);
-    app.file_operations.clipboard = None;
+    assert_eq!(
+        app.file_operations.clipboard_info(),
+        Some((1, ClipOp::Yank))
+    );
+    assert_eq!(
+        app.file_operations.clipboard_paths(),
+        Some([file_path].as_slice())
+    );
+    app.file_operations.clear_clipboard();
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('P'))))
         .expect("P should fullscreen preview");
@@ -2374,7 +2376,7 @@ fn rebound_yank_key_dispatches_yank_action() {
     app.select_index(0);
 
     assert!(
-        app.file_operations.clipboard.is_none(),
+        app.file_operations.clipboard_info().is_none(),
         "clipboard should start empty"
     );
 
@@ -2384,7 +2386,7 @@ fn rebound_yank_key_dispatches_yank_action() {
         .expect("dispatch should succeed");
 
     assert!(
-        app.file_operations.clipboard.is_some(),
+        app.file_operations.clipboard_info().is_some(),
         "yank should have populated the clipboard"
     );
 

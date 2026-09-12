@@ -45,6 +45,14 @@ fn validate_parsed_item(item: &ParsedCreateItem, cwd: &Path) -> Option<String> {
 }
 
 impl FileOperationsState {
+    pub(crate) fn create_overlay_mut(&mut self) -> Option<&mut CreateOverlay> {
+        self.create.as_mut()
+    }
+
+    pub(crate) fn dismiss_create(&mut self) {
+        self.create = None;
+    }
+
     pub(crate) fn open_create_prompt(&mut self) {
         self.create = Some(CreateOverlay {
             lines: vec![String::new()],

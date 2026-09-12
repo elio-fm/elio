@@ -224,6 +224,38 @@ impl FileOperationsState {
         self.archive_extract_request = None;
     }
 
+    pub(crate) fn archive_extract_job_is_current(&self, token: u64) -> bool {
+        token == self.archive_extract_token
+    }
+
+    pub(crate) fn update_archive_extract_progress(
+        &mut self,
+        completed: usize,
+        total: Option<usize>,
+    ) {
+        if let Some(progress) = &mut self.archive_extract_progress {
+            progress.completed = completed;
+            progress.total = total;
+        }
+    }
+
+    pub(crate) fn finish_archive_extract_job(&mut self) {
+        self.archive_extract_progress = None;
+    }
+
+    pub(crate) fn remember_archive_extract_request(&mut self, request: ArchiveExtractRequest) {
+        self.archive_extract_request = Some(request);
+    }
+
+    pub(crate) fn cancel_archive_extract_job(&mut self) -> Option<u64> {
+        self.archive_extract_progress.take()?;
+        Some(self.archive_extract_token)
+    }
+
+    pub(crate) fn archive_password_overlay_mut(&mut self) -> Option<&mut ArchivePasswordOverlay> {
+        self.archive_password.as_mut()
+    }
+
     pub(crate) fn open_archive_password_prompt(
         &mut self,
         request: ArchiveExtractRequest,

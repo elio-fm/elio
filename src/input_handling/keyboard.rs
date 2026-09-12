@@ -24,33 +24,33 @@ impl App {
     }
 
     fn handle_paste(&mut self, text: &str) -> Result<()> {
-        if self.file_operations.trash.is_some() || self.file_operations.restore.is_some() {
+        if self.file_operations.trash_is_open() || self.file_operations.restore_is_open() {
             return Ok(());
         }
 
-        if self.file_operations.archive_password.is_some() {
+        if self.file_operations.archive_password_is_open() {
             return self.paste_into_archive_password(text);
         }
 
-        if self.file_operations.archive_create.is_some() {
+        if self.file_operations.archive_create_is_open() {
             return self.paste_into_archive_create(text);
         }
 
-        if self.file_operations.create.is_some() {
+        if self.file_operations.create_is_open() {
             return self.paste_into_create(text);
         }
 
-        if self.file_operations.rename.is_some() {
+        if self.file_operations.rename_is_open() {
             return self.paste_into_rename(text);
         }
 
-        if self.file_operations.bulk_rename.is_some() {
+        if self.file_operations.bulk_rename_is_open() {
             return self.paste_into_bulk_rename(text);
         }
 
-        if self.file_operations.editor_rename_confirm.is_some()
+        if self.file_operations.editor_rename_confirm_is_open()
             || self.overlays.goto.is_some()
-            || self.file_operations.copy.is_some()
+            || self.file_operations.copy_is_open()
             || self.overlays.open_with.is_some()
         {
             return Ok(());
@@ -69,7 +69,7 @@ impl App {
 
     fn paste_into_archive_password(&mut self, text: &str) -> Result<()> {
         let text = single_line_paste_text(text);
-        if let Some(overlay) = &mut self.file_operations.archive_password {
+        if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
             insert_text_at_cursor(&mut overlay.input, &mut overlay.cursor_col, &text);
             overlay.error = None;
         }
@@ -78,7 +78,7 @@ impl App {
 
     fn paste_into_archive_create(&mut self, text: &str) -> Result<()> {
         let text = single_line_paste_text(text);
-        if let Some(overlay) = &mut self.file_operations.archive_create {
+        if let Some(overlay) = self.file_operations.archive_create_overlay_mut() {
             insert_text_at_cursor(&mut overlay.input, &mut overlay.cursor_col, &text);
             overlay.error = None;
         }
@@ -96,7 +96,7 @@ impl App {
                 self.create_insert_newline();
                 continue;
             }
-            if let Some(overlay) = &mut self.file_operations.create {
+            if let Some(overlay) = self.file_operations.create_overlay_mut() {
                 let byte = char_to_byte(&overlay.lines[overlay.cursor_line], overlay.cursor_col);
                 overlay.lines[overlay.cursor_line].insert(byte, ch);
                 overlay.cursor_col += 1;
@@ -109,7 +109,7 @@ impl App {
 
     fn paste_into_rename(&mut self, text: &str) -> Result<()> {
         let text = single_line_paste_text(text);
-        if let Some(overlay) = &mut self.file_operations.rename {
+        if let Some(overlay) = self.file_operations.rename_overlay_mut() {
             insert_text_at_cursor(&mut overlay.input, &mut overlay.cursor_col, &text);
             overlay.error = None;
         }
@@ -118,7 +118,7 @@ impl App {
 
     fn paste_into_bulk_rename(&mut self, text: &str) -> Result<()> {
         let text = single_line_paste_text(text);
-        if let Some(overlay) = &mut self.file_operations.bulk_rename {
+        if let Some(overlay) = self.file_operations.bulk_rename_overlay_mut() {
             insert_text_at_cursor(
                 &mut overlay.new_names[overlay.cursor_line],
                 &mut overlay.cursor_col,
@@ -177,11 +177,24 @@ impl App {
     }
 
     fn has_active_cancelable_job(&self) -> bool {
-        self.file_operations.trash_progress.is_some()
-            || self.file_operations.restore_progress.is_some()
-            || self.file_operations.archive_create_progress.is_some()
-            || self.file_operations.archive_extract_progress.is_some()
-            || self.file_operations.paste_progress.is_some()
+        self.file_operations.has_active_job()
+    }
+
+    fn cancel_active_file_job(&mut self) -> bool {
+        if let Some(token) = self.file_operations.cancel_trash_job() {
+            self.job_scheduler.cancel_trash(token);
+        } else if let Some(token) = self.file_operations.cancel_restore_job() {
+            self.job_scheduler.cancel_restore(token);
+        } else if let Some(token) = self.file_operations.cancel_archive_create_job() {
+            self.job_scheduler.cancel_archive_create(token);
+        } else if let Some(token) = self.file_operations.cancel_archive_extract_job() {
+            self.job_scheduler.cancel_archive_extract(token);
+        } else if let Some(token) = self.file_operations.cancel_paste_job() {
+            self.job_scheduler.cancel_paste(token);
+        } else {
+            return false;
+        }
+        true
     }
 
     pub(crate) fn scroll_help_by(&mut self, delta: isize) {
@@ -243,35 +256,35 @@ impl App {
             return Ok(());
         }
 
-        if self.file_operations.trash.is_some() {
+        if self.file_operations.trash_is_open() {
             return self.handle_trash_key(key);
         }
 
-        if self.file_operations.restore.is_some() {
+        if self.file_operations.restore_is_open() {
             return self.handle_restore_key(key);
         }
 
-        if self.file_operations.archive_password.is_some() {
+        if self.file_operations.archive_password_is_open() {
             return self.handle_archive_password_key(key);
         }
 
-        if self.file_operations.archive_create.is_some() {
+        if self.file_operations.archive_create_is_open() {
             return self.handle_archive_create_key(key);
         }
 
-        if self.file_operations.create.is_some() {
+        if self.file_operations.create_is_open() {
             return self.handle_create_key(key);
         }
 
-        if self.file_operations.rename.is_some() {
+        if self.file_operations.rename_is_open() {
             return self.handle_rename_key(key);
         }
 
-        if self.file_operations.bulk_rename.is_some() {
+        if self.file_operations.bulk_rename_is_open() {
             return self.handle_bulk_rename_key(key);
         }
 
-        if self.file_operations.editor_rename_confirm.is_some() {
+        if self.file_operations.editor_rename_confirm_is_open() {
             return self.handle_editor_rename_confirm_key(key);
         }
 
@@ -279,7 +292,7 @@ impl App {
             return self.handle_goto_key(key);
         }
 
-        if self.file_operations.copy.is_some() {
+        if self.file_operations.copy_is_open() {
             return self.handle_copy_key(key);
         }
 
@@ -312,35 +325,9 @@ impl App {
                 return Ok(());
             }
 
-            if let Some(prog) = &self.file_operations.trash_progress {
-                self.job_scheduler
-                    .cancel_trash(self.file_operations.trash_token);
-                if prog.permanent {
-                    // Permanent delete can be stopped between items; clear chip immediately.
-                    self.file_operations.trash_progress = None;
-                }
-                // Non-permanent: the batch OS call is atomic and may already be
-                // in flight.  Keep the chip visible; done=true will clear it.
-            } else if self.file_operations.restore_progress.is_some() {
-                self.job_scheduler
-                    .cancel_restore(self.file_operations.restore_token);
-                self.file_operations.restore_progress = None;
-            } else if self.file_operations.archive_create_progress.is_some() {
-                self.job_scheduler
-                    .cancel_archive_create(self.file_operations.archive_create_token);
-                self.file_operations.archive_create_progress = None;
-            } else if self.file_operations.archive_extract_progress.is_some() {
-                self.job_scheduler
-                    .cancel_archive_extract(self.file_operations.archive_extract_token);
-                self.file_operations.archive_extract_progress = None;
-            } else if self.file_operations.paste_progress.is_some() {
-                self.job_scheduler
-                    .cancel_paste(self.file_operations.paste_token);
-                self.file_operations.paste_progress = None;
-                self.file_operations.clear_queued_pastes();
-            } else {
+            if !self.cancel_active_file_job() {
                 self.clear_selection();
-                self.file_operations.clipboard = None;
+                self.file_operations.clear_clipboard();
             }
             return Ok(());
         }
@@ -439,32 +426,9 @@ impl App {
             KeyCode::Esc => {
                 if !self.file_browser.selected_paths.is_empty() {
                     self.clear_selection();
-                } else if let Some(prog) = &self.file_operations.trash_progress {
-                    self.job_scheduler
-                        .cancel_trash(self.file_operations.trash_token);
-                    if prog.permanent {
-                        self.file_operations.trash_progress = None;
-                    }
-                } else if self.file_operations.restore_progress.is_some() {
-                    self.job_scheduler
-                        .cancel_restore(self.file_operations.restore_token);
-                    self.file_operations.restore_progress = None;
-                } else if self.file_operations.archive_create_progress.is_some() {
-                    self.job_scheduler
-                        .cancel_archive_create(self.file_operations.archive_create_token);
-                    self.file_operations.archive_create_progress = None;
-                } else if self.file_operations.archive_extract_progress.is_some() {
-                    self.job_scheduler
-                        .cancel_archive_extract(self.file_operations.archive_extract_token);
-                    self.file_operations.archive_extract_progress = None;
-                } else if self.file_operations.paste_progress.is_some() {
-                    self.job_scheduler
-                        .cancel_paste(self.file_operations.paste_token);
-                    self.file_operations.paste_progress = None;
-                    self.file_operations.clear_queued_pastes();
-                } else {
+                } else if !self.cancel_active_file_job() {
                     self.clear_selection();
-                    self.file_operations.clipboard = None;
+                    self.file_operations.clear_clipboard();
                 }
             }
             _ if is_help_shortcut(key) => {
@@ -793,11 +757,7 @@ fn should_use_grid_zoom_for_symlink_key(
             configured_action,
             Some(crate::config::Action::SymlinkAbsolute | crate::config::Action::SymlinkRelative)
         )
-        && !app
-            .file_operations
-            .clipboard
-            .as_ref()
-            .is_some_and(|clipboard| clipboard.op == ClipOp::Yank && !clipboard.paths.is_empty())
+        && !app.file_operations.clipboard_has_yanked_paths()
 }
 
 fn is_cancel_key(key: KeyEvent) -> bool {

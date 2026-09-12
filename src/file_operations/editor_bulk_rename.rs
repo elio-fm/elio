@@ -62,6 +62,12 @@ pub(crate) struct BulkRenameCompletion {
 }
 
 impl FileOperationsState {
+    pub(crate) fn editor_rename_confirm_overlay_mut(
+        &mut self,
+    ) -> Option<&mut EditorRenameConfirmOverlay> {
+        self.editor_rename_confirm.as_mut()
+    }
+
     #[cfg(unix)]
     pub(crate) fn prepare_editor_bulk_rename(
         &mut self,

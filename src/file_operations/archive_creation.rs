@@ -56,6 +56,18 @@ fn archive_source_label(path: &std::path::Path) -> String {
 }
 
 impl FileOperationsState {
+    pub(crate) fn archive_creation_in_progress(&self) -> bool {
+        self.archive_create_progress.is_some()
+    }
+
+    pub(crate) fn archive_create_overlay_mut(&mut self) -> Option<&mut ArchiveCreateOverlay> {
+        self.archive_create.as_mut()
+    }
+
+    pub(crate) fn dismiss_archive_create(&mut self) {
+        self.archive_create = None;
+    }
+
     pub(crate) fn open_archive_create_prompt(
         &mut self,
         sources: Vec<PathBuf>,
@@ -139,6 +151,33 @@ impl FileOperationsState {
         self.archive_create_progress = None;
         self.archive_create_source_cwd = None;
         self.archive_create_path = None;
+    }
+
+    pub(crate) fn archive_create_job_is_current(&self, token: u64) -> bool {
+        token == self.archive_create_token
+    }
+
+    pub(crate) fn update_archive_create_progress(&mut self, completed: usize, total: usize) {
+        if let Some(progress) = &mut self.archive_create_progress {
+            progress.completed = completed;
+            progress.total = total;
+        }
+    }
+
+    pub(crate) fn finish_archive_create_job(&mut self) -> Option<PathBuf> {
+        self.archive_create_progress = None;
+        self.archive_create_path = None;
+        self.archive_create_source_cwd.take()
+    }
+
+    pub(crate) fn cancel_archive_create_job(&mut self) -> Option<u64> {
+        self.archive_create_progress.take()?;
+        Some(self.archive_create_token)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_archive_create_progress_for_test(&mut self, completed: usize, total: usize) {
+        self.archive_create_progress = Some(ArchiveCreateProgress { completed, total });
     }
 
     pub(crate) fn open_archive_create_password_prompt(&mut self) {
