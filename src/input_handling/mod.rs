@@ -1,5 +1,6 @@
 mod duplicate_finder;
 mod fuzzy_finder;
+mod goto;
 mod keyboard;
 mod local_filter;
 mod mouse;
