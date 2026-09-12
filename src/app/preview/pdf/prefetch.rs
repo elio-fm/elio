@@ -153,7 +153,7 @@ impl App {
     pub(super) fn pdf_render_key_for_page(&self, page: usize) -> Option<PdfRenderKey> {
         let request = self.pdf_overlay_request_for_page(page)?;
         let placement = self.overlay_placement_for_request(&request)?;
-        Some(PdfRenderKey::from_request(&request, placement))
+        Some(request.render_key(placement))
     }
 
     fn desired_pdf_render_variants(&self) -> Vec<(usize, u32, u32)> {

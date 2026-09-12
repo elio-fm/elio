@@ -291,7 +291,7 @@ fn preview_uses_image_overlay_only_for_current_render_target() {
     let placement = app
         .overlay_placement_for_request(&request)
         .expect("overlay placement should be available");
-    let render_key = PdfRenderKey::from_request(&request, placement);
+    let render_key = request.render_key(placement);
     app.preview.pdf.rendered_page_dimensions.insert(
         render_key,
         RenderedImageDimensions {
@@ -310,54 +310,6 @@ fn preview_uses_image_overlay_only_for_current_render_target() {
         .expect("PDF session should exist")
         .current_page = 2;
 
-    assert!(!app.preview_uses_image_overlay());
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[test]
-fn leaving_static_image_selection_clears_overlay_without_recursion() {
-    let root = temp_root("static-image-transition");
-    fs::create_dir_all(&root).expect("failed to create temp root");
-    let fade_path = root.join("fade.png");
-    let html_path = root.join("index.html");
-    write_test_raster_image(&fade_path, ImageFormat::Png, 8, 8);
-    fs::write(&html_path, "<html><body>demo</body></html>\n")
-        .expect("failed to write html placeholder");
-
-    let mut app = App::new_at(root.clone()).expect("app should initialize");
-    configure_terminal_image_support(&mut app);
-    app.input.frame_state.preview_content_area = Some(Rect {
-        x: 2,
-        y: 3,
-        width: 48,
-        height: 20,
-    });
-    app.input.frame_state.metrics.cols = 1;
-    app.input.frame_state.metrics.rows_visible = 6;
-    app.refresh_preview();
-
-    assert_eq!(
-        app.selected_entry().map(|entry| entry.path.as_path()),
-        Some(fade_path.as_path())
-    );
-
-    app.input.last_selection_change_at = Instant::now() - Duration::from_secs(1);
-    app.sync_image_preview_selection_activation();
-    app.present_preview_overlay()
-        .expect("presenting a static image overlay should not fail");
-    assert!(app.static_image_overlay_displayed());
-    assert!(app.preview_uses_image_overlay());
-
-    app.select_index(1);
-    assert_eq!(
-        app.selected_entry().map(|entry| entry.path.as_path()),
-        Some(html_path.as_path())
-    );
-
-    app.present_preview_overlay()
-        .expect("clearing a stale static image overlay should not fail");
-    assert!(!app.static_image_overlay_displayed());
     assert!(!app.preview_uses_image_overlay());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -399,7 +351,7 @@ fn step_pdf_page_queues_render_immediately_when_dimensions_are_cached() {
     let placement = app
         .overlay_placement_for_request(&active_request)
         .expect("overlay placement should be available");
-    let render_key = PdfRenderKey::from_request(&active_request, placement);
+    let render_key = active_request.render_key(placement);
     assert!(app.preview.pdf.pending_renders.contains(&render_key));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -435,7 +387,7 @@ fn handle_pdf_overlay_resize_prunes_stale_render_variant_and_queues_new_current_
     let old_placement = app
         .overlay_placement_for_request(&request)
         .expect("original placement should be available");
-    let old_render_key = PdfRenderKey::from_request(&request, old_placement);
+    let old_render_key = request.render_key(old_placement);
     app.preview
         .pdf
         .pending_renders
@@ -455,7 +407,7 @@ fn handle_pdf_overlay_resize_prunes_stale_render_variant_and_queues_new_current_
     let resized_placement = app
         .overlay_placement_for_request(&resized_request)
         .expect("resized placement should be available");
-    let resized_render_key = PdfRenderKey::from_request(&resized_request, resized_placement);
+    let resized_render_key = resized_request.render_key(resized_placement);
 
     assert_ne!(old_render_key, resized_render_key);
     assert!(app.preview.pdf.activation_ready_at.is_none());
@@ -550,7 +502,7 @@ fn pdf_preview_placeholder_message_stays_silent_while_loading() {
     app.preview
         .pdf
         .pending_renders
-        .insert(PdfRenderKey::from_request(&request, placement));
+        .insert(request.render_key(placement));
 
     assert_eq!(app.preview_overlay_placeholder_message(), None);
 

@@ -1,9 +1,9 @@
-use super::geometry::fit_pdf_page;
 use super::{
     FittedPdfPlacement, PDF_RENDER_CACHE_LIMIT, PdfOverlayRequest, PdfPageDimensions, PdfPageKey,
     PdfRenderKey,
 };
 use crate::app::{App, jobs};
+use crate::preview::documents::pdf::fit_pdf_page;
 use crate::terminal_runtime::terminal_images::{
     ImageProtocol, RenderedImageDimensions, fit_image_area, read_png_dimensions,
 };
@@ -222,7 +222,7 @@ impl App {
         request: &PdfOverlayRequest,
         placement: FittedPdfPlacement,
     ) -> PdfRenderKey {
-        PdfRenderKey::from_request(request, placement)
+        request.render_key(placement)
     }
 
     pub(super) fn pdf_sixel_prepare_for_render_key(

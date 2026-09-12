@@ -107,3 +107,85 @@ fn prepared_full_pane_image_uses_aspect_fitted_kitty_placement() {
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[test]
+fn iterm_static_image_requests_prepare_inline_payloads() {
+    let (mut app, root, _) = build_selected_static_image_app("iterm-request", "demo.png");
+    configure_iterm_image_support(&mut app);
+    app.refresh_preview();
+
+    let request = app
+        .active_static_image_overlay_request()
+        .expect("iterm static image request should exist");
+    assert!(request.prepare_inline_payload);
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn iterm_full_pane_static_image_clear_area_excludes_preview_header_and_border() {
+    let (mut app, root, _) = build_selected_static_image_app("iterm-clear-area", "demo.png");
+    configure_iterm_image_support(&mut app);
+    app.input.frame_state.preview_panel = Some(Rect {
+        x: 1,
+        y: 1,
+        width: 50,
+        height: 24,
+    });
+    app.input.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+    app.refresh_preview();
+
+    wait_for_displayed_static_image_overlay(&mut app);
+
+    assert_eq!(
+        app.displayed_static_image_clear_area(),
+        Some(Rect {
+            x: 2,
+            y: 3,
+            width: 48,
+            height: 20,
+        })
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn iterm_full_pane_static_image_erase_expands_to_body_bottom_edge() {
+    let (mut app, root, _) = build_selected_static_image_app("iterm-erase-bottom-edge", "demo.png");
+    configure_iterm_image_support(&mut app);
+    app.input.frame_state.preview_panel = Some(Rect {
+        x: 1,
+        y: 1,
+        width: 50,
+        height: 24,
+    });
+    app.input.frame_state.preview_body_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 21,
+    });
+    app.input.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+    app.refresh_preview();
+
+    wait_for_displayed_static_image_overlay(&mut app);
+    app.queue_forced_iterm_preview_erase();
+
+    let erase =
+        String::from_utf8(app.iterm_pre_draw_erase()).expect("iTerm erase output should be utf8");
+    assert!(erase.contains("\x1b[24;3H"));
+    assert!(!erase.contains("\x1b[3;3H"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}

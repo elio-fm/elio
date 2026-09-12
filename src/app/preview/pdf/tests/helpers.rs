@@ -1,12 +1,10 @@
 use super::super::*;
 pub(super) use crate::preview::PreviewKind;
 pub(super) use crate::terminal_runtime::terminal_images::{ImageProtocol, TerminalWindowSize};
-pub(super) use image::ImageFormat;
-use image::{DynamicImage, Rgba, RgbaImage};
 use std::{
     fs,
     path::Path,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 pub(super) fn temp_root(label: &str) -> PathBuf {
@@ -90,80 +88,4 @@ pub(super) fn write_test_png(path: &Path, width_px: u32, height_px: u32) {
     bytes.extend_from_slice(&width_px.to_be_bytes());
     bytes.extend_from_slice(&height_px.to_be_bytes());
     fs::write(path, bytes).expect("failed to write png header");
-}
-
-pub(super) fn write_test_raster_image(
-    path: &Path,
-    format: ImageFormat,
-    width_px: u32,
-    height_px: u32,
-) {
-    let mut image = RgbaImage::new(width_px, height_px);
-    for pixel in image.pixels_mut() {
-        *pixel = Rgba([32, 128, 224, 255]);
-    }
-
-    DynamicImage::ImageRgba8(image)
-        .save_with_format(path, format)
-        .expect("failed to write raster test image");
-}
-
-pub(super) fn write_test_svg_image(path: &Path, width_px: u32, height_px: u32) {
-    fs::write(
-        path,
-        format!(
-            r#"<svg viewBox="0 0 {width_px} {height_px}" xmlns="http://www.w3.org/2000/svg"></svg>"#
-        ),
-    )
-    .expect("failed to write svg placeholder");
-}
-
-pub(super) fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBuf) {
-    let root = temp_root(label);
-    fs::create_dir_all(&root).expect("failed to create temp root");
-    let image_path = root.join(file_name);
-    match image_path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .map(|extension| extension.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("png") => write_test_raster_image(&image_path, ImageFormat::Png, 600, 300),
-        Some("ico") => write_test_raster_image(&image_path, ImageFormat::Ico, 64, 64),
-        Some("jpg") | Some("jpeg") => {
-            write_test_raster_image(&image_path, ImageFormat::Jpeg, 600, 300)
-        }
-        Some("gif") => write_test_raster_image(&image_path, ImageFormat::Gif, 600, 300),
-        Some("webp") => write_test_raster_image(&image_path, ImageFormat::WebP, 600, 300),
-        Some("svg") => write_test_svg_image(&image_path, 600, 300),
-        _ => panic!("unsupported test image extension: {file_name}"),
-    }
-
-    let mut app = App::new_at(root.clone()).expect("app should initialize");
-    configure_terminal_image_support(&mut app);
-    app.preview.pdf.pdf_tools_available = true;
-    app.input.frame_state.preview_content_area = Some(Rect {
-        x: 2,
-        y: 3,
-        width: 48,
-        height: 20,
-    });
-    app.input.frame_state.metrics.cols = 1;
-    app.input.frame_state.metrics.rows_visible = 6;
-    app.refresh_preview();
-    (app, root)
-}
-
-pub(super) fn wait_for_displayed_static_image_overlay(app: &mut App) {
-    for _ in 0..200 {
-        let _ = app.process_background_jobs();
-        let _ = app.process_image_preview_timers();
-        app.present_preview_overlay()
-            .expect("presenting static image overlay should not fail");
-        if app.static_image_overlay_displayed() {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    panic!("timed out waiting for static image overlay");
 }

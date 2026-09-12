@@ -1,4 +1,14 @@
-use super::*;
+use crate::{
+    fs::{Entry, EntryKind},
+    preview::{PreviewKind, build_preview},
+};
+use ratatui::text::Line;
+use std::{
+    fs,
+    path::PathBuf,
+    process::Command,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[test]
 fn pdf_preview_shows_pdfinfo_metadata() {
@@ -35,7 +45,7 @@ fn pdf_preview_shows_pdfinfo_metadata() {
     assert!(
         line_texts
             .iter()
-            .any(|text| text.contains("Pages") && text.contains("1"))
+            .any(|text| text.contains("Pages") && text.contains('1'))
     );
     assert!(
         line_texts
@@ -44,6 +54,34 @@ fn pdf_preview_shows_pdfinfo_metadata() {
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+fn temp_path(label: &str) -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be after unix epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!("elio-preview-{label}-{unique}"))
+}
+
+fn file_entry(path: PathBuf) -> Entry {
+    Entry {
+        name: path.file_name().unwrap().to_string_lossy().to_string(),
+        name_key: path.file_name().unwrap().to_string_lossy().to_lowercase(),
+        path,
+        kind: EntryKind::File,
+        symlink: None,
+        size: 0,
+        modified: None,
+        readonly: false,
+    }
+}
+
+fn line_text(line: &Line<'_>) -> String {
+    line.spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>()
 }
 
 fn sample_pdf_bytes() -> Vec<u8> {

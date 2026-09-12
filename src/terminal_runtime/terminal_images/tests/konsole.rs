@@ -1,4 +1,5 @@
 use super::*;
+use crate::terminal_runtime::terminal_images::{ImageProtocol, place_terminal_image};
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use image::ImageFormat;
 use std::{
@@ -93,6 +94,42 @@ fn place_konsole_terminal_image_prefixes_cursor_move() {
     .expect("Konsole placement should be utf8");
 
     assert!(output.starts_with("\x1b[5;11H\x1b_G"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn konsole_protocol_uses_kitty_graphics_sequence_for_pngs() {
+    let root = temp_root("konsole-direct-placement");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("demo.png");
+    write_test_raster_image(&path, ImageFormat::Png, 600, 300);
+
+    let output = String::from_utf8(
+        place_terminal_image(
+            ImageProtocol::KittyDirectGraphics,
+            &path,
+            Rect {
+                x: 2,
+                y: 3,
+                width: 10,
+                height: 4,
+            },
+            &[],
+            None,
+            None,
+        )
+        .expect("Konsole direct placement should build"),
+    )
+    .expect("Konsole placement should be utf8");
+
+    assert!(output.starts_with("\x1b[4;3H\x1b_G"));
+    assert!(output.contains("a=T"));
+    assert!(output.contains("q=2"));
+    assert!(output.contains("c=10"));
+    assert!(output.contains("r=4"));
+    assert!(output.contains("C=1"));
+    assert!(!output.contains("]1337;File=inline=1;"));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

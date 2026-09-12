@@ -154,6 +154,54 @@ fn static_image_surface_remains_available_without_pdf_tooling() {
 }
 
 #[test]
+fn leaving_static_image_selection_clears_overlay_without_recursion() {
+    let root = temp_root("static-image-transition");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let fade_path = root.join("fade.png");
+    let html_path = root.join("index.html");
+    write_test_raster_image(&fade_path, ImageFormat::Png, 8, 8);
+    fs::write(&html_path, "<html><body>demo</body></html>\n")
+        .expect("failed to write html placeholder");
+
+    let mut app = App::new_at(root.clone()).expect("app should initialize");
+    configure_terminal_image_support(&mut app);
+    app.input.frame_state.preview_content_area = Some(Rect {
+        x: 2,
+        y: 3,
+        width: 48,
+        height: 20,
+    });
+    app.input.frame_state.metrics.cols = 1;
+    app.input.frame_state.metrics.rows_visible = 6;
+    app.refresh_preview();
+
+    assert_eq!(
+        app.selected_entry().map(|entry| entry.path.as_path()),
+        Some(fade_path.as_path())
+    );
+
+    app.input.last_selection_change_at = Instant::now() - Duration::from_secs(1);
+    app.sync_image_preview_selection_activation();
+    app.present_preview_overlay()
+        .expect("presenting a static image overlay should not fail");
+    assert!(app.static_image_overlay_displayed());
+    assert!(app.preview_uses_image_overlay());
+
+    app.select_index(1);
+    assert_eq!(
+        app.selected_entry().map(|entry| entry.path.as_path()),
+        Some(html_path.as_path())
+    );
+
+    app.present_preview_overlay()
+        .expect("clearing a stale static image overlay should not fail");
+    assert!(!app.static_image_overlay_displayed());
+    assert!(!app.preview_uses_image_overlay());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn refresh_preview_preloads_current_and_visible_nearby_static_images() {
     let (mut app, root) = build_multi_static_image_app(
         "image-preload-window",

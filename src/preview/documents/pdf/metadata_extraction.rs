@@ -1,4 +1,4 @@
-use super::{
+use super::super::{
     metadata_formatting::{
         humanize_pdfinfo_datetime, present_str, push_count_stat, push_metadata_field,
     },
@@ -6,7 +6,7 @@ use super::{
 };
 use std::{collections::BTreeMap, fs::File, io::Read, path::Path, process::Command};
 
-pub(super) fn extract_pdf_metadata(path: &Path) -> Option<DocumentMetadata> {
+pub(in crate::preview::documents) fn extract_pdf_metadata(path: &Path) -> Option<DocumentMetadata> {
     let mut bytes = Vec::with_capacity(256);
     File::open(path)
         .ok()?
@@ -123,3 +123,7 @@ fn parse_pdf_version(bytes: &[u8]) -> Option<&str> {
     let first_line = std::str::from_utf8(&bytes[..first_line_end]).ok()?;
     first_line.trim().strip_prefix("%PDF-")
 }
+
+#[cfg(test)]
+#[path = "tests/metadata_extraction.rs"]
+mod tests;

@@ -4,7 +4,7 @@ mod audio;
 mod binary;
 pub(crate) mod code;
 mod directory;
-mod documents;
+pub(crate) mod documents;
 pub(crate) mod external_commands;
 mod font;
 pub(crate) mod images;
