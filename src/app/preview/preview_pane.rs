@@ -1,7 +1,81 @@
-use super::*;
+use super::App;
+use crate::config;
+use ratatui::text::Line;
 use std::sync::Arc;
 
 impl App {
+    pub(crate) fn preview_visible(&self) -> bool {
+        self.preview.visible
+    }
+
+    pub(crate) fn preview_fullscreen(&self) -> bool {
+        self.preview.visible && self.preview.fullscreen
+    }
+
+    pub(crate) fn toggle_fullscreen_preview(&mut self) {
+        if preview_pane_disabled_by_layout(config::layout()) {
+            self.preview.visible = false;
+            self.preview.fullscreen = false;
+            self.status = "Preview pane disabled in config".to_string();
+            return;
+        }
+
+        if !self.preview.visible {
+            self.preview.visible = true;
+            self.refresh_preview();
+        }
+
+        let next_fullscreen = !self.preview.fullscreen;
+        if self.preview.fullscreen != next_fullscreen {
+            self.queue_terminal_image_geometry_clear();
+        }
+        self.preview.fullscreen = next_fullscreen;
+        self.status = if self.preview.fullscreen {
+            "Fullscreen preview"
+        } else {
+            "Exited fullscreen preview"
+        }
+        .to_string();
+    }
+
+    pub(crate) fn exit_fullscreen_preview(&mut self) -> bool {
+        if self.clear_fullscreen_preview() {
+            self.status = "Exited fullscreen preview".to_string();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn clear_fullscreen_preview(&mut self) -> bool {
+        if self.preview.fullscreen {
+            self.queue_terminal_image_geometry_clear();
+            self.preview.fullscreen = false;
+            self.preview.exit_fullscreen_after_directory_load = false;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn toggle_preview_pane(&mut self) {
+        if preview_pane_disabled_by_layout(config::layout()) {
+            self.preview.visible = false;
+            self.preview.fullscreen = false;
+            self.status = "Preview pane disabled in config".to_string();
+            return;
+        }
+
+        self.preview.visible = !self.preview.visible;
+        if self.preview.visible {
+            self.refresh_preview();
+            self.status = "Preview shown".to_string();
+        } else {
+            self.preview.fullscreen = false;
+            self.status = "Preview hidden".to_string();
+        }
+    }
+
     pub fn preview_lines(&self) -> Vec<Line<'static>> {
         self.preview.state.content.lines()
     }
@@ -105,4 +179,8 @@ impl App {
             available_width,
         )
     }
+}
+
+pub(super) fn preview_pane_disabled_by_layout(layout: config::LayoutConfig) -> bool {
+    layout.panes.is_some_and(|panes| panes.preview == 0)
 }

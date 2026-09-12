@@ -1,5 +1,5 @@
+use super::App;
 use super::static_images;
-use super::*;
 use crate::preview;
 use crate::terminal_images::ImageProtocol;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};

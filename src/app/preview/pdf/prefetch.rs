@@ -3,7 +3,8 @@ use super::{
     PDF_RENDER_PREFETCH_AHEAD_DISTANCE, PDF_RENDER_PREFETCH_BEHIND_DISTANCE, PdfOverlayRequest,
     PdfPageKey, PdfRenderKey,
 };
-use crate::app::{App, jobs};
+use crate::app::App;
+use crate::background_jobs::job_requests as jobs;
 
 impl App {
     pub(super) fn refresh_pdf_prefetch_window(&mut self) {

@@ -1,5 +1,6 @@
 use super::super::*;
 use super::helpers::*;
+use crate::filesystem::{Entry, EntryKind};
 
 #[test]
 fn pdf_preview_page_navigation_clamps_to_document_bounds() {

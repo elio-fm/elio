@@ -1,5 +1,5 @@
-use super::super::*;
 use super::helpers::*;
+use super::*;
 
 #[test]
 fn comic_preview_prefetches_adjacent_pages_for_instant_page_steps() {

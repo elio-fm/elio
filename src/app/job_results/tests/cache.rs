@@ -1,5 +1,6 @@
-use super::super::*;
 use super::helpers::*;
+use super::*;
+use crate::app::ScreenRegions;
 
 #[test]
 fn stale_archive_preview_result_is_ignored_after_selection_changes() {

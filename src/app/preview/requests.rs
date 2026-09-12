@@ -1,4 +1,6 @@
-use super::*;
+use super::App;
+use crate::background_jobs::job_requests::{PreviewPriority, PreviewRequest};
+use crate::filesystem::Entry;
 use crate::preview::{
     MIN_DYNAMIC_CODE_PREVIEW_LINE_LIMIT, PreviewContent, PreviewRequestOptions,
     default_code_preview_line_limit,

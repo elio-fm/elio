@@ -1,5 +1,5 @@
-use super::super::*;
 use super::helpers::*;
+use super::*;
 
 #[test]
 fn archive_preview_loads_in_background() {

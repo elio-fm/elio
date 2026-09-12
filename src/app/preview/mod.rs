@@ -9,10 +9,7 @@ pub(crate) mod static_images;
 pub(super) mod terminal_image_previews;
 mod visual_layout;
 
-use super::*;
-use crate::preview::{
-    PreviewDirectoryStatsState, PreviewLineCountKey, PreviewLoadState, PreviewRefreshMode,
-};
+use super::App;
 use std::time::Duration;
 
 pub(super) const IMAGE_SELECTION_ACTIVATION_DELAY: Duration = Duration::from_millis(120);

@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use ratatui::layout::Rect;
 
+use super::App;
+
 pub use crate::fuzzy_finder::SearchScope;
 
 #[derive(Clone, Debug, Default)]
@@ -110,5 +112,45 @@ impl Default for ViewMetrics {
             cols: 1,
             rows_visible: 1,
         }
+    }
+}
+
+impl App {
+    pub fn set_screen_regions(&mut self, mut screen_regions: ScreenRegions) -> bool {
+        let duplicate_preview_was_rendered = self.duplicate_finder.session.is_some()
+            && self.input.screen_regions.preview_panel.is_some();
+        let previous_code_line_limit = self.active_preview_entry().map(|entry| {
+            self.preview_code_line_limit_for_entry_with_rows(
+                &entry,
+                self.input.screen_regions.preview_rows_visible,
+            )
+        });
+        if self.preview_fullscreen() && screen_regions.entries_panel.is_none() {
+            screen_regions.metrics = self.input.screen_regions.metrics;
+        }
+        self.input.screen_regions = screen_regions;
+        let mut dirty = self.sync_scroll() | self.sync_search_scroll() | self.sync_preview_scroll();
+        let duplicate_preview_is_rendered = self.duplicate_finder.session.is_some()
+            && self.input.screen_regions.preview_panel.is_some();
+        if duplicate_preview_was_rendered && !duplicate_preview_is_rendered {
+            self.queue_terminal_image_geometry_clear();
+            self.clear_image_preview_selection_activation();
+            dirty = true;
+        }
+        dirty |= self.sync_duplicate_scroll();
+        let next_code_line_limit = self.active_preview_entry().map(|entry| {
+            self.preview_code_line_limit_for_entry_with_rows(
+                &entry,
+                self.input.screen_regions.preview_rows_visible,
+            )
+        });
+        if previous_code_line_limit != next_code_line_limit {
+            self.refresh_preview();
+            dirty = true;
+        }
+        self.queue_visible_directory_item_counts();
+        self.refresh_static_image_preloads_if_needed();
+        self.remember_current_directory_view();
+        dirty
     }
 }

@@ -2,9 +2,11 @@ use super::{
     PDF_PAGE_MIN, PDF_PAGE_STATUS_PREFIX, PDF_SELECTION_ACTIVATION_DELAY, PdfDocumentKey,
     PdfOverlayRequest, PdfPageDimensions, PdfPageKey, PdfRenderKey, PdfSession,
 };
-use crate::app::{App, Entry, jobs};
+use crate::app::App;
+use crate::background_jobs::job_requests as jobs;
 use crate::background_jobs::job_results as background_job_results;
 use crate::file_classification::{self, DocumentFormat};
+use crate::filesystem::Entry;
 use crate::terminal_images::read_png_dimensions;
 use std::time::{Duration, Instant};
 

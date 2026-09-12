@@ -1,5 +1,5 @@
-use super::super::*;
 use super::helpers::*;
+use super::*;
 
 #[test]
 fn background_job_processing_yields_after_a_burst_of_results() {

@@ -1,6 +1,7 @@
-use super::*;
-use crate::app::FileClass;
-use crate::file_classification;
+use super::App;
+use crate::background_jobs::job_requests::PreviewPriority;
+use crate::file_classification::{self, FileClass};
+use crate::filesystem::Entry;
 use crate::preview::{PreviewWorkClass, preview_work_class, should_build_preview_in_background};
 use std::time::{Duration, Instant};
 

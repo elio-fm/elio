@@ -1,5 +1,6 @@
-use super::*;
+use super::App;
 use crate::chooser::ChooserExit;
+use crate::file_browser::{SelectionChange, ViewMode};
 use std::path::{Path, PathBuf};
 
 impl App {

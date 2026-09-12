@@ -1,4 +1,5 @@
 use super::*;
+use crate::preview::PreviewLoadState;
 
 #[test]
 fn comic_page_ffmpeg_render_uses_fast_raster_args() {
@@ -223,11 +224,11 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
     app.preview.state.token = app.preview.state.token.wrapping_add(1);
 
     // Select epub_a and display its page image.
-    app.file_browser.entries = vec![crate::app::Entry {
+    app.file_browser.entries = vec![Entry {
         path: epub_a.clone(),
         name: "book_a.epub".to_string(),
         name_key: "book_a.epub".to_string(),
-        kind: crate::app::EntryKind::File,
+        kind: EntryKind::File,
         symlink: None,
         size: epub_a_meta.len(),
         modified: epub_a_meta.modified().ok(),
@@ -255,11 +256,11 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
 
     // Navigate to epub_b: update the entry, sync the EPUB session, and put the
     // preview into the loading (Placeholder) state with no visual yet.
-    app.file_browser.entries = vec![crate::app::Entry {
+    app.file_browser.entries = vec![Entry {
         path: epub_b.clone(),
         name: "book_b.epub".to_string(),
         name_key: "book_b.epub".to_string(),
-        kind: crate::app::EntryKind::File,
+        kind: EntryKind::File,
         symlink: None,
         size: epub_b_meta.len(),
         modified: epub_b_meta.modified().ok(),

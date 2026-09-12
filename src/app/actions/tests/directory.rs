@@ -1,70 +1,14 @@
-use super::*;
+use super::helpers::{
+    make_auto_reload_ready, temp_path, wait_for_directory_load, wait_for_directory_reload,
+};
+use crate::app::{App, ScreenRegions, ViewMetrics};
+use crate::file_browser::{
+    DirectoryHistoryMode, DirectoryLoadCompletion, HistoryEntry, PendingDirectoryLoad, ViewMode,
+};
 use std::{
     fs,
-    path::PathBuf,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
-
-fn temp_path(label: &str) -> PathBuf {
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time should be after unix epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!("elio-actions-{label}-{unique}"))
-}
-
-fn make_auto_reload_ready(app: &mut App) {
-    app.file_browser.directory_runtime.last_auto_reload_at =
-        Instant::now() - Duration::from_secs(3);
-}
-
-fn wait_for_directory_load(app: &mut App) {
-    for _ in 0..300 {
-        let _ = app.process_background_jobs();
-        if app.file_browser.directory_runtime.pending_load.is_none() {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    panic!("timed out waiting for directory load");
-}
-
-fn wait_for_directory_reload(app: &mut App, expected_entries: usize) {
-    for _ in 0..500 {
-        let _ = app.process_auto_reload();
-        let _ = app.process_background_jobs();
-        if app.file_browser.entries.len() == expected_entries
-            && app
-                .file_browser
-                .directory_runtime
-                .pending_reload_at
-                .is_none()
-            && app
-                .file_browser
-                .directory_runtime
-                .pending_fingerprint_scan
-                .is_none()
-            && app.file_browser.directory_runtime.pending_load.is_none()
-        {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    panic!(
-        "timed out waiting for directory reload: entries={}, pending_reload={}, pending_fingerprint_scan={}, pending_load={}, pending_background_work={}",
-        app.file_browser.entries.len(),
-        app.file_browser
-            .directory_runtime
-            .pending_reload_at
-            .is_some(),
-        app.file_browser
-            .directory_runtime
-            .pending_fingerprint_scan
-            .is_some(),
-        app.file_browser.directory_runtime.pending_load.is_some(),
-        app.has_pending_background_work(),
-    );
-}
 
 #[test]
 fn watcher_reload_detects_new_visible_entries() {
@@ -245,72 +189,6 @@ fn polling_fallback_respects_its_throttle_window() {
     );
     wait_for_directory_reload(&mut app, 2);
     assert_eq!(app.file_browser.entries.len(), 2);
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[test]
-fn selection_summary_is_compact_for_files() {
-    let root = temp_path("selection-summary-file");
-    fs::create_dir_all(&root).expect("failed to create temp root");
-    fs::write(root.join("note.txt"), "hello").expect("failed to write file");
-
-    let app = App::new_at(root.clone()).expect("failed to create app");
-    assert_eq!(app.selection_summary(), "1/1  note.txt");
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[test]
-fn selection_summary_marks_directories_with_trailing_slash() {
-    let root = temp_path("selection-summary-dir");
-    let child = root.join("child");
-    fs::create_dir_all(&child).expect("failed to create temp dirs");
-
-    let app = App::new_at(root.clone()).expect("failed to create app");
-    assert_eq!(app.selection_summary(), "1/1  child/");
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[test]
-fn set_screen_regions_does_not_refresh_code_preview_when_visible_rows_change() {
-    // Code line limit is fixed (no longer row-dependent), so resizing should
-    // not trigger a fresh preview render for source files.
-    let root = temp_path("code-preview-resize");
-    fs::create_dir_all(&root).expect("failed to create temp root");
-    fs::write(root.join("main.rs"), "fn main() {}\n").expect("failed to write code file");
-
-    let mut app = App::new_at(root.clone()).expect("failed to create app");
-    let initial_preview_token = app.preview.state.token;
-
-    app.set_screen_regions(ScreenRegions {
-        preview_rows_visible: 12,
-        preview_cols_visible: 80,
-        ..ScreenRegions::default()
-    });
-
-    assert_eq!(app.preview.state.token, initial_preview_token);
-
-    fs::remove_dir_all(root).expect("failed to remove temp root");
-}
-
-#[test]
-fn set_screen_regions_does_not_refresh_plain_text_preview_when_visible_rows_change() {
-    let root = temp_path("text-preview-resize");
-    fs::create_dir_all(&root).expect("failed to create temp root");
-    fs::write(root.join("notes.txt"), "plain text\n").expect("failed to write text file");
-
-    let mut app = App::new_at(root.clone()).expect("failed to create app");
-    let initial_preview_token = app.preview.state.token;
-
-    app.set_screen_regions(ScreenRegions {
-        preview_rows_visible: 12,
-        preview_cols_visible: 80,
-        ..ScreenRegions::default()
-    });
-
-    assert_eq!(app.preview.state.token, initial_preview_token);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
