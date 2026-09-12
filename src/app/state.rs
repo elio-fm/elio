@@ -8,10 +8,7 @@ use std::{
 
 use anyhow::{Context, Result};
 
-use super::{
-    preview::{comic, epub, pdf, static_images, terminal_image_previews},
-    types::*,
-};
+use super::types::*;
 use crate::background_jobs::{JobScheduler, job_requests::ArchiveExtractRequest};
 use crate::duplicate_finder::{DuplicateGroup, DuplicateScanStats};
 #[cfg(unix)]
@@ -23,7 +20,7 @@ use crate::file_operations::{
     TrashProgress,
 };
 use crate::fuzzy_finder::{SearchCandidate, SearchIndexStats};
-use crate::preview;
+use crate::preview::PreviewRuntime;
 use crate::{
     fs::{Entry, SortMode},
     places::PlaceRow,
@@ -183,66 +180,11 @@ pub(super) struct SearchCache {
     pub(super) stats: SearchIndexStats,
 }
 
-#[derive(Clone, Debug)]
-pub(super) struct CachedPreview {
-    pub(super) size: u64,
-    pub(super) modified: Option<SystemTime>,
-    pub(super) preview: preview::PreviewContent,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(super) struct PreviewCacheKey {
-    pub(super) path: PathBuf,
-    pub(super) variant: preview::PreviewRequestOptions,
-    pub(super) ffmpeg_available: bool,
-    pub(super) code_line_limit: usize,
-    /// The render limit used for this cache entry. Partial (incremental)
-    /// renders have `code_render_limit < code_line_limit`; complete renders
-    /// have `code_render_limit == code_line_limit`.
-    pub(super) code_render_limit: usize,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(super) struct PreviewLineCountKey {
-    pub(super) path: PathBuf,
-    pub(super) size: u64,
-    pub(super) modified: Option<SystemTime>,
-}
-
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(super) struct DirectoryItemCountKey {
     pub(super) path: PathBuf,
     pub(super) modified: Option<SystemTime>,
     pub(super) show_hidden: bool,
-}
-
-#[cfg(test)]
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct PreviewMetricsSnapshot {
-    pub cache_hits: u64,
-    pub cache_misses: u64,
-    pub applied_results: u64,
-    pub stale_results_dropped: u64,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(super) struct PreviewMetrics {
-    pub(super) cache_hits: u64,
-    pub(super) cache_misses: u64,
-    pub(super) applied_results: u64,
-    pub(super) stale_results_dropped: u64,
-}
-
-impl PreviewMetrics {
-    #[cfg(test)]
-    pub(super) fn snapshot(self) -> PreviewMetricsSnapshot {
-        PreviewMetricsSnapshot {
-            cache_hits: self.cache_hits,
-            cache_misses: self.cache_misses,
-            applied_results: self.applied_results,
-            stale_results_dropped: self.stale_results_dropped,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -364,12 +306,6 @@ impl SelectedPaths {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub(super) struct MediaPreviewState {
-    pub(super) ffprobe_available: Option<bool>,
-    pub(super) ffmpeg_available: Option<bool>,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct DirectoryCountViewport {
     pub(super) fingerprint: crate::fs::DirectoryFingerprint,
@@ -377,79 +313,6 @@ pub(super) struct DirectoryCountViewport {
     pub(super) cols: usize,
     pub(super) rows_visible: usize,
     pub(super) show_hidden: bool,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) enum PreviewLoadState {
-    Placeholder(PathBuf),
-    Refreshing(PathBuf),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) enum PreviewDirectoryStatsState {
-    Loading {
-        token: u64,
-        path: PathBuf,
-    },
-    Complete {
-        token: u64,
-        path: PathBuf,
-        stats: crate::fs::DirectoryStats,
-    },
-    Incomplete {
-        token: u64,
-        path: PathBuf,
-        partial: crate::fs::DirectoryStats,
-        error: String,
-    },
-}
-
-impl PreviewDirectoryStatsState {
-    pub(super) fn token(&self) -> u64 {
-        match self {
-            Self::Loading { token, .. }
-            | Self::Complete { token, .. }
-            | Self::Incomplete { token, .. } => *token,
-        }
-    }
-
-    pub(super) fn path(&self) -> &PathBuf {
-        match self {
-            Self::Loading { path, .. }
-            | Self::Complete { path, .. }
-            | Self::Incomplete { path, .. } => path,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum PreviewRefreshMode {
-    Immediate,
-    Deferred,
-}
-
-pub(super) struct PreviewState {
-    pub(super) scroll: usize,
-    pub(super) horizontal_scroll: usize,
-    pub(super) content: preview::PreviewContent,
-    pub(super) token: u64,
-    pub(super) metrics: PreviewMetrics,
-    pub(super) load_state: Option<PreviewLoadState>,
-    pub(super) directory_stats: Option<PreviewDirectoryStatsState>,
-    pub(super) directory_stats_ready_at: Option<Instant>,
-    pub(super) deferred_refresh_at: Option<Instant>,
-    pub(super) prefetch_ready_at: Option<Instant>,
-    pub(super) result_cache: HashMap<PreviewCacheKey, CachedPreview>,
-    pub(super) result_order: VecDeque<PreviewCacheKey>,
-    pub(super) line_count_cache: HashMap<PreviewLineCountKey, usize>,
-    pub(super) line_count_order: VecDeque<PreviewLineCountKey>,
-    pub(super) pending_line_counts: HashSet<PreviewLineCountKey>,
-    /// True while an incremental extension job is outstanding for the current
-    /// selection. Prevents duplicate extension submissions.
-    pub(super) incremental_render_in_flight: bool,
-    /// The path of the entry that triggered the in-flight extension job.
-    /// Used to clear `incremental_render_in_flight` when a stale result drops.
-    pub(super) incremental_render_path: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -515,19 +378,6 @@ pub(crate) struct NavigationState {
     pub(in crate::app) directory_view_memory: HashMap<PathBuf, DirectoryViewMemory>,
     pub(crate) directory_runtime: DirectoryRuntime,
     pub(in crate::app) last_sidebar_refresh_at: Instant,
-}
-
-pub(in crate::app) struct PreviewRuntime {
-    pub(in crate::app) visible: bool,
-    pub(in crate::app) fullscreen: bool,
-    pub(in crate::app) exit_fullscreen_after_directory_load: bool,
-    pub(in crate::app) state: PreviewState,
-    pub(in crate::app) comic: comic::ComicPreviewState,
-    pub(in crate::app) epub: epub::EpubPreviewState,
-    pub(in crate::app) image: static_images::ImagePreviewState,
-    pub(in crate::app) media: MediaPreviewState,
-    pub(in crate::app) pdf: pdf::PdfPreviewState,
-    pub(in crate::app) terminal_images: terminal_image_previews::TerminalImageState,
 }
 
 #[derive(Default)]
@@ -710,36 +560,7 @@ impl App {
                 },
                 last_sidebar_refresh_at: Instant::now(),
             },
-            preview: PreviewRuntime {
-                visible: true,
-                fullscreen: false,
-                exit_fullscreen_after_directory_load: false,
-                state: PreviewState {
-                    scroll: 0,
-                    horizontal_scroll: 0,
-                    content: preview::PreviewContent::placeholder("No selection"),
-                    token: 0,
-                    metrics: PreviewMetrics::default(),
-                    load_state: None,
-                    directory_stats: None,
-                    directory_stats_ready_at: None,
-                    deferred_refresh_at: None,
-                    prefetch_ready_at: None,
-                    result_cache: HashMap::new(),
-                    result_order: VecDeque::new(),
-                    line_count_cache: HashMap::new(),
-                    line_count_order: VecDeque::new(),
-                    pending_line_counts: HashSet::new(),
-                    incremental_render_in_flight: false,
-                    incremental_render_path: None,
-                },
-                comic: comic::ComicPreviewState::default(),
-                epub: epub::EpubPreviewState::default(),
-                image: static_images::ImagePreviewState::default(),
-                media: MediaPreviewState::default(),
-                pdf: pdf::PdfPreviewState::default(),
-                terminal_images: terminal_image_previews::TerminalImageState::default(),
-            },
+            preview: PreviewRuntime::new(),
             overlays: OverlayState::default(),
             jobs: JobRuntime {
                 directory_token: 0,

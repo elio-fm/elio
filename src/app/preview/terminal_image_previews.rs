@@ -6,6 +6,7 @@ use std::{
 };
 
 use crate::app::App;
+use crate::preview::OverlayPresentState;
 use crate::terminal_runtime::terminal_images::{
     self, ImageProtocol, TerminalIdentity, TerminalWindowSize,
 };
@@ -20,25 +21,6 @@ use crate::terminal_runtime::terminal_images::{
 /// events arrive unthrottled, so a much shorter settle suffices.
 const TMUX_RESIZE_SETTLE_DELAY: Duration = Duration::from_millis(300);
 const RESIZE_SETTLE_DELAY: Duration = Duration::from_millis(100);
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(in crate::app) struct TerminalImageState {
-    pub(super) protocol: ImageProtocol,
-    pub(super) identity: TerminalIdentity,
-    pub(super) window: Option<TerminalWindowSize>,
-    pending_iterm_erase: Vec<Rect>,
-    pending_resize_clear: bool,
-    pending_iterm_popup_restore: bool,
-    pending_sixel_repaint: bool,
-    resize_settled_at: Option<Instant>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) enum OverlayPresentState {
-    NotRequested,
-    Waiting,
-    Displayed,
-}
 
 impl App {
     pub(crate) fn enable_terminal_image_previews(&mut self) {

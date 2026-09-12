@@ -12,6 +12,10 @@ pub(super) mod terminal_image_previews;
 mod visual_layout;
 
 use super::*;
+use crate::preview::{
+    CachedPreview, PreviewCacheKey, PreviewDirectoryStatsState, PreviewLineCountKey,
+    PreviewLoadState, PreviewRefreshMode,
+};
 
 #[cfg(test)]
 mod tests;

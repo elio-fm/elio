@@ -9,8 +9,8 @@ This crate is organized around focused subsystems.
 - `archive` and `opening`: archive operations and launching items with applications.
 - `preview`: preview construction plus document and image inspection, preparation, and rendering.
 - `theme`: palettes and file appearance rules shared by rendered interfaces.
-- `app`: application state, input dispatch, preview coordination, and applying background-job
-  results.
+- `app`: remaining application state, input dispatch, preview coordination, and applying
+  background-job results.
 - `elevated_session`: privileged filesystem operations through sudo or doas.
 - `terminal_runtime`: application startup, terminal lifecycle, event loop, drawing, terminal-image
   protocols, and session output.
@@ -26,8 +26,8 @@ Current boundary rules:
 - Code-language recognition belongs to `file_classification`, not to a preview renderer.
 - Preview construction and media processing in `preview` should not depend on `app` or
   `background_jobs`.
-- Active-preview caching, navigation, and terminal-image presentation live in `app/preview`; the
-  independent `preview` subsystem constructs preview content and prepares image and PDF assets.
+- Active-preview state, caching, and format-specific sessions belong to `preview`; the remaining
+  `app/preview` code coordinates that state with application navigation and terminal presentation.
 - `preview` should not reach into `theme` directly. The explicit adapter boundary for theme
   access is `src/preview/appearance.rs`.
 - `app` owns behavior; it should not be the home for generic data model types that other

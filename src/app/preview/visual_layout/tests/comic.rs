@@ -269,7 +269,7 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
     app.sync_epub_preview_selection();
     app.preview.state.content =
         PreviewContent::new(PreviewKind::Document, Vec::new()).with_detail("EPUB ebook");
-    app.preview.state.load_state = Some(crate::app::state::PreviewLoadState::Placeholder(epub_b));
+    app.preview.state.load_state = Some(crate::preview::PreviewLoadState::Placeholder(epub_b));
 
     app.present_preview_overlay()
         .expect("presenting overlay during cross-EPUB loading should not fail");

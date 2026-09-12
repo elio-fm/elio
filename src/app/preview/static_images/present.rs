@@ -1,10 +1,10 @@
-use super::types::DisplayedStaticImagePreview;
+use super::DisplayedStaticImagePreview;
 use super::{
     SixelDcsKey, StaticImageKey, StaticImageOverlayMode, StaticImageOverlayPreparation,
     StaticImageOverlayRequest,
 };
 use crate::app::App;
-use crate::app::preview::terminal_image_previews::OverlayPresentState;
+use crate::preview::OverlayPresentState;
 use crate::terminal_runtime::terminal_images::{
     ImageProtocol, RenderedImageDimensions, TerminalWindowSize, area_pixel_size, encode_sixel_dcs,
     fit_image_area, place_sixel_from_dcs, place_terminal_image, preview_log,
