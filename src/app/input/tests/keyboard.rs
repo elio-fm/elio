@@ -6,6 +6,8 @@ use super::helpers::{
     wait_for_directory_load, write_epub_fixture,
 };
 use crate::config::Action;
+use crate::goto_menu::{GotoDestination, GotoMenu, GotoMenuEntry};
+use crossterm::event::{KeyEventKind, KeyEventState};
 use std::{
     fs,
     path::PathBuf,
@@ -1694,6 +1696,37 @@ fn g_opens_goto_overlay_and_goto_shortcuts_keep_g_for_top() {
         app.file_browser.selected, 2,
         "capital G should keep the old bottom-jump behavior"
     );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn goto_shortcuts_respect_caps_lock_normalization() {
+    let root = temp_path("goto-caps-lock");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    for name in ["a.txt", "b.txt"] {
+        fs::write(root.join(name), name).expect("failed to write temp file");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.jump_last();
+    app.overlays.goto = Some(GotoMenu::new(vec![GotoMenuEntry::new(
+        'W',
+        "top",
+        GotoDestination::Top,
+    )]));
+    let key = KeyEvent::new_with_kind_and_state(
+        KeyCode::Char('w'),
+        KeyModifiers::NONE,
+        KeyEventKind::Press,
+        KeyEventState::CAPS_LOCK,
+    );
+
+    app.handle_event(Event::Key(key))
+        .expect("caps-lock W shortcut should activate");
+
+    assert_eq!(app.file_browser.selected, 0);
+    assert!(app.overlays.goto.is_none());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

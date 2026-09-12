@@ -1,6 +1,9 @@
 use super::helpers;
-use crate::app::{App, FrameState, PathHit, PlaceRow};
 use crate::theme::Palette;
+use crate::{
+    app::{App, FrameState, PathHit},
+    places::PlaceRow,
+};
 use ratatui::{
     Frame,
     layout::Rect,

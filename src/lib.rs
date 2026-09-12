@@ -9,6 +9,7 @@ mod file_classification;
 mod file_operations;
 mod fs;
 mod fuzzy_finder;
+mod goto_menu;
 mod opening;
 mod places;
 mod preview;
