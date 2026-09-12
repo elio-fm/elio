@@ -18,7 +18,7 @@ fn directory_header_upgrades_to_exact_recursive_totals_after_background_stats() 
         &mut app,
         8,
         80,
-        &format!("4 items • {}", crate::app::format_size(1_700)),
+        &format!("4 items • {}", crate::filesystem::format_size(1_700)),
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -136,7 +136,7 @@ fn stale_directory_totals_result_is_ignored_after_selection_changes() {
         &mut app,
         8,
         80,
-        &format!("1 item • {}", crate::app::format_size(200)),
+        &format!("1 item • {}", crate::filesystem::format_size(200)),
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

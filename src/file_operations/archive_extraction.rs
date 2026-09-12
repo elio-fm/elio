@@ -1,18 +1,105 @@
 use crate::app::*;
-use crate::app::{ArchiveExtractBatchState, ArchiveExtractRequest};
 use crate::archive::{ArchiveEncryption, ArchivePassword};
+use crate::file_browser::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
 use crate::input_handling::text_editing::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
 };
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use std::fmt;
+use std::{fmt, path::PathBuf};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ArchiveExtractProgress {
     pub(crate) completed: usize,
     pub(crate) total: Option<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ArchiveExtractBatchState {
+    pub(crate) total_archives: usize,
+    pub(crate) completed_archives: usize,
+    pub(crate) failed_archives: usize,
+    pub(crate) skipped_archives: usize,
+    pub(crate) skipped_non_archives: usize,
+    pub(crate) dest_dirs: Vec<PathBuf>,
+}
+
+impl ArchiveExtractBatchState {
+    pub(crate) fn new(total_archives: usize, skipped_non_archives: usize) -> Self {
+        Self {
+            total_archives,
+            completed_archives: 0,
+            failed_archives: 0,
+            skipped_archives: 0,
+            skipped_non_archives,
+            dest_dirs: Vec::new(),
+        }
+    }
+
+    pub(crate) fn finished_archives(&self) -> usize {
+        self.completed_archives + self.failed_archives + self.skipped_archives
+    }
+
+    pub(crate) fn is_single_archive(&self) -> bool {
+        self.total_archives == 1 && self.skipped_non_archives == 0
+    }
+
+    pub(crate) fn reselect_path(&self) -> Option<PathBuf> {
+        self.is_single_archive()
+            .then(|| self.dest_dirs.first().cloned())
+            .flatten()
+    }
+
+    pub(crate) fn status(&self) -> String {
+        if self.is_single_archive()
+            && self.completed_archives == 1
+            && let Some(dest_dir) = self.dest_dirs.first()
+        {
+            let name = dest_dir
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("folder");
+            return format!("Extracted 1 archive to \"{name}\"");
+        }
+
+        let mut parts = Vec::new();
+        parts.push(format!(
+            "Extracted {} {}",
+            self.completed_archives,
+            if self.completed_archives == 1 {
+                "archive"
+            } else {
+                "archives"
+            }
+        ));
+        if self.failed_archives > 0 {
+            parts.push(format!("{} failed", self.failed_archives));
+        }
+        if self.skipped_archives > 0 {
+            parts.push(format!("{} skipped", self.skipped_archives));
+        }
+        if self.skipped_non_archives > 0 {
+            parts.push(format!(
+                "skipped {} {}",
+                self.skipped_non_archives,
+                if self.skipped_non_archives == 1 {
+                    "non-archive"
+                } else {
+                    "non-archives"
+                }
+            ));
+        }
+        parts.join(", ")
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ArchiveExtractRequest {
+    pub(crate) token: u64,
+    pub(crate) archives: Vec<PathBuf>,
+    pub(crate) password: Option<ArchivePassword>,
+    pub(crate) batch: ArchiveExtractBatchState,
 }
 
 #[derive(Clone, Debug)]

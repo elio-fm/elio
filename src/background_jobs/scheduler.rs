@@ -31,6 +31,9 @@ use super::{
         trash_delete::{self, TrashPool},
     },
 };
+use crate::file_operations::{
+    ArchiveCreateRequest, ArchiveExtractRequest, PasteRequest, RestoreRequest, TrashRequest,
+};
 use std::{
     collections::VecDeque,
     path::Path,

@@ -1,4 +1,5 @@
 use crate::app::*;
+use crate::file_browser::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
 use crate::fuzzy_finder::{
     SearchCache, SearchMatchCacheEntry, SearchState, build_base_search_cache_entry,
     build_search_cache_entry,

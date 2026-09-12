@@ -349,16 +349,16 @@ fn read_bytes(mut reader: impl Read) -> io::Result<Vec<u8>> {
 }
 
 #[cfg(unix)]
-pub fn run() -> anyhow::Result<()> {
+pub fn run(trash_handler: impl FnOnce(&[PathBuf]) -> Response) -> anyhow::Result<()> {
     validate_credentials()?;
     let request = read_request(io::stdin().lock())?;
     let response = match request {
-        Request::Trash(paths) => crate::app::run_user_trash_helper(&paths),
+        Request::Trash(paths) => trash_handler(&paths),
         Request::Restore(path) => restore_response(&path),
         #[cfg(target_os = "macos")]
         Request::RemoveRestoreOrigins(names) => {
             let names_ref = names.iter().map(String::as_str).collect::<Vec<_>>();
-            match crate::file_operations::remove_restore_origins_checked(&names_ref) {
+            match crate::filesystem::remove_restore_origins_checked(&names_ref) {
                 Ok(()) => Response {
                     completed: names.len(),
                     error: None,
@@ -380,13 +380,13 @@ pub fn run() -> anyhow::Result<()> {
 fn restore_response(path: &std::path::Path) -> Response {
     #[cfg(target_os = "macos")]
     {
-        return checked_restore_response(
-            crate::file_operations::restore_trash_item_checked_metadata(path),
-        );
+        return checked_restore_response(crate::filesystem::restore_trash_item_checked_metadata(
+            path,
+        ));
     }
 
     #[cfg(not(target_os = "macos"))]
-    match crate::file_operations::restore_trash_item(path) {
+    match crate::filesystem::restore_trash_item(path) {
         Ok(()) => Response {
             completed: 1,
             error: None,

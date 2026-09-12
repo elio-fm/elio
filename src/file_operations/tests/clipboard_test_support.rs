@@ -1,5 +1,5 @@
 pub(super) use crate::app::App;
-pub(super) use crate::app::ClipOp;
+pub(super) use crate::file_operations::ClipOp;
 pub(super) use std::{
     fs,
     path::PathBuf,

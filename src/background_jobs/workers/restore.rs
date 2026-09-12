@@ -228,7 +228,7 @@ fn restore_as_invoking_user(path: &std::path::Path) -> anyhow::Result<Option<Str
             }
         }
     }
-    crate::file_operations::restore_trash_item(path).map(|()| None)
+    crate::filesystem::restore_trash_item(path).map(|()| None)
 }
 
 #[cfg(unix)]

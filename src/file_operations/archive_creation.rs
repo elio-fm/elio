@@ -1,5 +1,4 @@
 use super::archive_extraction::{ArchivePasswordOverlay, ArchivePasswordPurpose};
-use crate::app::ArchiveCreateRequest;
 use crate::app::*;
 use crate::archive::{
     ArchiveEncryption, CreateArchiveFormat, CreateArchiveOptions, normalize_archive_output_name,
@@ -15,6 +14,15 @@ use std::path::PathBuf;
 pub(crate) struct ArchiveCreateProgress {
     pub(crate) completed: usize,
     pub(crate) total: usize,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ArchiveCreateRequest {
+    pub(crate) token: u64,
+    pub(crate) cwd: PathBuf,
+    pub(crate) sources: Vec<PathBuf>,
+    pub(crate) output_name: String,
+    pub(crate) options: CreateArchiveOptions,
 }
 
 #[derive(Debug)]

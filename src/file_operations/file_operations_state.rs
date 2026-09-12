@@ -1,12 +1,10 @@
 use std::{collections::VecDeque, path::PathBuf};
 
-use crate::background_jobs::job_requests::ArchiveExtractRequest;
-
 use super::{
-    ArchiveCreateOverlay, ArchiveCreateProgress, ArchiveExtractProgress, ArchivePasswordOverlay,
-    BulkRenameOverlay, Clipboard, CopyOverlay, CreateOverlay, EditorRenameConfirmOverlay,
-    PasteProgress, QueuedPaste, RenameOverlay, RestoreOverlay, RestoreProgress, TrashOverlay,
-    TrashProgress,
+    ArchiveCreateOverlay, ArchiveCreateProgress, ArchiveExtractProgress, ArchiveExtractRequest,
+    ArchivePasswordOverlay, BulkRenameOverlay, Clipboard, CopyOverlay, CreateOverlay,
+    EditorRenameConfirmOverlay, PasteProgress, QueuedPaste, RenameOverlay, RestoreOverlay,
+    RestoreProgress, TrashOverlay, TrashProgress,
 };
 
 #[derive(Default)]

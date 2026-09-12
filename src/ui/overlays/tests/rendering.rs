@@ -151,7 +151,7 @@ fn bulk_rename_overlay_scrolls_to_keep_the_active_row_visible() {
     }
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    app.file_browser.view_mode = crate::app::ViewMode::List;
+    app.file_browser.view_mode = crate::file_browser::ViewMode::List;
     let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
 
     for _ in 0..14 {

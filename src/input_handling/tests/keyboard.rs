@@ -11,6 +11,8 @@ use crate::input_handling::keyboard::{
     fullscreen_preview_dispatches_and_stays, fullscreen_preview_dispatches_then_exits,
     fullscreen_preview_exits_then_dispatches, should_handle_high_frequency_horizontal_key,
 };
+use crate::places::{PlaceItem, PlaceKind, PlaceRow};
+use crate::preview::PreviewDirectoryStatsState;
 use crossterm::event::{KeyEventKind, KeyEventState};
 use std::{
     fs,
@@ -358,11 +360,11 @@ fn pasted_text_updates_archive_password_and_flattens_newlines() {
     let root = temp_path("paste-archive-password");
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.open_archive_password_prompt(
-        crate::background_jobs::job_requests::ArchiveExtractRequest {
+        crate::file_operations::ArchiveExtractRequest {
             token: 0,
             archives: vec![root.join("archive.zip")],
             password: None,
-            batch: crate::background_jobs::job_requests::ArchiveExtractBatchState::new(1, 0),
+            batch: crate::file_operations::ArchiveExtractBatchState::new(1, 0),
         },
         None,
     );
@@ -2254,7 +2256,7 @@ fn rapid_key_navigation_clears_directory_totals_until_deferred_refresh_runs() {
         let _ = app.process_directory_stats_timer();
         let _ = app.process_background_jobs();
         if app.preview_header_detail_for_width(8, 80).as_deref()
-            == Some(&format!("1 item • {}", crate::app::format_size(100)))
+            == Some(&format!("1 item • {}", crate::filesystem::format_size(100)))
         {
             break;
         }
@@ -2262,7 +2264,7 @@ fn rapid_key_navigation_clears_directory_totals_until_deferred_refresh_runs() {
     }
     assert_eq!(
         app.preview_header_detail_for_width(8, 80).as_deref(),
-        Some(format!("1 item • {}", crate::app::format_size(100)).as_str())
+        Some(format!("1 item • {}", crate::filesystem::format_size(100)).as_str())
     );
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

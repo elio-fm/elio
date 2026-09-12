@@ -372,7 +372,7 @@ fn remove_deleted_restore_origins(names: &[String]) -> Result<(), String> {
     match crate::elevated_session::context() {
         InvocationContext::Normal | InvocationContext::RootSession => {
             let refs = names.iter().map(String::as_str).collect::<Vec<_>>();
-            crate::file_operations::remove_restore_origins(&refs);
+            crate::filesystem::remove_restore_origins(&refs);
             Ok(())
         }
         InvocationContext::Elevated(user) => {
@@ -816,7 +816,7 @@ fn trash_with_macos_finder(paths: &[&Path]) -> TrashBatchBackendResult {
     }
 
     if !origins.is_empty() {
-        match crate::file_operations::save_restore_origins_checked(&origins) {
+        match crate::filesystem::save_restore_origins_checked(&origins) {
             Ok(rejected) => {
                 for path in rejected {
                     warnings.push(format!("for {path:?}: original path is not valid UTF-8"));

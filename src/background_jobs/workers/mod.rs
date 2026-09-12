@@ -4,6 +4,9 @@ pub(super) use super::{
     scheduler::{lock_unpoison, wait_unpoison},
     scheduler_metrics::SchedulerMetrics,
 };
+pub(super) use crate::file_operations::{
+    ArchiveCreateRequest, ArchiveExtractRequest, PasteRequest, RestoreRequest, TrashRequest,
+};
 
 pub(super) mod archive_creation;
 pub(super) mod archive_extraction;

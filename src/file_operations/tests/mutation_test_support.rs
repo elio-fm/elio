@@ -1,6 +1,7 @@
-pub(super) use crate::app::{App, DirectoryLoadCompletion};
+pub(super) use crate::app::App;
 #[cfg(unix)]
 pub(super) use crate::duplicate_finder::DuplicateFinderSession;
+pub(super) use crate::file_browser::DirectoryLoadCompletion;
 pub(super) use crate::file_operations::rename;
 pub(super) use crate::file_operations::{BulkRenameItem, BulkRenameOverlay};
 #[cfg(unix)]

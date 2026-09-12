@@ -1,5 +1,5 @@
 use super::trash_delete::TrashTarget;
-use crate::app::{App, RestoreRequest};
+use crate::app::App;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::PathBuf;
@@ -16,6 +16,12 @@ pub(crate) struct RestoreOverlay {
     pub(crate) targets: Vec<TrashTarget>,
     pub(crate) scroll: usize,
     pub(crate) confirmed: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct RestoreRequest {
+    pub(crate) token: u64,
+    pub(crate) targets: Vec<TrashTarget>,
 }
 
 impl App {

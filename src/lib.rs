@@ -53,7 +53,14 @@ pub fn run_with_options(options: RunOptions) -> Result<()> {
 
 #[doc(hidden)]
 pub fn run_user_fs_helper() -> Result<()> {
-    elevated_session::run()
+    #[cfg(unix)]
+    {
+        elevated_session::run(background_jobs::run_user_trash_helper)
+    }
+    #[cfg(not(unix))]
+    {
+        elevated_session::run()
+    }
 }
 
 #[doc(hidden)]

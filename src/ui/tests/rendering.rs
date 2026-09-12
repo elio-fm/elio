@@ -5,8 +5,9 @@ use super::super::helpers;
 use super::super::pane_layout::resolve_pane_layout;
 use super::super::places_pane::render_places_pane;
 use super::super::scrollbars::split_scrollbar_area;
-use crate::app::{App, PlaceItem, PlaceKind, PlaceRow, ScreenRegions};
+use crate::app::{App, ScreenRegions};
 use crate::config::PaneWeights;
+use crate::places::{PlaceItem, PlaceKind, PlaceRow};
 use crate::preview::default_code_preview_line_limit;
 use crate::theme;
 use crate::ui;
@@ -180,7 +181,7 @@ fn list_view_ignores_grid_zoom_levels() {
     }
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    app.file_browser.view_mode = crate::app::ViewMode::List;
+    app.file_browser.view_mode = crate::file_browser::ViewMode::List;
     let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
 
     app.file_browser.zoom_level = 0;
@@ -829,7 +830,7 @@ fn grid_view_keeps_entry_hits_inside_the_entries_panel() {
     }
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    app.file_browser.view_mode = crate::app::ViewMode::Grid;
+    app.file_browser.view_mode = crate::file_browser::ViewMode::Grid;
     let mut terminal = Terminal::new(TestBackend::new(140, 30)).expect("terminal should init");
 
     let state = draw_ui(&mut terminal, &mut app);

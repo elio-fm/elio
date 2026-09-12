@@ -1,5 +1,6 @@
 use super::bulk_rename::BulkRenameItem;
-use crate::app::{App, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
+use crate::app::App;
+use crate::file_browser::{DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
 #[cfg(unix)]
 use anyhow::Context;
 use anyhow::{Result, bail};
