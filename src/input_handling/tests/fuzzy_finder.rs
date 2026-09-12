@@ -406,8 +406,9 @@ fn directory_reload_invalidates_closed_search_cache() {
     app.fuzzy_finder.search = None;
 
     fs::create_dir_all(root.join("beta")).expect("failed to create new folder");
-    let snapshot = crate::fs::load_directory_snapshot(&root, false, app.file_browser.sort_mode)
-        .expect("failed to load directory snapshot");
+    let snapshot =
+        crate::filesystem::load_directory_snapshot(&root, false, app.file_browser.sort_mode)
+            .expect("failed to load directory snapshot");
     app.apply_directory_snapshot(
         PendingDirectoryLoad {
             token: 0,

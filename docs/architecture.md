@@ -3,7 +3,8 @@
 This crate is organized around focused subsystems.
 
 - `cli` and `shell_integration`: command-line behavior and shell setup.
-- `fs` and `file_classification`: filesystem access and file, format, and code-language identification.
+- `filesystem` and `file_classification`: filesystem access and file, format, and code-language
+  identification.
 - `file_browser`: current-directory state, loading, navigation, selection, filtering, and item
   counts.
 - `file_operations`: state and actions for creating, renaming, copying, moving, trashing,
@@ -40,7 +41,7 @@ Current boundary rules:
   browser selection and coordinates application exit.
 - Raw Crossterm and Kitty input acquisition belongs to `terminal_runtime`; mapping those events to
   Elio behavior belongs to `input_handling`.
-- `fs` and `file_classification` should not depend on `app`.
+- `filesystem` and `file_classification` should not depend on `app`.
 - Code-language recognition belongs to `file_classification`, not to a preview renderer.
 - Preview construction and media processing in `preview` should not depend on `app` or
   `background_jobs`.

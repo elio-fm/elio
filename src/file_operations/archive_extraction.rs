@@ -369,7 +369,7 @@ impl App {
                 .input
                 .frame_state
                 .archive_password_visibility_btn
-                .is_some_and(|btn| rect_contains(btn, mouse.column, mouse.row))
+                .is_some_and(|btn| btn.contains((mouse.column, mouse.row).into()))
             {
                 self.toggle_archive_password_visibility();
                 return Ok(());
@@ -379,7 +379,7 @@ impl App {
                 .input
                 .frame_state
                 .archive_password_panel
-                .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+                .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
             if !inside {
                 self.cancel_archive_password_prompt()?;
             }

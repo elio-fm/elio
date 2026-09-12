@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     app::{App, ClipOp},
-    fs::EntryKind,
+    filesystem::EntryKind,
     terminal_runtime::tui_drawing::AppTerminal,
     theme,
 };

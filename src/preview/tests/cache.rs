@@ -1,5 +1,5 @@
 use crate::{
-    fs::{Entry, EntryKind},
+    filesystem::{Entry, EntryKind},
     preview::{
         PREVIEW_CACHE_LIMIT, PREVIEW_LINE_COUNT_CACHE_LIMIT, PreviewContent, PreviewKind,
         PreviewRequestOptions, PreviewRuntime,

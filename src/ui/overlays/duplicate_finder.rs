@@ -111,7 +111,7 @@ fn render_header(frame: &mut Frame<'_>, area: Rect, app: &App, palette: Palette)
             "{} files scanned • {} groups • {} reclaimable",
             stats.scanned_files,
             app.duplicate_group_count(),
-            crate::fs::format_size(stats.duplicate_bytes),
+            crate::filesystem::format_size(stats.duplicate_bytes),
         )
     };
     let line1 = Line::from(Span::styled(
@@ -139,7 +139,7 @@ fn duplicate_loading_status(
     if stats.processed_bytes > 0 {
         parts.push(format!(
             "{} read",
-            crate::fs::format_size(stats.processed_bytes)
+            crate::filesystem::format_size(stats.processed_bytes)
         ));
     }
     if stats.cached_hashes > 0 {
@@ -148,7 +148,7 @@ fn duplicate_loading_status(
     parts.push(format!("{group_count} groups"));
     parts.push(format!(
         "{} reclaimable",
-        crate::fs::format_size(stats.duplicate_bytes)
+        crate::filesystem::format_size(stats.duplicate_bytes)
     ));
     format!("{}… • {}", stats.phase.label(), parts.join(" • "))
 }
@@ -162,7 +162,7 @@ fn duplicate_partial_status(
         stats.checked_candidates,
         stats.candidate_files,
         group_count,
-        crate::fs::format_size(stats.duplicate_bytes)
+        crate::filesystem::format_size(stats.duplicate_bytes)
     )
 }
 
@@ -196,7 +196,7 @@ fn render_results(
     let group_rank_width = (app.duplicate_group_count().max(1).ilog10() as usize + 1).max(3);
     let size_width = rows
         .iter()
-        .map(|row| helpers::display_width(&crate::fs::format_size(row.size)))
+        .map(|row| helpers::display_width(&crate::filesystem::format_size(row.size)))
         .max()
         .unwrap_or(4)
         .max(8);
@@ -248,7 +248,7 @@ fn render_results(
         };
         let icon = theme::path_symbol_with_symlink(&row.path, false, None);
         let icon_color = theme::path_color_with_symlink(&row.path, false, None, palette);
-        let size = crate::fs::format_size(row.size);
+        let size = crate::filesystem::format_size(row.size);
         let prefix_width = 1 + UnicodeWidthStr::width(icon) + 1;
         let available = (file_rect.width as usize).saturating_sub(prefix_width);
         let fixed_suffix_width = 2 + size_width + 2;

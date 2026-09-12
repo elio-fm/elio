@@ -40,7 +40,7 @@ pub(in crate::background_jobs) struct FuzzyFinderJobKey {
     pub(in crate::background_jobs) cwd: PathBuf,
     pub(in crate::background_jobs) scope: SearchScope,
     pub(in crate::background_jobs) show_hidden: bool,
-    pub(in crate::background_jobs) fingerprint: crate::fs::DirectoryFingerprint,
+    pub(in crate::background_jobs) fingerprint: crate::filesystem::DirectoryFingerprint,
 }
 
 impl FuzzyFinderPool {

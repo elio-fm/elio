@@ -57,7 +57,7 @@ impl DirectoryStatsPool {
             workers.push(thread::spawn(move || {
                 while let Some((request, canceled)) = DirectoryStatsShared::pop(&shared) {
                     let key = DirectoryStatsJobKey::from_request(&request);
-                    let result = crate::fs::scan_directory_stats(&request.path, &|| {
+                    let result = crate::filesystem::scan_directory_stats(&request.path, &|| {
                         canceled.load(Ordering::Relaxed)
                     });
                     DirectoryStatsShared::finish(&shared, &key);

@@ -7,7 +7,7 @@ use super::{
     license_detection::{sniff_browser_license_file_type, sniff_license_file_type},
     names::inspect_exact_name,
 };
-use crate::fs::{Entry, EntryKind};
+use crate::filesystem::{Entry, EntryKind};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};

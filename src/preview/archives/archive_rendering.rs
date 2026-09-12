@@ -3,7 +3,7 @@ use super::super::{
 };
 use crate::{
     file_classification::{self, FileClass},
-    fs::EntryKind,
+    filesystem::EntryKind,
     preview::appearance as theme,
 };
 use ratatui::{
@@ -382,15 +382,24 @@ pub(super) fn render_archive_preview(config: ArchiveRenderConfig) -> PreviewCont
         ("Files", (file_count > 0).then(|| file_count.to_string())),
         (
             "Packed",
-            config.metadata.compressed_size.map(crate::fs::format_size),
+            config
+                .metadata
+                .compressed_size
+                .map(crate::filesystem::format_size),
         ),
         (
             "Unpacked",
-            config.metadata.unpacked_size.map(crate::fs::format_size),
+            config
+                .metadata
+                .unpacked_size
+                .map(crate::filesystem::format_size),
         ),
         (
             "Archive Size",
-            config.metadata.physical_size.map(crate::fs::format_size),
+            config
+                .metadata
+                .physical_size
+                .map(crate::filesystem::format_size),
         ),
         ("Comment", config.metadata.comment),
     ];

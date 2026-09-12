@@ -1,4 +1,4 @@
-use crate::fs::{Entry, EntryKind};
+use crate::filesystem::{Entry, EntryKind};
 use crate::preview::archives as archive_preview;
 use flate2::{Compression, write::GzEncoder};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};

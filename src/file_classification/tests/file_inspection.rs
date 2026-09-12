@@ -313,7 +313,7 @@ fn entry_display_name_controls_classification_when_storage_name_has_collision_su
     let path = root.join("photo.jpeg.2");
     fs::write(&path, [0xff, 0xd8, 0xff, 0xdb]).expect("failed to write jpeg signature");
     let metadata = fs::metadata(&path).expect("failed to stat temp file");
-    let entry = crate::fs::Entry {
+    let entry = crate::filesystem::Entry {
         path: path.clone(),
         name: "photo.jpeg".to_string(),
         name_key: "photo.jpeg".to_string(),

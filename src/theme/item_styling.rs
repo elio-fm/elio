@@ -1,7 +1,7 @@
 use super::theme_loading::{Palette, Theme, active_theme, normalize_key};
 use crate::{
     file_classification::{self, FileClass},
-    fs::{Entry, EntryKind, SymlinkInfo},
+    filesystem::{Entry, EntryKind, SymlinkInfo},
 };
 use ratatui::style::Color;
 use std::{

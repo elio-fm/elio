@@ -4,7 +4,7 @@ use crate::app::{
     App, ClipOp, Entry, EntryHit, FrameState, ViewMetrics, format_size, format_size_parts,
     format_time_ago, sanitize_terminal_text,
 };
-use crate::fs::symlink_target_display_label;
+use crate::filesystem::symlink_target_display_label;
 use crate::theme::{self, Palette};
 use ratatui::{
     Frame,

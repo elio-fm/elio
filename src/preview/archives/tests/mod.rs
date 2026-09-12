@@ -1,5 +1,5 @@
 use super::*;
-use crate::{file_classification::FileClass, fs::EntryKind};
+use crate::{file_classification::FileClass, filesystem::EntryKind};
 use std::path::Path;
 
 use crate::preview::archives as archive_preview;

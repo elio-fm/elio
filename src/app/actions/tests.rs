@@ -81,7 +81,9 @@ fn watcher_reload_detects_new_visible_entries() {
     app.file_browser
         .directory_runtime
         .watch_tx
-        .send(crate::fs::DirectoryWatchEvent::Changed(vec![second]))
+        .send(crate::filesystem::DirectoryWatchEvent::Changed(vec![
+            second,
+        ]))
         .expect("failed to queue watch event");
 
     assert!(
@@ -123,7 +125,7 @@ fn watcher_rescan_event_triggers_reload() {
     app.file_browser
         .directory_runtime
         .watch_tx
-        .send(crate::fs::DirectoryWatchEvent::Rescan)
+        .send(crate::filesystem::DirectoryWatchEvent::Rescan)
         .expect("failed to queue rescan event");
 
     assert!(
@@ -167,7 +169,9 @@ fn watcher_reload_ignores_hidden_entries_when_hidden_files_are_off() {
     app.file_browser
         .directory_runtime
         .watch_tx
-        .send(crate::fs::DirectoryWatchEvent::Changed(vec![hidden]))
+        .send(crate::filesystem::DirectoryWatchEvent::Changed(vec![
+            hidden,
+        ]))
         .expect("failed to queue watch event");
 
     assert!(

@@ -209,7 +209,7 @@ impl App {
             pending_terminal_task: None,
         };
         app.file_browser.in_trash = App::path_is_trash(&app.file_browser.cwd);
-        let snapshot = crate::fs::load_directory_snapshot(
+        let snapshot = crate::filesystem::load_directory_snapshot(
             &app.file_browser.cwd,
             app.effective_show_hidden(),
             app.file_browser.sort_mode,

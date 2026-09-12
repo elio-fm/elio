@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     file_classification::{self, FileClass},
-    fs::{self as browser_support, Entry},
+    filesystem::{self as browser_support, Entry},
 };
 use ratatui::text::Line;
 use std::fs;

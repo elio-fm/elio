@@ -694,7 +694,7 @@ fn normalize_high_signal_text(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fs::EntryKind;
+    use crate::filesystem::EntryKind;
     use std::{
         fs,
         path::PathBuf,

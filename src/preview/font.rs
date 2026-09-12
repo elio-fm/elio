@@ -2,7 +2,7 @@ use super::PreviewContent;
 use super::PreviewKind;
 use super::appearance as theme;
 use super::external_commands::run_command_capture_stdout_cancellable;
-use crate::fs::Entry;
+use crate::filesystem::Entry;
 use anyhow::{Context, Result};
 use ratatui::{
     style::Style,
@@ -77,7 +77,7 @@ where
             .unwrap_or(fallback_format),
         monospace: scan_metadata.as_ref().is_some_and(|scan| scan.monospace),
         variable: scan_metadata.as_ref().is_some_and(|scan| scan.variable),
-        file_size: crate::fs::format_size(byte_size),
+        file_size: crate::filesystem::format_size(byte_size),
     };
 
     Ok(render_font_preview(detail, preview_metadata))

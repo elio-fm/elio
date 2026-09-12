@@ -336,7 +336,7 @@ fn run_blocking_in_terminal_result(
 }
 
 fn refresh_after_shell(app: &mut App, cwd: &Path) {
-    let cwd_label = crate::fs::display_path(cwd);
+    let cwd_label = crate::filesystem::display_path(cwd);
     match cwd.try_exists() {
         Ok(true) => {
             if let Err(error) = app.reload() {

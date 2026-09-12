@@ -114,7 +114,7 @@ fn generic_editor_applications(path_str: &str, path: &Path) -> Vec<OpenWithAppli
 }
 
 fn generic_editor_content_types(path: &Path) -> &'static [&'static str] {
-    use crate::{file_classification::PreviewKind, fs::EntryKind};
+    use crate::{file_classification::PreviewKind, filesystem::EntryKind};
 
     match crate::file_classification::inspect_path(path, EntryKind::File)
         .preview

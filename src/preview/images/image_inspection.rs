@@ -1,4 +1,4 @@
-use crate::fs::{Entry, EntryKind};
+use crate::filesystem::{Entry, EntryKind};
 use crate::terminal_runtime::terminal_images::RenderedImageDimensions;
 use quick_xml::{Reader, events::Event};
 use std::{fs, fs::File, io::Read, path::Path, time::SystemTime};

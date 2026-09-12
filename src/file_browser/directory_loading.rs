@@ -60,10 +60,10 @@ pub(crate) struct PendingDirectoryFingerprintScan {
 pub(crate) struct DirectoryRuntime {
     pub(crate) load_token: u64,
     pub(crate) fingerprint_token: u64,
-    pub(crate) fingerprint: crate::fs::DirectoryFingerprint,
-    pub(crate) watch_tx: Sender<crate::fs::DirectoryWatchEvent>,
-    pub(crate) watch_rx: Receiver<crate::fs::DirectoryWatchEvent>,
-    pub(crate) watch: Option<crate::fs::DirectoryWatcher>,
+    pub(crate) fingerprint: crate::filesystem::DirectoryFingerprint,
+    pub(crate) watch_tx: Sender<crate::filesystem::DirectoryWatchEvent>,
+    pub(crate) watch_rx: Receiver<crate::filesystem::DirectoryWatchEvent>,
+    pub(crate) watch: Option<crate::filesystem::DirectoryWatcher>,
     pub(crate) pending_reload_at: Option<Instant>,
     pub(crate) pending_fingerprint_scan: Option<PendingDirectoryFingerprintScan>,
     pub(crate) pending_load: Option<PendingDirectoryLoad>,
@@ -77,7 +77,7 @@ impl DirectoryRuntime {
         Self {
             load_token: 0,
             fingerprint_token: 0,
-            fingerprint: crate::fs::DirectoryFingerprint::default(),
+            fingerprint: crate::filesystem::DirectoryFingerprint::default(),
             watch_tx,
             watch_rx,
             watch: None,

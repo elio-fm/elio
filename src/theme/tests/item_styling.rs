@@ -1,5 +1,5 @@
 use super::*;
-use crate::fs::SymlinkInfo;
+use crate::filesystem::SymlinkInfo;
 
 fn write_temp_file(label: &str, file_name: &str, contents: &str) -> (PathBuf, PathBuf) {
     let root = temp_path(label);

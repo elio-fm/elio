@@ -143,7 +143,7 @@ pub(in crate::preview) fn render_iso_preview(
         ("System", metadata.system_id.clone()),
         (
             "Image Size",
-            metadata.total_size.map(crate::fs::format_size),
+            metadata.total_size.map(crate::filesystem::format_size),
         ),
         (
             "Bootable",

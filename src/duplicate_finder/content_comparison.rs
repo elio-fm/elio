@@ -168,7 +168,7 @@ where
                 })
                 .collect::<Vec<_>>();
             files.sort_by(|left, right| {
-                crate::fs::natural_cmp(
+                crate::filesystem::natural_cmp(
                     &left.relative.to_lowercase(),
                     &right.relative.to_lowercase(),
                 )

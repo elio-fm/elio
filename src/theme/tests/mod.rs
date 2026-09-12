@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     file_classification::FileClass,
-    fs::{Entry, EntryKind},
+    filesystem::{Entry, EntryKind},
 };
 use std::{
     fs,

@@ -2,7 +2,7 @@ use super::state::{CachedPreview, PreviewCacheKey, PreviewLineCountKey, PreviewS
 use super::{PreviewContent, PreviewRequestOptions};
 use crate::{
     file_classification::{FileClass, inspect_entry_cached},
-    fs::Entry,
+    filesystem::Entry,
 };
 use std::{path::PathBuf, time::SystemTime};
 

@@ -1,6 +1,6 @@
 use crate::{
     file_classification::FileClass,
-    fs::{Entry, EntryKind},
+    filesystem::{Entry, EntryKind},
 };
 use ratatui::style::Color;
 use std::path::Path;

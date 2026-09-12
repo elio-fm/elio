@@ -43,7 +43,7 @@ A brief overview of the repository layout:
 │   ├── elevated_session/       # Privileged filesystem operations through sudo or doas
 │   ├── file_classification/    # File, format, and code-language identification
 │   ├── file_operations/        # File-operation state plus create, rename, copy, move, trash, restore, and archive actions
-│   ├── fs/                     # Directory access, entries, sorting, watching, and metadata
+│   ├── filesystem/             # Directory access, entries, sorting, watching, and metadata
 │   ├── fuzzy_finder/           # Candidate indexing and fuzzy matching
 │   ├── goto_menu/              # Configured Go To entries and destination resolution
 │   ├── input_handling/         # Keyboard, mouse, paste, and wheel interaction handling

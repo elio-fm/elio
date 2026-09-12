@@ -34,7 +34,7 @@ impl super::FileBrowserState {
         self.view_mode
     }
 
-    pub(crate) fn cycle_sort_mode(&mut self) -> crate::fs::SortMode {
+    pub(crate) fn cycle_sort_mode(&mut self) -> crate::filesystem::SortMode {
         self.sort_mode = self.sort_mode.cycle();
         self.sort_mode
     }

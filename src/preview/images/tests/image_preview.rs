@@ -1,4 +1,4 @@
-use crate::fs::{Entry, EntryKind};
+use crate::filesystem::{Entry, EntryKind};
 use crate::preview::{PreviewKind, build_preview};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use ratatui::text::Line;

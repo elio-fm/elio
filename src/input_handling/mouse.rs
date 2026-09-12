@@ -33,7 +33,7 @@ impl App {
             .frame_state
             .entry_hits
             .iter()
-            .find(|hit| rect_contains(hit.rect, column, row))
+            .find(|hit| hit.rect.contains((column, row).into()))
             .and_then(|hit| self.file_browser.entries.get(hit.index))
             .map(|entry| entry.path.clone())
     }
@@ -115,28 +115,28 @@ impl App {
                 self.clear_drag_state();
                 self.update_wheel_target_from_position(mouse.column, mouse.row);
                 if let Some(rect) = self.input.frame_state.back_button
-                    && rect_contains(rect, mouse.column, mouse.row)
+                    && rect.contains((mouse.column, mouse.row).into())
                 {
                     return self.go_back();
                 }
                 if let Some(rect) = self.input.frame_state.forward_button
-                    && rect_contains(rect, mouse.column, mouse.row)
+                    && rect.contains((mouse.column, mouse.row).into())
                 {
                     return self.go_forward();
                 }
                 if let Some(rect) = self.input.frame_state.parent_button
-                    && rect_contains(rect, mouse.column, mouse.row)
+                    && rect.contains((mouse.column, mouse.row).into())
                 {
                     return self.go_parent();
                 }
                 if let Some(rect) = self.input.frame_state.hidden_button
-                    && rect_contains(rect, mouse.column, mouse.row)
+                    && rect.contains((mouse.column, mouse.row).into())
                 {
                     self.toggle_hidden_files()?;
                     return Ok(());
                 }
                 if let Some(rect) = self.input.frame_state.view_button
-                    && rect_contains(rect, mouse.column, mouse.row)
+                    && rect.contains((mouse.column, mouse.row).into())
                 {
                     self.toggle_view_mode();
                     return Ok(());
@@ -147,7 +147,7 @@ impl App {
                     .frame_state
                     .sidebar_hits
                     .iter()
-                    .find(|hit| rect_contains(hit.rect, mouse.column, mouse.row))
+                    .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))
                     .cloned()
                 {
                     return self.set_dir(target.path);
@@ -158,7 +158,7 @@ impl App {
                     .frame_state
                     .entry_hits
                     .iter()
-                    .find(|hit| rect_contains(hit.rect, mouse.column, mouse.row))
+                    .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))
                     .cloned()
                 {
                     let Some((path, is_dir)) = self
@@ -235,14 +235,14 @@ impl App {
             .input
             .frame_state
             .preview_panel
-            .is_some_and(|rect| rect_contains(rect, column, row))
+            .is_some_and(|rect| rect.contains((column, row).into()))
         {
             Some(WheelTarget::Preview)
         } else if self
             .input
             .frame_state
             .entries_panel
-            .is_some_and(|rect| rect_contains(rect, column, row))
+            .is_some_and(|rect| rect.contains((column, row).into()))
         {
             Some(WheelTarget::Entries)
         } else {

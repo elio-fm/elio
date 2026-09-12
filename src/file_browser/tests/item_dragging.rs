@@ -1,5 +1,5 @@
 use super::super::FileBrowserState;
-use crate::fs::Entry;
+use crate::filesystem::Entry;
 use std::path::PathBuf;
 
 fn browser_with_entries() -> (FileBrowserState, PathBuf, PathBuf, PathBuf) {

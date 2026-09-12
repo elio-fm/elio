@@ -6,7 +6,7 @@ use super::filename_metadata::{ComicDerivedMetadata, derive_comic_archive_metada
 use super::page_extraction::{
     read_7z_entry_bytes_limited, read_unrar_entry_bytes_limited, read_zip_entry_bytes_limited,
 };
-use crate::fs::natural_cmp;
+use crate::filesystem::natural_cmp;
 use crate::preview::archives::{
     archive_preview::ZIP_BUILT_IN_READER_MAX_BYTES, archive_rendering::normalize_archive_path,
 };

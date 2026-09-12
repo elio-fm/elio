@@ -1,5 +1,5 @@
 use super::{PreviewKind, PreviewLineCoverage};
-use crate::fs::{format_item_count, format_size, sanitize_terminal_text};
+use crate::filesystem::{format_item_count, format_size, sanitize_terminal_text};
 use crate::preview::state::{PreviewDirectoryStatsState, PreviewRuntime};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 

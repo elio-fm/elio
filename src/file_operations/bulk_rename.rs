@@ -1,6 +1,5 @@
 use super::editor_bulk_rename::confirm_bulk_rename_overlay;
 use crate::app::App;
-use crate::fs::rect_contains;
 use crate::input_handling::text_editing::{
     char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
@@ -328,13 +327,13 @@ impl App {
                     .input
                     .frame_state
                     .rename_panel
-                    .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+                    .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
                     self.file_operations.bulk_rename = None;
                     return Ok(());
                 }
                 if let Some(list_area) = self.input.frame_state.bulk_rename_list_area
-                    && rect_contains(list_area, mouse.column, mouse.row)
+                    && list_area.contains((mouse.column, mouse.row).into())
                 {
                     let scroll_top = self.input.frame_state.bulk_rename_scroll_top;
                     let row_offset = (mouse.row - list_area.y) as usize;

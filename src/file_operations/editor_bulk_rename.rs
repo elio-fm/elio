@@ -1,6 +1,5 @@
 use super::bulk_rename::BulkRenameItem;
 use crate::app::{App, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
-use crate::fs::rect_contains;
 #[cfg(unix)]
 use anyhow::Context;
 use anyhow::{Result, bail};
@@ -367,7 +366,7 @@ impl App {
             .input
             .frame_state
             .rename_panel
-            .is_some_and(|panel| rect_contains(panel, mouse.column, mouse.row));
+            .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) if !inside => {
                 self.cancel_editor_rename_confirm();
@@ -377,7 +376,7 @@ impl App {
                     .input
                     .frame_state
                     .editor_rename_confirm_btn
-                    .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row)) =>
+                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into())) =>
             {
                 self.confirm_editor_rename()?;
             }
@@ -386,7 +385,7 @@ impl App {
                     .input
                     .frame_state
                     .editor_rename_cancel_btn
-                    .is_some_and(|rect| rect_contains(rect, mouse.column, mouse.row)) =>
+                    .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into())) =>
             {
                 self.cancel_editor_rename_confirm();
             }

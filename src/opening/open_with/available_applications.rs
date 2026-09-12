@@ -3,10 +3,10 @@ use std::cell::RefCell;
 use std::path::Path;
 
 #[cfg(all(unix, not(target_os = "macos")))]
-use crate::fs::Entry;
+use crate::filesystem::Entry;
 use crate::{
     file_classification::{FileClass, PreviewKind, inspect_path},
-    fs::EntryKind,
+    filesystem::EntryKind,
 };
 
 #[derive(Clone, Debug)]
@@ -46,7 +46,7 @@ pub(crate) fn applications_for_test() -> Option<Vec<OpenWithApplication>> {
     TEST_DISCOVER_OPEN_WITH_APPS.with(|slot| slot.borrow().clone())
 }
 
-pub(crate) fn applications_for(entry: &crate::fs::Entry) -> Vec<OpenWithApplication> {
+pub(crate) fn applications_for(entry: &crate::filesystem::Entry) -> Vec<OpenWithApplication> {
     #[cfg(target_os = "macos")]
     {
         super::macos::applications_for(&entry.path)

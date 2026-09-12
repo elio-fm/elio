@@ -1,5 +1,5 @@
 use super::super::{PreviewContent, PreviewKind, appearance as theme};
-use crate::fs::Entry;
+use crate::filesystem::Entry;
 use image::ImageReader;
 use ratatui::{
     style::Style,
@@ -15,7 +15,7 @@ pub(in crate::preview) fn build_image_preview(
     let byte_size = std::fs::metadata(&entry.path)
         .map(|metadata| metadata.len())
         .unwrap_or(entry.size);
-    let mut fields = vec![("File Size", crate::fs::format_size(byte_size))];
+    let mut fields = vec![("File Size", crate::filesystem::format_size(byte_size))];
     if let Ok((width_px, height_px)) = (|| {
         let reader = ImageReader::open(&entry.path)?;
         let reader = reader
