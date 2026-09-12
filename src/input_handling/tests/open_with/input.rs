@@ -1,5 +1,5 @@
 use super::{fake_open_with_app, fake_terminal_app, temp_dir_path};
-use crate::app::{App, state::PendingTerminalTask};
+use crate::app::{App, PendingTerminalTask};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use std::fs;
 

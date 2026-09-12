@@ -1,10 +1,10 @@
-use super::super::App;
+use crate::app::App;
 use crate::{config::Action, fs::rect_contains};
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 impl App {
-    pub(in crate::app) fn handle_open_with_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_open_with_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.overlays.open_with = None;
             return Ok(());
@@ -38,7 +38,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn handle_open_with_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+    pub(crate) fn handle_open_with_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self

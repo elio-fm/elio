@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use ratatui::layout::Rect;
 
 impl App {
-    pub(in crate::app) fn present_pdf_overlay(
+    pub(crate) fn present_pdf_overlay(
         &mut self,
         protocol: ImageProtocol,
         excluded: &[Rect],
@@ -184,11 +184,11 @@ impl App {
         None
     }
 
-    pub(in crate::app) fn pdf_overlay_displayed(&self) -> bool {
+    pub(crate) fn pdf_overlay_displayed(&self) -> bool {
         self.preview.pdf.displayed.is_some()
     }
 
-    pub(in crate::app) fn displayed_pdf_overlay_area(&self) -> Option<Rect> {
+    pub(crate) fn displayed_pdf_overlay_area(&self) -> Option<Rect> {
         self.preview
             .pdf
             .displayed
@@ -196,12 +196,12 @@ impl App {
             .map(|displayed| displayed.area)
     }
 
-    pub(in crate::app) fn clear_displayed_pdf_overlay(&mut self) {
+    pub(crate) fn clear_displayed_pdf_overlay(&mut self) {
         self.preview.pdf.displayed = None;
         self.preview.pdf.displayed_excluded.clear();
     }
 
-    pub(in crate::app) fn displayed_pdf_overlay_matches_active(&self) -> bool {
+    pub(crate) fn displayed_pdf_overlay_matches_active(&self) -> bool {
         self.active_pdf_display_target()
             .as_ref()
             .zip(self.preview.pdf.displayed.as_ref())

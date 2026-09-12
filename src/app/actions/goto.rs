@@ -45,7 +45,7 @@ impl App {
 }
 
 impl App {
-    pub(in crate::app) fn open_goto_overlay(&mut self) {
+    pub(crate) fn open_goto_overlay(&mut self) {
         self.overlays.help = false;
         self.overlays.goto = Some(build_goto_menu(
             &crate::config::goto().entries,
@@ -54,7 +54,7 @@ impl App {
         self.status.clear();
     }
 
-    pub(in crate::app) fn handle_goto_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_goto_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.overlays.goto = None;
             return Ok(());
@@ -76,7 +76,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn handle_goto_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+    pub(crate) fn handle_goto_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
             let inside = self
                 .input

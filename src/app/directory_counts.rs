@@ -23,7 +23,7 @@ impl App {
             .cache_directory_item_count(path, modified, show_hidden, item_count);
     }
 
-    pub(super) fn queue_visible_directory_item_counts(&mut self) {
+    pub(crate) fn queue_visible_directory_item_counts(&mut self) {
         self.file_browser.update_directory_count_viewport(
             self.input.frame_state.metrics.cols,
             self.input.frame_state.metrics.rows_visible,

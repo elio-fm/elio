@@ -10,7 +10,7 @@ use crate::opening::{
 use anyhow::Result;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) enum FallbackOpenOutcome {
+pub(crate) enum FallbackOpenOutcome {
     #[cfg_attr(all(unix, not(target_os = "macos"), not(test)), allow(dead_code))]
     DefaultApp,
     #[cfg(target_os = "macos")]
@@ -69,7 +69,7 @@ impl App {
 // ── Overlay control and launch logic ─────────────────────────────────────────
 
 impl App {
-    pub(in crate::app) fn open_open_with_overlay(&mut self) {
+    pub(crate) fn open_open_with_overlay(&mut self) {
         let Some(entry) = self.selected_entry() else {
             self.status = "Nothing selected".to_string();
             return;
@@ -77,7 +77,7 @@ impl App {
         self.open_open_with_overlay_for_entry(entry.clone());
     }
 
-    pub(in crate::app) fn open_open_with_overlay_for_entry(&mut self, entry: crate::fs::Entry) {
+    pub(crate) fn open_open_with_overlay_for_entry(&mut self, entry: crate::fs::Entry) {
         let path = entry.path.clone();
         #[cfg(test)]
         let apps = open_with::applications_for_test()
@@ -89,7 +89,7 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn confirm_open_with_index(&mut self, index: usize) -> Result<()> {
+    pub(crate) fn confirm_open_with_index(&mut self, index: usize) -> Result<()> {
         let Some(application) = self
             .overlays
             .open_with
@@ -127,7 +127,7 @@ impl App {
     /// `launch_app` is called only for GUI apps (`requires_terminal == false`).
     /// Terminal apps set `pending_terminal_task` on `self` directly so that
     /// the caller in `lib.rs` can suspend the TUI before running them.
-    pub(in crate::app) fn handle_discovered_open_with_apps<F, G>(
+    pub(crate) fn handle_discovered_open_with_apps<F, G>(
         &mut self,
         path: &Path,
         mut apps: Vec<OpenWithApplication>,
@@ -178,13 +178,13 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn move_open_with_selection(&mut self, delta: isize) {
+    pub(crate) fn move_open_with_selection(&mut self, delta: isize) {
         if let Some(selection) = self.overlays.open_with.as_mut() {
             selection.move_selection(delta);
         }
     }
 
-    pub(in crate::app) fn confirm_selected_open_with_row(&mut self) -> Result<()> {
+    pub(crate) fn confirm_selected_open_with_row(&mut self) -> Result<()> {
         let Some(index) = self
             .overlays
             .open_with

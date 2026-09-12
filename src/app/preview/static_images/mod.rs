@@ -14,7 +14,7 @@ pub(crate) use crate::preview::images::{
 pub(in crate::app::preview::static_images) use crate::preview::{
     DisplayedStaticImagePreview, StaticImagePreloadViewport,
 };
-pub(in crate::app) use crate::preview::{
+pub(crate) use crate::preview::{
     PreparedStaticImage, StaticImageOverlayMode, StaticImageOverlayPreparation,
     StaticImageOverlayRequest,
 };
@@ -23,7 +23,7 @@ const STATIC_IMAGE_PRELOAD_LIMIT: usize = 12;
 const STATIC_IMAGE_PRELOAD_LIMIT_SLOW_SIXEL: usize = 2;
 
 impl App {
-    pub(in crate::app) fn prepared_static_image_for_overlay(
+    pub(crate) fn prepared_static_image_for_overlay(
         &mut self,
         request: &StaticImageOverlayRequest,
     ) -> StaticImageOverlayPreparation {

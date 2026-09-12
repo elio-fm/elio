@@ -9,7 +9,7 @@ const VISIBLE_HEAVY_PREVIEW_PREFETCH_LIMIT: usize = 4;
 const VISIBLE_MIXED_HEAVY_PREVIEW_PREFETCH_LIMIT: usize = 3;
 
 impl App {
-    pub(in crate::app) fn prefetch_visible_heavy_preview_entries(&mut self) {
+    pub(crate) fn prefetch_visible_heavy_preview_entries(&mut self) {
         if !self.uses_sixel_image_protocol()
             || self.preview.state.deferred_refresh_at.is_some()
             || self.browser_wheel_burst_active()
@@ -50,7 +50,7 @@ impl App {
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))
     }
 
-    pub(in crate::app) fn schedule_preview_prefetch(&mut self) {
+    pub(crate) fn schedule_preview_prefetch(&mut self) {
         self.preview.state.prefetch_ready_at = self
             .selected_entry()
             .map(|_| Instant::now() + PREVIEW_PREFETCH_IDLE_DELAY);
@@ -91,7 +91,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn prefetch_nearby_audio_previews(&mut self) {
+    pub(crate) fn prefetch_nearby_audio_previews(&mut self) {
         let Some(current_entry) = self.selected_entry() else {
             return;
         };
@@ -122,7 +122,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn nearby_audio_preview_visual_overlay_requests(
+    pub(crate) fn nearby_audio_preview_visual_overlay_requests(
         &self,
     ) -> Vec<crate::app::preview::static_images::StaticImageOverlayRequest> {
         let Some(entry) = self.selected_entry() else {
@@ -150,7 +150,7 @@ impl App {
             .collect()
     }
 
-    pub(in crate::app) fn refreshes_image_preloads_for_nearby_audio_preview(
+    pub(crate) fn refreshes_image_preloads_for_nearby_audio_preview(
         &self,
         entry: &Entry,
         variant: &crate::preview::PreviewRequestOptions,

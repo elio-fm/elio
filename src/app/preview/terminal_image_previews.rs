@@ -62,7 +62,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn refresh_current_media_preview_after_image_support_enabled(&mut self) {
+    pub(crate) fn refresh_current_media_preview_after_image_support_enabled(&mut self) {
         if !self.terminal_image_overlay_available()
             || self.preview.state.content.preview_visual.is_some()
             || !matches!(
@@ -108,7 +108,7 @@ impl App {
     /// True while a resize burst is still in flight; image/PDF overlay
     /// placement is held (text renders normally) until geometry settles so a
     /// storm of SIGWINCH steps doesn't queue one full payload per step.
-    pub(in crate::app) fn terminal_image_resize_settling(&self) -> bool {
+    pub(crate) fn terminal_image_resize_settling(&self) -> bool {
         self.preview
             .terminal_images
             .resize_settled_at
@@ -135,7 +135,7 @@ impl App {
             .map(|settled_at| settled_at.saturating_duration_since(Instant::now()))
     }
 
-    pub(in crate::app) fn queue_terminal_image_geometry_clear(&mut self) {
+    pub(crate) fn queue_terminal_image_geometry_clear(&mut self) {
         if matches!(
             self.preview.terminal_images.protocol,
             ImageProtocol::KittyGraphics | ImageProtocol::ItermInline | ImageProtocol::Sixel
@@ -178,15 +178,15 @@ impl App {
         true
     }
 
-    pub(in crate::app) fn terminal_image_overlay_available(&self) -> bool {
+    pub(crate) fn terminal_image_overlay_available(&self) -> bool {
         self.preview.terminal_images.protocol != ImageProtocol::None
     }
 
-    pub(in crate::app) fn uses_sixel_image_protocol(&self) -> bool {
+    pub(crate) fn uses_sixel_image_protocol(&self) -> bool {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
     }
 
-    pub(in crate::app) fn uses_iterm_inline_protocol_inside_tmux(&self) -> bool {
+    pub(crate) fn uses_iterm_inline_protocol_inside_tmux(&self) -> bool {
         self.preview.terminal_images.protocol == ImageProtocol::ItermInline
             && terminal_images::inside_tmux()
     }
@@ -195,7 +195,7 @@ impl App {
         self.preview.terminal_images.identity == TerminalIdentity::WindowsTerminal
     }
 
-    pub(in crate::app) fn needs_sixel_repaint_workaround(&self) -> bool {
+    pub(crate) fn needs_sixel_repaint_workaround(&self) -> bool {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
             && matches!(
                 self.preview.terminal_images.identity,
@@ -203,7 +203,7 @@ impl App {
             )
     }
 
-    pub(in crate::app) fn needs_slow_sixel_navigation_workaround(&self) -> bool {
+    pub(crate) fn needs_slow_sixel_navigation_workaround(&self) -> bool {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
             && matches!(
                 self.preview.terminal_images.identity,
@@ -212,7 +212,7 @@ impl App {
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn set_terminal_image_protocol_for_tests(
+    pub(crate) fn set_terminal_image_protocol_for_tests(
         &mut self,
         protocol: ImageProtocol,
         identity: TerminalIdentity,
@@ -224,7 +224,7 @@ impl App {
     /// Pushes the resize-settle deadline far enough into the future that tests
     /// can assert pending-settle behavior without depending on scheduler timing.
     #[cfg(test)]
-    pub(in crate::app) fn defer_terminal_image_resize_settle_for_tests(&mut self) {
+    pub(crate) fn defer_terminal_image_resize_settle_for_tests(&mut self) {
         self.preview.terminal_images.resize_settled_at =
             Some(Instant::now() + Duration::from_secs(60));
     }
@@ -232,11 +232,11 @@ impl App {
     /// Jumps past the resize-settle window so tests can exercise the placement
     /// that follows a resize without waiting out the real delay.
     #[cfg(test)]
-    pub(in crate::app) fn expire_terminal_image_resize_settle_for_tests(&mut self) {
+    pub(crate) fn expire_terminal_image_resize_settle_for_tests(&mut self) {
         self.preview.terminal_images.resize_settled_at = None;
     }
 
-    pub(in crate::app) fn cached_terminal_window(&self) -> Option<TerminalWindowSize> {
+    pub(crate) fn cached_terminal_window(&self) -> Option<TerminalWindowSize> {
         self.preview.terminal_images.window
     }
 
@@ -584,17 +584,17 @@ impl App {
             || self.overlays.help
     }
 
-    pub(in crate::app) fn clear_pending_iterm_popup_restore(&mut self) {
+    pub(crate) fn clear_pending_iterm_popup_restore(&mut self) {
         self.preview.terminal_images.pending_iterm_popup_restore = false;
     }
 
-    pub(in crate::app) fn queue_sixel_repaint(&mut self) {
+    pub(crate) fn queue_sixel_repaint(&mut self) {
         if self.needs_sixel_repaint_workaround() {
             self.preview.terminal_images.pending_sixel_repaint = true;
         }
     }
 
-    pub(in crate::app) fn queue_windows_terminal_pdf_sixel_repaint(&mut self) {
+    pub(crate) fn queue_windows_terminal_pdf_sixel_repaint(&mut self) {
         if self.preview.terminal_images.protocol == ImageProtocol::Sixel
             && self.preview.terminal_images.identity == TerminalIdentity::WindowsTerminal
         {

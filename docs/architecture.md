@@ -10,14 +10,15 @@ This crate is organized around focused subsystems.
 - `background_jobs`: shared job scheduling, workers, requests, and result messages.
 - `fuzzy_finder` and `duplicate_finder`: feature state and behavior for finding items.
 - `goto_menu`: configured Go To entries and destination resolution.
+- `input_handling`: application-level keyboard, mouse, paste, and wheel interpretation.
 - `archive` and `opening`: archive operations and launching items with applications.
 - `preview`: preview construction plus document and image inspection, preparation, and rendering.
 - `theme`: palettes and file appearance rules shared by rendered interfaces.
-- `app`: remaining cross-subsystem state, input dispatch, preview coordination, and applying
+- `app`: remaining cross-subsystem state, preview coordination, actions, and application of
   background-job results.
 - `elevated_session`: privileged filesystem operations through sudo or doas.
-- `terminal_runtime`: application startup, terminal lifecycle, event loop, drawing, terminal-image
-  protocols, and session output.
+- `terminal_runtime`: application startup, terminal lifecycle, raw input acquisition, event loop,
+  drawing, terminal-image protocols, and session output.
 - `ui`: terminal rendering and layout.
 
 Current boundary rules:
@@ -31,8 +32,10 @@ Current boundary rules:
   selection also belong to `file_browser`; job execution, mouse hit testing, and terminal drag
   protocols remain at their respective boundaries.
 - Fuzzy-finder, duplicate-finder, Go To menu, and Open With state and pure transitions belong to
-  their feature subsystems; `app` only coordinates their input, background jobs, navigation, and
-  side effects.
+  their feature subsystems; `input_handling` interprets user interaction, while `app` coordinates
+  background jobs, navigation, and side effects.
+- Raw Crossterm and Kitty input acquisition belongs to `terminal_runtime`; mapping those events to
+  Elio behavior belongs to `input_handling`.
 - `fs` and `file_classification` should not depend on `app`.
 - Code-language recognition belongs to `file_classification`, not to a preview renderer.
 - Preview construction and media processing in `preview` should not depend on `app` or

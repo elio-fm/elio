@@ -1,10 +1,11 @@
 use super::*;
-use crate::app::text_edit::{
+use crate::input_handling::text_editing::{
     char_to_byte, insert_text_at_cursor, multiline_paste_text, single_line_paste_text,
 };
 
 const HELP_FALLBACK_SCROLL_MAX: usize = 64;
 const HELP_FALLBACK_PAGE_STEP: usize = 8;
+pub(super) const KEY_REPEAT_NAV_INTERVAL: Duration = Duration::from_millis(28);
 
 impl App {
     pub fn handle_event(&mut self, event: Event) -> Result<()> {
@@ -183,7 +184,7 @@ impl App {
             || self.jobs.paste_progress.is_some()
     }
 
-    pub(in crate::app) fn scroll_help_by(&mut self, delta: isize) {
+    pub(crate) fn scroll_help_by(&mut self, delta: isize) {
         let max_scroll = self.help_scroll_max();
         if delta.is_negative() {
             self.overlays.help_scroll = self
@@ -488,7 +489,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn dispatch_action(&mut self, action: crate::config::Action) -> Result<()> {
+    pub(crate) fn dispatch_action(&mut self, action: crate::config::Action) -> Result<()> {
         use crate::config::Action;
         match action {
             Action::Quit => self.should_quit = true,
@@ -600,7 +601,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn key_context(&self) -> crate::config::KeyContext {
+    pub(crate) fn key_context(&self) -> crate::config::KeyContext {
         if self.file_browser.in_trash || self.cwd_is_inside_trash_subfolder() {
             crate::config::KeyContext::Trash
         } else {
@@ -650,7 +651,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn open_selected(&mut self) -> Result<()> {
+    pub(crate) fn open_selected(&mut self) -> Result<()> {
         let Some(entry) = self.selected_entry() else {
             if !self.file_browser.selected_paths.is_empty() {
                 return self.dispatch_action(crate::config::Action::Open);
@@ -708,7 +709,7 @@ fn fullscreen_preview_action_policy(
     }
 }
 
-fn fullscreen_preview_dispatches_then_exits(action: crate::config::Action) -> bool {
+pub(super) fn fullscreen_preview_dispatches_then_exits(action: crate::config::Action) -> bool {
     use crate::config::Action;
     matches!(
         action,
@@ -722,7 +723,7 @@ fn fullscreen_preview_dispatches_then_exits(action: crate::config::Action) -> bo
     )
 }
 
-fn fullscreen_preview_dispatches_and_stays(action: crate::config::Action) -> bool {
+pub(super) fn fullscreen_preview_dispatches_and_stays(action: crate::config::Action) -> bool {
     use crate::config::Action;
     matches!(
         action,
@@ -736,7 +737,7 @@ fn fullscreen_preview_dispatches_and_stays(action: crate::config::Action) -> boo
     )
 }
 
-fn fullscreen_preview_exits_then_dispatches(action: crate::config::Action) -> bool {
+pub(super) fn fullscreen_preview_exits_then_dispatches(action: crate::config::Action) -> bool {
     use crate::config::Action;
     matches!(
         action,
@@ -767,7 +768,7 @@ fn fullscreen_preview_exits_then_dispatches(action: crate::config::Action) -> bo
     )
 }
 
-fn should_handle_high_frequency_horizontal_key(
+pub(super) fn should_handle_high_frequency_horizontal_key(
     key: KeyEvent,
     configured_action: Option<crate::config::Action>,
 ) -> bool {
@@ -812,114 +813,4 @@ fn is_help_shortcut(key: KeyEvent) -> bool {
 
     matches!(key.code, KeyCode::Char('?'))
         || matches!(key.code, KeyCode::Char('/')) && key.modifiers.contains(KeyModifiers::SHIFT)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::Action;
-
-    #[test]
-    fn high_frequency_horizontal_emulation_only_uses_default_history_actions() {
-        assert!(should_handle_high_frequency_horizontal_key(
-            KeyEvent::new(KeyCode::Left, KeyModifiers::ALT),
-            Some(Action::HistoryBack),
-        ));
-        assert!(should_handle_high_frequency_horizontal_key(
-            KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
-            Some(Action::HistoryForward),
-        ));
-        assert!(!should_handle_high_frequency_horizontal_key(
-            KeyEvent::new(KeyCode::Left, KeyModifiers::ALT),
-            Some(Action::Open),
-        ));
-        assert!(!should_handle_high_frequency_horizontal_key(
-            KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
-            Some(Action::Open),
-        ));
-        assert!(!should_handle_high_frequency_horizontal_key(
-            KeyEvent::new(KeyCode::Char('h'), KeyModifiers::ALT),
-            Some(Action::HistoryBack),
-        ));
-    }
-
-    #[test]
-    fn fullscreen_preview_explicit_commands_exit_before_dispatch() {
-        for action in [
-            Action::Yank,
-            Action::Cut,
-            Action::Paste,
-            Action::Trash,
-            Action::DeletePermanently,
-            Action::SymlinkAbsolute,
-            Action::SymlinkRelative,
-            Action::SelectAll,
-            Action::CopyPath,
-            Action::SearchFolders,
-            Action::SearchFiles,
-            Action::FilterDirectory,
-            Action::GoTo,
-            Action::OpenWith,
-            Action::Open,
-            Action::Zoxide,
-            Action::ShellHere,
-            Action::Create,
-            Action::Rename,
-            Action::RenameInEditor,
-            Action::CreateArchive,
-            Action::ExtractArchive,
-            Action::RestoreFromTrash,
-        ] {
-            assert!(
-                fullscreen_preview_exits_then_dispatches(action),
-                "{action:?} should be allowed from fullscreen preview"
-            );
-        }
-    }
-
-    #[test]
-    fn fullscreen_preview_navigation_dispatches_before_exit() {
-        for action in [
-            Action::CyclePlacesNext,
-            Action::CyclePlacesPrevious,
-            Action::GoParent,
-            Action::HistoryBack,
-            Action::HistoryForward,
-            Action::NavLeft,
-            Action::NavRight,
-        ] {
-            assert!(
-                fullscreen_preview_dispatches_then_exits(action),
-                "{action:?} should dispatch before leaving fullscreen preview"
-            );
-        }
-    }
-
-    #[test]
-    fn fullscreen_preview_same_directory_navigation_stays_fullscreen() {
-        for action in [
-            Action::ToggleSelection,
-            Action::PageUp,
-            Action::PageDown,
-            Action::JumpFirst,
-            Action::JumpLast,
-            Action::NavDown,
-            Action::NavUp,
-        ] {
-            assert!(
-                fullscreen_preview_dispatches_and_stays(action),
-                "{action:?} should dispatch without leaving fullscreen preview"
-            );
-        }
-    }
-
-    #[test]
-    fn fullscreen_preview_keeps_hidden_browser_mutations_blocked() {
-        for action in [Action::Sort, Action::ToggleView, Action::ToggleHidden] {
-            assert!(
-                !fullscreen_preview_exits_then_dispatches(action),
-                "{action:?} should stay blocked from fullscreen preview"
-            );
-        }
-    }
 }

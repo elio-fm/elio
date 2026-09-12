@@ -41,7 +41,7 @@ impl App {
             .map(|ready_at| ready_at.saturating_duration_since(Instant::now()))
     }
 
-    pub(in crate::app) fn preview_prefers_static_image_surface(&self) -> bool {
+    pub(crate) fn preview_prefers_static_image_surface(&self) -> bool {
         let Some(request) = self.active_static_image_overlay_request() else {
             return false;
         };
@@ -52,7 +52,7 @@ impl App {
             .contains(&StaticImageKey::from_request(&request))
     }
 
-    pub(in crate::app) fn preview_surface_visible_for_images(&self) -> bool {
+    pub(crate) fn preview_surface_visible_for_images(&self) -> bool {
         self.preview.visible || self.duplicate_preview_rendered()
     }
 
@@ -64,7 +64,7 @@ impl App {
                 .is_some_and(|entry| static_image_detail_label(&entry).is_some())
     }
 
-    pub(in crate::app) fn static_image_preview_header_detail(&self) -> Option<String> {
+    pub(crate) fn static_image_preview_header_detail(&self) -> Option<String> {
         let request = self.active_static_image_overlay_request()?;
         let dimensions = self
             .preview
@@ -75,23 +75,20 @@ impl App {
         Some(format!("{}x{}", dimensions.width_px, dimensions.height_px))
     }
 
-    pub(in crate::app) fn should_defer_static_image_preview(&self, entry: &Entry) -> bool {
+    pub(crate) fn should_defer_static_image_preview(&self, entry: &Entry) -> bool {
         static_image_detail_label(entry).is_some() && self.preview_prefers_static_image_surface()
     }
 
-    pub(in crate::app) fn sixel_static_image_preview_for_entry(&self, entry: &Entry) -> bool {
+    pub(crate) fn sixel_static_image_preview_for_entry(&self, entry: &Entry) -> bool {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
             && static_image_detail_label(entry).is_some()
     }
 
-    pub(in crate::app) fn static_image_preview_detail(
-        &self,
-        entry: &Entry,
-    ) -> Option<&'static str> {
+    pub(crate) fn static_image_preview_detail(&self, entry: &Entry) -> Option<&'static str> {
         static_image_detail_label(entry)
     }
 
-    pub(in crate::app) fn static_image_overlay_placeholder_message(&self) -> Option<String> {
+    pub(crate) fn static_image_overlay_placeholder_message(&self) -> Option<String> {
         if !self.preview_prefers_static_image_surface() || self.preview_uses_image_overlay() {
             return None;
         }
@@ -110,14 +107,12 @@ impl App {
         None
     }
 
-    pub(in crate::app) fn active_static_image_overlay_request(
-        &self,
-    ) -> Option<StaticImageOverlayRequest> {
+    pub(crate) fn active_static_image_overlay_request(&self) -> Option<StaticImageOverlayRequest> {
         let entry = self.active_preview_entry()?;
         self.static_image_overlay_request_for_entry(&entry)
     }
 
-    pub(in crate::app) fn clear_failed_static_image_state_if_needed(&mut self) {
+    pub(crate) fn clear_failed_static_image_state_if_needed(&mut self) {
         if let Some(entry) = self.active_preview_entry()
             && static_image_detail_label(&entry).is_none()
         {
@@ -125,7 +120,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn sync_image_preview_selection_activation(&mut self) {
+    pub(crate) fn sync_image_preview_selection_activation(&mut self) {
         self.preview.image.activation_ready_at = self
             .active_static_image_overlay_request()
             .or_else(|| self.active_preview_visual_overlay_request())
@@ -136,11 +131,11 @@ impl App {
             });
     }
 
-    pub(in crate::app) fn clear_image_preview_selection_activation(&mut self) {
+    pub(crate) fn clear_image_preview_selection_activation(&mut self) {
         self.preview.image.activation_ready_at = None;
     }
 
-    pub(in crate::app) fn mark_static_image_failed(&mut self, request: &StaticImageOverlayRequest) {
+    pub(crate) fn mark_static_image_failed(&mut self, request: &StaticImageOverlayRequest) {
         self.preview
             .image
             .failed_images
@@ -191,19 +186,19 @@ impl App {
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn set_ffmpeg_available_for_tests(&mut self, available: bool) {
+    pub(crate) fn set_ffmpeg_available_for_tests(&mut self, available: bool) {
         self.preview.image.ffmpeg_available = Some(available);
     }
 
-    pub(in crate::app) fn image_selection_activation_ready(&self) -> bool {
+    pub(crate) fn image_selection_activation_ready(&self) -> bool {
         self.preview.image.activation_ready_at.is_none()
     }
 
-    pub(in crate::app) fn static_image_overlay_displayed(&self) -> bool {
+    pub(crate) fn static_image_overlay_displayed(&self) -> bool {
         self.preview.image.displayed.is_some()
     }
 
-    pub(in crate::app) fn displayed_static_image_clear_area(&self) -> Option<Rect> {
+    pub(crate) fn displayed_static_image_clear_area(&self) -> Option<Rect> {
         self.preview
             .image
             .displayed
@@ -211,7 +206,7 @@ impl App {
             .map(|displayed| displayed.clear_area)
     }
 
-    pub(in crate::app) fn displayed_static_image_mode(&self) -> Option<StaticImageOverlayMode> {
+    pub(crate) fn displayed_static_image_mode(&self) -> Option<StaticImageOverlayMode> {
         self.preview
             .image
             .displayed
@@ -219,12 +214,12 @@ impl App {
             .map(|displayed| displayed.mode)
     }
 
-    pub(in crate::app) fn clear_displayed_static_image(&mut self) {
+    pub(crate) fn clear_displayed_static_image(&mut self) {
         self.preview.image.displayed = None;
         self.preview.image.displayed_excluded.clear();
     }
 
-    pub(in crate::app) fn preview_visual_force_render_to_cache(
+    pub(crate) fn preview_visual_force_render_to_cache(
         &self,
         visual: &preview::PreviewVisual,
     ) -> bool {
@@ -244,14 +239,14 @@ impl App {
             || self.uses_iterm_inline_protocol_inside_tmux()
     }
 
-    pub(in crate::app) fn displayed_static_image_matches_active(&self) -> bool {
+    pub(crate) fn displayed_static_image_matches_active(&self) -> bool {
         self.active_static_image_display_target()
             .as_ref()
             .zip(self.preview.image.displayed.as_ref())
             .is_some_and(|(active, displayed)| active == displayed)
     }
 
-    pub(in crate::app) fn keep_displayed_static_image_overlay_while_pending(&self) -> bool {
+    pub(crate) fn keep_displayed_static_image_overlay_while_pending(&self) -> bool {
         let Some(displayed) = self.preview.image.displayed.as_ref() else {
             return false;
         };
@@ -289,7 +284,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn displayed_static_image_replaces_preview(&self) -> bool {
+    pub(crate) fn displayed_static_image_replaces_preview(&self) -> bool {
         self.preview
             .image
             .displayed

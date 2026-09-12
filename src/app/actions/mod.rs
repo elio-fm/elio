@@ -3,7 +3,7 @@ mod duplicate_finder;
 mod fuzzy_finder;
 mod goto;
 mod navigation;
-pub(in crate::app) mod open_with;
+pub(crate) mod open_with;
 
 use super::*;
 use anyhow::{Result, anyhow, bail};

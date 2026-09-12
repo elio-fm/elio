@@ -5,7 +5,7 @@ use crate::preview::{
 };
 
 impl App {
-    pub(in crate::app) fn cached_preview_for(
+    pub(crate) fn cached_preview_for(
         &self,
         entry: &Entry,
         variant: &PreviewRequestOptions,
@@ -36,7 +36,7 @@ impl App {
             && self.preview.media.ffmpeg_available != Some(false)
     }
 
-    pub(in crate::app) fn build_preview_request(
+    pub(crate) fn build_preview_request(
         &mut self,
         entry: Entry,
         variant: PreviewRequestOptions,
@@ -67,7 +67,7 @@ impl App {
 
     /// Build a preview request with `code_render_limit = code_line_limit` (full render).
     /// Used for prefetch and other paths that should always produce complete previews.
-    pub(in crate::app) fn build_full_preview_request(
+    pub(crate) fn build_full_preview_request(
         &mut self,
         entry: Entry,
         variant: PreviewRequestOptions,
@@ -95,7 +95,7 @@ impl App {
     /// - The preview is already complete (no partial render in flight).
     /// - Another extension is already in flight for this entry.
     /// - There is no selected entry.
-    pub(in crate::app) fn build_code_preview_extension_request(
+    pub(crate) fn build_code_preview_extension_request(
         &mut self,
         entry: Entry,
         variant: PreviewRequestOptions,
@@ -124,20 +124,20 @@ impl App {
         })
     }
 
-    pub(in crate::app) fn current_preview_request_options(&self) -> PreviewRequestOptions {
+    pub(crate) fn current_preview_request_options(&self) -> PreviewRequestOptions {
         self.comic_preview_request_options()
             .or_else(|| self.epub_preview_request_options())
             .unwrap_or_default()
     }
 
-    pub(in crate::app) fn preview_code_line_limit_for_entry(&self, entry: &Entry) -> usize {
+    pub(crate) fn preview_code_line_limit_for_entry(&self, entry: &Entry) -> usize {
         self.preview_code_line_limit_for_entry_with_rows(
             entry,
             self.input.frame_state.preview_rows_visible,
         )
     }
 
-    pub(in crate::app) fn preview_code_line_limit_for_entry_with_rows(
+    pub(crate) fn preview_code_line_limit_for_entry_with_rows(
         &self,
         entry: &Entry,
         preview_rows_visible: usize,
@@ -151,10 +151,7 @@ impl App {
         default_code_preview_line_limit()
     }
 
-    pub(in crate::app) fn preview_request_options_for_entry(
-        &self,
-        entry: &Entry,
-    ) -> PreviewRequestOptions {
+    pub(crate) fn preview_request_options_for_entry(&self, entry: &Entry) -> PreviewRequestOptions {
         self.comic_preview_request_options_for_entry(entry)
             .or_else(|| self.epub_preview_request_options_for_entry(entry))
             .unwrap_or_default()

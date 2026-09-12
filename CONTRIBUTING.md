@@ -33,7 +33,7 @@ A brief overview of the repository layout:
 ├── examples/                   # Example config and theme files
 ├── packaging/                  # Distribution packaging files
 ├── src/
-│   ├── app/                    # Application state, input, and preview coordination
+│   ├── app/                    # Remaining application state and cross-feature coordination
 │   ├── archive/                # Archive creation, extraction, and format handling
 │   ├── background_jobs/        # Shared job scheduling, workers, requests, and results
 │   ├── cli/                    # Command-line arguments, options, help, and shell commands
@@ -45,6 +45,7 @@ A brief overview of the repository layout:
 │   ├── fs/                     # Directory access, entries, sorting, watching, and metadata
 │   ├── fuzzy_finder/           # Candidate indexing and fuzzy matching
 │   ├── goto_menu/              # Configured Go To entries and destination resolution
+│   ├── input_handling/         # Keyboard, mouse, paste, and wheel interaction handling
 │   ├── opening/                # Open rules, application launching, and Open With discovery
 │   ├── places/                 # Places list and mounted-device discovery
 │   ├── preview/                # Preview construction, document/image processing, and tests

@@ -6,7 +6,7 @@ use crate::terminal_runtime::terminal_images::ImageProtocol;
 use std::collections::HashSet;
 
 impl App {
-    pub(in crate::app) fn refresh_static_image_preloads(&mut self) {
+    pub(crate) fn refresh_static_image_preloads(&mut self) {
         let current_static = self.active_static_image_overlay_request();
         // When a deferred preview refresh is pending, preview_state.content still reflects the
         // previous selection.  Using its visual as "current" would cancel image-prepare jobs for
@@ -79,7 +79,7 @@ impl App {
         self.prefetch_visible_heavy_preview_entries();
     }
 
-    pub(in crate::app) fn refresh_static_image_preloads_if_needed(&mut self) {
+    pub(crate) fn refresh_static_image_preloads_if_needed(&mut self) {
         let viewport = StaticImagePreloadViewport {
             selected: self.file_browser.selected,
             scroll_row: self.file_browser.scroll_row,
@@ -97,7 +97,7 @@ impl App {
         self.refresh_static_image_preloads();
     }
 
-    pub(in crate::app) fn apply_image_prepare_build(
+    pub(crate) fn apply_image_prepare_build(
         &mut self,
         build: background_job_results::ImagePrepareBuild,
     ) -> bool {

@@ -26,23 +26,23 @@ use crate::places::PlacesState;
 use crate::preview::PreviewRuntime;
 
 #[derive(Clone, Debug)]
-pub(super) struct ClickState {
-    pub(super) path: PathBuf,
-    pub(super) at: Instant,
+pub(crate) struct ClickState {
+    pub(crate) path: PathBuf,
+    pub(crate) at: Instant,
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct ScrollLane {
-    pub(super) pending: isize,
-    pub(super) remainder: isize,
-    pub(super) last_step_at: Option<Instant>,
-    pub(super) last_input_at: Option<Instant>,
-    pub(super) last_input_direction: isize,
-    pub(super) burst_count: u8,
+pub(crate) struct ScrollLane {
+    pub(crate) pending: isize,
+    pub(crate) remainder: isize,
+    pub(crate) last_step_at: Option<Instant>,
+    pub(crate) last_input_at: Option<Instant>,
+    pub(crate) last_input_direction: isize,
+    pub(crate) burst_count: u8,
 }
 
 impl ScrollLane {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             pending: 0,
             remainder: 0,
@@ -55,28 +55,32 @@ impl ScrollLane {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct ScrollState {
-    pub(super) horizontal: ScrollLane,
-    pub(super) vertical: ScrollLane,
-    pub(super) preview: ScrollLane,
-    pub(super) preview_horizontal: ScrollLane,
-    pub(super) search: ScrollLane,
+pub(crate) struct ScrollState {
+    pub(crate) horizontal: ScrollLane,
+    pub(crate) vertical: ScrollLane,
+    pub(crate) preview: ScrollLane,
+    pub(crate) preview_horizontal: ScrollLane,
+    pub(crate) search: ScrollLane,
+}
+
+impl ScrollState {
+    pub(crate) const BURST_WINDOW: Duration = Duration::from_millis(150);
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum WheelTarget {
+pub(crate) enum WheelTarget {
     Entries,
     Preview,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum WheelProfile {
+pub(crate) enum WheelProfile {
     Default,
     HighFrequency,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum NavigationRepeatKey {
+pub(crate) enum NavigationRepeatKey {
     Up,
     Down,
     Left,
@@ -107,12 +111,12 @@ pub(crate) struct OverlayState {
 }
 
 pub(crate) struct JobRuntime {
-    pub(in crate::app) directory_token: u64,
-    pub(in crate::app) directory_fingerprint_token: u64,
-    pub(in crate::app) search_token: u64,
-    pub(in crate::app) search_loading: bool,
-    pub(in crate::app) search_cache: Option<SearchCache>,
-    pub(in crate::app) duplicate_token: u64,
+    pub(crate) directory_token: u64,
+    pub(crate) directory_fingerprint_token: u64,
+    pub(crate) search_token: u64,
+    pub(crate) search_loading: bool,
+    pub(crate) search_cache: Option<SearchCache>,
+    pub(crate) duplicate_token: u64,
     pub(crate) scheduler: JobScheduler,
     pub(crate) clipboard: Option<Clipboard>,
     pub(crate) archive_create_token: u64,
@@ -145,23 +149,23 @@ pub(crate) struct JobRuntime {
 
 pub(crate) struct InputRuntime {
     pub(crate) frame_state: FrameState,
-    pub(in crate::app) last_click: Option<ClickState>,
-    pub(in crate::app) wheel_scroll: ScrollState,
-    pub(in crate::app) wheel_profile: WheelProfile,
-    pub(in crate::app) last_wheel_target: Option<WheelTarget>,
+    pub(crate) last_click: Option<ClickState>,
+    pub(crate) wheel_scroll: ScrollState,
+    pub(crate) wheel_profile: WheelProfile,
+    pub(crate) last_wheel_target: Option<WheelTarget>,
     // Cursor panel tracked exclusively from MouseEventKind::Moved events.
     // These events come from ?1003h (any-event tracking) and always carry the true
     // cursor position, so this is a reliable fallback when scroll event coordinates
     // are wrong or absent (observed in some Alacritty/Ghostty configurations).
-    pub(in crate::app) hover_panel: Option<WheelTarget>,
-    pub(in crate::app) browser_wheel_post_burst_pending: bool,
-    pub(in crate::app) last_navigation_key: Option<(NavigationRepeatKey, Instant)>,
-    pub(in crate::app) last_selection_change_at: Instant,
+    pub(crate) hover_panel: Option<WheelTarget>,
+    pub(crate) browser_wheel_post_burst_pending: bool,
+    pub(crate) last_navigation_key: Option<(NavigationRepeatKey, Instant)>,
+    pub(crate) last_selection_change_at: Instant,
     /// Tracks when keyboard navigation last moved the selection.
     /// Only updated by `move_vertical_keyboard`, `move_by_keyboard`, and `page`
     /// (all keyboard-only paths), not by direct selection or wheel input, so it
     /// does not interfere with wheel auto-focus routing.
-    pub(in crate::app) last_key_nav_at: Instant,
+    pub(crate) last_key_nav_at: Instant,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -192,7 +196,7 @@ pub(crate) enum ChooserExit {
 pub struct App {
     pub(crate) file_browser: FileBrowserState,
     pub(crate) places: PlacesState,
-    pub(in crate::app) preview: PreviewRuntime,
+    pub(crate) preview: PreviewRuntime,
     pub(crate) overlays: OverlayState,
     pub(crate) jobs: JobRuntime,
     pub(crate) input: InputRuntime,
@@ -313,25 +317,25 @@ impl App {
         Ok(app)
     }
 
-    pub(in crate::app) fn ffprobe_available(&mut self) -> bool {
+    pub(crate) fn ffprobe_available(&mut self) -> bool {
         *self.preview.media.ffprobe_available.get_or_insert_with(|| {
             crate::terminal_runtime::terminal_images::command_exists("ffprobe")
         })
     }
 
-    pub(in crate::app) fn media_ffmpeg_available(&mut self) -> bool {
+    pub(crate) fn media_ffmpeg_available(&mut self) -> bool {
         *self.preview.media.ffmpeg_available.get_or_insert_with(|| {
             crate::terminal_runtime::terminal_images::command_exists("ffmpeg")
         })
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn set_media_ffprobe_available_for_tests(&mut self, available: bool) {
+    pub(crate) fn set_media_ffprobe_available_for_tests(&mut self, available: bool) {
         self.preview.media.ffprobe_available = Some(available);
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn set_media_ffmpeg_available_for_tests(&mut self, available: bool) {
+    pub(crate) fn set_media_ffmpeg_available_for_tests(&mut self, available: bool) {
         self.preview.media.ffmpeg_available = Some(available);
     }
 }

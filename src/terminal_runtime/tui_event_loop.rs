@@ -1,6 +1,7 @@
 use super::{
-    cd_on_exit, chooser_output, kitty_dnd, shell_here,
-    terminal_input::{InputEvent, InputReader},
+    cd_on_exit, chooser_output,
+    input_reader::{InputEvent, InputReader},
+    kitty_dnd, shell_here,
     tui_drawing::{AppTerminal, Drainer, ThreadedWriter, draw_terminal_frame},
     zoxide,
 };
@@ -554,7 +555,7 @@ fn run_app(
             ],
         );
 
-        if let Some(first_input) = read_runtime_input(&input_reader, poll_interval)? {
+        if let Some(first_input) = input_reader.read(poll_interval)? {
             // Batch all immediately-available events into one render cycle.
             // This prevents lag when events (especially scroll events from high-frequency
             // terminals) arrive faster than the app can render: instead of one render per
@@ -563,12 +564,12 @@ fn run_app(
             loop {
                 let input = match next_input.take() {
                     Some(input) => input,
-                    None => match try_read_runtime_input(&input_reader)? {
+                    None => match input_reader.try_read()? {
                         Some(input) => input,
                         None => break,
                     },
                 };
-                let input = coalesce_resize_inputs(&input_reader, input, &mut next_input)?;
+                let input = input_reader.coalesce_resizes(input, &mut next_input)?;
                 #[cfg(unix)]
                 let input_result = handle_runtime_input(
                     terminal,
@@ -581,7 +582,7 @@ fn run_app(
                 let input_result = handle_runtime_input(input)?;
                 let Some(event) = input_result else {
                     dirty = true;
-                    next_input = try_read_runtime_input(&input_reader)?;
+                    next_input = input_reader.try_read()?;
                     continue;
                 };
                 if std::env::var_os("ELIO_LOG_MOUSE").is_some()
@@ -628,7 +629,7 @@ fn run_app(
                         dirty = true;
                     }
                 };
-                next_input = try_read_runtime_input(&input_reader)?;
+                next_input = input_reader.try_read()?;
             }
 
             if app.should_quit {
@@ -641,12 +642,12 @@ fn run_app(
                 let zoxide_result = match task {
                     PendingTerminalTask::Command { program, args } => {
                         let cwd = app.file_browser.cwd.clone();
-                        pause_runtime_input(&input_reader, true);
+                        input_reader.set_paused(true);
                         suspend_terminal(terminal, drainer, true, kitty_dnd)?;
                         let result = run_open_command_in_terminal(&program, &args, &cwd);
                         resume_terminal(terminal, drainer, kitty_dnd)?;
                         app.invalidate_terminal_image_overlay_after_terminal_task();
-                        pause_runtime_input(&input_reader, false);
+                        input_reader.set_paused(false);
                         if let Err(error) = result {
                             app.set_status_message(format!("Could not open terminal app: {error}"));
                         }
@@ -654,7 +655,7 @@ fn run_app(
                     }
                     PendingTerminalTask::Commands(commands) => {
                         let cwd = app.file_browser.cwd.clone();
-                        pause_runtime_input(&input_reader, true);
+                        input_reader.set_paused(true);
                         suspend_terminal(terminal, drainer, true, kitty_dnd)?;
                         let mut last_error = None;
                         for (program, args) in commands {
@@ -665,7 +666,7 @@ fn run_app(
                         }
                         resume_terminal(terminal, drainer, kitty_dnd)?;
                         app.invalidate_terminal_image_overlay_after_terminal_task();
-                        pause_runtime_input(&input_reader, false);
+                        input_reader.set_paused(false);
                         if let Some(error) = last_error {
                             app.set_status_message(format!("Could not open terminal app: {error}"));
                         }
@@ -678,24 +679,24 @@ fn run_app(
                         session,
                     } => {
                         let _temp_cleanup = EditorTempCleanup(session.temp_path.clone());
-                        pause_runtime_input(&input_reader, true);
+                        input_reader.set_paused(true);
                         suspend_terminal(terminal, drainer, true, kitty_dnd)?;
                         let result = run_blocking_in_terminal_result(&program, &args);
                         resume_terminal(terminal, drainer, kitty_dnd)?;
                         app.invalidate_terminal_image_overlay_after_terminal_task();
-                        pause_runtime_input(&input_reader, false);
+                        input_reader.set_paused(false);
                         if let Err(error) = app.finish_editor_bulk_rename(session, result) {
                             app.report_runtime_error("Editor rename failed", &error);
                         }
                         None
                     }
                     PendingTerminalTask::ShellHere { cwd } => {
-                        pause_runtime_input(&input_reader, true);
+                        input_reader.set_paused(true);
                         suspend_terminal(terminal, drainer, true, kitty_dnd)?;
                         let shell_result = shell_here::run(&cwd);
                         resume_terminal(terminal, drainer, kitty_dnd)?;
                         app.invalidate_terminal_image_overlay_after_terminal_task();
-                        pause_runtime_input(&input_reader, false);
+                        input_reader.set_paused(false);
                         match shell_result {
                             Ok(()) => refresh_after_shell(&mut app, &cwd),
                             Err(error) => app.set_status_message(error),
@@ -707,12 +708,12 @@ fn run_app(
                         if let Some(result) = zoxide::preflight(&cwd) {
                             Some(result)
                         } else {
-                            pause_runtime_input(&input_reader, true);
+                            input_reader.set_paused(true);
                             suspend_terminal(terminal, drainer, false, kitty_dnd)?;
                             let result = zoxide::run_query_in_terminal(&cwd);
                             resume_terminal(terminal, drainer, kitty_dnd)?;
                             app.invalidate_terminal_image_overlay_after_terminal_task();
-                            pause_runtime_input(&input_reader, false);
+                            input_reader.set_paused(false);
                             Some(result)
                         }
                     }
@@ -746,74 +747,6 @@ fn run_app(
 /// returns focus. Focus and resize events carry no such implication.
 fn event_implies_terminal_focus(event: &Event) -> bool {
     matches!(event, Event::Key(_) | Event::Mouse(_) | Event::Paste(_))
-}
-
-fn read_runtime_input(reader: &InputReader, timeout: Duration) -> Result<Option<InputEvent>> {
-    match reader {
-        InputReader::Crossterm => {
-            if event::poll(timeout)? {
-                Ok(Some(InputEvent::Terminal(event::read()?)))
-            } else {
-                Ok(None)
-            }
-        }
-        #[cfg(unix)]
-        InputReader::KittyDnd(reader) => Ok(reader.recv_timeout(timeout)?),
-    }
-}
-
-fn try_read_runtime_input(reader: &InputReader) -> Result<Option<InputEvent>> {
-    match reader {
-        InputReader::Crossterm => {
-            if event::poll(Duration::ZERO)? {
-                Ok(Some(InputEvent::Terminal(event::read()?)))
-            } else {
-                Ok(None)
-            }
-        }
-        #[cfg(unix)]
-        InputReader::KittyDnd(reader) => Ok(reader.try_recv()?),
-    }
-}
-
-fn pause_runtime_input(reader: &InputReader, paused: bool) {
-    #[cfg(unix)]
-    if let InputReader::KittyDnd(reader) = reader {
-        reader.set_paused(paused);
-    }
-    #[cfg(not(unix))]
-    let _ = (reader, paused);
-}
-
-fn coalesce_resize_inputs(
-    reader: &InputReader,
-    input: InputEvent,
-    next_input: &mut Option<InputEvent>,
-) -> Result<InputEvent> {
-    let InputEvent::Terminal(Event::Resize(mut width, mut height)) = input else {
-        return Ok(input);
-    };
-
-    loop {
-        let candidate = if let Some(input) = next_input.take() {
-            Some(input)
-        } else {
-            try_read_runtime_input(reader)?
-        };
-        match candidate {
-            Some(InputEvent::Terminal(Event::Resize(w, h))) => {
-                width = w;
-                height = h;
-            }
-            Some(other) => {
-                *next_input = Some(other);
-                break;
-            }
-            None => break,
-        }
-    }
-
-    Ok(InputEvent::Terminal(Event::Resize(width, height)))
 }
 
 #[cfg(unix)]

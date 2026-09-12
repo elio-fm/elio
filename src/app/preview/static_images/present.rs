@@ -14,7 +14,7 @@ use ratatui::layout::Rect;
 use std::{path::Path, sync::Arc};
 
 impl App {
-    pub(in crate::app) fn present_static_image_overlay(
+    pub(crate) fn present_static_image_overlay(
         &mut self,
         protocol: ImageProtocol,
         excluded: &[Rect],
@@ -114,7 +114,7 @@ impl App {
         Ok(OverlayPresentState::Displayed)
     }
 
-    pub(in crate::app) fn present_preview_visual_overlay(
+    pub(crate) fn present_preview_visual_overlay(
         &mut self,
         protocol: ImageProtocol,
         excluded: &[Rect],

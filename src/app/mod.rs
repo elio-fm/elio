@@ -1,21 +1,17 @@
 mod actions;
 mod constants;
 mod directory_counts;
-mod input;
 mod job_results;
-mod local_filter;
 pub(crate) mod preview;
 use crate::config;
 mod selection;
 mod state;
-mod text_edit;
 mod types;
 
 use self::constants::*;
-use self::state::*;
-pub(crate) use self::text_edit::{
-    char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
-    remove_char_range,
+#[cfg(test)]
+pub(crate) use self::constants::{
+    DIRECTORY_ITEM_COUNT_IDLE_DELAY, HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY,
 };
 #[cfg(test)]
 use crate::background_jobs::SchedulerMetricsSnapshot;
@@ -24,7 +20,7 @@ pub(crate) use crate::background_jobs::job_requests::{
     ArchiveCreateRequest, ArchiveExtractBatchState, ArchiveExtractRequest, PasteRequest,
     RestoreRequest, TrashRequest,
 };
-use crate::background_jobs::job_requests::{
+pub(crate) use crate::background_jobs::job_requests::{
     PreviewLineCountRequest, PreviewPriority, PreviewRequest, SearchRequest,
 };
 #[cfg(unix)]
@@ -38,11 +34,9 @@ pub(crate) use crate::file_browser::{
 pub(crate) use crate::file_operations::ClipOp;
 use crate::fuzzy_finder::SearchCache;
 #[cfg(test)]
-pub(in crate::app) use crate::preview::PreviewDirectoryStatsState;
-pub(in crate::app) use crate::preview::{PreviewLoadState, PreviewRefreshMode};
+pub(crate) use crate::preview::PreviewDirectoryStatsState;
+pub(crate) use crate::preview::{PreviewLoadState, PreviewRefreshMode};
 use anyhow::Result;
-#[cfg(test)]
-use ratatui::layout::Rect;
 use ratatui::text::Line;
 use std::{
     path::PathBuf,
@@ -51,7 +45,12 @@ use std::{
 
 pub use self::state::App;
 
-pub(crate) use self::state::{ChooserExit, PendingTerminalTask};
+#[cfg(test)]
+pub(crate) use self::actions::open_with::FallbackOpenOutcome;
+pub(crate) use self::state::{
+    ChooserExit, ClickState, NavigationRepeatKey, PendingTerminalTask, ScrollLane, ScrollState,
+    WheelProfile, WheelTarget,
+};
 pub use crate::duplicate_finder::DuplicateRow;
 pub(crate) use crate::file_classification::FileClass;
 pub(crate) use crate::fs::{
@@ -157,7 +156,7 @@ impl App {
                 .wheel_scroll
                 .vertical
                 .last_input_at
-                .is_some_and(|at| at.elapsed() <= WHEEL_SCROLL_BURST_WINDOW)
+                .is_some_and(|at| at.elapsed() <= ScrollState::BURST_WINDOW)
     }
 
     pub(crate) fn pending_browser_wheel_timer(&self) -> Option<Duration> {
@@ -168,7 +167,7 @@ impl App {
             .wheel_scroll
             .vertical
             .last_input_at
-            .map(|at| WHEEL_SCROLL_BURST_WINDOW.saturating_sub(at.elapsed()))
+            .map(|at| ScrollState::BURST_WINDOW.saturating_sub(at.elapsed()))
     }
 
     pub(crate) fn process_browser_wheel_timers(&mut self) -> bool {
@@ -197,7 +196,7 @@ impl App {
         self.preview.visible && self.preview.fullscreen
     }
 
-    pub(in crate::app) fn toggle_fullscreen_preview(&mut self) {
+    pub(crate) fn toggle_fullscreen_preview(&mut self) {
         if preview_pane_disabled_by_layout(config::layout()) {
             self.preview.visible = false;
             self.preview.fullscreen = false;
@@ -223,7 +222,7 @@ impl App {
         .to_string();
     }
 
-    pub(in crate::app) fn exit_fullscreen_preview(&mut self) -> bool {
+    pub(crate) fn exit_fullscreen_preview(&mut self) -> bool {
         if self.clear_fullscreen_preview() {
             self.status = "Exited fullscreen preview".to_string();
             true
@@ -232,7 +231,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn clear_fullscreen_preview(&mut self) -> bool {
+    pub(crate) fn clear_fullscreen_preview(&mut self) -> bool {
         if self.preview.fullscreen {
             self.queue_terminal_image_geometry_clear();
             self.preview.fullscreen = false;
@@ -243,7 +242,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn toggle_preview_pane(&mut self) {
+    pub(crate) fn toggle_preview_pane(&mut self) {
         if preview_pane_disabled_by_layout(config::layout()) {
             self.preview.visible = false;
             self.preview.fullscreen = false;

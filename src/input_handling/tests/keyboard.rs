@@ -7,6 +7,10 @@ use super::helpers::{
 };
 use crate::config::Action;
 use crate::goto_menu::{GotoDestination, GotoMenu, GotoMenuEntry};
+use crate::input_handling::keyboard::{
+    fullscreen_preview_dispatches_and_stays, fullscreen_preview_dispatches_then_exits,
+    fullscreen_preview_exits_then_dispatches, should_handle_high_frequency_horizontal_key,
+};
 use crossterm::event::{KeyEventKind, KeyEventState};
 use std::{
     fs,
@@ -14,6 +18,110 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+
+#[test]
+fn high_frequency_horizontal_emulation_only_uses_default_history_actions() {
+    assert!(should_handle_high_frequency_horizontal_key(
+        KeyEvent::new(KeyCode::Left, KeyModifiers::ALT),
+        Some(Action::HistoryBack),
+    ));
+    assert!(should_handle_high_frequency_horizontal_key(
+        KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
+        Some(Action::HistoryForward),
+    ));
+    assert!(!should_handle_high_frequency_horizontal_key(
+        KeyEvent::new(KeyCode::Left, KeyModifiers::ALT),
+        Some(Action::Open),
+    ));
+    assert!(!should_handle_high_frequency_horizontal_key(
+        KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
+        Some(Action::Open),
+    ));
+    assert!(!should_handle_high_frequency_horizontal_key(
+        KeyEvent::new(KeyCode::Char('h'), KeyModifiers::ALT),
+        Some(Action::HistoryBack),
+    ));
+}
+
+#[test]
+fn fullscreen_preview_explicit_commands_exit_before_dispatch() {
+    for action in [
+        Action::Yank,
+        Action::Cut,
+        Action::Paste,
+        Action::Trash,
+        Action::DeletePermanently,
+        Action::SymlinkAbsolute,
+        Action::SymlinkRelative,
+        Action::SelectAll,
+        Action::CopyPath,
+        Action::SearchFolders,
+        Action::SearchFiles,
+        Action::FilterDirectory,
+        Action::GoTo,
+        Action::OpenWith,
+        Action::Open,
+        Action::Zoxide,
+        Action::ShellHere,
+        Action::Create,
+        Action::Rename,
+        Action::RenameInEditor,
+        Action::CreateArchive,
+        Action::ExtractArchive,
+        Action::RestoreFromTrash,
+    ] {
+        assert!(
+            fullscreen_preview_exits_then_dispatches(action),
+            "{action:?} should be allowed from fullscreen preview"
+        );
+    }
+}
+
+#[test]
+fn fullscreen_preview_navigation_dispatches_before_exit() {
+    for action in [
+        Action::CyclePlacesNext,
+        Action::CyclePlacesPrevious,
+        Action::GoParent,
+        Action::HistoryBack,
+        Action::HistoryForward,
+        Action::NavLeft,
+        Action::NavRight,
+    ] {
+        assert!(
+            fullscreen_preview_dispatches_then_exits(action),
+            "{action:?} should dispatch before leaving fullscreen preview"
+        );
+    }
+}
+
+#[test]
+fn fullscreen_preview_same_directory_navigation_stays_fullscreen() {
+    for action in [
+        Action::ToggleSelection,
+        Action::PageUp,
+        Action::PageDown,
+        Action::JumpFirst,
+        Action::JumpLast,
+        Action::NavDown,
+        Action::NavUp,
+    ] {
+        assert!(
+            fullscreen_preview_dispatches_and_stays(action),
+            "{action:?} should dispatch without leaving fullscreen preview"
+        );
+    }
+}
+
+#[test]
+fn fullscreen_preview_keeps_hidden_browser_mutations_blocked() {
+    for action in [Action::Sort, Action::ToggleView, Action::ToggleHidden] {
+        assert!(
+            !fullscreen_preview_exits_then_dispatches(action),
+            "{action:?} should stay blocked from fullscreen preview"
+        );
+    }
+}
 
 #[cfg(all(unix, not(target_os = "macos")))]
 struct DefaultOpenWithAppGuard;

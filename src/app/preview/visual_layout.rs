@@ -61,7 +61,7 @@ impl App {
         (!self.preview_visual_failed_for_rows(area, rows)).then_some(rows)
     }
 
-    pub(in crate::app) fn active_preview_visual_overlay_request(
+    pub(crate) fn active_preview_visual_overlay_request(
         &self,
     ) -> Option<static_images::StaticImageOverlayRequest> {
         if self.preview_uses_image_overlay() {
@@ -71,7 +71,7 @@ impl App {
         self.active_preview_visual_overlay_request_unchecked()
     }
 
-    pub(in crate::app) fn active_preview_visual_overlay_request_unchecked(
+    pub(crate) fn active_preview_visual_overlay_request_unchecked(
         &self,
     ) -> Option<static_images::StaticImageOverlayRequest> {
         if !self.preview_surface_visible_for_images() || !self.terminal_image_overlay_available() {
@@ -135,7 +135,7 @@ impl App {
         ))
     }
 
-    pub(in crate::app) fn preview_visual_overlay_request_for_visual(
+    pub(crate) fn preview_visual_overlay_request_for_visual(
         &self,
         _preview_kind: preview::PreviewKind,
         visual: &preview::PreviewVisual,

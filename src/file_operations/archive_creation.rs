@@ -1,12 +1,12 @@
 use super::archive_extraction::{ArchivePasswordOverlay, ArchivePasswordPurpose};
 use crate::app::ArchiveCreateRequest;
 use crate::app::*;
-use crate::app::{
-    char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
-    remove_char_range,
-};
 use crate::archive::{
     ArchiveEncryption, CreateArchiveFormat, CreateArchiveOptions, normalize_archive_output_name,
+};
+use crate::input_handling::text_editing::{
+    char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
+    remove_char_range,
 };
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
