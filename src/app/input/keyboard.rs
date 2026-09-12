@@ -147,8 +147,8 @@ impl App {
     fn paste_into_local_filter(&mut self, text: &str) -> Result<()> {
         let text = single_line_paste_text(text);
         insert_text_at_cursor(
-            &mut self.navigation.local_filter.query,
-            &mut self.navigation.local_filter.cursor,
+            &mut self.file_browser.local_filter.query,
+            &mut self.file_browser.local_filter.cursor,
             &text,
         );
         self.apply_local_filter_preserving_selection();
@@ -235,7 +235,7 @@ impl App {
         }
 
         if is_cancel_key(key)
-            && !self.navigation.selected_paths.is_empty()
+            && !self.file_browser.selected_paths.is_empty()
             && self.has_active_cancelable_job()
         {
             self.clear_selection();
@@ -398,7 +398,7 @@ impl App {
                     FullscreenPreviewActionPolicy::DispatchThenExit => {
                         let status_before = self.status.clone();
                         self.dispatch_action(action)?;
-                        if self.navigation.directory_runtime.pending_load.is_some() {
+                        if self.file_browser.directory_runtime.pending_load.is_some() {
                             self.preview.exit_fullscreen_after_directory_load = true;
                         } else if self.clear_fullscreen_preview() && self.status == status_before {
                             self.status = "Exited fullscreen preview".to_string();
@@ -406,7 +406,7 @@ impl App {
                     }
                     FullscreenPreviewActionPolicy::DispatchAndStayInFullscreen => {
                         self.dispatch_action(action)?;
-                        if self.navigation.directory_runtime.pending_load.is_some() {
+                        if self.file_browser.directory_runtime.pending_load.is_some() {
                             self.preview.exit_fullscreen_after_directory_load = true;
                         }
                     }
@@ -435,7 +435,7 @@ impl App {
 
         match key.code {
             KeyCode::Esc => {
-                if !self.navigation.selected_paths.is_empty() {
+                if !self.file_browser.selected_paths.is_empty() {
                     self.clear_selection();
                 } else if let Some(prog) = &self.jobs.trash_progress {
                     self.jobs.scheduler.cancel_trash(self.jobs.trash_token);
@@ -474,12 +474,12 @@ impl App {
                 self.dispatch_action(action)?;
             }
             KeyCode::Char('+') | KeyCode::Char('=')
-                if self.navigation.view_mode == ViewMode::Grid =>
+                if self.file_browser.view_mode == ViewMode::Grid =>
             {
                 self.adjust_zoom(1);
             }
             KeyCode::Char('-') | KeyCode::Char('_')
-                if self.navigation.view_mode == ViewMode::Grid =>
+                if self.file_browser.view_mode == ViewMode::Grid =>
             {
                 self.adjust_zoom(-1);
             }
@@ -507,8 +507,8 @@ impl App {
             Action::DeletePermanently => self.open_delete_permanently_prompt(),
             Action::Create => self.open_create_prompt(),
             Action::Rename => {
-                if !self.navigation.in_trash && !self.cwd_is_inside_trash_subfolder() {
-                    if !self.navigation.selected_paths.is_empty() {
+                if !self.file_browser.in_trash && !self.cwd_is_inside_trash_subfolder() {
+                    if !self.file_browser.selected_paths.is_empty() {
                         self.open_bulk_rename_prompt();
                     } else {
                         self.open_rename_prompt();
@@ -517,7 +517,7 @@ impl App {
             }
             Action::RenameInEditor => self.open_editor_bulk_rename()?,
             Action::RestoreFromTrash => {
-                if self.navigation.in_trash {
+                if self.file_browser.in_trash {
                     self.open_restore_prompt();
                 } else if self.cwd_is_inside_trash_subfolder() {
                     self.status = "Cannot restore from inside a trashed folder \
@@ -536,7 +536,7 @@ impl App {
             }
             Action::ShellHere => {
                 self.pending_terminal_task = Some(PendingTerminalTask::ShellHere {
-                    cwd: self.navigation.cwd.clone(),
+                    cwd: self.file_browser.cwd.clone(),
                 });
                 self.status.clear();
             }
@@ -561,7 +561,7 @@ impl App {
             Action::FullscreenPreview => self.toggle_fullscreen_preview(),
             Action::ToggleHidden => self.toggle_hidden_files()?,
             Action::NavLeft => {
-                if self.navigation.view_mode == ViewMode::Grid {
+                if self.file_browser.view_mode == ViewMode::Grid {
                     self.move_by_keyboard(-1);
                 } else {
                     self.go_parent()?;
@@ -570,7 +570,7 @@ impl App {
             Action::NavDown => self.move_vertical_keyboard(1),
             Action::NavUp => self.move_vertical_keyboard(-1),
             Action::NavRight => {
-                if self.navigation.view_mode == ViewMode::Grid {
+                if self.file_browser.view_mode == ViewMode::Grid {
                     self.move_by_keyboard(1);
                 } else if let Some(entry) = self.selected_entry().filter(|entry| entry.is_dir()) {
                     self.set_dir(entry.path.clone())?;
@@ -601,7 +601,7 @@ impl App {
     }
 
     pub(in crate::app) fn key_context(&self) -> crate::config::KeyContext {
-        if self.navigation.in_trash || self.cwd_is_inside_trash_subfolder() {
+        if self.file_browser.in_trash || self.cwd_is_inside_trash_subfolder() {
             crate::config::KeyContext::Trash
         } else {
             crate::config::KeyContext::Normal
@@ -652,7 +652,7 @@ impl App {
 
     pub(in crate::app) fn open_selected(&mut self) -> Result<()> {
         let Some(entry) = self.selected_entry() else {
-            if !self.navigation.selected_paths.is_empty() {
+            if !self.file_browser.selected_paths.is_empty() {
                 return self.dispatch_action(crate::config::Action::Open);
             }
             return Ok(());
@@ -694,7 +694,7 @@ fn fullscreen_preview_action_policy(
         action if fullscreen_preview_dispatches_and_stays(action) => {
             FullscreenPreviewActionPolicy::DispatchAndStayInFullscreen
         }
-        Action::NavLeft | Action::NavRight if app.navigation.view_mode == ViewMode::Grid => {
+        Action::NavLeft | Action::NavRight if app.file_browser.view_mode == ViewMode::Grid => {
             FullscreenPreviewActionPolicy::DispatchAndStayInFullscreen
         }
         action if fullscreen_preview_dispatches_then_exits(action) => {
@@ -784,7 +784,7 @@ fn should_use_grid_zoom_for_symlink_key(
     key: KeyEvent,
     configured_action: Option<crate::config::Action>,
 ) -> bool {
-    app.navigation.view_mode == ViewMode::Grid
+    app.file_browser.view_mode == ViewMode::Grid
         && matches!(key.code, KeyCode::Char('-') | KeyCode::Char('_'))
         && matches!(
             configured_action,

@@ -4,28 +4,6 @@ use ratatui::layout::Rect;
 
 pub use crate::fuzzy_finder::SearchScope;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ViewMode {
-    Grid,
-    List,
-}
-
-impl ViewMode {
-    pub fn toggle(self) -> Self {
-        match self {
-            Self::Grid => Self::List,
-            Self::List => Self::Grid,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Grid => "Grid",
-            Self::List => "List",
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct FrameState {
     pub sidebar_hits: Vec<PathHit>,

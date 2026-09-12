@@ -61,7 +61,8 @@ impl App {
             processed += 1;
             match job {
                 JobResult::Directory(build) => {
-                    let Some(load) = self.navigation.directory_runtime.pending_load.clone() else {
+                    let Some(load) = self.file_browser.directory_runtime.pending_load.clone()
+                    else {
                         continue;
                     };
                     if build.token != self.jobs.directory_token
@@ -71,7 +72,7 @@ impl App {
                         continue;
                     }
 
-                    self.navigation.directory_runtime.pending_load = None;
+                    self.file_browser.directory_runtime.pending_load = None;
                     dirty = true;
 
                     match build.result {
@@ -85,7 +86,7 @@ impl App {
                 }
                 JobResult::DirectoryFingerprint(build) => {
                     let Some(scan) = self
-                        .navigation
+                        .file_browser
                         .directory_runtime
                         .pending_fingerprint_scan
                         .clone()
@@ -100,13 +101,13 @@ impl App {
                         continue;
                     }
 
-                    self.navigation.directory_runtime.pending_fingerprint_scan = None;
+                    self.file_browser.directory_runtime.pending_fingerprint_scan = None;
 
                     let Ok(fingerprint) = build.result else {
                         continue;
                     };
-                    if self.navigation.directory_runtime.pending_load.is_some()
-                        || fingerprint == self.navigation.directory_runtime.fingerprint
+                    if self.file_browser.directory_runtime.pending_load.is_some()
+                        || fingerprint == self.file_browser.directory_runtime.fingerprint
                     {
                         continue;
                     }
@@ -156,9 +157,9 @@ impl App {
                 }
                 JobResult::SearchBatch(build) => {
                     if build.token != self.jobs.search_token
-                        || build.cwd != self.navigation.cwd
+                        || build.cwd != self.file_browser.cwd
                         || build.show_hidden != self.effective_show_hidden()
-                        || build.fingerprint != self.navigation.directory_runtime.fingerprint
+                        || build.fingerprint != self.file_browser.directory_runtime.fingerprint
                     {
                         continue;
                     }
@@ -182,9 +183,9 @@ impl App {
                 }
                 JobResult::Search(build) => {
                     if build.token != self.jobs.search_token
-                        || build.cwd != self.navigation.cwd
+                        || build.cwd != self.file_browser.cwd
                         || build.show_hidden != self.effective_show_hidden()
-                        || build.fingerprint != self.navigation.directory_runtime.fingerprint
+                        || build.fingerprint != self.file_browser.directory_runtime.fingerprint
                     {
                         continue;
                     }
@@ -244,7 +245,7 @@ impl App {
                 }
                 JobResult::DuplicateScanBatch(build) => {
                     if build.token != self.jobs.duplicate_token
-                        || build.cwd != self.navigation.cwd
+                        || build.cwd != self.file_browser.cwd
                         || build.show_hidden != self.effective_show_hidden()
                     {
                         continue;
@@ -254,7 +255,7 @@ impl App {
                 }
                 JobResult::DuplicateScan(build) => {
                     if build.token != self.jobs.duplicate_token
-                        || build.cwd != self.navigation.cwd
+                        || build.cwd != self.file_browser.cwd
                         || build.show_hidden != self.effective_show_hidden()
                     {
                         continue;
@@ -273,22 +274,22 @@ impl App {
                             .jobs
                             .archive_create_source_cwd
                             .take()
-                            .unwrap_or_else(|| self.navigation.cwd.clone());
+                            .unwrap_or_else(|| self.file_browser.cwd.clone());
                         let status = build.status.unwrap_or_default();
                         let nav_target = self
-                            .navigation
+                            .file_browser
                             .directory_runtime
                             .pending_load
                             .as_ref()
                             .map(|load| load.target_cwd.as_path());
                         let nav_to_source = nav_target == Some(source_cwd.as_path());
                         if nav_to_source
-                            || (source_cwd == self.navigation.cwd && nav_target.is_none())
+                            || (source_cwd == self.file_browser.cwd && nav_target.is_none())
                         {
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,
                                 target_cwd: source_cwd,
-                                previous_cwd: self.navigation.cwd.clone(),
+                                previous_cwd: self.file_browser.cwd.clone(),
                                 previous_selected_path: None,
                                 previous_selection_name: None,
                                 reselect_path: build.output_path,
@@ -332,22 +333,22 @@ impl App {
                             .jobs
                             .archive_extract_source_cwd
                             .take()
-                            .unwrap_or_else(|| self.navigation.cwd.clone());
+                            .unwrap_or_else(|| self.file_browser.cwd.clone());
                         let status = build.status.unwrap_or_default();
                         let nav_target = self
-                            .navigation
+                            .file_browser
                             .directory_runtime
                             .pending_load
                             .as_ref()
                             .map(|l| l.target_cwd.as_path());
                         let nav_to_source = nav_target == Some(source_cwd.as_path());
                         if nav_to_source
-                            || (source_cwd == self.navigation.cwd && nav_target.is_none())
+                            || (source_cwd == self.file_browser.cwd && nav_target.is_none())
                         {
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,
                                 target_cwd: source_cwd,
-                                previous_cwd: self.navigation.cwd.clone(),
+                                previous_cwd: self.file_browser.cwd.clone(),
                                 previous_selected_path: None,
                                 previous_selection_name: None,
                                 reselect_path: build.dest_dir,
@@ -376,7 +377,7 @@ impl App {
                             .jobs
                             .paste_dest_dir
                             .take()
-                            .unwrap_or_else(|| self.navigation.cwd.clone());
+                            .unwrap_or_else(|| self.file_browser.cwd.clone());
                         let status = build.status.unwrap_or_default();
                         let next_queued_dest = self
                             .jobs
@@ -389,13 +390,13 @@ impl App {
                         // destination directory and not mid-navigation to
                         // somewhere else (which would cancel their navigation).
                         let nav_target = self
-                            .navigation
+                            .file_browser
                             .directory_runtime
                             .pending_load
                             .as_ref()
                             .map(|l| l.target_cwd.as_path());
                         let nav_to_dest = nav_target == Some(dest_dir.as_path());
-                        if dest_dir == self.navigation.cwd
+                        if dest_dir == self.file_browser.cwd
                             && (nav_target.is_none() || nav_to_dest)
                             && !defer_reload_for_same_dest
                         {
@@ -409,7 +410,7 @@ impl App {
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,
                                 target_cwd: dest_dir,
-                                previous_cwd: self.navigation.cwd.clone(),
+                                previous_cwd: self.file_browser.cwd.clone(),
                                 previous_selected_path: None,
                                 previous_selection_name: None,
                                 reselect_path,
@@ -458,7 +459,7 @@ impl App {
                             .jobs
                             .trash_source_cwd
                             .take()
-                            .unwrap_or_else(|| self.navigation.cwd.clone());
+                            .unwrap_or_else(|| self.file_browser.cwd.clone());
                         let status = build.status.unwrap_or_default();
                         if let Some(paths) = duplicate_targets.as_ref() {
                             self.remove_duplicate_paths(paths);
@@ -467,19 +468,19 @@ impl App {
                         // source directory and not mid-navigation to somewhere
                         // else (which would cancel their navigation).
                         let nav_target = self
-                            .navigation
+                            .file_browser
                             .directory_runtime
                             .pending_load
                             .as_ref()
                             .map(|l| l.target_cwd.as_path());
                         let nav_to_source = nav_target == Some(source_cwd.as_path());
                         if nav_to_source
-                            || (source_cwd == self.navigation.cwd && nav_target.is_none())
+                            || (source_cwd == self.file_browser.cwd && nav_target.is_none())
                         {
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,
                                 target_cwd: source_cwd,
-                                previous_cwd: self.navigation.cwd.clone(),
+                                previous_cwd: self.file_browser.cwd.clone(),
                                 previous_selected_path: None,
                                 previous_selection_name: None,
                                 reselect_path: next_selection,
@@ -511,22 +512,22 @@ impl App {
                             .jobs
                             .restore_source_cwd
                             .take()
-                            .unwrap_or_else(|| self.navigation.cwd.clone());
+                            .unwrap_or_else(|| self.file_browser.cwd.clone());
                         let status = build.status.unwrap_or_default();
                         let nav_target = self
-                            .navigation
+                            .file_browser
                             .directory_runtime
                             .pending_load
                             .as_ref()
                             .map(|l| l.target_cwd.as_path());
                         let nav_to_source = nav_target == Some(source_cwd.as_path());
                         if nav_to_source
-                            || (source_cwd == self.navigation.cwd && nav_target.is_none())
+                            || (source_cwd == self.file_browser.cwd && nav_target.is_none())
                         {
                             let _ = self.queue_directory_load(PendingDirectoryLoad {
                                 token: 0,
                                 target_cwd: source_cwd,
-                                previous_cwd: self.navigation.cwd.clone(),
+                                previous_cwd: self.file_browser.cwd.clone(),
                                 previous_selected_path: None,
                                 previous_selection_name: None,
                                 reselect_path: next_selection,

@@ -6,4 +6,4 @@ mod places_list;
 mod tests;
 
 pub use self::places_list::{PlaceItem, PlaceKind, PlaceRow};
-pub(crate) use self::places_list::{build_place_rows, trash_dir};
+pub(crate) use self::places_list::{PlacesState, trash_dir};

@@ -26,7 +26,7 @@ pub(super) fn render_places_pane(
     helpers::fill_area(frame, inner, palette.panel, palette.text);
     let mut y = inner.y;
     let row_height = 1u16;
-    for item in &app.navigation.sidebar {
+    for item in &app.places.rows {
         if y.saturating_add(row_height) > inner.y.saturating_add(inner.height) {
             break;
         }
@@ -58,7 +58,7 @@ pub(super) fn render_places_pane(
                 );
             }
             PlaceRow::Item(item) => {
-                let active = helpers::path_is_active(&app.navigation.cwd, &item.identity_path);
+                let active = helpers::path_is_active(&app.file_browser.cwd, &item.identity_path);
                 let bg = if active {
                     palette.sidebar_active
                 } else {

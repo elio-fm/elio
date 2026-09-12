@@ -6,7 +6,10 @@ use std::{
     collections::HashSet,
     fs,
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
+
+const SIDEBAR_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlaceItem {
@@ -55,6 +58,37 @@ pub enum PlaceKind {
 pub enum PlaceRow {
     Section { title: &'static str },
     Item(PlaceItem),
+}
+
+pub(crate) struct PlacesState {
+    pub(crate) rows: Vec<PlaceRow>,
+    pub(crate) last_refresh_at: Instant,
+}
+
+impl PlacesState {
+    pub(crate) fn new() -> Self {
+        Self {
+            rows: Vec::new(),
+            last_refresh_at: Instant::now(),
+        }
+    }
+
+    pub(crate) fn refresh_if_due(&mut self) -> bool {
+        if self.last_refresh_at.elapsed() < SIDEBAR_REFRESH_INTERVAL {
+            return false;
+        }
+        self.refresh()
+    }
+
+    pub(crate) fn refresh(&mut self) -> bool {
+        self.last_refresh_at = Instant::now();
+        let rows = build_place_rows();
+        if rows == self.rows {
+            return false;
+        }
+        self.rows = rows;
+        true
+    }
 }
 
 impl PlaceRow {

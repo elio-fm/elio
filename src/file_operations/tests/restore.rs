@@ -5,14 +5,14 @@ fn confirm_restore_restores_file_from_trashinfo_and_queues_reload() {
     let (root, trash_files, original_path, trashed_path) = create_fake_trash_file("restore");
 
     let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
+    app.file_browser.in_trash = true;
     app.open_restore_prompt();
 
     assert_eq!(app.restore_title(), "Restore 1 selected file?");
     app.confirm_restore().expect("restore should succeed");
 
     assert!(app.overlays.restore.is_none());
-    assert!(app.navigation.selected_paths.is_empty());
+    assert!(app.file_browser.selected_paths.is_empty());
 
     // Restore is now async — wait for the background worker and
     // subsequent directory reload to both complete.
@@ -22,7 +22,7 @@ fn confirm_restore_restores_file_from_trashinfo_and_queues_reload() {
     assert!(!trashed_path.exists());
     assert_eq!(app.status_message(), "Restored \"restore-target.txt\"");
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -54,11 +54,11 @@ fn confirm_restore_bulk_restores_multiple_files_and_reports_count() {
     }
 
     let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
-    app.navigation
+    app.file_browser.in_trash = true;
+    app.file_browser
         .selected_paths
         .insert(trash_files.join("alpha.txt"));
-    app.navigation
+    app.file_browser
         .selected_paths
         .insert(trash_files.join("beta.txt"));
     app.open_restore_prompt();
@@ -67,7 +67,7 @@ fn confirm_restore_bulk_restores_multiple_files_and_reports_count() {
     app.confirm_restore().expect("restore should succeed");
 
     assert!(app.overlays.restore.is_none());
-    assert!(app.navigation.selected_paths.is_empty());
+    assert!(app.file_browser.selected_paths.is_empty());
 
     wait_for_restore_and_reload(&mut app);
 
@@ -77,7 +77,7 @@ fn confirm_restore_bulk_restores_multiple_files_and_reports_count() {
     assert!(!trash_files.join("beta.txt").exists());
     assert_eq!(app.status_message(), "Restored 2 items");
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -91,14 +91,14 @@ fn restore_refuses_normal_selection_from_trash() {
     fs::write(&normal, "normal").expect("failed to write normal file");
 
     let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
-    app.navigation.selected_paths.insert(normal);
+    app.file_browser.in_trash = true;
+    app.file_browser.selected_paths.insert(normal);
     app.open_restore_prompt();
 
     assert!(!app.restore_is_open());
     assert_eq!(app.status_message(), "Cannot restore normal files");
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -114,9 +114,9 @@ fn restore_refuses_mixed_trash_and_normal_selection() {
     fs::write(&normal, "normal").expect("failed to write normal file");
 
     let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
-    app.navigation.selected_paths.insert(trashed);
-    app.navigation.selected_paths.insert(normal);
+    app.file_browser.in_trash = true;
+    app.file_browser.selected_paths.insert(trashed);
+    app.file_browser.selected_paths.insert(normal);
     app.open_restore_prompt();
 
     assert!(!app.restore_is_open());
@@ -125,7 +125,7 @@ fn restore_refuses_mixed_trash_and_normal_selection() {
         "Selection mixes trash and normal files"
     );
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -140,8 +140,8 @@ fn restore_allows_selected_parent_of_current_directory() {
     fs::write(&child_file, "child").expect("failed to write child file");
 
     let mut app = App::new_at(parent.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
-    app.navigation.selected_paths.insert(parent);
+    app.file_browser.in_trash = true;
+    app.file_browser.selected_paths.insert(parent);
     app.open_restore_prompt();
 
     assert!(app.restore_is_open());
@@ -151,7 +151,7 @@ fn restore_allows_selected_parent_of_current_directory() {
         Some(trash_files.join("parent").as_path())
     );
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -164,7 +164,7 @@ fn esc_during_restore_clears_chip_immediately() {
         create_fake_trash_file("restore-cancel");
 
     let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
+    app.file_browser.in_trash = true;
     app.open_restore_prompt();
     app.confirm_restore().expect("restore should succeed");
 
@@ -190,7 +190,7 @@ fn esc_during_restore_clears_chip_immediately() {
     for _ in 0..200 {
         let _ = app.process_background_jobs();
         if app.jobs.restore_source_cwd.is_none()
-            && app.navigation.directory_runtime.pending_load.is_none()
+            && app.file_browser.directory_runtime.pending_load.is_none()
         {
             break;
         }
@@ -205,7 +205,7 @@ fn esc_during_restore_clears_chip_immediately() {
         || status.starts_with("Nothing was restored");
     assert!(valid, "unexpected status: {status:?}");
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     // root may or may not still contain the original file depending on
     // the race; ignore removal errors.
@@ -221,7 +221,7 @@ fn confirm_restore_while_in_progress_shows_status_and_dismisses_overlay() {
         create_fake_trash_file("restore-in-progress");
 
     let mut app = App::new_at(trash_files.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
+    app.file_browser.in_trash = true;
     app.open_restore_prompt();
     app.confirm_restore().expect("first restore should succeed");
 
@@ -244,14 +244,14 @@ fn confirm_restore_while_in_progress_shows_status_and_dismisses_overlay() {
     for _ in 0..200 {
         let _ = app.process_background_jobs();
         if app.restore_progress().is_none()
-            && app.navigation.directory_runtime.pending_load.is_none()
+            && app.file_browser.directory_runtime.pending_load.is_none()
         {
             break;
         }
         std::thread::sleep(Duration::from_millis(10));
     }
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     let _ = fs::remove_dir_all(root);
 }

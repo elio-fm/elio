@@ -11,7 +11,7 @@ impl App {
     }
 
     pub(crate) fn refresh_git_branch(&mut self) {
-        let cwd = self.navigation.cwd.clone();
+        let cwd = self.file_browser.cwd.clone();
         let cwd_changed = self.git.cwd != cwd;
         self.git.cwd = cwd.clone();
         if cwd_changed {

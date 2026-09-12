@@ -27,7 +27,7 @@ fn confirm_rename_renames_selected_entry_and_queues_reselect() {
     assert_eq!(status, "Renamed \"report.txt\" → \"summary.txt\"");
     assert_eq!(reselect_path, Some(root.join("summary.txt")));
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

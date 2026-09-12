@@ -174,14 +174,14 @@ fn paste_status_chip_shows_queued_count() {
     let mut app = App::new_at(src_dir.clone()).expect("failed to create app");
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('y'))))
         .expect("yank shortcut should succeed");
-    app.navigation.cwd = dst_dir.clone();
+    app.file_browser.cwd = dst_dir.clone();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('p'))))
         .expect("paste shortcut should succeed");
-    app.navigation.cwd = src_dir.clone();
-    app.navigation.selected = 1;
+    app.file_browser.cwd = src_dir.clone();
+    app.file_browser.selected = 1;
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('y'))))
         .expect("second yank shortcut should succeed");
-    app.navigation.cwd = dst_dir.clone();
+    app.file_browser.cwd = dst_dir.clone();
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('p'))))
         .expect("second paste should be queued");
 

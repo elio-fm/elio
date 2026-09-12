@@ -14,7 +14,7 @@ fn page_image_overlay_request_uses_asset_metadata_without_forcing_render_cache()
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.navigation.entries = vec![Entry {
+    app.file_browser.entries = vec![Entry {
         path: root.join("book.cbz"),
         name: "book.cbz".to_string(),
         name_key: "book.cbz".to_string(),
@@ -24,7 +24,7 @@ fn page_image_overlay_request_uses_asset_metadata_without_forcing_render_cache()
         modified: None,
         readonly: false,
     }];
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
@@ -62,8 +62,8 @@ fn oversized_page_overlay_request_forces_rendered_cache() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.navigation.entries.clear();
-    app.navigation.selected = 0;
+    app.file_browser.entries.clear();
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
@@ -160,8 +160,8 @@ fn current_comic_prepare_build_marks_preview_dirty() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.navigation.entries.clear();
-    app.navigation.selected = 0;
+    app.file_browser.entries.clear();
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,

@@ -12,7 +12,7 @@ fn link_yanked_creates_absolute_symlink_in_current_directory() {
 
     let mut app = App::new_at(src_dir.clone()).unwrap();
     app.yank();
-    app.navigation.cwd = dst_dir.clone();
+    app.file_browser.cwd = dst_dir.clone();
 
     app.link_yanked(false).unwrap();
 
@@ -36,7 +36,7 @@ fn link_yanked_creates_relative_symlink_in_current_directory() {
 
     let mut app = App::new_at(source.parent().unwrap().to_path_buf()).unwrap();
     app.yank();
-    app.navigation.cwd = dest.clone();
+    app.file_browser.cwd = dest.clone();
 
     app.link_yanked(true).unwrap();
 
@@ -61,7 +61,7 @@ fn link_yanked_uses_unique_destination_names() {
 
     let mut app = App::new_at(src_dir.clone()).unwrap();
     app.yank();
-    app.navigation.cwd = dst_dir.clone();
+    app.file_browser.cwd = dst_dir.clone();
 
     app.link_yanked(false).unwrap();
 
@@ -86,7 +86,7 @@ fn link_yanked_refuses_cut_clipboard() {
 
     let mut app = App::new_at(src_dir.clone()).unwrap();
     app.cut();
-    app.navigation.cwd = dst_dir.clone();
+    app.file_browser.cwd = dst_dir.clone();
 
     app.link_yanked(false).unwrap();
 

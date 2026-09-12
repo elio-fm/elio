@@ -415,7 +415,7 @@ fn duplicate_trash_binding_permanently_deletes_when_results_are_inside_trash() {
     let root = temp_path("duplicate-trash-binding-inside-trash");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
+    app.file_browser.in_trash = true;
     app.open_duplicate_finder();
 
     let overlay = app
@@ -455,7 +455,7 @@ fn duplicate_trash_binding_blocks_mixed_trash_and_normal_results() {
     fs::create_dir_all(&trash_root).expect("failed to create trash temp root");
     fs::create_dir_all(&normal_root).expect("failed to create normal temp root");
     let mut app = App::new_at(trash_root.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
+    app.file_browser.in_trash = true;
     app.open_duplicate_finder();
 
     let overlay = app
@@ -491,7 +491,7 @@ fn duplicate_finder_uses_normal_action_bindings_even_when_browser_is_in_trash() 
     let root = temp_path("duplicate-normal-bindings-in-trash");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
+    app.file_browser.in_trash = true;
     app.open_duplicate_finder();
 
     let overlay = app
@@ -596,7 +596,7 @@ fn duplicate_permanent_delete_keeps_finder_open_and_keeps_singleton_remainder() 
     assert_eq!(app.duplicate_focused_path(), Some(root.join("beta.txt")));
 
     app.close_duplicate_finder();
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 

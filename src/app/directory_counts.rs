@@ -8,7 +8,8 @@ impl App {
     }
 
     pub(crate) fn directory_item_count_value(&self, entry: &Entry) -> Option<usize> {
-        self.directory_item_count(entry)
+        self.file_browser
+            .directory_item_count(entry, self.effective_show_hidden())
     }
 
     pub(super) fn cache_directory_item_count(
@@ -18,64 +19,33 @@ impl App {
         show_hidden: bool,
         item_count: Option<usize>,
     ) {
-        let key = DirectoryItemCountKey {
-            path,
-            modified,
-            show_hidden,
-        };
-        self.navigation
-            .directory_item_count_cache
-            .insert(key.clone(), item_count);
-        self.navigation
-            .directory_item_count_order
-            .retain(|queued| queued != &key);
-        self.navigation
-            .directory_item_count_order
-            .push_back(key.clone());
-
-        while self.navigation.directory_item_count_order.len() > DIRECTORY_ITEM_COUNT_CACHE_LIMIT {
-            if let Some(stale_key) = self.navigation.directory_item_count_order.pop_front() {
-                self.navigation
-                    .directory_item_count_cache
-                    .remove(&stale_key);
-            }
-        }
+        self.file_browser
+            .cache_directory_item_count(path, modified, show_hidden, item_count);
     }
 
     pub(super) fn queue_visible_directory_item_counts(&mut self) {
-        let viewport = DirectoryCountViewport {
-            fingerprint: self.navigation.directory_runtime.fingerprint,
-            scroll_row: self.navigation.scroll_row,
-            cols: self.input.frame_state.metrics.cols.max(1),
-            rows_visible: self.input.frame_state.metrics.rows_visible.max(1),
-            show_hidden: self.effective_show_hidden(),
-        };
-        if self.navigation.directory_count_viewport == Some(viewport) {
-            return;
-        }
-        self.navigation.directory_count_viewport = Some(viewport);
-        self.navigation
-            .directory_item_count_ready_at
-            .get_or_insert_with(|| Instant::now() + DIRECTORY_ITEM_COUNT_IDLE_DELAY);
+        self.file_browser.update_directory_count_viewport(
+            self.input.frame_state.metrics.cols,
+            self.input.frame_state.metrics.rows_visible,
+            self.effective_show_hidden(),
+            Instant::now() + DIRECTORY_ITEM_COUNT_IDLE_DELAY,
+        );
     }
 
     pub(crate) fn process_directory_item_count_timer(&mut self) -> bool {
-        let Some(deadline) = self.navigation.directory_item_count_ready_at else {
-            return false;
-        };
-        if Instant::now() < deadline {
+        if !self
+            .file_browser
+            .directory_count_timer_ready(Instant::now())
+        {
             return false;
         }
-
-        self.navigation.directory_item_count_ready_at = None;
         self.submit_visible_directory_item_counts();
         false
     }
 
     pub(crate) fn pending_directory_item_count_timer(&self) -> Option<std::time::Duration> {
-        self.navigation
-            .directory_item_count_ready_at
-            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+        self.file_browser
+            .pending_directory_count_timer(Instant::now())
     }
 
     fn submit_visible_directory_item_counts(&mut self) {
@@ -83,9 +53,9 @@ impl App {
             .visible_entry_indices()
             .into_iter()
             .filter_map(|index| {
-                self.navigation.entries.get(index).and_then(|entry| {
+                self.file_browser.entries.get(index).and_then(|entry| {
                     entry.is_dir().then_some((
-                        index.abs_diff(self.navigation.selected),
+                        index.abs_diff(self.file_browser.selected),
                         index,
                         entry,
                     ))
@@ -112,36 +82,25 @@ impl App {
         modified: Option<SystemTime>,
         show_hidden: bool,
     ) -> bool {
-        if self.effective_show_hidden() != show_hidden {
-            return false;
-        }
-
-        self.visible_entry_indices().into_iter().any(|index| {
-            self.navigation.entries.get(index).is_some_and(|entry| {
-                entry.is_dir() && entry.path == path && entry.modified == modified
-            })
-        })
-    }
-
-    fn directory_item_count(&self, entry: &Entry) -> Option<usize> {
-        let key = self.directory_item_count_key_for(entry)?;
-        self.navigation
-            .directory_item_count_cache
-            .get(&key)
-            .copied()
-            .flatten()
+        self.file_browser.should_redraw_for_directory_item_count(
+            path,
+            modified,
+            show_hidden,
+            self.effective_show_hidden(),
+            self.input.frame_state.metrics.cols,
+            self.input.frame_state.metrics.rows_visible,
+        )
     }
 
     fn directory_item_count_request_for(
         &self,
         entry: &Entry,
     ) -> Option<jobs::DirectoryItemCountRequest> {
-        let key = self.directory_item_count_key_for(entry)?;
-        if self
-            .navigation
-            .directory_item_count_cache
-            .contains_key(&key)
-        {
+        let key = crate::file_browser::FileBrowserState::directory_item_count_key(
+            entry,
+            self.effective_show_hidden(),
+        )?;
+        if self.file_browser.directory_item_count_is_cached(&key) {
             return None;
         }
         Some(jobs::DirectoryItemCountRequest {
@@ -151,23 +110,10 @@ impl App {
         })
     }
 
-    fn directory_item_count_key_for(&self, entry: &Entry) -> Option<DirectoryItemCountKey> {
-        entry.is_dir().then(|| DirectoryItemCountKey {
-            path: entry.path.clone(),
-            modified: entry.modified,
-            show_hidden: self.effective_show_hidden(),
-        })
-    }
-
     pub(super) fn visible_entry_indices(&self) -> Vec<usize> {
-        if self.navigation.entries.is_empty() {
-            return Vec::new();
-        }
-
-        let cols = self.input.frame_state.metrics.cols.max(1);
-        let rows_visible = self.input.frame_state.metrics.rows_visible.max(1);
-        let start = self.navigation.scroll_row.saturating_mul(cols);
-        let limit = rows_visible.saturating_mul(cols);
-        (start..self.navigation.entries.len()).take(limit).collect()
+        self.file_browser.visible_entry_indices(
+            self.input.frame_state.metrics.cols,
+            self.input.frame_state.metrics.rows_visible,
+        )
     }
 }

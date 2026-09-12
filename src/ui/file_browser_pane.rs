@@ -22,8 +22,10 @@ pub(super) fn render_file_browser_pane(
     palette: Palette,
 ) {
     state.entries_panel = Some(area);
-    let path_text =
-        helpers::stable_path_label(&app.navigation.cwd, area.width.saturating_sub(10) as usize);
+    let path_text = helpers::stable_path_label(
+        &app.file_browser.cwd,
+        area.width.saturating_sub(10) as usize,
+    );
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -52,7 +54,7 @@ pub(super) fn render_file_browser_pane(
     let inner = block.inner(area);
     helpers::fill_area(frame, inner, palette.panel_alt, palette.text);
 
-    if app.navigation.view_mode == crate::app::ViewMode::Grid {
+    if app.file_browser.view_mode == crate::app::ViewMode::Grid {
         render_grid_view(frame, inner, app, state, palette);
     } else {
         render_list_view(frame, inner, app, state, palette);
@@ -128,7 +130,7 @@ fn render_list_view(
         rows_visible: (content_area.height / row_height.max(1)).max(1) as usize,
     };
 
-    if app.navigation.entries.is_empty() {
+    if app.file_browser.entries.is_empty() {
         let message = if app.local_filter_has_query() {
             "No matches"
         } else {
@@ -138,18 +140,19 @@ fn render_list_view(
         return;
     }
 
-    for (visible_index, entry_index) in (app.navigation.scroll_row..app.navigation.entries.len())
+    for (visible_index, entry_index) in (app.file_browser.scroll_row
+        ..app.file_browser.entries.len())
         .take(state.metrics.rows_visible)
         .enumerate()
     {
-        let entry = &app.navigation.entries[entry_index];
+        let entry = &app.file_browser.entries[entry_index];
         let row = Rect {
             x: content_area.x,
             y: content_area.y + visible_index as u16 * row_height,
             width: content_area.width,
             height: row_height,
         };
-        let selected = entry_index == app.navigation.selected;
+        let selected = entry_index == app.file_browser.selected;
         let multi_selected = app.is_selected(&entry.path);
         let clip_op = app.clipboard_op_for(&entry.path);
         let appearance = theme::resolve_browser_entry(entry);
@@ -240,9 +243,9 @@ fn render_list_view(
         render_browser_scrollbar(
             frame,
             sb,
-            app.navigation.entries.len(),
+            app.file_browser.entries.len(),
             state.metrics.rows_visible,
-            app.navigation.scroll_row,
+            app.file_browser.scroll_row,
             palette,
         );
     }
@@ -656,7 +659,7 @@ fn render_grid_view(
         helpers::fill_area(frame, sb, palette.panel_alt, palette.border);
     }
 
-    let spec = grid_zoom_spec(app.navigation.zoom_level);
+    let spec = grid_zoom_spec(app.file_browser.zoom_level);
     let gap_x = spec.gap_x;
     let gap_y = spec.gap_y;
     let cols = ((content_area.width + gap_x) / (spec.tile_width_hint + gap_x)).max(1) as usize;
@@ -666,7 +669,7 @@ fn render_grid_view(
     let rows_visible = ((content_area.height + gap_y) / (spec.tile_height + gap_y)).max(1) as usize;
     state.metrics = ViewMetrics { cols, rows_visible };
 
-    if app.navigation.entries.is_empty() {
+    if app.file_browser.entries.is_empty() {
         let message = if app.local_filter_has_query() {
             "No matches"
         } else {
@@ -676,10 +679,10 @@ fn render_grid_view(
         return;
     }
 
-    let start = app.navigation.scroll_row * cols;
+    let start = app.file_browser.scroll_row * cols;
     let limit = rows_visible * cols;
 
-    for (visible_index, entry_index) in (start..app.navigation.entries.len())
+    for (visible_index, entry_index) in (start..app.file_browser.entries.len())
         .take(limit)
         .enumerate()
     {
@@ -700,9 +703,9 @@ fn render_grid_view(
             width: actual_tile_width,
             height: spec.tile_height,
         };
-        let entry = &app.navigation.entries[entry_index];
+        let entry = &app.file_browser.entries[entry_index];
         let tile_state = TileState {
-            selected: entry_index == app.navigation.selected,
+            selected: entry_index == app.file_browser.selected,
             multi_selected: app.is_selected(&entry.path),
             clip_op: app.clipboard_op_for(&entry.path),
         };
@@ -714,13 +717,13 @@ fn render_grid_view(
     }
 
     if let Some(sb) = scrollbar_area {
-        let total_rows = app.navigation.entries.len().div_ceil(cols);
+        let total_rows = app.file_browser.entries.len().div_ceil(cols);
         render_browser_scrollbar(
             frame,
             sb,
             total_rows,
             rows_visible,
-            app.navigation.scroll_row,
+            app.file_browser.scroll_row,
             palette,
         );
     }

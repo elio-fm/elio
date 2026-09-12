@@ -13,7 +13,7 @@ impl App {
         self.overlays.help = false;
         self.overlays.search = None;
         self.jobs.duplicate_token = self.jobs.duplicate_token.wrapping_add(1);
-        let cwd = self.navigation.cwd.clone();
+        let cwd = self.file_browser.cwd.clone();
         let show_hidden = self.effective_show_hidden();
         self.overlays.duplicates = Some(DuplicateFinderOverlay {
             cwd: cwd.clone(),

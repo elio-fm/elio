@@ -81,8 +81,8 @@ impl App {
 
     pub(in crate::app) fn refresh_static_image_preloads_if_needed(&mut self) {
         let viewport = StaticImagePreloadViewport {
-            selected: self.navigation.selected,
-            scroll_row: self.navigation.scroll_row,
+            selected: self.file_browser.selected,
+            scroll_row: self.file_browser.scroll_row,
             cols: self.input.frame_state.metrics.cols.max(1),
             rows_visible: self.input.frame_state.metrics.rows_visible.max(1),
             preview_content_area: self.input.frame_state.preview_content_area,
@@ -168,13 +168,13 @@ impl App {
         let mut requests = self
             .visible_entry_indices()
             .into_iter()
-            .filter(|&index| index != self.navigation.selected)
+            .filter(|&index| index != self.file_browser.selected)
             .filter_map(|index| {
-                self.navigation
+                self.file_browser
                     .entries
                     .get(index)
                     .and_then(|entry| self.static_image_overlay_request_for_entry(entry))
-                    .map(|request| (index.abs_diff(self.navigation.selected), request))
+                    .map(|request| (index.abs_diff(self.file_browser.selected), request))
             })
             .filter(|(_, request)| current_path != Some(&request.path))
             .collect::<Vec<_>>();

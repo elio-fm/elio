@@ -63,11 +63,11 @@ impl App {
                 break;
             }
 
-            let target = self.navigation.selected as isize + offset;
+            let target = self.file_browser.selected as isize + offset;
             if target < 0 {
                 continue;
             }
-            let Some(entry) = self.navigation.entries.get(target as usize).cloned() else {
+            let Some(entry) = self.file_browser.entries.get(target as usize).cloned() else {
                 continue;
             };
             let variant = self.preview_request_options_for_entry(&entry);
@@ -167,11 +167,11 @@ impl App {
         AUDIO_ENTRY_PREFETCH_OFFSETS
             .into_iter()
             .filter_map(|offset| {
-                let target = self.navigation.selected as isize + offset;
+                let target = self.file_browser.selected as isize + offset;
                 if target < 0 {
                     return None;
                 }
-                let entry = self.navigation.entries.get(target as usize)?.clone();
+                let entry = self.file_browser.entries.get(target as usize)?.clone();
                 is_audio_entry(&entry).then_some(entry)
             })
             .collect()
@@ -182,10 +182,10 @@ impl App {
         let mut candidates = self
             .visible_entry_indices()
             .into_iter()
-            .filter(|&index| index != self.navigation.selected)
+            .filter(|&index| index != self.file_browser.selected)
             .filter_map(|index| {
-                self.navigation.entries.get(index).cloned().map(|entry| {
-                    let distance = index.abs_diff(self.navigation.selected);
+                self.file_browser.entries.get(index).cloned().map(|entry| {
+                    let distance = index.abs_diff(self.file_browser.selected);
                     (distance, entry)
                 })
             })

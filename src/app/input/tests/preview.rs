@@ -14,7 +14,7 @@ fn preview_horizontal_scroll_works_in_list_view() {
     .expect("failed to write temp file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     app.set_frame_state(FrameState {
         preview_panel: Some(Rect {
@@ -55,7 +55,7 @@ fn preview_scroll_resets_when_reselecting_a_file() {
     fs::write(&other, "short\ntext").expect("failed to write other text file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     app.set_frame_state(FrameState {
         preview_panel: Some(Rect {
@@ -100,7 +100,7 @@ fn preview_horizontal_scroll_resets_when_reselecting_code() {
     fs::write(&other, "short\ntext").expect("failed to write other text file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     app.set_frame_state(FrameState {
         preview_panel: Some(Rect {

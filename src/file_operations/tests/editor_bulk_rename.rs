@@ -19,9 +19,9 @@ fn editor_bulk_rename_file_preserves_selection_order() {
     fs::write(&analytics, "analytics").expect("failed to write analytics");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(angular.clone());
-    app.navigation.selected_paths.insert(analysis.clone());
-    app.navigation.selected_paths.insert(analytics.clone());
+    app.file_browser.selected_paths.insert(angular.clone());
+    app.file_browser.selected_paths.insert(analysis.clone());
+    app.file_browser.selected_paths.insert(analytics.clone());
 
     app.open_editor_bulk_rename()
         .expect("editor bulk rename should open");
@@ -40,7 +40,7 @@ fn editor_bulk_rename_file_preserves_selection_order() {
     );
     let _ = fs::remove_file(&session.temp_path);
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -57,7 +57,7 @@ fn invalid_editor_bulk_rename_aborts_without_review_overlay() {
     fs::write(&temp_file, "../outside.txt\n").expect("failed to write edited rename file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(file.clone());
+    app.file_browser.selected_paths.insert(file.clone());
     let session = BulkRenameEditorSession {
         root: root.clone(),
         temp_path: temp_file.clone(),
@@ -75,7 +75,7 @@ fn invalid_editor_bulk_rename_aborts_without_review_overlay() {
 
     assert!(app.overlays.bulk_rename.is_none());
     assert!(app.overlays.editor_rename_confirm.is_none());
-    assert!(app.navigation.selected_paths.contains(&file));
+    assert!(app.file_browser.selected_paths.contains(&file));
     assert_eq!(
         app.status_message(),
         "Editor rename aborted: line 1: Path cannot contain . or .."
@@ -83,7 +83,7 @@ fn invalid_editor_bulk_rename_aborts_without_review_overlay() {
     assert!(file.exists());
     assert!(!temp_file.exists());
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -218,7 +218,7 @@ fn finish_editor_bulk_rename_opens_confirmation_with_relative_paths() {
     assert_eq!(status, "Renamed 2 items");
     assert_eq!(reselect_path, Some(right.join("renamed-beta.txt")));
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

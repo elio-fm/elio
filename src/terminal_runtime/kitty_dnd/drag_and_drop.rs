@@ -292,7 +292,7 @@ where
 
 fn drag_icon_for_path(app: &App, path: &Path) -> (String, ratatui::style::Color) {
     if let Some(entry) = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.path == path)

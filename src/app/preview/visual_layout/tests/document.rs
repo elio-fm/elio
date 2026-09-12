@@ -31,7 +31,7 @@ fn build_displayed_iterm_inline_image_app(label: &str) -> (App, PathBuf) {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_iterm_image_support(&mut app);
-    app.navigation.entries = vec![Entry {
+    app.file_browser.entries = vec![Entry {
         path: page.clone(),
         name: "page.png".to_string(),
         name_key: "page.png".to_string(),
@@ -41,7 +41,7 @@ fn build_displayed_iterm_inline_image_app(label: &str) -> (App, PathBuf) {
         modified: page_metadata.modified().ok(),
         readonly: false,
     }];
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.preview.image.selection_activation_delay = Duration::ZERO;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
@@ -243,8 +243,8 @@ fn document_page_image_prepares_in_background_before_display() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.navigation.entries.clear();
-    app.navigation.selected = 0;
+    app.file_browser.entries.clear();
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
@@ -323,8 +323,8 @@ fn iterm_inline_page_image_clear_area_stays_inside_media_area() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_iterm_image_support(&mut app);
-    app.navigation.entries.clear();
-    app.navigation.selected = 0;
+    app.file_browser.entries.clear();
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_panel = Some(Rect {
         x: 1,
         y: 1,
@@ -398,8 +398,8 @@ fn document_overlay_keeps_previous_page_visible_while_next_page_waits() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.navigation.entries.clear();
-    app.navigation.selected = 0;
+    app.file_browser.entries.clear();
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
@@ -456,8 +456,8 @@ fn iterm_popup_masks_displayed_image_until_close() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_iterm_image_support(&mut app);
-    app.navigation.entries.clear();
-    app.navigation.selected = 0;
+    app.file_browser.entries.clear();
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_panel = Some(Rect {
         x: 1,
         y: 1,
@@ -826,8 +826,8 @@ fn iterm_pre_draw_erase_detects_cover_layout_change_before_frame_update() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_iterm_image_support(&mut app);
-    app.navigation.entries.clear();
-    app.navigation.selected = 0;
+    app.file_browser.entries.clear();
+    app.file_browser.selected = 0;
     app.preview.image.selection_activation_delay = Duration::ZERO;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,

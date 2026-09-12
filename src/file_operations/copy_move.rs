@@ -74,7 +74,7 @@ impl App {
             paths,
             op: ClipOp::Yank,
         });
-        self.navigation.selected_paths.clear();
+        self.file_browser.selected_paths.clear();
         self.status.clear();
     }
 
@@ -88,7 +88,7 @@ impl App {
             paths,
             op: ClipOp::Cut,
         });
-        self.navigation.selected_paths.clear();
+        self.file_browser.selected_paths.clear();
         self.status.clear();
     }
 
@@ -140,7 +140,7 @@ impl App {
         if op == ClipOp::Cut
             && paths.iter().any(|path| {
                 path.file_name()
-                    .map(|file_name| self.navigation.cwd.join(file_name) == *path)
+                    .map(|file_name| self.file_browser.cwd.join(file_name) == *path)
                     .unwrap_or(false)
             })
         {
@@ -149,7 +149,7 @@ impl App {
         }
 
         let request = QueuedPaste {
-            dest_dir: self.navigation.cwd.clone(),
+            dest_dir: self.file_browser.cwd.clone(),
             paths,
             op,
             origin: PasteOrigin::Drop,
@@ -193,7 +193,7 @@ impl App {
             return None;
         }
         Some(QueuedPaste {
-            dest_dir: self.navigation.cwd.clone(),
+            dest_dir: self.file_browser.cwd.clone(),
             paths: clipboard.paths,
             op: clipboard.op,
             origin: PasteOrigin::Clipboard,
@@ -222,8 +222,9 @@ impl App {
     /// Collect the paths that y/x should act on: all space-selected paths if
     /// any exist (sorted for stable ordering), otherwise the focused entry.
     pub(super) fn clipboard_target_paths(&self) -> Vec<PathBuf> {
-        if !self.navigation.selected_paths.is_empty() {
-            let mut paths: Vec<PathBuf> = self.navigation.selected_paths.iter().cloned().collect();
+        if !self.file_browser.selected_paths.is_empty() {
+            let mut paths: Vec<PathBuf> =
+                self.file_browser.selected_paths.iter().cloned().collect();
             paths.sort();
             paths
         } else {

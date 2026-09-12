@@ -158,7 +158,7 @@ impl App {
     }
 
     fn archive_create_targets(&self) -> Option<(Vec<PathBuf>, Vec<String>, String)> {
-        if !self.navigation.selected_paths.is_empty() {
+        if !self.file_browser.selected_paths.is_empty() {
             let sources = self.selected_paths_sorted();
             let names = sources
                 .iter()
@@ -429,7 +429,7 @@ impl App {
             return Ok(false);
         }
         if let Err(error) = crate::archive::plan_create_archive(
-            &self.navigation.cwd,
+            &self.file_browser.cwd,
             sources.clone(),
             &output_name,
             options.clone(),
@@ -448,8 +448,8 @@ impl App {
             completed: 0,
             total: 0,
         });
-        self.jobs.archive_create_source_cwd = Some(self.navigation.cwd.clone());
-        self.jobs.archive_create_path = Some(self.navigation.cwd.join(&output_name));
+        self.jobs.archive_create_source_cwd = Some(self.file_browser.cwd.clone());
+        self.jobs.archive_create_path = Some(self.file_browser.cwd.join(&output_name));
         self.status.clear();
 
         let submitted = self
@@ -457,7 +457,7 @@ impl App {
             .scheduler
             .submit_archive_create(ArchiveCreateRequest {
                 token,
-                cwd: self.navigation.cwd.clone(),
+                cwd: self.file_browser.cwd.clone(),
                 sources,
                 output_name,
                 options,

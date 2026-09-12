@@ -51,14 +51,14 @@ fn e_extracts_selected_archives_as_one_batch_and_skips_other_files() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(alpha.clone());
-    app.navigation.selected_paths.insert(beta.clone());
-    app.navigation.selected_paths.insert(notes);
+    app.file_browser.selected_paths.insert(alpha.clone());
+    app.file_browser.selected_paths.insert(beta.clone());
+    app.file_browser.selected_paths.insert(notes);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('e'))))
         .expect("e should start batch archive extraction");
     assert!(
-        app.navigation.selected_paths.is_empty(),
+        app.file_browser.selected_paths.is_empty(),
         "selected archives should be consumed once extraction starts"
     );
 
@@ -93,7 +93,7 @@ fn e_reports_no_archives_selected_for_non_archive_selection() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(notes);
+    app.file_browser.selected_paths.insert(notes);
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('e'))))
         .expect("e should handle non-archive selection");
@@ -101,7 +101,7 @@ fn e_reports_no_archives_selected_for_non_archive_selection() {
     assert_eq!(app.status_message(), "No archives selected");
     assert!(app.jobs.archive_extract_progress.is_none());
     assert_eq!(
-        app.navigation.selected_paths.len(),
+        app.file_browser.selected_paths.len(),
         1,
         "selection should stay when extraction does not start"
     );
@@ -123,14 +123,14 @@ fn e_skips_password_archive_on_cancel_and_continues_batch() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(secret.clone());
-    app.navigation.selected_paths.insert(alpha.clone());
-    app.navigation.selected_paths.insert(beta.clone());
+    app.file_browser.selected_paths.insert(secret.clone());
+    app.file_browser.selected_paths.insert(alpha.clone());
+    app.file_browser.selected_paths.insert(beta.clone());
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('e'))))
         .expect("e should start batch archive extraction");
     assert!(
-        app.navigation.selected_paths.is_empty(),
+        app.file_browser.selected_paths.is_empty(),
         "selected archives should be consumed before the password prompt"
     );
     wait_for_archive_password_prompt(&mut app);
@@ -392,8 +392,8 @@ fn c_create_archive_clears_selection_when_started() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(alpha.clone());
-    app.navigation.selected_paths.insert(beta.clone());
+    app.file_browser.selected_paths.insert(alpha.clone());
+    app.file_browser.selected_paths.insert(beta.clone());
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('C'))))
         .expect("C should open archive creation");
@@ -404,7 +404,7 @@ fn c_create_archive_clears_selection_when_started() {
         .expect("enter should start archive creation");
 
     assert!(
-        app.navigation.selected_paths.is_empty(),
+        app.file_browser.selected_paths.is_empty(),
         "starting archive creation should clear the consumed selection"
     );
 
@@ -605,7 +605,7 @@ fn cancel_keys_clear_selection_before_cancelling_archive_creation() {
 
         let mut app = App::new_at(root.clone()).expect("failed to create app");
         wait_for_directory_load(&mut app);
-        app.navigation.selected_paths.insert(alpha);
+        app.file_browser.selected_paths.insert(alpha);
         app.jobs.archive_create_progress = Some(crate::file_operations::ArchiveCreateProgress {
             completed: 0,
             total: 1,
@@ -614,7 +614,7 @@ fn cancel_keys_clear_selection_before_cancelling_archive_creation() {
         app.handle_event(Event::Key(key))
             .expect("cancel key should be handled");
 
-        assert!(app.navigation.selected_paths.is_empty());
+        assert!(app.file_browser.selected_paths.is_empty());
         assert!(
             app.jobs.archive_create_progress.is_some(),
             "first cancel key should clear selection instead of cancelling archive creation"
@@ -636,7 +636,7 @@ fn archive_create_contents_list_scrolls_with_mouse_wheel() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
     for index in 0..12 {
-        app.navigation
+        app.file_browser
             .selected_paths
             .insert(root.join(format!("item-{index}.txt")));
     }

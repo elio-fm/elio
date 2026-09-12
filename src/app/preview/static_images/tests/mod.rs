@@ -73,7 +73,7 @@ fn set_single_test_entry(app: &mut App, path: &Path) {
         .file_name()
         .and_then(|name| name.to_str())
         .expect("file name should be valid utf-8");
-    app.navigation.entries = vec![Entry {
+    app.file_browser.entries = vec![Entry {
         path: path.to_path_buf(),
         name: name.to_string(),
         name_key: name.to_ascii_lowercase(),
@@ -83,7 +83,7 @@ fn set_single_test_entry(app: &mut App, path: &Path) {
         modified: metadata.modified().ok(),
         readonly: false,
     }];
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
@@ -96,7 +96,7 @@ fn set_single_test_entry(app: &mut App, path: &Path) {
 
 fn set_single_unmodified_test_entry(app: &mut App, path: &Path) {
     set_single_test_entry(app, path);
-    app.navigation.entries[0].modified = None;
+    app.file_browser.entries[0].modified = None;
 }
 
 fn build_selected_static_image_app(label: &str, file_name: &str) -> (App, PathBuf, PathBuf) {
@@ -280,9 +280,9 @@ fn cold_sixel_jpeg_selection_defers_first_keyboard_preview_refresh() {
     configure_terminal_image_support(&mut app);
     app.preview.terminal_images.protocol = ImageProtocol::Sixel;
     app.preview.pdf.pdf_tools_available = true;
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.set_ffmpeg_available_for_tests(true);
-    app.navigation.entries = ["a.txt", "b.jpg", "c.txt"]
+    app.file_browser.entries = ["a.txt", "b.jpg", "c.txt"]
         .into_iter()
         .map(|name| {
             let path = root.join(name);
@@ -299,13 +299,13 @@ fn cold_sixel_jpeg_selection_defers_first_keyboard_preview_refresh() {
             }
         })
         .collect();
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.refresh_preview();
 
     let token_before = app.preview.state.token;
     app.move_vertical_keyboard(1);
 
-    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.file_browser.selected, 1);
     assert_eq!(
         app.preview.state.token, token_before,
         "cold sixel jpeg should defer the first keyboard refresh"
@@ -331,8 +331,8 @@ fn cold_sixel_comic_selection_defers_first_keyboard_preview_refresh() {
     configure_terminal_image_support(&mut app);
     app.preview.terminal_images.protocol = ImageProtocol::Sixel;
     app.preview.pdf.pdf_tools_available = true;
-    app.navigation.view_mode = ViewMode::List;
-    app.navigation.entries = ["a.txt", "b.cbz", "c.txt"]
+    app.file_browser.view_mode = ViewMode::List;
+    app.file_browser.entries = ["a.txt", "b.cbz", "c.txt"]
         .into_iter()
         .map(|name| {
             let path = root.join(name);
@@ -349,13 +349,13 @@ fn cold_sixel_comic_selection_defers_first_keyboard_preview_refresh() {
             }
         })
         .collect();
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.refresh_preview();
 
     let token_before = app.preview.state.token;
     app.move_vertical_keyboard(1);
 
-    assert_eq!(app.navigation.selected, 1);
+    assert_eq!(app.file_browser.selected, 1);
     assert_eq!(
         app.preview.state.token, token_before,
         "cold sixel comic should defer the first keyboard refresh"
@@ -385,9 +385,9 @@ fn sixel_preloads_visible_static_images_before_selection_lands_on_them() {
     configure_terminal_image_support(&mut app);
     app.preview.terminal_images.protocol = ImageProtocol::Sixel;
     app.preview.pdf.pdf_tools_available = true;
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.set_ffmpeg_available_for_tests(true);
-    app.navigation.entries = ["a.txt", "b.jpg", "c.txt"]
+    app.file_browser.entries = ["a.txt", "b.jpg", "c.txt"]
         .into_iter()
         .map(|name| {
             let path = root.join(name);
@@ -404,7 +404,7 @@ fn sixel_preloads_visible_static_images_before_selection_lands_on_them() {
             }
         })
         .collect();
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
@@ -416,7 +416,7 @@ fn sixel_preloads_visible_static_images_before_selection_lands_on_them() {
     app.refresh_preview();
     app.refresh_static_image_preloads();
 
-    let image_entry = &app.navigation.entries[1];
+    let image_entry = &app.file_browser.entries[1];
     let request = app
         .static_image_overlay_request_for_entry(image_entry)
         .expect("visible jpeg should have a static image overlay request");
@@ -449,9 +449,9 @@ fn foot_sixel_limits_nearby_static_image_preloads() {
     app.preview.terminal_images.identity =
         crate::terminal_runtime::terminal_images::TerminalIdentity::Foot;
     app.preview.pdf.pdf_tools_available = true;
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.set_ffmpeg_available_for_tests(true);
-    app.navigation.entries = ["a.txt", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]
+    app.file_browser.entries = ["a.txt", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]
         .into_iter()
         .map(|name| {
             let path = root.join(name);
@@ -468,7 +468,7 @@ fn foot_sixel_limits_nearby_static_image_preloads() {
             }
         })
         .collect();
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
@@ -507,9 +507,9 @@ fn windows_terminal_sixel_limits_nearby_static_image_preloads() {
     app.preview.terminal_images.identity =
         crate::terminal_runtime::terminal_images::TerminalIdentity::WindowsTerminal;
     app.preview.pdf.pdf_tools_available = true;
-    app.navigation.view_mode = ViewMode::List;
+    app.file_browser.view_mode = ViewMode::List;
     app.set_ffmpeg_available_for_tests(true);
-    app.navigation.entries = ["a.txt", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]
+    app.file_browser.entries = ["a.txt", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]
         .into_iter()
         .map(|name| {
             let path = root.join(name);
@@ -526,7 +526,7 @@ fn windows_terminal_sixel_limits_nearby_static_image_preloads() {
             }
         })
         .collect();
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_content_area = Some(Rect {
         x: 2,
         y: 3,

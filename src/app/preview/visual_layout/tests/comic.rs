@@ -28,8 +28,8 @@ fn comic_jpeg_page_prepares_in_background_before_display() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.navigation.entries.clear();
-    app.navigation.selected = 0;
+    app.file_browser.entries.clear();
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
@@ -77,8 +77,8 @@ fn comic_overlay_keeps_previous_page_visible_while_next_page_waits() {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.set_ffmpeg_available_for_tests(true);
-    app.navigation.entries.clear();
-    app.navigation.selected = 0;
+    app.file_browser.entries.clear();
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
@@ -142,8 +142,8 @@ fn comic_overlay_clears_previous_file_page_while_next_comic_preview_loads() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.navigation.entries.clear();
-    app.navigation.selected = 0;
+    app.file_browser.entries.clear();
+    app.file_browser.selected = 0;
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
@@ -163,7 +163,7 @@ fn comic_overlay_clears_previous_file_page_while_next_comic_preview_loads() {
     wait_for_displayed_preview_overlay(&mut app);
     assert!(app.static_image_overlay_displayed());
 
-    app.navigation.entries = vec![Entry {
+    app.file_browser.entries = vec![Entry {
         path: archive.clone(),
         name: "issue.cbz".to_string(),
         name_key: "issue.cbz".to_string(),
@@ -173,7 +173,7 @@ fn comic_overlay_clears_previous_file_page_while_next_comic_preview_loads() {
         modified: archive_metadata.modified().ok(),
         readonly: false,
     }];
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.sync_comic_preview_selection();
     app.preview.state.content = PreviewContent::new(PreviewKind::Comic, Vec::new())
         .with_navigation_position("Page", 1, 2, None);
@@ -223,7 +223,7 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
     app.preview.state.token = app.preview.state.token.wrapping_add(1);
 
     // Select epub_a and display its page image.
-    app.navigation.entries = vec![crate::app::Entry {
+    app.file_browser.entries = vec![crate::app::Entry {
         path: epub_a.clone(),
         name: "book_a.epub".to_string(),
         name_key: "book_a.epub".to_string(),
@@ -233,7 +233,7 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
         modified: epub_a_meta.modified().ok(),
         readonly: false,
     }];
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.sync_epub_preview_selection();
     app.input.frame_state.preview_media_area = Some(Rect {
         x: 2,
@@ -255,7 +255,7 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
 
     // Navigate to epub_b: update the entry, sync the EPUB session, and put the
     // preview into the loading (Placeholder) state with no visual yet.
-    app.navigation.entries = vec![crate::app::Entry {
+    app.file_browser.entries = vec![crate::app::Entry {
         path: epub_b.clone(),
         name: "book_b.epub".to_string(),
         name_key: "book_b.epub".to_string(),
@@ -265,7 +265,7 @@ fn epub_overlay_clears_previous_file_page_while_next_epub_preview_loads() {
         modified: epub_b_meta.modified().ok(),
         readonly: false,
     }];
-    app.navigation.selected = 0;
+    app.file_browser.selected = 0;
     app.sync_epub_preview_selection();
     app.preview.state.content =
         PreviewContent::new(PreviewKind::Document, Vec::new()).with_detail("EPUB ebook");

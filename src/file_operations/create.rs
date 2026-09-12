@@ -449,7 +449,7 @@ impl App {
             let msg = if !seen_names.insert(item.name.clone()) {
                 Some(format!("\"{}\" appears more than once", item.name))
             } else {
-                validate_parsed_item(item, &self.navigation.cwd)
+                validate_parsed_item(item, &self.file_browser.cwd)
             };
             if let Some(msg) = msg {
                 errors[*line_idx] = Some(msg);
@@ -471,7 +471,7 @@ impl App {
 
         let mut last_path: Option<std::path::PathBuf> = None;
         for (_, item) in &items {
-            let path = self.navigation.cwd.join(&item.name);
+            let path = self.file_browser.cwd.join(&item.name);
             let result = if item.is_dir {
                 fs::create_dir(&path).map_err(anyhow::Error::from)
             } else {
@@ -538,8 +538,8 @@ impl App {
         };
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
-            target_cwd: self.navigation.cwd.clone(),
-            previous_cwd: self.navigation.cwd.clone(),
+            target_cwd: self.file_browser.cwd.clone(),
+            previous_cwd: self.file_browser.cwd.clone(),
             previous_selected_path: self.selected_entry().map(|entry| entry.path.clone()),
             previous_selection_name: self.selected_entry().map(|entry| entry.name.clone()),
             reselect_path: last_path,

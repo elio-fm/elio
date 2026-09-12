@@ -50,7 +50,7 @@ pub(in crate::ui) fn render_rename_overlay(
     let cursor_col = app.rename_cursor_col();
 
     let is_dir = app.rename_item_is_dir();
-    let live_path = app.navigation.cwd.join(app.rename_input());
+    let live_path = app.file_browser.cwd.join(app.rename_input());
     let (icon, icon_color) = (
         theme::path_symbol(&live_path, is_dir),
         theme::path_color(&live_path, is_dir, palette),

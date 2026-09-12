@@ -41,7 +41,7 @@ const MAX_EDITOR_RENAME_BYTES: u64 = 1024 * 1024;
 impl App {
     #[cfg(unix)]
     pub(crate) fn open_editor_bulk_rename(&mut self) -> Result<()> {
-        if self.navigation.in_trash || self.cwd_is_inside_trash_subfolder() {
+        if self.file_browser.in_trash || self.cwd_is_inside_trash_subfolder() {
             return Ok(());
         }
 
@@ -188,7 +188,7 @@ impl App {
 
     #[cfg(unix)]
     fn editor_bulk_rename_targets(&self) -> Vec<PathBuf> {
-        if !self.navigation.selected_paths.is_empty() {
+        if !self.file_browser.selected_paths.is_empty() {
             return self.selected_paths_in_selection_order();
         }
         self.selected_entry()
@@ -280,7 +280,7 @@ impl App {
         let changed_old_paths: Vec<PathBuf> = plan.iter().map(|op| op.old_path.clone()).collect();
         let reload_cwd = self
             .current_directory_escape_for_paths(&changed_old_paths)
-            .unwrap_or_else(|| self.navigation.cwd.clone());
+            .unwrap_or_else(|| self.file_browser.cwd.clone());
 
         let applied = match apply_rename_ops(&plan) {
             Ok(applied) => applied,
@@ -297,12 +297,12 @@ impl App {
             .collect::<Vec<_>>();
 
         self.overlays.editor_rename_confirm = None;
-        self.navigation.selected_paths.clear();
+        self.file_browser.selected_paths.clear();
         self.apply_duplicate_rename_pairs(duplicate_rename_pairs);
         self.queue_directory_load(PendingDirectoryLoad {
             token: 0,
             target_cwd: reload_cwd,
-            previous_cwd: self.navigation.cwd.clone(),
+            previous_cwd: self.file_browser.cwd.clone(),
             previous_selected_path: None,
             previous_selection_name: None,
             reselect_path: last_new_path,
@@ -425,7 +425,7 @@ pub(super) fn confirm_bulk_rename_overlay(app: &mut App) -> Result<()> {
     let changed_old_paths: Vec<PathBuf> = ops.iter().map(|op| op.old_path.clone()).collect();
     let reload_cwd = app
         .current_directory_escape_for_paths(&changed_old_paths)
-        .unwrap_or_else(|| app.navigation.cwd.clone());
+        .unwrap_or_else(|| app.file_browser.cwd.clone());
 
     let applied = match apply_rename_ops(&ops) {
         Ok(applied) => applied,
@@ -442,13 +442,13 @@ pub(super) fn confirm_bulk_rename_overlay(app: &mut App) -> Result<()> {
         .collect::<Vec<_>>();
 
     app.overlays.bulk_rename = None;
-    app.navigation.selected_paths.clear();
+    app.file_browser.selected_paths.clear();
     app.apply_duplicate_rename_pairs(duplicate_rename_pairs);
 
     app.queue_directory_load(PendingDirectoryLoad {
         token: 0,
         target_cwd: reload_cwd,
-        previous_cwd: app.navigation.cwd.clone(),
+        previous_cwd: app.file_browser.cwd.clone(),
         previous_selected_path: None,
         previous_selection_name: None,
         reselect_path: last_new_path,

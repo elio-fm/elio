@@ -7,15 +7,17 @@ fn confirm_trash_permanently_deletes_selected_items_inside_trash() {
     fs::write(root.join("gone.txt"), "bye").expect("failed to write file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
-    app.navigation.selected_paths.insert(root.join("gone.txt"));
+    app.file_browser.in_trash = true;
+    app.file_browser
+        .selected_paths
+        .insert(root.join("gone.txt"));
     app.open_trash_prompt();
 
     assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
     app.confirm_trash().expect("trash should succeed");
 
     assert!(app.overlays.trash.is_none());
-    assert!(app.navigation.selected_paths.is_empty());
+    assert!(app.file_browser.selected_paths.is_empty());
 
     // Deletion is async — wait for the background worker *and* the
     // subsequent directory reload to both finish.
@@ -25,7 +27,7 @@ fn confirm_trash_permanently_deletes_selected_items_inside_trash() {
     // Status is set by apply_directory_snapshot once the reload completes.
     assert_eq!(app.status_message(), "Permanently deleted \"gone.txt\"");
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -37,21 +39,23 @@ fn confirm_delete_permanently_removes_selected_items_outside_trash() {
     fs::write(root.join("gone.txt"), "bye").expect("failed to write file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(root.join("gone.txt"));
+    app.file_browser
+        .selected_paths
+        .insert(root.join("gone.txt"));
     app.open_delete_permanently_prompt();
 
     assert_eq!(app.trash_title(), "Delete permanently 1 selected file?");
     app.confirm_trash().expect("delete should succeed");
 
     assert!(app.overlays.trash.is_none());
-    assert!(app.navigation.selected_paths.is_empty());
+    assert!(app.file_browser.selected_paths.is_empty());
 
     wait_for_trash_and_reload(&mut app);
 
     assert!(!root.join("gone.txt").exists());
     assert_eq!(app.status_message(), "Permanently deleted \"gone.txt\"");
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -65,22 +69,22 @@ fn confirm_delete_selected_parent_of_current_directory_moves_to_parent() {
     fs::write(child.join("file.txt"), "child").expect("failed to write child file");
 
     let mut app = App::new_at(child.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(parent.clone());
+    app.file_browser.selected_paths.insert(parent.clone());
     app.open_delete_permanently_prompt();
 
     assert_eq!(app.trash_title(), "Delete permanently 1 selected folder?");
     app.confirm_trash().expect("delete should succeed");
 
     assert!(app.overlays.trash.is_none());
-    assert!(app.navigation.selected_paths.is_empty());
+    assert!(app.file_browser.selected_paths.is_empty());
 
     wait_for_trash_and_reload(&mut app);
 
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
     assert!(!parent.exists());
     assert_eq!(app.status_message(), "Permanently deleted \"parent\"");
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -97,8 +101,8 @@ fn after_delete_cursor_moves_to_next_surviving_entry() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     // entries are sorted by name: alpha=0, beta=1, gamma=2
-    app.navigation.in_trash = true;
-    app.navigation.selected = 1; // cursor on beta.txt
+    app.file_browser.in_trash = true;
+    app.file_browser.selected = 1; // cursor on beta.txt
     app.remember_current_directory_view(); // simulate a rendered frame committing the position
     app.open_trash_prompt();
     app.confirm_trash().expect("trash should succeed");
@@ -112,7 +116,7 @@ fn after_delete_cursor_moves_to_next_surviving_entry() {
         "cursor should land on gamma.txt (next surviving entry)"
     );
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -128,8 +132,8 @@ fn after_delete_cursor_falls_back_to_previous_entry_when_last_is_deleted() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     // entries are sorted by name: alpha=0, beta=1, gamma=2
-    app.navigation.in_trash = true;
-    app.navigation.selected = 2; // cursor on gamma.txt
+    app.file_browser.in_trash = true;
+    app.file_browser.selected = 2; // cursor on gamma.txt
     app.remember_current_directory_view(); // simulate a rendered frame committing the position
     app.open_trash_prompt();
     app.confirm_trash().expect("trash should succeed");
@@ -143,7 +147,7 @@ fn after_delete_cursor_falls_back_to_previous_entry_when_last_is_deleted() {
         "cursor should fall back to beta.txt (last surviving entry before cursor)"
     );
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -159,8 +163,8 @@ fn cancelled_delete_does_not_move_cursor_away_from_surviving_entry() {
     fs::write(root.join("gamma.txt"), "c").expect("failed to write gamma");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
-    app.navigation.selected = 1; // cursor on beta.txt
+    app.file_browser.in_trash = true;
+    app.file_browser.selected = 1; // cursor on beta.txt
     app.remember_current_directory_view(); // simulate a rendered frame committing the position
     app.open_trash_prompt();
     app.confirm_trash().expect("trash should succeed");
@@ -192,7 +196,7 @@ fn cancelled_delete_does_not_move_cursor_away_from_surviving_entry() {
         "cursor must point to a surviving entry"
     );
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -207,16 +211,22 @@ fn confirm_trash_batch_trashes_multiple_files_and_reports_count() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     // in_trash = false → non-permanent batch trash
-    app.navigation.selected_paths.insert(root.join("alpha.txt"));
-    app.navigation.selected_paths.insert(root.join("beta.txt"));
-    app.navigation.selected_paths.insert(root.join("gamma.txt"));
+    app.file_browser
+        .selected_paths
+        .insert(root.join("alpha.txt"));
+    app.file_browser
+        .selected_paths
+        .insert(root.join("beta.txt"));
+    app.file_browser
+        .selected_paths
+        .insert(root.join("gamma.txt"));
     app.open_trash_prompt();
 
     assert_eq!(app.trash_title(), "Trash 3 files?");
     app.confirm_trash().expect("trash should succeed");
 
     assert!(app.overlays.trash.is_none());
-    assert!(app.navigation.selected_paths.is_empty());
+    assert!(app.file_browser.selected_paths.is_empty());
 
     wait_for_trash_and_reload(&mut app);
 
@@ -240,7 +250,7 @@ fn confirm_trash_batch_trashes_multiple_files_and_reports_count() {
         }
     }
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -253,14 +263,16 @@ fn confirm_trash_batch_single_file_shows_quoted_name() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     // in_trash = false → non-permanent batch trash
-    app.navigation.selected_paths.insert(root.join("notes.txt"));
+    app.file_browser
+        .selected_paths
+        .insert(root.join("notes.txt"));
     app.open_trash_prompt();
 
     assert_eq!(app.trash_title(), "Trash 1 selected file?");
     app.confirm_trash().expect("trash should succeed");
 
     assert!(app.overlays.trash.is_none());
-    assert!(app.navigation.selected_paths.is_empty());
+    assert!(app.file_browser.selected_paths.is_empty());
 
     wait_for_trash_and_reload(&mut app);
 
@@ -280,7 +292,7 @@ fn confirm_trash_batch_single_file_shows_quoted_name() {
         }
     }
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -296,7 +308,7 @@ fn esc_during_batched_trash_keeps_chip_visible_until_done() {
     fs::write(root.join("canary.txt"), "x").expect("failed to write file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation
+    app.file_browser
         .selected_paths
         .insert(root.join("canary.txt"));
     app.open_trash_prompt();
@@ -346,7 +358,7 @@ fn esc_during_batched_trash_keeps_chip_visible_until_done() {
         }
     }
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -360,8 +372,10 @@ fn esc_during_permanent_delete_clears_chip_immediately() {
     fs::write(root.join("gone.txt"), "x").expect("failed to write file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.in_trash = true;
-    app.navigation.selected_paths.insert(root.join("gone.txt"));
+    app.file_browser.in_trash = true;
+    app.file_browser
+        .selected_paths
+        .insert(root.join("gone.txt"));
     app.open_trash_prompt();
     app.confirm_trash().expect("trash should succeed");
 
@@ -386,7 +400,7 @@ fn esc_during_permanent_delete_clears_chip_immediately() {
         std::thread::sleep(Duration::from_millis(10));
     }
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     // root may or may not still contain gone.txt depending on the race.
     let _ = fs::remove_dir_all(root);

@@ -28,7 +28,7 @@ pub(crate) struct BulkRenameOverlay {
 
 impl App {
     pub(crate) fn open_bulk_rename_prompt(&mut self) {
-        if self.navigation.in_trash {
+        if self.file_browser.in_trash {
             return;
         }
         let selected_paths = self.selected_paths_sorted();
@@ -125,9 +125,9 @@ impl App {
             .and_then(|r| {
                 r.new_names
                     .get(index)
-                    .map(|name| r.root.as_ref().unwrap_or(&self.navigation.cwd).join(name))
+                    .map(|name| r.root.as_ref().unwrap_or(&self.file_browser.cwd).join(name))
             })
-            .unwrap_or_else(|| self.navigation.cwd.clone())
+            .unwrap_or_else(|| self.file_browser.cwd.clone())
     }
 
     pub fn bulk_rename_line_error(&self, index: usize) -> Option<&str> {

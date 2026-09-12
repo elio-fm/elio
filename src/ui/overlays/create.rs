@@ -85,7 +85,7 @@ pub(in crate::ui) fn render_create_overlay(
                 ("󰈔", palette.muted)
             }
         } else {
-            let path = app.navigation.cwd.join(clean_name);
+            let path = app.file_browser.cwd.join(clean_name);
             (
                 theme::path_symbol(&path, is_dir),
                 theme::path_color(&path, is_dir, palette),

@@ -8,8 +8,12 @@ fn confirm_bulk_rename_renames_changed_entries_and_skips_unchanged_rows() {
     fs::write(root.join("beta.txt"), "beta").expect("failed to write beta");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(root.join("alpha.txt"));
-    app.navigation.selected_paths.insert(root.join("beta.txt"));
+    app.file_browser
+        .selected_paths
+        .insert(root.join("alpha.txt"));
+    app.file_browser
+        .selected_paths
+        .insert(root.join("beta.txt"));
     app.open_bulk_rename_prompt();
 
     let overlay = app
@@ -27,13 +31,13 @@ fn confirm_bulk_rename_renames_changed_entries_and_skips_unchanged_rows() {
     assert!(root.join("gamma.txt").is_file());
     assert!(root.join("beta.txt").is_file());
     assert!(!root.join("alpha.txt").exists());
-    assert!(app.navigation.selected_paths.is_empty());
+    assert!(app.file_browser.selected_paths.is_empty());
 
     let (status, reselect_path) = take_pending_status(&mut app);
     assert_eq!(status, "Renamed \"alpha.txt\" → \"gamma.txt\"");
     assert_eq!(reselect_path, Some(root.join("gamma.txt")));
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -46,8 +50,12 @@ fn confirm_bulk_rename_reports_duplicate_destination_names() {
     fs::write(root.join("beta.txt"), "beta").expect("failed to write beta");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(root.join("alpha.txt"));
-    app.navigation.selected_paths.insert(root.join("beta.txt"));
+    app.file_browser
+        .selected_paths
+        .insert(root.join("alpha.txt"));
+    app.file_browser
+        .selected_paths
+        .insert(root.join("beta.txt"));
     app.open_bulk_rename_prompt();
 
     let overlay = app
@@ -72,9 +80,9 @@ fn confirm_bulk_rename_reports_duplicate_destination_names() {
     );
     assert!(root.join("alpha.txt").is_file());
     assert!(root.join("beta.txt").is_file());
-    assert!(app.navigation.directory_runtime.pending_load.is_none());
+    assert!(app.file_browser.directory_runtime.pending_load.is_none());
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -86,7 +94,7 @@ fn confirm_bulk_rename_apply_failure_keeps_review_context() {
     let missing = root.join("missing.txt");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(missing.clone());
+    app.file_browser.selected_paths.insert(missing.clone());
     app.overlays.bulk_rename = Some(BulkRenameOverlay {
         items: vec![BulkRenameItem {
             path: missing.clone(),
@@ -105,14 +113,14 @@ fn confirm_bulk_rename_apply_failure_keeps_review_context() {
         .expect("apply failure should be reported as status");
 
     assert!(app.overlays.bulk_rename.is_some());
-    assert!(app.navigation.selected_paths.contains(&missing));
+    assert!(app.file_browser.selected_paths.contains(&missing));
     assert!(
         app.status_message()
             .starts_with("Could not rename \"missing.txt\":")
     );
-    assert!(app.navigation.directory_runtime.pending_load.is_none());
+    assert!(app.file_browser.directory_runtime.pending_load.is_none());
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -128,8 +136,8 @@ fn bulk_rename_uses_selection_from_multiple_directories() {
     fs::write(&beta, "beta").expect("failed to write beta");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(alpha.clone());
-    app.navigation.selected_paths.insert(beta.clone());
+    app.file_browser.selected_paths.insert(alpha.clone());
+    app.file_browser.selected_paths.insert(beta.clone());
     app.open_bulk_rename_prompt();
 
     let overlay = app
@@ -150,13 +158,13 @@ fn bulk_rename_uses_selection_from_multiple_directories() {
     assert!(!beta.exists());
     assert!(root.join("alpha-renamed.txt").is_file());
     assert!(child.join("beta-renamed.txt").is_file());
-    assert!(app.navigation.selected_paths.is_empty());
+    assert!(app.file_browser.selected_paths.is_empty());
 
     let (status, reselect_path) = take_pending_status(&mut app);
     assert_eq!(status, "Renamed 2 items");
     assert_eq!(reselect_path, Some(child.join("beta-renamed.txt")));
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -174,8 +182,8 @@ fn bulk_rename_allows_same_new_name_in_different_directories() {
     fs::write(&right_file, "right").expect("failed to write right file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(left_file);
-    app.navigation.selected_paths.insert(right_file);
+    app.file_browser.selected_paths.insert(left_file);
+    app.file_browser.selected_paths.insert(right_file);
     app.open_bulk_rename_prompt();
 
     let overlay = app
@@ -192,7 +200,7 @@ fn bulk_rename_allows_same_new_name_in_different_directories() {
     assert!(left.join("new.txt").is_file());
     assert!(right.join("new.txt").is_file());
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -217,14 +225,14 @@ fn bulk_rename_refuses_selection_containing_trash_item() {
     let _xdg_data_home = EnvVarGuard::set_path("XDG_DATA_HOME", &data_home);
 
     let mut app = App::new_at(normal_dir.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(normal);
-    app.navigation.selected_paths.insert(trashed);
+    app.file_browser.selected_paths.insert(normal);
+    app.file_browser.selected_paths.insert(trashed);
     app.open_bulk_rename_prompt();
 
     assert!(!app.bulk_rename_is_open());
     assert_eq!(app.status_message(), "Cannot rename items from Trash");
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -238,7 +246,7 @@ fn bulk_rename_selected_parent_of_current_directory_reloads_parent() {
     fs::write(&child_file, "child").expect("failed to write child file");
 
     let mut app = App::new_at(parent.clone()).expect("failed to create app");
-    app.navigation.selected_paths.insert(parent.clone());
+    app.file_browser.selected_paths.insert(parent.clone());
     app.open_bulk_rename_prompt();
 
     assert!(app.bulk_rename_is_open());
@@ -255,7 +263,7 @@ fn bulk_rename_selected_parent_of_current_directory_reloads_parent() {
         .expect("bulk rename should succeed");
 
     let load = app
-        .navigation
+        .file_browser
         .directory_runtime
         .pending_load
         .as_ref()
@@ -265,7 +273,7 @@ fn bulk_rename_selected_parent_of_current_directory_reloads_parent() {
     assert!(!parent.exists());
     assert!(root.join("renamed/child.txt").is_file());
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

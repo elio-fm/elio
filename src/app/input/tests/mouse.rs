@@ -49,10 +49,10 @@ fn double_click_opens_clicked_file_not_multi_selection() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(alpha.clone());
-    app.navigation.selected_paths.insert(gamma.clone());
+    app.file_browser.selected_paths.insert(alpha.clone());
+    app.file_browser.selected_paths.insert(gamma.clone());
     let beta_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == beta)
@@ -89,7 +89,7 @@ fn double_click_suppresses_drag_from_held_second_click() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
     let beta_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == beta)
@@ -128,9 +128,9 @@ fn double_click_enters_clicked_directory_not_multi_selection() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(selected);
+    app.file_browser.selected_paths.insert(selected);
     let child_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == child)
@@ -142,13 +142,13 @@ fn double_click_enters_clicked_directory_not_multi_selection() {
 
     app.handle_event(left_click(1, 1))
         .expect("first click should focus clicked directory");
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
 
     app.handle_event(left_click(1, 1))
         .expect("second click should enter clicked directory");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, child);
+    assert_eq!(app.file_browser.cwd, child);
 
     fs::remove_dir_all(root).ok();
 }
@@ -164,10 +164,10 @@ fn chooser_double_click_confirms_clicked_file() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
-    app.navigation.selected_paths.insert(alpha);
+    app.file_browser.selected_paths.insert(alpha);
     app.enable_chooser_mode();
     let beta_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == beta)
@@ -203,7 +203,7 @@ fn chooser_double_click_enters_clicked_directory() {
     wait_for_directory_load(&mut app);
     app.enable_chooser_mode();
     let child_index = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .position(|entry| entry.path == child)
@@ -219,7 +219,7 @@ fn chooser_double_click_enters_clicked_directory() {
         .expect("second click should enter clicked directory");
     wait_for_directory_load(&mut app);
 
-    assert_eq!(app.navigation.cwd, child);
+    assert_eq!(app.file_browser.cwd, child);
     assert!(!app.should_quit);
     assert_eq!(app.chooser_exit, None);
 

@@ -40,7 +40,7 @@ fn wait_for_directory_counts(app: &mut App) {
         let _ = app.process_directory_item_count_timer();
         let _ = app.process_background_jobs();
         let all_visible_directory_counts_loaded = app
-            .navigation
+            .file_browser
             .entries
             .iter()
             .filter(|entry| entry.is_dir())
@@ -180,13 +180,13 @@ fn list_view_ignores_grid_zoom_levels() {
     }
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    app.navigation.view_mode = crate::app::ViewMode::List;
+    app.file_browser.view_mode = crate::app::ViewMode::List;
     let mut terminal = Terminal::new(TestBackend::new(90, 24)).expect("terminal should init");
 
-    app.navigation.zoom_level = 0;
+    app.file_browser.zoom_level = 0;
     let compact = draw_ui(&mut terminal, &mut app);
 
-    app.navigation.zoom_level = 2;
+    app.file_browser.zoom_level = 2;
     let zoomed = draw_ui(&mut terminal, &mut app);
 
     assert_eq!(compact.metrics.rows_visible, zoomed.metrics.rows_visible);
@@ -629,7 +629,7 @@ fn sidebar_clamps_long_labels_when_width_is_tight() {
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    app.navigation.sidebar = vec![PlaceRow::Item(PlaceItem::new(
+    app.places.rows = vec![PlaceRow::Item(PlaceItem::new(
         PlaceKind::Downloads,
         "Downloads Directory",
         "D",
@@ -666,7 +666,7 @@ fn sidebar_uses_icons_only_at_icon_width() {
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    app.navigation.sidebar = vec![
+    app.places.rows = vec![
         PlaceRow::Section { title: "Devices" },
         PlaceRow::Item(PlaceItem::new(
             PlaceKind::Downloads,
@@ -709,7 +709,7 @@ fn sidebar_sections_render_without_creating_click_targets() {
     fs::create_dir_all(&drive).expect("failed to create temp dirs");
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    app.navigation.sidebar = vec![
+    app.places.rows = vec![
         PlaceRow::Section { title: "Devices" },
         PlaceRow::Item(PlaceItem::new(
             PlaceKind::Device { removable: true },
@@ -759,8 +759,8 @@ fn sidebar_marks_symlinked_place_active_by_identity_path() {
 
     let target_identity = target.canonicalize().expect("target should canonicalize");
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    app.navigation.cwd = target_identity.clone();
-    app.navigation.sidebar = vec![PlaceRow::Item(PlaceItem::new(
+    app.file_browser.cwd = target_identity.clone();
+    app.places.rows = vec![PlaceRow::Item(PlaceItem::new(
         PlaceKind::Custom,
         "Linked",
         "L",
@@ -829,7 +829,7 @@ fn grid_view_keeps_entry_hits_inside_the_entries_panel() {
     }
 
     let mut app = App::new_at(root.clone()).expect("app should load temp directory");
-    app.navigation.view_mode = crate::app::ViewMode::Grid;
+    app.file_browser.view_mode = crate::app::ViewMode::Grid;
     let mut terminal = Terminal::new(TestBackend::new(140, 30)).expect("terminal should init");
 
     let state = draw_ui(&mut terminal, &mut app);
@@ -1145,7 +1145,7 @@ fn compact_list_rows_do_not_push_metadata_into_a_far_right_column() {
 
     let app = App::new_at(root.clone()).expect("app should load temp directory");
     let entry = app
-        .navigation
+        .file_browser
         .entries
         .first()
         .expect("entry should be present");
@@ -1184,7 +1184,7 @@ fn compact_list_rows_hide_metadata_early_on_tight_widths() {
 
     let app = App::new_at(root.clone()).expect("app should load temp directory");
     let entry = app
-        .navigation
+        .file_browser
         .entries
         .first()
         .expect("entry should be present");
@@ -1227,7 +1227,7 @@ fn symlink_list_rows_expose_target_detail_inline() {
 
     let app = App::new_at(root.clone()).expect("app should load temp directory");
     let entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.name == "linked.txt")
@@ -1273,7 +1273,7 @@ fn symlink_list_rows_sanitize_link_names_and_targets() {
 
     let app = App::new_at(root.clone()).expect("app should load temp directory");
     let entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.name == link_name)
@@ -1313,7 +1313,7 @@ fn broken_symlink_list_rows_expose_broken_target_detail() {
 
     let app = App::new_at(root.clone()).expect("app should load temp directory");
     let entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.name == "broken_link_with_known_ext.rs")
@@ -1360,13 +1360,13 @@ fn compact_list_rows_hide_file_metadata_at_consistent_widths() {
 
     let app = App::new_at(root.clone()).expect("app should load temp directory");
     let small_entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.path == small)
         .expect("small entry should be present");
     let large_entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.path == large)
@@ -1418,13 +1418,13 @@ fn compact_list_rows_hide_directory_metadata_at_consistent_widths() {
     wait_for_directory_counts(&mut app);
 
     let short_entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.path == short)
         .expect("short-count entry should be present");
     let long_entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.path == long)
@@ -1473,13 +1473,13 @@ fn compact_list_rows_align_file_and_directory_metadata_columns() {
     wait_for_directory_counts(&mut app);
 
     let folder_entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.path == folder)
         .expect("folder entry should be present");
     let file_entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.path == file_path)
@@ -1536,13 +1536,13 @@ fn compact_list_rows_align_directory_count_nouns_for_singular_and_plural() {
     wait_for_directory_counts(&mut app);
 
     let single_entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.path == single)
         .expect("single entry should be present");
     let many_entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.path == many)
@@ -1596,13 +1596,13 @@ fn compact_list_rows_align_file_size_units_for_small_and_large_sizes() {
 
     let app = App::new_at(root.clone()).expect("app should load temp directory");
     let small_entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.path == small_path)
         .expect("small entry should be present");
     let large_entry = app
-        .navigation
+        .file_browser
         .entries
         .iter()
         .find(|entry| entry.path == large_path)

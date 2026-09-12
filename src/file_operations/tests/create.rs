@@ -25,7 +25,7 @@ fn confirm_create_creates_files_and_folders_and_reselects_last_created_path() {
     assert_eq!(status, "Created 1 file and 1 folder");
     assert_eq!(reselect_path, Some(root.join("docs")));
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -59,9 +59,9 @@ fn confirm_create_reports_duplicate_names_after_dir_marker_normalization() {
         Some("\"logs\" appears more than once")
     );
     assert!(!root.join("logs").exists());
-    assert!(app.navigation.directory_runtime.pending_load.is_none());
+    assert!(app.file_browser.directory_runtime.pending_load.is_none());
 
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

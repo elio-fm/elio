@@ -4,12 +4,14 @@ This crate is organized around focused subsystems.
 
 - `cli` and `shell_integration`: command-line behavior and shell setup.
 - `fs` and `file_classification`: filesystem access and file, format, and code-language identification.
+- `file_browser`: current-directory state, loading, navigation, selection, filtering, and item
+  counts.
 - `file_operations`: workflows that create, rename, copy, move, trash, restore, or archive items.
 - `background_jobs`: shared job scheduling, workers, requests, and result messages.
 - `archive` and `opening`: archive operations and launching items with applications.
 - `preview`: preview construction plus document and image inspection, preparation, and rendering.
 - `theme`: palettes and file appearance rules shared by rendered interfaces.
-- `app`: remaining application state, input dispatch, preview coordination, and applying
+- `app`: remaining cross-subsystem state, input dispatch, preview coordination, and applying
   background-job results.
 - `elevated_session`: privileged filesystem operations through sudo or doas.
 - `terminal_runtime`: application startup, terminal lifecycle, event loop, drawing, terminal-image
@@ -22,6 +24,8 @@ Current boundary rules:
   a generic shared module.
 - Filesystem mutations belong to `file_operations`; their background workers remain centralized in
   `background_jobs` with Elio's other workers.
+- Current-directory browsing state and pure browser transitions belong to `file_browser`; places
+  pane state remains in `places`.
 - `fs` and `file_classification` should not depend on `app`.
 - Code-language recognition belongs to `file_classification`, not to a preview renderer.
 - Preview construction and media processing in `preview` should not depend on `app` or

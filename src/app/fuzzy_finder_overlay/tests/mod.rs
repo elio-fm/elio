@@ -77,12 +77,12 @@ fn opening_search_ignores_hidden_cache_when_browser_hides_dotfiles() {
     fs::create_dir_all(root.join(".hidden-root/needle")).expect("failed to create temp tree");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.navigation.show_hidden = false;
+    app.file_browser.show_hidden = false;
     app.jobs.search_cache = Some(SearchCache {
         cwd: root.clone(),
         scope: SearchScope::Folders,
         show_hidden: true,
-        fingerprint: app.navigation.directory_runtime.fingerprint,
+        fingerprint: app.file_browser.directory_runtime.fingerprint,
         candidates: Arc::new(vec![crate::fuzzy_finder::SearchCandidate {
             path: root.join(".hidden-root/needle"),
             name: "needle".to_string(),
@@ -118,8 +118,8 @@ fn opening_search_preserves_cached_limit_status() {
     app.jobs.search_cache = Some(SearchCache {
         cwd: root.clone(),
         scope: SearchScope::Folders,
-        show_hidden: app.navigation.show_hidden,
-        fingerprint: app.navigation.directory_runtime.fingerprint,
+        show_hidden: app.file_browser.show_hidden,
+        fingerprint: app.file_browser.directory_runtime.fingerprint,
         candidates: Arc::new(vec![crate::fuzzy_finder::SearchCandidate {
             path: root.join("needle"),
             name: "needle".to_string(),
@@ -158,7 +158,7 @@ fn search_rows_keep_full_paths() {
         cwd: root.clone(),
         scope: SearchScope::Files,
         show_hidden: app.effective_show_hidden(),
-        fingerprint: app.navigation.directory_runtime.fingerprint,
+        fingerprint: app.file_browser.directory_runtime.fingerprint,
         candidates: Arc::new(vec![crate::fuzzy_finder::SearchCandidate {
             path: license_path.clone(),
             name: "LICENSE.md".to_string(),
@@ -210,8 +210,8 @@ fn search_progress_batch_updates_open_overlay_while_loading() {
                 token: 42,
                 cwd: root.clone(),
                 scope: SearchScope::Folders,
-                show_hidden: app.navigation.show_hidden,
-                fingerprint: app.navigation.directory_runtime.fingerprint,
+                show_hidden: app.file_browser.show_hidden,
+                fingerprint: app.file_browser.directory_runtime.fingerprint,
                 batch: crate::fuzzy_finder::SearchIndexBatch {
                     candidates: vec![crate::fuzzy_finder::SearchCandidate {
                         path: root.join("linked-folder"),
@@ -286,8 +286,8 @@ fn search_progress_batches_update_current_query_incrementally() {
                     token: 42,
                     cwd: root.clone(),
                     scope: SearchScope::Folders,
-                    show_hidden: app.navigation.show_hidden,
-                    fingerprint: app.navigation.directory_runtime.fingerprint,
+                    show_hidden: app.file_browser.show_hidden,
+                    fingerprint: app.file_browser.directory_runtime.fingerprint,
                     batch: crate::fuzzy_finder::SearchIndexBatch {
                         candidates,
                         stats: crate::fuzzy_finder::SearchIndexStats {
@@ -369,8 +369,8 @@ fn closing_search_cancels_inflight_index_token() {
                 token: 42,
                 cwd: root.clone(),
                 scope: SearchScope::Folders,
-                show_hidden: app.navigation.show_hidden,
-                fingerprint: app.navigation.directory_runtime.fingerprint,
+                show_hidden: app.file_browser.show_hidden,
+                fingerprint: app.file_browser.directory_runtime.fingerprint,
                 batch: crate::fuzzy_finder::SearchIndexBatch {
                     candidates: vec![folder_candidate(&root, "stale")],
                     stats: crate::fuzzy_finder::SearchIndexStats {
@@ -400,7 +400,7 @@ fn directory_reload_invalidates_closed_search_cache() {
     app.overlays.search = None;
 
     fs::create_dir_all(root.join("beta")).expect("failed to create new folder");
-    let snapshot = crate::fs::load_directory_snapshot(&root, false, app.navigation.sort_mode)
+    let snapshot = crate::fs::load_directory_snapshot(&root, false, app.file_browser.sort_mode)
         .expect("failed to load directory snapshot");
     app.apply_directory_snapshot(
         PendingDirectoryLoad {
@@ -740,7 +740,7 @@ fn confirm_search_selection_selects_file_already_in_current_directory() {
         .expect("search selection should succeed");
 
     assert!(app.overlays.search.is_none());
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(beta.as_path())
@@ -781,7 +781,7 @@ fn confirm_search_selection_keeps_overlay_open_when_reveal_fails() {
 
     assert!(app.confirm_search_selection().is_err());
     assert!(app.overlays.search.is_some());
-    assert_eq!(app.navigation.cwd, root);
+    assert_eq!(app.file_browser.cwd, root);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

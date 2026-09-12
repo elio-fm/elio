@@ -81,7 +81,7 @@ impl App {
         }
 
         self.overlays.help = false;
-        self.overlays.copy = Some(build_copy_overlay(&self.navigation.cwd, &paths));
+        self.overlays.copy = Some(build_copy_overlay(&self.file_browser.cwd, &paths));
         self.status.clear();
     }
 

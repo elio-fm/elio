@@ -30,7 +30,7 @@ pub(crate) struct TrashOverlay {
 
 impl App {
     pub(crate) fn cwd_is_trash(&self) -> bool {
-        self.navigation.in_trash
+        self.file_browser.in_trash
     }
 
     /// Returns `true` when the current directory is *inside* a trashed folder
@@ -39,7 +39,7 @@ impl App {
         crate::elevated_session::trash_home_dir()
             .and_then(|home| crate::places::trash_dir(&home))
             .is_some_and(|trash| {
-                self.navigation.cwd != trash && self.navigation.cwd.starts_with(&trash)
+                self.file_browser.cwd != trash && self.file_browser.cwd.starts_with(&trash)
             })
     }
 
@@ -56,17 +56,17 @@ impl App {
     }
 
     pub(crate) fn effective_show_hidden(&self) -> bool {
-        self.navigation.show_hidden || self.navigation.in_trash
+        self.file_browser.show_hidden || self.file_browser.in_trash
     }
 
     pub(crate) fn effective_show_hidden_for(&self, path: &Path) -> bool {
-        self.navigation.show_hidden || Self::path_is_trash(path)
+        self.file_browser.show_hidden || Self::path_is_trash(path)
     }
 }
 
 impl App {
     pub(super) fn selected_trash_targets(&self) -> Vec<TrashTarget> {
-        if !self.navigation.selected_paths.is_empty() {
+        if !self.file_browser.selected_paths.is_empty() {
             self.selected_paths_sorted()
                 .into_iter()
                 .map(trash_target_from_path)
@@ -156,7 +156,7 @@ impl App {
 
     pub(crate) fn trash_target_is_inside_trash(&self, path: &Path) -> bool {
         Self::path_is_inside_trash(path)
-            || (self.navigation.in_trash && path.starts_with(&self.navigation.cwd))
+            || (self.file_browser.in_trash && path.starts_with(&self.file_browser.cwd))
     }
 
     pub fn trash_is_open(&self) -> bool {
@@ -238,7 +238,7 @@ impl App {
         self.overlays.trash.as_ref().is_some_and(|t| {
             t.targets
                 .iter()
-                .any(|target| target.path.parent() != Some(self.navigation.cwd.as_path()))
+                .any(|target| target.path.parent() != Some(self.file_browser.cwd.as_path()))
         })
     }
 
@@ -378,7 +378,7 @@ impl App {
             .duplicates
             .is_some()
             .then(|| t.targets.iter().map(|target| target.path.clone()).collect());
-        self.navigation.selected_paths.clear();
+        self.file_browser.selected_paths.clear();
         let target_paths: Vec<PathBuf> =
             t.targets.iter().map(|target| target.path.clone()).collect();
         let source_cwd = self.queue_directory_escape_for_paths(&target_paths)?;
@@ -389,14 +389,14 @@ impl App {
         let deleted_paths: std::collections::HashSet<_> =
             t.targets.iter().map(|tgt| &tgt.path).collect();
         let next_selection = self
-            .navigation
+            .file_browser
             .entries
             .iter()
             .enumerate()
             .filter(|(_, e)| !deleted_paths.contains(&e.path))
-            .find(|(i, _)| *i >= self.navigation.selected)
+            .find(|(i, _)| *i >= self.file_browser.selected)
             .or_else(|| {
-                self.navigation
+                self.file_browser
                     .entries
                     .iter()
                     .enumerate()

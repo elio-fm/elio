@@ -127,7 +127,7 @@ impl App {
                     .cloned()
                 {
                     let Some((path, is_dir)) = self
-                        .navigation
+                        .file_browser
                         .entries
                         .get(hit.index)
                         .map(|entry| (entry.path.clone(), entry.is_dir()))

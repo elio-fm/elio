@@ -15,7 +15,7 @@ pub(super) fn temp_path(label: &str) -> PathBuf {
         .expect("system time should be after unix epoch")
         .as_nanos();
     let path = env::temp_dir().join(format!("elio-events-{label}-{unique}"));
-    // Pre-canonicalize so that both sides of assert_eq!(app.navigation.cwd, root) use the
+    // Pre-canonicalize so that both sides of assert_eq!(app.file_browser.cwd, root) use the
     // same path form. On Windows env::temp_dir() returns 8.3 short names while
     // navigate_to() resolves to \\?\ paths; on macOS /var is a symlink to
     // /private/var. Creating the directory first makes canonicalize() succeed.
@@ -24,7 +24,7 @@ pub(super) fn temp_path(label: &str) -> PathBuf {
 }
 
 pub(super) fn cleanup_app_temp_root(mut app: App, root: PathBuf) {
-    app.navigation.directory_runtime.watch = None;
+    app.file_browser.directory_runtime.watch = None;
     drop(app);
     remove_temp_root(root);
 }
@@ -48,7 +48,7 @@ fn remove_temp_root(root: PathBuf) {
 pub(super) fn wait_for_directory_load(app: &mut App) {
     for _ in 0..100 {
         let _ = app.process_background_jobs();
-        if app.navigation.directory_runtime.pending_load.is_none() {
+        if app.file_browser.directory_runtime.pending_load.is_none() {
             return;
         }
         thread::sleep(Duration::from_millis(10));

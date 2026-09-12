@@ -53,8 +53,8 @@ impl App {
     }
 
     fn drag_paths_for_candidate(&self, candidate: &Path) -> Vec<PathBuf> {
-        if !self.navigation.selected_paths.is_empty()
-            && self.navigation.selected_paths.contains(candidate)
+        if !self.file_browser.selected_paths.is_empty()
+            && self.file_browser.selected_paths.contains(candidate)
         {
             return self.selected_paths_sorted();
         }
@@ -69,13 +69,13 @@ impl App {
             .entry_hits
             .iter()
             .find(|hit| rect_contains(hit.rect, column, row))
-            .and_then(|hit| self.navigation.entries.get(hit.index))
+            .and_then(|hit| self.file_browser.entries.get(hit.index))
             .map(|entry| entry.path.clone())
     }
 
     #[cfg(test)]
     pub(crate) fn drag_export_paths(&self) -> Vec<PathBuf> {
-        if !self.navigation.selected_paths.is_empty() {
+        if !self.file_browser.selected_paths.is_empty() {
             return self.selected_paths_sorted();
         }
         self.selected_entry()
@@ -110,7 +110,7 @@ mod tests {
         fs::write(&beta, "b").expect("beta");
         fs::write(&gamma, "g").expect("gamma");
         let mut app = App::new_at(root).expect("app should initialize");
-        app.navigation.entries = vec![
+        app.file_browser.entries = vec![
             Entry {
                 path: alpha.clone(),
                 name: "alpha.txt".to_string(),
@@ -130,7 +130,7 @@ mod tests {
                 ..Entry::default()
             },
         ];
-        app.navigation.selected = 1;
+        app.file_browser.selected = 1;
         (app, alpha, beta, gamma)
     }
 
@@ -144,8 +144,8 @@ mod tests {
     #[test]
     fn drag_with_selection_exports_sorted_selection() {
         let (mut app, alpha, _beta, gamma) = make_app_with_entries();
-        app.navigation.selected_paths.insert(gamma.clone());
-        app.navigation.selected_paths.insert(alpha.clone());
+        app.file_browser.selected_paths.insert(gamma.clone());
+        app.file_browser.selected_paths.insert(alpha.clone());
 
         assert_eq!(app.drag_export_paths(), vec![alpha, gamma]);
     }
@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn drag_with_no_entries_exports_nothing() {
         let (mut app, _alpha, _beta, _gamma) = make_app_with_entries();
-        app.navigation.entries.clear();
+        app.file_browser.entries.clear();
 
         assert!(app.drag_export_paths().is_empty());
     }
@@ -169,8 +169,8 @@ mod tests {
     #[test]
     fn drag_offer_exports_selection_when_clicked_entry_is_selected() {
         let (mut app, alpha, _beta, gamma) = make_app_with_entries();
-        app.navigation.selected_paths.insert(gamma.clone());
-        app.navigation.selected_paths.insert(alpha.clone());
+        app.file_browser.selected_paths.insert(gamma.clone());
+        app.file_browser.selected_paths.insert(alpha.clone());
         app.remember_drag_candidate(gamma.clone());
 
         assert_eq!(app.take_drag_export_paths_at(0, 0), vec![alpha, gamma]);
@@ -179,10 +179,10 @@ mod tests {
     #[test]
     fn drag_offer_uses_mouse_down_selection_snapshot() {
         let (mut app, alpha, _beta, gamma) = make_app_with_entries();
-        app.navigation.selected_paths.insert(gamma.clone());
-        app.navigation.selected_paths.insert(alpha.clone());
+        app.file_browser.selected_paths.insert(gamma.clone());
+        app.file_browser.selected_paths.insert(alpha.clone());
         app.remember_drag_candidate(gamma.clone());
-        app.navigation.selected_paths.clear();
+        app.file_browser.selected_paths.clear();
 
         assert_eq!(app.take_drag_export_paths_at(0, 0), vec![alpha, gamma]);
     }
@@ -198,7 +198,7 @@ mod tests {
             ..FrameState::default()
         });
 
-        let expected = app.navigation.entries[1].path.clone();
+        let expected = app.file_browser.entries[1].path.clone();
         assert_eq!(app.take_drag_export_paths_at(3, 3), vec![expected]);
     }
 

@@ -3,7 +3,7 @@ use std::{
     env,
     path::PathBuf,
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result};
@@ -11,6 +11,7 @@ use anyhow::{Context, Result};
 use super::types::*;
 use crate::background_jobs::{JobScheduler, job_requests::ArchiveExtractRequest};
 use crate::duplicate_finder::{DuplicateGroup, DuplicateScanStats};
+use crate::file_browser::FileBrowserState;
 #[cfg(unix)]
 use crate::file_operations::BulkRenameEditorSession;
 use crate::file_operations::{
@@ -20,11 +21,8 @@ use crate::file_operations::{
     TrashProgress,
 };
 use crate::fuzzy_finder::{SearchCandidate, SearchIndexStats};
+use crate::places::PlacesState;
 use crate::preview::PreviewRuntime;
-use crate::{
-    fs::{Entry, SortMode},
-    places::PlaceRow,
-};
 
 #[derive(Clone, Debug)]
 pub(super) struct ClickState {
@@ -180,206 +178,6 @@ pub(super) struct SearchCache {
     pub(super) stats: SearchIndexStats,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(super) struct DirectoryItemCountKey {
-    pub(super) path: PathBuf,
-    pub(super) modified: Option<SystemTime>,
-    pub(super) show_hidden: bool,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) enum DirectoryHistoryMode {
-    None,
-    PushCurrent,
-    GoBack,
-    GoForward,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) enum DirectoryLoadCompletion {
-    Keep,
-    Clear,
-    Status(String),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct HistoryEntry {
-    pub(super) cwd: PathBuf,
-    pub(super) selected_path: Option<PathBuf>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub(super) struct NavigationHistory {
-    pub(super) back: Vec<HistoryEntry>,
-    pub(super) forward: Vec<HistoryEntry>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub(super) struct DirectoryViewMemory {
-    pub(super) selected_path: Option<PathBuf>,
-    pub(super) scroll_row: usize,
-}
-
-#[derive(Clone, Debug, Default)]
-pub(crate) struct SelectedPaths {
-    inner: HashSet<PathBuf>,
-    order: Vec<PathBuf>,
-    ancestor_counts: HashMap<PathBuf, usize>,
-}
-
-impl SelectedPaths {
-    pub(in crate::app) fn len(&self) -> usize {
-        self.inner.len()
-    }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-
-    pub(crate) fn contains(&self, path: &std::path::Path) -> bool {
-        self.inner.contains(path)
-    }
-
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &PathBuf> {
-        self.inner.iter()
-    }
-
-    #[cfg(unix)]
-    pub(in crate::app) fn ordered(&self) -> impl Iterator<Item = &PathBuf> {
-        self.order.iter()
-    }
-
-    pub(crate) fn clear(&mut self) {
-        self.inner.clear();
-        self.order.clear();
-        self.ancestor_counts.clear();
-    }
-
-    pub(crate) fn insert(&mut self, path: PathBuf) -> bool {
-        if self.has_nesting_conflict(&path) {
-            return false;
-        }
-        if !self.inner.insert(path.clone()) {
-            return false;
-        }
-        self.order.push(path.clone());
-        self.add_ancestors(&path);
-        true
-    }
-
-    pub(in crate::app) fn remove(&mut self, path: &std::path::Path) -> bool {
-        if !self.inner.remove(path) {
-            return false;
-        }
-        self.order.retain(|selected| selected != path);
-        self.remove_ancestors(path);
-        true
-    }
-
-    pub(in crate::app) fn has_nesting_conflict(&self, path: &std::path::Path) -> bool {
-        self.ancestor_counts.contains_key(path)
-            || path
-                .ancestors()
-                .skip(1)
-                .any(|ancestor| self.inner.contains(ancestor))
-    }
-
-    fn add_ancestors(&mut self, path: &std::path::Path) {
-        for ancestor in path.ancestors().skip(1) {
-            *self
-                .ancestor_counts
-                .entry(ancestor.to_path_buf())
-                .or_default() += 1;
-        }
-    }
-
-    fn remove_ancestors(&mut self, path: &std::path::Path) {
-        for ancestor in path.ancestors().skip(1) {
-            let Some(count) = self.ancestor_counts.get_mut(ancestor) else {
-                continue;
-            };
-            *count -= 1;
-            if *count == 0 {
-                self.ancestor_counts.remove(ancestor);
-            }
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct DirectoryCountViewport {
-    pub(super) fingerprint: crate::fs::DirectoryFingerprint,
-    pub(super) scroll_row: usize,
-    pub(super) cols: usize,
-    pub(super) rows_visible: usize,
-    pub(super) show_hidden: bool,
-}
-
-#[derive(Clone, Debug, Default)]
-pub(in crate::app) struct LocalFilter {
-    pub(in crate::app) active: bool,
-    pub(in crate::app) query: String,
-    pub(in crate::app) cursor: usize,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct PendingDirectoryLoad {
-    pub(crate) token: u64,
-    pub(crate) target_cwd: PathBuf,
-    pub(crate) previous_cwd: PathBuf,
-    pub(crate) previous_selected_path: Option<PathBuf>,
-    pub(crate) previous_selection_name: Option<String>,
-    pub(crate) reselect_path: Option<PathBuf>,
-    pub(crate) history_mode: DirectoryHistoryMode,
-    pub(crate) refresh_search: bool,
-    pub(crate) completion: DirectoryLoadCompletion,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct PendingDirectoryFingerprintScan {
-    pub(super) token: u64,
-    pub(super) cwd: PathBuf,
-    pub(super) show_hidden: bool,
-}
-
-pub(crate) struct DirectoryRuntime {
-    pub(super) fingerprint: crate::fs::DirectoryFingerprint,
-    pub(super) watch_tx: std::sync::mpsc::Sender<crate::fs::DirectoryWatchEvent>,
-    pub(super) watch_rx: std::sync::mpsc::Receiver<crate::fs::DirectoryWatchEvent>,
-    pub(crate) watch: Option<crate::fs::DirectoryWatcher>,
-    pub(super) pending_reload_at: Option<Instant>,
-    pub(super) pending_fingerprint_scan: Option<PendingDirectoryFingerprintScan>,
-    pub(crate) pending_load: Option<PendingDirectoryLoad>,
-    pub(super) use_polling_reload: bool,
-    pub(super) last_auto_reload_at: Instant,
-}
-
-pub(crate) struct NavigationState {
-    pub(crate) cwd: PathBuf,
-    pub(crate) entries: Vec<Entry>,
-    pub(in crate::app) unfiltered_entries: Vec<Entry>,
-    pub(in crate::app) local_filter: LocalFilter,
-    pub(crate) sidebar: Vec<PlaceRow>,
-    pub(crate) selected: usize,
-    pub(crate) scroll_row: usize,
-    pub(crate) view_mode: ViewMode,
-    pub(crate) zoom_level: u8,
-    pub(crate) sort_mode: SortMode,
-    pub(crate) show_hidden: bool,
-    /// True when the loaded directory is the trash folder.
-    /// Set in apply_directory_snapshot so it's only true once the load completes.
-    pub(crate) in_trash: bool,
-    pub(in crate::app) navigation_history: NavigationHistory,
-    pub(crate) selected_paths: SelectedPaths,
-    pub(in crate::app) directory_item_count_cache: HashMap<DirectoryItemCountKey, Option<usize>>,
-    pub(in crate::app) directory_item_count_order: VecDeque<DirectoryItemCountKey>,
-    pub(in crate::app) directory_count_viewport: Option<DirectoryCountViewport>,
-    pub(in crate::app) directory_item_count_ready_at: Option<Instant>,
-    pub(in crate::app) directory_view_memory: HashMap<PathBuf, DirectoryViewMemory>,
-    pub(crate) directory_runtime: DirectoryRuntime,
-    pub(in crate::app) last_sidebar_refresh_at: Instant,
-}
-
 #[derive(Default)]
 pub(crate) struct OverlayState {
     pub(crate) trash: Option<TrashOverlay>,
@@ -493,7 +291,8 @@ pub(in crate::app) struct GitRuntime {
 }
 
 pub struct App {
-    pub(crate) navigation: NavigationState,
+    pub(crate) file_browser: FileBrowserState,
+    pub(crate) places: PlacesState,
     pub(in crate::app) preview: PreviewRuntime,
     pub(crate) overlays: OverlayState,
     pub(crate) jobs: JobRuntime,
@@ -525,41 +324,14 @@ impl App {
         reveal_hidden_start_focus: bool,
     ) -> Result<Self> {
         let scheduler = JobScheduler::new();
-        let (directory_watch_tx, directory_watch_rx) = std::sync::mpsc::channel();
         let mut app = Self {
-            navigation: NavigationState {
+            file_browser: FileBrowserState::new(
                 cwd,
-                entries: Vec::new(),
-                unfiltered_entries: Vec::new(),
-                local_filter: LocalFilter::default(),
-                sidebar: Vec::new(),
-                selected: 0,
-                scroll_row: 0,
-                view_mode: startup_view_mode(crate::config::ui().start_in_grid),
-                zoom_level: crate::config::ui().grid_zoom,
-                sort_mode: SortMode::Name,
-                show_hidden: crate::config::ui().show_hidden || reveal_hidden_start_focus,
-                in_trash: false,
-                navigation_history: NavigationHistory::default(),
-                selected_paths: SelectedPaths::default(),
-                directory_item_count_cache: HashMap::new(),
-                directory_item_count_order: VecDeque::new(),
-                directory_count_viewport: None,
-                directory_item_count_ready_at: None,
-                directory_view_memory: HashMap::new(),
-                directory_runtime: DirectoryRuntime {
-                    fingerprint: crate::fs::DirectoryFingerprint::default(),
-                    watch_tx: directory_watch_tx,
-                    watch_rx: directory_watch_rx,
-                    watch: None,
-                    pending_reload_at: None,
-                    pending_fingerprint_scan: None,
-                    pending_load: None,
-                    use_polling_reload: true,
-                    last_auto_reload_at: Instant::now(),
-                },
-                last_sidebar_refresh_at: Instant::now(),
-            },
+                crate::config::ui().start_in_grid,
+                crate::config::ui().grid_zoom,
+                crate::config::ui().show_hidden || reveal_hidden_start_focus,
+            ),
+            places: PlacesState::new(),
             preview: PreviewRuntime::new(),
             overlays: OverlayState::default(),
             jobs: JobRuntime {
@@ -625,25 +397,24 @@ impl App {
             chooser_exit: None,
             pending_terminal_task: None,
         };
-        app.navigation.in_trash = App::path_is_trash(&app.navigation.cwd);
+        app.file_browser.in_trash = App::path_is_trash(&app.file_browser.cwd);
         let snapshot = crate::fs::load_directory_snapshot(
-            &app.navigation.cwd,
+            &app.file_browser.cwd,
             app.effective_show_hidden(),
-            app.navigation.sort_mode,
+            app.file_browser.sort_mode,
         )?;
-        app.navigation.sidebar = crate::places::build_place_rows();
-        app.navigation.last_sidebar_refresh_at = Instant::now();
-        app.navigation.unfiltered_entries = snapshot.entries;
+        app.places.refresh();
+        app.file_browser.unfiltered_entries = snapshot.entries;
         app.apply_local_filter_preserving_selection();
-        app.navigation.directory_runtime.fingerprint = snapshot.fingerprint;
+        app.file_browser.directory_runtime.fingerprint = snapshot.fingerprint;
         if let Some(start_focus) = start_focus
             && let Some(index) = app
-                .navigation
+                .file_browser
                 .entries
                 .iter()
                 .position(|entry| entry.path == start_focus)
         {
-            app.navigation.selected = index;
+            app.file_browser.selected = index;
         }
         app.clamp_selection();
         app.sync_scroll();
@@ -673,14 +444,6 @@ impl App {
     #[cfg(test)]
     pub(in crate::app) fn set_media_ffmpeg_available_for_tests(&mut self, available: bool) {
         self.preview.media.ffmpeg_available = Some(available);
-    }
-}
-
-fn startup_view_mode(start_in_grid: bool) -> ViewMode {
-    if start_in_grid {
-        ViewMode::Grid
-    } else {
-        ViewMode::List
     }
 }
 
@@ -721,16 +484,6 @@ mod tests {
     }
 
     #[test]
-    fn startup_view_mode_defaults_to_list() {
-        assert_eq!(startup_view_mode(false), ViewMode::List);
-    }
-
-    #[test]
-    fn startup_view_mode_can_start_in_grid() {
-        assert_eq!(startup_view_mode(true), ViewMode::Grid);
-    }
-
-    #[test]
     fn startup_focus_selects_and_scrolls_entry_without_status_history_or_multi_selection() {
         let root = temp_path("startup-focus");
         fs::create_dir_all(&root).expect("temp directory should be created");
@@ -747,10 +500,10 @@ mod tests {
             app.selected_entry().map(|entry| entry.path.as_path()),
             Some(target.as_path())
         );
-        assert_eq!(app.navigation.scroll_row, app.navigation.selected);
-        assert!(app.navigation.selected_paths.is_empty());
-        assert!(app.navigation.navigation_history.back.is_empty());
-        assert!(app.navigation.navigation_history.forward.is_empty());
+        assert_eq!(app.file_browser.scroll_row, app.file_browser.selected);
+        assert!(app.file_browser.selected_paths.is_empty());
+        assert!(app.file_browser.directory_history.back.is_empty());
+        assert!(app.file_browser.directory_history.forward.is_empty());
         assert_eq!(app.status_message(), "");
 
         fs::remove_dir_all(root).expect("temp directory should be removed");
@@ -768,13 +521,13 @@ mod tests {
         let app = App::new_at_startup(root.clone(), Some(hidden.clone()), true)
             .expect("app should initialize");
 
-        assert!(app.navigation.show_hidden);
+        assert!(app.file_browser.show_hidden);
         assert_eq!(
             app.selected_entry().map(|entry| entry.path.as_path()),
             Some(hidden.as_path())
         );
         assert!(
-            app.navigation
+            app.file_browser
                 .entries
                 .iter()
                 .any(|entry| entry.path == hidden)

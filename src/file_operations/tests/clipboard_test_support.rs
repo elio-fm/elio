@@ -43,7 +43,7 @@ pub(super) fn wait_for_paste_and_reload(app: &mut App) {
         let _ = app.process_background_jobs();
         if app.paste_progress().is_none()
             && app.jobs.queued_pastes.is_empty()
-            && app.navigation.directory_runtime.pending_load.is_none()
+            && app.file_browser.directory_runtime.pending_load.is_none()
         {
             return;
         }
