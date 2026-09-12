@@ -1,5 +1,6 @@
-use super::results::is_duplicate_help_shortcut;
-use super::*;
+use super::super::*;
+use anyhow::Result;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 impl App {
     pub(in crate::app) fn handle_duplicate_key(&mut self, key: KeyEvent) -> Result<()> {
@@ -126,97 +127,63 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app::duplicate_finder_overlay) fn move_duplicate_selection(
-        &mut self,
-        delta: isize,
-    ) {
-        let count = self.duplicate_file_count();
-        if count == 0 {
+    pub(in crate::app) fn move_duplicate_selection(&mut self, delta: isize) {
+        if self.duplicate_file_count() == 0 {
             return;
         }
-        let current = self.overlays.duplicates.as_ref().map_or(0, |d| d.selected) as isize;
-        self.set_duplicate_selection(
-            (current + delta).clamp(0, count.saturating_sub(1) as isize) as usize
-        );
+        if let Some(duplicates) = &mut self.overlays.duplicates {
+            duplicates.move_selection(delta);
+        }
+        self.sync_duplicate_scroll();
+        self.refresh_duplicate_preview();
     }
-    pub(in crate::app::duplicate_finder_overlay) fn page_duplicate_selection(
-        &mut self,
-        direction: isize,
-    ) {
+    pub(in crate::app) fn page_duplicate_selection(&mut self, direction: isize) {
         let visible = self.input.frame_state.duplicate_rows_visible.max(1) as isize;
         self.move_duplicate_selection(direction * visible);
     }
     pub(in crate::app) fn set_duplicate_selection(&mut self, index: usize) {
-        let count = self.duplicate_file_count();
-        if let Some(overlay) = &mut self.overlays.duplicates {
-            overlay.selected = index.min(count.saturating_sub(1));
+        if let Some(duplicates) = &mut self.overlays.duplicates {
+            duplicates.set_selection(index);
         }
         self.sync_duplicate_scroll();
         self.refresh_duplicate_preview();
     }
     pub(in crate::app) fn sync_duplicate_scroll(&mut self) -> bool {
-        let count = self.duplicate_file_count();
-        let Some(overlay) = &mut self.overlays.duplicates else {
-            return false;
-        };
-        let previous_selected = overlay.selected;
-        let previous_scroll = overlay.scroll;
-        if count == 0 {
-            overlay.selected = 0;
-            overlay.scroll = 0;
-            return previous_selected != overlay.selected || previous_scroll != overlay.scroll;
-        }
-        overlay.selected = overlay.selected.min(count - 1);
-        let visible = self.input.frame_state.duplicate_rows_visible.max(1);
-        if overlay.selected < overlay.scroll {
-            overlay.scroll = overlay.selected;
-        } else if overlay.selected >= overlay.scroll + visible {
-            overlay.scroll = overlay.selected.saturating_sub(visible - 1);
-        }
-        overlay.scroll = overlay.scroll.min(count.saturating_sub(visible));
-        previous_selected != overlay.selected || previous_scroll != overlay.scroll
+        let rows_visible = self.input.frame_state.duplicate_rows_visible;
+        self.overlays
+            .duplicates
+            .as_mut()
+            .is_some_and(|duplicates| duplicates.sync_scroll(rows_visible))
     }
-    pub(in crate::app::duplicate_finder_overlay) fn toggle_duplicate_selection(&mut self) {
-        let Some(path) = self.duplicate_focused_path() else {
-            return;
-        };
-        let Some(overlay) = &mut self.overlays.duplicates else {
-            return;
-        };
-        if !overlay.selected_paths.insert(path.clone()) {
-            overlay.selected_paths.remove(&path);
+    pub(in crate::app) fn toggle_duplicate_selection(&mut self) {
+        let changed =
+            self.overlays.duplicates.as_mut().is_some_and(
+                crate::duplicate_finder::DuplicateFinderState::toggle_focused_selection,
+            );
+        if changed {
+            self.status.clear();
+            self.move_duplicate_selection(1);
         }
-        self.status.clear();
-        self.move_duplicate_selection(1);
     }
-    pub(in crate::app::duplicate_finder_overlay) fn select_all_duplicates(&mut self) {
-        let paths = self
-            .duplicate_flat_files()
-            .into_iter()
-            .map(|(_, file)| file.path)
-            .collect::<Vec<_>>();
-        let Some(overlay) = &mut self.overlays.duplicates else {
-            return;
-        };
-        overlay.selected_paths.extend(paths);
-        self.status.clear();
+    pub(in crate::app) fn select_all_duplicates(&mut self) {
+        if let Some(duplicates) = &mut self.overlays.duplicates {
+            duplicates.select_all();
+            self.status.clear();
+        }
     }
-    pub(in crate::app::duplicate_finder_overlay) fn clear_duplicate_selection_or_close(&mut self) {
-        if let Some(overlay) = self
+    pub(in crate::app) fn clear_duplicate_selection_or_close(&mut self) {
+        if self
             .overlays
             .duplicates
             .as_mut()
-            .filter(|overlay| !overlay.selected_paths.is_empty())
+            .is_some_and(crate::duplicate_finder::DuplicateFinderState::clear_selection)
         {
-            overlay.selected_paths.clear();
             self.status.clear();
             return;
         }
         self.close_duplicate_finder();
     }
-    pub(in crate::app::duplicate_finder_overlay) fn reveal_duplicate_focus(
-        &mut self,
-    ) -> Result<()> {
+    pub(in crate::app) fn reveal_duplicate_focus(&mut self) -> Result<()> {
         let Some(path) = self.duplicate_focused_path() else {
             return Ok(());
         };
@@ -287,7 +254,7 @@ impl App {
         }
         Ok(())
     }
-    pub(in crate::app::duplicate_finder_overlay) fn toggle_duplicate_preview(&mut self) {
+    pub(in crate::app) fn toggle_duplicate_preview(&mut self) {
         self.queue_terminal_image_geometry_clear();
         let mut hidden = false;
         if let Some(overlay) = &mut self.overlays.duplicates {
@@ -302,4 +269,15 @@ impl App {
         }
         self.refresh_duplicate_preview();
     }
+}
+
+fn is_duplicate_help_shortcut(key: KeyEvent) -> bool {
+    if key
+        .modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+    {
+        return false;
+    }
+    matches!(key.code, KeyCode::Char('?'))
+        || matches!(key.code, KeyCode::Char('/')) && key.modifiers.contains(KeyModifiers::SHIFT)
 }

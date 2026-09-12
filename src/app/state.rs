@@ -1,8 +1,7 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::VecDeque,
     env,
     path::PathBuf,
-    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -10,7 +9,7 @@ use anyhow::{Context, Result};
 
 use super::types::*;
 use crate::background_jobs::{JobScheduler, job_requests::ArchiveExtractRequest};
-use crate::duplicate_finder::{DuplicateGroup, DuplicateScanStats};
+use crate::duplicate_finder::DuplicateFinderState;
 use crate::file_browser::FileBrowserState;
 #[cfg(unix)]
 use crate::file_operations::BulkRenameEditorSession;
@@ -20,7 +19,8 @@ use crate::file_operations::{
     PasteProgress, QueuedPaste, RenameOverlay, RestoreOverlay, RestoreProgress, TrashOverlay,
     TrashProgress,
 };
-use crate::fuzzy_finder::{SearchCandidate, SearchIndexStats};
+use crate::fuzzy_finder::{SearchCache, SearchState};
+use crate::opening::open_with::ApplicationSelection;
 use crate::places::PlacesState;
 use crate::preview::PreviewRuntime;
 
@@ -87,54 +87,6 @@ pub(super) enum NavigationRepeatKey {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct DuplicateFinderOverlay {
-    pub(crate) cwd: PathBuf,
-    pub(crate) groups: Vec<DuplicateGroup>,
-    pub(crate) stats: DuplicateScanStats,
-    pub(crate) selected: usize,
-    pub(crate) scroll: usize,
-    pub(crate) selected_paths: HashSet<PathBuf>,
-    pub(crate) loading: bool,
-    pub(crate) partial: bool,
-    pub(crate) error: Option<String>,
-    pub(crate) preview_visible: bool,
-    pub(crate) preview_path: Option<PathBuf>,
-}
-
-#[derive(Clone, Debug)]
-pub struct DuplicateRow {
-    pub index: usize,
-    pub group_rank: usize,
-    pub group_first: bool,
-    pub path: PathBuf,
-    pub name: String,
-    pub parent: String,
-    pub size: u64,
-    pub selected: bool,
-    pub focused: bool,
-}
-
-pub(crate) struct SearchOverlay {
-    pub(in crate::app) scope: SearchScope,
-    pub(in crate::app) query: String,
-    pub(in crate::app) query_cursor: usize,
-    pub(in crate::app) candidates: Arc<Vec<SearchCandidate>>,
-    pub(in crate::app) matches: Vec<usize>,
-    pub(in crate::app) cached_matches: HashMap<String, SearchMatchCacheEntry>,
-    pub(in crate::app) selected: usize,
-    pub(in crate::app) scroll: usize,
-    pub(in crate::app) loading: bool,
-    pub(in crate::app) error: Option<String>,
-    pub(in crate::app) stats: SearchIndexStats,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct SearchMatchCacheEntry {
-    pub(super) pool: Vec<usize>,
-    pub(super) matches: Vec<usize>,
-}
-
-#[derive(Clone, Debug)]
 pub(super) enum GoToDestination {
     Top,
     Path(PathBuf),
@@ -154,30 +106,6 @@ pub(crate) struct GoToOverlay {
     pub(in crate::app) rows: Vec<GoToOverlayRow>,
 }
 
-#[derive(Clone, Debug)]
-pub(super) struct OpenWithRow {
-    pub(super) shortcut: Option<char>,
-    pub(super) label: String,
-    pub(super) app: crate::opening::open_with::OpenWithApplication,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct OpenWithOverlay {
-    pub(in crate::app) title: String,
-    pub(in crate::app) rows: Vec<OpenWithRow>,
-    pub(in crate::app) selected: usize,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct SearchCache {
-    pub(super) cwd: PathBuf,
-    pub(super) scope: SearchScope,
-    pub(super) show_hidden: bool,
-    pub(super) fingerprint: crate::fs::DirectoryFingerprint,
-    pub(super) candidates: Arc<Vec<SearchCandidate>>,
-    pub(super) stats: SearchIndexStats,
-}
-
 #[derive(Default)]
 pub(crate) struct OverlayState {
     pub(crate) trash: Option<TrashOverlay>,
@@ -190,9 +118,9 @@ pub(crate) struct OverlayState {
     pub(crate) editor_rename_confirm: Option<EditorRenameConfirmOverlay>,
     pub(crate) goto: Option<GoToOverlay>,
     pub(crate) copy: Option<CopyOverlay>,
-    pub(crate) open_with: Option<OpenWithOverlay>,
-    pub(crate) search: Option<SearchOverlay>,
-    pub(crate) duplicates: Option<DuplicateFinderOverlay>,
+    pub(crate) open_with: Option<ApplicationSelection>,
+    pub(crate) search: Option<SearchState>,
+    pub(crate) duplicates: Option<DuplicateFinderState>,
     pub(crate) help: bool,
     pub(crate) help_scroll: usize,
 }

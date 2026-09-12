@@ -1,13 +1,14 @@
 mod directory;
+mod duplicate_finder;
+mod fuzzy_finder;
 mod goto;
 mod navigation;
+pub(in crate::app) mod open_with;
 
 use super::*;
 use anyhow::{Result, anyhow, bail};
 use std::{
-    collections::HashMap,
     path::{Path, PathBuf},
-    sync::Arc,
     time::Instant,
 };
 

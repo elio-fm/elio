@@ -2,7 +2,6 @@ use super::*;
 use crate::background_jobs::job_results::*;
 use crate::preview;
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -172,7 +171,7 @@ impl App {
                         search.error = None;
                         search.stats = build.batch.stats;
                         if !build.batch.candidates.is_empty() {
-                            append_streamed_search_candidates(search, build.batch.candidates);
+                            search.append_candidates(build.batch.candidates);
                             sync_search_scroll = true;
                         }
                         dirty = true;
@@ -208,37 +207,16 @@ impl App {
                             if let Some(search) = &mut self.overlays.search
                                 && search.scope == build.scope
                             {
-                                search.candidates = candidates;
-                                search.cached_matches = HashMap::from([(
-                                    String::new(),
-                                    crate::app::fuzzy_finder_overlay::build_base_search_cache_entry(
-                                        (0..search.candidates.len()).collect(),
-                                    ),
-                                )]);
-                                search.loading = false;
-                                search.error = None;
-                                search.stats = stats;
+                                search.replace_candidates(candidates, stats);
                             }
-                            self.refresh_search_matches("");
+                            self.sync_search_scroll();
                         }
                         Err(error) => {
                             self.jobs.search_cache = None;
                             if let Some(search) = &mut self.overlays.search
                                 && search.scope == build.scope
                             {
-                                search.candidates = Arc::new(Vec::new());
-                                search.matches.clear();
-                                search.cached_matches = HashMap::from([(
-                                    String::new(),
-                                    crate::app::fuzzy_finder_overlay::build_base_search_cache_entry(
-                                        Vec::new(),
-                                    ),
-                                )]);
-                                search.selected = 0;
-                                search.scroll = 0;
-                                search.loading = false;
-                                search.error = Some(error);
-                                search.stats = crate::fuzzy_finder::SearchIndexStats::default();
+                                search.fail_loading(error);
                             }
                         }
                     }
@@ -669,108 +647,6 @@ impl App {
 
         dirty
     }
-}
-
-fn append_streamed_search_candidates(
-    search: &mut SearchOverlay,
-    candidates: Vec<crate::fuzzy_finder::SearchCandidate>,
-) {
-    let start = search.candidates.len();
-    let end = start + candidates.len();
-    Arc::make_mut(&mut search.candidates).extend(candidates);
-
-    append_empty_query_search_cache(search, start, end);
-
-    let query = search.query.clone();
-    let query_key = crate::app::fuzzy_finder_overlay::search_cache_key(&query);
-    search
-        .cached_matches
-        .retain(|cached_query, _| cached_query.is_empty() || cached_query == &query_key);
-
-    if query_key.is_empty() {
-        if let Some(entry) = search.cached_matches.get("") {
-            search.matches = entry.matches.clone();
-        }
-    } else {
-        update_streamed_query_search_cache(search, &query, &query_key, start, end);
-    }
-
-    clamp_search_selection(search);
-}
-
-fn append_empty_query_search_cache(search: &mut SearchOverlay, start: usize, end: usize) {
-    let base = search
-        .cached_matches
-        .entry(String::new())
-        .or_insert_with(|| {
-            crate::app::fuzzy_finder_overlay::build_base_search_cache_entry((0..start).collect())
-        });
-    for index in start..end {
-        base.pool.push(index);
-        if base.matches.len() < SEARCH_MATCH_LIMIT {
-            base.matches.push(index);
-        }
-    }
-}
-
-fn update_streamed_query_search_cache(
-    search: &mut SearchOverlay,
-    query: &str,
-    query_key: &str,
-    start: usize,
-    end: usize,
-) {
-    let Some(existing) = search.cached_matches.remove(query_key) else {
-        let result = crate::fuzzy_finder::filter_candidates_in(
-            &search.candidates,
-            0..end,
-            query,
-            SEARCH_MATCH_LIMIT,
-        );
-        search.matches = result.matches.clone();
-        search.cached_matches.insert(
-            query_key.to_string(),
-            crate::app::fuzzy_finder_overlay::build_search_cache_entry(result.pool, result.matches),
-        );
-        return;
-    };
-
-    let new_result = crate::fuzzy_finder::filter_candidates_in(
-        &search.candidates,
-        start..end,
-        query,
-        SEARCH_MATCH_LIMIT,
-    );
-    let mut pool = existing.pool;
-    pool.extend(new_result.pool.iter().copied());
-
-    let rerank_pool = existing
-        .matches
-        .iter()
-        .copied()
-        .chain(new_result.pool.iter().copied());
-    let matches = crate::fuzzy_finder::filter_candidates_in(
-        &search.candidates,
-        rerank_pool,
-        query,
-        SEARCH_MATCH_LIMIT,
-    )
-    .matches;
-
-    search.matches = matches.clone();
-    search.cached_matches.insert(
-        query_key.to_string(),
-        crate::app::fuzzy_finder_overlay::build_search_cache_entry(pool, matches),
-    );
-}
-
-fn clamp_search_selection(search: &mut SearchOverlay) {
-    if search.matches.is_empty() {
-        search.selected = 0;
-        search.scroll = 0;
-        return;
-    }
-    search.selected = search.selected.min(search.matches.len().saturating_sub(1));
 }
 
 #[cfg(test)]

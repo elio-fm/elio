@@ -418,17 +418,7 @@ impl App {
         };
 
         if let Some(search) = &mut self.overlays.search {
-            search.candidates = Arc::new(Vec::new());
-            search.matches.clear();
-            search.cached_matches = HashMap::from([(
-                String::new(),
-                super::super::fuzzy_finder_overlay::build_base_search_cache_entry(Vec::new()),
-            )]);
-            search.selected = 0;
-            search.scroll = 0;
-            search.loading = true;
-            search.error = None;
-            search.stats = crate::fuzzy_finder::SearchIndexStats::default();
+            search.restart_loading();
         }
         self.prewarm_search_index(scope);
     }

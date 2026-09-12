@@ -1,8 +1,8 @@
 use crate::opening::open_with::OpenWithApplication;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+mod actions;
 mod input;
-mod overlay;
 
 fn temp_dir_path(label: &str) -> std::path::PathBuf {
     let unique = SystemTime::now()
