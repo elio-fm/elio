@@ -14,7 +14,7 @@ use std::{
 use crossterm::{event::Event, terminal};
 
 use super::{KittyDndEvent, Osc72State, crossterm_parser, parse_osc72_with_state};
-use crate::terminal_runtime::terminal_input::InputEvent;
+use crate::terminal_runtime::input_reader::InputEvent;
 
 const RESIZE_POLL_INTERVAL: Duration = Duration::from_millis(16);
 

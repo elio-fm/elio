@@ -8,7 +8,7 @@ const COMIC_PAGE_PREFETCH_OFFSETS: [isize; 3] = [1, 2, -1];
 const COMIC_ENTRY_PREFETCH_OFFSETS: [isize; 2] = [1, -1];
 
 impl App {
-    pub(in crate::app) fn sync_comic_preview_selection(&mut self) {
+    pub(crate) fn sync_comic_preview_selection(&mut self) {
         let Some(entry) = self.selected_entry() else {
             self.preview.comic.session = None;
             return;
@@ -36,9 +36,7 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn comic_preview_request_options(
-        &self,
-    ) -> Option<preview::PreviewRequestOptions> {
+    pub(crate) fn comic_preview_request_options(&self) -> Option<preview::PreviewRequestOptions> {
         self.preview
             .comic
             .session
@@ -46,14 +44,14 @@ impl App {
             .map(|session| preview::PreviewRequestOptions::ComicPage(session.current_page))
     }
 
-    pub(in crate::app) fn comic_preview_request_options_for_entry(
+    pub(crate) fn comic_preview_request_options_for_entry(
         &self,
         entry: &Entry,
     ) -> Option<preview::PreviewRequestOptions> {
         is_comic_entry(entry).then_some(preview::PreviewRequestOptions::ComicPage(0))
     }
 
-    pub(in crate::app) fn comic_preview_wheel_capture_active(&self) -> bool {
+    pub(crate) fn comic_preview_wheel_capture_active(&self) -> bool {
         self.preview.comic.session.is_some()
     }
 
@@ -61,7 +59,7 @@ impl App {
     /// to the inline overlay.  Records the source file path so
     /// `displayed_page_image_belongs_to_current_session` can later decide
     /// whether to keep or clear the stale overlay on navigation.
-    pub(in crate::app) fn record_comic_page_image_displayed(&mut self) {
+    pub(crate) fn record_comic_page_image_displayed(&mut self) {
         let is_page_image = self
             .preview
             .state
@@ -89,7 +87,7 @@ impl App {
     /// overlay was rendered for the same source file as the active session.
     /// Covers both comic sessions and fixed-layout EPUB sessions.
     /// Both being `None` is treated as matching (no session info available).
-    pub(in crate::app) fn displayed_comic_page_belongs_to_current_session(&self) -> bool {
+    pub(crate) fn displayed_comic_page_belongs_to_current_session(&self) -> bool {
         let current_source = self
             .preview
             .comic
@@ -100,7 +98,7 @@ impl App {
         self.preview.comic.displayed_page_source.as_deref() == current_source
     }
 
-    pub(in crate::app) fn apply_current_comic_preview_metadata(&mut self) {
+    pub(crate) fn apply_current_comic_preview_metadata(&mut self) {
         let Some((path, size, modified)) = self
             .selected_entry()
             .map(|entry| (entry.path.clone(), entry.size, entry.modified))
@@ -125,7 +123,7 @@ impl App {
         session.current_page = position.index;
     }
 
-    pub(in crate::app) fn apply_current_comic_loading_navigation(
+    pub(crate) fn apply_current_comic_loading_navigation(
         &self,
         preview: preview::PreviewContent,
     ) -> preview::PreviewContent {
@@ -142,11 +140,11 @@ impl App {
         preview.with_navigation_position("Page", session.current_page, total_pages, None)
     }
 
-    pub(in crate::app) fn step_comic_page(&mut self, delta: isize) -> bool {
+    pub(crate) fn step_comic_page(&mut self, delta: isize) -> bool {
         self.step_comic_page_with_preview_mode(delta, PreviewRefreshMode::Immediate)
     }
 
-    pub(in crate::app) fn step_comic_page_with_preview_mode(
+    pub(crate) fn step_comic_page_with_preview_mode(
         &mut self,
         delta: isize,
         preview_mode: PreviewRefreshMode,
@@ -204,7 +202,7 @@ impl App {
         true
     }
 
-    pub(in crate::app) fn comic_prefetch_page_indices(&self) -> Vec<usize> {
+    pub(crate) fn comic_prefetch_page_indices(&self) -> Vec<usize> {
         let Some(session) = self.preview.comic.session.as_ref() else {
             return Vec::new();
         };
@@ -236,7 +234,7 @@ impl App {
             .collect()
     }
 
-    pub(in crate::app) fn prefetch_nearby_comic_pages(&mut self) {
+    pub(crate) fn prefetch_nearby_comic_pages(&mut self) {
         let Some(entry) = self.selected_entry().cloned() else {
             return;
         };
@@ -260,7 +258,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn prefetch_nearby_comic_entries(&mut self) {
+    pub(crate) fn prefetch_nearby_comic_entries(&mut self) {
         let Some(current_entry) = self.selected_entry() else {
             return;
         };
@@ -291,7 +289,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn prefetch_visible_nearby_comic_entries(&mut self, limit: usize) {
+    pub(crate) fn prefetch_visible_nearby_comic_entries(&mut self, limit: usize) {
         let candidates = self.visible_nearby_comic_entry_candidates(limit);
         for entry in candidates {
             let variant = preview::PreviewRequestOptions::ComicPage(0);
@@ -309,7 +307,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn nearby_comic_preview_visual_overlay_requests(
+    pub(crate) fn nearby_comic_preview_visual_overlay_requests(
         &self,
     ) -> Vec<crate::app::preview::static_images::StaticImageOverlayRequest> {
         let Some(entry) = self.selected_entry() else {
@@ -337,7 +335,7 @@ impl App {
             .collect()
     }
 
-    pub(in crate::app) fn nearby_comic_entry_preview_visual_overlay_requests(
+    pub(crate) fn nearby_comic_entry_preview_visual_overlay_requests(
         &self,
     ) -> Vec<crate::app::preview::static_images::StaticImageOverlayRequest> {
         let Some(area) = self.input.frame_state.preview_media_area else {
@@ -359,7 +357,7 @@ impl App {
             .collect()
     }
 
-    pub(in crate::app) fn refreshes_image_preloads_for_nearby_comic_entry_preview(
+    pub(crate) fn refreshes_image_preloads_for_nearby_comic_entry_preview(
         &self,
         entry: &Entry,
         variant: &preview::PreviewRequestOptions,
@@ -392,7 +390,7 @@ impl App {
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn has_cached_comic_preview_page(
+    pub(crate) fn has_cached_comic_preview_page(
         &self,
         path: &std::path::Path,
         page: usize,

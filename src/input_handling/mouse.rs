@@ -1,9 +1,10 @@
 use super::*;
 
 const HELP_WHEEL_LINES: isize = 2;
+const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(450);
 
 impl App {
-    pub(in crate::app) fn remember_drag_candidate(&mut self, path: PathBuf) {
+    pub(crate) fn remember_drag_candidate(&mut self, path: PathBuf) {
         self.file_browser.remember_drag_candidate(path);
     }
 
@@ -16,7 +17,7 @@ impl App {
         self.file_browser.clear_drag_state();
     }
 
-    pub(in crate::app) fn suppress_drag_until_button_up(&mut self) {
+    pub(crate) fn suppress_drag_until_button_up(&mut self) {
         self.file_browser.suppress_drag_until_button_up();
     }
 
@@ -37,7 +38,7 @@ impl App {
             .map(|entry| entry.path.clone())
     }
 
-    pub(in crate::app) fn handle_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+    pub(crate) fn handle_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if self.overlays.trash.is_some() {
             return self.handle_trash_mouse(mouse);
         }
@@ -249,17 +250,13 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn update_wheel_target_from_position(&mut self, column: u16, row: u16) {
+    pub(crate) fn update_wheel_target_from_position(&mut self, column: u16, row: u16) {
         if let Some(target) = self.panel_target_at(column, row) {
             self.input.last_wheel_target = Some(target);
         }
     }
 
-    pub(in crate::app) fn resolve_wheel_target(
-        &mut self,
-        column: u16,
-        row: u16,
-    ) -> Option<WheelTarget> {
+    pub(crate) fn resolve_wheel_target(&mut self, column: u16, row: u16) -> Option<WheelTarget> {
         if let Some(target) = self.panel_target_at(column, row) {
             self.input.last_wheel_target = Some(target);
             return Some(target);
@@ -283,7 +280,7 @@ impl App {
         self.input.last_wheel_target
     }
 
-    pub(in crate::app) fn is_double_click(&self, path: &Path) -> bool {
+    pub(crate) fn is_double_click(&self, path: &Path) -> bool {
         self.input
             .last_click
             .as_ref()

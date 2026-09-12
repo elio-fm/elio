@@ -128,7 +128,7 @@ impl App {
         Ok(target_cwd)
     }
 
-    pub(in crate::app) fn apply_directory_snapshot(
+    pub(crate) fn apply_directory_snapshot(
         &mut self,
         load: PendingDirectoryLoad,
         snapshot: crate::fs::DirectorySnapshot,
@@ -233,7 +233,7 @@ impl App {
         self.file_browser.remember_current_directory_view();
     }
 
-    pub(in crate::app) fn set_dir(&mut self, path: PathBuf) -> Result<()> {
+    pub(crate) fn set_dir(&mut self, path: PathBuf) -> Result<()> {
         self.set_dir_transition(
             path,
             DirectoryHistoryMode::PushCurrent,
@@ -242,7 +242,7 @@ impl App {
         )
     }
 
-    pub(in crate::app) fn set_dir_transition(
+    pub(crate) fn set_dir_transition(
         &mut self,
         path: PathBuf,
         history_mode: DirectoryHistoryMode,
@@ -331,7 +331,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn go_parent(&mut self) -> Result<()> {
+    pub(crate) fn go_parent(&mut self) -> Result<()> {
         let current = self.file_browser.cwd.clone();
         let Some(parent) = self.file_browser.cwd.parent() else {
             self.status = "Already at filesystem root".to_string();
@@ -345,7 +345,7 @@ impl App {
         )
     }
 
-    pub(in crate::app) fn reset_directory_watch(&mut self) {
+    pub(crate) fn reset_directory_watch(&mut self) {
         self.file_browser.directory_runtime.watch = None;
         self.file_browser.directory_runtime.pending_reload_at = None;
         self.file_browser.directory_runtime.pending_fingerprint_scan = None;

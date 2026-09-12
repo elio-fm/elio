@@ -1,9 +1,9 @@
-use crate::app::{
-    App, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad, char_to_byte,
-    next_delete_end, next_word_start, previous_delete_start, previous_word_start,
+use crate::app::{App, DirectoryHistoryMode, DirectoryLoadCompletion, PendingDirectoryLoad};
+use crate::fs::rect_contains;
+use crate::input_handling::text_editing::{
+    char_to_byte, next_delete_end, next_word_start, previous_delete_start, previous_word_start,
     remove_char_range,
 };
-use crate::fs::rect_contains;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::{fs, path::Path};

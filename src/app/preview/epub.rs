@@ -8,7 +8,7 @@ use std::time::Instant;
 const EPUB_SECTION_PREFETCH_OFFSETS: [isize; 3] = [1, 2, -1];
 
 impl App {
-    pub(in crate::app) fn sync_epub_preview_selection(&mut self) {
+    pub(crate) fn sync_epub_preview_selection(&mut self) {
         let Some(entry) = self.selected_entry() else {
             self.preview.epub.session = None;
             return;
@@ -36,9 +36,7 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn epub_preview_request_options(
-        &self,
-    ) -> Option<preview::PreviewRequestOptions> {
+    pub(crate) fn epub_preview_request_options(&self) -> Option<preview::PreviewRequestOptions> {
         self.preview
             .epub
             .session
@@ -46,22 +44,22 @@ impl App {
             .map(|session| preview::PreviewRequestOptions::EpubSection(session.current_section))
     }
 
-    pub(in crate::app) fn epub_preview_request_options_for_entry(
+    pub(crate) fn epub_preview_request_options_for_entry(
         &self,
         entry: &Entry,
     ) -> Option<preview::PreviewRequestOptions> {
         is_epub_entry(entry).then_some(preview::PreviewRequestOptions::EpubSection(0))
     }
 
-    pub(in crate::app) fn epub_preview_wheel_capture_active(&self) -> bool {
+    pub(crate) fn epub_preview_wheel_capture_active(&self) -> bool {
         self.preview.epub.session.is_some()
     }
 
-    pub(in crate::app) fn epub_preview_session_path(&self) -> Option<&std::path::Path> {
+    pub(crate) fn epub_preview_session_path(&self) -> Option<&std::path::Path> {
         self.preview.epub.session.as_ref().map(|s| s.path.as_path())
     }
 
-    pub(in crate::app) fn apply_current_epub_preview_metadata(&mut self) {
+    pub(crate) fn apply_current_epub_preview_metadata(&mut self) {
         let Some((path, size, modified)) = self
             .selected_entry()
             .map(|entry| (entry.path.clone(), entry.size, entry.modified))
@@ -83,7 +81,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn apply_current_epub_loading_navigation(
+    pub(crate) fn apply_current_epub_loading_navigation(
         &self,
         preview: preview::PreviewContent,
     ) -> preview::PreviewContent {
@@ -100,7 +98,7 @@ impl App {
         preview.with_ebook_section(session.current_section, total_sections, None)
     }
 
-    pub(in crate::app) fn step_epub_section(&mut self, delta: isize) -> bool {
+    pub(crate) fn step_epub_section(&mut self, delta: isize) -> bool {
         let Some(session) = self.preview.epub.session.as_mut() else {
             return false;
         };
@@ -128,7 +126,7 @@ impl App {
         true
     }
 
-    pub(in crate::app) fn epub_prefetch_section_indices(&self) -> Vec<usize> {
+    pub(crate) fn epub_prefetch_section_indices(&self) -> Vec<usize> {
         let Some(session) = self.preview.epub.session.as_ref() else {
             return Vec::new();
         };
@@ -153,7 +151,7 @@ impl App {
             .collect()
     }
 
-    pub(in crate::app) fn prefetch_nearby_epub_sections(&mut self) {
+    pub(crate) fn prefetch_nearby_epub_sections(&mut self) {
         let Some(entry) = self.selected_entry().cloned() else {
             return;
         };
@@ -177,7 +175,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn prefetch_visible_nearby_epub_entries(&mut self, limit: usize) {
+    pub(crate) fn prefetch_visible_nearby_epub_entries(&mut self, limit: usize) {
         let candidates = self.visible_nearby_epub_entry_candidates(limit);
         for entry in candidates {
             let variant = preview::PreviewRequestOptions::EpubSection(0);
@@ -195,7 +193,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn nearby_epub_preview_visual_overlay_requests(
+    pub(crate) fn nearby_epub_preview_visual_overlay_requests(
         &self,
     ) -> Vec<crate::app::preview::static_images::StaticImageOverlayRequest> {
         let Some(entry) = self.selected_entry() else {
@@ -223,7 +221,7 @@ impl App {
             .collect()
     }
 
-    pub(in crate::app) fn nearby_epub_entry_preview_visual_overlay_requests(
+    pub(crate) fn nearby_epub_entry_preview_visual_overlay_requests(
         &self,
     ) -> Vec<crate::app::preview::static_images::StaticImageOverlayRequest> {
         let Some(area) = self.input.frame_state.preview_media_area else {
@@ -245,7 +243,7 @@ impl App {
             .collect()
     }
 
-    pub(in crate::app) fn refreshes_image_preloads_for_nearby_epub_entry_preview(
+    pub(crate) fn refreshes_image_preloads_for_nearby_epub_entry_preview(
         &self,
         entry: &Entry,
         variant: &preview::PreviewRequestOptions,
@@ -276,7 +274,7 @@ impl App {
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn has_cached_epub_preview_section(
+    pub(crate) fn has_cached_epub_preview_section(
         &self,
         path: &std::path::Path,
         section: usize,

@@ -26,7 +26,7 @@ impl App {
         self.file_browser.current_directory_escape_for_paths(paths)
     }
 
-    pub(in crate::app) fn toggle_selection(&mut self) {
+    pub(crate) fn toggle_selection(&mut self) {
         let Some(entry) = self.selected_entry() else {
             return;
         };
@@ -44,7 +44,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn select_all(&mut self) {
+    pub(crate) fn select_all(&mut self) {
         let blocked = self.file_browser.select_all_visible();
         if blocked {
             self.status = "Cannot select nested paths".to_string();
@@ -68,7 +68,7 @@ impl App {
         self.chooser_exit.take()
     }
 
-    pub(in crate::app) fn confirm_chooser(&mut self) {
+    pub(crate) fn confirm_chooser(&mut self) {
         if !self.chooser_mode {
             return;
         }
@@ -76,7 +76,7 @@ impl App {
         self.should_quit = true;
     }
 
-    pub(in crate::app) fn confirm_chooser_path(&mut self, path: &Path) {
+    pub(crate) fn confirm_chooser_path(&mut self, path: &Path) {
         if !self.chooser_mode {
             return;
         }
@@ -86,7 +86,7 @@ impl App {
         self.should_quit = true;
     }
 
-    pub(in crate::app) fn cancel_chooser(&mut self) {
+    pub(crate) fn cancel_chooser(&mut self) {
         if !self.chooser_mode {
             return;
         }

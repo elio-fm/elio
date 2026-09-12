@@ -83,7 +83,7 @@ impl App {
             .map_or(0, crate::fuzzy_finder::SearchState::query_cursor)
     }
 
-    pub(in crate::app) fn open_fuzzy_finder(&mut self, scope: SearchScope) -> Result<()> {
+    pub(crate) fn open_fuzzy_finder(&mut self, scope: SearchScope) -> Result<()> {
         self.clear_wheel_scroll();
         self.overlays.help = false;
         let show_hidden = self.effective_show_hidden();
@@ -137,7 +137,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn close_search_overlay(&mut self) {
+    pub(crate) fn close_search_overlay(&mut self) {
         self.overlays.search = None;
         self.jobs.search_loading = false;
         self.jobs.search_token = self.jobs.search_token.wrapping_add(1);
@@ -145,28 +145,28 @@ impl App {
         self.clear_wheel_scroll();
     }
 
-    pub(in crate::app) fn move_search_selection(&mut self, delta: isize) {
+    pub(crate) fn move_search_selection(&mut self, delta: isize) {
         if let Some(search) = &mut self.overlays.search {
             search.move_selection(delta);
         }
         self.sync_search_scroll();
     }
 
-    pub(in crate::app) fn refresh_search_matches(&mut self, previous_query: &str) {
+    pub(crate) fn refresh_search_matches(&mut self, previous_query: &str) {
         if let Some(search) = &mut self.overlays.search {
             search.refresh_matches(previous_query);
         }
         self.sync_search_scroll();
     }
 
-    pub(in crate::app) fn select_search_index(&mut self, index: usize) {
+    pub(crate) fn select_search_index(&mut self, index: usize) {
         if let Some(search) = &mut self.overlays.search {
             search.select_index(index);
         }
         self.sync_search_scroll();
     }
 
-    pub(in crate::app) fn confirm_search_selection(&mut self) -> Result<()> {
+    pub(crate) fn confirm_search_selection(&mut self) -> Result<()> {
         let Some(path) = self
             .overlays
             .search
@@ -180,7 +180,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn sync_search_scroll(&mut self) -> bool {
+    pub(crate) fn sync_search_scroll(&mut self) -> bool {
         let rows_visible = self.input.frame_state.search_rows_visible;
         self.overlays
             .search
@@ -188,7 +188,7 @@ impl App {
             .is_some_and(|search| search.sync_scroll(rows_visible))
     }
 
-    pub(in crate::app) fn reveal_path(&mut self, path: PathBuf) -> Result<()> {
+    pub(crate) fn reveal_path(&mut self, path: PathBuf) -> Result<()> {
         if path.is_dir() {
             return self.set_dir_transition(
                 path,

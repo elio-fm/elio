@@ -8,7 +8,7 @@ use std::{
 };
 
 impl App {
-    pub(in crate::app) fn open_duplicate_targets(&mut self) -> Result<()> {
+    pub(crate) fn open_duplicate_targets(&mut self) -> Result<()> {
         let targets = self.duplicate_action_paths();
         if targets.is_empty() {
             return Ok(());
@@ -16,14 +16,14 @@ impl App {
         self.jobs.clipboard = None;
         self.open_paths_in_system(targets)
     }
-    pub(in crate::app) fn open_duplicate_open_with_overlay(&mut self) {
+    pub(crate) fn open_duplicate_open_with_overlay(&mut self) {
         let Some(entry) = self.duplicate_focused_entry() else {
             self.status = "Nothing selected".to_string();
             return;
         };
         self.open_open_with_overlay_for_entry(entry);
     }
-    pub(in crate::app) fn open_duplicate_rename(&mut self) {
+    pub(crate) fn open_duplicate_rename(&mut self) {
         if self
             .overlays
             .duplicates
@@ -44,7 +44,7 @@ impl App {
             error: None,
         });
     }
-    pub(in crate::app) fn open_duplicate_bulk_rename(&mut self) {
+    pub(crate) fn open_duplicate_bulk_rename(&mut self) {
         let paths = self.duplicate_action_paths();
         if paths.is_empty() {
             return;
@@ -76,7 +76,7 @@ impl App {
             line_errors: vec![None; count],
         });
     }
-    pub(in crate::app) fn open_duplicate_editor_bulk_rename(&mut self) -> Result<()> {
+    pub(crate) fn open_duplicate_editor_bulk_rename(&mut self) -> Result<()> {
         let paths = self.duplicate_action_paths();
         if paths.is_empty() {
             return Ok(());
@@ -90,7 +90,7 @@ impl App {
         self.file_browser.selected_paths = saved_selection;
         result
     }
-    pub(in crate::app) fn open_duplicate_trash_prompt(&mut self) {
+    pub(crate) fn open_duplicate_trash_prompt(&mut self) {
         let Some(targets) = self.duplicate_trash_targets_or_status(false) else {
             return;
         };
@@ -108,12 +108,12 @@ impl App {
             _ => self.open_trash_prompt_for_explicit_targets(targets, false),
         }
     }
-    pub(in crate::app) fn open_duplicate_delete_permanently_prompt(&mut self) {
+    pub(crate) fn open_duplicate_delete_permanently_prompt(&mut self) {
         if let Some(targets) = self.duplicate_trash_targets_or_status(true) {
             self.open_trash_prompt_for_explicit_targets(targets, true);
         }
     }
-    pub(in crate::app) fn duplicate_trash_targets_or_status(
+    pub(crate) fn duplicate_trash_targets_or_status(
         &mut self,
         permanent: bool,
     ) -> Option<Vec<TrashTarget>> {
@@ -142,7 +142,7 @@ impl App {
         }
         Some(targets)
     }
-    pub(in crate::app) fn duplicate_action_paths(&self) -> Vec<PathBuf> {
+    pub(crate) fn duplicate_action_paths(&self) -> Vec<PathBuf> {
         self.overlays
             .duplicates
             .as_ref()
@@ -197,7 +197,7 @@ impl App {
         self.overlays.duplicates.is_some()
     }
 
-    pub(in crate::app) fn open_duplicate_finder(&mut self) {
+    pub(crate) fn open_duplicate_finder(&mut self) {
         self.clear_selection();
         self.queue_terminal_image_geometry_clear();
         self.clear_wheel_scroll();
@@ -224,7 +224,7 @@ impl App {
         self.refresh_duplicate_preview();
     }
 
-    pub(in crate::app) fn stop_duplicate_scan_with_partial_results(&mut self) {
+    pub(crate) fn stop_duplicate_scan_with_partial_results(&mut self) {
         let Some(duplicates) = self
             .overlays
             .duplicates
@@ -241,7 +241,7 @@ impl App {
         self.refresh_duplicate_preview();
     }
 
-    pub(in crate::app) fn close_duplicate_finder(&mut self) {
+    pub(crate) fn close_duplicate_finder(&mut self) {
         self.queue_terminal_image_geometry_clear();
         self.jobs.duplicate_token = self.jobs.duplicate_token.wrapping_add(1);
         self.jobs.scheduler.cancel_duplicate_scan();
@@ -250,7 +250,7 @@ impl App {
         self.clear_wheel_scroll();
     }
 
-    pub(in crate::app) fn apply_duplicate_batch(
+    pub(crate) fn apply_duplicate_batch(
         &mut self,
         batch: crate::duplicate_finder::DuplicateScanBatch,
     ) {
@@ -268,7 +268,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn apply_duplicate_result(
+    pub(crate) fn apply_duplicate_result(
         &mut self,
         result: Result<crate::duplicate_finder::DuplicateScanResult, String>,
     ) {
@@ -284,7 +284,7 @@ impl App {
         self.refresh_duplicate_preview();
     }
 
-    pub(in crate::app) fn duplicate_focused_path(&self) -> Option<PathBuf> {
+    pub(crate) fn duplicate_focused_path(&self) -> Option<PathBuf> {
         self.overlays
             .duplicates
             .as_ref()
@@ -298,7 +298,7 @@ impl App {
             .and_then(crate::duplicate_finder::DuplicateFinderState::focused_entry)
     }
 
-    pub(in crate::app) fn active_preview_entry(&self) -> Option<Entry> {
+    pub(crate) fn active_preview_entry(&self) -> Option<Entry> {
         if let Some(duplicates) = &self.overlays.duplicates {
             return duplicates
                 .preview_visible
@@ -365,7 +365,7 @@ impl App {
             .is_some_and(|duplicates| duplicates.preview_visible)
     }
 
-    pub(in crate::app) fn duplicate_preview_rendered(&self) -> bool {
+    pub(crate) fn duplicate_preview_rendered(&self) -> bool {
         self.overlays.duplicates.is_some()
             && self.duplicate_preview_visible()
             && self.input.frame_state.preview_panel.is_some()
@@ -395,7 +395,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn remove_duplicate_paths(&mut self, paths: &[PathBuf]) {
+    pub(crate) fn remove_duplicate_paths(&mut self, paths: &[PathBuf]) {
         if paths.is_empty() || self.overlays.duplicates.is_none() {
             return;
         }
@@ -407,7 +407,7 @@ impl App {
         self.refresh_duplicate_preview();
     }
 
-    pub(in crate::app) fn refresh_duplicate_preview(&mut self) {
+    pub(crate) fn refresh_duplicate_preview(&mut self) {
         let Some(path) = self.duplicate_focused_path() else {
             return;
         };

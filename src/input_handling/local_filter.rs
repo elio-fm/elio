@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::text_edit::{
+use crate::input_handling::text_editing::{
     next_delete_end, next_word_start, previous_delete_start, previous_word_start,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -28,7 +28,7 @@ impl App {
         self.status.clear();
     }
 
-    pub(in crate::app) fn clear_local_filter(&mut self) {
+    pub(crate) fn clear_local_filter(&mut self) {
         let was_filtered = !self.file_browser.local_filter.query.is_empty();
         self.file_browser.local_filter = LocalFilter::default();
         if was_filtered {
@@ -37,7 +37,7 @@ impl App {
         self.status.clear();
     }
 
-    pub(in crate::app) fn clear_local_filter_for_directory_change(&mut self) {
+    pub(crate) fn clear_local_filter_for_directory_change(&mut self) {
         self.file_browser.local_filter = LocalFilter::default();
     }
 
@@ -123,7 +123,7 @@ impl App {
         self.file_browser.local_filter.move_cursor(delta);
     }
 
-    pub(in crate::app) fn apply_local_filter_preserving_selection(&mut self) {
+    pub(crate) fn apply_local_filter_preserving_selection(&mut self) {
         self.file_browser.apply_local_filter_preserving_selection();
         self.clamp_selection();
         self.sync_scroll();
@@ -131,7 +131,7 @@ impl App {
         self.queue_visible_directory_item_counts();
     }
 
-    pub(in crate::app) fn apply_local_filter(&mut self) {
+    pub(crate) fn apply_local_filter(&mut self) {
         self.file_browser.apply_local_filter();
     }
 }

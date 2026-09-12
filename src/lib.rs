@@ -10,6 +10,7 @@ mod file_operations;
 mod fs;
 mod fuzzy_finder;
 mod goto_menu;
+mod input_handling;
 mod opening;
 mod places;
 mod preview;

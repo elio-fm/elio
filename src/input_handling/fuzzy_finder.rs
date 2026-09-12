@@ -1,9 +1,9 @@
-use super::super::*;
+use super::*;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 impl App {
-    pub(in crate::app) fn handle_search_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub(crate) fn handle_search_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
             self.close_search_overlay();
             self.status.clear();
@@ -88,7 +88,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn handle_search_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+    pub(crate) fn handle_search_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 if let Some(hit) = self

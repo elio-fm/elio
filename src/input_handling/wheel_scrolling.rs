@@ -1,8 +1,21 @@
 use super::*;
 use crate::preview;
 
+const INCREMENTAL_RENDER_LOOKAHEAD: usize = 80;
+pub(super) const PREVIEW_AUTO_FOCUS_DELAY: Duration = Duration::from_millis(220);
+const WHEEL_SCROLL_INTERVAL_HORIZONTAL: Duration = Duration::from_millis(64);
+const WHEEL_SCROLL_INTERVAL_PREVIEW: Duration = Duration::from_millis(12);
+const WHEEL_SCROLL_INTERVAL_PREVIEW_HORIZONTAL: Duration = Duration::from_millis(12);
+const WHEEL_SCROLL_INTERVAL_SEARCH: Duration = Duration::from_millis(72);
+const WHEEL_SCROLL_INTERVAL_VERTICAL: Duration = Duration::from_millis(16);
+const WHEEL_SCROLL_INTERVAL_VERTICAL_HIGH_FREQUENCY: Duration = Duration::from_millis(12);
+const WHEEL_SCROLL_QUEUE_LIMIT: isize = 8;
+const WHEEL_SCROLL_QUEUE_LIMIT_HORIZONTAL: isize = 3;
+const WHEEL_SCROLL_QUEUE_LIMIT_PREVIEW_HORIZONTAL: isize = 10;
+const WHEEL_SCROLL_QUEUE_LIMIT_SEARCH: isize = 2;
+
 #[derive(Clone, Copy)]
-pub(in crate::app) struct WheelTuning {
+pub(crate) struct WheelTuning {
     queue_limit: isize,
     medium_threshold: u8,
     fast_threshold: u8,
@@ -10,7 +23,7 @@ pub(in crate::app) struct WheelTuning {
     fast_divisor: isize,
 }
 
-pub(in crate::app) const ENTRY_WHEEL_TUNING: WheelTuning = WheelTuning {
+pub(crate) const ENTRY_WHEEL_TUNING: WheelTuning = WheelTuning {
     queue_limit: WHEEL_SCROLL_QUEUE_LIMIT,
     medium_threshold: 4,
     fast_threshold: 8,
@@ -93,7 +106,7 @@ impl App {
             || self.input.wheel_scroll.search.pending != 0
     }
 
-    pub(in crate::app) fn handle_wheel_event(&mut self, mouse: MouseEvent, delta: isize) {
+    pub(crate) fn handle_wheel_event(&mut self, mouse: MouseEvent, delta: isize) {
         // In HighFrequency mode (Alacritty, Ghostty, VTE), scroll event coordinates can be
         // unreliable. hover_panel is tracked exclusively from MouseEventKind::Moved events
         // (via ?1003h any-event tracking), which always carry the true cursor position.
@@ -160,11 +173,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn handle_horizontal_wheel_event(
-        &mut self,
-        mouse: MouseEvent,
-        delta: isize,
-    ) {
+    pub(crate) fn handle_horizontal_wheel_event(&mut self, mouse: MouseEvent, delta: isize) {
         let target = if self.input.wheel_profile == WheelProfile::HighFrequency {
             self.input
                 .hover_panel
@@ -200,7 +209,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn queue_search_wheel(&mut self, delta: isize) {
+    pub(crate) fn queue_search_wheel(&mut self, delta: isize) {
         Self::queue_scroll(
             &mut self.input.wheel_scroll.search,
             delta,
@@ -208,7 +217,7 @@ impl App {
         );
     }
 
-    pub(in crate::app) fn queue_scroll(lane: &mut ScrollLane, delta: isize, tuning: WheelTuning) {
+    pub(crate) fn queue_scroll(lane: &mut ScrollLane, delta: isize, tuning: WheelTuning) {
         let burst_count = Self::register_scroll_input(lane, delta);
 
         let divisor = if burst_count >= tuning.fast_threshold {
@@ -238,7 +247,7 @@ impl App {
         let continuing_burst = lane.last_input_direction == direction
             && lane
                 .last_input_at
-                .is_some_and(|at| now.duration_since(at) <= WHEEL_SCROLL_BURST_WINDOW);
+                .is_some_and(|at| now.duration_since(at) <= ScrollState::BURST_WINDOW);
 
         if continuing_burst {
             lane.burst_count = lane.burst_count.saturating_add(1);
@@ -420,7 +429,7 @@ impl App {
             .clamp(2, 6)
     }
 
-    pub(in crate::app) fn sync_preview_scroll(&mut self) -> bool {
+    pub(crate) fn sync_preview_scroll(&mut self) -> bool {
         let previous = self.preview.state.scroll;
         let previous_horizontal = self.preview.state.horizontal_scroll;
         let visible_rows = self.input.frame_state.preview_rows_visible;
@@ -475,7 +484,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn clear_wheel_scroll(&mut self) {
+    pub(crate) fn clear_wheel_scroll(&mut self) {
         Self::reset_scroll_lane(&mut self.input.wheel_scroll.vertical);
         Self::reset_scroll_lane(&mut self.input.wheel_scroll.horizontal);
         Self::reset_scroll_lane(&mut self.input.wheel_scroll.preview);
@@ -523,7 +532,7 @@ impl App {
         1
     }
 
-    pub(in crate::app) fn handle_horizontal_navigation_key(&mut self, delta: isize) -> bool {
+    pub(crate) fn handle_horizontal_navigation_key(&mut self, delta: isize) -> bool {
         if self.input.last_wheel_target == Some(WheelTarget::Preview) {
             if self.input.wheel_profile == WheelProfile::HighFrequency {
                 let _ = self.scroll_preview_columns(delta);
@@ -652,7 +661,7 @@ impl App {
         preview_ready.then_some(WheelTarget::Preview)
     }
 
-    pub(in crate::app) fn scroll_preview_lines(&mut self, delta: isize) -> bool {
+    pub(crate) fn scroll_preview_lines(&mut self, delta: isize) -> bool {
         let previous = self.preview.state.scroll;
         let step = self.preview_scroll_step();
         if delta.is_negative() {
@@ -673,7 +682,7 @@ impl App {
         previous != self.preview.state.scroll
     }
 
-    pub(in crate::app) fn scroll_preview_columns(&mut self, delta: isize) -> bool {
+    pub(crate) fn scroll_preview_columns(&mut self, delta: isize) -> bool {
         let previous = self.preview.state.horizontal_scroll;
         let step = self.preview_horizontal_scroll_step();
         if delta.is_negative() {

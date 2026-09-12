@@ -9,7 +9,7 @@ use crate::terminal_runtime::terminal_images::read_png_dimensions;
 use std::time::{Duration, Instant};
 
 impl App {
-    pub(in crate::app) fn prefetch_visible_nearby_pdf_entries(&mut self, limit: usize) {
+    pub(crate) fn prefetch_visible_nearby_pdf_entries(&mut self, limit: usize) {
         if !self.preview.pdf.pdf_tools_available {
             return;
         }
@@ -81,7 +81,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn handle_pdf_overlay_resize(&mut self) {
+    pub(crate) fn handle_pdf_overlay_resize(&mut self) {
         if self.preview.pdf.session.is_some() {
             self.preview.pdf.activation_ready_at = None;
             self.refresh_pdf_prefetch_window();
@@ -107,7 +107,7 @@ impl App {
             .map(|ready_at| ready_at.saturating_duration_since(Instant::now()))
     }
 
-    pub(in crate::app) fn pdf_preview_header_detail(&self) -> Option<String> {
+    pub(crate) fn pdf_preview_header_detail(&self) -> Option<String> {
         let session = self.preview.pdf.session.as_ref()?;
         if !self.terminal_image_overlay_available() {
             return None;
@@ -120,7 +120,7 @@ impl App {
         Some(page_label)
     }
 
-    pub(in crate::app) fn step_pdf_page(&mut self, delta: isize) -> bool {
+    pub(crate) fn step_pdf_page(&mut self, delta: isize) -> bool {
         let Some(session) = &mut self.preview.pdf.session else {
             return false;
         };
@@ -143,7 +143,7 @@ impl App {
         changed
     }
 
-    pub(in crate::app) fn sync_pdf_preview_selection(&mut self) {
+    pub(crate) fn sync_pdf_preview_selection(&mut self) {
         self.clear_failed_static_image_state_if_needed();
         if !self.terminal_image_overlay_available() || !self.preview.pdf.pdf_tools_available {
             self.preview.pdf.session = None;
@@ -211,11 +211,11 @@ impl App {
         })
     }
 
-    pub(in crate::app) fn active_pdf_overlay_requested(&self) -> bool {
+    pub(crate) fn active_pdf_overlay_requested(&self) -> bool {
         self.active_pdf_overlay_request().is_some()
     }
 
-    pub(in crate::app) fn apply_pdf_probe_build(
+    pub(crate) fn apply_pdf_probe_build(
         &mut self,
         build: background_job_results::PdfProbeBuild,
     ) -> bool {
@@ -291,7 +291,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn apply_pdf_render_build(
+    pub(crate) fn apply_pdf_render_build(
         &mut self,
         build: background_job_results::PdfRenderBuild,
     ) -> bool {
@@ -358,7 +358,7 @@ impl App {
             .is_none_or(|ready_at| Instant::now() >= ready_at)
     }
 
-    pub(in crate::app) fn should_defer_pdf_document_preview(&self, entry: &Entry) -> bool {
+    pub(crate) fn should_defer_pdf_document_preview(&self, entry: &Entry) -> bool {
         is_pdf_entry(entry) && self.preview_prefers_pdf_surface()
     }
 

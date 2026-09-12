@@ -81,6 +81,11 @@ fn app_does_not_depend_on_ui() {
 }
 
 #[test]
+fn app_does_not_depend_on_input_handling() {
+    assert_tree_has_no_pattern("src/app", "input_handling::", &[]);
+}
+
+#[test]
 fn terminal_images_do_not_depend_on_app() {
     assert_tree_has_no_pattern("src/terminal_runtime/terminal_images", "crate::app", &[]);
 }

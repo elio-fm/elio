@@ -4,7 +4,7 @@ use crate::preview::{PreviewContent, PreviewKind, loading_preview_for, preview_w
 use std::time::Instant;
 
 impl App {
-    pub(in crate::app) fn clear_preview_directory_stats(&mut self) {
+    pub(crate) fn clear_preview_directory_stats(&mut self) {
         self.preview.state.directory_stats = None;
         self.preview.state.directory_stats_ready_at = None;
         self.jobs.scheduler.cancel_directory_stats();
@@ -53,7 +53,7 @@ impl App {
             Some(Instant::now() + DIRECTORY_STATS_IDLE_DELAY);
     }
 
-    pub(in crate::app) fn apply_preview_directory_stats_result(
+    pub(crate) fn apply_preview_directory_stats_result(
         &mut self,
         token: u64,
         path: &std::path::Path,
@@ -102,7 +102,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn refresh_preview(&mut self) {
+    pub(crate) fn refresh_preview(&mut self) {
         self.preview.state.deferred_refresh_at = None;
         self.preview.state.prefetch_ready_at = None;
         // Reset incremental state on every selection refresh.
@@ -252,7 +252,7 @@ impl App {
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))
     }
 
-    pub(in crate::app) fn apply_preview_line_count_result(
+    pub(crate) fn apply_preview_line_count_result(
         &mut self,
         path: &std::path::Path,
         size: u64,
@@ -298,7 +298,7 @@ impl App {
         false
     }
 
-    pub(in crate::app) fn sync_current_preview_line_count(&mut self) {
+    pub(crate) fn sync_current_preview_line_count(&mut self) {
         let needs_total_line_count = self.preview.state.content.needs_total_line_count();
         let Some(entry) = self.active_preview_entry() else {
             return;

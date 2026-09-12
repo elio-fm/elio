@@ -36,7 +36,7 @@ impl App {
         &self.status
     }
 
-    pub(in crate::app) fn open_search_with_status(&mut self, scope: SearchScope) {
+    pub(crate) fn open_search_with_status(&mut self, scope: SearchScope) {
         if let Err(error) = self.open_fuzzy_finder(scope) {
             self.status = format!("Search unavailable: {error}");
         }
@@ -57,21 +57,21 @@ impl App {
         self.status = status.into();
     }
 
-    pub(in crate::app) fn toggle_view_mode(&mut self) {
+    pub(crate) fn toggle_view_mode(&mut self) {
         self.clear_wheel_scroll();
         let view_mode = self.file_browser.toggle_view_mode();
         self.sync_scroll();
         self.status = format!("Switched to {} view", view_mode.label());
     }
 
-    pub(in crate::app) fn cycle_sort_mode(&mut self) -> Result<()> {
+    pub(crate) fn cycle_sort_mode(&mut self) -> Result<()> {
         let sort_mode = self.file_browser.cycle_sort_mode();
         self.reload()?;
         self.status = format!("Sort: {}", sort_mode.label());
         Ok(())
     }
 
-    pub(in crate::app) fn toggle_hidden_files(&mut self) -> Result<()> {
+    pub(crate) fn toggle_hidden_files(&mut self) -> Result<()> {
         if self.cwd_is_trash() {
             self.status = "Trash shows all files".to_string();
             return Ok(());
@@ -174,14 +174,14 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn set_selected_last(&mut self) {
+    pub(crate) fn set_selected_last(&mut self) {
         if !self.file_browser.entries.is_empty() {
             let last = self.file_browser.entries.len() - 1;
             self.set_selected(last);
         }
     }
 
-    pub(in crate::app) fn set_selected_delta(&mut self, delta: isize) {
+    pub(crate) fn set_selected_delta(&mut self, delta: isize) {
         self.set_selected_delta_with_preview_mode(delta, PreviewRefreshMode::Immediate);
     }
 
@@ -205,7 +205,7 @@ impl App {
         self.set_selected_with_preview_mode(next, preview_mode);
     }
 
-    pub(in crate::app) fn page(&mut self, direction: isize) {
+    pub(crate) fn page(&mut self, direction: isize) {
         let rows = self.input.frame_state.metrics.rows_visible.max(1) as isize;
         let mode = self.rapid_nav_preview_mode(PreviewRefreshMode::Immediate);
         let prev = self.file_browser.selected;
@@ -220,7 +220,7 @@ impl App {
     }
 
     /// Keyboard-only: applies rapid-nav deferred preview for Up/Down/j/k, then moves.
-    pub(in crate::app) fn move_vertical_keyboard(&mut self, rows: isize) {
+    pub(crate) fn move_vertical_keyboard(&mut self, rows: isize) {
         let mode = self.rapid_nav_preview_mode(PreviewRefreshMode::Immediate);
         let prev = self.file_browser.selected;
         self.move_vertical_with_preview_mode(rows, mode);
@@ -230,7 +230,7 @@ impl App {
     }
 
     /// Keyboard-only: applies rapid-nav deferred preview for grid h/l navigation, then moves.
-    pub(in crate::app) fn move_by_keyboard(&mut self, delta: isize) {
+    pub(crate) fn move_by_keyboard(&mut self, delta: isize) {
         let mode = self.rapid_nav_preview_mode(PreviewRefreshMode::Immediate);
         let prev = self.file_browser.selected;
         self.set_selected_delta_with_preview_mode(delta, mode);
@@ -239,11 +239,11 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn move_vertical(&mut self, rows: isize) {
+    pub(crate) fn move_vertical(&mut self, rows: isize) {
         self.move_vertical_with_preview_mode(rows, PreviewRefreshMode::Immediate);
     }
 
-    pub(in crate::app) fn move_vertical_with_preview_mode(
+    pub(crate) fn move_vertical_with_preview_mode(
         &mut self,
         rows: isize,
         preview_mode: PreviewRefreshMode,
@@ -255,7 +255,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn move_by(&mut self, delta: isize) {
+    pub(crate) fn move_by(&mut self, delta: isize) {
         self.set_selected_delta(delta);
     }
 
@@ -279,7 +279,7 @@ impl App {
         self.set_selected_with_preview_mode(target_index, preview_mode);
     }
 
-    pub(in crate::app) fn adjust_zoom(&mut self, delta: i8) {
+    pub(crate) fn adjust_zoom(&mut self, delta: i8) {
         if !self.file_browser.adjust_zoom(delta) {
             self.status = format!("Grid zoom limit: {}", self.file_browser.zoom_level);
             return;
@@ -292,11 +292,11 @@ impl App {
         self.set_selected(index);
     }
 
-    pub(in crate::app) fn jump_last(&mut self) {
+    pub(crate) fn jump_last(&mut self) {
         self.set_selected_last();
     }
 
-    pub(in crate::app) fn clamp_selection(&mut self) {
+    pub(crate) fn clamp_selection(&mut self) {
         if self.file_browser.clamp_selection() {
             self.preview.state.content = PreviewContent::placeholder("No selection");
             self.clear_preview_directory_stats();
@@ -306,14 +306,14 @@ impl App {
         self.sync_preview_scroll();
     }
 
-    pub(in crate::app) fn sync_scroll(&mut self) -> bool {
+    pub(crate) fn sync_scroll(&mut self) -> bool {
         self.file_browser.sync_scroll(
             self.input.frame_state.metrics.cols,
             self.input.frame_state.metrics.rows_visible,
         )
     }
 
-    pub(in crate::app) fn step_sidebar_place(&mut self, delta: isize) -> Result<()> {
+    pub(crate) fn step_sidebar_place(&mut self, delta: isize) -> Result<()> {
         let places = self
             .places
             .rows
@@ -344,7 +344,7 @@ impl App {
         self.set_dir(places[next].path.clone())
     }
 
-    pub(in crate::app) fn go_back(&mut self) -> Result<()> {
+    pub(crate) fn go_back(&mut self) -> Result<()> {
         let Some(previous) = self.file_browser.directory_history.back.last().cloned() else {
             self.status = "No previous folder".to_string();
             return Ok(());
@@ -359,7 +359,7 @@ impl App {
         )
     }
 
-    pub(in crate::app) fn go_forward(&mut self) -> Result<()> {
+    pub(crate) fn go_forward(&mut self) -> Result<()> {
         let Some(next) = self.file_browser.directory_history.forward.last().cloned() else {
             self.status = "No next folder".to_string();
             return Ok(());
@@ -372,7 +372,7 @@ impl App {
         )
     }
 
-    pub(in crate::app) fn open_entry_at_index(&mut self, index: usize) -> Result<()> {
+    pub(crate) fn open_entry_at_index(&mut self, index: usize) -> Result<()> {
         let Some(entry) = self.file_browser.entries.get(index).cloned() else {
             return Ok(());
         };
@@ -384,7 +384,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn open_in_system(&mut self) -> Result<()> {
+    pub(crate) fn open_in_system(&mut self) -> Result<()> {
         let entries = self.open_target_entries();
         match crate::opening::plans_for_entries(&entries) {
             Ok(plans)
@@ -547,7 +547,7 @@ impl App {
         Ok(())
     }
 
-    pub(in crate::app) fn open_paths_in_system(&mut self, targets: Vec<PathBuf>) -> Result<()> {
+    pub(crate) fn open_paths_in_system(&mut self, targets: Vec<PathBuf>) -> Result<()> {
         if targets.is_empty() {
             return Ok(());
         }
