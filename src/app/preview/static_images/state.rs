@@ -5,7 +5,7 @@ use super::{
 use crate::app::{App, Entry};
 use crate::preview::images::{
     StaticImageFormat, static_image_can_prepare_inline, static_image_format_for_cached_path,
-    static_image_format_for_path, static_image_supports_iterm_source_passthrough,
+    static_image_format_for_path,
 };
 use crate::preview::{self, PreviewLoadState};
 use crate::terminal_runtime::terminal_images::{ImageProtocol, command_exists};
@@ -157,26 +157,6 @@ impl App {
         ) && !request.force_render_to_cache
             && static_image_format_for_cached_path(&request.path, request.size, request.modified)
                 == Some(StaticImageFormat::Png)
-    }
-
-    pub(super) fn static_image_can_use_source_path(
-        &self,
-        request: &StaticImageOverlayRequest,
-    ) -> bool {
-        match self.preview.terminal_images.protocol {
-            ImageProtocol::KittyGraphics | ImageProtocol::KittyDirectGraphics => {
-                self.static_image_can_display_directly_now(request)
-            }
-            ImageProtocol::ItermInline => static_image_supports_iterm_source_passthrough(
-                &request.path,
-                request.size,
-                request.modified,
-                request.force_render_to_cache,
-            ),
-            // Sixel requires decoding and re-encoding the image, so the source path
-            // can never be used directly — always go through the prepare pipeline.
-            ImageProtocol::Sixel | ImageProtocol::None => false,
-        }
     }
 
     pub(super) fn static_image_requires_prepare(

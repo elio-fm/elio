@@ -132,13 +132,17 @@ impl App {
                     .dimensions
                     .insert(key.clone(), prepared.dimensions);
                 if let Some(payload) = prepared.inline_payload {
-                    self.remember_static_image_inline_payload(key.clone(), payload);
+                    self.preview
+                        .image
+                        .remember_inline_payload(key.clone(), payload);
                 }
                 if let (Some(dcs), Some(dcs_key)) = (prepared.sixel_dcs, prepared.sixel_dcs_key) {
-                    self.remember_sixel_dcs(dcs_key, dcs);
+                    self.preview.image.remember_sixel_dcs(dcs_key, dcs);
                 }
                 if prepared.display_path != build.path {
-                    self.remember_rendered_static_image(key, prepared.display_path);
+                    self.preview
+                        .image
+                        .remember_rendered_image(key, prepared.display_path);
                 }
                 self.refresh_static_image_preloads();
                 is_current
@@ -194,9 +198,13 @@ impl App {
         let key = StaticImageKey::from_request(request);
         if self.preview.image.failed_images.contains(&key)
             || self.preview.image.pending_prepares.contains(&key)
-            || self
-                .cached_prepared_static_image_for_overlay(&key, request)
-                .is_some()
+            || {
+                let protocol = self.preview.terminal_images.protocol;
+                self.preview
+                    .image
+                    .cached_prepared_image(&key, request, protocol)
+                    .is_some()
+            }
         {
             return;
         }

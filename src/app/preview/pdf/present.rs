@@ -71,7 +71,7 @@ impl App {
                     return Ok(OverlayPresentState::Waiting);
                 };
                 let dcs_key = SixelDcsKey::new(&rendered, placement.image_area, window_size);
-                let Some(dcs) = self.cached_sixel_dcs(&dcs_key) else {
+                let Some(dcs) = self.preview.image.cached_sixel_dcs(&dcs_key) else {
                     preview_log("present_pdf_overlay: sixel dcs not ready → Waiting");
                     let _ = self.ensure_pdf_render(&render_key);
                     return Ok(OverlayPresentState::Waiting);

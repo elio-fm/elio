@@ -101,7 +101,8 @@ fn cached_adjacent_comic_page_queues_background_image_prepare() {
         .selected_entry()
         .cloned()
         .expect("selected entry should exist");
-    app.cache_preview_result(
+    cache_preview(
+        &mut app,
         &entry,
         &preview::PreviewRequestOptions::ComicPage(1),
         &adjacent_preview,
@@ -183,7 +184,8 @@ fn cached_adjacent_epub_section_queues_background_image_prepare() {
         .selected_entry()
         .cloned()
         .expect("selected entry should exist");
-    app.cache_preview_result(
+    cache_preview(
+        &mut app,
         &entry,
         &preview::PreviewRequestOptions::EpubSection(1),
         &adjacent_preview,
@@ -276,7 +278,8 @@ fn cached_adjacent_audio_cover_queues_background_image_prepare() {
             modified: next_cover_metadata.modified().ok(),
         });
     let adjacent_entry = app.file_browser.entries[1].clone();
-    app.cache_preview_result(
+    cache_preview(
+        &mut app,
         &adjacent_entry,
         &preview::PreviewRequestOptions::Default,
         &adjacent_preview,

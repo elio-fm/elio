@@ -274,12 +274,14 @@ impl App {
     ) -> Result<Vec<u8>> {
         if protocol == ImageProtocol::Sixel {
             let dcs_key = SixelDcsKey::new(display_path, placement, window_size);
-            let dcs: Arc<[u8]> = match self.cached_sixel_dcs(&dcs_key) {
+            let dcs: Arc<[u8]> = match self.preview.image.cached_sixel_dcs(&dcs_key) {
                 Some(cached) => cached,
                 None => {
                     let (pw, ph) = area_pixel_size(placement, window_size);
                     let dcs = encode_sixel_dcs(display_path, pw, ph)?;
-                    self.remember_sixel_dcs(dcs_key, Arc::clone(&dcs));
+                    self.preview
+                        .image
+                        .remember_sixel_dcs(dcs_key, Arc::clone(&dcs));
                     dcs
                 }
             };

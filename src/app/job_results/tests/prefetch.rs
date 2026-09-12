@@ -125,7 +125,7 @@ fn nearby_archive_preview_skips_heavy_prefetch_work() {
         let _ = app.process_background_jobs();
         thread::sleep(Duration::from_millis(10));
     }
-    assert!(!app.has_cached_preview_for_path(&second));
+    assert!(!app.preview.state.has_cached_preview_for_path(&second));
     let scheduler_metrics = app.scheduler_metrics();
     assert!(scheduler_metrics.preview_jobs_submitted_high >= 1);
     assert_eq!(scheduler_metrics.preview_jobs_submitted_low, 0);
@@ -212,13 +212,13 @@ fn nearby_audio_preview_prefetch_warms_adjacent_file_preview() {
     for _ in 0..500 {
         let _ = app.process_preview_prefetch_timers();
         let _ = app.process_background_jobs();
-        if app.has_cached_preview_for_path(&second) {
+        if app.preview.state.has_cached_preview_for_path(&second) {
             break;
         }
         thread::sleep(Duration::from_millis(10));
     }
 
-    assert!(app.has_cached_preview_for_path(&second));
+    assert!(app.preview.state.has_cached_preview_for_path(&second));
     assert!(app.scheduler_metrics().preview_jobs_submitted_low >= 1);
 
     let preview_metrics = app.preview_metrics();

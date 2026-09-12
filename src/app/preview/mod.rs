@@ -1,4 +1,3 @@
-mod cache;
 pub(super) mod comic;
 pub(super) mod epub;
 mod header;
@@ -13,8 +12,7 @@ mod visual_layout;
 
 use super::*;
 use crate::preview::{
-    CachedPreview, PreviewCacheKey, PreviewDirectoryStatsState, PreviewLineCountKey,
-    PreviewLoadState, PreviewRefreshMode,
+    PreviewDirectoryStatsState, PreviewLineCountKey, PreviewLoadState, PreviewRefreshMode,
 };
 
 #[cfg(test)]

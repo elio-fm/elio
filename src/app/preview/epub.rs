@@ -1,5 +1,7 @@
 use super::*;
 use crate::file_classification::{self, DocumentFormat};
+#[cfg(test)]
+use crate::preview::PreviewCacheKey;
 use crate::preview::{self, EpubSession, preview_work_class};
 use std::time::Instant;
 
