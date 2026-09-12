@@ -9,7 +9,7 @@ pub(crate) use candidate_index::{
 };
 pub(crate) use fuzzy_matching::filter_candidates_in;
 pub use search_state::SearchRow;
-pub(crate) use search_state::{SearchCache, SearchState};
+pub(crate) use search_state::{FuzzyFinderState, SearchCache, SearchState};
 #[cfg(test)]
 pub(crate) use search_state::{
     SearchMatchCacheEntry, build_base_search_cache_entry, build_search_cache_entry,

@@ -259,7 +259,7 @@ fn validate_parsed_item(item: &ParsedCreateItem, cwd: &Path) -> Option<String> {
 impl App {
     pub(crate) fn open_create_prompt(&mut self) {
         self.overlays.help = false;
-        self.overlays.search = None;
+        self.fuzzy_finder.search = None;
         self.file_operations.create = Some(CreateOverlay {
             lines: vec![String::new()],
             cursor_line: 0,

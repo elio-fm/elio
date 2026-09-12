@@ -11,8 +11,7 @@ fn background_job_processing_yields_after_a_burst_of_results() {
     wait_for_background_idle(&mut app);
 
     for index in 0..20 {
-        app.jobs
-            .scheduler
+        app.job_scheduler
             .defer_result(JobResult::PreviewLineCount(PreviewLineCountBuild {
                 path: root.join(format!("item-{index}.txt")),
                 size: index as u64 + 1,

@@ -13,7 +13,7 @@ use crate::file_browser::FileBrowserState;
 #[cfg(unix)]
 use crate::file_operations::BulkRenameEditorSession;
 use crate::file_operations::FileOperationsState;
-use crate::fuzzy_finder::{SearchCache, SearchState};
+use crate::fuzzy_finder::FuzzyFinderState;
 use crate::goto_menu::GotoMenu;
 use crate::opening::open_with::ApplicationSelection;
 use crate::places::PlacesState;
@@ -89,20 +89,8 @@ pub(crate) enum NavigationRepeatKey {
 pub(crate) struct OverlayState {
     pub(crate) goto: Option<GotoMenu>,
     pub(crate) open_with: Option<ApplicationSelection>,
-    pub(crate) search: Option<SearchState>,
-    pub(crate) duplicates: Option<DuplicateFinderState>,
     pub(crate) help: bool,
     pub(crate) help_scroll: usize,
-}
-
-pub(crate) struct JobRuntime {
-    pub(crate) directory_token: u64,
-    pub(crate) directory_fingerprint_token: u64,
-    pub(crate) search_token: u64,
-    pub(crate) search_loading: bool,
-    pub(crate) search_cache: Option<SearchCache>,
-    pub(crate) duplicate_token: u64,
-    pub(crate) scheduler: JobScheduler,
 }
 
 pub(crate) struct InputRuntime {
@@ -156,8 +144,10 @@ pub struct App {
     pub(crate) places: PlacesState,
     pub(crate) preview: PreviewRuntime,
     pub(crate) file_operations: FileOperationsState,
+    pub(crate) fuzzy_finder: FuzzyFinderState,
+    pub(crate) duplicate_finder: DuplicateFinderState,
     pub(crate) overlays: OverlayState,
-    pub(crate) jobs: JobRuntime,
+    pub(crate) job_scheduler: JobScheduler,
     pub(crate) input: InputRuntime,
     pub(crate) status: String,
     pub(crate) should_quit: bool,
@@ -195,16 +185,10 @@ impl App {
             places: PlacesState::new(),
             preview: PreviewRuntime::new(),
             file_operations: FileOperationsState::default(),
+            fuzzy_finder: FuzzyFinderState::default(),
+            duplicate_finder: DuplicateFinderState::default(),
             overlays: OverlayState::default(),
-            jobs: JobRuntime {
-                directory_token: 0,
-                directory_fingerprint_token: 0,
-                search_token: 0,
-                search_loading: false,
-                search_cache: None,
-                duplicate_token: 0,
-                scheduler,
-            },
+            job_scheduler: scheduler,
             input: InputRuntime {
                 frame_state: FrameState::default(),
                 last_click: None,

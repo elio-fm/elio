@@ -53,7 +53,7 @@ fn present_pdf_overlay_waits_for_selection_activation_before_queueing_probe() {
         .expect("presenting a delayed PDF overlay should not fail");
 
     assert!(app.preview.pdf.pending_page_probes.is_empty());
-    assert!(!app.jobs.scheduler.has_pending_work());
+    assert!(!app.job_scheduler.has_pending_work());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -73,7 +73,7 @@ fn present_pdf_overlay_queues_current_probe_only_once() {
 
     assert_eq!(app.preview.pdf.pending_page_probes.len(), 1);
     assert!(app.preview.pdf.pending_page_probes.contains(&key));
-    assert!(app.jobs.scheduler.has_pending_work());
+    assert!(app.job_scheduler.has_pending_work());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -263,7 +263,7 @@ fn sync_pdf_preview_selection_queues_initial_probe_for_current_page() {
 
     app.sync_pdf_preview_selection();
 
-    assert!(app.jobs.scheduler.has_pending_work());
+    assert!(app.job_scheduler.has_pending_work());
     assert!(app.preview.pdf.pending_page_probes.contains(&PdfPageKey {
         path: entry.path,
         size: entry.size,

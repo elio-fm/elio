@@ -61,8 +61,7 @@ impl App {
                 .iter()
                 .map(|request| self.image_prepare_request_for_overlay(request))
                 .collect::<Vec<_>>();
-            self.jobs
-                .scheduler
+            self.job_scheduler
                 .retain_image_prepares(current_job.as_ref(), &nearby_jobs);
         }
 
@@ -211,8 +210,8 @@ impl App {
 
         let job = self.image_prepare_request_for_overlay(request);
         let submit = match priority {
-            jobs::ImageJobPriority::Current => self.jobs.scheduler.submit_image_prepare(job),
-            jobs::ImageJobPriority::Nearby => self.jobs.scheduler.submit_nearby_image_prepare(job),
+            jobs::ImageJobPriority::Current => self.job_scheduler.submit_image_prepare(job),
+            jobs::ImageJobPriority::Nearby => self.job_scheduler.submit_nearby_image_prepare(job),
         };
         if submit {
             self.preview.image.pending_prepares.insert(key);

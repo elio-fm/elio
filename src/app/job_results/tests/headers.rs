@@ -55,7 +55,7 @@ fn directory_header_marks_incomplete_totals_without_claiming_exactness() {
         .cloned()
         .expect("directory entry should be selected");
     let token = app.preview.state.token.wrapping_add(1);
-    app.jobs.scheduler.cancel_directory_stats();
+    app.job_scheduler.cancel_directory_stats();
     // Seed a settled directory preview state so this assertion does not depend
     // on how quickly the background preview worker finishes on slower CI VMs.
     app.preview.state.token = token;
@@ -66,8 +66,7 @@ fn directory_header_marks_incomplete_totals_without_claiming_exactness() {
         token,
         path: entry.path.clone(),
     });
-    app.jobs
-        .scheduler
+    app.job_scheduler
         .defer_result(JobResult::DirectoryStats(DirectoryStatsBuild {
             token,
             path: entry.path.clone(),
@@ -115,8 +114,7 @@ fn stale_directory_totals_result_is_ignored_after_selection_changes() {
         .cloned()
         .expect("b-dir should be selected second");
 
-    app.jobs
-        .scheduler
+    app.job_scheduler
         .defer_result(JobResult::DirectoryStats(DirectoryStatsBuild {
             token: stale_token,
             path: stale_entry.path.clone(),

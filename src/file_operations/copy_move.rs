@@ -215,7 +215,7 @@ impl App {
         });
         self.file_operations.paste_dest_dir = Some(request.dest_dir.clone());
 
-        self.jobs.scheduler.submit_paste(PasteRequest {
+        self.job_scheduler.submit_paste(PasteRequest {
             token,
             dest_dir: request.dest_dir,
             paths: request.paths,

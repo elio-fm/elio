@@ -199,7 +199,7 @@ impl App {
     #[cfg(unix)]
     fn close_transient_overlays(&mut self) {
         self.overlays.help = false;
-        self.overlays.search = None;
+        self.fuzzy_finder.search = None;
         self.file_operations.create = None;
         self.file_operations.rename = None;
         self.file_operations.trash = None;

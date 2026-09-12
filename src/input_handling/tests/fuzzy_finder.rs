@@ -63,14 +63,14 @@ fn opening_search_restarts_index_when_cache_missing_even_if_loading() {
     fs::create_dir_all(root.join(".hidden-root/needle")).expect("failed to create temp tree");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.jobs.search_loading = true;
-    let previous_token = app.jobs.search_token;
+    app.fuzzy_finder.loading = true;
+    let previous_token = app.fuzzy_finder.token;
 
     app.open_fuzzy_finder(SearchScope::Folders)
         .expect("failed to open search");
 
-    assert!(app.jobs.search_loading);
-    assert!(app.jobs.search_token > previous_token);
+    assert!(app.fuzzy_finder.loading);
+    assert!(app.fuzzy_finder.token > previous_token);
 
     fs::remove_dir_all(root).expect("failed to remove temp tree");
 }
@@ -82,7 +82,7 @@ fn opening_search_ignores_hidden_cache_when_browser_hides_dotfiles() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.file_browser.show_hidden = false;
-    app.jobs.search_cache = Some(SearchCache {
+    app.fuzzy_finder.cache = Some(SearchCache {
         cwd: root.clone(),
         scope: SearchScope::Folders,
         show_hidden: true,
@@ -119,7 +119,7 @@ fn opening_search_preserves_cached_limit_status() {
         node_limit_reached: true,
         candidate_limit_reached: false,
     };
-    app.jobs.search_cache = Some(SearchCache {
+    app.fuzzy_finder.cache = Some(SearchCache {
         cwd: root.clone(),
         scope: SearchScope::Folders,
         show_hidden: app.file_browser.show_hidden,
@@ -158,7 +158,7 @@ fn search_rows_keep_full_paths() {
     .expect("failed to write license");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.jobs.search_cache = Some(SearchCache {
+    app.fuzzy_finder.cache = Some(SearchCache {
         cwd: root.clone(),
         scope: SearchScope::Files,
         show_hidden: app.effective_show_hidden(),
@@ -191,9 +191,9 @@ fn search_progress_batch_updates_open_overlay_while_loading() {
     fs::create_dir_all(&root).expect("failed to create temp tree");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.jobs.search_token = 42;
-    app.jobs.search_loading = true;
-    app.overlays.search = Some(SearchState {
+    app.fuzzy_finder.token = 42;
+    app.fuzzy_finder.loading = true;
+    app.fuzzy_finder.search = Some(SearchState {
         scope: SearchScope::Folders,
         query: "link".to_string(),
         query_cursor: 4,
@@ -207,8 +207,7 @@ fn search_progress_batch_updates_open_overlay_while_loading() {
         stats: crate::fuzzy_finder::SearchIndexStats::default(),
     });
 
-    app.jobs
-        .scheduler
+    app.job_scheduler
         .defer_result(crate::background_jobs::job_results::JobResult::SearchBatch(
             crate::background_jobs::job_results::SearchBatchBuild {
                 token: 42,
@@ -252,9 +251,9 @@ fn search_progress_batches_update_current_query_incrementally() {
     fs::create_dir_all(&root).expect("failed to create temp tree");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.jobs.search_token = 42;
-    app.jobs.search_loading = true;
-    app.overlays.search = Some(SearchState {
+    app.fuzzy_finder.token = 42;
+    app.fuzzy_finder.loading = true;
+    app.fuzzy_finder.search = Some(SearchState {
         scope: SearchScope::Folders,
         query: "fast".to_string(),
         query_cursor: 4,
@@ -284,7 +283,7 @@ fn search_progress_batches_update_current_query_incrementally() {
         ),
         (3, vec![folder_candidate(&root, "fastlane")]),
     ] {
-        app.jobs.scheduler.defer_result(
+        app.job_scheduler.defer_result(
             crate::background_jobs::job_results::JobResult::SearchBatch(
                 crate::background_jobs::job_results::SearchBatchBuild {
                     token: 42,
@@ -306,7 +305,11 @@ fn search_progress_batches_update_current_query_incrementally() {
         assert!(app.process_background_jobs());
     }
 
-    let search = app.overlays.search.as_ref().expect("search should be open");
+    let search = app
+        .fuzzy_finder
+        .search
+        .as_ref()
+        .expect("search should be open");
     assert_eq!(search.candidates.len(), 3);
     assert_eq!(app.search_match_count(), 2);
     let rows = app.search_rows(10);
@@ -343,9 +346,9 @@ fn closing_search_cancels_inflight_index_token() {
     fs::create_dir_all(&root).expect("failed to create temp tree");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.jobs.search_token = 42;
-    app.jobs.search_loading = true;
-    app.overlays.search = Some(SearchState {
+    app.fuzzy_finder.token = 42;
+    app.fuzzy_finder.loading = true;
+    app.fuzzy_finder.search = Some(SearchState {
         scope: SearchScope::Folders,
         query: String::new(),
         query_cursor: 0,
@@ -363,11 +366,10 @@ fn closing_search_cancels_inflight_index_token() {
         .expect("closing search should work");
 
     assert!(!app.search_is_open());
-    assert!(!app.jobs.search_loading);
-    assert_eq!(app.jobs.search_token, 43);
+    assert!(!app.fuzzy_finder.loading);
+    assert_eq!(app.fuzzy_finder.token, 43);
 
-    app.jobs
-        .scheduler
+    app.job_scheduler
         .defer_result(crate::background_jobs::job_results::JobResult::SearchBatch(
             crate::background_jobs::job_results::SearchBatchBuild {
                 token: 42,
@@ -401,7 +403,7 @@ fn directory_reload_invalidates_closed_search_cache() {
     app.open_fuzzy_finder(SearchScope::Folders)
         .expect("failed to open search");
     wait_for_search_candidates(&mut app, 1);
-    app.overlays.search = None;
+    app.fuzzy_finder.search = None;
 
     fs::create_dir_all(root.join("beta")).expect("failed to create new folder");
     let snapshot = crate::fs::load_directory_snapshot(&root, false, app.file_browser.sort_mode)
@@ -461,7 +463,7 @@ fn refining_query_rechecks_full_candidate_set() {
         symlink: None,
     });
 
-    app.overlays.search = Some(SearchState {
+    app.fuzzy_finder.search = Some(SearchState {
         scope: SearchScope::Folders,
         query: "f".to_string(),
         query_cursor: 1,
@@ -476,7 +478,7 @@ fn refining_query_rechecks_full_candidate_set() {
     });
     app.refresh_search_matches("");
     let fastfetch_index = app
-        .overlays
+        .fuzzy_finder
         .search
         .as_ref()
         .and_then(|search| {
@@ -487,7 +489,7 @@ fn refining_query_rechecks_full_candidate_set() {
         })
         .expect("fastfetch candidate should exist");
     assert!(
-        !app.overlays
+        !app.fuzzy_finder
             .search
             .as_ref()
             .expect("search should be open")
@@ -495,12 +497,16 @@ fn refining_query_rechecks_full_candidate_set() {
             .contains(&fastfetch_index)
     );
 
-    if let Some(search) = &mut app.overlays.search {
+    if let Some(search) = &mut app.fuzzy_finder.search {
         search.query = "fastfetch".to_string();
     }
     app.refresh_search_matches("f");
 
-    let search = app.overlays.search.as_ref().expect("search should be open");
+    let search = app
+        .fuzzy_finder
+        .search
+        .as_ref()
+        .expect("search should be open");
     assert_eq!(search.matches.first().copied(), Some(fastfetch_index));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
@@ -512,7 +518,7 @@ fn search_query_cursor_inserts_and_deletes_in_place() {
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.overlays.search = Some(SearchState {
+    app.fuzzy_finder.search = Some(SearchState {
         scope: SearchScope::Folders,
         query: "fatch".to_string(),
         query_cursor: 2,
@@ -547,7 +553,7 @@ fn search_query_ctrl_arrows_move_across_word_boundaries() {
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.overlays.search = Some(SearchState {
+    app.fuzzy_finder.search = Some(SearchState {
         scope: SearchScope::Folders,
         query: "foo bar/baz".to_string(),
         query_cursor: "foo bar/baz".chars().count(),
@@ -594,7 +600,7 @@ fn search_query_ctrl_backspace_and_delete_remove_word_units() {
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.overlays.search = Some(SearchState {
+    app.fuzzy_finder.search = Some(SearchState {
         scope: SearchScope::Folders,
         query: "foo bar/baz".to_string(),
         query_cursor: 8,
@@ -632,7 +638,7 @@ fn search_query_terminal_fallback_word_delete_bindings_work() {
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.overlays.search = Some(SearchState {
+    app.fuzzy_finder.search = Some(SearchState {
         scope: SearchScope::Folders,
         query: "foo bar/baz".to_string(),
         query_cursor: 8,
@@ -656,7 +662,7 @@ fn search_query_terminal_fallback_word_delete_bindings_work() {
     assert_eq!(app.search_query(), "foo baz");
     assert_eq!(app.search_query_cursor(), 4);
 
-    if let Some(search) = &mut app.overlays.search {
+    if let Some(search) = &mut app.fuzzy_finder.search {
         search.query = "foo bar baz".to_string();
         search.query_cursor = 4;
     }
@@ -666,7 +672,7 @@ fn search_query_terminal_fallback_word_delete_bindings_work() {
     assert_eq!(app.search_query(), "foo baz");
     assert_eq!(app.search_query_cursor(), 4);
 
-    if let Some(search) = &mut app.overlays.search {
+    if let Some(search) = &mut app.fuzzy_finder.search {
         search.query = "foo bar".to_string();
         search.query_cursor = 7;
     }
@@ -685,7 +691,7 @@ fn search_rows_ignore_stale_match_indexes() {
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.overlays.search = Some(SearchState {
+    app.fuzzy_finder.search = Some(SearchState {
         scope: SearchScope::Folders,
         query: String::new(),
         query_cursor: 0,
@@ -718,7 +724,7 @@ fn confirm_search_selection_selects_file_already_in_current_directory() {
         app.selected_entry().map(|entry| entry.path.as_path()),
         Some(alpha.as_path())
     );
-    app.overlays.search = Some(SearchState {
+    app.fuzzy_finder.search = Some(SearchState {
         scope: SearchScope::Files,
         query: "beta".to_string(),
         query_cursor: 4,
@@ -743,7 +749,7 @@ fn confirm_search_selection_selects_file_already_in_current_directory() {
     app.confirm_search_selection()
         .expect("search selection should succeed");
 
-    assert!(app.overlays.search.is_none());
+    assert!(app.fuzzy_finder.search.is_none());
     assert_eq!(app.file_browser.cwd, root);
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
@@ -761,7 +767,7 @@ fn confirm_search_selection_keeps_overlay_open_when_reveal_fails() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     let missing = root.join("missing/file.txt");
-    app.overlays.search = Some(SearchState {
+    app.fuzzy_finder.search = Some(SearchState {
         scope: SearchScope::Files,
         query: "missing".to_string(),
         query_cursor: 7,
@@ -784,7 +790,7 @@ fn confirm_search_selection_keeps_overlay_open_when_reveal_fails() {
     });
 
     assert!(app.confirm_search_selection().is_err());
-    assert!(app.overlays.search.is_some());
+    assert!(app.fuzzy_finder.search.is_some());
     assert_eq!(app.file_browser.cwd, root);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");

@@ -16,8 +16,7 @@ impl App {
         let modified = session.modified;
 
         let window_pages = self.pdf_probe_window_pages();
-        self.jobs
-            .scheduler
+        self.job_scheduler
             .retain_pdf_probe_pages(&path, size, modified, &window_pages);
         self.preview.pdf.pending_page_probes.retain(|key| {
             key.path == path
@@ -27,8 +26,7 @@ impl App {
         });
 
         let render_variants = self.desired_pdf_render_variants();
-        self.jobs
-            .scheduler
+        self.job_scheduler
             .retain_pdf_render_variants(&path, size, modified, &render_variants);
         self.preview.pdf.pending_renders.retain(|key| {
             key.path == path
@@ -250,7 +248,7 @@ impl App {
             return;
         }
 
-        if self.jobs.scheduler.submit_pdf_probe(
+        if self.job_scheduler.submit_pdf_probe(
             jobs::PdfProbeRequest {
                 path: key.path.clone(),
                 size: key.size,
@@ -273,7 +271,7 @@ impl App {
             return;
         }
 
-        if self.jobs.scheduler.submit_pdf_render(
+        if self.job_scheduler.submit_pdf_render(
             jobs::PdfRenderRequest {
                 path: key.path.clone(),
                 size: key.size,

@@ -146,7 +146,7 @@ fn finish_editor_bulk_rename_opens_confirmation_with_relative_paths() {
     assert_eq!(app.status_message(), "");
     assert!(!temp_file.exists());
 
-    app.overlays.duplicates = Some(DuplicateFinderState {
+    app.duplicate_finder.session = Some(DuplicateFinderSession {
         cwd: root.clone(),
         groups: vec![crate::duplicate_finder::DuplicateGroup {
             id: 1,
@@ -187,8 +187,8 @@ fn finish_editor_bulk_rename_opens_confirmation_with_relative_paths() {
     assert!(!beta.exists());
 
     let duplicate_overlay = app
-        .overlays
-        .duplicates
+        .duplicate_finder
+        .session
         .as_ref()
         .expect("duplicate overlay should stay open");
     assert_eq!(

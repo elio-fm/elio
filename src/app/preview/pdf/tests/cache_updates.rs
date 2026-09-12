@@ -121,7 +121,7 @@ fn apply_pdf_probe_build_queues_render_for_current_page() {
 
     assert!(dirty);
     assert!(app.preview.pdf.pending_renders.contains(&render_key));
-    assert!(app.jobs.scheduler.has_pending_work());
+    assert!(app.job_scheduler.has_pending_work());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -155,7 +155,7 @@ fn apply_pdf_probe_build_queues_render_even_before_selection_activation_is_ready
 
     assert!(dirty);
     assert!(app.preview.pdf.pending_renders.contains(&render_key));
-    assert!(app.jobs.scheduler.has_pending_work());
+    assert!(app.job_scheduler.has_pending_work());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

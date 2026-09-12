@@ -85,7 +85,7 @@ impl App {
                 PreviewPriority::Low,
                 PreviewWorkClass::Light,
             );
-            if self.jobs.scheduler.submit_preview(request) {
+            if self.job_scheduler.submit_preview(request) {
                 queued += 1;
             }
         }
@@ -118,7 +118,7 @@ impl App {
                 PreviewPriority::Low,
                 preview_work_class(&entry, &variant),
             );
-            let _ = self.jobs.scheduler.submit_preview(request);
+            let _ = self.job_scheduler.submit_preview(request);
         }
     }
 
@@ -213,7 +213,7 @@ impl App {
                 PreviewPriority::Low,
                 PreviewWorkClass::Heavy,
             );
-            if self.jobs.scheduler.submit_preview(request) {
+            if self.job_scheduler.submit_preview(request) {
                 queued += 1;
             }
         }

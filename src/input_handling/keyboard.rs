@@ -56,7 +56,7 @@ impl App {
             return Ok(());
         }
 
-        if self.overlays.search.is_some() {
+        if self.fuzzy_finder.search.is_some() {
             return self.paste_into_search(text);
         }
 
@@ -133,12 +133,12 @@ impl App {
     fn paste_into_search(&mut self, text: &str) -> Result<()> {
         let text = single_line_paste_text(text);
         let previous_query = self
-            .overlays
+            .fuzzy_finder
             .search
             .as_ref()
             .map(|search| search.query.clone())
             .unwrap_or_default();
-        if let Some(search) = &mut self.overlays.search {
+        if let Some(search) = &mut self.fuzzy_finder.search {
             insert_text_at_cursor(&mut search.query, &mut search.query_cursor, &text);
         }
         self.refresh_search_matches(&previous_query);
@@ -291,11 +291,11 @@ impl App {
             return self.handle_help_key(key);
         }
 
-        if self.overlays.duplicates.is_some() {
+        if self.duplicate_finder.session.is_some() {
             return self.handle_duplicate_key(key);
         }
 
-        if self.overlays.search.is_some() {
+        if self.fuzzy_finder.search.is_some() {
             return self.handle_search_key(key);
         }
 
@@ -313,8 +313,7 @@ impl App {
             }
 
             if let Some(prog) = &self.file_operations.trash_progress {
-                self.jobs
-                    .scheduler
+                self.job_scheduler
                     .cancel_trash(self.file_operations.trash_token);
                 if prog.permanent {
                     // Permanent delete can be stopped between items; clear chip immediately.
@@ -323,23 +322,19 @@ impl App {
                 // Non-permanent: the batch OS call is atomic and may already be
                 // in flight.  Keep the chip visible; done=true will clear it.
             } else if self.file_operations.restore_progress.is_some() {
-                self.jobs
-                    .scheduler
+                self.job_scheduler
                     .cancel_restore(self.file_operations.restore_token);
                 self.file_operations.restore_progress = None;
             } else if self.file_operations.archive_create_progress.is_some() {
-                self.jobs
-                    .scheduler
+                self.job_scheduler
                     .cancel_archive_create(self.file_operations.archive_create_token);
                 self.file_operations.archive_create_progress = None;
             } else if self.file_operations.archive_extract_progress.is_some() {
-                self.jobs
-                    .scheduler
+                self.job_scheduler
                     .cancel_archive_extract(self.file_operations.archive_extract_token);
                 self.file_operations.archive_extract_progress = None;
             } else if self.file_operations.paste_progress.is_some() {
-                self.jobs
-                    .scheduler
+                self.job_scheduler
                     .cancel_paste(self.file_operations.paste_token);
                 self.file_operations.paste_progress = None;
                 self.clear_queued_pastes();
@@ -445,30 +440,25 @@ impl App {
                 if !self.file_browser.selected_paths.is_empty() {
                     self.clear_selection();
                 } else if let Some(prog) = &self.file_operations.trash_progress {
-                    self.jobs
-                        .scheduler
+                    self.job_scheduler
                         .cancel_trash(self.file_operations.trash_token);
                     if prog.permanent {
                         self.file_operations.trash_progress = None;
                     }
                 } else if self.file_operations.restore_progress.is_some() {
-                    self.jobs
-                        .scheduler
+                    self.job_scheduler
                         .cancel_restore(self.file_operations.restore_token);
                     self.file_operations.restore_progress = None;
                 } else if self.file_operations.archive_create_progress.is_some() {
-                    self.jobs
-                        .scheduler
+                    self.job_scheduler
                         .cancel_archive_create(self.file_operations.archive_create_token);
                     self.file_operations.archive_create_progress = None;
                 } else if self.file_operations.archive_extract_progress.is_some() {
-                    self.jobs
-                        .scheduler
+                    self.job_scheduler
                         .cancel_archive_extract(self.file_operations.archive_extract_token);
                     self.file_operations.archive_extract_progress = None;
                 } else if self.file_operations.paste_progress.is_some() {
-                    self.jobs
-                        .scheduler
+                    self.job_scheduler
                         .cancel_paste(self.file_operations.paste_token);
                     self.file_operations.paste_progress = None;
                     self.clear_queued_pastes();

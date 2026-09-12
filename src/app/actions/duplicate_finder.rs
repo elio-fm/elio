@@ -25,8 +25,8 @@ impl App {
     }
     pub(crate) fn open_duplicate_rename(&mut self) {
         if self
-            .overlays
-            .duplicates
+            .duplicate_finder
+            .session
             .as_ref()
             .is_some_and(|overlay| !overlay.selected_paths.is_empty())
         {
@@ -143,10 +143,10 @@ impl App {
         Some(targets)
     }
     pub(crate) fn duplicate_action_paths(&self) -> Vec<PathBuf> {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
-            .map(crate::duplicate_finder::DuplicateFinderState::action_paths)
+            .map(crate::duplicate_finder::DuplicateFinderSession::action_paths)
             .unwrap_or_default()
     }
 
@@ -194,7 +194,7 @@ impl App {
 
 impl App {
     pub fn duplicates_is_open(&self) -> bool {
-        self.overlays.duplicates.is_some()
+        self.duplicate_finder.session.is_some()
     }
 
     pub(crate) fn open_duplicate_finder(&mut self) {
@@ -202,22 +202,26 @@ impl App {
         self.queue_terminal_image_geometry_clear();
         self.clear_wheel_scroll();
         self.overlays.help = false;
-        self.overlays.search = None;
-        self.jobs.duplicate_token = self.jobs.duplicate_token.wrapping_add(1);
+        self.fuzzy_finder.search = None;
+        self.duplicate_finder.scan_token = self.duplicate_finder.scan_token.wrapping_add(1);
         let cwd = self.file_browser.cwd.clone();
         let show_hidden = self.effective_show_hidden();
-        self.overlays.duplicates = Some(crate::duplicate_finder::DuplicateFinderState::new(
+        self.duplicate_finder.session = Some(crate::duplicate_finder::DuplicateFinderSession::new(
             cwd.clone(),
         ));
         let submitted = self
-            .jobs
-            .scheduler
+            .job_scheduler
             .submit_duplicate_scan(DuplicateScanRequest {
-                token: self.jobs.duplicate_token,
+                token: self.duplicate_finder.scan_token,
                 cwd,
                 show_hidden,
             });
-        if let Some(duplicates) = self.overlays.duplicates.as_mut().filter(|_| !submitted) {
+        if let Some(duplicates) = self
+            .duplicate_finder
+            .session
+            .as_mut()
+            .filter(|_| !submitted)
+        {
             duplicates.loading = false;
             duplicates.error = Some("Duplicate worker unavailable".to_string());
         }
@@ -226,15 +230,15 @@ impl App {
 
     pub(crate) fn stop_duplicate_scan_with_partial_results(&mut self) {
         let Some(duplicates) = self
-            .overlays
-            .duplicates
+            .duplicate_finder
+            .session
             .as_mut()
             .filter(|duplicates| duplicates.loading)
         else {
             return;
         };
-        self.jobs.duplicate_token = self.jobs.duplicate_token.wrapping_add(1);
-        self.jobs.scheduler.cancel_duplicate_scan();
+        self.duplicate_finder.scan_token = self.duplicate_finder.scan_token.wrapping_add(1);
+        self.job_scheduler.cancel_duplicate_scan();
         duplicates.stop_with_partial_results();
         self.status = "Duplicate scan stopped".to_string();
         self.sync_duplicate_scroll();
@@ -243,9 +247,9 @@ impl App {
 
     pub(crate) fn close_duplicate_finder(&mut self) {
         self.queue_terminal_image_geometry_clear();
-        self.jobs.duplicate_token = self.jobs.duplicate_token.wrapping_add(1);
-        self.jobs.scheduler.cancel_duplicate_scan();
-        self.overlays.duplicates = None;
+        self.duplicate_finder.scan_token = self.duplicate_finder.scan_token.wrapping_add(1);
+        self.job_scheduler.cancel_duplicate_scan();
+        self.duplicate_finder.session = None;
         self.refresh_preview();
         self.clear_wheel_scroll();
     }
@@ -255,8 +259,8 @@ impl App {
         batch: crate::duplicate_finder::DuplicateScanBatch,
     ) {
         let became_non_empty = self
-            .overlays
-            .duplicates
+            .duplicate_finder
+            .session
             .as_mut()
             .is_some_and(|duplicates| duplicates.apply_batch(batch));
         if became_non_empty {
@@ -273,8 +277,8 @@ impl App {
         result: Result<crate::duplicate_finder::DuplicateScanResult, String>,
     ) {
         let file_presence_changed = self
-            .overlays
-            .duplicates
+            .duplicate_finder
+            .session
             .as_mut()
             .is_some_and(|duplicates| duplicates.apply_result(result));
         if file_presence_changed {
@@ -285,21 +289,21 @@ impl App {
     }
 
     pub(crate) fn duplicate_focused_path(&self) -> Option<PathBuf> {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
-            .and_then(crate::duplicate_finder::DuplicateFinderState::focused_path)
+            .and_then(crate::duplicate_finder::DuplicateFinderSession::focused_path)
     }
 
     pub fn duplicate_focused_entry(&self) -> Option<Entry> {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
-            .and_then(crate::duplicate_finder::DuplicateFinderState::focused_entry)
+            .and_then(crate::duplicate_finder::DuplicateFinderSession::focused_entry)
     }
 
     pub(crate) fn active_preview_entry(&self) -> Option<Entry> {
-        if let Some(duplicates) = &self.overlays.duplicates {
+        if let Some(duplicates) = &self.duplicate_finder.session {
             return duplicates
                 .preview_visible
                 .then(|| duplicates.focused_entry())
@@ -309,78 +313,78 @@ impl App {
     }
 
     pub fn duplicate_rows(&self, max_rows: usize) -> Vec<DuplicateRow> {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
             .map(|duplicates| duplicates.rows(max_rows))
             .unwrap_or_default()
     }
 
     pub fn duplicate_group_count(&self) -> usize {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
             .map_or(0, |duplicates| duplicates.groups.len())
     }
 
     pub fn duplicate_file_count(&self) -> usize {
-        self.overlays
-            .duplicates
-            .as_ref()
-            .map_or(0, crate::duplicate_finder::DuplicateFinderState::file_count)
+        self.duplicate_finder.session.as_ref().map_or(
+            0,
+            crate::duplicate_finder::DuplicateFinderSession::file_count,
+        )
     }
 
     pub fn duplicate_stats(&self) -> Option<crate::duplicate_finder::DuplicateScanStats> {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
             .map(|duplicates| duplicates.stats)
     }
 
     pub fn duplicate_loading(&self) -> bool {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
             .is_some_and(|duplicates| duplicates.loading)
     }
 
     pub fn duplicate_partial(&self) -> bool {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
             .is_some_and(|duplicates| duplicates.partial)
     }
 
     pub fn duplicate_error(&self) -> Option<&str> {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
             .and_then(|duplicates| duplicates.error.as_deref())
     }
 
     pub fn duplicate_preview_visible(&self) -> bool {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
             .is_some_and(|duplicates| duplicates.preview_visible)
     }
 
     pub(crate) fn duplicate_preview_rendered(&self) -> bool {
-        self.overlays.duplicates.is_some()
+        self.duplicate_finder.session.is_some()
             && self.duplicate_preview_visible()
             && self.input.frame_state.preview_panel.is_some()
     }
 
     pub fn duplicate_cwd(&self) -> Option<&Path> {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
             .map(|duplicates| duplicates.cwd.as_path())
     }
 
     pub fn duplicate_scroll_top(&self) -> usize {
-        self.overlays
-            .duplicates
+        self.duplicate_finder
+            .session
             .as_ref()
             .map_or(0, |duplicates| duplicates.scroll)
     }
@@ -389,17 +393,17 @@ impl App {
         if pairs.is_empty() {
             return;
         }
-        if let Some(duplicates) = &mut self.overlays.duplicates {
+        if let Some(duplicates) = &mut self.duplicate_finder.session {
             duplicates.apply_rename_pairs(pairs);
             self.refresh_duplicate_preview();
         }
     }
 
     pub(crate) fn remove_duplicate_paths(&mut self, paths: &[PathBuf]) {
-        if paths.is_empty() || self.overlays.duplicates.is_none() {
+        if paths.is_empty() || self.duplicate_finder.session.is_none() {
             return;
         }
-        if let Some(duplicates) = &mut self.overlays.duplicates {
+        if let Some(duplicates) = &mut self.duplicate_finder.session {
             duplicates.remove_paths(paths);
         }
         self.queue_terminal_image_geometry_clear();
@@ -411,13 +415,17 @@ impl App {
         let Some(path) = self.duplicate_focused_path() else {
             return;
         };
-        let should_refresh = self.overlays.duplicates.as_ref().is_some_and(|duplicates| {
-            duplicates.preview_visible && duplicates.preview_path.as_ref() != Some(&path)
-        });
+        let should_refresh = self
+            .duplicate_finder
+            .session
+            .as_ref()
+            .is_some_and(|duplicates| {
+                duplicates.preview_visible && duplicates.preview_path.as_ref() != Some(&path)
+            });
         if !should_refresh {
             return;
         }
-        if let Some(duplicates) = &mut self.overlays.duplicates {
+        if let Some(duplicates) = &mut self.duplicate_finder.session {
             duplicates.preview_path = Some(path);
         }
         self.refresh_preview();

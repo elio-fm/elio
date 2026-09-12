@@ -54,7 +54,7 @@ impl App {
         while processed < JOB_RESULT_APPLY_MAX_PER_TICK
             && started_at.elapsed() < JOB_RESULT_APPLY_TIME_BUDGET
         {
-            let Ok(job) = self.jobs.scheduler.try_recv() else {
+            let Ok(job) = self.job_scheduler.try_recv() else {
                 break;
             };
             processed += 1;
@@ -64,7 +64,7 @@ impl App {
                     else {
                         continue;
                     };
-                    if build.token != self.jobs.directory_token
+                    if build.token != self.file_browser.directory_runtime.load_token
                         || build.token != load.token
                         || build.cwd != load.target_cwd
                     {
@@ -92,7 +92,7 @@ impl App {
                     else {
                         continue;
                     };
-                    if build.token != self.jobs.directory_fingerprint_token
+                    if build.token != self.file_browser.directory_runtime.fingerprint_token
                         || build.token != scan.token
                         || build.cwd != scan.cwd
                         || build.show_hidden != scan.show_hidden
@@ -160,7 +160,7 @@ impl App {
                     dirty |= self.apply_image_prepare_build(build);
                 }
                 JobResult::SearchBatch(build) => {
-                    if build.token != self.jobs.search_token
+                    if build.token != self.fuzzy_finder.token
                         || build.cwd != self.file_browser.cwd
                         || build.show_hidden != self.effective_show_hidden()
                         || build.fingerprint != self.file_browser.directory_runtime.fingerprint
@@ -169,7 +169,7 @@ impl App {
                     }
 
                     let mut sync_search_scroll = false;
-                    if let Some(search) = &mut self.overlays.search
+                    if let Some(search) = &mut self.fuzzy_finder.search
                         && search.scope == build.scope
                     {
                         search.loading = true;
@@ -186,7 +186,7 @@ impl App {
                     }
                 }
                 JobResult::Search(build) => {
-                    if build.token != self.jobs.search_token
+                    if build.token != self.fuzzy_finder.token
                         || build.cwd != self.file_browser.cwd
                         || build.show_hidden != self.effective_show_hidden()
                         || build.fingerprint != self.file_browser.directory_runtime.fingerprint
@@ -194,14 +194,14 @@ impl App {
                         continue;
                     }
 
-                    self.jobs.search_loading = false;
+                    self.fuzzy_finder.loading = false;
                     dirty = true;
 
                     match build.result {
                         Ok(index) => {
                             let stats = index.stats;
                             let candidates = Arc::new(index.candidates);
-                            self.jobs.search_cache = Some(SearchCache {
+                            self.fuzzy_finder.cache = Some(SearchCache {
                                 cwd: build.cwd,
                                 scope: build.scope,
                                 show_hidden: build.show_hidden,
@@ -209,7 +209,7 @@ impl App {
                                 candidates: candidates.clone(),
                                 stats,
                             });
-                            if let Some(search) = &mut self.overlays.search
+                            if let Some(search) = &mut self.fuzzy_finder.search
                                 && search.scope == build.scope
                             {
                                 search.replace_candidates(candidates, stats);
@@ -217,8 +217,8 @@ impl App {
                             self.sync_search_scroll();
                         }
                         Err(error) => {
-                            self.jobs.search_cache = None;
-                            if let Some(search) = &mut self.overlays.search
+                            self.fuzzy_finder.cache = None;
+                            if let Some(search) = &mut self.fuzzy_finder.search
                                 && search.scope == build.scope
                             {
                                 search.fail_loading(error);
@@ -227,7 +227,7 @@ impl App {
                     }
                 }
                 JobResult::DuplicateScanBatch(build) => {
-                    if build.token != self.jobs.duplicate_token
+                    if build.token != self.duplicate_finder.scan_token
                         || build.cwd != self.file_browser.cwd
                         || build.show_hidden != self.effective_show_hidden()
                     {
@@ -237,7 +237,7 @@ impl App {
                     dirty = true;
                 }
                 JobResult::DuplicateScan(build) => {
-                    if build.token != self.jobs.duplicate_token
+                    if build.token != self.duplicate_finder.scan_token
                         || build.cwd != self.file_browser.cwd
                         || build.show_hidden != self.effective_show_hidden()
                     {
@@ -651,9 +651,9 @@ impl App {
 
         if (processed == JOB_RESULT_APPLY_MAX_PER_TICK
             || (processed > 0 && started_at.elapsed() >= JOB_RESULT_APPLY_TIME_BUDGET))
-            && let Ok(job) = self.jobs.scheduler.try_recv()
+            && let Ok(job) = self.job_scheduler.try_recv()
         {
-            self.jobs.scheduler.defer_result(job);
+            self.job_scheduler.defer_result(job);
         }
 
         dirty

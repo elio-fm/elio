@@ -7,7 +7,7 @@ impl App {
     }
 
     pub fn selection_count(&self) -> usize {
-        if let Some(overlay) = &self.overlays.duplicates {
+        if let Some(overlay) = &self.duplicate_finder.session {
             return overlay.selected_paths.len();
         }
         self.file_browser.selection_count()

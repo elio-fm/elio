@@ -5,6 +5,14 @@ use super::{SearchCandidate, SearchIndexStats, SearchScope, filter_candidates_in
 pub(crate) const SEARCH_MATCH_LIMIT: usize = 250;
 const SEARCH_CACHE_LIMIT: usize = 32;
 
+#[derive(Default)]
+pub(crate) struct FuzzyFinderState {
+    pub(crate) search: Option<SearchState>,
+    pub(crate) token: u64,
+    pub(crate) loading: bool,
+    pub(crate) cache: Option<SearchCache>,
+}
+
 pub(crate) struct SearchState {
     pub(crate) scope: SearchScope,
     pub(crate) query: String,

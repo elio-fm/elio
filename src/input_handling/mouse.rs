@@ -87,11 +87,11 @@ impl App {
             return self.handle_help_mouse(mouse);
         }
 
-        if self.overlays.duplicates.is_some() {
+        if self.duplicate_finder.session.is_some() {
             return self.handle_duplicate_mouse(mouse);
         }
 
-        if self.overlays.search.is_some() {
+        if self.fuzzy_finder.search.is_some() {
             return self.handle_search_mouse(mouse);
         }
 

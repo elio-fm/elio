@@ -175,7 +175,7 @@ fn esc_during_restore_clears_chip_immediately() {
 
     // Simulate Esc: chip clears immediately for per-item operations.
     let token = app.file_operations.restore_token;
-    app.jobs.scheduler.cancel_restore(token);
+    app.job_scheduler.cancel_restore(token);
     app.file_operations.restore_progress = None;
 
     assert!(

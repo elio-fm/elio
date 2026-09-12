@@ -175,8 +175,7 @@ fn stale_preview_results_are_counted_in_metrics() {
 
     app.set_selected(1);
     let metrics_before = app.preview_metrics();
-    app.jobs
-        .scheduler
+    app.job_scheduler
         .defer_result(JobResult::Preview(Box::new(PreviewBuild {
             token: app.preview.state.token.wrapping_add(1),
             entry: stale_entry,

@@ -22,7 +22,7 @@ impl App {
         {
             return None;
         }
-        if !self.jobs.scheduler.submit_pdf_render(
+        if !self.job_scheduler.submit_pdf_render(
             jobs::PdfRenderRequest {
                 path: key.path.clone(),
                 size: key.size,
@@ -54,7 +54,7 @@ impl App {
         {
             return None;
         }
-        if !self.jobs.scheduler.submit_pdf_probe(
+        if !self.job_scheduler.submit_pdf_probe(
             jobs::PdfProbeRequest {
                 path: request.path.clone(),
                 size: request.size,

@@ -29,7 +29,7 @@ impl App {
         let is_dir = entry.is_dir();
         let cursor_col = cursor_before_extension(&name);
         self.overlays.help = false;
-        self.overlays.search = None;
+        self.fuzzy_finder.search = None;
         self.file_operations.create = None;
         self.file_operations.trash = None;
         self.file_operations.restore = None;
