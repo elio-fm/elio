@@ -1,4 +1,4 @@
-use crate::app::{App, PasteRequest};
+use crate::app::App;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
@@ -34,6 +34,14 @@ pub(crate) struct QueuedPaste {
     pub(crate) paths: Vec<PathBuf>,
     pub(crate) op: ClipOp,
     pub(crate) origin: PasteOrigin,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PasteRequest {
+    pub(crate) token: u64,
+    pub(crate) dest_dir: PathBuf,
+    pub(crate) paths: Vec<PathBuf>,
+    pub(crate) op: ClipOp,
 }
 
 impl App {

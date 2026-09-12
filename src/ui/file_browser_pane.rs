@@ -1,10 +1,12 @@
 use super::helpers;
 use super::scrollbars::{render_browser_scrollbar, split_scrollbar_area};
-use crate::app::{
-    App, ClipOp, Entry, EntryHit, ScreenRegions, ViewMetrics, format_size, format_size_parts,
-    format_time_ago, sanitize_terminal_text,
+use crate::app::{App, EntryHit, ScreenRegions, ViewMetrics};
+use crate::file_browser::ViewMode;
+use crate::file_operations::ClipOp;
+use crate::filesystem::{
+    Entry, format_size, format_size_parts, format_time_ago, sanitize_terminal_text,
+    symlink_target_display_label,
 };
-use crate::filesystem::symlink_target_display_label;
 use crate::theme::{self, Palette};
 use ratatui::{
     Frame,
@@ -54,7 +56,7 @@ pub(super) fn render_file_browser_pane(
     let inner = block.inner(area);
     helpers::fill_area(frame, inner, palette.panel_alt, palette.text);
 
-    if app.file_browser.view_mode == crate::app::ViewMode::Grid {
+    if app.file_browser.view_mode == ViewMode::Grid {
         render_grid_view(frame, inner, app, state, palette);
     } else {
         render_list_view(frame, inner, app, state, palette);

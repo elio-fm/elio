@@ -30,6 +30,18 @@ fn filesystem_does_not_depend_on_file_operations() {
 }
 
 #[test]
+fn file_operations_do_not_depend_on_background_jobs() {
+    assert_tree_has_no_pattern("src/file_operations", "background_jobs::", &[]);
+}
+
+#[test]
+fn elevated_session_does_not_depend_on_app_or_file_operations() {
+    assert_tree_has_no_pattern("src/elevated_session", "app::", &[]);
+    assert_tree_has_no_pattern("src/elevated_session", "background_jobs::", &[]);
+    assert_tree_has_no_pattern("src/elevated_session", "file_operations::", &[]);
+}
+
+#[test]
 fn file_classification_does_not_depend_on_app() {
     assert_tree_has_no_pattern("src/file_classification", "app::", &[]);
 }

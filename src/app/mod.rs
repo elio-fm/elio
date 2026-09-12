@@ -14,26 +14,19 @@ pub(crate) use self::preview::HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY;
 #[cfg(test)]
 use crate::background_jobs::SchedulerMetricsSnapshot;
 use crate::background_jobs::job_requests as jobs;
-pub(crate) use crate::background_jobs::job_requests::{
-    ArchiveCreateRequest, ArchiveExtractBatchState, ArchiveExtractRequest, PasteRequest,
-    RestoreRequest, TrashRequest,
-};
-pub(crate) use crate::background_jobs::job_requests::{
+use crate::background_jobs::job_requests::{
     PreviewLineCountRequest, PreviewPriority, PreviewRequest, SearchRequest,
 };
-#[cfg(unix)]
-pub(crate) use crate::background_jobs::run_user_trash_helper;
 #[cfg(test)]
-pub(crate) use crate::file_browser::HistoryEntry;
-pub(crate) use crate::file_browser::{
-    DirectoryHistoryMode, DirectoryLoadCompletion, DirectoryViewMemory, LocalFilter,
+use crate::file_browser::HistoryEntry;
+use crate::file_browser::{
+    DirectoryHistoryMode, DirectoryLoadCompletion, DirectoryViewMemory,
     PendingDirectoryFingerprintScan, PendingDirectoryLoad, SelectionChange,
 };
-pub(crate) use crate::file_operations::ClipOp;
 use crate::fuzzy_finder::SearchCache;
 #[cfg(test)]
-pub(crate) use crate::preview::PreviewDirectoryStatsState;
-pub(crate) use crate::preview::{PreviewLoadState, PreviewRefreshMode};
+use crate::preview::PreviewDirectoryStatsState;
+use crate::preview::{PreviewLoadState, PreviewRefreshMode};
 use anyhow::Result;
 use ratatui::text::Line;
 use std::{
@@ -49,30 +42,22 @@ pub(crate) use self::state::{
     ClickState, NavigationRepeatKey, PendingTerminalTask, ScrollLane, ScrollState, WheelProfile,
     WheelTarget,
 };
-#[cfg(test)]
-pub(crate) use crate::chooser::ChooserExit;
-pub use crate::duplicate_finder::DuplicateRow;
-pub(crate) use crate::file_classification::FileClass;
-pub(crate) use crate::filesystem::{
-    format_item_count, format_size, format_size_parts, format_time_ago, sanitize_terminal_text,
-};
+use crate::duplicate_finder::DuplicateRow;
+use crate::file_classification::FileClass;
+use crate::filesystem::format_item_count;
 #[cfg(unix)]
 #[cfg(test)]
-pub use crate::preview::PreviewMetricsSnapshot;
+use crate::preview::PreviewMetricsSnapshot;
 
 pub use self::screen_regions::{
     CopyHit, DuplicateHit, EntryHit, GoToHit, OpenWithHit, PathHit, ScreenRegions, SearchHit,
     SearchScope, ViewMetrics,
 };
-pub use crate::file_browser::ViewMode;
-pub use crate::filesystem::Entry;
+use crate::file_browser::ViewMode;
+use crate::filesystem::Entry;
 #[cfg(test)]
-pub use crate::filesystem::EntryKind;
-pub use crate::fuzzy_finder::SearchRow;
-#[cfg(test)]
-pub use crate::places::PlaceItem;
-#[cfg(test)]
-pub use crate::places::{PlaceKind, PlaceRow};
+use crate::filesystem::EntryKind;
+use crate::fuzzy_finder::SearchRow;
 
 impl App {
     pub fn set_screen_regions(&mut self, mut screen_regions: ScreenRegions) -> bool {

@@ -1,9 +1,7 @@
 use super::*;
 use crate::{
-    app::{App, ClipOp},
-    filesystem::EntryKind,
-    terminal_runtime::tui_drawing::AppTerminal,
-    theme,
+    app::App, file_operations::ClipOp, filesystem::EntryKind,
+    terminal_runtime::tui_drawing::AppTerminal, theme,
 };
 use anyhow::Result;
 use std::{
@@ -268,7 +266,7 @@ where
             let (icon, icon_color) = icon_for_path(path);
             let text = path
                 .file_name()
-                .map(|name| crate::app::sanitize_terminal_text(&name.to_string_lossy()))
+                .map(|name| crate::filesystem::sanitize_terminal_text(&name.to_string_lossy()))
                 .filter(|name| !name.is_empty())
                 .unwrap_or_else(|| "1 item".to_string());
             return DragIconLabel {

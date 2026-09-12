@@ -1,4 +1,4 @@
-use crate::app::sanitize_terminal_text;
+use crate::filesystem::sanitize_terminal_text;
 use crate::theme::Palette;
 use ratatui::{
     Frame,

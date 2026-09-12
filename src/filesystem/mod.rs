@@ -5,6 +5,7 @@ mod entries;
 mod item_display;
 mod sort;
 mod trash_metadata;
+mod trash_restoration;
 
 pub(crate) use directory_scanning::{
     DirectoryFingerprint, DirectorySnapshot, entry_from_path, load_directory_snapshot,
@@ -26,3 +27,9 @@ pub(crate) use item_display::{
 pub use sort::SortMode;
 pub(crate) use sort::natural_cmp;
 pub(crate) use trash_metadata::{original_basename_from_path_value, parse_original_path};
+pub(crate) use trash_restoration::restore_trash_item;
+#[cfg(target_os = "macos")]
+pub(crate) use trash_restoration::{
+    remove_restore_origins, remove_restore_origins_checked, restore_trash_item_checked_metadata,
+    save_restore_origins_checked,
+};

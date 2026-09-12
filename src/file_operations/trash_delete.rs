@@ -1,4 +1,4 @@
-use crate::app::{App, TrashRequest};
+use crate::app::App;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::path::{Path, PathBuf};
@@ -17,6 +17,13 @@ pub(crate) struct TrashTarget {
     pub(crate) path: PathBuf,
     pub(crate) name: String,
     pub(crate) is_dir: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TrashRequest {
+    pub(crate) token: u64,
+    pub(crate) targets: Vec<TrashTarget>,
+    pub(crate) permanent: bool,
 }
 
 #[derive(Clone, Debug)]

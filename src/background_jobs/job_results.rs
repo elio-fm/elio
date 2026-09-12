@@ -1,5 +1,5 @@
-use super::job_requests::ArchiveExtractRequest;
 use crate::duplicate_finder::{DuplicateScanBatch, DuplicateScanResult};
+use crate::file_operations::ArchiveExtractRequest;
 use crate::filesystem::Entry;
 use crate::fuzzy_finder::{SearchIndex, SearchIndexBatch, SearchScope};
 use crate::preview::{

@@ -1,5 +1,6 @@
 use super::helpers;
-use crate::app::{App, ClipOp};
+use crate::app::App;
+use crate::file_operations::ClipOp;
 use crate::theme::Palette;
 use ratatui::{
     Frame,
