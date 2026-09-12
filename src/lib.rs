@@ -15,6 +15,7 @@ mod input_handling;
 mod opening;
 mod places;
 mod preview;
+mod terminal_images;
 mod terminal_runtime;
 mod theme;
 mod ui;

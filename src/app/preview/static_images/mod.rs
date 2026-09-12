@@ -3,9 +3,7 @@ mod present;
 mod state;
 
 use super::super::*;
-use crate::{
-    preview::images::read_raster_dimensions, terminal_runtime::terminal_images::read_png_dimensions,
-};
+use crate::{preview::images::read_raster_dimensions, terminal_images::read_png_dimensions};
 
 pub(crate) use crate::preview::images::{
     SixelDcsKey, StaticImageKey, image_target_height_px, image_target_width_px,

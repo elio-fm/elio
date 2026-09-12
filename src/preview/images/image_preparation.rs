@@ -7,7 +7,7 @@ use super::image_rendering::{
     render_svg_to_png_with_magick, render_svg_to_png_with_resvg, should_render_raster_with_ffmpeg,
     shrink_image_to_fit,
 };
-use crate::terminal_runtime::terminal_images::{
+use crate::terminal_images::{
     RenderedImageDimensions, TerminalWindowSize, area_pixel_size, encode_iterm_inline_payload,
     encode_sixel_dcs, fit_image_area,
 };

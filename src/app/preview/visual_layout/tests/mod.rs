@@ -7,7 +7,7 @@ use crate::preview::{
     PreviewContent, PreviewKind, PreviewRequestOptions, PreviewVisual, PreviewVisualKind,
     PreviewVisualLayout,
 };
-use crate::terminal_runtime::terminal_images::{ImageProtocol, TerminalWindowSize};
+use crate::terminal_images::{ImageProtocol, TerminalWindowSize};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use ratatui::layout::Rect;
 use std::{

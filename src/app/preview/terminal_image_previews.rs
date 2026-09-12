@@ -7,9 +7,7 @@ use std::{
 
 use crate::app::App;
 use crate::preview::OverlayPresentState;
-use crate::terminal_runtime::terminal_images::{
-    self, ImageProtocol, TerminalIdentity, TerminalWindowSize,
-};
+use crate::terminal_images::{self, ImageProtocol, TerminalIdentity, TerminalWindowSize};
 
 /// How long terminal geometry must stay unchanged before image payloads are
 /// (re)transmitted. Tiling window managers resize the terminal in an animated

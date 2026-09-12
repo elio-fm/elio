@@ -5,7 +5,7 @@ use super::{
 };
 use crate::app::App;
 use crate::preview::OverlayPresentState;
-use crate::terminal_runtime::terminal_images::{
+use crate::terminal_images::{
     ImageProtocol, RenderedImageDimensions, TerminalWindowSize, area_pixel_size, encode_sixel_dcs,
     fit_image_area, place_sixel_from_dcs, place_terminal_image, preview_log,
 };

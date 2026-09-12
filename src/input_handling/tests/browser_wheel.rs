@@ -465,8 +465,8 @@ fn foot_sixel_browser_wheel_defers_preview_refresh() {
     app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::Default;
     app.set_terminal_image_protocol_for_tests(
-        crate::terminal_runtime::terminal_images::ImageProtocol::Sixel,
-        crate::terminal_runtime::terminal_images::TerminalIdentity::Foot,
+        crate::terminal_images::ImageProtocol::Sixel,
+        crate::terminal_images::TerminalIdentity::Foot,
     );
     app.select_index(0);
     app.set_screen_regions(ScreenRegions {
@@ -522,8 +522,8 @@ fn windows_terminal_sixel_browser_wheel_defers_preview_refresh() {
     app.file_browser.view_mode = ViewMode::List;
     app.input.wheel_profile = WheelProfile::Default;
     app.set_terminal_image_protocol_for_tests(
-        crate::terminal_runtime::terminal_images::ImageProtocol::Sixel,
-        crate::terminal_runtime::terminal_images::TerminalIdentity::WindowsTerminal,
+        crate::terminal_images::ImageProtocol::Sixel,
+        crate::terminal_images::TerminalIdentity::WindowsTerminal,
     );
     app.select_index(0);
     app.set_screen_regions(ScreenRegions {

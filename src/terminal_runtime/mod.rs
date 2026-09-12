@@ -2,7 +2,6 @@ mod cd_on_exit;
 mod input_reader;
 mod kitty_dnd;
 mod shell_here;
-pub(crate) mod terminal_images;
 mod tui_drawing;
 mod tui_event_loop;
 mod zoxide;

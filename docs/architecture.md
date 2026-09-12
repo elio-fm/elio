@@ -20,8 +20,9 @@ This crate is organized around focused subsystems.
 - `app`: remaining cross-subsystem state, preview coordination, actions, and application of
   background-job results.
 - `elevated_session`: privileged filesystem operations through sudo or doas.
+- `terminal_images`: terminal detection, image protocols, placement, clearing, and geometry.
 - `terminal_runtime`: application startup, terminal lifecycle, raw input acquisition, event loop,
-  drawing, terminal-image protocols, and session output.
+  drawing, and session output.
 - `ui`: terminal rendering and layout.
 
 Current boundary rules:

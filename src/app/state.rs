@@ -236,15 +236,19 @@ impl App {
     }
 
     pub(crate) fn ffprobe_available(&mut self) -> bool {
-        *self.preview.media.ffprobe_available.get_or_insert_with(|| {
-            crate::terminal_runtime::terminal_images::command_exists("ffprobe")
-        })
+        *self
+            .preview
+            .media
+            .ffprobe_available
+            .get_or_insert_with(|| crate::terminal_images::command_exists("ffprobe"))
     }
 
     pub(crate) fn media_ffmpeg_available(&mut self) -> bool {
-        *self.preview.media.ffmpeg_available.get_or_insert_with(|| {
-            crate::terminal_runtime::terminal_images::command_exists("ffmpeg")
-        })
+        *self
+            .preview
+            .media
+            .ffmpeg_available
+            .get_or_insert_with(|| crate::terminal_images::command_exists("ffmpeg"))
     }
 
     #[cfg(test)]

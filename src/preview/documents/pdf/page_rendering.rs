@@ -1,7 +1,5 @@
 use super::PdfPageDimensions;
-use crate::terminal_runtime::terminal_images::{
-    TerminalWindowSize, fit_image_area, fit_image_pixels,
-};
+use crate::terminal_images::{TerminalWindowSize, fit_image_area, fit_image_pixels};
 use anyhow::{Context, Result};
 use ratatui::layout::Rect;
 use std::{

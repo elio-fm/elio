@@ -3,7 +3,7 @@ use super::{
     static_image_supports_iterm_source_passthrough,
 };
 use crate::preview::{PreparedStaticImage, StaticImageOverlayRequest, state::ImagePreviewState};
-use crate::terminal_runtime::terminal_images::ImageProtocol;
+use crate::terminal_images::ImageProtocol;
 use std::{fs, path::PathBuf, sync::Arc};
 
 const RENDERED_IMAGE_CACHE_LIMIT: usize = 64;

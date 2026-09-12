@@ -1,5 +1,5 @@
 use super::*;
-use crate::terminal_runtime::terminal_images::{ImageProtocol, place_terminal_image};
+use crate::terminal_images::{ImageProtocol, place_terminal_image};
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use image::ImageFormat;
 use std::{
