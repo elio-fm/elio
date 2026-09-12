@@ -1,4 +1,4 @@
-use crate::app::{App, FrameState, OpenWithHit};
+use crate::app::{App, OpenWithHit, ScreenRegions};
 use crate::{
     theme::Palette,
     ui::{helpers, scrollbars::render_overlay_scrollbar},
@@ -15,7 +15,7 @@ pub(in crate::ui) fn render_open_with_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let row_count = app.open_with_row_count().max(1);

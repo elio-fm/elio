@@ -280,7 +280,7 @@ fn apply_pdf_render_build_prefetches_next_page_when_current_page_is_ready() {
             page,
             area: app
                 .input
-                .frame_state
+                .screen_regions
                 .preview_content_area
                 .expect("preview content area should be set"),
         };

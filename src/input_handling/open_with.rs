@@ -43,7 +43,7 @@ impl App {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
                     .input
-                    .frame_state
+                    .screen_regions
                     .open_with_panel
                     .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
@@ -53,7 +53,7 @@ impl App {
 
                 if let Some(hit) = self
                     .input
-                    .frame_state
+                    .screen_regions
                     .open_with_hits
                     .iter()
                     .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))

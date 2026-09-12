@@ -210,7 +210,7 @@ impl App {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
                     .input
-                    .frame_state
+                    .screen_regions
                     .restore_panel
                     .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
@@ -219,14 +219,14 @@ impl App {
                 }
                 if self
                     .input
-                    .frame_state
+                    .screen_regions
                     .restore_confirm_btn
                     .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
                 {
                     self.confirm_restore()?;
                 } else if self
                     .input
-                    .frame_state
+                    .screen_regions
                     .restore_cancel_btn
                     .is_some_and(|rect| rect.contains((mouse.column, mouse.row).into()))
                 {

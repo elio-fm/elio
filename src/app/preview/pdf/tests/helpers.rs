@@ -51,7 +51,7 @@ pub(super) fn build_pdf_overlay_test_app(label: &str) -> (App, PathBuf) {
         current_page: 1,
         total_pages: None,
     });
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -70,7 +70,7 @@ pub(super) fn build_selected_pdf_app(label: &str) -> (App, PathBuf) {
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.preview.pdf.pdf_tools_available = true;
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,

@@ -29,7 +29,7 @@ fn high_frequency_preview_wheel_scrolls_preview_after_entries_scroll() {
         .expect("long.txt should be in entries");
     app.select_index(long_index);
 
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -48,7 +48,7 @@ fn high_frequency_preview_wheel_scrolls_preview_after_entries_scroll() {
             cols: 1,
             rows_visible: 8,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 
@@ -116,7 +116,7 @@ fn high_frequency_preview_wheel_scrolls_preview_without_prior_moved_event() {
         .expect("long.txt should be in entries");
     app.select_index(long_index);
 
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -135,7 +135,7 @@ fn high_frequency_preview_wheel_scrolls_preview_without_prior_moved_event() {
             cols: 1,
             rows_visible: 8,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 
@@ -187,7 +187,7 @@ fn hover_panel_routes_scroll_when_event_coords_are_outside_panels() {
         .expect("long.txt should be in entries");
     app.select_index(long_index);
 
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -206,7 +206,7 @@ fn hover_panel_routes_scroll_when_event_coords_are_outside_panels() {
             cols: 1,
             rows_visible: 8,
         },
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 
@@ -261,7 +261,7 @@ fn preview_wheel_uses_last_focused_panel_when_coordinates_miss() {
         .position(|entry| entry.path == file_path)
         .expect("long file should be visible");
     app.select_index(file_index);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -276,7 +276,7 @@ fn preview_wheel_uses_last_focused_panel_when_coordinates_miss() {
         }),
         preview_rows_visible: 4,
         preview_cols_visible: 20,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 
@@ -321,7 +321,7 @@ fn preview_wheel_follows_hovered_panel_without_click() {
         .position(|entry| entry.path == file_path)
         .expect("long file should be visible");
     app.select_index(file_index);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -336,7 +336,7 @@ fn preview_wheel_follows_hovered_panel_without_click() {
         }),
         preview_rows_visible: 4,
         preview_cols_visible: 20,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 
@@ -381,7 +381,7 @@ fn preview_wheel_uses_preview_column_when_row_is_unreliable() {
         .position(|entry| entry.path == file_path)
         .expect("long file should be visible");
     app.select_index(file_index);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -396,7 +396,7 @@ fn preview_wheel_uses_preview_column_when_row_is_unreliable() {
         }),
         preview_rows_visible: 4,
         preview_cols_visible: 20,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 
@@ -438,7 +438,7 @@ fn preview_wheel_steps_comic_pages_instead_of_scrolling_summary_text() {
         .expect("archive should be visible");
     app.select_index(archive_index);
     wait_for_background_preview(&mut app);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -453,7 +453,7 @@ fn preview_wheel_steps_comic_pages_instead_of_scrolling_summary_text() {
         }),
         preview_rows_visible: 6,
         preview_cols_visible: 20,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(Event::Mouse(MouseEvent {
@@ -509,7 +509,7 @@ fn comic_preview_wheel_clears_pending_entry_scroll_before_page_turns() {
     app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     wait_for_background_preview(&mut app);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -524,7 +524,7 @@ fn comic_preview_wheel_clears_pending_entry_scroll_before_page_turns() {
         }),
         preview_rows_visible: 6,
         preview_cols_visible: 20,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     app.input.wheel_scroll.vertical.pending = 3;
 
@@ -567,7 +567,7 @@ fn preview_wheel_steps_cbr_pages_instead_of_scrolling_summary_text() {
     app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     wait_for_background_preview(&mut app);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -582,7 +582,7 @@ fn preview_wheel_steps_cbr_pages_instead_of_scrolling_summary_text() {
         }),
         preview_rows_visible: 6,
         preview_cols_visible: 20,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(Event::Mouse(MouseEvent {
@@ -644,7 +644,7 @@ fn preview_wheel_scrolls_epub_section_before_advancing_to_next_section() {
     app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
     wait_for_background_preview(&mut app);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -659,7 +659,7 @@ fn preview_wheel_scrolls_epub_section_before_advancing_to_next_section() {
         }),
         preview_rows_visible: 4,
         preview_cols_visible: 24,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(Event::Mouse(MouseEvent {
@@ -675,8 +675,8 @@ fn preview_wheel_scrolls_epub_section_before_advancing_to_next_section() {
     assert_eq!(app.preview.state.content.ebook_section_index, Some(0));
 
     let max_scroll = app
-        .preview_total_lines(app.input.frame_state.preview_cols_visible.max(1))
-        .saturating_sub(app.input.frame_state.preview_rows_visible.max(1));
+        .preview_total_lines(app.input.screen_regions.preview_cols_visible.max(1))
+        .saturating_sub(app.input.screen_regions.preview_rows_visible.max(1));
     app.preview.state.scroll = max_scroll;
     app.sync_preview_scroll();
 
@@ -745,7 +745,7 @@ fn preview_wheel_advances_full_height_epub_image_without_hidden_scroll() {
         modified: None,
     });
     app.apply_current_epub_preview_metadata();
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         entries_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -760,7 +760,7 @@ fn preview_wheel_advances_full_height_epub_image_without_hidden_scroll() {
         }),
         preview_rows_visible: 0,
         preview_cols_visible: 24,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(Event::Mouse(MouseEvent {

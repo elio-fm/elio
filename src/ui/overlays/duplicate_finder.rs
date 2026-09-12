@@ -1,5 +1,5 @@
 use crate::{
-    app::{App, DuplicateHit, FrameState},
+    app::{App, DuplicateHit, ScreenRegions},
     theme::{self, Palette},
     ui::{
         helpers,
@@ -24,7 +24,7 @@ pub(in crate::ui) fn render_duplicate_finder_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let popup = area;
@@ -62,7 +62,7 @@ fn render_duplicate_results_panel(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let block = Block::default()
@@ -170,7 +170,7 @@ fn render_results(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     helpers::fill_area(frame, area, palette.chrome_alt, palette.text);
@@ -371,7 +371,7 @@ fn render_duplicate_preview(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     state.preview_panel = Some(area);

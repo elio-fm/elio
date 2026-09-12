@@ -372,7 +372,7 @@ impl App {
     pub(crate) fn duplicate_preview_rendered(&self) -> bool {
         self.duplicate_finder.session.is_some()
             && self.duplicate_preview_visible()
-            && self.input.frame_state.preview_panel.is_some()
+            && self.input.screen_regions.preview_panel.is_some()
     }
 
     pub fn duplicate_cwd(&self) -> Option<&Path> {

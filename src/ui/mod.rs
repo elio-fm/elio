@@ -9,12 +9,12 @@ mod scrollbars;
 mod status_bar;
 
 use crate::{
-    app::{App, FrameState},
+    app::{App, ScreenRegions},
     config, theme,
 };
 use ratatui::{Frame, widgets::Block};
 
-pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut FrameState) {
+pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut ScreenRegions) {
     let palette = theme::palette();
     let ui_config = config::ui();
 

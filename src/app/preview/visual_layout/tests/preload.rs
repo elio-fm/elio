@@ -70,7 +70,7 @@ fn cached_adjacent_comic_page_queues_background_image_prepare() {
         readonly: false,
     }];
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -114,7 +114,7 @@ fn cached_adjacent_comic_page_queues_background_image_prepare() {
             .as_ref()
             .expect("adjacent preview should have a visual"),
         app.input
-            .frame_state
+            .screen_regions
             .preview_media_area
             .expect("preview media area should exist"),
     );
@@ -153,7 +153,7 @@ fn cached_adjacent_epub_section_queues_background_image_prepare() {
         readonly: false,
     }];
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -197,7 +197,7 @@ fn cached_adjacent_epub_section_queues_background_image_prepare() {
             .as_ref()
             .expect("adjacent preview should have a visual"),
         app.input
-            .frame_state
+            .screen_regions
             .preview_media_area
             .expect("preview media area should exist"),
     );
@@ -252,7 +252,7 @@ fn cached_adjacent_audio_cover_queues_background_image_prepare() {
         },
     ];
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -291,7 +291,7 @@ fn cached_adjacent_audio_cover_queues_background_image_prepare() {
             .as_ref()
             .expect("adjacent preview should have a visual"),
         app.input
-            .frame_state
+            .screen_regions
             .preview_media_area
             .expect("preview media area should exist"),
     );
@@ -315,7 +315,7 @@ fn stale_adjacent_comic_preview_result_immediately_queues_image_prepare() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -365,7 +365,7 @@ fn cached_adjacent_comic_entry_preview_immediately_queues_image_prepare() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,

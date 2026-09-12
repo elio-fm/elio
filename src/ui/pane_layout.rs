@@ -2,7 +2,7 @@ use super::file_browser_pane::render_file_browser_pane;
 use super::places_pane::render_places_pane;
 use super::preview_pane::render_preview_pane;
 use crate::{
-    app::{App, FrameState},
+    app::{App, ScreenRegions},
     config::{self, PaneWeights},
     theme::Palette,
 };
@@ -53,7 +53,7 @@ pub(in crate::ui) fn render_panes(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let layout = resolve_pane_layout(

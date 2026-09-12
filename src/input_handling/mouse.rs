@@ -30,7 +30,7 @@ impl App {
     #[cfg(any(unix, test))]
     fn entry_path_at(&self, column: u16, row: u16) -> Option<PathBuf> {
         self.input
-            .frame_state
+            .screen_regions
             .entry_hits
             .iter()
             .find(|hit| hit.rect.contains((column, row).into()))
@@ -114,28 +114,28 @@ impl App {
             MouseEventKind::Down(MouseButton::Left) => {
                 self.clear_drag_state();
                 self.update_wheel_target_from_position(mouse.column, mouse.row);
-                if let Some(rect) = self.input.frame_state.back_button
+                if let Some(rect) = self.input.screen_regions.back_button
                     && rect.contains((mouse.column, mouse.row).into())
                 {
                     return self.go_back();
                 }
-                if let Some(rect) = self.input.frame_state.forward_button
+                if let Some(rect) = self.input.screen_regions.forward_button
                     && rect.contains((mouse.column, mouse.row).into())
                 {
                     return self.go_forward();
                 }
-                if let Some(rect) = self.input.frame_state.parent_button
+                if let Some(rect) = self.input.screen_regions.parent_button
                     && rect.contains((mouse.column, mouse.row).into())
                 {
                     return self.go_parent();
                 }
-                if let Some(rect) = self.input.frame_state.hidden_button
+                if let Some(rect) = self.input.screen_regions.hidden_button
                     && rect.contains((mouse.column, mouse.row).into())
                 {
                     self.toggle_hidden_files()?;
                     return Ok(());
                 }
-                if let Some(rect) = self.input.frame_state.view_button
+                if let Some(rect) = self.input.screen_regions.view_button
                     && rect.contains((mouse.column, mouse.row).into())
                 {
                     self.toggle_view_mode();
@@ -144,7 +144,7 @@ impl App {
 
                 if let Some(target) = self
                     .input
-                    .frame_state
+                    .screen_regions
                     .sidebar_hits
                     .iter()
                     .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))
@@ -155,7 +155,7 @@ impl App {
 
                 if let Some(hit) = self
                     .input
-                    .frame_state
+                    .screen_regions
                     .entry_hits
                     .iter()
                     .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))
@@ -233,14 +233,14 @@ impl App {
     fn panel_target_at(&self, column: u16, row: u16) -> Option<WheelTarget> {
         if self
             .input
-            .frame_state
+            .screen_regions
             .preview_panel
             .is_some_and(|rect| rect.contains((column, row).into()))
         {
             Some(WheelTarget::Preview)
         } else if self
             .input
-            .frame_state
+            .screen_regions
             .entries_panel
             .is_some_and(|rect| rect.contains((column, row).into()))
         {
@@ -262,14 +262,14 @@ impl App {
             return Some(target);
         }
 
-        if let Some(preview) = self.input.frame_state.preview_panel
+        if let Some(preview) = self.input.screen_regions.preview_panel
             && column >= preview.x
         {
             self.input.last_wheel_target = Some(WheelTarget::Preview);
             return self.input.last_wheel_target;
         }
 
-        if let Some(entries) = self.input.frame_state.entries_panel
+        if let Some(entries) = self.input.screen_regions.entries_panel
             && column >= entries.x
             && column < entries.x.saturating_add(entries.width)
         {

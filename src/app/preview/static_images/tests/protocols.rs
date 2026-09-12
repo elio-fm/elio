@@ -54,7 +54,7 @@ fn prepared_full_pane_image_uses_aspect_fitted_kitty_placement() {
     let path = root.join("photo.jpg");
     write_test_raster_image(&path, ImageFormat::Jpeg, 1600, 900);
     set_single_unmodified_test_entry(&mut app, &path);
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 46,
         y: 2,
         width: 25,
@@ -126,13 +126,13 @@ fn iterm_static_image_requests_prepare_inline_payloads() {
 fn iterm_full_pane_static_image_clear_area_excludes_preview_header_and_border() {
     let (mut app, root, _) = build_selected_static_image_app("iterm-clear-area", "demo.png");
     configure_iterm_image_support(&mut app);
-    app.input.frame_state.preview_panel = Some(Rect {
+    app.input.screen_regions.preview_panel = Some(Rect {
         x: 1,
         y: 1,
         width: 50,
         height: 24,
     });
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -159,19 +159,19 @@ fn iterm_full_pane_static_image_clear_area_excludes_preview_header_and_border() 
 fn iterm_full_pane_static_image_erase_expands_to_body_bottom_edge() {
     let (mut app, root, _) = build_selected_static_image_app("iterm-erase-bottom-edge", "demo.png");
     configure_iterm_image_support(&mut app);
-    app.input.frame_state.preview_panel = Some(Rect {
+    app.input.screen_regions.preview_panel = Some(Rect {
         x: 1,
         y: 1,
         width: 50,
         height: 24,
     });
-    app.input.frame_state.preview_body_area = Some(Rect {
+    app.input.screen_regions.preview_body_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 21,
     });
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,

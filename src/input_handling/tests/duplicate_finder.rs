@@ -876,14 +876,14 @@ fn hidden_duplicate_preview_layout_keeps_content_target_but_no_image_surface() {
     overlay.preview_visible = true;
     app.preview.visible = false;
 
-    app.input.frame_state.preview_panel = None;
+    app.input.screen_regions.preview_panel = None;
     assert_eq!(
         app.active_preview_entry().map(|entry| entry.name),
         Some("alpha.webp".to_string())
     );
     assert!(!app.preview_surface_visible_for_images());
 
-    app.input.frame_state.preview_panel = Some(ratatui::layout::Rect {
+    app.input.screen_regions.preview_panel = Some(ratatui::layout::Rect {
         x: 40,
         y: 0,
         width: 20,
@@ -894,7 +894,7 @@ fn hidden_duplicate_preview_layout_keeps_content_target_but_no_image_surface() {
         app.active_preview_entry().map(|entry| entry.name),
         Some("alpha.webp".to_string())
     );
-    app.input.frame_state.preview_content_area = Some(ratatui::layout::Rect {
+    app.input.screen_regions.preview_content_area = Some(ratatui::layout::Rect {
         x: 40,
         y: 2,
         width: 20,
@@ -930,7 +930,7 @@ fn duplicate_scroll_clamps_when_visible_rows_increase() {
     overlay.selected = 83;
     overlay.scroll = 73;
 
-    app.input.frame_state.duplicate_rows_visible = 30;
+    app.input.screen_regions.duplicate_rows_visible = 30;
 
     assert!(app.sync_duplicate_scroll());
     assert_eq!(app.duplicate_scroll_top(), 54);

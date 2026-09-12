@@ -171,11 +171,11 @@ impl App {
                     .split(body_area)[0],
             );
         }
-        self.input.frame_state.preview_media_area
+        self.input.screen_regions.preview_media_area
     }
 
     fn current_preview_body_render_area(&self) -> Option<Rect> {
-        let body_area = self.input.frame_state.preview_body_area?;
+        let body_area = self.input.screen_regions.preview_body_area?;
         Some(if body_area.width >= 6 {
             Layout::default()
                 .direction(Direction::Horizontal)

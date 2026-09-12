@@ -93,7 +93,7 @@ impl App {
             MouseEventKind::Down(MouseButton::Left) => {
                 if let Some(hit) = self
                     .input
-                    .frame_state
+                    .screen_regions
                     .search_hits
                     .iter()
                     .find(|hit| hit.rect.contains((mouse.column, mouse.row).into()))
@@ -103,7 +103,7 @@ impl App {
                     self.confirm_search_selection()?;
                 } else if self
                     .input
-                    .frame_state
+                    .screen_regions
                     .search_panel
                     .is_none_or(|rect| !rect.contains((mouse.column, mouse.row).into()))
                 {
@@ -119,7 +119,7 @@ impl App {
     }
 
     fn page_search(&mut self, direction: isize) {
-        let visible = self.input.frame_state.search_rows_visible.max(1) as isize;
+        let visible = self.input.screen_regions.search_rows_visible.max(1) as isize;
         self.move_search_selection(direction * visible);
     }
 }

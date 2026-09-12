@@ -1,5 +1,9 @@
 use super::*;
 
+const AUTO_RELOAD_INTERVAL_SMALL: Duration = Duration::from_millis(500);
+const AUTO_RELOAD_INTERVAL_MEDIUM: Duration = Duration::from_secs(1);
+const AUTO_RELOAD_INTERVAL_LARGE: Duration = Duration::from_secs(2);
+
 impl App {
     pub(crate) fn refresh_git_branch(&mut self) {
         let (token, cwd) = self.file_browser.begin_git_status_refresh();

@@ -1,5 +1,5 @@
 use crate::{
-    app::{App, FrameState},
+    app::{App, ScreenRegions},
     theme::{self, Palette},
     ui::{
         helpers,
@@ -18,7 +18,7 @@ pub(in crate::ui) fn render_archive_create_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let item_count = app.archive_create_source_names().len();
@@ -149,7 +149,7 @@ fn render_contents_list(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
     visible_lines: usize,
 ) {

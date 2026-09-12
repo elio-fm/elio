@@ -302,7 +302,7 @@ impl App {
         }
         static_image_detail_label(entry)?;
 
-        let area = self.input.frame_state.preview_content_area?;
+        let area = self.input.screen_regions.preview_content_area?;
         if area.width == 0 || area.height == 0 {
             return None;
         }

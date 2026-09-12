@@ -385,17 +385,17 @@ impl App {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
                     .input
-                    .frame_state
+                    .screen_regions
                     .create_panel
                     .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
                     self.file_operations.create = None;
                     return Ok(());
                 }
-                if let Some(list_area) = self.input.frame_state.create_list_area
+                if let Some(list_area) = self.input.screen_regions.create_list_area
                     && list_area.contains((mouse.column, mouse.row).into())
                 {
-                    let scroll_top = self.input.frame_state.create_scroll_top;
+                    let scroll_top = self.input.screen_regions.create_scroll_top;
                     let row_offset = (mouse.row - list_area.y) as usize;
                     let line_idx = scroll_top + row_offset;
                     let line_count = self.create_line_count();

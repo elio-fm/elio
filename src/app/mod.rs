@@ -1,18 +1,16 @@
 mod actions;
-mod constants;
 mod directory_counts;
 mod job_results;
 pub(crate) mod preview;
+mod screen_regions;
 use crate::config;
 mod selection;
 mod state;
-mod types;
 
-use self::constants::*;
 #[cfg(test)]
-pub(crate) use self::constants::{
-    DIRECTORY_ITEM_COUNT_IDLE_DELAY, HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY,
-};
+pub(crate) use self::directory_counts::DIRECTORY_ITEM_COUNT_IDLE_DELAY;
+#[cfg(test)]
+pub(crate) use self::preview::HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY;
 #[cfg(test)]
 use crate::background_jobs::SchedulerMetricsSnapshot;
 use crate::background_jobs::job_requests as jobs;
@@ -62,8 +60,8 @@ pub(crate) use crate::filesystem::{
 #[cfg(test)]
 pub use crate::preview::PreviewMetricsSnapshot;
 
-pub use self::types::{
-    CopyHit, DuplicateHit, EntryHit, FrameState, GoToHit, OpenWithHit, PathHit, SearchHit,
+pub use self::screen_regions::{
+    CopyHit, DuplicateHit, EntryHit, GoToHit, OpenWithHit, PathHit, ScreenRegions, SearchHit,
     SearchScope, ViewMetrics,
 };
 pub use crate::file_browser::ViewMode;
@@ -77,22 +75,22 @@ pub use crate::places::PlaceItem;
 pub use crate::places::{PlaceKind, PlaceRow};
 
 impl App {
-    pub fn set_frame_state(&mut self, mut frame_state: FrameState) -> bool {
+    pub fn set_screen_regions(&mut self, mut screen_regions: ScreenRegions) -> bool {
         let duplicate_preview_was_rendered = self.duplicate_finder.session.is_some()
-            && self.input.frame_state.preview_panel.is_some();
+            && self.input.screen_regions.preview_panel.is_some();
         let previous_code_line_limit = self.active_preview_entry().map(|entry| {
             self.preview_code_line_limit_for_entry_with_rows(
                 &entry,
-                self.input.frame_state.preview_rows_visible,
+                self.input.screen_regions.preview_rows_visible,
             )
         });
-        if self.preview_fullscreen() && frame_state.entries_panel.is_none() {
-            frame_state.metrics = self.input.frame_state.metrics;
+        if self.preview_fullscreen() && screen_regions.entries_panel.is_none() {
+            screen_regions.metrics = self.input.screen_regions.metrics;
         }
-        self.input.frame_state = frame_state;
+        self.input.screen_regions = screen_regions;
         let mut dirty = self.sync_scroll() | self.sync_search_scroll() | self.sync_preview_scroll();
         let duplicate_preview_is_rendered = self.duplicate_finder.session.is_some()
-            && self.input.frame_state.preview_panel.is_some();
+            && self.input.screen_regions.preview_panel.is_some();
         if duplicate_preview_was_rendered && !duplicate_preview_is_rendered {
             self.queue_terminal_image_geometry_clear();
             self.clear_image_preview_selection_activation();
@@ -102,7 +100,7 @@ impl App {
         let next_code_line_limit = self.active_preview_entry().map(|entry| {
             self.preview_code_line_limit_for_entry_with_rows(
                 &entry,
-                self.input.frame_state.preview_rows_visible,
+                self.input.screen_regions.preview_rows_visible,
             )
         });
         if previous_code_line_limit != next_code_line_limit {

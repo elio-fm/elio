@@ -59,14 +59,14 @@ fn build_multi_static_image_app(label: &str, file_names: &[&str]) -> (App, PathB
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
     app.preview.pdf.pdf_tools_available = true;
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.input.frame_state.metrics.cols = 1;
-    app.input.frame_state.metrics.rows_visible = 6;
+    app.input.screen_regions.metrics.cols = 1;
+    app.input.screen_regions.metrics.rows_visible = 6;
     app.refresh_preview();
     (app, root)
 }
@@ -165,14 +165,14 @@ fn leaving_static_image_selection_clears_overlay_without_recursion() {
 
     let mut app = App::new_at(root.clone()).expect("app should initialize");
     configure_terminal_image_support(&mut app);
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.input.frame_state.metrics.cols = 1;
-    app.input.frame_state.metrics.rows_visible = 6;
+    app.input.screen_regions.metrics.cols = 1;
+    app.input.screen_regions.metrics.rows_visible = 6;
     app.refresh_preview();
 
     assert_eq!(

@@ -1,6 +1,9 @@
 use super::*;
 use std::{path::Path, time::Instant};
 
+pub(crate) const DIRECTORY_ITEM_COUNT_IDLE_DELAY: std::time::Duration =
+    std::time::Duration::from_millis(120);
+
 impl App {
     pub(crate) fn directory_item_count_label(&self, entry: &Entry) -> Option<String> {
         self.directory_item_count_value(entry)
@@ -25,8 +28,8 @@ impl App {
 
     pub(crate) fn queue_visible_directory_item_counts(&mut self) {
         self.file_browser.update_directory_count_viewport(
-            self.input.frame_state.metrics.cols,
-            self.input.frame_state.metrics.rows_visible,
+            self.input.screen_regions.metrics.cols,
+            self.input.screen_regions.metrics.rows_visible,
             self.effective_show_hidden(),
             Instant::now() + DIRECTORY_ITEM_COUNT_IDLE_DELAY,
         );
@@ -87,8 +90,8 @@ impl App {
             modified,
             show_hidden,
             self.effective_show_hidden(),
-            self.input.frame_state.metrics.cols,
-            self.input.frame_state.metrics.rows_visible,
+            self.input.screen_regions.metrics.cols,
+            self.input.screen_regions.metrics.rows_visible,
         )
     }
 
@@ -112,8 +115,8 @@ impl App {
 
     pub(super) fn visible_entry_indices(&self) -> Vec<usize> {
         self.file_browser.visible_entry_indices(
-            self.input.frame_state.metrics.cols,
-            self.input.frame_state.metrics.rows_visible,
+            self.input.screen_regions.metrics.cols,
+            self.input.screen_regions.metrics.rows_visible,
         )
     }
 }

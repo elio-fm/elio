@@ -2,7 +2,7 @@ use super::super::status_bar::{
     compact_footer_summary, git_label_for_width, render_status_bar, status_section_width,
 };
 use crate::{
-    app::{App, FrameState},
+    app::{App, ScreenRegions},
     theme,
     ui::helpers,
 };
@@ -89,7 +89,7 @@ fn git_branch_renders_after_position_summary() {
         "status row should place git branch after position summary, got: {rendered:?}"
     );
 
-    app.set_frame_state(FrameState::default());
+    app.set_screen_regions(ScreenRegions::default());
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp dir");
 }
@@ -117,7 +117,7 @@ fn dirty_git_branch_renders_star_suffix() {
         "status row should mark dirty git branches, got: {rendered:?}"
     );
 
-    app.set_frame_state(FrameState::default());
+    app.set_screen_regions(ScreenRegions::default());
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp dir");
 }
@@ -157,7 +157,7 @@ fn local_filter_renders_as_left_footer_command_line() {
         "inactive filter should keep a left footer indicator, got: {rendered:?}"
     );
 
-    app.set_frame_state(FrameState::default());
+    app.set_screen_regions(ScreenRegions::default());
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp dir");
 }
@@ -196,7 +196,7 @@ fn paste_status_chip_shows_queued_count() {
         "status row should show queued paste count, got: {rendered:?}"
     );
 
-    app.set_frame_state(FrameState::default());
+    app.set_screen_regions(ScreenRegions::default());
     drop(app);
     fs::remove_dir_all(src_dir).expect("failed to remove source dir");
     fs::remove_dir_all(dst_dir).expect("failed to remove destination dir");

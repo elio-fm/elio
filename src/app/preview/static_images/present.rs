@@ -234,7 +234,7 @@ impl App {
             }
             return self
                 .input
-                .frame_state
+                .screen_regions
                 .preview_content_area
                 .unwrap_or(request.area);
         }

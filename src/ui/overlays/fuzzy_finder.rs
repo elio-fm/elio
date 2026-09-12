@@ -1,5 +1,5 @@
 use crate::{
-    app::{App, FrameState, SearchHit, SearchScope},
+    app::{App, ScreenRegions, SearchHit, SearchScope},
     theme::{self, Palette},
     ui::{helpers, scrollbars::render_overlay_scrollbar},
 };
@@ -16,7 +16,7 @@ pub(in crate::ui) fn render_fuzzy_finder_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let popup_width = area.width.saturating_sub(8).clamp(48, 88);

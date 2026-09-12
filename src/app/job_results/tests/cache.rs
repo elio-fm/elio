@@ -105,10 +105,10 @@ fn archive_preview_resets_scroll_after_async_refresh() {
     fs::write(&text, "plain text").expect("failed to write text file");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_rows_visible: 4,
         preview_cols_visible: 40,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 

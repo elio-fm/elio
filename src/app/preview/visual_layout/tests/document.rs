@@ -43,13 +43,13 @@ fn build_displayed_iterm_inline_image_app(label: &str) -> (App, PathBuf) {
     }];
     app.file_browser.selected = 0;
     app.preview.image.selection_activation_delay = Duration::ZERO;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 12,
     });
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 15,
         width: 48,
@@ -245,7 +245,7 @@ fn document_page_image_prepares_in_background_before_display() {
     app.set_ffmpeg_available_for_tests(true);
     app.file_browser.entries.clear();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -325,19 +325,19 @@ fn iterm_inline_page_image_clear_area_stays_inside_media_area() {
     configure_iterm_image_support(&mut app);
     app.file_browser.entries.clear();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_panel = Some(Rect {
+    app.input.screen_regions.preview_panel = Some(Rect {
         x: 1,
         y: 1,
         width: 50,
         height: 24,
     });
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 12,
     });
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 15,
         width: 48,
@@ -400,7 +400,7 @@ fn document_overlay_keeps_previous_page_visible_while_next_page_waits() {
     app.set_ffmpeg_available_for_tests(true);
     app.file_browser.entries.clear();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
@@ -458,19 +458,19 @@ fn iterm_popup_masks_displayed_image_until_close() {
     configure_iterm_image_support(&mut app);
     app.file_browser.entries.clear();
     app.file_browser.selected = 0;
-    app.input.frame_state.preview_panel = Some(Rect {
+    app.input.screen_regions.preview_panel = Some(Rect {
         x: 1,
         y: 1,
         width: 50,
         height: 24,
     });
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 12,
     });
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 15,
         width: 48,
@@ -576,13 +576,13 @@ fn closing_open_with_popup_restores_iterm_inline_image() {
 fn iterm_modal_layout_change_repaints_image_behind_popup() {
     let (mut app, root) = build_displayed_iterm_inline_image_app("iterm-modal-layout-repaint");
 
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 36,
         height: 10,
     });
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 13,
         width: 36,
@@ -661,8 +661,8 @@ fn iterm_modal_repaints_image_when_preview_pane_reappears() {
         "resize clear should drop the stale logical image target"
     );
 
-    app.input.frame_state.preview_media_area = None;
-    app.input.frame_state.preview_content_area = None;
+    app.input.screen_regions.preview_media_area = None;
+    app.input.screen_regions.preview_content_area = None;
     assert!(
         app.active_static_image_overlay_request().is_none(),
         "hidden preview pane should remove the active static image target"
@@ -673,13 +673,13 @@ fn iterm_modal_repaints_image_when_preview_pane_reappears() {
             .is_empty()
     );
 
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 12,
     });
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 15,
         width: 48,
@@ -829,13 +829,13 @@ fn iterm_pre_draw_erase_detects_cover_layout_change_before_frame_update() {
     app.file_browser.entries.clear();
     app.file_browser.selected = 0;
     app.preview.image.selection_activation_delay = Duration::ZERO;
-    app.input.frame_state.preview_media_area = Some(Rect {
+    app.input.screen_regions.preview_media_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,
         height: 20,
     });
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 23,
         width: 48,
@@ -858,13 +858,13 @@ fn iterm_pre_draw_erase_detects_cover_layout_change_before_frame_update() {
     wait_for_displayed_preview_overlay(&mut app);
     assert!(app.static_image_overlay_displayed());
 
-    app.input.frame_state.preview_panel = Some(Rect {
+    app.input.screen_regions.preview_panel = Some(Rect {
         x: 1,
         y: 1,
         width: 50,
         height: 24,
     });
-    app.input.frame_state.preview_body_area = Some(Rect {
+    app.input.screen_regions.preview_body_area = Some(Rect {
         x: 2,
         y: 3,
         width: 48,

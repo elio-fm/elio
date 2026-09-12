@@ -82,10 +82,10 @@ impl App {
         let viewport = StaticImagePreloadViewport {
             selected: self.file_browser.selected,
             scroll_row: self.file_browser.scroll_row,
-            cols: self.input.frame_state.metrics.cols.max(1),
-            rows_visible: self.input.frame_state.metrics.rows_visible.max(1),
-            preview_content_area: self.input.frame_state.preview_content_area,
-            preview_media_area: self.input.frame_state.preview_media_area,
+            cols: self.input.screen_regions.metrics.cols.max(1),
+            rows_visible: self.input.screen_regions.metrics.rows_visible.max(1),
+            preview_content_area: self.input.screen_regions.preview_content_area,
+            preview_media_area: self.input.screen_regions.preview_media_area,
             protocol: self.preview.terminal_images.protocol,
             window: self.cached_terminal_window(),
         };

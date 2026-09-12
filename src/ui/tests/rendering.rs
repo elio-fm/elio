@@ -5,7 +5,7 @@ use super::super::helpers;
 use super::super::pane_layout::resolve_pane_layout;
 use super::super::places_pane::render_places_pane;
 use super::super::scrollbars::split_scrollbar_area;
-use crate::app::{App, FrameState, PlaceItem, PlaceKind, PlaceRow};
+use crate::app::{App, PlaceItem, PlaceKind, PlaceRow, ScreenRegions};
 use crate::config::PaneWeights;
 use crate::preview::default_code_preview_line_limit;
 use crate::theme;
@@ -26,13 +26,13 @@ fn temp_path(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!("elio-browser-{label}-{unique}"))
 }
 
-fn draw_ui(terminal: &mut Terminal<TestBackend>, app: &mut App) -> FrameState {
-    let mut frame_state = FrameState::default();
+fn draw_ui(terminal: &mut Terminal<TestBackend>, app: &mut App) -> ScreenRegions {
+    let mut screen_regions = ScreenRegions::default();
     terminal
-        .draw(|frame| ui::render(frame, app, &mut frame_state))
+        .draw(|frame| ui::render(frame, app, &mut screen_regions))
         .expect("ui should render");
-    app.set_frame_state(frame_state.clone());
-    frame_state
+    app.set_screen_regions(screen_regions.clone());
+    screen_regions
 }
 
 fn wait_for_directory_counts(app: &mut App) {
@@ -638,14 +638,14 @@ fn sidebar_clamps_long_labels_when_width_is_tight() {
     ))];
 
     let mut terminal = Terminal::new(TestBackend::new(14, 5)).expect("terminal should init");
-    let mut frame_state = FrameState::default();
+    let mut screen_regions = ScreenRegions::default();
     terminal
         .draw(|frame| {
             render_places_pane(
                 frame,
                 frame.area(),
                 &app,
-                &mut frame_state,
+                &mut screen_regions,
                 theme::palette(),
             );
         })
@@ -678,14 +678,14 @@ fn sidebar_uses_icons_only_at_icon_width() {
     ];
 
     let mut terminal = Terminal::new(TestBackend::new(5, 5)).expect("terminal should init");
-    let mut frame_state = FrameState::default();
+    let mut screen_regions = ScreenRegions::default();
     terminal
         .draw(|frame| {
             render_places_pane(
                 frame,
                 frame.area(),
                 &app,
-                &mut frame_state,
+                &mut screen_regions,
                 theme::palette(),
             );
         })
@@ -696,8 +696,8 @@ fn sidebar_uses_icons_only_at_icon_width() {
     assert!(!rendered.contains("Places"));
     assert!(!rendered.contains("Devices"));
     assert!(!rendered.contains("Down"));
-    assert_eq!(frame_state.sidebar_hits.len(), 1);
-    assert_eq!(frame_state.sidebar_hits[0].path, root);
+    assert_eq!(screen_regions.sidebar_hits.len(), 1);
+    assert_eq!(screen_regions.sidebar_hits[0].path, root);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -721,14 +721,14 @@ fn sidebar_sections_render_without_creating_click_targets() {
     ];
 
     let mut terminal = Terminal::new(TestBackend::new(18, 6)).expect("terminal should init");
-    let mut frame_state = FrameState::default();
+    let mut screen_regions = ScreenRegions::default();
     terminal
         .draw(|frame| {
             render_places_pane(
                 frame,
                 frame.area(),
                 &app,
-                &mut frame_state,
+                &mut screen_regions,
                 theme::palette(),
             );
         })
@@ -740,8 +740,8 @@ fn sidebar_sections_render_without_creating_click_targets() {
         row_text(terminal.backend().buffer(), 1).contains("│ Devices"),
         "section labels should align with the panel title, got: {rendered:?}"
     );
-    assert_eq!(frame_state.sidebar_hits.len(), 1);
-    assert_eq!(frame_state.sidebar_hits[0].path, drive);
+    assert_eq!(screen_regions.sidebar_hits.len(), 1);
+    assert_eq!(screen_regions.sidebar_hits[0].path, drive);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
@@ -769,14 +769,14 @@ fn sidebar_marks_symlinked_place_active_by_identity_path() {
     ))];
 
     let mut terminal = Terminal::new(TestBackend::new(18, 4)).expect("terminal should init");
-    let mut frame_state = FrameState::default();
+    let mut screen_regions = ScreenRegions::default();
     terminal
         .draw(|frame| {
             render_places_pane(
                 frame,
                 frame.area(),
                 &app,
-                &mut frame_state,
+                &mut screen_regions,
                 theme::palette(),
             );
         })
@@ -786,8 +786,8 @@ fn sidebar_marks_symlinked_place_active_by_identity_path() {
         row_text(terminal.backend().buffer(), 1).contains("▌"),
         "symlinked sidebar place should render as active"
     );
-    assert_eq!(frame_state.sidebar_hits.len(), 1);
-    assert_eq!(frame_state.sidebar_hits[0].path, linked);
+    assert_eq!(screen_regions.sidebar_hits.len(), 1);
+    assert_eq!(screen_regions.sidebar_hits[0].path, linked);
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

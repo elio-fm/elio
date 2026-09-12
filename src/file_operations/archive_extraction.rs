@@ -367,7 +367,7 @@ impl App {
         if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
             if self
                 .input
-                .frame_state
+                .screen_regions
                 .archive_password_visibility_btn
                 .is_some_and(|btn| btn.contains((mouse.column, mouse.row).into()))
             {
@@ -377,7 +377,7 @@ impl App {
 
             let inside = self
                 .input
-                .frame_state
+                .screen_regions
                 .archive_password_panel
                 .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
             if !inside {

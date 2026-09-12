@@ -646,8 +646,9 @@ fn archive_create_contents_list_scrolls_with_mouse_wheel() {
 
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('C'))))
         .expect("C should open archive creation");
-    app.input.frame_state.archive_create_panel = Some(ratatui::layout::Rect::new(0, 0, 40, 12));
-    app.input.frame_state.archive_create_list_area = Some(ratatui::layout::Rect::new(1, 4, 38, 8));
+    app.input.screen_regions.archive_create_panel = Some(ratatui::layout::Rect::new(0, 0, 40, 12));
+    app.input.screen_regions.archive_create_list_area =
+        Some(ratatui::layout::Rect::new(1, 4, 38, 8));
 
     app.handle_event(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,

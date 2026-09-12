@@ -325,7 +325,7 @@ fn step_pdf_page_queues_render_immediately_when_dimensions_are_cached() {
         page: 2,
         area: app
             .input
-            .frame_state
+            .screen_regions
             .preview_content_area
             .expect("preview content area should be set"),
     };
@@ -366,7 +366,7 @@ fn handle_pdf_overlay_resize_prunes_stale_render_variant_and_queues_new_current_
         pixels_width: 1000,
         pixels_height: 1000,
     });
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 16,
@@ -393,7 +393,7 @@ fn handle_pdf_overlay_resize_prunes_stale_render_variant_and_queues_new_current_
         .pending_renders
         .insert(old_render_key.clone());
 
-    app.input.frame_state.preview_content_area = Some(Rect {
+    app.input.screen_regions.preview_content_area = Some(Rect {
         x: 2,
         y: 3,
         width: 64,

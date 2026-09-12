@@ -181,7 +181,7 @@ impl App {
     }
 
     pub(crate) fn sync_search_scroll(&mut self) -> bool {
-        let rows_visible = self.input.frame_state.search_rows_visible;
+        let rows_visible = self.input.screen_regions.search_rows_visible;
         self.fuzzy_finder
             .search
             .as_mut()

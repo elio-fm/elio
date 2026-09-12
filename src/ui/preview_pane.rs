@@ -1,6 +1,6 @@
 use super::helpers;
 use super::scrollbars::render_preview_scrollbar;
-use crate::app::{App, FrameState};
+use crate::app::{App, ScreenRegions};
 use crate::theme::{self, Palette};
 use ratatui::{
     Frame,
@@ -15,7 +15,7 @@ pub(super) fn render_preview_pane(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     state.preview_panel = Some(area);
@@ -71,7 +71,7 @@ fn render_preview_body(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let sections = Layout::default()

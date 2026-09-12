@@ -1,4 +1,4 @@
-use crate::app::{App, FrameState};
+use crate::app::{App, ScreenRegions};
 use crate::{
     theme::Palette,
     ui::{helpers, scrollbars::render_overlay_scrollbar_on_bg},
@@ -15,7 +15,7 @@ pub(in crate::ui) fn render_editor_rename_confirm_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let item_count = app.editor_rename_confirm_count();

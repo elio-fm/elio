@@ -1,4 +1,4 @@
-use crate::app::{App, FrameState};
+use crate::app::{App, ScreenRegions};
 use crate::config::{KeyBindings, KeyList};
 use crate::{
     theme::Palette,
@@ -23,7 +23,7 @@ pub(in crate::ui) fn render_help_overlay(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let mode = if app.chooser_mode() {
@@ -174,7 +174,7 @@ fn render_wide_help(
     frame: &mut Frame<'_>,
     body: Rect,
     sections: &[HelpSection],
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     state.help_scroll_max = 0;
@@ -218,7 +218,7 @@ fn render_compact_help(
     body: Rect,
     sections: &[HelpSection],
     scroll_top: usize,
-    state: &mut FrameState,
+    state: &mut ScreenRegions,
     palette: Palette,
 ) {
     let visible = body.height as usize;

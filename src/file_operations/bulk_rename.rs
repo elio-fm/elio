@@ -325,17 +325,17 @@ impl App {
             MouseEventKind::Down(MouseButton::Left) => {
                 let inside = self
                     .input
-                    .frame_state
+                    .screen_regions
                     .rename_panel
                     .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
                 if !inside {
                     self.file_operations.bulk_rename = None;
                     return Ok(());
                 }
-                if let Some(list_area) = self.input.frame_state.bulk_rename_list_area
+                if let Some(list_area) = self.input.screen_regions.bulk_rename_list_area
                     && list_area.contains((mouse.column, mouse.row).into())
                 {
-                    let scroll_top = self.input.frame_state.bulk_rename_scroll_top;
+                    let scroll_top = self.input.screen_regions.bulk_rename_scroll_top;
                     let row_offset = (mouse.row - list_area.y) as usize;
                     let line_idx = scroll_top + row_offset;
                     let count = self.bulk_rename_item_count();

@@ -1,7 +1,9 @@
 use super::*;
 use crate::background_jobs::job_requests::DirectoryStatsRequest;
 use crate::preview::{PreviewContent, PreviewKind, loading_preview_for, preview_work_class};
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+const DIRECTORY_STATS_IDLE_DELAY: Duration = Duration::from_millis(180);
 
 impl App {
     pub(crate) fn clear_preview_directory_stats(&mut self) {

@@ -47,7 +47,7 @@ impl App {
 
     #[cfg(test)]
     pub fn preview_header_detail(&self, visible_rows: usize) -> Option<String> {
-        let visible_cols = self.input.frame_state.preview_cols_visible;
+        let visible_cols = self.input.screen_regions.preview_cols_visible;
         let detail = self
             .preview
             .state
@@ -99,7 +99,7 @@ impl App {
         let image_detail = self.static_image_preview_header_detail();
         self.preview.header_detail_for_width(
             visible_rows,
-            self.input.frame_state.preview_cols_visible,
+            self.input.screen_regions.preview_cols_visible,
             pdf_detail.as_deref(),
             image_detail.as_deref(),
             available_width,

@@ -16,7 +16,7 @@ fn preview_horizontal_scroll_works_in_list_view() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -25,7 +25,7 @@ fn preview_horizontal_scroll_works_in_list_view() {
         }),
         preview_rows_visible: 6,
         preview_cols_visible: 12,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.handle_event(Event::Mouse(MouseEvent {
@@ -57,7 +57,7 @@ fn preview_scroll_resets_when_reselecting_a_file() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -66,7 +66,7 @@ fn preview_scroll_resets_when_reselecting_a_file() {
         }),
         preview_rows_visible: 4,
         preview_cols_visible: 40,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
     wait_for_background_preview(&mut app);
 
@@ -102,7 +102,7 @@ fn preview_horizontal_scroll_resets_when_reselecting_code() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.file_browser.view_mode = ViewMode::List;
     app.select_index(0);
-    app.set_frame_state(FrameState {
+    app.set_screen_regions(ScreenRegions {
         preview_panel: Some(Rect {
             x: 0,
             y: 0,
@@ -111,7 +111,7 @@ fn preview_horizontal_scroll_resets_when_reselecting_code() {
         }),
         preview_rows_visible: 6,
         preview_cols_visible: 12,
-        ..FrameState::default()
+        ..ScreenRegions::default()
     });
 
     app.preview.state.horizontal_scroll = 3;
