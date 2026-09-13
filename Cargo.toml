@@ -17,7 +17,7 @@ blake3 = "1"
 color_quant = "1.1"
 dirs = "7.0"
 libc = "0.2"
-base64 = "0.22"
+base64 = { version = "0.23", default-features = false, features = ["std"] }
 cfb = "0.14"
 crossterm = "0.29"
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
