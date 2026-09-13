@@ -52,6 +52,7 @@ fn watcher_reload_detects_new_visible_entries() {
             .any(|entry| entry.name == "two.txt")
     );
 
+    drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -94,6 +95,7 @@ fn watcher_rescan_event_triggers_reload() {
             .any(|entry| entry.name == "two.txt")
     );
 
+    drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -132,6 +134,7 @@ fn watcher_reload_ignores_hidden_entries_when_hidden_files_are_off() {
     assert_eq!(app.file_browser.entries.len(), 1);
     assert_eq!(app.file_browser.entries[0].name, "visible.txt");
 
+    drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -160,6 +163,7 @@ fn sidebar_refresh_rebuilds_places_once_per_interval() {
     );
     assert_eq!(app.places.rows, sidebar_after_refresh);
 
+    drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -190,6 +194,7 @@ fn polling_fallback_respects_its_throttle_window() {
     wait_for_directory_reload(&mut app, 2);
     assert_eq!(app.file_browser.entries.len(), 2);
 
+    drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -208,6 +213,7 @@ fn set_dir_failure_keeps_previous_directory_state() {
     assert!(app.file_browser.directory_history.back.is_empty());
     assert!(app.file_browser.directory_history.forward.is_empty());
 
+    drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -234,6 +240,7 @@ fn go_back_failure_preserves_history() {
     );
     assert!(app.file_browser.directory_history.forward.is_empty());
 
+    drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -263,6 +270,7 @@ fn reload_restores_latest_remembered_view_state() {
     assert_eq!(app.file_browser.selected, 6);
     assert_eq!(app.file_browser.scroll_row, 4);
 
+    drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
@@ -306,5 +314,6 @@ fn same_directory_reselect_updates_pending_load_instead_of_dropping_it() {
         other => panic!("expected status completion, got {other:?}"),
     }
 
+    drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
