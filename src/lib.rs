@@ -1,3 +1,11 @@
+//! elio is a snappy, batteries-included terminal file manager.
+//!
+//! This crate is published for installing elio through Cargo. Its library
+//! interface is intended for internal use and may change without notice.
+//!
+//! See the [elio documentation](https://elio-fm.github.io/) for installation,
+//! configuration, and usage.
+
 mod app;
 mod archive;
 mod background_jobs;
@@ -24,6 +32,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 
 #[derive(Debug, Default)]
+#[doc(hidden)]
 pub struct RunOptions {
     pub start_dir: Option<PathBuf>,
     pub cwd_file: Option<PathBuf>,
@@ -36,10 +45,12 @@ pub enum RunOutcome {
     Cancelled,
 }
 
+#[doc(hidden)]
 pub fn run() -> Result<()> {
     run_with_options(RunOptions::default())
 }
 
+#[doc(hidden)]
 pub fn run_at(cwd: PathBuf) -> Result<()> {
     run_with_options(RunOptions {
         start_dir: Some(cwd),
@@ -47,6 +58,7 @@ pub fn run_at(cwd: PathBuf) -> Result<()> {
     })
 }
 
+#[doc(hidden)]
 pub fn run_with_options(options: RunOptions) -> Result<()> {
     run_with_startup_options(options, None, false, None, None, None).map(|_| ())
 }
