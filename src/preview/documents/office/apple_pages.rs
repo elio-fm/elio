@@ -110,9 +110,7 @@ fn parse_plist_dict(xml: &str) -> Option<BTreeMap<String, String>> {
                 current_tag = None;
             }
             Ok(Event::Text(text)) => {
-                let Ok(value) = text.decode() else {
-                    continue;
-                };
+                let value: &str = text.as_ref();
                 let value = value.trim();
                 if value.is_empty() {
                     continue;

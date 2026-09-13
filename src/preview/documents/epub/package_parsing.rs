@@ -56,10 +56,7 @@ pub(super) fn parse_epub_rootfile_path(xml: &str) -> Option<String> {
                         continue;
                     }
                     let value = attribute
-                        .decoded_and_normalized_value(
-                            quick_xml::XmlVersion::Implicit1_0,
-                            reader.decoder(),
-                        )
+                        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                         .ok()?;
                     let value = value.trim();
                     if !value.is_empty() {
@@ -87,16 +84,16 @@ pub(super) fn parse_epub_package_document(xml: &str) -> EpubPackageDocument {
                 match tag.as_str() {
                     "metadata" | "manifest" => {}
                     "spine" if package.toc_id.is_none() => {
-                        package.toc_id = xml_attribute_value(&event, reader.decoder(), "toc");
+                        package.toc_id = xml_attribute_value(&event, "toc");
                     }
                     "item" if stack.last().is_some_and(|section| section == "manifest") => {
-                        register_epub_manifest_item(&mut package, &event, reader.decoder());
+                        register_epub_manifest_item(&mut package, &event);
                     }
                     "itemref" if stack.last().is_some_and(|section| section == "spine") => {
-                        register_epub_spine_itemref(&mut package, &event, reader.decoder());
+                        register_epub_spine_itemref(&mut package, &event);
                     }
                     "meta" if stack.last().is_some_and(|section| section == "metadata") => {
-                        register_epub_meta(&mut package, &event, reader.decoder());
+                        register_epub_meta(&mut package, &event);
                     }
                     "title" | "subject" | "creator" | "language" | "publisher" | "identifier"
                     | "date"
@@ -112,13 +109,13 @@ pub(super) fn parse_epub_package_document(xml: &str) -> EpubPackageDocument {
                 let tag = local_name(event.name().as_ref());
                 match tag.as_str() {
                     "item" if stack.last().is_some_and(|section| section == "manifest") => {
-                        register_epub_manifest_item(&mut package, &event, reader.decoder());
+                        register_epub_manifest_item(&mut package, &event);
                     }
                     "itemref" if stack.last().is_some_and(|section| section == "spine") => {
-                        register_epub_spine_itemref(&mut package, &event, reader.decoder());
+                        register_epub_spine_itemref(&mut package, &event);
                     }
                     "meta" if stack.last().is_some_and(|section| section == "metadata") => {
-                        register_epub_meta(&mut package, &event, reader.decoder());
+                        register_epub_meta(&mut package, &event);
                     }
                     _ => {}
                 }
@@ -127,10 +124,7 @@ pub(super) fn parse_epub_package_document(xml: &str) -> EpubPackageDocument {
                 let Some(tag) = current_metadata_tag.as_deref() else {
                     continue;
                 };
-                let Ok(value) = text.decode() else {
-                    continue;
-                };
-                assign_epub_metadata_text(&mut package.metadata, tag, value.as_ref());
+                assign_epub_metadata_text(&mut package.metadata, tag, text.as_ref());
             }
             Ok(Event::End(event)) => {
                 let tag = local_name(event.name().as_ref());
@@ -201,16 +195,15 @@ pub(super) fn epub_manifest_item_is_text(item: &EpubManifestItem) -> bool {
 fn register_epub_manifest_item(
     package: &mut EpubPackageDocument,
     event: &quick_xml::events::BytesStart<'_>,
-    decoder: quick_xml::encoding::Decoder,
 ) {
-    let Some(id) = xml_attribute_value(event, decoder, "id") else {
+    let Some(id) = xml_attribute_value(event, "id") else {
         return;
     };
-    let Some(href) = xml_attribute_value(event, decoder, "href") else {
+    let Some(href) = xml_attribute_value(event, "href") else {
         return;
     };
-    let media_type = xml_attribute_value(event, decoder, "media-type");
-    let properties = xml_attribute_value(event, decoder, "properties")
+    let media_type = xml_attribute_value(event, "media-type");
+    let properties = xml_attribute_value(event, "properties")
         .map(|value| {
             value
                 .split_whitespace()
@@ -237,15 +230,11 @@ fn register_epub_manifest_item(
 fn register_epub_spine_itemref(
     package: &mut EpubPackageDocument,
     event: &quick_xml::events::BytesStart<'_>,
-    decoder: quick_xml::encoding::Decoder,
 ) {
-    if matches!(
-        xml_attribute_value(event, decoder, "linear").as_deref(),
-        Some("no")
-    ) {
+    if matches!(xml_attribute_value(event, "linear").as_deref(), Some("no")) {
         return;
     }
-    if let Some(idref) = xml_attribute_value(event, decoder, "idref") {
+    if let Some(idref) = xml_attribute_value(event, "idref") {
         package.spine.push(idref);
     }
 }
@@ -253,11 +242,10 @@ fn register_epub_spine_itemref(
 fn register_epub_meta(
     package: &mut EpubPackageDocument,
     event: &quick_xml::events::BytesStart<'_>,
-    decoder: quick_xml::encoding::Decoder,
 ) {
-    let name = xml_attribute_value(event, decoder, "name");
-    let property = xml_attribute_value(event, decoder, "property");
-    let content = xml_attribute_value(event, decoder, "content");
+    let name = xml_attribute_value(event, "name");
+    let property = xml_attribute_value(event, "property");
+    let content = xml_attribute_value(event, "content");
 
     if name.as_deref() == Some("cover") && package.cover_id.is_none() {
         package.cover_id = content.clone();

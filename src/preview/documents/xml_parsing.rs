@@ -3,14 +3,13 @@ use std::collections::BTreeMap;
 
 pub(super) fn xml_attribute_value(
     event: &quick_xml::events::BytesStart<'_>,
-    decoder: quick_xml::encoding::Decoder,
     name: &str,
 ) -> Option<String> {
     event.attributes().flatten().find_map(|attribute| {
         (local_name(attribute.key.as_ref()) == name)
             .then(|| {
                 attribute
-                    .decoded_and_normalized_value(quick_xml::XmlVersion::Implicit1_0, decoder)
+                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                     .ok()
             })
             .flatten()
@@ -34,10 +33,9 @@ pub(super) fn parse_xml_text_fields(xml: &str) -> BTreeMap<String, String> {
                 if tag == "document-statistic" {
                     for attribute in event.attributes().flatten() {
                         let key = local_name(attribute.key.as_ref());
-                        if let Ok(value) = attribute.decoded_and_normalized_value(
-                            quick_xml::XmlVersion::Implicit1_0,
-                            reader.decoder(),
-                        ) {
+                        if let Ok(value) =
+                            attribute.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                        {
                             let value = value.trim();
                             if !value.is_empty() {
                                 fields.insert(key, value.to_string());
@@ -51,10 +49,9 @@ pub(super) fn parse_xml_text_fields(xml: &str) -> BTreeMap<String, String> {
                 if local_name(event.name().as_ref()) == "document-statistic" {
                     for attribute in event.attributes().flatten() {
                         let key = local_name(attribute.key.as_ref());
-                        if let Ok(value) = attribute.decoded_and_normalized_value(
-                            quick_xml::XmlVersion::Implicit1_0,
-                            reader.decoder(),
-                        ) {
+                        if let Ok(value) =
+                            attribute.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                        {
                             let value = value.trim();
                             if !value.is_empty() {
                                 fields.insert(key, value.to_string());
@@ -65,10 +62,8 @@ pub(super) fn parse_xml_text_fields(xml: &str) -> BTreeMap<String, String> {
                 current_text_tag = None;
             }
             Ok(Event::Text(text)) => {
-                if let Some(tag) = &current_text_tag
-                    && let Ok(value) = text.decode()
-                {
-                    let value = value.trim();
+                if let Some(tag) = &current_text_tag {
+                    let value = text.trim();
                     if !value.is_empty() {
                         fields
                             .entry(tag.clone())
@@ -85,7 +80,10 @@ pub(super) fn parse_xml_text_fields(xml: &str) -> BTreeMap<String, String> {
     fields
 }
 
-pub(super) fn local_name(name: &[u8]) -> String {
-    let name = std::str::from_utf8(name).unwrap_or_default();
+pub(super) fn local_name(name: &str) -> String {
     name.rsplit(':').next().unwrap_or(name).to_string()
 }
+
+#[cfg(test)]
+#[path = "tests/xml_parsing.rs"]
+mod tests;

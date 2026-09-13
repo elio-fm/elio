@@ -133,17 +133,13 @@ fn extract_xhtml_text_blocks(xml: &str) -> Vec<String> {
                 if body_depth == 0 || skip_depth > 0 {
                     continue;
                 }
-                if let Ok(value) = text.decode() {
-                    append_epub_text_fragment(&mut current, value.as_ref());
-                }
+                append_epub_text_fragment(&mut current, text.as_ref());
             }
             Ok(Event::CData(text)) => {
                 if body_depth == 0 || skip_depth > 0 {
                     continue;
                 }
-                if let Ok(value) = text.decode() {
-                    append_epub_text_fragment(&mut current, value.as_ref());
-                }
+                append_epub_text_fragment(&mut current, text.as_ref());
             }
             Ok(Event::End(event)) => {
                 let tag = local_name(event.name().as_ref());
@@ -186,15 +182,15 @@ fn extract_xhtml_image_href(xml: &str) -> Option<String> {
                     continue;
                 }
                 if tag == "img" {
-                    if let Some(src) = xml_attribute_value(&event, reader.decoder(), "src") {
+                    if let Some(src) = xml_attribute_value(&event, "src") {
                         return Some(src);
                     }
                 } else if tag == "image" {
-                    if let Some(href) = xml_attribute_value(&event, reader.decoder(), "href") {
+                    if let Some(href) = xml_attribute_value(&event, "href") {
                         return Some(href);
                     }
                 } else if tag == "object"
-                    && let Some(data) = xml_attribute_value(&event, reader.decoder(), "data")
+                    && let Some(data) = xml_attribute_value(&event, "data")
                 {
                     return Some(data);
                 }
@@ -205,15 +201,15 @@ fn extract_xhtml_image_href(xml: &str) -> Option<String> {
                     continue;
                 }
                 if tag == "img" {
-                    if let Some(src) = xml_attribute_value(&event, reader.decoder(), "src") {
+                    if let Some(src) = xml_attribute_value(&event, "src") {
                         return Some(src);
                     }
                 } else if tag == "image" {
-                    if let Some(href) = xml_attribute_value(&event, reader.decoder(), "href") {
+                    if let Some(href) = xml_attribute_value(&event, "href") {
                         return Some(href);
                     }
                 } else if tag == "object"
-                    && let Some(data) = xml_attribute_value(&event, reader.decoder(), "data")
+                    && let Some(data) = xml_attribute_value(&event, "data")
                 {
                     return Some(data);
                 }
@@ -294,3 +290,7 @@ fn epub_section_truncation_note() -> String {
         EPUB_SECTION_TEXT_LIMIT_CHARS / 1024
     )
 }
+
+#[cfg(test)]
+#[path = "tests/xml_migration.rs"]
+mod xml_migration_tests;
