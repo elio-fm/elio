@@ -42,7 +42,7 @@ trash = "5.2.5"
 rusqlite = { version = "0.40", features = ["bundled"] }
 xz2 = { version = "0.1.7", features = ["static"] }
 bzip2 = "0.6.1"
-zstd = { version = "0.13.3", default-features = false }
+zstd = { version = "0.14", default-features = false }
 sevenz-rust2 = { version = "0.22", default-features = false, features = ["aes256", "compress"] }
 
 [dev-dependencies]
