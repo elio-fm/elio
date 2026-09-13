@@ -113,7 +113,7 @@ fn parse_epub_nav_toc(xml: &str) -> Vec<EpubNavPoint> {
             Ok(Event::Start(event)) => {
                 let tag = local_name(event.name().as_ref());
                 if tag == "nav" {
-                    nav_stack.push(epub_nav_is_toc(&event, reader.decoder()));
+                    nav_stack.push(epub_nav_is_toc(&event));
                     continue;
                 }
                 if !epub_nav_stack_active(&nav_stack) {
@@ -126,7 +126,7 @@ fn parse_epub_nav_toc(xml: &str) -> Vec<EpubNavPoint> {
                         current_href = None;
                     }
                 } else if tag == "a" && item_depth > 0 && current_href.is_none() {
-                    current_href = xml_attribute_value(&event, reader.decoder(), "href");
+                    current_href = xml_attribute_value(&event, "href");
                 }
             }
             Ok(Event::Empty(event)) => {
@@ -137,16 +137,14 @@ fn parse_epub_nav_toc(xml: &str) -> Vec<EpubNavPoint> {
                 if tag == "br" {
                     append_epub_text_fragment(&mut current_label, " ");
                 } else if tag == "a" && current_href.is_none() {
-                    current_href = xml_attribute_value(&event, reader.decoder(), "href");
+                    current_href = xml_attribute_value(&event, "href");
                 }
             }
             Ok(Event::Text(text)) => {
                 if !epub_nav_stack_active(&nav_stack) || item_depth == 0 {
                     continue;
                 }
-                if let Ok(value) = text.decode() {
-                    append_epub_text_fragment(&mut current_label, value.as_ref());
-                }
+                append_epub_text_fragment(&mut current_label, text.as_ref());
             }
             Ok(Event::End(event)) => {
                 let tag = local_name(event.name().as_ref());
@@ -200,7 +198,7 @@ fn parse_ncx_toc(xml: &str) -> Vec<EpubNavPoint> {
                     }
                     "text" if in_label => in_text = true,
                     "content" if nav_depth > 0 && current_href.is_none() => {
-                        current_href = xml_attribute_value(&event, reader.decoder(), "src");
+                        current_href = xml_attribute_value(&event, "src");
                     }
                     _ => {}
                 }
@@ -208,14 +206,11 @@ fn parse_ncx_toc(xml: &str) -> Vec<EpubNavPoint> {
             Ok(Event::Empty(event))
                 if nav_depth > 0 && local_name(event.name().as_ref()) == "content" =>
             {
-                current_href = xml_attribute_value(&event, reader.decoder(), "src");
+                current_href = xml_attribute_value(&event, "src");
             }
             Ok(Event::Text(text)) => {
-                if in_label
-                    && in_text
-                    && let Ok(value) = text.decode()
-                {
-                    append_epub_text_fragment(&mut current_label, value.as_ref());
+                if in_label && in_text {
+                    append_epub_text_fragment(&mut current_label, text.as_ref());
                 }
             }
             Ok(Event::End(event)) => {
@@ -240,15 +235,10 @@ fn parse_ncx_toc(xml: &str) -> Vec<EpubNavPoint> {
     items
 }
 
-fn epub_nav_is_toc(
-    event: &quick_xml::events::BytesStart<'_>,
-    decoder: quick_xml::encoding::Decoder,
-) -> bool {
+fn epub_nav_is_toc(event: &quick_xml::events::BytesStart<'_>) -> bool {
     event.attributes().flatten().any(|attribute| {
         let key = local_name(attribute.key.as_ref());
-        let Ok(value) =
-            attribute.decoded_and_normalized_value(quick_xml::XmlVersion::Implicit1_0, decoder)
-        else {
+        let Ok(value) = attribute.normalized_value(quick_xml::XmlVersion::Implicit1_0) else {
             return false;
         };
         let value = value.trim();

@@ -131,7 +131,7 @@ pub(super) fn parse_comic_metadata_xml(xml: &str) -> Option<ComicInfoMetadata> {
                         .is_some_and(|parent| parent == "book-info")
                 {
                     state.current_acbf_author = Some(AcbfAuthorDraft {
-                        activity: xml_attribute_value(&event, reader.decoder(), "activity"),
+                        activity: xml_attribute_value(&event, "activity"),
                         ..Default::default()
                     });
                 }
@@ -143,11 +143,11 @@ pub(super) fn parse_comic_metadata_xml(xml: &str) -> Option<ComicInfoMetadata> {
                 {
                     set_comic_info_field(
                         &mut state.metadata.series,
-                        xml_attribute_value(&event, reader.decoder(), "title").as_deref(),
+                        xml_attribute_value(&event, "title").as_deref(),
                     );
                     set_comic_info_field(
                         &mut state.metadata.volume,
-                        xml_attribute_value(&event, reader.decoder(), "volume").as_deref(),
+                        xml_attribute_value(&event, "volume").as_deref(),
                     );
                 }
                 if tag == "publish-date"
@@ -155,21 +155,17 @@ pub(super) fn parse_comic_metadata_xml(xml: &str) -> Option<ComicInfoMetadata> {
                         .path
                         .last()
                         .is_some_and(|parent| parent == "publish-info")
-                    && let Some(value) = xml_attribute_value(&event, reader.decoder(), "value")
+                    && let Some(value) = xml_attribute_value(&event, "value")
                 {
                     set_comic_info_year_from_date(&mut state.metadata.year, &value);
                 }
                 state.path.push(tag);
             }
             Ok(Event::Text(text)) => {
-                if let Ok(value) = text.decode() {
-                    assign_comic_xml_text(&mut state, value.as_ref());
-                }
+                assign_comic_xml_text(&mut state, text.as_ref());
             }
             Ok(Event::CData(text)) => {
-                if let Ok(value) = text.decode() {
-                    assign_comic_xml_text(&mut state, value.as_ref());
-                }
+                assign_comic_xml_text(&mut state, text.as_ref());
             }
             Ok(Event::End(event)) => {
                 let tag = xml_local_name(event.name().as_ref()).to_ascii_lowercase();
@@ -520,25 +516,18 @@ fn set_comic_info_year_from_date(field: &mut Option<String>, value: &str) {
     set_comic_info_field(field, year);
 }
 
-fn xml_local_name(name: &[u8]) -> String {
-    let local = name
-        .iter()
-        .position(|byte| *byte == b':')
-        .map(|index| &name[index + 1..])
-        .unwrap_or(name);
-    String::from_utf8_lossy(local).to_string()
+fn xml_local_name(name: &str) -> String {
+    name.split_once(':')
+        .map_or(name, |(_, local)| local)
+        .to_string()
 }
 
-fn xml_attribute_value(
-    event: &quick_xml::events::BytesStart<'_>,
-    decoder: quick_xml::encoding::Decoder,
-    name: &str,
-) -> Option<String> {
+fn xml_attribute_value(event: &quick_xml::events::BytesStart<'_>, name: &str) -> Option<String> {
     event.attributes().flatten().find_map(|attribute| {
         (xml_local_name(attribute.key.as_ref()).eq_ignore_ascii_case(name))
             .then(|| {
                 attribute
-                    .decoded_and_normalized_value(quick_xml::XmlVersion::Implicit1_0, decoder)
+                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                     .ok()
             })
             .flatten()

@@ -203,22 +203,19 @@ pub(super) fn read_svg_dimensions(path: &Path) -> Option<RenderedImageDimensions
     let mut buffer = Vec::new();
     loop {
         match reader.read_event_into(&mut buffer).ok()? {
-            Event::Start(tag) | Event::Empty(tag) if tag.name().as_ref() == b"svg" => {
+            Event::Start(tag) | Event::Empty(tag) if tag.name().as_ref() == "svg" => {
                 let mut width = None;
                 let mut height = None;
                 let mut view_box = None;
                 for attribute in tag.attributes().flatten() {
                     let key = attribute.key.as_ref();
                     let value = attribute
-                        .decoded_and_normalized_value(
-                            quick_xml::XmlVersion::Implicit1_0,
-                            reader.decoder(),
-                        )
+                        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                         .ok()?;
                     match key {
-                        b"width" => width = parse_svg_length_px(&value),
-                        b"height" => height = parse_svg_length_px(&value),
-                        b"viewBox" => view_box = parse_svg_view_box(&value),
+                        "width" => width = parse_svg_length_px(&value),
+                        "height" => height = parse_svg_length_px(&value),
+                        "viewBox" => view_box = parse_svg_view_box(&value),
                         _ => {}
                     }
                 }
