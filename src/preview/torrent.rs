@@ -204,7 +204,7 @@ impl TorrentMetadata {
     }
 
     fn normalize_trackers(&mut self) {
-        let mut normalized = self.announce_tiers.drain(..).collect::<Vec<_>>();
+        let mut normalized = std::mem::take(&mut self.announce_tiers);
         if let Some(primary) = self.announce.take().filter(|value| !value.is_empty()) {
             if normalized.is_empty() {
                 normalized.push(vec![primary]);

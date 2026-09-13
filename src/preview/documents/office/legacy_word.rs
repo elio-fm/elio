@@ -149,7 +149,7 @@ fn parse_lpwstr(bytes: &[u8], offset: usize) -> Option<String> {
     let byte_len = length.checked_mul(2)?;
     let slice = bytes.get(offset + 4..offset + 4 + byte_len)?;
     let mut units = Vec::with_capacity(length);
-    for chunk in slice.chunks_exact(2) {
+    for chunk in slice.as_chunks::<2>().0 {
         units.push(u16::from_le_bytes([chunk[0], chunk[1]]));
     }
     if let Some(0) = units.last().copied() {

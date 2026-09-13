@@ -263,7 +263,9 @@ fn decode_utf16_preview(buffer: &[u8]) -> Option<String> {
     }
 
     let units = content[..unit_len * 2]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| match endian {
             Utf16Endian::Little => u16::from_le_bytes([chunk[0], chunk[1]]),
             Utf16Endian::Big => u16::from_be_bytes([chunk[0], chunk[1]]),
@@ -312,7 +314,7 @@ fn count_utf16_lines(mut reader: BufReader<File>, endian: Utf16Endian) -> anyhow
 
         pending.extend_from_slice(&buffer[..read]);
         let complete_len = pending.len() - (pending.len() % 2);
-        for chunk in pending[..complete_len].chunks_exact(2) {
+        for chunk in pending[..complete_len].as_chunks::<2>().0 {
             let unit = match endian {
                 Utf16Endian::Little => u16::from_le_bytes([chunk[0], chunk[1]]),
                 Utf16Endian::Big => u16::from_be_bytes([chunk[0], chunk[1]]),
