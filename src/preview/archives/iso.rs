@@ -57,7 +57,7 @@ pub(in crate::preview) fn parse_iso_metadata(bytes: &[u8]) -> Option<IsoMetadata
         return None;
     }
 
-    for descriptor in bytes[start..].chunks_exact(ISO_SECTOR_SIZE) {
+    for descriptor in bytes[start..].as_chunks::<ISO_SECTOR_SIZE>().0 {
         if descriptor.get(1..6) != Some(b"CD001".as_slice()) {
             continue;
         }
