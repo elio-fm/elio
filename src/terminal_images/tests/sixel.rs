@@ -220,31 +220,58 @@ fn encode_sixel_dcs_returns_dcs_without_cursor_prefix() {
 }
 
 #[test]
-fn sixel_encode_profile_uses_aggressive_settings_for_foot() {
+fn sixel_preserves_256_distinct_colors_in_foot() {
     let _lock = terminal_env_lock();
     let _guard = TerminalEnvGuard::isolate();
     unsafe {
         std::env::set_var("TERM", "foot");
     }
+    let img = image::RgbImage::from_fn(16, 16, |x, y| {
+        let i = y * 16 + x;
+        image::Rgb([
+            (i % 8 * 32) as u8,
+            (i / 8 % 8 * 32) as u8,
+            (i / 64 * 64) as u8,
+        ])
+    });
+    let root = temp_root("sixel-full-palette");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("palette.png");
+    img.save(&path).expect("test palette should save");
+    let dcs = encode_sixel_dcs(&path, 16, 16).expect("full palette encoding should succeed");
+    let output = std::str::from_utf8(&dcs).expect("sixel should be utf8");
 
-    let profile = sixel_encode_profile();
-
-    assert_eq!(profile.color_limit, SIXEL_COLOR_LIMIT_FOOT);
-    assert_eq!(profile.neuquant_sample, SIXEL_NEUQUANT_SAMPLE_FOOT);
+    assert_eq!(output.matches(";2;").count(), 256);
+    for pixel in img.pixels() {
+        let percent = |c: u8| (u32::from(c) * 100 + 127) / 255;
+        let color = format!(
+            ";2;{};{};{}",
+            percent(pixel[0]),
+            percent(pixel[1]),
+            percent(pixel[2])
+        );
+        assert!(output.contains(&color), "missing original color {pixel:?}");
+    }
+    fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
 #[test]
-fn sixel_encode_profile_keeps_full_palette_elsewhere() {
-    let _lock = terminal_env_lock();
-    let _guard = TerminalEnvGuard::isolate();
-    unsafe {
-        std::env::set_var("TERM", "xterm-kitty");
-    }
+fn sixel_composites_transparency_over_panel_background() {
+    let img = image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 255, 0]));
+    let dcs = encode_sixel_dcs_from_image(img.into(), 1, 1)
+        .expect("transparent image encoding should succeed");
+    let output = std::str::from_utf8(&dcs).expect("sixel should be utf8");
+    let (r, g, b) = panel_background();
+    let percent = |c: u8| (u32::from(c) * 100 + 127) / 255;
 
-    let profile = sixel_encode_profile();
-
-    assert_eq!(profile.color_limit, SIXEL_COLOR_LIMIT_DEFAULT);
-    assert_eq!(profile.neuquant_sample, SIXEL_NEUQUANT_SAMPLE_DEFAULT);
+    assert_eq!(output.matches(";2;").count(), 1);
+    assert!(output.contains(&format!(
+        "#0;2;{};{};{}",
+        percent(r),
+        percent(g),
+        percent(b)
+    )));
+    assert!(output.contains("\"1;1;1;1"));
 }
 
 #[test]
@@ -298,17 +325,6 @@ fn build_sixel_tmux_native_placement_keeps_pane_local_cursor_and_raw_dcs() {
     let s = String::from_utf8(out).expect("output should be valid utf8");
 
     assert_eq!(s, "\x1b[5;11H\x1bP0;1;0qABC\x1b\\");
-}
-
-#[test]
-fn compact_palette_removes_unused_entries_and_reindexes_pixels() {
-    let palette = vec![(1, 2, 3), (4, 5, 6), (7, 8, 9)];
-    let indices = vec![2, 2, 0, 2, 0];
-
-    let (dense_palette, dense_indices) = compact_palette(palette, indices);
-
-    assert_eq!(dense_palette, vec![(7, 8, 9), (1, 2, 3)]);
-    assert_eq!(dense_indices, vec![0, 0, 1, 0, 1]);
 }
 
 #[test]
