@@ -1,7 +1,98 @@
-//! tmux DCS-passthrough helpers for terminal image escape sequences.
+//! tmux transport and DCS-passthrough helpers for terminal images.
 
+use anyhow::{Context, Result, ensure};
 use ratatui::layout::Rect;
 use std::process::{Command, Stdio};
+
+/// Sixel placement and redraw behavior for the current terminal session.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum SixelTransport {
+    #[default]
+    Direct,
+    TmuxNative,
+    TmuxPassthrough,
+}
+
+impl SixelTransport {
+    pub(crate) fn supports_synchronized_updates(self) -> bool {
+        // tmux redraws its cells when synchronization ends. Passthrough images
+        // are absent from its screen state and get erased by that redraw.
+        self != Self::TmuxPassthrough
+    }
+}
+
+pub(crate) fn configure_sixel_transport() -> SixelTransport {
+    if !inside_tmux() {
+        return SixelTransport::Direct;
+    }
+    let transport = query_pane_format("#{sixel_support}|#{client_termfeatures}")
+        .map(|reply| parse_sixel_transport(&reply))
+        .unwrap_or(SixelTransport::TmuxPassthrough);
+    if transport == SixelTransport::TmuxPassthrough {
+        // 'all' also permits passthrough while tmux has a redraw pending.
+        set_allow_passthrough("all");
+    }
+    transport
+}
+
+fn parse_sixel_transport(reply: &str) -> SixelTransport {
+    match reply.trim().split_once('|') {
+        Some(("1", features)) if features.split(',').any(|f| f == "sixel") => {
+            SixelTransport::TmuxNative
+        }
+        _ => SixelTransport::TmuxPassthrough,
+    }
+}
+
+const TMUX_MIN_INPUT_BUFFER_SIZE: usize = 1024 * 1024;
+
+pub(super) fn ensure_sixel_input_capacity(payload_len: usize) -> Result<()> {
+    let required = sixel_input_capacity(payload_len)
+        .context("sixel payload exceeds tmux's input buffer capacity")?;
+    if required <= TMUX_MIN_INPUT_BUFFER_SIZE {
+        return Ok(());
+    }
+    // tmux grows its DCS input buffer in powers of two. Raise the server limit
+    // only for an image that needs it, and never lower an existing larger limit.
+    // Both native Sixel and passthrough DCS sequences are subject to this limit.
+    let status = Command::new("tmux")
+        .args([
+            "if-shell",
+            "-F",
+            &format!("#{{e|<:#{{input-buffer-size}},{required}}}"),
+            &format!("set-option -s input-buffer-size {required}"),
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .status()
+        .context("failed to configure tmux's Sixel input buffer")?;
+    ensure!(
+        status.success(),
+        "tmux rejected the Sixel input buffer size"
+    );
+    Ok(())
+}
+
+fn sixel_input_capacity(payload_len: usize) -> Option<usize> {
+    let size = payload_len.checked_add(1)?.checked_next_power_of_two()?;
+    // The tmux option is bounded by UINT_MAX, even on a 64-bit host.
+    u32::try_from(size).ok()?;
+    Some(size)
+}
+
+fn query_pane_format(format: &str) -> Option<String> {
+    let mut command = Command::new("tmux");
+    command.args(["display-message", "-p"]);
+    if let Some(pane) = std::env::var_os("TMUX_PANE").filter(|p| !p.is_empty()) {
+        command.arg("-t").arg(pane);
+    }
+    let output = command.arg(format).stdin(Stdio::null()).output().ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8(output.stdout).ok())
+        .flatten()
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct TmuxPaneOrigin {
@@ -27,9 +118,14 @@ pub(crate) fn enable_allow_passthrough() {
         return;
     }
 
+    set_allow_passthrough("on");
+}
+
+fn set_allow_passthrough(value: &str) {
     let mut command = Command::new("tmux");
     command.args(allow_passthrough_args(
         std::env::var_os("TMUX_PANE").as_deref(),
+        value,
     ));
     let _ = command
         .stdin(Stdio::null())
@@ -38,7 +134,10 @@ pub(crate) fn enable_allow_passthrough() {
         .status();
 }
 
-fn allow_passthrough_args(target_pane: Option<&std::ffi::OsStr>) -> Vec<std::ffi::OsString> {
+fn allow_passthrough_args(
+    target_pane: Option<&std::ffi::OsStr>,
+    value: &str,
+) -> Vec<std::ffi::OsString> {
     let mut args = ["set-option", "-p", "-q"]
         .into_iter()
         .map(std::ffi::OsString::from)
@@ -49,7 +148,7 @@ fn allow_passthrough_args(target_pane: Option<&std::ffi::OsStr>) -> Vec<std::ffi
         args.push("-t".into());
         args.push(pane.into());
     }
-    args.extend(["allow-passthrough", "on"].into_iter().map(Into::into));
+    args.extend(["allow-passthrough", value].into_iter().map(Into::into));
     args
 }
 
@@ -57,23 +156,29 @@ pub(super) fn query_pane_origin() -> Option<TmuxPaneOrigin> {
     if !inside_tmux() {
         return None;
     }
-    let output = Command::new("tmux")
-        .args(["display-message", "-p", "#{pane_top},#{pane_left}"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let stdout = String::from_utf8(output.stdout).ok()?;
+    let stdout =
+        query_pane_format("#{pane_top},#{pane_left},#{?#{==:#{status-position},top},#{status},0}")?;
     parse_pane_origin(&stdout)
 }
 
 pub(super) fn parse_pane_origin(raw: &str) -> Option<TmuxPaneOrigin> {
     let trimmed = raw.trim();
-    let (top, left) = trimmed.split_once(',')?;
+    let mut fields = trimmed.split(',');
+    let top: u16 = fields.next()?.parse().ok()?;
+    let left = fields.next()?.parse().ok()?;
+    // pane_top excludes the status lines above the window. Passthrough cursor
+    // positions are relative to the outer terminal, so include those lines.
+    let status_rows = match fields.next()? {
+        "on" => 1,
+        "off" => 0,
+        rows => rows.parse::<u16>().ok()?,
+    };
+    if fields.next().is_some() {
+        return None;
+    }
     Some(TmuxPaneOrigin {
-        top: top.parse().ok()?,
-        left: left.parse().ok()?,
+        top: top.checked_add(status_rows)?,
+        left,
     })
 }
 

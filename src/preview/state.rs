@@ -6,7 +6,8 @@ use super::{
 use crate::{
     filesystem::Entry,
     terminal_images::{
-        ImageProtocol, RenderedImageDimensions, TerminalIdentity, TerminalWindowSize,
+        ImageProtocol, RenderedImageDimensions, SixelTransport, TerminalIdentity,
+        TerminalWindowSize,
     },
 };
 use ratatui::layout::Rect;
@@ -421,6 +422,7 @@ impl DisplayedStaticImagePreview {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct TerminalImageState {
     pub(crate) protocol: ImageProtocol,
+    pub(crate) sixel_transport: SixelTransport,
     pub(crate) identity: TerminalIdentity,
     pub(crate) window: Option<TerminalWindowSize>,
     pub(crate) pending_iterm_erase: Vec<Rect>,

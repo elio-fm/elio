@@ -76,7 +76,11 @@ impl App {
                     let _ = self.ensure_pdf_render(&render_key);
                     return Ok(OverlayPresentState::Waiting);
                 };
-                place_sixel_from_dcs(&dcs, placement.image_area)?
+                place_sixel_from_dcs(
+                    &dcs,
+                    placement.image_area,
+                    self.preview.terminal_images.sixel_transport,
+                )?
             }
             _ => match place_terminal_image(
                 protocol,

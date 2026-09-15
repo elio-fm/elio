@@ -20,7 +20,9 @@ pub(crate) use self::protocol::{
     command_exists, detect_terminal_identity, pdf_preview_tools_available, select_image_protocol,
 };
 pub(crate) use self::sixel::{encode_sixel_dcs, place_sixel_from_dcs};
-pub(crate) use self::tmux::{enable_allow_passthrough, inside_tmux};
+pub(crate) use self::tmux::{
+    SixelTransport, configure_sixel_transport, enable_allow_passthrough, inside_tmux,
+};
 pub(crate) use self::window::query_terminal_window_size;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
