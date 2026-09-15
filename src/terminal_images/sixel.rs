@@ -1,25 +1,19 @@
 use anyhow::{Context, Result};
-use color_quant::NeuQuant;
 use image::{DynamicImage, GenericImageView, imageops};
-use ratatui::layout::Rect;
-use std::{
-    collections::HashMap,
-    io::Write as _,
-    path::Path,
-    process::{Command, Stdio},
-    sync::Arc,
+use quantette::{
+    PaletteSize,
+    color_map::IndexedColorMap,
+    deps::palette::Srgb,
+    wu::{BinnerU8x3, WuU8x3},
 };
+use ratatui::layout::Rect;
+use std::{io::Write as _, path::Path, sync::Arc};
 
 use super::{
     TerminalIdentity, TerminalWindowSize, area_pixel_size, fit_image_area,
-    protocol::{command_exists, detect_terminal_identity},
+    protocol::detect_terminal_identity,
     tmux::{self, TmuxPaneOrigin},
 };
-
-const SIXEL_COLOR_LIMIT_DEFAULT: usize = 256;
-const SIXEL_COLOR_LIMIT_FOOT: usize = 64;
-const SIXEL_NEUQUANT_SAMPLE_DEFAULT: i32 = 10;
-const SIXEL_NEUQUANT_SAMPLE_FOOT: i32 = 20;
 
 // ── public API ───────────────────────────────────────────────────────────────
 
@@ -31,17 +25,12 @@ const SIXEL_NEUQUANT_SAMPLE_FOOT: i32 = 20;
 /// [`place_sixel_from_dcs`] so the same encoded buffer can be reused at
 /// different screen positions.
 pub(crate) fn encode_sixel_dcs(path: &Path, target_w: u32, target_h: u32) -> Result<Arc<[u8]>> {
-    let profile = sixel_encode_profile();
-    if let Some(dcs) = encode_sixel_dcs_with_img2sixel(path, target_w, target_h, profile) {
-        return Ok(dcs);
-    }
-
     let img = image::ImageReader::open(path)
         .with_context(|| format!("failed to open sixel preview image {}", path.display()))?
         .decode()
         .with_context(|| format!("failed to decode sixel preview image {}", path.display()))?;
 
-    encode_sixel_dcs_from_image(img, target_w, target_h, profile)
+    encode_sixel_dcs_from_image(img, target_w, target_h)
 }
 
 /// Prepend the cursor-positioning escape to a pre-encoded Sixel DCS buffer
@@ -113,7 +102,7 @@ pub(super) fn place_terminal_image_with_sixel_protocol(
     let placement = fit_image_area(area, window_size, aspect_ratio);
     let (target_w, target_h) = area_pixel_size(placement, window_size);
 
-    let dcs = encode_sixel_dcs_from_image(img, target_w, target_h, sixel_encode_profile())?;
+    let dcs = encode_sixel_dcs_from_image(img, target_w, target_h)?;
     place_sixel_from_dcs(&dcs, placement)
 }
 
@@ -136,65 +125,39 @@ fn encode_sixel_dcs_from_image(
     img: DynamicImage,
     target_w: u32,
     target_h: u32,
-    profile: SixelEncodeProfile,
 ) -> Result<Arc<[u8]>> {
-    // Triangle is ~5× faster than Lanczos3 and imperceptible at terminal
-    // pixel densities.
     let img = img.resize(target_w, target_h, imageops::FilterType::Triangle);
     let (w, h) = img.dimensions();
 
     // Flatten RGBA and composite alpha over the panel background colour.
     let rgba = img.to_rgba8();
     let (bg_r, bg_g, bg_b) = panel_background();
-    let flat_rgba: Vec<u8> = rgba
+    let colors: Vec<Srgb<u8>> = rgba
         .pixels()
-        .flat_map(|p| {
+        .map(|p| {
             let [r, g, b, a] = p.0;
             let a32 = a as u32;
             let ia = 255 - a32;
-            [
+            Srgb::new(
                 ((r as u32 * a32 + bg_r as u32 * ia) / 255) as u8,
                 ((g as u32 * a32 + bg_g as u32 * ia) / 255) as u8,
                 ((b as u32 * a32 + bg_b as u32 * ia) / 255) as u8,
-                255u8,
-            ]
+            )
         })
         .collect();
 
-    // Foot is noticeably slower than Kitty/iTerm because Sixel is a textual
-    // pixel stream that the terminal must parse. Keep a modest color cap so
-    // the payload stays reasonable, but let NeuQuant preserve more gradients.
-    let nq = NeuQuant::new(profile.neuquant_sample, profile.color_limit, &flat_rgba);
-    let color_map = nq.color_map_rgba();
-    let palette: Vec<(u8, u8, u8)> = color_map.chunks(4).map(|c| (c[0], c[1], c[2])).collect();
-    let indices: Vec<u8> = flat_rgba
-        .chunks(4)
-        .map(|px| nq.index_of(px) as u8)
+    let wu = WuU8x3::run_slice(&colors, BinnerU8x3::rgb())
+        .context("failed to quantize sixel preview image")?;
+    let color_map = wu.color_map(PaletteSize::MAX);
+    let indices = color_map.map_to_indices(&colors);
+    let palette: Vec<(u8, u8, u8)> = color_map
+        .into_palette()
+        .into_vec()
+        .into_iter()
+        .map(|c| (c.red, c.green, c.blue))
         .collect();
-    let (palette, indices) = compact_palette(palette, indices);
 
     encode_dcs_bytes(w as usize, h as usize, &palette, &indices)
-}
-
-#[derive(Clone, Copy)]
-struct SixelEncodeProfile {
-    color_limit: usize,
-    neuquant_sample: i32,
-}
-
-fn sixel_encode_profile() -> SixelEncodeProfile {
-    match detect_terminal_identity() {
-        // Foot spends most of the time parsing the Sixel stream, so reducing
-        // palette size helps more than preserving subtle gradients.
-        TerminalIdentity::Foot => SixelEncodeProfile {
-            color_limit: SIXEL_COLOR_LIMIT_FOOT,
-            neuquant_sample: SIXEL_NEUQUANT_SAMPLE_FOOT,
-        },
-        _ => SixelEncodeProfile {
-            color_limit: SIXEL_COLOR_LIMIT_DEFAULT,
-            neuquant_sample: SIXEL_NEUQUANT_SAMPLE_DEFAULT,
-        },
-    }
 }
 
 // ── private helpers ───────────────────────────────────────────────────────────
@@ -204,67 +167,6 @@ fn panel_background() -> (u8, u8, u8) {
         ratatui::style::Color::Rgb(r, g, b) => (r, g, b),
         _ => (0, 0, 0),
     }
-}
-
-fn encode_sixel_dcs_with_img2sixel(
-    path: &Path,
-    target_w: u32,
-    target_h: u32,
-    profile: SixelEncodeProfile,
-) -> Option<Arc<[u8]>> {
-    if !command_exists("img2sixel") {
-        return None;
-    }
-
-    let (bg_r, bg_g, bg_b) = panel_background();
-    let bgcolor = format!("#{bg_r:02x}{bg_g:02x}{bg_b:02x}");
-    let output = Command::new("img2sixel")
-        .arg("-w")
-        .arg(target_w.max(1).to_string())
-        .arg("-h")
-        .arg(target_h.max(1).to_string())
-        .arg("-o")
-        .arg("-")
-        .arg("-p")
-        .arg(profile.color_limit.to_string())
-        .arg("-E")
-        .arg("size")
-        .arg("-q")
-        .arg("low")
-        .arg("-B")
-        .arg(bgcolor)
-        .arg(path)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let stdout = output.stdout;
-    if !(stdout.starts_with(b"\x1bP") || stdout.starts_with(b"\x90")) {
-        return None;
-    }
-    Some(Arc::from(stdout))
-}
-
-fn compact_palette(palette: Vec<(u8, u8, u8)>, indices: Vec<u8>) -> (Vec<(u8, u8, u8)>, Vec<u8>) {
-    let mut remap = HashMap::new();
-    let mut dense_palette = Vec::new();
-    let mut dense_indices = Vec::with_capacity(indices.len());
-    for index in indices {
-        let mapped = match remap.get(&index) {
-            Some(&mapped) => mapped,
-            None => {
-                let mapped = dense_palette.len() as u8;
-                dense_palette.push(palette[index as usize]);
-                remap.insert(index, mapped);
-                mapped
-            }
-        };
-        dense_indices.push(mapped);
-    }
-    (dense_palette, dense_indices)
 }
 
 /// Assemble the complete Sixel DCS stream body (no cursor prefix) and return
