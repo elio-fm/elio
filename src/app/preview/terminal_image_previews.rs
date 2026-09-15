@@ -44,10 +44,10 @@ impl App {
             ImageProtocol::KittyGraphics
                 | ImageProtocol::KittyDirectGraphics
                 | ImageProtocol::ItermInline
-                | ImageProtocol::Sixel
         ) {
             terminal_images::enable_allow_passthrough();
         }
+        self.refresh_sixel_transport();
         self.preview.pdf.pdf_tools_available = terminal_images::pdf_preview_tools_available();
         self.refresh_terminal_image_window_size();
         terminal_images::preview_log(format_args!(
@@ -82,6 +82,7 @@ impl App {
     }
 
     pub(crate) fn handle_terminal_image_focus_gained(&mut self) {
+        self.refresh_sixel_transport();
         let previous_window = self.preview.terminal_images.window;
         self.refresh_terminal_image_window_size();
         if self.preview.terminal_images.window != previous_window {
@@ -178,6 +179,26 @@ impl App {
 
     pub(crate) fn terminal_image_overlay_available(&self) -> bool {
         self.preview.terminal_images.protocol != ImageProtocol::None
+    }
+
+    fn refresh_sixel_transport(&mut self) {
+        if self.uses_sixel_image_protocol() {
+            let transport = terminal_images::configure_sixel_transport();
+            if transport != self.preview.terminal_images.sixel_transport {
+                self.preview.terminal_images.sixel_transport = transport;
+                self.queue_terminal_image_geometry_clear();
+            }
+            terminal_images::preview_log(format_args!("Sixel transport: {transport:?}"));
+        }
+    }
+
+    pub(crate) fn supports_synchronized_terminal_updates(&self) -> bool {
+        !self.uses_sixel_image_protocol()
+            || self
+                .preview
+                .terminal_images
+                .sixel_transport
+                .supports_synchronized_updates()
     }
 
     pub(crate) fn uses_sixel_image_protocol(&self) -> bool {

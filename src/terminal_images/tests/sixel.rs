@@ -321,7 +321,8 @@ fn build_sixel_tmux_native_placement_keeps_pane_local_cursor_and_raw_dcs() {
         width: 3,
         height: 2,
     };
-    let out = build_sixel_tmux_native_placement_sequence(dcs, placement);
+    let out =
+        place_sixel_from_dcs(dcs, placement, SixelTransport::TmuxNative).expect("native placement");
     let s = String::from_utf8(out).expect("output should be valid utf8");
 
     assert_eq!(s, "\x1b[5;11H\x1bP0;1;0qABC\x1b\\");

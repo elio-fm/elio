@@ -179,7 +179,10 @@ impl Drop for ThreadedWriter {
 }
 
 pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> Result<bool> {
-    execute!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
+    let synchronized = app.supports_synchronized_terminal_updates();
+    if synchronized {
+        execute!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
+    }
 
     let draw_result = (|| -> Result<bool> {
         if app.take_pending_resize_clear() {
@@ -267,7 +270,11 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
         Ok(dirty)
     })();
 
-    let end_result = execute!(terminal.backend_mut(), EndSynchronizedUpdate);
+    let end_result = if synchronized {
+        execute!(terminal.backend_mut(), EndSynchronizedUpdate)
+    } else {
+        Ok(())
+    };
     match (draw_result, end_result) {
         (Ok(dirty), Ok(())) => Ok(dirty),
         (Err(error), Ok(())) => Err(error),

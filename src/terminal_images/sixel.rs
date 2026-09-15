@@ -10,9 +10,8 @@ use ratatui::layout::Rect;
 use std::{io::Write as _, path::Path, sync::Arc};
 
 use super::{
-    TerminalIdentity, TerminalWindowSize, area_pixel_size, fit_image_area,
-    protocol::detect_terminal_identity,
-    tmux::{self, TmuxPaneOrigin},
+    TerminalWindowSize, area_pixel_size, fit_image_area,
+    tmux::{self, SixelTransport, TmuxPaneOrigin},
 };
 
 // ── public API ───────────────────────────────────────────────────────────────
@@ -38,16 +37,25 @@ pub(crate) fn encode_sixel_dcs(path: &Path, target_w: u32, target_h: u32) -> Res
 ///
 /// This is O(n) in the DCS buffer size due to the memory copy, but avoids
 /// re-running the expensive encode for re-renders of the same image.
-pub(crate) fn place_sixel_from_dcs(dcs: &[u8], placement: Rect) -> Result<Vec<u8>> {
-    if tmux::inside_tmux() {
-        if detect_terminal_identity() == TerminalIdentity::WindowsTerminal {
-            return Ok(build_sixel_tmux_native_placement_sequence(dcs, placement));
+pub(crate) fn place_sixel_from_dcs(
+    dcs: &[u8],
+    placement: Rect,
+    transport: SixelTransport,
+) -> Result<Vec<u8>> {
+    let bytes = match transport {
+        SixelTransport::Direct | SixelTransport::TmuxNative => {
+            build_sixel_placement_sequence(dcs, placement)
         }
-        let origin = tmux::query_pane_origin()
-            .ok_or_else(|| anyhow::anyhow!("tmux pane origin unavailable"))?;
-        return Ok(build_sixel_tmux_placement_sequence(dcs, placement, origin));
+        SixelTransport::TmuxPassthrough => {
+            let origin = tmux::query_pane_origin()
+                .ok_or_else(|| anyhow::anyhow!("tmux pane origin unavailable"))?;
+            build_sixel_tmux_placement_sequence(dcs, placement, origin)
+        }
+    };
+    if transport != SixelTransport::Direct {
+        tmux::ensure_sixel_input_capacity(bytes.len())?;
     }
-    Ok(build_sixel_placement_sequence(dcs, placement))
+    Ok(bytes)
 }
 
 fn build_sixel_placement_sequence(dcs: &[u8], placement: Rect) -> Vec<u8> {
@@ -56,13 +64,6 @@ fn build_sixel_placement_sequence(dcs: &[u8], placement: Rect) -> Vec<u8> {
         placement.y.saturating_add(1).into(),
         placement.x.saturating_add(1).into(),
     )
-}
-
-// Windows Terminal via WSL+tmux renders tmux passthrough Sixel incorrectly in
-// the alternate screen. Let tmux consume the raw Sixel and render it through
-// its native Sixel path instead.
-fn build_sixel_tmux_native_placement_sequence(dcs: &[u8], placement: Rect) -> Vec<u8> {
-    build_sixel_placement_sequence(dcs, placement)
 }
 
 fn build_sixel_tmux_placement_sequence(
@@ -103,7 +104,7 @@ pub(super) fn place_terminal_image_with_sixel_protocol(
     let (target_w, target_h) = area_pixel_size(placement, window_size);
 
     let dcs = encode_sixel_dcs_from_image(img, target_w, target_h)?;
-    place_sixel_from_dcs(&dcs, placement)
+    place_sixel_from_dcs(&dcs, placement, tmux::configure_sixel_transport())
 }
 
 /// No explicit clear primitive exists for Sixel — the next ratatui draw

@@ -285,7 +285,11 @@ impl App {
                     dcs
                 }
             };
-            return place_sixel_from_dcs(&dcs, placement);
+            return place_sixel_from_dcs(
+                &dcs,
+                placement,
+                self.preview.terminal_images.sixel_transport,
+            );
         }
         place_terminal_image(
             protocol,

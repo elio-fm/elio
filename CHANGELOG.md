@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Improved Sixel preview colors and encoding speed with a consistent 256-color quantizer, including in Foot.
+- Improved Sixel preview speed and color quality.
 
 - Improved `--help` with cleaner formatting, terminal colors, and a link to the CLI documentation.
 
 ### Fixed
+
+- Fixed Sixel previews disappearing in tmux.
 
 - Fixed `-h` and `--help` for shell integration commands.
 
