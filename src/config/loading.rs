@@ -1,4 +1,6 @@
-use super::{GotoConfig, KeyBindings, LayoutConfig, OpenConfig, PlacesConfig, UiConfig};
+use super::{
+    GotoConfig, KeyBindings, LayoutConfig, OpenConfig, PlacesConfig, PreviewConfig, UiConfig,
+};
 #[cfg(unix)]
 use crate::elevated_session::InvocationContext;
 use serde::Deserialize;
@@ -12,6 +14,7 @@ static ACTIVE_CONFIG: OnceLock<Config> = OnceLock::new();
 
 pub(super) struct Config {
     pub(super) ui: UiConfig,
+    pub(super) preview: PreviewConfig,
     pub(super) goto: GotoConfig,
     pub(super) places: PlacesConfig,
     pub(super) layout: LayoutConfig,
@@ -22,6 +25,7 @@ pub(super) struct Config {
 #[derive(Deserialize, Default)]
 struct ConfigFile {
     ui: Option<super::ui::UiConfigOverride>,
+    preview: Option<super::preview::PreviewConfigOverride>,
     goto: Option<super::goto::GotoConfigOverride>,
     places: Option<super::places::PlacesConfigOverride>,
     layout: Option<super::layout::LayoutConfigOverride>,
@@ -158,6 +162,7 @@ impl Config {
     pub(super) fn default_config() -> Self {
         Self {
             ui: UiConfig::default(),
+            preview: PreviewConfig::default(),
             goto: GotoConfig::default(),
             places: PlacesConfig::default(),
             layout: LayoutConfig::default(),
@@ -171,6 +176,9 @@ impl Config {
         let mut resolved = Self::default_config();
         if let Some(ui) = parsed.ui {
             resolved.ui.apply_override(ui);
+        }
+        if let Some(preview) = parsed.preview {
+            resolved.preview.apply_override(preview);
         }
         if let Some(goto) = parsed.goto {
             resolved.goto = GotoConfig::from_override(goto, &resolved.goto);

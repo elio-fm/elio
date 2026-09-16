@@ -55,7 +55,8 @@ pub(crate) use self::state::{
     PreviewRefreshMode, PreviewRuntime, StaticImageOverlayMode, StaticImageOverlayPreparation,
     StaticImageOverlayRequest, StaticImagePreloadViewport,
 };
-pub(crate) use self::text_rendering::{expand_tabs, line_number_span, line_number_width};
+use self::text_rendering::expand_tabs;
+pub(crate) use self::text_rendering::{line_number_span, line_number_width};
 
 #[cfg(test)]
 mod tests;

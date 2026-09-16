@@ -54,6 +54,10 @@ where
             CustomCodeKind::Log => log_files::highlight_log_line(line, code_palette),
         };
         spans.extend(body);
+        crate::preview::text_rendering::expand_tabs_in_spans(
+            &mut spans[1..],
+            crate::config::preview().tab_width,
+        );
         rendered.push(Line::from(spans));
     }
 

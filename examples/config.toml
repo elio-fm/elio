@@ -6,6 +6,9 @@
 # show_hidden = false  # show dotfiles and hidden files on startup (toggle with .)
 # start_in_grid = false  # open in grid view on startup (toggle with v)
 
+# [preview]
+# tab_width = 4  # tab-stop width in columns for text/code previews (1–16, clamped)
+
 # Customize the Places pane. `entries` controls the pinned items in order;
 # `show_devices` keeps or hides the auto-detected Devices section.
 # Omit [places] entirely to keep the exact default sidebar.

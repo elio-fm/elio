@@ -4,6 +4,7 @@ mod layout;
 mod loading;
 mod open;
 mod places;
+mod preview;
 #[cfg(test)]
 mod tests;
 mod ui;
@@ -19,6 +20,7 @@ pub(crate) use self::{
     loading::config_dir,
     open::{OpenConfig, OpenPlatform, OpenRule, OpenTargetType},
     places::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},
+    preview::PreviewConfig,
     ui::UiConfig,
 };
 
@@ -31,6 +33,10 @@ pub(crate) fn initialize(path: Option<&Path>) -> anyhow::Result<()> {
 
 pub(crate) fn ui() -> UiConfig {
     loading::active_config().ui
+}
+
+pub(crate) fn preview() -> PreviewConfig {
+    loading::active_config().preview
 }
 
 pub(crate) fn goto() -> &'static GotoConfig {

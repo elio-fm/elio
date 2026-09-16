@@ -74,18 +74,17 @@ where
             if role == SemanticRole::Invalid {
                 style = style.add_modifier(Modifier::UNDERLINED);
             }
-            let expanded = crate::preview::expand_tabs(token);
             match pending_style {
                 Some(s) if s == style => {
-                    pending_text.push_str(&expanded);
+                    pending_text.push_str(token);
                 }
                 Some(s) => {
                     spans.push(Span::styled(std::mem::take(&mut pending_text), s));
-                    pending_text = expanded;
+                    pending_text.push_str(token);
                     pending_style = Some(style);
                 }
                 None => {
-                    pending_text = expanded;
+                    pending_text.push_str(token);
                     pending_style = Some(style);
                 }
             }
@@ -94,6 +93,10 @@ where
             spans.push(Span::styled(pending_text, s));
         }
 
+        crate::preview::text_rendering::expand_tabs_in_spans(
+            &mut spans[1..],
+            crate::config::preview().tab_width,
+        );
         rendered.push(Line::from(spans));
     }
 

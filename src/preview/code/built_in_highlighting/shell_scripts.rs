@@ -45,6 +45,10 @@ where
         }
 
         spans.extend(render_shell_line(line, code_palette));
+        crate::preview::text_rendering::expand_tabs_in_spans(
+            &mut spans[1..],
+            crate::config::preview().tab_width,
+        );
         rendered.push(Line::from(spans));
     }
 
@@ -156,7 +160,7 @@ fn shell_span(text: &str, role: SemanticRole, palette: CodePalette) -> Span<'sta
         rendered_style = rendered_style.add_modifier(Modifier::UNDERLINED);
     }
 
-    Span::styled(crate::preview::expand_tabs(text), rendered_style)
+    Span::styled(text.to_owned(), rendered_style)
 }
 
 fn consume_while(text: &str, predicate: impl Fn(char) -> bool) -> Option<usize> {
