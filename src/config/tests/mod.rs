@@ -2,6 +2,7 @@ mod goto;
 mod layout;
 mod open;
 mod places;
+mod preview;
 mod ui;
 
 fn toml_string(value: &str) -> String {

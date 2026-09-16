@@ -23,6 +23,7 @@ mod helpers;
 mod markdown;
 mod plain_text;
 mod preview_header;
+mod tab_width;
 mod torrent;
 mod video;
 

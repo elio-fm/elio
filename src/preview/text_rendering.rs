@@ -46,11 +46,38 @@ pub(super) fn sanitize_preview_lines(lines: Vec<Line<'static>>) -> Arc<[Line<'st
 }
 
 fn sanitize_preview_line(mut line: Line<'static>) -> Line<'static> {
-    for span in &mut line.spans {
-        let sanitized = browser_support::sanitize_terminal_text(span.content.as_ref());
-        span.content = sanitized.into();
-    }
+    expand_tabs_in_spans(&mut line.spans, crate::config::preview().tab_width);
     line
+}
+
+// Expand after highlighting, using source-content columns (without the gutter).
+// Keep text between tabs across spans so Unicode sequences split by styles are
+// measured together, including combining marks and emoji sequences.
+pub(super) fn expand_tabs_in_spans(spans: &mut [Span<'_>], tab_width: u8) {
+    let has_tabs = spans.iter().any(|span| span.content.contains('\t'));
+    let tab_width = usize::from(tab_width.max(1));
+    let mut column = 0;
+    let mut pending = String::new();
+    for span in spans {
+        if !has_tabs {
+            span.content = browser_support::sanitize_terminal_text(&span.content).into();
+            continue;
+        }
+        let mut expanded = String::with_capacity(span.content.len());
+        for (index, part) in span.content.split('\t').enumerate() {
+            if index > 0 {
+                column += pending.width();
+                pending.clear();
+                let spaces = tab_width - column % tab_width;
+                expanded.extend(std::iter::repeat_n(' ', spaces));
+                column += spaces;
+            }
+            let sanitized = browser_support::sanitize_terminal_text(part);
+            pending.push_str(&sanitized);
+            expanded.push_str(&sanitized);
+        }
+        span.content = expanded.into();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -69,9 +96,16 @@ pub(crate) fn line_number_width(lines: usize) -> usize {
     lines.max(1).to_string().len().max(3)
 }
 
-pub(crate) fn expand_tabs(text: &str) -> String {
-    browser_support::sanitize_terminal_text(text)
+pub(super) fn expand_tabs(text: &str) -> String {
+    let mut spans = [Span::raw(text)];
+    expand_tabs_in_spans(&mut spans, crate::config::preview().tab_width);
+    let [span] = spans;
+    span.content.into_owned()
 }
+
+#[cfg(test)]
+#[path = "tests/tab_stops.rs"]
+mod tests;
 
 // ---------------------------------------------------------------------------
 // Word-wrap algorithm
