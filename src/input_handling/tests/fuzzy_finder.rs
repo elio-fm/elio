@@ -4,7 +4,7 @@ use crate::fuzzy_finder::{
     SearchCache, SearchMatchCacheEntry, SearchState, build_base_search_cache_entry,
     build_search_cache_entry,
 };
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use std::{
     collections::HashMap,
     fs,
@@ -59,6 +59,103 @@ fn wait_for_search_candidates(app: &mut App, expected: usize) {
 }
 
 #[test]
+fn tab_lazily_scans_each_scope_and_reuses_both_completed_indexes() {
+    let root = temp_path("scope-toggle");
+    fs::create_dir(root.join("needle-folder")).unwrap();
+    fs::write(root.join("needle.txt"), "data").unwrap();
+    let mut app = App::new_at(root.clone()).unwrap();
+    app.open_fuzzy_finder(SearchScope::Folders).unwrap();
+    wait_for_search_candidates(&mut app, 1);
+    assert_eq!(app.fuzzy_finder.caches.len(), 1);
+    let folders = app.fuzzy_finder.caches[&SearchScope::Folders]
+        .candidates
+        .clone();
+    for ch in "needle".chars() {
+        app.handle_search_key(KeyEvent::from(KeyCode::Char(ch)))
+            .unwrap();
+    }
+    app.handle_search_key(KeyEvent::from(KeyCode::Left))
+        .unwrap();
+    let token = app.fuzzy_finder.token;
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
+        .unwrap();
+    assert!(app.fuzzy_finder.token > token);
+    assert!(app.search_is_loading());
+    assert_eq!(app.search_scope(), Some(SearchScope::Files));
+    assert_eq!(app.search_query(), "needle");
+    assert_eq!(app.search_query_cursor(), 5);
+    wait_for_search_candidates(&mut app, 1);
+    assert_eq!(app.search_rows(10)[0].relative, "needle.txt");
+    assert_eq!(app.fuzzy_finder.caches.len(), 2);
+    let scanned = app.search_scanned_count();
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Tab)))
+        .unwrap();
+    assert_eq!(app.search_rows(10)[0].relative, "needle-folder");
+    assert_eq!(app.search_scanned_count(), scanned);
+    assert!(!app.search_is_loading());
+    assert!(Arc::ptr_eq(
+        &folders,
+        &app.fuzzy_finder.search.as_ref().unwrap().candidates
+    ));
+    assert_eq!(app.search_query(), "needle");
+    assert_eq!(app.search_query_cursor(), 5);
+
+    app.close_search_overlay();
+    app.open_fuzzy_finder(SearchScope::Files).unwrap();
+    assert!(!app.search_is_loading());
+    assert_eq!(app.search_rows(10)[0].relative, "needle.txt");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn switching_back_to_cached_scope_cancels_scan_and_ignores_late_results() {
+    use crate::background_jobs::job_results::{JobResult, SearchBatchBuild, SearchBuild};
+    let root = temp_path("scope-cancel");
+    fs::create_dir(root.join("needle-folder")).unwrap();
+    fs::write(root.join("needle.txt"), "data").unwrap();
+    let mut app = App::new_at(root.clone()).unwrap();
+    app.open_fuzzy_finder(SearchScope::Folders).unwrap();
+    wait_for_search_candidates(&mut app, 1);
+    app.toggle_search_scope().unwrap();
+    let token = app.fuzzy_finder.token;
+    assert!(app.search_is_loading());
+    app.toggle_search_scope().unwrap();
+    assert!(!app.search_is_loading());
+    assert!(app.fuzzy_finder.token > token);
+    app.job_scheduler
+        .defer_result(JobResult::SearchBatch(SearchBatchBuild {
+            token,
+            cwd: root.clone(),
+            scope: SearchScope::Files,
+            show_hidden: app.effective_show_hidden(),
+            fingerprint: app.file_browser.directory_runtime.fingerprint,
+            batch: crate::fuzzy_finder::SearchIndexBatch {
+                candidates: vec![folder_candidate(&root, "stale")],
+                stats: Default::default(),
+            },
+        }));
+    app.job_scheduler
+        .defer_result(JobResult::Search(SearchBuild {
+            token,
+            cwd: root.clone(),
+            scope: SearchScope::Files,
+            show_hidden: app.effective_show_hidden(),
+            fingerprint: app.file_browser.directory_runtime.fingerprint,
+            result: Err("stale failure".into()),
+        }));
+    app.process_background_jobs();
+    assert!(!app.search_is_loading());
+    assert!(app.search_error().is_none());
+    assert_eq!(app.search_rows(10)[0].relative, "needle-folder");
+    assert_eq!(app.fuzzy_finder.caches.len(), 1);
+    app.toggle_search_scope().unwrap();
+    wait_for_search_candidates(&mut app, 1);
+    assert_eq!(app.search_rows(10)[0].relative, "needle.txt");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn opening_search_restarts_index_when_cache_missing_even_if_loading() {
     let root = temp_path("restarts-index");
     fs::create_dir_all(root.join(".hidden-root/needle")).expect("failed to create temp tree");
@@ -83,22 +180,24 @@ fn opening_search_ignores_hidden_cache_when_browser_hides_dotfiles() {
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     app.file_browser.show_hidden = false;
-    app.fuzzy_finder.cache = Some(SearchCache {
-        cwd: root.clone(),
-        scope: SearchScope::Folders,
-        show_hidden: true,
-        fingerprint: app.file_browser.directory_runtime.fingerprint,
-        candidates: Arc::new(vec![crate::fuzzy_finder::SearchCandidate {
-            path: root.join(".hidden-root/needle"),
-            name: "needle".to_string(),
-            name_key: "needle".to_string(),
-            relative: ".hidden-root/needle".to_string(),
-            relative_key: ".hidden-root/needle".to_string(),
-            is_dir: true,
-            symlink: None,
-        }]),
-        stats: crate::fuzzy_finder::SearchIndexStats::default(),
-    });
+    app.fuzzy_finder.caches.insert(
+        SearchScope::Folders,
+        SearchCache {
+            cwd: root.clone(),
+            show_hidden: true,
+            fingerprint: app.file_browser.directory_runtime.fingerprint,
+            candidates: Arc::new(vec![crate::fuzzy_finder::SearchCandidate {
+                path: root.join(".hidden-root/needle"),
+                name: "needle".to_string(),
+                name_key: "needle".to_string(),
+                relative: ".hidden-root/needle".to_string(),
+                relative_key: ".hidden-root/needle".to_string(),
+                is_dir: true,
+                symlink: None,
+            }]),
+            stats: crate::fuzzy_finder::SearchIndexStats::default(),
+        },
+    );
 
     app.open_fuzzy_finder(SearchScope::Folders)
         .expect("failed to open search");
@@ -120,22 +219,24 @@ fn opening_search_preserves_cached_limit_status() {
         node_limit_reached: true,
         candidate_limit_reached: false,
     };
-    app.fuzzy_finder.cache = Some(SearchCache {
-        cwd: root.clone(),
-        scope: SearchScope::Folders,
-        show_hidden: app.file_browser.show_hidden,
-        fingerprint: app.file_browser.directory_runtime.fingerprint,
-        candidates: Arc::new(vec![crate::fuzzy_finder::SearchCandidate {
-            path: root.join("needle"),
-            name: "needle".to_string(),
-            name_key: "needle".to_string(),
-            relative: "needle".to_string(),
-            relative_key: "needle".to_string(),
-            is_dir: true,
-            symlink: None,
-        }]),
-        stats,
-    });
+    app.fuzzy_finder.caches.insert(
+        SearchScope::Folders,
+        SearchCache {
+            cwd: root.clone(),
+            show_hidden: app.file_browser.show_hidden,
+            fingerprint: app.file_browser.directory_runtime.fingerprint,
+            candidates: Arc::new(vec![crate::fuzzy_finder::SearchCandidate {
+                path: root.join("needle"),
+                name: "needle".to_string(),
+                name_key: "needle".to_string(),
+                relative: "needle".to_string(),
+                relative_key: "needle".to_string(),
+                is_dir: true,
+                symlink: None,
+            }]),
+            stats,
+        },
+    );
 
     app.open_fuzzy_finder(SearchScope::Folders)
         .expect("failed to open search");
@@ -159,22 +260,24 @@ fn search_rows_keep_full_paths() {
     .expect("failed to write license");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
-    app.fuzzy_finder.cache = Some(SearchCache {
-        cwd: root.clone(),
-        scope: SearchScope::Files,
-        show_hidden: app.effective_show_hidden(),
-        fingerprint: app.file_browser.directory_runtime.fingerprint,
-        candidates: Arc::new(vec![crate::fuzzy_finder::SearchCandidate {
-            path: license_path.clone(),
-            name: "LICENSE.md".to_string(),
-            name_key: "license.md".to_string(),
-            relative: "nested/LICENSE.md".to_string(),
-            relative_key: "nested/license.md".to_string(),
-            is_dir: false,
-            symlink: None,
-        }]),
-        stats: crate::fuzzy_finder::SearchIndexStats::default(),
-    });
+    app.fuzzy_finder.caches.insert(
+        SearchScope::Files,
+        SearchCache {
+            cwd: root.clone(),
+            show_hidden: app.effective_show_hidden(),
+            fingerprint: app.file_browser.directory_runtime.fingerprint,
+            candidates: Arc::new(vec![crate::fuzzy_finder::SearchCandidate {
+                path: license_path.clone(),
+                name: "LICENSE.md".to_string(),
+                name_key: "license.md".to_string(),
+                relative: "nested/LICENSE.md".to_string(),
+                relative_key: "nested/license.md".to_string(),
+                is_dir: false,
+                symlink: None,
+            }]),
+            stats: crate::fuzzy_finder::SearchIndexStats::default(),
+        },
+    );
 
     app.open_fuzzy_finder(SearchScope::Files)
         .expect("failed to open search");
@@ -396,7 +499,7 @@ fn closing_search_cancels_inflight_index_token() {
 }
 
 #[test]
-fn directory_reload_invalidates_closed_search_cache() {
+fn directory_reload_invalidates_both_closed_search_caches() {
     let root = temp_path("reload-invalidates-cache");
     fs::create_dir_all(root.join("alpha")).expect("failed to create initial folder");
 
@@ -404,7 +507,10 @@ fn directory_reload_invalidates_closed_search_cache() {
     app.open_fuzzy_finder(SearchScope::Folders)
         .expect("failed to open search");
     wait_for_search_candidates(&mut app, 1);
-    app.fuzzy_finder.search = None;
+    app.toggle_search_scope().unwrap();
+    wait_for_search_candidates(&mut app, 0);
+    assert_eq!(app.fuzzy_finder.caches.len(), 2);
+    app.close_search_overlay();
 
     fs::create_dir_all(root.join("beta")).expect("failed to create new folder");
     let snapshot =
@@ -424,6 +530,8 @@ fn directory_reload_invalidates_closed_search_cache() {
         },
         snapshot,
     );
+
+    assert!(app.fuzzy_finder.caches.is_empty());
 
     app.open_fuzzy_finder(SearchScope::Folders)
         .expect("failed to reopen search");

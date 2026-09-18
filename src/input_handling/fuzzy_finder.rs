@@ -15,6 +15,7 @@ impl App {
                 self.status.clear();
             }
             KeyCode::Enter => self.confirm_search_selection()?,
+            KeyCode::Tab if key.modifiers.is_empty() => self.toggle_search_scope()?,
             KeyCode::Left if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if let Some(search) = &mut self.fuzzy_finder.search {
                     search.move_cursor_to_previous_word();

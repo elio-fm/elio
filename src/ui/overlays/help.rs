@@ -39,6 +39,7 @@ pub(in crate::ui) fn render_help_overlay(
     let search_entries = entries([
         keys.action(&kb.search_folders, "search folders"),
         keys.action(&kb.search_files, "search files"),
+        e("Tab (in search)", "switch files/folders"),
         keys.action(&kb.find_duplicates, "find duplicates"),
         keys.action(&kb.zoxide, "zoxide history"),
     ]);

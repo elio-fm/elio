@@ -88,16 +88,15 @@ impl App {
     }
 
     pub(crate) fn open_fuzzy_finder(&mut self, scope: SearchScope) -> Result<()> {
-        self.clear_wheel_scroll();
+        self.close_search_overlay();
         self.overlays.help = false;
         let show_hidden = self.effective_show_hidden();
         let cached = self
             .fuzzy_finder
-            .cache
-            .as_ref()
+            .caches
+            .get(&scope)
             .filter(|cache| {
                 cache.cwd == self.file_browser.cwd
-                    && cache.scope == scope
                     && cache.show_hidden == show_hidden
                     && cache.fingerprint == self.file_browser.directory_runtime.fingerprint
             })
@@ -109,12 +108,12 @@ impl App {
             )
         });
         let loading = cached.is_none();
-        if loading {
-            self.prewarm_search_index(scope);
-        }
         self.fuzzy_finder.search = Some(crate::fuzzy_finder::SearchState::new(
             scope, candidates, stats, loading,
         ));
+        if loading {
+            self.prewarm_search_index(scope);
+        }
         self.status.clear();
         Ok(())
     }
@@ -122,7 +121,7 @@ impl App {
     pub(crate) fn prewarm_search_index(&mut self, scope: SearchScope) {
         self.fuzzy_finder.token = self.fuzzy_finder.token.wrapping_add(1);
         self.fuzzy_finder.loading = true;
-        self.fuzzy_finder.cache = None;
+        self.fuzzy_finder.caches.remove(&scope);
         let request = SearchRequest {
             token: self.fuzzy_finder.token,
             cwd: self.file_browser.cwd.clone(),
@@ -132,9 +131,7 @@ impl App {
         };
         if !self.job_scheduler.submit_search(request) {
             self.fuzzy_finder.loading = false;
-            if let Some(search) = &mut self.fuzzy_finder.search
-                && search.scope == scope
-            {
+            if let Some(search) = &mut self.fuzzy_finder.search {
                 search.loading = false;
                 search.error = Some("Search worker unavailable".to_string());
             }
@@ -147,6 +144,25 @@ impl App {
         self.fuzzy_finder.token = self.fuzzy_finder.token.wrapping_add(1);
         self.job_scheduler.cancel_search();
         self.clear_wheel_scroll();
+    }
+
+    pub(crate) fn toggle_search_scope(&mut self) -> Result<()> {
+        let Some(search) = &self.fuzzy_finder.search else {
+            return Ok(());
+        };
+        let scope = match search.scope {
+            SearchScope::Files => SearchScope::Folders,
+            SearchScope::Folders => SearchScope::Files,
+        };
+        let query = search.query.clone();
+        let cursor = search.query_cursor;
+        self.open_fuzzy_finder(scope)?;
+        if let Some(search) = &mut self.fuzzy_finder.search {
+            search.query = query;
+            search.query_cursor = cursor;
+        }
+        self.refresh_search_matches("");
+        Ok(())
     }
 
     pub(crate) fn move_search_selection(&mut self, delta: isize) {

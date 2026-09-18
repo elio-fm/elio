@@ -126,14 +126,16 @@ impl App {
             Ok(index) => {
                 let stats = index.stats;
                 let candidates = Arc::new(index.candidates);
-                self.fuzzy_finder.cache = Some(SearchCache {
-                    cwd: build.cwd,
-                    scope: build.scope,
-                    show_hidden: build.show_hidden,
-                    fingerprint: build.fingerprint,
-                    candidates: candidates.clone(),
-                    stats,
-                });
+                self.fuzzy_finder.caches.insert(
+                    build.scope,
+                    SearchCache {
+                        cwd: build.cwd,
+                        show_hidden: build.show_hidden,
+                        fingerprint: build.fingerprint,
+                        candidates: candidates.clone(),
+                        stats,
+                    },
+                );
                 if let Some(search) = &mut self.fuzzy_finder.search
                     && search.scope == build.scope
                 {
@@ -142,7 +144,7 @@ impl App {
                 self.sync_search_scroll();
             }
             Err(error) => {
-                self.fuzzy_finder.cache = None;
+                self.fuzzy_finder.caches.remove(&build.scope);
                 if let Some(search) = &mut self.fuzzy_finder.search
                     && search.scope == build.scope
                 {

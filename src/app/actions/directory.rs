@@ -245,14 +245,7 @@ impl App {
     }
 
     fn invalidate_search_index_for_directory_snapshot(&mut self, cwd: &Path) {
-        if self
-            .fuzzy_finder
-            .cache
-            .as_ref()
-            .is_some_and(|cache| cache.cwd == cwd)
-        {
-            self.fuzzy_finder.cache = None;
-        }
+        self.fuzzy_finder.caches.retain(|_, cache| cache.cwd != cwd);
 
         self.fuzzy_finder.loading = false;
         self.fuzzy_finder.token = self.fuzzy_finder.token.wrapping_add(1);
@@ -462,13 +455,12 @@ impl App {
     }
 
     fn refresh_search_after_directory_reload(&mut self) {
-        let Some(scope) = self.fuzzy_finder.search.as_ref().map(|search| search.scope) else {
+        let Some(search) = &mut self.fuzzy_finder.search else {
             return;
         };
 
-        if let Some(search) = &mut self.fuzzy_finder.search {
-            search.restart_loading();
-        }
+        search.restart_loading();
+        let scope = search.scope;
         self.prewarm_search_index(scope);
     }
 }
