@@ -10,7 +10,7 @@ pub(crate) struct FuzzyFinderState {
     pub(crate) search: Option<SearchState>,
     pub(crate) token: u64,
     pub(crate) loading: bool,
-    pub(crate) cache: Option<SearchCache>,
+    pub(crate) caches: HashMap<SearchScope, SearchCache>,
 }
 
 pub(crate) struct SearchState {
@@ -36,7 +36,6 @@ pub(crate) struct SearchMatchCacheEntry {
 #[derive(Clone, Debug)]
 pub(crate) struct SearchCache {
     pub(crate) cwd: PathBuf,
-    pub(crate) scope: SearchScope,
     pub(crate) show_hidden: bool,
     pub(crate) fingerprint: crate::filesystem::DirectoryFingerprint,
     pub(crate) candidates: Arc<Vec<SearchCandidate>>,
