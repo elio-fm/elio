@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a Nix flake.
 - Added `Tab` to switch between files and folders in Fuzzy Find without clearing your query. ([#296])
 - Added `[preview] tab_width` to configure tab width in text and code previews (1–16 columns, default 4). ([#292])
 
