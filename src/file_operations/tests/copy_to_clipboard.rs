@@ -31,13 +31,13 @@ fn copy_overlay_populates_expected_rows_for_selected_file() {
 #[test]
 fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {
     let _lock = clipboard_env_lock();
-    let _env = ClipboardEnvGuard::isolate();
     let root = temp_path("copy-overlay-copy");
     fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
     let file = root.join("docs/report final.md");
     let capture = root.join("clipboard.txt");
     fs::write(&file, "notes").expect("failed to write test file");
     let tool = install_fake_clipboard_tool(&root, &capture);
+    let _env = ClipboardEnvGuard::isolate();
 
     unsafe {
         env::set_var("ELIO_TEST_CLIPBOARD_TOOL", &tool);
@@ -195,7 +195,6 @@ fn copy_overlay_shortcut_uses_osc52_override_for_unknown_terminals() {
 #[test]
 fn copy_overlay_skips_osc52_in_tmux_when_tmux_rejects_application_clipboard() {
     let _lock = clipboard_env_lock();
-    let _env = ClipboardEnvGuard::isolate();
     let root = temp_path("copy-overlay-tmux-external");
     fs::create_dir_all(root.join("docs")).expect("failed to create docs dir");
     let file = root.join("docs/report final.md");
@@ -203,6 +202,7 @@ fn copy_overlay_skips_osc52_in_tmux_when_tmux_rejects_application_clipboard() {
     let osc52_capture = root.join("osc52.txt");
     fs::write(&file, "notes").expect("failed to write test file");
     let tool = install_fake_clipboard_tool(&root, &capture);
+    let _env = ClipboardEnvGuard::isolate();
 
     unsafe {
         env::set_var("ELIO_TEST_CLIPBOARD_TOOL", &tool);
@@ -268,13 +268,13 @@ fn copy_overlay_reports_short_error_when_no_clipboard_backend_is_available() {
 #[test]
 fn copy_overlay_does_not_block_on_backgrounding_clipboard_helpers() {
     let _lock = clipboard_env_lock();
-    let _env = ClipboardEnvGuard::isolate();
     let root = temp_path("copy-overlay-background");
     fs::create_dir_all(&root).expect("failed to create temp root");
     let report = root.join("aaa-report.txt");
     fs::write(&report, "hello").expect("failed to write test file");
     let capture = root.join("clipboard.txt");
     let tool = install_backgrounding_clipboard_tool(&root, &capture);
+    let _env = ClipboardEnvGuard::isolate();
 
     unsafe {
         env::set_var("ELIO_TEST_CLIPBOARD_TOOL", &tool);

@@ -14,7 +14,7 @@ use std::{
 
 use support::temp_path;
 
-const FAKE_ELIO: &str = r#"#!/usr/bin/env sh
+const FAKE_ELIO: &str = r#"#!/bin/sh
 if [ "$1" = "--cwd-file" ]; then
   if [ "${3-}" = "empty" ]; then
     : > "$2"

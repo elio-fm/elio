@@ -240,9 +240,21 @@ fn confirm_trash_batch_trashes_multiple_files_and_reports_count() {
 
     wait_for_trash_and_reload(&mut app);
 
-    assert!(!root.join("alpha.txt").exists());
-    assert!(!root.join("beta.txt").exists());
-    assert!(!root.join("gamma.txt").exists());
+    assert!(
+        !root.join("alpha.txt").exists(),
+        "alpha.txt still exists after trash; status: {}",
+        app.status_message()
+    );
+    assert!(
+        !root.join("beta.txt").exists(),
+        "beta.txt still exists after trash; status: {}",
+        app.status_message()
+    );
+    assert!(
+        !root.join("gamma.txt").exists(),
+        "gamma.txt still exists after trash; status: {}",
+        app.status_message()
+    );
     assert_eq!(app.status_message(), "Trashed 3 items");
 
     // Purge the items we just trashed from the OS trash so the test
@@ -286,7 +298,11 @@ fn confirm_trash_batch_single_file_shows_quoted_name() {
 
     wait_for_trash_and_reload(&mut app);
 
-    assert!(!root.join("notes.txt").exists());
+    assert!(
+        !root.join("notes.txt").exists(),
+        "notes.txt still exists after trash; status: {}",
+        app.status_message()
+    );
     assert_eq!(app.status_message(), "Trashed \"notes.txt\"");
 
     // Purge from OS trash to avoid side-effects.

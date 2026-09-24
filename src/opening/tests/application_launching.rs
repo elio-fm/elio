@@ -20,17 +20,35 @@ fn shell_quote(s: &str) -> String {
 }
 
 #[test]
+fn detached_process_group_child() {
+    let Some(root) = std::env::var_os("ELIO_TEST_PROCESS_GROUP_ROOT") else {
+        return;
+    };
+    let root = PathBuf::from(root);
+    let contents = format!("{} {}\n", std::process::id(), unsafe { libc::getpgrp() });
+    fs::write(root.join("capture.tmp"), contents).expect("failed to write process group");
+    fs::rename(root.join("capture.tmp"), root.join("capture.txt"))
+        .expect("failed to publish process group");
+}
+
+#[test]
 fn launch_application_with_target_creates_a_separate_process_group() {
     let root = temp_path("detached-open");
     fs::create_dir_all(&root).expect("failed to create temp root");
 
     let capture = root.join("capture.txt");
-    let capture_str = capture
+    let executable = std::env::current_exe().expect("failed to locate test executable");
+    let executable = executable
         .to_str()
-        .expect("capture path should be valid utf-8");
+        .expect("test executable should be utf-8");
+    let stderr = root.join("stderr.txt");
+    let stderr_str = stderr.to_str().expect("stderr path should be valid utf-8");
+    // The launcher appends the target as $0. Set the helper's environment only
+    // in the child shell, without mutating the test process's environment.
     let command = format!(
-        "pgid=$(ps -o pgid= -p $$ | tr -d ' '); printf '%s %s\\n' \"$$\" \"$pgid\" > {}",
-        shell_quote(capture_str)
+        "exec 2> {}; export ELIO_TEST_PROCESS_GROUP_ROOT=\"$0\"; exec {} --exact opening::application_launching::tests::detached_process_group_child --nocapture",
+        shell_quote(stderr_str),
+        shell_quote(executable)
     );
     launch_application_with_target("/bin/sh", &["-c", &command], &root)
         .expect("failed to spawn fake opener");
@@ -47,6 +65,12 @@ fn launch_application_with_target_creates_a_separate_process_group() {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
+    let stderr_text = fs::read_to_string(&stderr).unwrap_or_else(|error| error.to_string());
+    assert_eq!(
+        capture_text.split_whitespace().count(),
+        2,
+        "expected pid and process group; capture={capture_text:?}; stderr={stderr_text:?}"
+    );
     let mut parts = capture_text.split_whitespace();
     let pid = parts
         .next()
