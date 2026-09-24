@@ -130,6 +130,14 @@ pub(super) fn displayed_sixel_static_image_overlay(
     app: &mut App,
     identity: TerminalIdentity,
 ) -> StaticImageOverlayRequest {
+    // Match the synthetic frame, not the host TTY: an unsized build PTY can
+    // successfully report 0x0 cells, producing enormous Sixel pixel targets.
+    app.preview.terminal_images.window = Some(TerminalWindowSize {
+        cells_width: 120,
+        cells_height: 40,
+        pixels_width: 1920,
+        pixels_height: 1080,
+    });
     let request = ready_static_image_overlay(app);
     app.set_terminal_image_protocol_for_tests(ImageProtocol::Sixel, identity);
 
