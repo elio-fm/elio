@@ -79,6 +79,20 @@ Install the FreeBSD package:
 pkg install elio
 ```
 
+### Nix
+
+Run from `main` with Nix flakes:
+
+```bash
+nix run github:elio-fm/elio/main
+```
+
+Or install from `main` in your Nix profile:
+
+```bash
+nix profile add github:elio-fm/elio/main
+```
+
 ### Cargo
 
 Install from crates.io:

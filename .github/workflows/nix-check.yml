@@ -1,0 +1,62 @@
+name: Nix checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nix-check.yml'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'nix/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  pull_request:
+    paths:
+      - '.github/workflows/nix-check.yml'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'nix/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  nix:
+    name: Nix build and test (${{ matrix.system }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Standard native runners: https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-24.04
+          - system: aarch64-linux
+            runner: ubuntu-24.04-arm
+          - system: aarch64-darwin
+            runner: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Check flake (including package tests)
+        run: |
+          test "$(nix eval --impure --raw --expr builtins.currentSystem)" = '${{ matrix.system }}'
+          nix flake check --print-build-logs
+
+      - name: Check executable
+        run: nix run .#packages.${{ matrix.system }}.elio -- --version

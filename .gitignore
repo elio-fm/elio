@@ -1,4 +1,6 @@
 /target
+/result
+/result-*
 /vendor
 /.codex
 /elio-*.tar.gz
