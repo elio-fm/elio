@@ -303,14 +303,24 @@ pub(crate) fn run_with_startup_state(
 fn run_open_command_in_terminal(
     program: &str,
     args: &[String],
-    elevated_cwd: &Path,
+    cwd: &Path,
 ) -> std::io::Result<std::process::ExitStatus> {
     let mut command = Command::new(program);
-    command.args(args);
+    command.args(args).env("PWD", cwd);
     #[cfg(unix)]
-    crate::elevated_session::prepare_external(&mut command, Some(elevated_cwd))?;
+    {
+        crate::elevated_session::prepare_external(&mut command, Some(cwd))?;
+        if matches!(
+            crate::elevated_session::context(),
+            crate::elevated_session::InvocationContext::Normal
+                | crate::elevated_session::InvocationContext::RootSession
+        ) {
+            // Elevated launches must chdir only after dropping privileges.
+            command.current_dir(cwd);
+        }
+    }
     #[cfg(not(unix))]
-    let _ = elevated_cwd;
+    command.current_dir(cwd);
     command.status()
 }
 

@@ -9,6 +9,64 @@ use std::{
 };
 
 #[test]
+fn terminal_open_uses_browser_cwd_without_changing_parent_cwd() {
+    let parent_cwd = std::env::current_dir().unwrap();
+    let parent_pwd = std::env::var_os("PWD");
+    let cwd = std::env::temp_dir().join(format!(
+        "elio terminal open {} {}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir(&cwd).unwrap();
+    let cwd = cwd.canonicalize().unwrap();
+    fs::write(cwd.join("relative file.txt"), "browser directory").unwrap();
+    fs::write(cwd.join("expected cwd.txt"), cwd.to_str().unwrap()).unwrap();
+
+    // Reuse the test executable so the probe needs no shell or external tools.
+    let status = super::run_open_command_in_terminal(
+        std::env::current_exe().unwrap().to_str().unwrap(),
+        &[
+            "--exact".into(),
+            "terminal_runtime::tui_event_loop::tests::terminal_open_child_probe".into(),
+            "--ignored".into(),
+            "--nocapture".into(),
+        ],
+        &cwd,
+    );
+    let probe_completed = cwd.join("probe completed").is_file();
+    fs::remove_dir_all(&cwd).unwrap();
+
+    assert!(probe_completed, "child probe must run its assertions");
+    assert_eq!(std::env::current_dir().unwrap(), parent_cwd);
+    assert_eq!(std::env::var_os("PWD"), parent_pwd);
+    assert!(status.unwrap().success());
+}
+
+#[test]
+#[ignore = "subprocess probe for terminal_open_uses_browser_cwd_without_changing_parent_cwd"]
+fn terminal_open_child_probe() {
+    let expected = fs::read_to_string("expected cwd.txt")
+        .expect("terminal application must resolve files in the browser directory");
+    let expected = std::path::Path::new(&expected);
+    assert_eq!(
+        std::env::current_dir().unwrap().canonicalize().unwrap(),
+        expected
+    );
+    assert_eq!(
+        std::env::var_os("PWD").as_deref(),
+        Some(expected.as_os_str())
+    );
+    assert_eq!(
+        fs::read_to_string("relative file.txt").unwrap(),
+        "browser directory"
+    );
+    fs::write("probe completed", "").unwrap();
+}
+
+#[test]
 fn event_poll_interval_stays_idle_while_terminal_is_unfocused() {
     let interval = event_poll_interval(
         IDLE_POLL_INTERVAL,

@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed Nushell integration not changing directory to symlinked folders on quit.
 - Fixed Sixel previews disappearing in tmux.
 - Fixed `-h` and `--help` for shell integration commands.
+- Fixed terminal applications using elio's startup folder as their working directory instead of the current folder. ([#293])
 
 ## [1.12.0] - 2026-08-24
 
@@ -356,6 +357,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
 [#296]: https://github.com/elio-fm/elio/issues/296
+[#293]: https://github.com/elio-fm/elio/issues/293
 [#292]: https://github.com/elio-fm/elio/issues/292
 [#278]: https://github.com/elio-fm/elio/issues/278
 [#274]: https://github.com/elio-fm/elio/issues/274
