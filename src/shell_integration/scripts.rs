@@ -178,7 +178,7 @@ fn nu_init_script(executable: &str) -> String {
   let cwd = if ($tmp | path exists) {{ open --raw $tmp }} else {{ "" }}
   rm -f $tmp
 
-  if ($cwd | is-not-empty) and ($cwd != $env.PWD) and (($cwd | path type) == 'dir') {{
+  if ($cwd | is-not-empty) and ($cwd != $env.PWD) and (($cwd | path expand | path type) == 'dir') {{
     cd $cwd
   }}
 

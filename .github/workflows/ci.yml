@@ -85,10 +85,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Install preview test tooling
+      - name: Install preview and shell test tooling
         run: |
           set -euxo pipefail
-          brew install ffmpeg imagemagick poppler sevenzip cdrtools
+          brew install ffmpeg imagemagick poppler sevenzip cdrtools fish nushell
 
           if ! command -v 7z >/dev/null 2>&1 && command -v 7zz >/dev/null 2>&1; then
             ln -sf "$(command -v 7zz)" /usr/local/bin/7z

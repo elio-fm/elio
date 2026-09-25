@@ -20,7 +20,7 @@ if [ "$1" = "--cwd-file" ]; then
     : > "$2"
     exit 9
   fi
-  printf '%s' /tmp > "$2"
+  printf '%s' "$ELIO_TEST_DESTINATION" > "$2"
   exit 7
 fi
 
@@ -64,6 +64,7 @@ struct RuntimeFixture {
     fake_dir: PathBuf,
     init_script: PathBuf,
     start_dir: PathBuf,
+    destination: PathBuf,
     home_dir: PathBuf,
     config_home: PathBuf,
     data_home: PathBuf,
@@ -97,7 +98,20 @@ fn generated_nu_function_runs_when_executed() -> Result<(), Box<dyn Error>> {
     run_generated_function("nu", ShellSyntax::Nu)
 }
 
+#[test]
+fn generated_nu_function_follows_directory_symlinks() -> Result<(), Box<dyn Error>> {
+    run_generated_function_with_destination("nu", ShellSyntax::Nu, true)
+}
+
 fn run_generated_function(shell: &str, syntax: ShellSyntax) -> Result<(), Box<dyn Error>> {
+    run_generated_function_with_destination(shell, syntax, false)
+}
+
+fn run_generated_function_with_destination(
+    shell: &str,
+    syntax: ShellSyntax,
+    use_symlink: bool,
+) -> Result<(), Box<dyn Error>> {
     if !shell_available(shell) {
         return Ok(());
     }
@@ -118,9 +132,17 @@ fn run_generated_function(shell: &str, syntax: ShellSyntax) -> Result<(), Box<dy
     }
     command.arg("-c").arg(runtime_script);
     configure_runtime_environment(&mut command, &fixture)?;
+    let destination = if use_symlink {
+        let link = fixture._root.path().join("destination link");
+        symlink(&fixture.destination, &link)?;
+        command.env("ELIO_TEST_DESTINATION", &link);
+        link
+    } else {
+        fixture.destination.clone()
+    };
     let output = command.output()?;
 
-    assert_runtime_output(output, &fixture.start_dir);
+    assert_runtime_output(output, &fixture.start_dir, &destination);
     Ok(())
 }
 
@@ -129,6 +151,9 @@ fn runtime_fixture(shell: &str) -> Result<RuntimeFixture, Box<dyn Error>> {
     let gen_dir = root.path().join("gen-bin");
     let fake_dir = root.path().join("fake-bin");
     let start_dir = root.path().join("start");
+    let destination = root.path().join("destination with spaces");
+    fs::create_dir_all(&destination)?;
+    let destination = destination.canonicalize()?;
     let home_dir = root.path().join("home");
     let config_home = root.path().join("config");
     let data_home = root.path().join("data");
@@ -186,6 +211,7 @@ fn runtime_fixture(shell: &str) -> Result<RuntimeFixture, Box<dyn Error>> {
         fake_dir,
         init_script,
         start_dir,
+        destination,
         home_dir,
         config_home,
         data_home,
@@ -199,6 +225,7 @@ fn configure_runtime_environment(
 ) -> Result<(), Box<dyn Error>> {
     command
         .env("PATH", path_with_prefix(&fixture.fake_dir)?)
+        .env("ELIO_TEST_DESTINATION", &fixture.destination)
         .env("HOME", &fixture.home_dir)
         .env("XDG_CONFIG_HOME", &fixture.config_home)
         .env("XDG_DATA_HOME", &fixture.data_home)
@@ -347,7 +374,7 @@ print $"shell_pipeline=(open --raw {})"
     )
 }
 
-fn assert_runtime_output(output: std::process::Output, start_dir: &Path) {
+fn assert_runtime_output(output: std::process::Output, start_dir: &Path, destination: &Path) {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
@@ -360,8 +387,8 @@ fn assert_runtime_output(output: std::process::Output, start_dir: &Path) {
         "shell runtime script printed stderr:\n{stderr}\nstdout:\n{stdout}"
     );
     assert!(
-        stdout.contains("cwd=/tmp code=7"),
-        "normal call should cd to /tmp and return fake status\nstdout:\n{stdout}"
+        stdout.contains(&format!("cwd={} code=7", destination.display())),
+        "normal call should cd to the destination and return fake status\nstdout:\n{stdout}"
     );
     assert!(
         stdout.contains(&format!("empty_cwd={} empty_code=9", start_dir.display())),
