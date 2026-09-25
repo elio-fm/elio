@@ -78,6 +78,78 @@ impl Drop for TerminalEnvGuard {
 }
 
 #[test]
+fn rio_identifiers_take_precedence_over_inherited_kitty_marker() {
+    for (identifier, value) in [
+        ("TERM", "rio"),
+        ("TERM", "xterm-rio"),
+        ("TERM_PROGRAM", "rio"),
+    ] {
+        let lookup = |name: &str| match name {
+            _ if name == identifier => Some(value.to_string()),
+            "KITTY_WINDOW_ID" => Some("stale".to_string()),
+            _ => None,
+        };
+        assert_eq!(classify_from_env(&lookup), TerminalIdentity::Rio);
+        assert_eq!(
+            classify_supported_tmux_env(&lookup),
+            Some(TerminalIdentity::Rio)
+        );
+    }
+}
+
+#[test]
+fn rio_identifiers_require_exact_names() {
+    for value in ["rio-extra", "priority"] {
+        for identifier in ["TERM", "TERM_PROGRAM"] {
+            let lookup = |name: &str| (name == identifier).then(|| value.to_string());
+            assert_eq!(classify_from_env(&lookup), TerminalIdentity::Other);
+            assert_eq!(classify_supported_tmux_env(&lookup), None);
+        }
+        assert_eq!(classify_tmux_client_termname(value), None);
+    }
+    let lookup = |name: &str| (name == "TERM_PROGRAM").then(|| "xterm-rio".to_string());
+    assert_eq!(classify_from_env(&lookup), TerminalIdentity::Other);
+    assert_eq!(classify_supported_tmux_env(&lookup), None);
+}
+
+#[test]
+fn detect_terminal_identity_recovers_rio_from_tmux_with_stale_kitty_marker() {
+    let pane_env = |name: &str| match name {
+        "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+        "KITTY_WINDOW_ID" => Some("stale".to_string()),
+        _ => None,
+    };
+    for term in ["rio", "xterm-rio"] {
+        let id = detect_terminal_identity_with(
+            pane_env,
+            || Some(term.to_string()),
+            no_tmux_env_lookup,
+            no_tmux_env_lookup,
+        );
+        assert_eq!(id, TerminalIdentity::Rio, "client term: {term}");
+    }
+    let recovered_env = |name: &str| match name {
+        "TERM_PROGRAM" => Some("rio".to_string()),
+        "KITTY_WINDOW_ID" => Some("stale".to_string()),
+        _ => None,
+    };
+    let live = detect_terminal_identity_with(
+        pane_env,
+        no_tmux_client_term,
+        recovered_env,
+        no_tmux_env_lookup,
+    );
+    let session = detect_terminal_identity_with(
+        pane_env,
+        no_tmux_client_term,
+        no_tmux_env_lookup,
+        recovered_env,
+    );
+    assert_eq!(live, TerminalIdentity::Rio);
+    assert_eq!(session, TerminalIdentity::Rio);
+}
+
+#[test]
 fn detect_terminal_identity_recognizes_iterm2_term_program() {
     let _lock = terminal_env_lock();
     let _guard = TerminalEnvGuard::isolate();
@@ -126,6 +198,12 @@ fn select_image_protocol_uses_direct_kitty_graphics_inside_zellij() {
         select_image_protocol_with_zellij(TerminalIdentity::Ghostty, false, true),
         ImageProtocol::KittyDirectGraphics
     );
+    for override_enabled in [false, true] {
+        assert_eq!(
+            select_image_protocol_with_zellij(TerminalIdentity::Rio, override_enabled, true),
+            ImageProtocol::KittyDirectGraphics
+        );
+    }
 }
 
 #[test]
@@ -146,6 +224,12 @@ fn select_image_protocol_keeps_normal_kitty_graphics_outside_zellij() {
         select_image_protocol_with_zellij(TerminalIdentity::Ghostty, false, false),
         ImageProtocol::KittyGraphics
     );
+    for override_enabled in [false, true] {
+        assert_eq!(
+            select_image_protocol_with_zellij(TerminalIdentity::Rio, override_enabled, false),
+            ImageProtocol::KittyGraphics
+        );
+    }
 }
 
 #[test]

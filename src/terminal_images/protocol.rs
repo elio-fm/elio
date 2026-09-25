@@ -87,6 +87,8 @@ fn classify_from_env(env_lookup: &impl Fn(&str) -> Option<String>) -> TerminalId
         TerminalIdentity::Ghostty
     } else if term.contains("wezterm") || term_program == "wezterm" {
         TerminalIdentity::WezTerm
+    } else if matches!(term.as_str(), "rio" | "xterm-rio") || term_program == "rio" {
+        TerminalIdentity::Rio
     } else if term_program.contains("warp") || env_lookup("WARP_SESSION_ID").is_some() {
         TerminalIdentity::Warp
     } else if term_program == "iterm.app" {
@@ -120,6 +122,8 @@ fn classify_tmux_client_termname(term: &str) -> Option<TerminalIdentity> {
         Some(TerminalIdentity::Kitty)
     } else if term.contains("ghostty") {
         Some(TerminalIdentity::Ghostty)
+    } else if matches!(term.as_str(), "rio" | "xterm-rio") {
+        Some(TerminalIdentity::Rio)
     } else if term == "foot" || term == "foot-extra" {
         Some(TerminalIdentity::Foot)
     } else {
@@ -143,6 +147,8 @@ fn classify_tmux_recovered_identity(
         Some(TerminalIdentity::Ghostty)
     } else if term.contains("wezterm") || term_program == "wezterm" {
         Some(TerminalIdentity::WezTerm)
+    } else if matches!(term.as_str(), "rio" | "xterm-rio") || term_program == "rio" {
+        Some(TerminalIdentity::Rio)
     } else if term_program.contains("warp") || warp_session_id_set {
         Some(TerminalIdentity::Warp)
     } else if term_program == "iterm.app" {
@@ -297,8 +303,10 @@ fn select_image_protocol_with_zellij(
     match identity {
         // Zellij currently implements Kitty graphics, but not Unicode placeholders.
         // If Zellij later adds placeholder support, remove this block to let
-        // Kitty/Ghostty inside Zellij fall through to `KittyGraphics`.
-        TerminalIdentity::Kitty | TerminalIdentity::Ghostty if in_zellij => {
+        // Kitty/Ghostty/Rio inside Zellij fall through to `KittyGraphics`.
+        TerminalIdentity::Kitty | TerminalIdentity::Ghostty | TerminalIdentity::Rio
+            if in_zellij =>
+        {
             ImageProtocol::KittyDirectGraphics
         }
         // Use Kitty direct placement inside Zellij since it does not support iTerm inline.
@@ -306,6 +314,7 @@ fn select_image_protocol_with_zellij(
 
         TerminalIdentity::Kitty => ImageProtocol::KittyGraphics,
         TerminalIdentity::Ghostty => ImageProtocol::KittyGraphics,
+        TerminalIdentity::Rio => ImageProtocol::KittyGraphics,
         // Warp supports direct Kitty graphics, but not Unicode placeholders.
         // Use Kitty direct placement instead of elio's `KittyGraphics` path.
         TerminalIdentity::Warp => ImageProtocol::KittyDirectGraphics,
