@@ -16,7 +16,7 @@ pub(crate) use directory_statistics::{
 };
 pub(crate) use directory_watching::{
     DirectoryWatchEvent, DirectoryWatcher, directory_watch_debounce, event_affects_visible_entries,
-    start_directory_watcher,
+    start_directory_watcher, start_git_head_watcher,
 };
 pub(crate) use entries::is_hidden_entry;
 pub use entries::{Entry, EntryKind, SymlinkInfo};

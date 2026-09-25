@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `-h` and `--help` for shell integration commands.
 - Fixed terminal applications using elio's startup folder as their working directory instead of the current folder. ([#293])
 - Fixed Git branch names truncating when space is available in the status bar.
+- Fixed the Git branch indicator staying stale after external branch switches, including in subfolders and linked worktrees.
 
 ## [1.12.0] - 2026-08-24
 
