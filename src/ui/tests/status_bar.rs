@@ -65,6 +65,15 @@ fn git_label_uses_the_available_width_before_hiding() {
         git_label_for_width("chore/footer-cleanup", true, 16).as_deref(),
         Some(" chore/…eanup *")
     );
+
+    let branch = "fix/git-branch-indicator-truncation";
+    let label = format!(" {branch} *");
+    let width = helpers::display_width(&label);
+    assert_eq!(git_label_for_width(branch, true, width), Some(label));
+    let truncated = git_label_for_width(branch, true, width - 1).unwrap();
+    assert!(truncated.contains('…'));
+    assert_eq!(helpers::display_width(&truncated), width - 1);
+    assert!(truncated.ends_with(" *"));
 }
 
 #[test]
