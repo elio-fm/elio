@@ -29,13 +29,14 @@ pub(crate) use self::window::query_terminal_window_size;
 pub(crate) enum TerminalIdentity {
     Kitty,
     Ghostty,
+    Rio,
     Warp,
     WezTerm,
     ITerm2,
     Konsole,
-    Alacritty,
     Foot,
     WindowsTerminal,
+    Alacritty,
     #[default]
     Other,
 }
@@ -46,7 +47,7 @@ pub(crate) enum TerminalIdentity {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum ImageProtocol {
     /// Kitty Graphics Protocol (APC `\x1b_G…\x1b\\`) using the Unicode
-    /// placeholder extension. Used by Kitty and Ghostty.
+    /// placeholder extension. Used by Kitty, Ghostty, and Rio.
     KittyGraphics,
     /// Direct-placement variant of the Kitty Graphics Protocol: same APC wire
     /// format, but without the Unicode placeholder extension. Images are

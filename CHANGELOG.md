@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added a Nix flake.
-- Added `Tab` to switch between files and folders in Fuzzy Find without clearing your query. ([#296])
+- Added `Tab` as a keybinding to switch between files and folders in Fuzzy Find without clearing the query. ([#296])
 - Added `[preview] tab_width` to configure tab width in text and code previews (1–16 columns, default 4). ([#292])
+- Added image preview support for Rio. ([#303])
 
 ### Changed
 
@@ -358,6 +359,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#303]: https://github.com/elio-fm/elio/issues/303
 [#296]: https://github.com/elio-fm/elio/issues/296
 [#293]: https://github.com/elio-fm/elio/issues/293
 [#292]: https://github.com/elio-fm/elio/issues/292
