@@ -12,7 +12,6 @@ use ratatui::{
 
 const STATUS_MIN_LEFT_WIDTH: u16 = 24;
 const STATUS_RIGHT_PADDING: usize = 2;
-const GIT_BRANCH_MAX_WIDTH: usize = 24;
 const LOCAL_FILTER_INDICATOR_MAX_WIDTH: usize = 24;
 const FOOTER_MIN_NAME_WIDTH: usize = 6;
 const FOOTER_MIN_GIT_BRANCH_WIDTH: usize = 3;
@@ -292,7 +291,7 @@ pub(in crate::ui) fn git_label_for_width(
 ) -> Option<String> {
     let dirty_suffix = if dirty { " *" } else { "" };
     let fixed_width = helpers::display_width(" ") + helpers::display_width(dirty_suffix);
-    let branch_width = width.saturating_sub(fixed_width).min(GIT_BRANCH_MAX_WIDTH);
+    let branch_width = width.saturating_sub(fixed_width);
     if branch_width < FOOTER_MIN_GIT_BRANCH_WIDTH {
         return None;
     }

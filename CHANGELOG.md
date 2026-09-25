@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed Sixel previews disappearing in tmux.
 - Fixed `-h` and `--help` for shell integration commands.
 - Fixed terminal applications using elio's startup folder as their working directory instead of the current folder. ([#293])
+- Fixed Git branch names truncating when space is available in the status bar.
 
 ## [1.12.0] - 2026-08-24
 
