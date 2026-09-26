@@ -45,6 +45,7 @@ pub(crate) struct DirectoryRequest {
     pub(crate) cwd: PathBuf,
     pub(crate) show_hidden: bool,
     pub(crate) sort_mode: SortMode,
+    pub(crate) folders_first: bool,
 }
 
 #[derive(Clone, Debug)]

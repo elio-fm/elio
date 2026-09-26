@@ -178,14 +178,16 @@ pub(crate) fn load_directory_snapshot(
     dir: &Path,
     show_hidden: bool,
     sort_mode: SortMode,
+    folders_first: bool,
 ) -> Result<DirectorySnapshot> {
-    load_directory_snapshot_cancellable(dir, show_hidden, sort_mode, &|| false)
+    load_directory_snapshot_cancellable(dir, show_hidden, sort_mode, folders_first, &|| false)
 }
 
 pub(crate) fn load_directory_snapshot_cancellable(
     dir: &Path,
     show_hidden: bool,
     sort_mode: SortMode,
+    folders_first: bool,
     canceled: &dyn Fn() -> bool,
 ) -> Result<DirectorySnapshot> {
     let mut entries = read_entries(dir, show_hidden, canceled)?;
@@ -210,7 +212,7 @@ pub(crate) fn load_directory_snapshot_cancellable(
     }
 
     check_scan_canceled(canceled)?;
-    sort_entries(&mut entries, sort_mode);
+    sort_entries(&mut entries, sort_mode, folders_first);
     check_scan_canceled(canceled)?;
     let fingerprint = entries_fingerprint(&entries);
     Ok(DirectorySnapshot {
@@ -291,10 +293,10 @@ pub(crate) fn scan_directory_fingerprint_cancellable(
     Ok(fingerprint_from_parts(&mut parts))
 }
 
-fn sort_entries(entries: &mut [Entry], mode: SortMode) {
+fn sort_entries(entries: &mut [Entry], mode: SortMode, folders_first: bool) {
     entries.sort_by(|left, right| match (left.is_dir(), right.is_dir()) {
-        (true, false) => Ordering::Less,
-        (false, true) => Ordering::Greater,
+        (true, false) if folders_first => Ordering::Less,
+        (false, true) if folders_first => Ordering::Greater,
         _ => match mode {
             SortMode::Name => compare_entry_names(left, right),
             SortMode::Modified => right

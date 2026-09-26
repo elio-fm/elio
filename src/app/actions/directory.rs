@@ -115,6 +115,7 @@ impl App {
             cwd: load.target_cwd.clone(),
             show_hidden: self.effective_show_hidden_for(&load.target_cwd),
             sort_mode: self.file_browser.sort_mode,
+            folders_first: crate::config::ui().folders_first,
         };
         if !self.job_scheduler.submit_directory(request) {
             bail!("Directory worker unavailable");

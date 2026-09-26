@@ -514,7 +514,7 @@ fn directory_reload_invalidates_both_closed_search_caches() {
 
     fs::create_dir_all(root.join("beta")).expect("failed to create new folder");
     let snapshot =
-        crate::filesystem::load_directory_snapshot(&root, false, app.file_browser.sort_mode)
+        crate::filesystem::load_directory_snapshot(&root, false, app.file_browser.sort_mode, true)
             .expect("failed to load directory snapshot");
     app.apply_directory_snapshot(
         PendingDirectoryLoad {

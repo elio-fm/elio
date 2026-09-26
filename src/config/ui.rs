@@ -5,6 +5,7 @@ pub(crate) struct UiConfig {
     pub show_top_bar: bool,
     pub grid_zoom: u8,
     pub show_hidden: bool,
+    pub folders_first: bool,
     pub start_in_grid: bool,
 }
 
@@ -14,6 +15,7 @@ impl Default for UiConfig {
             show_top_bar: false,
             grid_zoom: 1,
             show_hidden: false,
+            folders_first: true,
             start_in_grid: false,
         }
     }
@@ -24,6 +26,7 @@ pub(super) struct UiConfigOverride {
     show_top_bar: Option<bool>,
     grid_zoom: Option<i64>,
     show_hidden: Option<bool>,
+    folders_first: Option<bool>,
     start_in_grid: Option<bool>,
 }
 
@@ -37,6 +40,9 @@ impl UiConfig {
         }
         if let Some(show_hidden) = overrides.show_hidden {
             self.show_hidden = show_hidden;
+        }
+        if let Some(folders_first) = overrides.folders_first {
+            self.folders_first = folders_first;
         }
         if let Some(start_in_grid) = overrides.start_in_grid {
             self.start_in_grid = start_in_grid;

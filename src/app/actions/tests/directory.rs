@@ -11,6 +11,133 @@ use std::{
 };
 
 #[test]
+fn configured_folders_first_applies_to_browser_and_directory_previews() {
+    use crate::filesystem::SortMode;
+
+    const SETTING_ENV: &str = "ELIO_TEST_FOLDERS_FIRST";
+    let Ok(setting) = std::env::var(SETTING_ENV) else {
+        // Config is process-wide and immutable; isolate each setting from other tests.
+        for setting in ["default", "true", "false"] {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    concat!(
+                        module_path!(),
+                        "::configured_folders_first_applies_to_browser_and_directory_previews"
+                    )
+                    .trim_start_matches("elio::"),
+                ])
+                .env(SETTING_ENV, setting)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "folders_first {setting}:\n{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+        }
+        return;
+    };
+
+    let root = temp_path("folders-first");
+    let cwd = root.join("browser");
+    let folder = cwd.join("z-folder");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(cwd.join("a-file"), "content").unwrap();
+    for name in ["entry2", "entry20"] {
+        fs::create_dir(folder.join(name)).unwrap();
+    }
+    for name in ["entry1", "entry10"] {
+        fs::write(folder.join(name), "content").unwrap();
+    }
+    // Make the file newer than the folder without relying on filesystem clock resolution.
+    fs::File::options()
+        .write(true)
+        .open(cwd.join("a-file"))
+        .unwrap()
+        .set_modified(fs::metadata(&folder).unwrap().modified().unwrap() + Duration::from_secs(60))
+        .unwrap();
+    let config_path = root.join("config.toml");
+    fs::write(
+        &config_path,
+        if setting == "default" {
+            String::new()
+        } else {
+            format!("[ui]\nfolders_first = {setting}\n")
+        },
+    )
+    .unwrap();
+    crate::config::initialize(Some(&config_path)).unwrap();
+    let mut app = App::new_at(cwd).unwrap();
+    let expected = if setting == "false" {
+        ["a-file", "z-folder"]
+    } else {
+        ["z-folder", "a-file"]
+    };
+    for (mode, reload) in [
+        (SortMode::Name, false),
+        (SortMode::Name, true),
+        (SortMode::Modified, true),
+        (SortMode::Size, true),
+    ] {
+        app.file_browser.sort_mode = mode;
+        if reload {
+            app.reload().unwrap();
+            wait_for_directory_load(&mut app);
+        }
+        assert_eq!(
+            app.file_browser
+                .entries
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            expected,
+            "browser {mode:?}, reload={reload}"
+        );
+    }
+
+    app.file_browser.selected = app
+        .file_browser
+        .entries
+        .iter()
+        .position(|entry| entry.path == folder)
+        .unwrap();
+    app.refresh_preview();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while app.preview.state.content.lines.len() != 4 {
+        assert!(Instant::now() < deadline, "directory preview timed out");
+        app.process_background_jobs();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let expected = if setting == "false" {
+        ["entry1", "entry10", "entry2", "entry20"]
+    } else {
+        ["entry2", "entry20", "entry1", "entry10"]
+    };
+    // A repeated refresh must also retain the configured order when using the cache.
+    for refresh in [false, true] {
+        if refresh {
+            let cache_hits = app.preview.state.metrics.cache_hits;
+            app.refresh_preview();
+            assert!(app.preview.state.metrics.cache_hits > cache_hits);
+        }
+        let names = app
+            .preview
+            .state
+            .content
+            .lines
+            .iter()
+            .map(|line| line.spans.last().unwrap().content.as_ref())
+            .collect::<Vec<_>>();
+        assert_eq!(names, expected, "preview refresh={refresh}");
+    }
+    drop(app);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn watcher_reload_detects_new_visible_entries() {
     let root = temp_path("auto-reload-visible");
     fs::create_dir_all(&root).expect("failed to create temp root");

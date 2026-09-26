@@ -21,13 +21,61 @@ fn test_entry(name: &str, kind: EntryKind) -> Entry {
 }
 
 #[test]
+fn folders_first_controls_grouping_for_every_sort_mode() {
+    use std::time::Duration;
+
+    let entries = [
+        ("entry10", EntryKind::Directory, 0, None),
+        ("entry2", EntryKind::File, 20, Some(2)),
+        ("entry1", EntryKind::Directory, 0, Some(1)),
+        ("entry3", EntryKind::File, 0, Some(1)),
+    ]
+    .map(|(name, kind, size, modified)| {
+        let mut entry = test_entry(name, kind);
+        entry.size = size;
+        entry.modified = modified.map(|seconds| UNIX_EPOCH + Duration::from_secs(seconds));
+        entry
+    });
+    for (mode, grouped, mixed) in [
+        (
+            SortMode::Name,
+            ["entry1", "entry10", "entry2", "entry3"],
+            ["entry1", "entry2", "entry3", "entry10"],
+        ),
+        (
+            SortMode::Modified,
+            ["entry1", "entry10", "entry2", "entry3"],
+            ["entry2", "entry1", "entry3", "entry10"],
+        ),
+        (
+            SortMode::Size,
+            ["entry1", "entry10", "entry2", "entry3"],
+            ["entry2", "entry1", "entry3", "entry10"],
+        ),
+    ] {
+        for (folders_first, expected) in [(true, grouped), (false, mixed)] {
+            let mut sorted = entries.clone();
+            sort_entries(&mut sorted, mode, folders_first);
+            assert_eq!(
+                sorted
+                    .iter()
+                    .map(|entry| entry.name.as_str())
+                    .collect::<Vec<_>>(),
+                expected,
+                "{mode:?}, folders_first={folders_first}"
+            );
+        }
+    }
+}
+
+#[test]
 fn sort_keeps_directories_before_files() {
     let mut entries = vec![
         test_entry("beta.txt", EntryKind::File),
         test_entry("alpha", EntryKind::Directory),
     ];
 
-    sort_entries(&mut entries, SortMode::Name);
+    sort_entries(&mut entries, SortMode::Name, true);
     assert!(entries[0].is_dir());
     assert!(!entries[1].is_dir());
 }
@@ -40,7 +88,7 @@ fn sort_uses_natural_numeric_order_for_names() {
         test_entry("episode 1.mkv", EntryKind::File),
     ];
 
-    sort_entries(&mut entries, SortMode::Name);
+    sort_entries(&mut entries, SortMode::Name, true);
     let names = entries
         .iter()
         .map(|entry| entry.name.as_str())
@@ -59,7 +107,7 @@ fn sort_uses_natural_numeric_order_with_non_latin_names() {
         test_entry("北斗の拳 究極版 1巻.epub", EntryKind::File),
     ];
 
-    sort_entries(&mut entries, SortMode::Name);
+    sort_entries(&mut entries, SortMode::Name, true);
     let names = entries
         .iter()
         .map(|entry| entry.name.as_str())
@@ -234,7 +282,8 @@ fn trash_snapshot_uses_deletion_date_from_trashinfo() {
     )
     .expect("failed to write trashinfo");
 
-    let snapshot = load_directory_snapshot(&files_dir, false, SortMode::Name).expect("should load");
+    let snapshot =
+        load_directory_snapshot(&files_dir, false, SortMode::Name, true).expect("should load");
     let entry = snapshot
         .entries
         .iter()
@@ -268,7 +317,8 @@ fn trash_snapshot_displays_original_name_from_trashinfo() {
     )
     .expect("failed to write trashinfo");
 
-    let snapshot = load_directory_snapshot(&files_dir, false, SortMode::Name).expect("should load");
+    let snapshot =
+        load_directory_snapshot(&files_dir, false, SortMode::Name, true).expect("should load");
     let entry = snapshot.entries.first().expect("entry should be present");
 
     assert_eq!(entry.name, "report final.pdf");
@@ -296,7 +346,8 @@ fn trash_snapshot_keeps_stored_name_without_original_path_metadata() {
     )
     .expect("failed to write trashinfo");
 
-    let snapshot = load_directory_snapshot(&files_dir, false, SortMode::Name).expect("should load");
+    let snapshot =
+        load_directory_snapshot(&files_dir, false, SortMode::Name, true).expect("should load");
     let entry = snapshot.entries.first().expect("entry should be present");
 
     assert_eq!(entry.name, "stored-name.txt.2");

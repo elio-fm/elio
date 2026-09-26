@@ -214,6 +214,7 @@ impl App {
             &app.file_browser.cwd,
             app.effective_show_hidden(),
             app.file_browser.sort_mode,
+            crate::config::ui().folders_first,
         )?;
         app.places.refresh();
         app.file_browser.unfiltered_entries = snapshot.entries;

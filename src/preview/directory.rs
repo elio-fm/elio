@@ -25,11 +25,10 @@ pub(super) fn build_directory_preview(entry: &Entry) -> PreviewContent {
             if scan_truncated {
                 items.pop();
             }
+            let folders_first = crate::config::ui().folders_first;
             items.sort_by(|left, right| {
-                right
-                    .entry
-                    .is_dir()
-                    .cmp(&left.entry.is_dir())
+                (folders_first && right.entry.is_dir())
+                    .cmp(&(folders_first && left.entry.is_dir()))
                     .then_with(|| left.entry.name_key.cmp(&right.entry.name_key))
                     .then_with(|| left.entry.name.cmp(&right.entry.name))
             });

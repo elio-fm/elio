@@ -1,6 +1,23 @@
 use super::super::*;
 
 #[test]
+fn config_folders_first_defaults_to_true_and_accepts_false() {
+    assert!(Config::default_config().ui.folders_first);
+    for source in ["", "[ui]", "[ui]\nfolders_first = true"] {
+        assert!(Config::from_str(source).unwrap().ui.folders_first);
+    }
+    assert!(
+        !Config::from_str("[ui]\nfolders_first = false")
+            .unwrap()
+            .ui
+            .folders_first
+    );
+    for value in ["1", "\"false\"", "[]"] {
+        assert!(Config::from_str(&format!("[ui]\nfolders_first = {value}")).is_err());
+    }
+}
+
+#[test]
 fn config_defaults_hide_top_bar() {
     let config = Config::default_config();
     assert!(!config.ui.show_top_bar);
