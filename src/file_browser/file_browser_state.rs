@@ -11,6 +11,7 @@ use std::{
 };
 
 pub(crate) struct FileBrowserState {
+    pub(crate) folder_sizes: super::folder_sizes::FolderSizes,
     pub(crate) cwd: PathBuf,
     pub(crate) entries: Vec<Entry>,
     pub(crate) unfiltered_entries: Vec<Entry>,
@@ -44,6 +45,7 @@ impl FileBrowserState {
         show_hidden: bool,
     ) -> Self {
         Self {
+            folder_sizes: super::folder_sizes::FolderSizes::default(),
             cwd,
             entries: Vec::new(),
             unfiltered_entries: Vec::new(),

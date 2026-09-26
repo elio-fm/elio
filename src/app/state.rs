@@ -219,6 +219,7 @@ impl App {
         )?;
         app.places.refresh();
         app.file_browser.unfiltered_entries = snapshot.entries;
+        app.start_folder_sizes();
         app.apply_local_filter_preserving_selection();
         app.file_browser.directory_runtime.fingerprint = snapshot.fingerprint;
         if let Some(start_focus) = start_focus
@@ -268,7 +269,7 @@ impl App {
     }
 
     pub fn has_pending_background_work(&self) -> bool {
-        self.job_scheduler.has_pending_work()
+        self.file_browser.folder_sizes.pending > 0 || self.job_scheduler.has_pending_work()
     }
 
     pub(crate) fn browser_wheel_burst_active(&self) -> bool {

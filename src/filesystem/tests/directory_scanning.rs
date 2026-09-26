@@ -21,6 +21,32 @@ fn test_entry(name: &str, kind: EntryKind) -> Entry {
 }
 
 #[test]
+fn recursive_sizes_sort_known_zero_before_unknown_and_mix_with_files() {
+    let entries = [
+        test_entry("unknown2", EntryKind::Directory),
+        test_entry("empty", EntryKind::Directory),
+        test_entry("large", EntryKind::Directory),
+        test_entry("file", EntryKind::File),
+        test_entry("unknown1", EntryKind::Directory),
+    ];
+    let sizes = std::collections::HashMap::from([
+        (PathBuf::from("empty"), 0),
+        (PathBuf::from("large"), 20),
+    ]);
+    for (grouped, expected) in [
+        (true, ["large", "empty", "unknown1", "unknown2", "file"]),
+        (false, ["large", "file", "empty", "unknown1", "unknown2"]),
+    ] {
+        let mut sorted = entries.clone();
+        sort_entries_by_recursive_size(&mut sorted, grouped, &sizes);
+        assert_eq!(
+            sorted.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(),
+            expected
+        );
+    }
+}
+
+#[test]
 fn folders_first_controls_grouping_for_every_sort_mode() {
     use std::time::Duration;
 

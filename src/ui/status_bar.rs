@@ -179,8 +179,41 @@ pub(super) fn render_status_bar(frame: &mut Frame<'_>, area: Rect, app: &App, pa
             spans.push(Span::raw("  "));
         }
 
-        let available_after_chips = sections[0].width.saturating_sub(chips_width) as usize;
         let summary = app.selection_summary();
+        let calculating_label = " Calculating folder sizes… ";
+        let calculating_width = helpers::display_width(calculating_label) as u16 + 2;
+        // Background sizing must not replace operation, clipboard, or selection
+        // chips, or squeeze the useful position/name summary out of the footer.
+        let summary_reserve = summary.split_once("  ").map_or_else(
+            || helpers::display_width(&summary),
+            |(position, name)| {
+                helpers::display_width(position)
+                    + 2
+                    + helpers::display_width(name).min(FOOTER_MIN_NAME_WIDTH)
+            },
+        );
+        if app.file_browser.sort_mode == crate::filesystem::SortMode::Size
+            && app.file_browser.folder_sizes.pending > 0
+            && trash_prog.is_none()
+            && restore_prog.is_none()
+            && paste_prog.is_none()
+            && archive_create_prog.is_none()
+            && archive_prog.is_none()
+            && sections[0].width.saturating_sub(chips_width) as usize
+                >= calculating_width as usize + summary_reserve
+        {
+            chips_width += calculating_width;
+            spans.push(Span::styled(
+                calculating_label,
+                Style::default()
+                    .bg(palette.progress_bar)
+                    .fg(palette.chip_text)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::raw("  "));
+        }
+
+        let available_after_chips = sections[0].width.saturating_sub(chips_width) as usize;
         let desired_summary_width = helpers::display_width(&summary).min(available_after_chips);
         let git_label = app.git_branch().and_then(|branch| {
             git_label_for_width(

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added image preview support for Rio. ([#303])
 - Added `[ui] folders_first` to optionally mix folders and files in the browser and directory previews.
 - Added `[ui] default_sort` to set the initial browser sort (name, modified, or size).
+- Added recursive folder size calculation in the background when sorting by size.
 
 ### Changed
 

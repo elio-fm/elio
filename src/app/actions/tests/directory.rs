@@ -205,6 +205,19 @@ fn configured_default_sort_initializes_browser_and_retains_runtime_sort() {
     .unwrap();
     crate::config::initialize(Some(&config_path)).unwrap();
     let mut app = App::new_at(cwd.clone()).unwrap();
+    if setting == "size" {
+        assert_eq!(app.file_browser.folder_sizes.pending, 1);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while app.file_browser.folder_sizes.pending > 0 {
+            app.process_folder_sizes();
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        assert_eq!(app.file_browser.folder_sizes.current[&folder], 6);
+        assert_eq!(app.file_browser.entries[0].name, "z-folder");
+    } else {
+        assert_eq!(app.file_browser.folder_sizes.pending, 0);
+    }
     let initial = match setting.as_str() {
         "modified" => SortMode::Modified,
         "size" => SortMode::Size,
