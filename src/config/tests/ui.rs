@@ -1,4 +1,31 @@
 use super::super::*;
+use crate::filesystem::SortMode;
+
+#[test]
+fn config_default_sort_defaults_and_valid_values() {
+    assert_eq!(Config::default_config().ui.default_sort, SortMode::Name);
+    for source in ["", "[ui]"] {
+        assert_eq!(
+            Config::from_str(source).unwrap().ui.default_sort,
+            SortMode::Name
+        );
+    }
+    for (value, expected) in [
+        ("name", SortMode::Name),
+        ("modified", SortMode::Modified),
+        ("size", SortMode::Size),
+    ] {
+        let config = Config::from_str(&format!("[ui]\ndefault_sort = {value:?}")).unwrap();
+        assert_eq!(config.ui.default_sort, expected);
+    }
+}
+
+#[test]
+fn config_default_sort_rejects_invalid_values() {
+    for value in ["\"date\"", "\"Name\"", "\"\"", "1", "true", "[]", "{}"] {
+        assert!(Config::from_str(&format!("[ui]\ndefault_sort = {value}")).is_err());
+    }
+}
 
 #[test]
 fn config_folders_first_defaults_to_true_and_accepts_false() {

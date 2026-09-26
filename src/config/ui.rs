@@ -1,3 +1,4 @@
+use crate::filesystem::SortMode;
 use serde::Deserialize;
 
 #[derive(Clone, Copy)]
@@ -6,6 +7,7 @@ pub(crate) struct UiConfig {
     pub grid_zoom: u8,
     pub show_hidden: bool,
     pub folders_first: bool,
+    pub default_sort: SortMode,
     pub start_in_grid: bool,
 }
 
@@ -16,6 +18,7 @@ impl Default for UiConfig {
             grid_zoom: 1,
             show_hidden: false,
             folders_first: true,
+            default_sort: SortMode::Name,
             start_in_grid: false,
         }
     }
@@ -27,6 +30,7 @@ pub(super) struct UiConfigOverride {
     grid_zoom: Option<i64>,
     show_hidden: Option<bool>,
     folders_first: Option<bool>,
+    default_sort: Option<SortMode>,
     start_in_grid: Option<bool>,
 }
 
@@ -43,6 +47,9 @@ impl UiConfig {
         }
         if let Some(folders_first) = overrides.folders_first {
             self.folders_first = folders_first;
+        }
+        if let Some(default_sort) = overrides.default_sort {
+            self.default_sort = default_sort;
         }
         if let Some(start_in_grid) = overrides.start_in_grid {
             self.start_in_grid = start_in_grid;
