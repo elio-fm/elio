@@ -138,6 +138,127 @@ fn configured_folders_first_applies_to_browser_and_directory_previews() {
 }
 
 #[test]
+fn configured_default_sort_initializes_browser_and_retains_runtime_sort() {
+    use crate::filesystem::SortMode;
+
+    const SETTING_ENV: &str = "ELIO_TEST_DEFAULT_SORT";
+    let Ok(setting) = std::env::var(SETTING_ENV) else {
+        for setting in ["default", "name", "modified", "size"] {
+            for grid in [false, true] {
+                for folders_first in [false, true] {
+                    let output = std::process::Command::new(std::env::current_exe().unwrap())
+                        .args([
+                            "--exact",
+                            concat!(
+                                module_path!(),
+                                "::configured_default_sort_initializes_browser_and_retains_runtime_sort"
+                            )
+                            .trim_start_matches("elio::"),
+                        ])
+                        .env(SETTING_ENV, setting)
+                        .env("ELIO_TEST_SORT_GRID", grid.to_string())
+                        .env("ELIO_TEST_SORT_FOLDERS_FIRST", folders_first.to_string())
+                        .output()
+                        .unwrap();
+                    assert!(
+                        output.status.success(),
+                        "default_sort={setting}, grid={grid}, folders_first={folders_first}:\n{}\n{}",
+                        String::from_utf8_lossy(&output.stdout),
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                    assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+                }
+            }
+        }
+        return;
+    };
+
+    let grid = std::env::var("ELIO_TEST_SORT_GRID").unwrap() == "true";
+    let folders_first = std::env::var("ELIO_TEST_SORT_FOLDERS_FIRST").unwrap() == "true";
+    let root = temp_path("sort-by");
+    let cwd = root.join("browser");
+    let folder = cwd.join("z-folder");
+    fs::create_dir_all(&folder).unwrap();
+    let epoch = std::time::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+    for directory in [&cwd, &folder] {
+        for (name, content, seconds) in [("a", "aa", 0), ("b", "b", 120), ("c", "ccc", 60)] {
+            let path = directory.join(name);
+            fs::write(&path, content).unwrap();
+            fs::File::options()
+                .write(true)
+                .open(path)
+                .unwrap()
+                .set_modified(epoch + Duration::from_secs(seconds))
+                .unwrap();
+        }
+    }
+    let config_path = root.join("config.toml");
+    let sort_setting = if setting == "default" {
+        String::new()
+    } else {
+        format!("default_sort = {setting:?}\n")
+    };
+    fs::write(
+        &config_path,
+        format!("[ui]\n{sort_setting}start_in_grid = {grid}\nfolders_first = {folders_first}\n"),
+    )
+    .unwrap();
+    crate::config::initialize(Some(&config_path)).unwrap();
+    let mut app = App::new_at(cwd.clone()).unwrap();
+    let initial = match setting.as_str() {
+        "modified" => SortMode::Modified,
+        "size" => SortMode::Size,
+        _ => SortMode::Name,
+    };
+    assert_eq!(
+        app.file_browser.view_mode,
+        ViewMode::from_start_in_grid(grid)
+    );
+    let mut mode = initial;
+    for cycle in 0..4 {
+        if cycle > 0 {
+            app.cycle_sort_mode().unwrap();
+            wait_for_directory_load(&mut app);
+            mode = mode.cycle();
+        }
+        for step in 0..5 {
+            match step {
+                1 => app.reload().unwrap(),
+                2 => app.set_dir(folder.clone()).unwrap(),
+                3 => app.go_back().unwrap(),
+                4 => app.toggle_view_mode(),
+                _ => {}
+            }
+            wait_for_directory_load(&mut app);
+            assert_eq!(app.file_browser.sort_mode, mode);
+            let names = app
+                .file_browser
+                .entries
+                .iter()
+                .filter(|entry| entry.name != "z-folder")
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>();
+            let expected = match mode {
+                SortMode::Name => ["a", "b", "c"],
+                SortMode::Modified => ["b", "c", "a"],
+                SortMode::Size => ["c", "a", "b"],
+            };
+            assert_eq!(names, expected, "cycle={cycle}, step={step}");
+            if app.file_browser.cwd == cwd {
+                if folders_first || mode == SortMode::Modified {
+                    assert_eq!(app.file_browser.entries[0].name, "z-folder");
+                } else if mode == SortMode::Name {
+                    assert_eq!(app.file_browser.entries.last().unwrap().name, "z-folder");
+                }
+            }
+        }
+    }
+    assert_eq!(mode, initial);
+    drop(app);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn watcher_reload_detects_new_visible_entries() {
     let root = temp_path("auto-reload-visible");
     fs::create_dir_all(&root).expect("failed to create temp root");

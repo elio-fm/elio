@@ -5,6 +5,7 @@
 # grid_zoom = 1    # starting zoom level for grid view: 0, 1, or 2 (clamped)
 # show_hidden = false  # show dotfiles and hidden files on startup (toggle with .)
 # folders_first = true  # false mixes folders and files in the browser and directory previews
+# default_sort = "name"  # initial browser sort: name, modified, or size (cycle with s)
 # start_in_grid = false  # open in grid view on startup (toggle with v)
 
 # [preview]

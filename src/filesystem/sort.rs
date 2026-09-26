@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SortMode {
     Name,
     Modified,
