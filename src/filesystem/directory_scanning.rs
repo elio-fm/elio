@@ -311,6 +311,31 @@ fn sort_entries(entries: &mut [Entry], mode: SortMode, folders_first: bool) {
     });
 }
 
+/// Browser-only recursive totals; unknown folders are not empty folders.
+pub(crate) fn sort_entries_by_recursive_size(
+    entries: &mut [Entry],
+    folders_first: bool,
+    sizes: &std::collections::HashMap<PathBuf, u64>,
+) {
+    let size = |entry: &Entry| {
+        if entry.is_dir() {
+            sizes.get(&entry.path).copied()
+        } else {
+            Some(entry.size)
+        }
+    };
+    entries.sort_by(|left, right| {
+        let grouping = if folders_first {
+            right.is_dir().cmp(&left.is_dir())
+        } else {
+            Ordering::Equal
+        };
+        grouping
+            .then_with(|| size(right).cmp(&size(left)))
+            .then_with(|| compare_entry_names(left, right))
+    });
+}
+
 fn compare_entry_names(left: &Entry, right: &Entry) -> Ordering {
     super::natural_cmp(&left.name_key, &right.name_key).then_with(|| left.name.cmp(&right.name))
 }

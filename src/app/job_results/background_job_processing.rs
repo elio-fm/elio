@@ -7,7 +7,7 @@ const JOB_RESULT_APPLY_TIME_BUDGET: Duration = Duration::from_millis(2);
 
 impl App {
     pub fn process_background_jobs(&mut self) -> bool {
-        let mut dirty = false;
+        let mut dirty = self.process_folder_sizes();
         let started_at = Instant::now();
         let mut processed = 0usize;
 

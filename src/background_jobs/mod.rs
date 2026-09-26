@@ -1,3 +1,4 @@
+pub(crate) mod folder_sizes;
 pub(crate) mod job_requests;
 pub(crate) mod job_results;
 mod scheduler;

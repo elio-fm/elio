@@ -1,5 +1,6 @@
 mod directory;
 mod duplicate_finder;
+mod folder_sizes;
 mod fuzzy_finder;
 mod goto;
 mod navigation;

@@ -28,6 +28,93 @@ fn row_text(buffer: &Buffer, y: u16) -> String {
         .collect::<String>()
 }
 
+fn render_footer(app: &App, width: u16) -> Buffer {
+    let mut terminal = Terminal::new(TestBackend::new(width, 1)).expect("terminal should init");
+    terminal
+        .draw(|frame| render_status_bar(frame, frame.area(), app, theme::palette()))
+        .expect("status should render");
+    terminal.backend().buffer().clone()
+}
+
+#[test]
+fn folder_size_chip_tracks_pending_completion_cancellation_and_sort_mode() {
+    use crate::filesystem::SortMode;
+    use ratatui::style::Modifier;
+
+    let root = temp_path("folder-size-state");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("logo.png"), "png").unwrap();
+    let mut app = App::new_at(root.clone()).unwrap();
+    let path = root.join("pending");
+    app.file_browser.sort_mode = SortMode::Size;
+    app.file_browser
+        .folder_sizes
+        .begin(1, std::slice::from_ref(&path));
+
+    let buffer = render_footer(&app, 100);
+    let rendered = row_text(&buffer, 0);
+    assert!(
+        rendered.starts_with(" Calculating folder sizes…   1/1  logo.png"),
+        "{rendered:?}"
+    );
+    let palette = theme::palette();
+    for x in 0..helpers::display_width(" Calculating folder sizes… ") as u16 {
+        assert_eq!(buffer[(x, 0)].bg, palette.progress_bar);
+        assert_eq!(buffer[(x, 0)].fg, palette.chip_text);
+        assert!(buffer[(x, 0)].modifier.contains(Modifier::BOLD));
+    }
+
+    assert!(
+        app.file_browser
+            .folder_sizes
+            .apply(1, path.clone(), Some(0))
+    );
+    assert!(!row_text(&render_footer(&app, 100), 0).contains("Calculating"));
+    app.file_browser
+        .folder_sizes
+        .begin(2, std::slice::from_ref(&path));
+    app.cancel_folder_sizes();
+    assert!(!row_text(&render_footer(&app, 100), 0).contains("Calculating"));
+    app.file_browser.folder_sizes.begin(3, &[path]);
+    for mode in [SortMode::Name, SortMode::Modified] {
+        app.file_browser.sort_mode = mode;
+        assert!(!row_text(&render_footer(&app, 100), 0).contains("Calculating"));
+    }
+    drop(app);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn folder_size_chip_preserves_clipboard_selection_and_narrow_summary() {
+    let root = temp_path("folder-size-width");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("logo.png"), "png").unwrap();
+    let mut app = App::new_at(root.clone()).unwrap();
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('y'))))
+        .unwrap();
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(' '))))
+        .unwrap();
+    app.file_browser.sort_mode = crate::filesystem::SortMode::Size;
+    app.file_browser
+        .folder_sizes
+        .begin(1, &[root.join("pending")]);
+
+    let wide = row_text(&render_footer(&app, 120), 0);
+    assert!(wide.contains("1 yanked"), "{wide:?}");
+    assert!(wide.contains("1 selected"), "{wide:?}");
+    assert!(wide.contains("Calculating folder sizes…"), "{wide:?}");
+    assert!(wide.contains("1/1  logo.png"), "{wide:?}");
+    for width in [40, 50] {
+        let narrow = row_text(&render_footer(&app, width), 0);
+        assert!(!narrow.contains("Calculating"), "{narrow:?}");
+        assert!(narrow.contains("1 yanked"), "{narrow:?}");
+        assert!(narrow.contains("1 selected"), "{narrow:?}");
+        assert!(narrow.contains("1/1"), "{narrow:?}");
+    }
+    drop(app);
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn idle_status_keeps_the_message_area_empty() {
     assert_eq!(status_section_width(100, ""), 1);
@@ -194,6 +281,10 @@ fn paste_status_chip_shows_queued_count() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('p'))))
         .expect("second paste should be queued");
 
+    app.file_browser.sort_mode = crate::filesystem::SortMode::Size;
+    app.file_browser
+        .folder_sizes
+        .begin(1, &[src_dir.join("pending")]);
     let mut terminal = Terminal::new(TestBackend::new(120, 1)).expect("terminal should init");
     terminal
         .draw(|frame| render_status_bar(frame, frame.area(), &app, theme::palette()))
@@ -204,6 +295,8 @@ fn paste_status_chip_shows_queued_count() {
         rendered.contains("(+1 queued)"),
         "status row should show queued paste count, got: {rendered:?}"
     );
+
+    assert!(!rendered.contains("Calculating"), "{rendered:?}");
 
     app.set_screen_regions(ScreenRegions::default());
     drop(app);

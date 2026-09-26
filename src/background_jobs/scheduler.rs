@@ -55,6 +55,7 @@ pub(super) fn wait_unpoison<'a, T>(
 }
 
 pub(crate) struct JobScheduler {
+    pub(crate) folder_sizes: super::folder_sizes::FolderSizeWorker,
     directory: DirectoryPool,
     directory_fingerprint: DirectoryFingerprintPool,
     archive_create: ArchiveCreatePool,
@@ -91,6 +92,7 @@ impl JobScheduler {
         let (result_tx, result_rx) = mpsc::channel();
         let metrics = Arc::new(Mutex::new(SchedulerMetrics::default()));
         Self {
+            folder_sizes: super::folder_sizes::FolderSizeWorker::new(),
             directory: DirectoryPool::new(1, result_tx.clone(), Arc::clone(&metrics)),
             archive_create: ArchiveCreatePool::new(result_tx.clone()),
             archive_extract: ArchiveExtractPool::new(result_tx.clone()),

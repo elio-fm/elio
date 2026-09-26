@@ -100,6 +100,7 @@ impl App {
     }
 
     pub(crate) fn queue_directory_load(&mut self, mut load: PendingDirectoryLoad) -> Result<()> {
+        self.cancel_folder_sizes();
         self.file_browser.directory_runtime.pending_fingerprint_scan = None;
         self.job_scheduler.cancel_directory_fingerprints();
         self.job_scheduler.cancel_directory_stats();
@@ -179,6 +180,7 @@ impl App {
         self.file_browser.cwd = load.target_cwd.clone();
         self.file_browser.in_trash = crate::places::path_is_trash(&self.file_browser.cwd);
         self.file_browser.unfiltered_entries = snapshot.entries;
+        self.start_folder_sizes();
         self.apply_local_filter();
         self.places.refresh();
         self.file_browser.directory_runtime.fingerprint = snapshot.fingerprint;
