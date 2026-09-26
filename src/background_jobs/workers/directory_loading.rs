@@ -40,6 +40,7 @@ struct DirectoryJobKey {
     cwd: PathBuf,
     show_hidden: bool,
     sort_mode: SortMode,
+    folders_first: bool,
 }
 
 impl DirectoryPool {
@@ -70,6 +71,7 @@ impl DirectoryPool {
                         &request.cwd,
                         request.show_hidden,
                         request.sort_mode,
+                        request.folders_first,
                         &|| canceled.load(Ordering::Relaxed),
                     )
                     .map_err(|error| {
@@ -204,6 +206,7 @@ impl DirectoryJobKey {
             cwd: request.cwd.clone(),
             show_hidden: request.show_hidden,
             sort_mode: request.sort_mode,
+            folders_first: request.folders_first,
         }
     }
 }
