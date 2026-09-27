@@ -264,13 +264,16 @@ fn sync_pdf_preview_selection_queues_initial_probe_for_current_page() {
 
     app.sync_pdf_preview_selection();
 
-    assert!(app.job_scheduler.has_pending_work());
-    assert!(app.preview.pdf.pending_page_probes.contains(&PdfPageKey {
+    let key = PdfPageKey {
         path: entry.path,
         size: entry.size,
         modified: entry.modified,
         page: PDF_PAGE_MIN,
-    }));
+    };
+    // The worker may finish before this assertion; pending probes remain until
+    // their result is applied, so they record that the scheduler accepted it.
+    assert!(app.preview.pdf.pending_page_probes.contains(&key));
+    assert!(!app.preview.pdf.failed_page_probes.contains(&key));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
