@@ -37,6 +37,8 @@ fn execute_elio(options: Options) -> Result<ExitCode> {
         reveal_hidden_start_focus,
         cwd_file,
         chooser_file,
+        save_as,
+        save_as_path,
         config_file,
         theme_file,
     } = options;
@@ -49,6 +51,7 @@ fn execute_elio(options: Options) -> Result<ExitCode> {
         start_focus,
         reveal_hidden_start_focus,
         chooser_file,
+        if save_as { Some(save_as_path) } else { None },
         config_file,
         theme_file,
     )

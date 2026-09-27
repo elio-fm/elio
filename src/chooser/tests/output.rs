@@ -1,4 +1,4 @@
-use super::super::output::{file_is_stdout, write_selected_paths};
+use super::super::output::{file_is_stdout, same_destination, write_selected_paths};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -17,6 +17,26 @@ fn temp_path(label: &str) -> PathBuf {
 fn chooser_file_is_not_written_when_absent() {
     write_selected_paths(None, &[PathBuf::from("/tmp/example")])
         .expect("absent chooser file should be a no-op");
+}
+
+#[test]
+fn chooser_output_cannot_be_the_selected_destination() {
+    let root = temp_path("collision");
+    fs::create_dir_all(&root).unwrap();
+    let target = root.join("document");
+    fs::write(&target, "keep").unwrap();
+    assert!(write_selected_paths(Some(&target), std::slice::from_ref(&target)).is_err());
+    assert_eq!(fs::read_to_string(&target).unwrap(), "keep");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn relative_output_matches_new_absolute_destination() {
+    let relative = temp_path("relative-collision");
+    let relative = Path::new(relative.file_name().unwrap());
+    let absolute = std::path::absolute(relative).unwrap();
+    assert!(same_destination(relative, &absolute));
+    assert!(!absolute.exists());
 }
 
 #[test]

@@ -46,6 +46,12 @@ struct AppExit {
     chooser: Option<ChooserExit>,
 }
 
+enum ChooserLaunch {
+    None,
+    Choose,
+    SaveAs(crate::chooser::SaveAsStartup),
+}
+
 fn init_terminal() -> Result<(AppTerminal, Drainer, kitty_dnd::KittyDndRuntime)> {
     match try_init_terminal() {
         Ok(terminal) => Ok(terminal),
@@ -270,11 +276,20 @@ pub(crate) fn run_with_startup_state(
     start_focus: Option<PathBuf>,
     reveal_hidden_start_focus: bool,
     chooser_file: Option<PathBuf>,
+    save_as: Option<Option<PathBuf>>,
 ) -> Result<RunOutcome> {
     let RunOptions {
         start_dir,
         cwd_file,
     } = options;
+    let chooser_launch = match save_as {
+        Some(path) => ChooserLaunch::SaveAs(crate::chooser::resolve_startup(
+            &std::env::current_dir()?,
+            path.as_deref(),
+        )?),
+        None if chooser_file.is_some() => ChooserLaunch::Choose,
+        None => ChooserLaunch::None,
+    };
     let (mut terminal, drainer, kitty_dnd) = init_terminal()?;
     let result = run_app(
         &mut terminal,
@@ -283,7 +298,7 @@ pub(crate) fn run_with_startup_state(
         start_dir,
         start_focus,
         reveal_hidden_start_focus,
-        chooser_file.is_some(),
+        chooser_launch,
     );
     restore_terminal(&mut terminal, &drainer, &kitty_dnd)?;
     let app_exit = result?;
@@ -384,19 +399,27 @@ fn run_app(
     cwd: Option<PathBuf>,
     start_focus: Option<PathBuf>,
     reveal_hidden_start_focus: bool,
-    chooser_enabled: bool,
+    chooser_launch: ChooserLaunch,
 ) -> Result<AppExit> {
     #[cfg(unix)]
     if kitty_dnd.is_enabled() {
         kitty_dnd::prewarm_drag_image_renderer();
     }
 
+    let cwd = match &chooser_launch {
+        ChooserLaunch::SaveAs(startup) => Some(startup.directory.clone()),
+        _ => cwd,
+    };
     let mut app = match cwd {
         Some(cwd) => App::new_at_startup(cwd, start_focus, reveal_hidden_start_focus)?,
         None => App::new()?,
     };
-    if chooser_enabled {
-        app.enable_chooser_mode();
+    match chooser_launch {
+        ChooserLaunch::SaveAs(startup) => {
+            app.enable_save_as_mode(startup.name);
+        }
+        ChooserLaunch::Choose => app.enable_chooser_mode(),
+        ChooserLaunch::None => {}
     }
     app.refresh_git_branch();
 
@@ -514,6 +537,10 @@ fn run_app(
         }
 
         let wants_search_cursor = app.search_is_open()
+            || app
+                .chooser
+                .save_as()
+                .is_some_and(|save| save.is_open() && !save.overwrite())
             || app.local_filter_is_editing()
             || app.file_operations.create_is_open()
             || app.file_operations.rename_is_open()

@@ -29,6 +29,7 @@ pub struct ScreenRegions {
     pub archive_password_visibility_btn: Option<Rect>,
     pub create_panel: Option<Rect>,
     pub rename_panel: Option<Rect>,
+    pub save_as_panel: Option<Rect>,
     pub create_list_area: Option<Rect>,
     pub create_scroll_top: usize,
     pub bulk_rename_list_area: Option<Rect>,

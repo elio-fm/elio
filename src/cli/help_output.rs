@@ -91,6 +91,7 @@ fn root_text(style: HelpStyle) -> String {
             "\n",
             "{heading}Options:{reset}\n",
             "      {literal}--chooser-file{reset} <FILE>     Write selected paths to FILE; use \"-\" for stdout\n",
+            "      {literal}--save-as{reset}                 Enable Save As mode for --chooser-file\n",
             "      {literal}--config{reset} <FILE>           Load configuration from FILE\n",
             "      {literal}--cwd-file{reset} <FILE>         Write the final directory to FILE on exit\n",
             "      {literal}--theme{reset} <FILE>            Load a theme from FILE\n",

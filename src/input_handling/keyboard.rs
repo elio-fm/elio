@@ -24,6 +24,15 @@ impl App {
     }
 
     fn handle_paste(&mut self, text: &str) -> Result<()> {
+        if let Some(save) = self.chooser.save_as_mut().filter(|save| save.is_open()) {
+            if !save.overwrite() {
+                let text = single_line_paste_text(text);
+                let (input, cursor) = save.input_mut();
+                insert_text_at_cursor(input, cursor, &text);
+                save.clear_error();
+            }
+            return Ok(());
+        }
         if self.file_operations.trash_is_open() || self.file_operations.restore_is_open() {
             return Ok(());
         }
@@ -248,14 +257,6 @@ impl App {
             return Ok(());
         }
 
-        if is_cancel_key(key)
-            && !self.file_browser.selected_paths.is_empty()
-            && self.has_active_cancelable_job()
-        {
-            self.clear_selection();
-            return Ok(());
-        }
-
         if self.file_operations.trash_is_open() {
             return self.handle_trash_key(key);
         }
@@ -266,6 +267,11 @@ impl App {
 
         if self.file_operations.archive_password_is_open() {
             return self.handle_archive_password_key(key);
+        }
+
+        if self.chooser.save_as().is_some_and(|state| state.is_open()) {
+            self.handle_save_as_key(key);
+            return Ok(());
         }
 
         if self.file_operations.archive_create_is_open() {
@@ -314,6 +320,15 @@ impl App {
 
         if self.local_filter_is_editing() {
             return self.handle_local_filter_key(key);
+        }
+
+        // Modal handlers above own cancellation before browser selection/job shortcuts.
+        if is_cancel_key(key)
+            && !self.file_browser.selected_paths.is_empty()
+            && self.has_active_cancelable_job()
+        {
+            self.clear_selection();
+            return Ok(());
         }
 
         if self.should_debounce_navigation_key(key) {

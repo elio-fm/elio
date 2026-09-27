@@ -9,6 +9,14 @@ pub(crate) fn write_selected_paths(chooser_file: Option<&Path>, paths: &[PathBuf
         return Ok(());
     };
 
+    if !file_is_stdout(chooser_file)
+        && paths
+            .iter()
+            .any(|path| same_destination(chooser_file, path))
+    {
+        anyhow::bail!("chooser output file must not be a selected destination");
+    }
+
     let bytes = output_bytes(paths);
     if file_is_stdout(chooser_file) {
         let mut stdout = io::stdout().lock();
@@ -18,6 +26,11 @@ pub(crate) fn write_selected_paths(chooser_file: Option<&Path>, paths: &[PathBuf
         std::fs::write(chooser_file, bytes)?;
     }
     Ok(())
+}
+
+pub(super) fn same_destination(first: &Path, second: &Path) -> bool {
+    matches!((std::path::absolute(first), std::path::absolute(second)), (Ok(first), Ok(second)) if first == second)
+        || matches!((first.canonicalize(), second.canonicalize()), (Ok(first), Ok(second)) if first == second)
 }
 
 pub(super) fn file_is_stdout(chooser_file: &Path) -> bool {

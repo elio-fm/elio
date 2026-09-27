@@ -1,3 +1,4 @@
+use super::SaveAsState;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -9,12 +10,26 @@ pub(crate) enum ChooserExit {
 #[derive(Default)]
 pub(crate) struct ChooserState {
     enabled: bool,
+    save_as: Option<SaveAsState>,
     exit: Option<ChooserExit>,
 }
 
 impl ChooserState {
     pub(crate) fn enable(&mut self) {
         self.enabled = true;
+    }
+    pub(crate) fn enable_save_as(&mut self, name: String) {
+        self.enabled = true;
+        self.save_as = Some(SaveAsState::new(name));
+    }
+    pub(crate) fn save_as(&self) -> Option<&SaveAsState> {
+        self.save_as.as_ref()
+    }
+    pub(crate) fn save_as_mut(&mut self) -> Option<&mut SaveAsState> {
+        self.save_as.as_mut()
+    }
+    pub(crate) fn is_save_as(&self) -> bool {
+        self.save_as.is_some()
     }
 
     pub(crate) fn is_enabled(&self) -> bool {

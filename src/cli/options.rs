@@ -12,6 +12,8 @@ pub(super) struct Options {
     pub(super) reveal_hidden_start_focus: bool,
     pub(super) cwd_file: Option<PathBuf>,
     pub(super) chooser_file: Option<PathBuf>,
+    pub(super) save_as: bool,
+    pub(super) save_as_path: Option<PathBuf>,
     pub(super) config_file: Option<PathBuf>,
     pub(super) theme_file: Option<PathBuf>,
 }

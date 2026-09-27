@@ -65,6 +65,13 @@ impl App {
         self.chooser.enable();
         self.status = "Chooser mode".to_string();
     }
+    pub(crate) fn enable_save_as_mode(&mut self, name: String) {
+        self.chooser.enable_save_as(name);
+        self.status = "Save as mode".to_string();
+    }
+    pub(crate) fn save_as_mode(&self) -> bool {
+        self.chooser.is_save_as()
+    }
 
     pub(crate) fn take_chooser_exit(&mut self) -> Option<ChooserExit> {
         self.chooser.take_exit()
@@ -80,6 +87,10 @@ impl App {
     }
 
     pub(crate) fn confirm_chooser(&mut self) {
+        if self.chooser.is_save_as() {
+            self.open_save_as_prompt();
+            return;
+        }
         let cwd = self.file_browser.cwd.clone();
         let focused_path = self.selected_entry().map(|entry| entry.path.clone());
         let selected_paths = self.selected_paths_sorted();
@@ -92,6 +103,10 @@ impl App {
     }
 
     pub(crate) fn confirm_chooser_path(&mut self, path: &Path) {
+        if self.chooser.is_save_as() {
+            self.open_save_as_prompt();
+            return;
+        }
         if self.chooser.confirm_path(&self.file_browser.cwd, path) {
             self.should_quit = true;
         }

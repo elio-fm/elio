@@ -11,3 +11,4 @@ mod navigation;
 mod open_with;
 mod preview;
 mod preview_wheel;
+mod save_as;

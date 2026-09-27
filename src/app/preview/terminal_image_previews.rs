@@ -552,6 +552,9 @@ impl App {
 
     pub(crate) fn collect_popup_rects(&self) -> Vec<Rect> {
         let mut rects = Vec::new();
+        if let Some(r) = self.input.screen_regions.save_as_panel {
+            rects.push(r);
+        }
         if let Some(r) = self.input.screen_regions.trash_panel {
             rects.push(r);
         }
@@ -590,6 +593,7 @@ impl App {
 
     fn any_modal_overlay_open(&self) -> bool {
         self.file_operations.overlay_blocks_terminal_images()
+            || self.chooser.save_as().is_some_and(|save| save.is_open())
             || self.overlays.goto.is_some()
             || self.overlays.open_with.is_some()
             || self.fuzzy_finder.search.is_some()

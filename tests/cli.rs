@@ -4,6 +4,30 @@ use std::fs;
 use support::{elio, temp_path};
 
 #[test]
+fn save_as_cli_errors_do_not_write_output() {
+    let output = elio().arg("--save-as").output().unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("requires --chooser-file"));
+    let root = temp_path("save-as-cli");
+    fs::create_dir_all(&root).unwrap();
+    let sink = root.join("selection");
+    fs::write(&sink, "keep").unwrap();
+    for path in [root.join("missing/file"), root.join("missing/")] {
+        let output = elio()
+            .arg("--save-as")
+            .arg("--chooser-file")
+            .arg(&sink)
+            .arg(path)
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("does not exist"));
+        assert_eq!(fs::read_to_string(&sink).unwrap(), "keep");
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn version_prints_package_version() {
     let output = elio()
         .arg("--version")
@@ -38,6 +62,10 @@ fn help_prints_usage() {
         )
     );
     assert!(stdout.contains("--config <FILE>           Load configuration from FILE"));
+    assert!(stdout.contains(
+        "--chooser-file <FILE>     Write selected paths to FILE; use \"-\" for stdout\n      --save-as                 Enable Save As mode for --chooser-file\n"
+    ));
+    assert!(!stdout.contains("Save As:"));
     assert!(stdout.contains("--cwd-file <FILE>         Write the final directory to FILE on exit"));
     assert!(stdout.contains("--theme <FILE>            Load a theme from FILE"));
     assert!(stdout.contains("-h, --help                    Print help"));

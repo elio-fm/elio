@@ -11,6 +11,7 @@ mod help;
 mod open_with;
 mod rename;
 mod restore;
+mod save_as;
 mod trash_delete;
 
 pub(super) use self::{
@@ -21,7 +22,8 @@ pub(super) use self::{
     editor_rename_confirm::render_editor_rename_confirm_overlay,
     fuzzy_finder::render_fuzzy_finder_overlay, goto::render_goto_overlay,
     help::render_help_overlay, open_with::render_open_with_overlay, rename::render_rename_overlay,
-    restore::render_restore_overlay, trash_delete::render_trash_delete_overlay,
+    restore::render_restore_overlay, save_as::render_save_as_overlay,
+    trash_delete::render_trash_delete_overlay,
 };
 
 #[cfg(test)]

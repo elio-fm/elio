@@ -17,6 +17,7 @@ use unicode_width::UnicodeWidthStr;
 enum HelpMode {
     Normal,
     Chooser,
+    SaveAs,
 }
 
 pub(in crate::ui) fn render_help_overlay(
@@ -26,7 +27,9 @@ pub(in crate::ui) fn render_help_overlay(
     state: &mut ScreenRegions,
     palette: Palette,
 ) {
-    let mode = if app.chooser_mode() {
+    let mode = if app.save_as_mode() {
+        HelpMode::SaveAs
+    } else if app.chooser_mode() {
         HelpMode::Chooser
     } else {
         HelpMode::Normal
@@ -164,7 +167,7 @@ pub(in crate::ui) fn render_help_overlay(
 }
 
 fn double_click_action(mode: HelpMode) -> &'static str {
-    if mode.is_chooser() {
+    if matches!(mode, HelpMode::Chooser) {
         "enter folder / choose"
     } else {
         "open item"
@@ -305,13 +308,14 @@ fn line_width(line: &Line<'_>) -> usize {
 
 impl HelpMode {
     fn is_chooser(self) -> bool {
-        matches!(self, Self::Chooser)
+        matches!(self, Self::Chooser | Self::SaveAs)
     }
 
     fn title(self) -> &'static str {
         match self {
             Self::Normal => " Keyboard and mouse controls ",
             Self::Chooser => " Chooser controls ",
+            Self::SaveAs => " Save as controls ",
         }
     }
 }
@@ -377,7 +381,14 @@ fn navigation_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
         keys.action(&kb.nav_right, "enter folder"),
     ];
     if keys.mode.is_chooser() {
-        items.push(e(&kb.choose.to_string(), "choose"));
+        items.push(e(
+            &kb.choose.to_string(),
+            if matches!(keys.mode, HelpMode::SaveAs) {
+                "save here"
+            } else {
+                "choose"
+            },
+        ));
     }
     items.extend([
         keys.action(&kb.open_or_enter, "enter folder / open"),

@@ -120,6 +120,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut ScreenRegions) {
         overlays::render_restore_overlay(frame, area, app, state, palette);
     } else if app.file_operations.archive_password_is_open() {
         overlays::render_archive_password_overlay(frame, area, app, state, palette);
+    } else if app.chooser.save_as().is_some_and(|save| save.is_open()) {
+        overlays::render_save_as_overlay(frame, area, app, state, palette);
     } else if app.file_operations.archive_create_is_open() {
         overlays::render_archive_create_overlay(frame, area, app, state, palette);
     } else if app.file_operations.create_is_open() {

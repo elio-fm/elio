@@ -754,6 +754,50 @@ fn medium_help_overlay_uses_two_columns_before_scrolling() {
 }
 
 #[test]
+fn save_as_prompt_and_contextual_help_register_popup_regions() {
+    let root = temp_path("save-as-overlay");
+    fs::create_dir_all(&root).unwrap();
+    let mut app = App::new_at(root.clone()).unwrap();
+    app.enable_save_as_mode("draft.txt".into());
+    app.overlays.help = true;
+    let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+    draw_ui(&mut terminal, &mut app);
+    let rendered = buffer_text(terminal.backend().buffer());
+    assert!(rendered.contains("Save as controls"));
+    assert!(rendered.contains("save here"));
+    assert!(rendered.contains("Double-click"));
+    assert!(rendered.contains("open item"));
+    assert!(!rendered.contains("enter folder / save here"));
+    assert!(!rendered.contains("save here…"));
+    app.overlays.help = false;
+    app.confirm_chooser();
+    draw_ui(&mut terminal, &mut app);
+    let rendered = buffer_text(terminal.backend().buffer());
+    assert!(rendered.contains("Save as"));
+    assert!(rendered.contains("draft.txt"));
+    let panel = app.input.screen_regions.save_as_panel.unwrap();
+    assert!(app.collect_popup_rects().contains(&panel));
+    assert!(!rendered.contains("Enter save"));
+    fs::write(root.join("draft.txt"), "keep").unwrap();
+    app.submit_save_as();
+    draw_ui(&mut terminal, &mut app);
+    let rendered = buffer_text(terminal.backend().buffer());
+    assert!(rendered.contains("Overwrite?"));
+    assert!(rendered.contains("Esc cancel"));
+    assert!(app.collect_popup_rects().contains(&panel));
+    app.chooser.save_as_mut().unwrap().cancel_overwrite();
+    fs::remove_file(root.join("draft.txt")).unwrap();
+    fs::create_dir(root.join("draft.txt")).unwrap();
+    app.submit_save_as();
+    draw_ui(&mut terminal, &mut app);
+    assert!(buffer_text(terminal.backend().buffer()).contains("A directory already has that name"));
+    app.chooser.save_as_mut().unwrap().close();
+    draw_ui(&mut terminal, &mut app);
+    assert!(app.input.screen_regions.save_as_panel.is_none());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn chooser_help_overlay_uses_chooser_actions_without_changing_esc() {
     let root = temp_path("chooser-help-overlay");
     fs::create_dir_all(&root).expect("failed to create temp root");

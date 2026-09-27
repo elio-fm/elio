@@ -30,6 +30,25 @@ fn standard_actions_are_recognized() {
 }
 
 #[test]
+fn save_as_requires_chooser_file_and_accepts_one_path_in_any_flag_order() {
+    assert!(
+        parse(strings(&["--save-as"]))
+            .unwrap_err()
+            .to_string()
+            .contains("requires --chooser-file")
+    );
+    let Action::Run(options) =
+        parse(strings(&["draft.txt", "--chooser-file", "-", "--save-as"])).unwrap()
+    else {
+        panic!("save as should run")
+    };
+    assert!(options.save_as);
+    assert_eq!(options.save_as_path, Some(PathBuf::from("draft.txt")));
+    assert!(parse(strings(&["--chooser-file", "-", "--save-as=value"])).is_err());
+    assert!(parse(strings(&["--chooser-file", "-", "--save-as", "--save-as"])).is_err());
+}
+
+#[test]
 fn config_and_theme_accept_separate_and_inline_paths() {
     let action = parse(strings(&[
         "--theme=/tmp/custom-theme.toml",

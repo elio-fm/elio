@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `[ui] folders_first` to optionally mix folders and files in the browser and directory previews.
 - Added `[ui] default_sort` to set the initial browser sort (name, modified, or size).
 - Added recursive folder size calculation in the background when sorting by size.
+- Added `--save-as` support for `--chooser-file`, adding Save As behavior through a dedicated popup. ([#273])
 
 ### Changed
 
@@ -368,6 +369,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#292]: https://github.com/elio-fm/elio/issues/292
 [#278]: https://github.com/elio-fm/elio/issues/278
 [#274]: https://github.com/elio-fm/elio/issues/274
+[#273]: https://github.com/elio-fm/elio/issues/273
 [#270]: https://github.com/elio-fm/elio/issues/270
 [#267]: https://github.com/elio-fm/elio/issues/267
 [#258]: https://github.com/elio-fm/elio/issues/258

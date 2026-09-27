@@ -6,6 +6,7 @@ mod keyboard;
 mod local_filter;
 mod mouse;
 mod open_with;
+mod save_as;
 pub(crate) mod text_editing;
 mod wheel_scrolling;
 

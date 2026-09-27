@@ -115,6 +115,7 @@ fn parse_shell(args: &[String]) -> Result<Option<Action>> {
 
 fn parse_options(args: Vec<String>) -> Result<Options> {
     let mut options = Options::default();
+    let mut positional: Option<String> = None;
     let mut index = 0;
 
     while index < args.len() {
@@ -138,6 +139,17 @@ fn parse_options(args: Vec<String>) -> Result<Options> {
             index = next_index;
             continue;
         }
+        if arg == "--save-as" {
+            if options.save_as {
+                return Err(duplicate_option("--save-as"));
+            }
+            options.save_as = true;
+            index += 1;
+            continue;
+        }
+        if arg.starts_with("--save-as=") {
+            return Err(unexpected_argument(arg));
+        }
 
         if path_option_matches(arg, "--config") {
             if options.config_file.is_some() {
@@ -159,16 +171,29 @@ fn parse_options(args: Vec<String>) -> Result<Options> {
             continue;
         }
 
-        if arg.starts_with('-') || options.start_dir.is_some() {
+        if arg.starts_with('-') || positional.is_some() {
             return Err(unexpected_argument(arg));
         }
-        let resolved = options::resolve_path(arg)?;
-        options.start_dir = Some(resolved.directory);
-        options.start_focus = resolved.focused_entry;
-        options.reveal_hidden_start_focus = resolved.reveal_hidden;
+        positional = Some(arg.clone());
         index += 1;
     }
 
+    if let Some(arg) = positional {
+        if options.save_as {
+            options.save_as_path = Some(PathBuf::from(arg));
+        } else {
+            let resolved = options::resolve_path(&arg)?;
+            options.start_dir = Some(resolved.directory);
+            options.start_focus = resolved.focused_entry;
+            options.reveal_hidden_start_focus = resolved.reveal_hidden;
+        }
+    }
+
+    if options.save_as && options.chooser_file.is_none() {
+        return Err(anyhow::anyhow!(
+            "error: '--save-as' requires --chooser-file\n\n{RUN_USAGE}"
+        ));
+    }
     Ok(options)
 }
 
