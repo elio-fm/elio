@@ -17,7 +17,7 @@ blake3 = "1"
 dirs = "7.0"
 libc = "0.2"
 base64 = { version = "0.23", default-features = false, features = ["std"] }
-cfb = "0.14"
+cfb = "0.15"
 crossterm = "0.29"
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 fontdue = "0.9"
@@ -43,10 +43,10 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 xz2 = { version = "0.1.7", features = ["static"] }
 bzip2 = "0.6.1"
 zstd = { version = "0.14", default-features = false }
-sevenz-rust2 = { version = "0.22", default-features = false, features = ["aes256", "compress"] }
+sevenz-rust2 = { version = "0.23", default-features = false, features = ["aes256", "compress"] }
 
 [dev-dependencies]
-sevenz-rust2 = { version = "0.22", default-features = false, features = ["aes256", "compress"] }
+sevenz-rust2 = { version = "0.23", default-features = false, features = ["aes256", "compress"] }
 
 [build-dependencies]
 syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "yaml-load", "regex-fancy"] }
