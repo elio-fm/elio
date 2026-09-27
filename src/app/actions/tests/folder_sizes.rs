@@ -3,20 +3,25 @@ use crate::{background_jobs::folder_sizes::FolderSizeResult, file_browser::ViewM
 use std::{
     fs,
     path::PathBuf,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    sync::atomic::{AtomicU64, Ordering},
+    time::{Duration, Instant},
 };
+
+static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "elio-folder-sizes-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+        let root = loop {
+            let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
+            let candidate = std::env::temp_dir()
+                .join(format!("elio-folder-sizes-{}-{id}", std::process::id(),));
+            match fs::create_dir(&candidate) {
+                Ok(()) => break candidate,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("failed to create fixture directory: {error}"),
+            }
+        };
         fs::create_dir_all(root.join("a-empty")).unwrap();
         fs::create_dir_all(root.join("z-large/nested")).unwrap();
         fs::write(root.join("z-large/nested/data"), [0; 23]).unwrap();
