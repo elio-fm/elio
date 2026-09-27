@@ -158,7 +158,16 @@ fn save_as_double_click_opens_file_instead_of_save_prompt() {
 #[test]
 fn save_as_rejects_symlink_and_special_file_destinations() {
     use std::os::unix::{fs::symlink, net::UnixListener};
-    let root = temp_path("save-as-special");
+    let root = std::path::Path::new("/tmp").join(format!(
+        "elio-save-as-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&root).unwrap();
+    let root = root.canonicalize().unwrap();
     fs::write(root.join("target"), "keep").unwrap();
     symlink(root.join("target"), root.join("link")).unwrap();
     let socket = root.join("socket");
