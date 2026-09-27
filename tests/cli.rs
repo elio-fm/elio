@@ -63,7 +63,7 @@ fn help_prints_usage() {
     );
     assert!(stdout.contains("--config <FILE>           Load configuration from FILE"));
     assert!(stdout.contains(
-        "--chooser-file <FILE>     Write selected paths to FILE; use \"-\" for stdout\n      --save-as                 Enable Save As mode for --chooser-file\n"
+        "--chooser-file <FILE>     Write selected paths to FILE; use \"-\" for stdout\n      --save-as                 Enable Save As mode for --chooser-file\n      --cwd-file <FILE>         Write the final directory to FILE on exit\n      --config <FILE>           Load configuration from FILE\n"
     ));
     assert!(!stdout.contains("Save As:"));
     assert!(stdout.contains("--cwd-file <FILE>         Write the final directory to FILE on exit"));
