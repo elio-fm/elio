@@ -112,7 +112,7 @@ fn configured_folders_first_applies_to_browser_and_directory_previews() {
         std::thread::sleep(Duration::from_millis(10));
     }
     let expected = if setting == "false" {
-        ["entry1", "entry10", "entry2", "entry20"]
+        ["entry1", "entry2", "entry10", "entry20"]
     } else {
         ["entry2", "entry20", "entry1", "entry10"]
     };

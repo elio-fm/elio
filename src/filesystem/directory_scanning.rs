@@ -337,7 +337,7 @@ pub(crate) fn sort_entries_by_recursive_size(
 }
 
 fn compare_entry_names(left: &Entry, right: &Entry) -> Ordering {
-    super::natural_cmp(&left.name_key, &right.name_key).then_with(|| left.name.cmp(&right.name))
+    super::natural_cmp(&left.name, &right.name)
 }
 
 fn entry_details(path: &Path, metadata: &fs::Metadata) -> EntryDetails {

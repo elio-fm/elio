@@ -70,7 +70,7 @@ pub(super) fn collect_size_candidates(
             breathe_after_node(stats.visited_nodes);
             if file_type.is_dir() {
                 if !should_prune_dir(&name_key) {
-                    nodes.push((name_key, path, true));
+                    nodes.push((name, path, true));
                 }
                 continue;
             }

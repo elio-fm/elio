@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed terminal applications using elio's startup folder as their working directory instead of the current folder. ([#293])
 - Fixed Git branch names truncating when space is available in the status bar.
 - Fixed the Git branch indicator staying stale after external branch switches, including in subfolders and linked worktrees.
+- Fixed name sorting by making it aware of the system locale, including accented characters and numeric names. ([#314])
 
 ## [1.12.0] - 2026-08-24
 
@@ -364,6 +365,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#314]: https://github.com/elio-fm/elio/issues/314
 [#303]: https://github.com/elio-fm/elio/issues/303
 [#296]: https://github.com/elio-fm/elio/issues/296
 [#293]: https://github.com/elio-fm/elio/issues/293

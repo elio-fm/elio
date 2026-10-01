@@ -81,9 +81,7 @@ pub(super) fn linux_device_items_from_mounts(
     }
 
     items.sort_by(|left, right| {
-        let left_key = left.title.to_ascii_lowercase();
-        let right_key = right.title.to_ascii_lowercase();
-        crate::filesystem::natural_cmp(&left_key, &right_key)
+        crate::filesystem::natural_cmp(&left.title, &right.title)
             .then_with(|| left.path.cmp(&right.path))
     });
 

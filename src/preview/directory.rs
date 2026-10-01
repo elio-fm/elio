@@ -29,8 +29,7 @@ pub(super) fn build_directory_preview(entry: &Entry) -> PreviewContent {
             items.sort_by(|left, right| {
                 (folders_first && right.entry.is_dir())
                     .cmp(&(folders_first && left.entry.is_dir()))
-                    .then_with(|| left.entry.name_key.cmp(&right.entry.name_key))
-                    .then_with(|| left.entry.name.cmp(&right.entry.name))
+                    .then_with(|| browser_support::natural_cmp(&left.entry.name, &right.entry.name))
             });
 
             if items.is_empty() {

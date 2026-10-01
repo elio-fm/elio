@@ -284,8 +284,7 @@ fn collect_candidates_with_limits_and_emitter(
         nodes.sort_by(|left, right| {
             // Siblings share the same parent prefix, so sorting by name preserves
             // the same natural order as sorting by their relative paths.
-            crate::filesystem::natural_cmp(&left.name_key, &right.name_key)
-                .then_with(|| left.name.cmp(&right.name))
+            crate::filesystem::natural_cmp(&left.name, &right.name)
         });
 
         for node in nodes {

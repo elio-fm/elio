@@ -194,9 +194,7 @@ where
             capture_comic_metadata_entry(&mut metadata_entry, name);
             continue;
         };
-        let sort_key = normalize_archive_path(name, false)
-            .unwrap_or_else(|| name.clone())
-            .to_lowercase();
+        let sort_key = normalize_archive_path(name, false).unwrap_or_else(|| name.clone());
         page_entries.push(ComicArchivePage {
             entry_name: name.clone(),
             sort_key,
@@ -360,9 +358,8 @@ fn push_7z_comic_entry(
 
     if !is_dir && let Some(entry_name) = entry_name {
         if let Some(extension) = archive_image_extension(&entry_name) {
-            let sort_key = normalize_archive_path(&entry_name, false)
-                .unwrap_or_else(|| entry_name.clone())
-                .to_lowercase();
+            let sort_key =
+                normalize_archive_path(&entry_name, false).unwrap_or_else(|| entry_name.clone());
             page_entries.push(ComicArchivePage {
                 entry_name,
                 sort_key,
@@ -399,9 +396,7 @@ where
             capture_comic_metadata_entry(&mut metadata_entry, name);
             continue;
         };
-        let sort_key = normalize_archive_path(name, false)
-            .unwrap_or_else(|| name.to_string())
-            .to_lowercase();
+        let sort_key = normalize_archive_path(name, false).unwrap_or_else(|| name.to_string());
         page_entries.push(ComicArchivePage {
             entry_name: name.to_string(),
             sort_key,

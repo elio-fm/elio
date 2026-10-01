@@ -44,6 +44,10 @@ xz2 = { version = "0.1.7", features = ["static"] }
 bzip2 = "0.6.1"
 zstd = { version = "0.14", default-features = false }
 sevenz-rust2 = { version = "0.23", default-features = false, features = ["aes256", "compress"] }
+icu_collator = { version = "=2.3.1", default-features = false, features = ["compiled_data"] }
+icu_locale_core = { version = "=2.3.0", default-features = false, features = ["alloc"] }
+icu_normalizer = { version = "=2.3.0", default-features = false, features = ["compiled_data"] }
+sys-locale = "=0.3.2"
 
 [dev-dependencies]
 sevenz-rust2 = { version = "0.23", default-features = false, features = ["aes256", "compress"] }

@@ -73,11 +73,8 @@ pub(super) fn mounted_device_items(
     }
 
     items.sort_by(|left, right| {
-        crate::filesystem::natural_cmp(
-            &left.title.to_ascii_lowercase(),
-            &right.title.to_ascii_lowercase(),
-        )
-        .then_with(|| left.path.cmp(&right.path))
+        crate::filesystem::natural_cmp(&left.title, &right.title)
+            .then_with(|| left.path.cmp(&right.path))
     });
 
     items
@@ -158,11 +155,8 @@ pub(super) fn mounted_device_items(home: &Path, pinned_paths: &HashSet<PathBuf>)
     }
 
     items.sort_by(|left, right| {
-        crate::filesystem::natural_cmp(
-            &left.title.to_ascii_lowercase(),
-            &right.title.to_ascii_lowercase(),
-        )
-        .then_with(|| left.path.cmp(&right.path))
+        crate::filesystem::natural_cmp(&left.title, &right.title)
+            .then_with(|| left.path.cmp(&right.path))
     });
 
     items

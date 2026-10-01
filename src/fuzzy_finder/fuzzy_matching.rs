@@ -73,14 +73,9 @@ fn compare_scored(
         .then_with(|| left.2.cmp(&right.2))
         .then_with(|| {
             crate::filesystem::natural_cmp(
-                &candidates[left.0].relative_key,
-                &candidates[right.0].relative_key,
+                &candidates[left.0].relative,
+                &candidates[right.0].relative,
             )
-            .then_with(|| {
-                candidates[left.0]
-                    .relative
-                    .cmp(&candidates[right.0].relative)
-            })
         })
 }
 
