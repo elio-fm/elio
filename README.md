@@ -26,7 +26,7 @@ Snappy, batteries-included terminal file manager with rich previews, inline imag
 - **Fuzzy find** — find folders and files quickly
 - **Zoxide jumps** — jump to frequent directories from your zoxide history
 - **Kitty drag and drop** — drop files into elio and drag them out in Kitty 0.47+
-- **Shell integration** — install cd-on-exit wrappers for bash, zsh, fish, and Nushell
+- **Shell integration** — install cd-on-exit wrappers for bash, zsh, fish, Nushell, and PowerShell 7.4+
 - **File chooser** — use elio as the file chooser on Linux and FreeBSD
 - **Theming** — full palette and file-class control via `theme.toml`
 

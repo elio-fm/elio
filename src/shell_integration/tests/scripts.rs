@@ -1,4 +1,7 @@
-use super::super::{Shell, binary_command, init_script, scripts::nu_string_literal};
+use super::super::{
+    Shell, binary_command, init_script,
+    scripts::{nu_string_literal, pwsh_string_literal},
+};
 use std::path::Path;
 
 #[test]
@@ -58,6 +61,34 @@ fn binary_command_formats_nu_invocations_for_run_external() {
             Path::new("/repo/target/debug/elio")
         ),
         r#""/repo/target/debug/elio""#
+    );
+}
+
+#[test]
+fn binary_command_looks_up_pwsh_invocations_as_an_application() {
+    assert_eq!(
+        binary_command(
+            Shell::Pwsh,
+            Some("elio"),
+            Path::new("/versioned/path/elio.exe")
+        ),
+        "(Get-Command -Name 'elio.exe' -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source)"
+    );
+    assert_eq!(
+        binary_command(
+            Shell::Pwsh,
+            Some(r"target\debug\elio.exe"),
+            Path::new("/repo/target/debug/elio.exe")
+        ),
+        "'/repo/target/debug/elio.exe'"
+    );
+}
+
+#[test]
+fn pwsh_string_literal_doubles_quotes_and_keeps_backslashes() {
+    assert_eq!(
+        pwsh_string_literal(Path::new(r"C:\Users\ann's files\elio.exe")),
+        r"'C:\Users\ann''s files\elio.exe'"
     );
 }
 
@@ -126,4 +157,50 @@ fn nu_init_script_passes_cli_commands_through_without_posix_syntax() {
                 .expect("complete branch should exist"),
         "chooser mode must run before the captured pass-through branch"
     );
+}
+
+#[test]
+fn pwsh_init_script_passes_cli_commands_through_and_avoids_self_recursion() {
+    let script = init_script(Shell::Pwsh, "'C:\\elio\\elio.exe'");
+
+    assert!(script.contains("function elio {"));
+    assert!(script.contains("$elioExe = 'C:\\elio\\elio.exe'"));
+    assert!(
+        script.contains("$first -ceq 'shell' -or $first -ceq 'portal' -or $first.StartsWith('-')")
+    );
+    assert!(script.contains("$value -ceq '--chooser-file'"));
+    assert!(script.contains("& $elioExe @args"));
+    assert!(script.contains("& $elioExe --cwd-file $tmp @args"));
+    assert!(script.contains("[System.IO.Path]::GetTempFileName()"));
+    assert!(script.contains("Set-Location -LiteralPath $cwd"));
+    assert!(
+        !script.contains("& elio"),
+        "calling elio by name would resolve back to the wrapper function"
+    );
+    assert!(!script.contains("mktemp"));
+}
+
+#[test]
+fn pwsh_init_script_stays_a_simple_function_without_comments() {
+    let script = init_script(Shell::Pwsh, "'elio.exe'");
+
+    assert!(
+        !script.contains("CmdletBinding") && !script.contains("param("),
+        "an advanced function would bind common parameters such as -Verbose itself"
+    );
+    assert!(!script.contains('#'));
+}
+
+#[test]
+fn pwsh_init_script_sets_status_after_cleanup() {
+    let script = init_script(Shell::Pwsh, "'elio.exe'");
+
+    let cleanup = script
+        .find("Remove-Item -LiteralPath $tmp")
+        .expect("temp file should be removed");
+    let status = script
+        .find("$global:LASTEXITCODE = $statusCode")
+        .expect("status should be propagated");
+
+    assert!(cleanup < status);
 }

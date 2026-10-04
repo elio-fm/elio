@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `[ui] default_sort` to set the initial browser sort (name, modified, or size).
 - Added recursive folder size calculation in the background when sorting by size.
 - Added `--save-as` support for `--chooser-file`, adding Save As behavior through a dedicated popup. ([#273])
+- Added shell integration for PowerShell.
 
 ### Changed
 
