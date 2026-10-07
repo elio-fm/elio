@@ -1,5 +1,5 @@
 %bcond_with check
-%global fallback_version 1.12.0
+%global fallback_version 1.13.0
 %global fallback_release 1
 
 Name:           elio
@@ -53,6 +53,12 @@ desktop-file-validate packaging/linux/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Wed Oct 07 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.13.0-1
+- Add XDG Desktop Portal FileChooser integration and Save As support
+- Add a Nix flake and configurable browser sorting and folder-size calculation
+- Improve Sixel preview speed and color quality, CLI help, and terminal image preview support
+- Fix system-locale-aware name sorting, shell integration, tmux Sixel previews, and Git status updates
+
 * Mon Aug 24 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.12.0-1
 - Add Duplicate Finder, bulk archive extraction, and preview pane controls
 - Add invoking-user-aware sudo/doas sessions and config/theme path overrides

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-07
+
 ### Added
 
 - Added XDG Desktop Portal FileChooser integration on Linux and FreeBSD, allowing elio to serve as the file chooser for desktop applications via `elio portal enable`, with independent routing for different desktop environments or window managers.
@@ -347,7 +349,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Trash and restore support for safer file management workflows.
 - Optional external-tool integrations such as Poppler, ffmpeg, ffprobe, resvg, and 7-Zip for richer previews and metadata.
 
-[Unreleased]: https://github.com/elio-fm/elio/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/elio-fm/elio/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/elio-fm/elio/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/elio-fm/elio/compare/v1.11.2...v1.12.0
 [1.11.2]: https://github.com/elio-fm/elio/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/elio-fm/elio/compare/v1.11.0...v1.11.1
