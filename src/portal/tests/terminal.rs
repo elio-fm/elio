@@ -26,8 +26,7 @@ fn chooser_args_give_portal_windows_a_stable_identity() {
         (
             TerminalAdapter::Ghostty,
             &[
-                "--title",
-                "elio File Chooser",
+                "--title=elio File Chooser",
                 "--class=io.github.elio_fm.elio.filechooser",
                 "-e",
             ][..],
