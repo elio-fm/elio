@@ -77,8 +77,8 @@ impl TerminalAdapter {
                 APP_ID.into(),
             ],
             Self::Ghostty => vec![
-                "--title".into(),
-                TITLE.into(),
+                // Ghostty configuration overrides require `--key=value`.
+                format!("--title={TITLE}").into(),
                 format!("--class={APP_ID}").into(),
                 "-e".into(),
             ],

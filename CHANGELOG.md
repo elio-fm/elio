@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed text input fields ignoring Caps Lock. ([#321])
+- Fixed Ghostty showing configuration errors when opening the FileChooser portal. ([#324])
 
 ## [1.13.0] - 2026-10-07
 
@@ -376,6 +377,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#324]: https://github.com/elio-fm/elio/issues/324
 [#321]: https://github.com/elio-fm/elio/issues/321
 [#315]: https://github.com/elio-fm/elio/issues/315
 [#314]: https://github.com/elio-fm/elio/issues/314
