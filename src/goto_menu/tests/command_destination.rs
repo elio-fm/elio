@@ -53,5 +53,13 @@ fn command_uses_the_displayed_directory_as_its_working_directory() {
     #[cfg(windows)]
     let command = "cmd /C cd";
 
-    assert_eq!(resolve_command_destination(command, &cwd), Ok(cwd));
+    let destination = resolve_command_destination(command, &cwd)
+        .expect("command should resolve the displayed directory");
+    assert_eq!(
+        destination
+            .canonicalize()
+            .expect("destination should canonicalize"),
+        cwd.canonicalize()
+            .expect("working directory should canonicalize")
+    );
 }
