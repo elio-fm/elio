@@ -6,6 +6,7 @@ mod default_bindings;
 mod tests;
 
 pub(crate) use self::action_bindings::{
-    Action, ChooserKeyAction, KeyBindings, KeyContext, KeyList, normalized_plain_key_char,
+    Action, ChooserKeyAction, KeyBindings, KeyContext, KeyList, normalize_caps_lock_character,
+    normalized_plain_key_char,
 };
 pub(super) use self::binding_parsing::KeysConfigOverride;

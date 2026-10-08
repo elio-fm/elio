@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed text input fields ignoring Caps Lock. ([#321])
+
 ## [1.13.0] - 2026-10-07
 
 ### Added
@@ -368,6 +372,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#321]: https://github.com/elio-fm/elio/issues/321
 [#314]: https://github.com/elio-fm/elio/issues/314
 [#303]: https://github.com/elio-fm/elio/issues/303
 [#296]: https://github.com/elio-fm/elio/issues/296

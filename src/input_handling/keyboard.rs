@@ -10,7 +10,7 @@ pub(super) const KEY_REPEAT_NAV_INTERVAL: Duration = Duration::from_millis(28);
 impl App {
     pub fn handle_event(&mut self, event: Event) -> Result<()> {
         let result = match event {
-            Event::Key(key) => self.handle_key(key),
+            Event::Key(key) => self.handle_key(crate::config::normalize_caps_lock_character(key)),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             Event::Paste(text) => self.handle_paste(&text),
             Event::Resize(_, _) | Event::FocusGained | Event::FocusLost => Ok(()),

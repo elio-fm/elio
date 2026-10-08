@@ -142,6 +142,52 @@ open_with = "alt+o"
     );
 }
 
+#[test]
+fn caps_lock_normalization_preserves_event_metadata() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+
+    let key = KeyEvent::new_with_kind_and_state(
+        KeyCode::Char('ñ'),
+        KeyModifiers::NONE,
+        KeyEventKind::Repeat,
+        KeyEventState::CAPS_LOCK,
+    );
+    let normalized = normalize_caps_lock_character(key);
+
+    assert_eq!(normalized.code, KeyCode::Char('Ñ'));
+    assert_eq!(normalized.modifiers, key.modifiers);
+    assert_eq!(normalized.kind, key.kind);
+    assert_eq!(normalized.state, key.state);
+}
+
+#[test]
+fn caps_lock_with_shift_normalizes_to_lowercase() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    assert_eq!(
+        normalize_caps_lock_character(caps_lock_char('A', KeyModifiers::SHIFT)).code,
+        KeyCode::Char('a')
+    );
+}
+
+#[test]
+fn caps_lock_preserves_multi_character_case_mappings() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    assert_eq!(
+        normalize_caps_lock_character(caps_lock_char('ß', KeyModifiers::NONE)).code,
+        KeyCode::Char('ß')
+    );
+}
+
+#[test]
+fn character_case_stays_unchanged_without_caps_lock() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+    assert_eq!(normalize_caps_lock_character(key), key);
+}
+
 fn caps_lock_char(
     c: char,
     modifiers: crossterm::event::KeyModifiers,

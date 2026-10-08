@@ -1884,6 +1884,26 @@ fn goto_shortcuts_respect_caps_lock_normalization() {
 }
 
 #[test]
+fn caps_lock_normalization_reaches_text_overlays_at_event_ingress() {
+    let root = temp_path("caps-lock-text-input");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.open_create_prompt();
+    let key = KeyEvent::new_with_kind_and_state(
+        KeyCode::Char('ñ'),
+        KeyModifiers::NONE,
+        KeyEventKind::Press,
+        KeyEventState::CAPS_LOCK,
+    );
+
+    app.handle_event(Event::Key(key))
+        .expect("caps-lock character should reach the create prompt");
+
+    assert_eq!(app.file_operations.create_line(0), "Ñ");
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn tab_and_shift_tab_cycle_sidebar_locations_and_skip_section_rows() {
     let root = temp_path("tab-cycles-pinned-places");
     let downloads = root.join("downloads");
