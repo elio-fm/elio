@@ -15,7 +15,8 @@ use std::path::Path;
 pub(crate) use self::{
     goto::{BuiltinGoto, GotoConfig, GotoEntrySpec},
     key_bindings::{
-        Action, ChooserKeyAction, KeyBindings, KeyContext, KeyList, normalized_plain_key_char,
+        Action, ChooserKeyAction, KeyBindings, KeyContext, KeyList, normalize_caps_lock_character,
+        normalized_plain_key_char,
     },
     layout::{LayoutConfig, PaneWeights},
     loading::{config_dir, config_path},

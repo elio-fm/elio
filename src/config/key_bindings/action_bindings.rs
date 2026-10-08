@@ -320,21 +320,14 @@ impl KeySpec {
 }
 
 fn normalize_key_event(key: KeyEvent) -> (KeyCode, KeyModifierSpec) {
+    let key = normalize_caps_lock_character(key);
     let mut modifiers = KeyModifierSpec::from_event(key.modifiers);
-    let caps_lock = key.state.contains(KeyEventState::CAPS_LOCK);
     let code = match key.code {
         KeyCode::Char(c) if modifiers.ctrl || modifiers.alt => {
             modifiers.shift = false;
             KeyCode::Char(c.to_ascii_lowercase())
         }
-        KeyCode::Char(mut c) => {
-            if caps_lock {
-                c = if modifiers.shift {
-                    single_case_mapping(c.to_lowercase()).unwrap_or(c)
-                } else {
-                    single_case_mapping(c.to_uppercase()).unwrap_or(c)
-                };
-            }
+        KeyCode::Char(c) => {
             modifiers.shift = false;
             KeyCode::Char(c)
         }
@@ -345,6 +338,30 @@ fn normalize_key_event(key: KeyEvent) -> (KeyCode, KeyModifierSpec) {
         code => code,
     };
     (code, modifiers)
+}
+
+/// Normalizes character case reported through Caps Lock event state.
+pub(crate) fn normalize_caps_lock_character(mut key: KeyEvent) -> KeyEvent {
+    let KeyCode::Char(ch) = key.code else {
+        return key;
+    };
+    if !key.state.contains(KeyEventState::CAPS_LOCK)
+        || key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+    {
+        return key;
+    }
+
+    let normalized = if key.modifiers.contains(KeyModifiers::SHIFT) {
+        single_case_mapping(ch.to_lowercase())
+    } else {
+        single_case_mapping(ch.to_uppercase())
+    };
+    if let Some(ch) = normalized {
+        key.code = KeyCode::Char(ch);
+    }
+    key
 }
 
 fn single_case_mapping(mut mapping: impl Iterator<Item = char>) -> Option<char> {
