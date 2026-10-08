@@ -18,6 +18,7 @@ pub(super) mod directory_statistics;
 pub(super) mod duplicate_finder;
 pub(super) mod fuzzy_finder;
 pub(super) mod git_status;
+pub(super) mod goto_command;
 pub(super) mod pdf_page_inspection;
 pub(super) mod pdf_page_rendering;
 pub(super) mod preview_building;

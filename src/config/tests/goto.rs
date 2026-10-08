@@ -63,12 +63,12 @@ entries = [
                 destination: BuiltinGoto::Downloads,
                 key: 'W',
             },
-            GotoEntrySpec::Custom {
+            GotoEntrySpec::Path {
                 title: "projects".to_string(),
                 path: workspace,
                 key: 'p',
             },
-            GotoEntrySpec::Custom {
+            GotoEntrySpec::Path {
                 title: "temp".to_string(),
                 path: tmp,
                 key: 'T',
@@ -133,6 +133,30 @@ entries = [
         vec![GotoEntrySpec::Builtin {
             destination: BuiltinGoto::Trash,
             key: 't',
+        }]
+    );
+}
+
+#[test]
+fn config_goto_accepts_commands_and_rejects_ambiguous_destinations() {
+    let config = Config::from_str(
+        r#"
+[goto]
+entries = [
+  { title = "project root", command = "git rev-parse --show-toplevel", key = "r" },
+  { title = "ambiguous", path = "/tmp", command = "pwd", key = "a" },
+  { title = "missing destination", key = "m" },
+]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(
+        config.goto.entries,
+        vec![GotoEntrySpec::Command {
+            title: "project root".to_string(),
+            command: "git rev-parse --show-toplevel".to_string(),
+            key: 'r',
         }]
     );
 }

@@ -75,6 +75,14 @@ pub(crate) struct GitStatusRequest {
 }
 
 #[derive(Clone, Debug)]
+pub(crate) struct GotoCommandRequest {
+    pub(crate) token: u64,
+    pub(crate) title: String,
+    pub(crate) command: String,
+    pub(crate) cwd: PathBuf,
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct PreviewLineCountRequest {
     pub(crate) path: PathBuf,
     pub(crate) size: u64,

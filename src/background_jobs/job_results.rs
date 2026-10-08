@@ -84,6 +84,13 @@ pub(crate) struct GitStatusBuild {
 }
 
 #[derive(Debug)]
+pub(crate) struct GotoCommandBuild {
+    pub(crate) token: u64,
+    pub(crate) title: String,
+    pub(crate) result: Result<PathBuf, &'static str>,
+}
+
+#[derive(Debug)]
 pub(crate) struct PreviewLineCountBuild {
     pub(crate) path: PathBuf,
     pub(crate) size: u64,
@@ -214,6 +221,7 @@ pub(crate) enum JobResult {
     DirectoryItemCount(DirectoryItemCountBuild),
     DirectoryStats(DirectoryStatsBuild),
     GitStatus(GitStatusBuild),
+    GotoCommand(GotoCommandBuild),
     PreviewLineCount(PreviewLineCountBuild),
     ImagePrepare(ImagePrepareBuild),
     PdfProbe(PdfProbeBuild),

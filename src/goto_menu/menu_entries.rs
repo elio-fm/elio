@@ -8,6 +8,7 @@ use std::path::PathBuf;
 pub(crate) enum GotoDestination {
     Top,
     Path(PathBuf),
+    Command { title: String, command: String },
     Missing(String),
 }
 
@@ -96,7 +97,7 @@ fn build_configured_entry(entry: &GotoEntrySpec, place_rows: &[PlaceRow]) -> Got
             let (label, destination) = builtin_destination(*destination, place_rows);
             GotoMenuEntry::new(*key, label, destination)
         }
-        GotoEntrySpec::Custom { title, path, key } => {
+        GotoEntrySpec::Path { title, path, key } => {
             let destination = if path.exists() {
                 GotoDestination::Path(path.clone())
             } else {
@@ -104,6 +105,18 @@ fn build_configured_entry(entry: &GotoEntrySpec, place_rows: &[PlaceRow]) -> Got
             };
             GotoMenuEntry::new(*key, title, destination)
         }
+        GotoEntrySpec::Command {
+            title,
+            command,
+            key,
+        } => GotoMenuEntry::new(
+            *key,
+            title,
+            GotoDestination::Command {
+                title: title.clone(),
+                command: command.clone(),
+            },
+        ),
     }
 }
 

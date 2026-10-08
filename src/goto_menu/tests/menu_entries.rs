@@ -21,12 +21,12 @@ fn configured_entries_resolve_available_and_missing_paths() {
     fs::create_dir_all(&available).expect("available destination should be created");
 
     let configured = vec![
-        GotoEntrySpec::Custom {
+        GotoEntrySpec::Path {
             title: "Available".to_string(),
             path: available.clone(),
             key: 'a',
         },
-        GotoEntrySpec::Custom {
+        GotoEntrySpec::Path {
             title: "Missing".to_string(),
             path: missing,
             key: 'm',
@@ -46,6 +46,25 @@ fn configured_entries_resolve_available_and_missing_paths() {
     );
 
     fs::remove_dir_all(root).expect("temporary directory should be removed");
+}
+
+#[test]
+fn command_entries_stay_unresolved_until_selected() {
+    let configured = vec![GotoEntrySpec::Command {
+        title: "Project root".to_string(),
+        command: "git rev-parse --show-toplevel".to_string(),
+        key: 'r',
+    }];
+
+    let menu = build_goto_menu(&configured, &[]);
+
+    assert_eq!(
+        menu.destination(0),
+        Some(GotoDestination::Command {
+            title: "Project root".to_string(),
+            command: "git rev-parse --show-toplevel".to_string(),
+        })
+    );
 }
 
 #[test]

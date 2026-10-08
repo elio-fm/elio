@@ -22,6 +22,7 @@ use super::{
         duplicate_finder::DuplicateFinderPool,
         fuzzy_finder::FuzzyFinderPool,
         git_status::GitStatusPool,
+        goto_command::GotoCommandPool,
         pdf_page_inspection::PdfProbePool,
         pdf_page_rendering::PdfRenderPool,
         preview_building::PreviewPool,
@@ -66,6 +67,7 @@ pub(crate) struct JobScheduler {
     directory_item_count: DirectoryItemCountPool,
     directory_stats: DirectoryStatsPool,
     git_status: GitStatusPool,
+    goto_command: GotoCommandPool,
     preview_line_count: PreviewLineCountPool,
     image_prepare: ImagePreparePool,
     pdf_probe: PdfProbePool,
@@ -113,6 +115,7 @@ impl JobScheduler {
                 result_tx.clone(),
             ),
             git_status: GitStatusPool::new(result_tx.clone()),
+            goto_command: GotoCommandPool::new(result_tx.clone()),
             preview_line_count: PreviewLineCountPool::new(
                 config.preview_line_count_worker_count,
                 config.preview_line_count_queue_limit,
@@ -181,6 +184,10 @@ impl JobScheduler {
 
     pub(crate) fn submit_git_status(&self, request: GitStatusRequest) -> bool {
         self.git_status.submit(request)
+    }
+
+    pub(crate) fn submit_goto_command(&self, request: GotoCommandRequest) -> bool {
+        self.goto_command.submit(request)
     }
 
     pub(crate) fn submit_preview_line_count(&self, request: PreviewLineCountRequest) -> bool {
@@ -330,6 +337,7 @@ impl JobScheduler {
             || self.directory_item_count.has_pending_work()
             || self.directory_stats.has_pending_work()
             || self.git_status.has_pending_work()
+            || self.goto_command.has_pending_work()
             || self.preview_line_count.has_pending_work()
             || self.image_prepare.has_pending_work()
             || self.pdf_probe.has_pending_work()
