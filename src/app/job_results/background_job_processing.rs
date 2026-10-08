@@ -28,6 +28,7 @@ impl App {
                 }
                 JobResult::DirectoryStats(build) => self.apply_directory_stats_job_result(build),
                 JobResult::GitStatus(build) => self.apply_git_status_job_result(build),
+                JobResult::GotoCommand(build) => self.apply_goto_command_job_result(build),
                 JobResult::PreviewLineCount(build) => {
                     self.apply_preview_line_count_job_result(build)
                 }

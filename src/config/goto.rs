@@ -35,9 +35,14 @@ pub(crate) enum GotoEntrySpec {
         destination: BuiltinGoto,
         key: char,
     },
-    Custom {
+    Path {
         title: String,
         path: PathBuf,
+        key: char,
+    },
+    Command {
+        title: String,
+        command: String,
         key: char,
     },
 }
@@ -102,7 +107,10 @@ impl GotoEntrySpec {
                         return None;
                     };
                     let destination = BuiltinGoto::parse(name)?;
-                    if table.contains_key("title") || table.contains_key("path") {
+                    if table.contains_key("title")
+                        || table.contains_key("path")
+                        || table.contains_key("command")
+                    {
                         eprintln!(
                             "elio: {field_name}: builtin goto entries only support {{ builtin, key }}; \
                              ignoring extra fields"
@@ -131,13 +139,18 @@ impl GotoEntrySpec {
                     .and_then(toml::Value::as_str)
                     .map(str::trim)
                     .filter(|path| !path.is_empty());
-                let Some(path) = path else {
+                let command = table
+                    .get("command")
+                    .and_then(toml::Value::as_str)
+                    .map(str::trim)
+                    .filter(|command| !command.is_empty());
+                if path.is_some() == command.is_some() {
                     eprintln!(
-                        "elio: {field_name}: custom goto entries require a non-empty string path; \
+                        "elio: {field_name}: custom goto entries require exactly one non-empty string path or command; \
                          skipping entry"
                     );
                     return None;
-                };
+                }
 
                 let Some(key) = parse_goto_key(table.get("key"), field_name) else {
                     eprintln!(
@@ -147,22 +160,32 @@ impl GotoEntrySpec {
                     return None;
                 };
 
-                match crate::config::places::expand_custom_place_path(path) {
-                    Ok(path) => Some(Self::Custom {
-                        title: title.to_string(),
-                        path,
-                        key,
-                    }),
-                    Err(error) => {
-                        eprintln!("elio: {field_name}: {error}; skipping entry");
-                        None
+                if let Some(path) = path {
+                    match crate::config::places::expand_custom_place_path(path) {
+                        Ok(path) => Some(Self::Path {
+                            title: title.to_string(),
+                            path,
+                            key,
+                        }),
+                        Err(error) => {
+                            eprintln!("elio: {field_name}: {error}; skipping entry");
+                            None
+                        }
                     }
+                } else {
+                    Some(Self::Command {
+                        title: title.to_string(),
+                        command: command
+                            .expect("command is present when path is absent")
+                            .to_string(),
+                        key,
+                    })
                 }
             }
             _ => {
                 eprintln!(
                     "elio: {field_name}: expected a built-in name, {{ builtin, key? }}, or \
-                     {{ title, path, key }} object; skipping entry"
+                     {{ title, path, key }} or {{ title, command, key }} object; skipping entry"
                 );
                 None
             }
@@ -171,14 +194,14 @@ impl GotoEntrySpec {
 
     pub(crate) fn key(&self) -> char {
         match self {
-            Self::Builtin { key, .. } | Self::Custom { key, .. } => *key,
+            Self::Builtin { key, .. } | Self::Path { key, .. } | Self::Command { key, .. } => *key,
         }
     }
 
     fn name(&self) -> &str {
         match self {
             Self::Builtin { destination, .. } => destination.name(),
-            Self::Custom { title, .. } => title,
+            Self::Path { title, .. } | Self::Command { title, .. } => title,
         }
     }
 }

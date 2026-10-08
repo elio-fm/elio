@@ -5,13 +5,13 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 impl App {
     pub(crate) fn handle_goto_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            self.overlays.goto = None;
+            self.dismiss_goto_overlay();
             return Ok(());
         }
 
         match key.code {
             KeyCode::Esc => {
-                self.overlays.goto = None;
+                self.dismiss_goto_overlay();
             }
             _ => {
                 if let Some(index) = crate::config::normalized_plain_key_char(key)
@@ -33,7 +33,7 @@ impl App {
                 .goto_panel
                 .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()));
             if !inside {
-                self.overlays.goto = None;
+                self.dismiss_goto_overlay();
                 return Ok(());
             }
 
