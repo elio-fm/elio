@@ -1,6 +1,6 @@
 ## Summary
 
-<!-- What does this PR change and why? Keep it concise. -->
+<!-- What does this PR change and why? -->
 
 ## Testing
 
@@ -14,10 +14,4 @@ Verified with:
 
 Manual checks:
 
-<!-- List the manual checks performed. Include relevant details, such as the OS, terminal, multiplexer, or external tools used, and the behavior verified in each. -->
-
-## Documentation and Changelog
-
-- [ ] Updated docs when behavior, configuration, controls, or optional dependencies changed
-- [ ] Added a `CHANGELOG.md` entry for user-visible changes
-- [ ] Docs and changelog are not needed
+<!-- List manual checks and relevant environment details when useful. -->
