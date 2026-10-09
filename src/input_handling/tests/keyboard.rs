@@ -1174,6 +1174,8 @@ fn fullscreen_preview_allows_file_open_with_and_directory_enter() {
     let file_path = root.join("note.txt");
     fs::create_dir_all(&folder).expect("failed to create folder");
     fs::write(&file_path, "hello").expect("failed to write temp file");
+    // No discovered apps → Open With falls back to the system opener.
+    let _capture_guard = OpenInSystemCaptureGuard::install(root.join("capture.txt"));
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
@@ -2779,6 +2781,8 @@ fn capital_o_on_directory_uses_open_with_instead_of_file_only_error() {
     let root = temp_path("open-with-overlay-dir");
     let child = root.join("subdir");
     fs::create_dir_all(&child).expect("failed to create child dir");
+    // No discovered apps → Open With falls back to the system opener.
+    let _capture_guard = OpenInSystemCaptureGuard::install(root.join("capture.txt"));
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     wait_for_directory_load(&mut app);
