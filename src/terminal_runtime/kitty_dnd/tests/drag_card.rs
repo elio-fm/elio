@@ -34,8 +34,11 @@ fn kitty_setting_value_reads_bold_font_without_matching_prefixes() {
 
 #[test]
 fn drag_card_metrics_follow_terminal_cell_height() {
-    assert_eq!(super::drag_card_metrics(Some(32.0)).height, 52);
-    assert_eq!(super::drag_card_metrics(Some(32.0)).font_size, 30.0);
+    let base = super::drag_card_metrics(Some(32.0));
+    assert_eq!(base.height, 52);
+    assert_eq!(base.font_size, 30.0);
+    assert_eq!(base.icon_label_gap, 8);
+    assert_eq!(base.item_count_gap, 8);
 
     assert_eq!(super::drag_card_metrics(Some(16.0)).height, 26);
     assert_eq!(super::drag_card_metrics(Some(16.0)).font_size, 15.0);
