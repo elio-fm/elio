@@ -50,6 +50,13 @@ fn unsupported_drop_scheme_status_names_one_or_many_schemes() {
 }
 
 #[test]
+fn drag_card_cell_height_uses_real_terminal_pixels() {
+    assert_eq!(drag_card_cell_height_from_dimensions(960, 40), Some(24.0));
+    assert_eq!(drag_card_cell_height_from_dimensions(0, 40), None);
+    assert_eq!(drag_card_cell_height_from_dimensions(960, 0), None);
+}
+
+#[test]
 fn drag_icon_label_uses_name_for_single_item_and_count_for_many() {
     assert_eq!(
         drag_icon_label_with(&[PathBuf::from("/tmp/report.pdf")], |_| (

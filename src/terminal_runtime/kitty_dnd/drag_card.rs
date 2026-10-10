@@ -10,15 +10,21 @@ use fontdue::{Font, FontSettings};
 use image::{ImageEncoder, codecs::png::PngEncoder};
 use ratatui::style::Color;
 
-const FONT_SIZE: f32 = 28.0;
-const ICON_SIZE: f32 = 30.0;
-const ICON_SLOT_WIDTH: u32 = 32;
-const PADDING_X: u32 = 18;
-const ICON_TEXT_GAP: u32 = 9;
-const WIDE_ICON_TEXT_GAP: u32 = 12;
-const RADIUS: f32 = 13.0;
+const FONT_SIZE: f32 = 30.0;
+const ICON_SIZE: f32 = 33.0;
+const ICON_SLOT_WIDTH: u32 = 35;
+const PADDING_X: u32 = 20;
+const ICON_TEXT_GAP: u32 = 10;
+const WIDE_ICON_TEXT_GAP: u32 = 13;
+const RADIUS: f32 = 14.0;
+const BASELINE: f32 = 35.0;
+const CARD_HEIGHT: f32 = 52.0;
 const MAX_TEXT_CHARS: usize = 30;
 const PREWARM_DRAG_ICONS: &str = "󰉋󰌺󰆍󰒓󰈙󰿃󰋩󰎆󰀼󰛖󰆼󰈔󰉓";
+const BASE_CELL_HEIGHT: f32 = 32.0;
+const MIN_CELL_HEIGHT: f32 = 8.0;
+const MAX_CELL_HEIGHT: f32 = 256.0;
+const MAX_IMAGE_BYTES: usize = 4 * 1024 * 1024;
 
 pub(in crate::terminal_runtime) struct DragImage {
     pub(in crate::terminal_runtime) png: Vec<u8>,
@@ -62,6 +68,7 @@ pub(in crate::terminal_runtime) fn render_drag_image(
     icon_color: Color,
     card_color: Color,
     text_color: Color,
+    cell_height: Option<f32>,
 ) -> Option<DragImage> {
     let base_fonts = loaded_fonts()?;
     let fonts = RenderFontSet {
@@ -72,15 +79,22 @@ pub(in crate::terminal_runtime) fn render_drag_image(
         return None;
     }
 
+    let metrics = drag_card_metrics(cell_height);
     let style = resolve_card_style(card_color, text_color);
     let text = truncate_text(text, MAX_TEXT_CHARS);
-    let icon_width = measure_text(&fonts, icon, ICON_SIZE).ceil() as u32;
-    let icon_slot_width = icon_slot_width(icon_width);
-    let text_width = measure_text(&fonts, &text, FONT_SIZE).ceil() as u32;
-    let icon_text_gap = icon_text_gap(icon_slot_width);
-    let width = PADDING_X * 2 + icon_slot_width + icon_text_gap + text_width;
-    let height = 48;
-    let mut pixels = vec![0u8; width as usize * height as usize * 4];
+    let icon_width = measure_text(&fonts, icon, metrics.icon_size).ceil() as u32;
+    let icon_slot_width = icon_slot_width(icon_width, metrics.icon_slot_width);
+    let text_width = measure_text(&fonts, &text, metrics.font_size).ceil() as u32;
+    let icon_text_gap = icon_text_gap(icon_slot_width, &metrics);
+    let width = metrics
+        .padding_x
+        .checked_mul(2)?
+        .checked_add(icon_slot_width)?
+        .checked_add(icon_text_gap)?
+        .checked_add(text_width)?;
+    let height = metrics.height;
+    let pixel_len = drag_image_pixel_len(width, height)?;
+    let mut pixels = vec![0u8; pixel_len];
 
     let mut canvas = Canvas {
         pixels: &mut pixels,
@@ -96,19 +110,18 @@ pub(in crate::terminal_runtime) fn render_drag_image(
             width: width as f32,
             height: height as f32,
         },
-        RADIUS,
+        metrics.radius,
         style.bg,
     );
 
-    let baseline = 32.0;
     draw_text(
         &mut canvas,
         &fonts,
         icon,
-        ICON_SIZE,
+        metrics.icon_size,
         Point {
-            x: (PADDING_X + icon_x_offset(icon_width, icon_slot_width)) as f32,
-            y: baseline + 1.0,
+            x: (metrics.padding_x + icon_x_offset(icon_width, icon_slot_width)) as f32,
+            y: metrics.baseline + metrics.scale,
         },
         color_rgba(icon_color, 255),
     );
@@ -116,10 +129,10 @@ pub(in crate::terminal_runtime) fn render_drag_image(
         &mut canvas,
         &fonts,
         &text,
-        FONT_SIZE,
+        metrics.font_size,
         Point {
-            x: (PADDING_X + icon_slot_width + icon_text_gap) as f32,
-            y: baseline,
+            x: (metrics.padding_x + icon_slot_width + icon_text_gap) as f32,
+            y: metrics.baseline,
         },
         style.text,
     );
@@ -129,6 +142,52 @@ pub(in crate::terminal_runtime) fn render_drag_image(
         .write_image(&pixels, width, height, image::ExtendedColorType::Rgba8)
         .ok()?;
     Some(DragImage { png, width, height })
+}
+
+fn drag_image_pixel_len(width: u32, height: u32) -> Option<usize> {
+    let bytes = usize::try_from(width)
+        .ok()?
+        .checked_mul(usize::try_from(height).ok()?)?
+        .checked_mul(4)?;
+    (bytes <= MAX_IMAGE_BYTES).then_some(bytes)
+}
+
+#[derive(Clone, Copy)]
+struct DragCardMetrics {
+    scale: f32,
+    font_size: f32,
+    icon_size: f32,
+    icon_slot_width: u32,
+    padding_x: u32,
+    icon_text_gap: u32,
+    wide_icon_text_gap: u32,
+    radius: f32,
+    baseline: f32,
+    height: u32,
+}
+
+fn drag_card_metrics(cell_height: Option<f32>) -> DragCardMetrics {
+    // Cell pixels carry the source display scale and current font size. Reject
+    // implausible terminal reports; otherwise follow Kitty font zoom like its
+    // text DnD icon.
+    let scale = cell_height
+        .filter(|height| height.is_finite() && (MIN_CELL_HEIGHT..=MAX_CELL_HEIGHT).contains(height))
+        .map(|height| height / BASE_CELL_HEIGHT)
+        .unwrap_or(1.0);
+    let scaled = |value: f32| (value * scale).round().max(1.0) as u32;
+
+    DragCardMetrics {
+        scale,
+        font_size: FONT_SIZE * scale,
+        icon_size: ICON_SIZE * scale,
+        icon_slot_width: scaled(ICON_SLOT_WIDTH as f32),
+        padding_x: scaled(PADDING_X as f32),
+        icon_text_gap: scaled(ICON_TEXT_GAP as f32),
+        wide_icon_text_gap: scaled(WIDE_ICON_TEXT_GAP as f32),
+        radius: RADIUS * scale,
+        baseline: BASELINE * scale,
+        height: scaled(CARD_HEIGHT),
+    }
 }
 
 struct CardStyle {
@@ -200,16 +259,16 @@ fn loaded_fonts() -> Option<&'static FontSet> {
     font_cache().get_or_init(load_font_from_disk).as_ref()
 }
 
-fn icon_text_gap(icon_width: u32) -> u32 {
-    if icon_width >= 30 {
-        WIDE_ICON_TEXT_GAP
+fn icon_text_gap(icon_width: u32, metrics: &DragCardMetrics) -> u32 {
+    if icon_width >= metrics.icon_size.ceil() as u32 {
+        metrics.wide_icon_text_gap
     } else {
-        ICON_TEXT_GAP
+        metrics.icon_text_gap
     }
 }
 
-fn icon_slot_width(icon_width: u32) -> u32 {
-    icon_width.max(ICON_SLOT_WIDTH)
+fn icon_slot_width(icon_width: u32, minimum_width: u32) -> u32 {
+    icon_width.max(minimum_width)
 }
 
 fn icon_x_offset(icon_width: u32, icon_slot_width: u32) -> u32 {
