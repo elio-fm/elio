@@ -4,7 +4,7 @@ use super::{
     portal::PortalCommand,
     shell_commands::ShellIntegrationCommand,
 };
-use crate::shell_integration::Shell;
+use crate::shell_integration::{SUPPORTED_SHELLS, Shell};
 use anyhow::{Error, Result};
 use std::path::PathBuf;
 
@@ -150,7 +150,7 @@ fn parse_shell(args: &[String]) -> Result<Option<Action>> {
         }
         [subcommand] if subcommand == "init" => {
             return Err(anyhow::anyhow!(
-                "error: expected a shell after 'elio shell init'\n\nsupported shells: bash, zsh, fish, nu"
+                "error: expected a shell after 'elio shell init'\n\nsupported shells: {SUPPORTED_SHELLS}"
             ));
         }
         _ => {
