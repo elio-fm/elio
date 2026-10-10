@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed text input fields ignoring Caps Lock. ([#321])
 - Fixed Ghostty showing configuration errors when opening the FileChooser portal. ([#324])
+- Fixed Save As not closing when clicking outside its popup.
 
 ## [1.13.0] - 2026-10-07
 

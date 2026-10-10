@@ -79,6 +79,58 @@ fn save_as_editing_handles_unicode_and_single_line_paste() {
 }
 
 #[test]
+fn save_as_outside_click_closes_prompt() {
+    let root = temp_path("save-as-outside-click");
+    let mut app = App::new_at(root.clone()).unwrap();
+    app.enable_save_as_mode("draft.txt".into());
+    app.confirm_chooser();
+    app.set_screen_regions(ScreenRegions {
+        save_as_panel: Some(Rect::new(10, 5, 40, 6)),
+        ..ScreenRegions::default()
+    });
+
+    app.handle_event(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: 0,
+        row: 0,
+        modifiers: KeyModifiers::NONE,
+    }))
+    .unwrap();
+
+    assert!(!app.chooser.save_as().unwrap().is_open());
+    assert!(app.take_chooser_exit().is_none());
+    cleanup_app_temp_root(app, root);
+}
+
+#[test]
+fn save_as_outside_click_only_cancels_overwrite_confirmation() {
+    let root = temp_path("save-as-overwrite-outside-click");
+    fs::write(root.join("existing.txt"), "keep me").unwrap();
+    let mut app = App::new_at(root.clone()).unwrap();
+    app.enable_save_as_mode("existing.txt".into());
+    app.confirm_chooser();
+    key(&mut app, KeyCode::Enter);
+    app.set_screen_regions(ScreenRegions {
+        save_as_panel: Some(Rect::new(10, 5, 40, 6)),
+        ..ScreenRegions::default()
+    });
+
+    app.handle_event(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: 0,
+        row: 0,
+        modifiers: KeyModifiers::NONE,
+    }))
+    .unwrap();
+
+    let save = app.chooser.save_as().unwrap();
+    assert!(save.is_open());
+    assert!(!save.overwrite());
+    assert!(app.take_chooser_exit().is_none());
+    cleanup_app_temp_root(app, root);
+}
+
+#[test]
 fn overwrite_requires_confirmation_and_selection_cancel_returns_to_input() {
     let root = temp_path("save-as-overwrite");
     let target = root.join("existing");

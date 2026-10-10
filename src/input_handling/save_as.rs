@@ -102,20 +102,33 @@ impl App {
         }
     }
     pub(crate) fn handle_save_as_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        if !matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
-            || !self.chooser.save_as().is_some_and(|save| save.overwrite())
-        {
+        if !matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
             return Ok(());
         }
 
         let point = (mouse.column, mouse.row).into();
         let regions = &self.input.screen_regions;
-        if !regions
+        let inside_panel = regions
             .save_as_panel
-            .is_some_and(|panel| panel.contains(point))
-            || regions
-                .save_as_cancel_btn
-                .is_some_and(|button| button.contains(point))
+            .is_some_and(|panel| panel.contains(point));
+        if !inside_panel {
+            if let Some(save) = self.chooser.save_as_mut() {
+                if save.overwrite() {
+                    save.cancel_overwrite();
+                } else {
+                    save.close();
+                }
+            }
+            return Ok(());
+        }
+
+        if !self.chooser.save_as().is_some_and(|save| save.overwrite()) {
+            return Ok(());
+        }
+
+        if regions
+            .save_as_cancel_btn
+            .is_some_and(|button| button.contains(point))
         {
             if let Some(save) = self.chooser.save_as_mut() {
                 save.cancel_overwrite();
