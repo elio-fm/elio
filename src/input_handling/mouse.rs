@@ -39,6 +39,11 @@ impl App {
     }
 
     pub(crate) fn handle_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+        if matches!(mouse.kind, MouseEventKind::Down(_)) && self.blocks_file_drag_and_drop() {
+            // An outside click can dismiss an overlay before Kitty sends the matching
+            // drag offer. Keep that press from becoming a browser drag afterward.
+            self.suppress_drag_until_button_up();
+        }
         if self.chooser.save_as().is_some_and(|save| save.is_open()) {
             return self.handle_save_as_mouse(mouse);
         }

@@ -60,6 +60,41 @@ fn drag_offer_without_click_candidate_uses_entry_hit() {
 }
 
 #[test]
+fn closing_overlay_with_mouse_suppresses_drag_until_release() {
+    let root = temp_path("overlay-close-drag-suppression");
+    let item = root.join("item.txt");
+    fs::write(&item, "item").expect("failed to write item");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    let index = app
+        .file_browser
+        .entries
+        .iter()
+        .position(|entry| entry.path == item)
+        .expect("item should be visible");
+    app.set_screen_regions(ScreenRegions {
+        entry_hits: vec![entry_hit(index, 3)],
+        create_panel: Some(Rect::new(30, 10, 20, 5)),
+        ..ScreenRegions::default()
+    });
+    app.open_create_prompt();
+
+    app.handle_event(left_click(2, 3))
+        .expect("outside click should close the overlay");
+    assert!(!app.file_operations.create_is_open());
+    assert!(app.take_drag_export_paths_at(2, 3).is_empty());
+
+    app.handle_event(left_release(2, 3))
+        .expect("release should clear drag suppression");
+    app.handle_event(left_click(2, 3))
+        .expect("next click should start a drag candidate");
+    assert_eq!(app.take_drag_export_paths_at(2, 3), vec![item]);
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
 fn drag_offer_outside_entry_exports_nothing() {
     let root = temp_path("drag-offer-outside-entry");
     fs::create_dir_all(&root).expect("failed to create temp root");
