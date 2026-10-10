@@ -82,9 +82,10 @@ pub(in crate::terminal_runtime) fn render_drag_image(
     let metrics = drag_card_metrics(cell_height);
     let style = resolve_card_style(card_color, text_color);
     let text = truncate_text(text, MAX_TEXT_CHARS);
-    let icon_width = measure_text(&fonts, icon, metrics.icon_size).ceil() as u32;
+    let icon_width =
+        measure_text(&fonts, icon, metrics.icon_size, TextWeight::Regular).ceil() as u32;
     let icon_slot_width = icon_slot_width(icon_width, metrics.icon_slot_width);
-    let text_width = measure_text(&fonts, &text, metrics.font_size).ceil() as u32;
+    let text_width = measure_text(&fonts, &text, metrics.font_size, TextWeight::Bold).ceil() as u32;
     let icon_text_gap = icon_text_gap(icon_slot_width, &metrics);
     let width = metrics
         .padding_x
@@ -124,6 +125,7 @@ pub(in crate::terminal_runtime) fn render_drag_image(
             y: metrics.baseline + metrics.scale,
         },
         color_rgba(icon_color, 255),
+        TextWeight::Regular,
     );
     draw_text(
         &mut canvas,
@@ -135,6 +137,7 @@ pub(in crate::terminal_runtime) fn render_drag_image(
             y: metrics.baseline,
         },
         style.text,
+        TextWeight::Bold,
     );
 
     let mut png = Vec::new();
@@ -277,6 +280,7 @@ fn icon_x_offset(icon_width: u32, icon_slot_width: u32) -> u32 {
 
 struct FontSet {
     primary: Font,
+    label_bold: Option<Font>,
     fallbacks: Vec<Font>,
 }
 
@@ -285,13 +289,32 @@ struct RenderFontSet<'a> {
     glyph_fallbacks: Vec<Arc<Font>>,
 }
 
+#[derive(Clone, Copy)]
+enum TextWeight {
+    Regular,
+    Bold,
+}
+
 fn load_font_from_disk() -> Option<FontSet> {
-    let primary_path = kitty_font_family()
+    let kitty_font_family = kitty_font_family();
+    let primary_path = kitty_font_family
         .as_deref()
         .and_then(platform_fonts::resolve_family)
         .or_else(platform_fonts::resolve_monospace)
         .or_else(known_font_fallback)?;
     let primary = load_font(&primary_path)?;
+    let label_bold = kitty_bold_font_family()
+        .as_deref()
+        .filter(|family| !family.eq_ignore_ascii_case("auto"))
+        .and_then(platform_fonts::resolve_family)
+        .or_else(|| {
+            kitty_font_family
+                .as_deref()
+                .and_then(platform_fonts::resolve_bold_family)
+        })
+        .or_else(platform_fonts::resolve_bold_monospace)
+        .filter(|path| path != &primary_path)
+        .and_then(|path| load_font(&path));
 
     let fallbacks = ["Symbols Nerd Font Mono", "Symbols Nerd Font"]
         .into_iter()
@@ -300,7 +323,11 @@ fn load_font_from_disk() -> Option<FontSet> {
         .filter_map(|path| load_font(&path))
         .collect();
 
-    Some(FontSet { primary, fallbacks })
+    Some(FontSet {
+        primary,
+        label_bold,
+        fallbacks,
+    })
 }
 
 fn load_glyph_fallbacks_for_text(fonts: &FontSet, text: &str) -> Vec<Arc<Font>> {
@@ -367,10 +394,19 @@ fn load_font(path: &Path) -> Option<Font> {
 }
 
 fn kitty_font_family() -> Option<String> {
+    kitty_font_setting("font_family", true)
+}
+
+fn kitty_bold_font_family() -> Option<String> {
+    kitty_font_setting("bold_font", false)
+}
+
+fn kitty_font_setting(key: &str, skip_auto: bool) -> Option<String> {
     let mut visited = Vec::new();
     for path in kitty_config_candidates() {
-        if let Some(font) = kitty_font_family_from_config(&path, &mut visited, 0) {
-            return Some(font);
+        if let Some(value) = kitty_font_setting_from_config(&path, key, skip_auto, &mut visited, 0)
+        {
+            return Some(value);
         }
     }
     None
@@ -390,8 +426,10 @@ fn kitty_config_candidates() -> Vec<PathBuf> {
     paths
 }
 
-fn kitty_font_family_from_config(
+fn kitty_font_setting_from_config(
     path: &Path,
+    key: &str,
+    skip_auto: bool,
     visited: &mut Vec<PathBuf>,
     depth: usize,
 ) -> Option<String> {
@@ -408,8 +446,8 @@ fn kitty_font_family_from_config(
             continue;
         }
 
-        if let Some(value) = kitty_setting_value(line, "font_family") {
-            if !value.eq_ignore_ascii_case("auto") {
+        if let Some(value) = kitty_setting_value(line, key) {
+            if !skip_auto || !value.eq_ignore_ascii_case("auto") {
                 return Some(value.to_string());
             }
         } else if let Some(include) = kitty_setting_value(line, "include") {
@@ -419,8 +457,10 @@ fn kitty_font_family_from_config(
             } else {
                 base_dir.join(include)
             };
-            if let Some(font) = kitty_font_family_from_config(&include, visited, depth + 1) {
-                return Some(font);
+            if let Some(value) =
+                kitty_font_setting_from_config(&include, key, skip_auto, visited, depth + 1)
+            {
+                return Some(value);
             }
         }
     }
@@ -456,6 +496,18 @@ mod platform_fonts {
 
     pub(super) fn resolve_monospace() -> Option<PathBuf> {
         resolve_family("monospace")
+    }
+
+    pub(super) fn resolve_bold_family(family: &str) -> Option<PathBuf> {
+        resolve_family(&bold_family_query(family))
+    }
+
+    pub(super) fn resolve_bold_monospace() -> Option<PathBuf> {
+        resolve_bold_family("monospace")
+    }
+
+    pub(super) fn bold_family_query(family: &str) -> String {
+        format!("{family}:style=Bold")
     }
 
     pub(super) fn resolve_matching_family(family: &str) -> Option<PathBuf> {
@@ -564,6 +616,13 @@ mod platform_fonts {
             size: CGFloat,
             matrix: *const c_void,
         ) -> CTFontRef;
+        fn CTFontCreateCopyWithSymbolicTraits(
+            font: CTFontRef,
+            size: CGFloat,
+            matrix: *const c_void,
+            sym_trait_value: u32,
+            sym_trait_mask: u32,
+        ) -> CTFontRef;
         fn CTFontCreateForString(
             current_font: CTFontRef,
             string: CFStringRef,
@@ -585,6 +644,31 @@ mod platform_fonts {
         ["Menlo", "Monaco"]
             .into_iter()
             .find_map(|family| font_path_for_family(family).map(|resolved| resolved.path))
+    }
+
+    pub(super) fn resolve_bold_family(family: &str) -> Option<PathBuf> {
+        const K_CT_FONT_BOLD_TRAIT: u32 = 1 << 1;
+
+        let regular = create_font_for_family(family)?;
+        let bold = unsafe {
+            CTFontCreateCopyWithSymbolicTraits(
+                regular,
+                0.0,
+                ptr::null(),
+                K_CT_FONT_BOLD_TRAIT,
+                K_CT_FONT_BOLD_TRAIT,
+            )
+        };
+        let path = font_path_for_font(bold).map(|resolved| resolved.path);
+        release_if_present(bold);
+        release_if_present(regular);
+        path
+    }
+
+    pub(super) fn resolve_bold_monospace() -> Option<PathBuf> {
+        ["Menlo", "Monaco"]
+            .into_iter()
+            .find_map(resolve_bold_family)
     }
 
     pub(super) fn resolve_matching_family(family: &str) -> Option<PathBuf> {
@@ -756,10 +840,10 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
     truncated
 }
 
-fn measure_text(fonts: &RenderFontSet<'_>, text: &str, size: f32) -> f32 {
+fn measure_text(fonts: &RenderFontSet<'_>, text: &str, size: f32, weight: TextWeight) -> f32 {
     text.chars()
         .map(|ch| {
-            font_for_char_or_primary(fonts, ch)
+            font_for_char_or_primary(fonts, ch, weight)
                 .metrics(ch, size)
                 .advance_width
                 .max(0.0)
@@ -783,7 +867,20 @@ fn arc_fonts_have_char(fonts: &[Arc<Font>], ch: char) -> bool {
     fonts.iter().any(|font| font.lookup_glyph_index(ch) != 0)
 }
 
-fn font_for_char_or_primary<'a>(fonts: &'a RenderFontSet<'_>, ch: char) -> &'a Font {
+fn font_for_char_or_primary<'a>(
+    fonts: &'a RenderFontSet<'_>,
+    ch: char,
+    weight: TextWeight,
+) -> &'a Font {
+    if matches!(weight, TextWeight::Bold)
+        && let Some(font) = fonts
+            .base
+            .label_bold
+            .as_ref()
+            .filter(|font| font.lookup_glyph_index(ch) != 0)
+    {
+        return font;
+    }
     font_for_char(fonts, ch).unwrap_or(&fonts.base.primary)
 }
 
@@ -812,10 +909,11 @@ fn draw_text(
     size: f32,
     origin: Point,
     rgba: [u8; 4],
+    weight: TextWeight,
 ) {
     let mut cursor = origin.x;
     for ch in text.chars() {
-        let font = font_for_char_or_primary(fonts, ch);
+        let font = font_for_char_or_primary(fonts, ch, weight);
         let (metrics, bitmap) = font.rasterize(ch, size);
         let glyph_x = cursor + metrics.xmin as f32;
         let glyph_y = origin.y - metrics.ymin as f32 - metrics.height as f32;

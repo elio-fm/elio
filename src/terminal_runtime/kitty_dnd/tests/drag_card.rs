@@ -12,6 +12,27 @@ fn fontconfig_charset_query_uses_lowercase_hex_codepoint() {
 }
 
 #[test]
+#[cfg(not(target_os = "macos"))]
+fn fontconfig_bold_family_query_requests_a_bold_face() {
+    assert_eq!(
+        super::platform_fonts::bold_family_query("Noto Sans Mono"),
+        "Noto Sans Mono:style=Bold"
+    );
+}
+
+#[test]
+fn kitty_setting_value_reads_bold_font_without_matching_prefixes() {
+    assert_eq!(
+        super::kitty_setting_value("bold_font Noto Sans Mono", "bold_font"),
+        Some("Noto Sans Mono")
+    );
+    assert_eq!(
+        super::kitty_setting_value("bold_font Noto Sans Mono", "font"),
+        None
+    );
+}
+
+#[test]
 fn drag_card_metrics_follow_terminal_cell_height() {
     assert_eq!(super::drag_card_metrics(Some(32.0)).height, 52);
     assert_eq!(super::drag_card_metrics(Some(32.0)).font_size, 30.0);
