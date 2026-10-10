@@ -6,6 +6,25 @@ use std::{
 };
 
 #[test]
+fn opening_overlay_cancels_active_drag_immediately() {
+    let mut app = App::new_at(std::env::temp_dir()).expect("app should initialize");
+    app.overlays.help = true;
+    let mut pending_drag_out = PendingDragOut {
+        active: true,
+        uri_list: b"file:///tmp/item".to_vec(),
+    };
+    let mut output = Vec::new();
+
+    assert!(
+        cancel_active_drag_for_overlay(&mut output, &mut app, &mut pending_drag_out)
+            .expect("overlay should cancel the active drag")
+    );
+    assert_eq!(output, cancel_drag_sequence().as_bytes());
+    assert!(!pending_drag_out.active);
+    assert!(pending_drag_out.uri_list.is_empty());
+}
+
+#[test]
 fn overlays_block_drag_and_drop() {
     let mut app = App::new_at(std::env::temp_dir()).expect("app should initialize");
     assert!(!app.blocks_file_drag_and_drop());

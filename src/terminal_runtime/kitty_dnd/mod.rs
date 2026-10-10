@@ -14,7 +14,9 @@ mod outgoing;
 mod support;
 
 #[cfg(unix)]
-pub(super) use drag_and_drop::{PendingDragOut, PendingDropIn, handle_event};
+pub(super) use drag_and_drop::{
+    PendingDragOut, PendingDropIn, cancel_active_drag_for_overlay, handle_event,
+};
 #[cfg(unix)]
 pub(in crate::terminal_runtime) use drag_card::{prewarm_drag_image_renderer, render_drag_image};
 #[cfg(unix)]

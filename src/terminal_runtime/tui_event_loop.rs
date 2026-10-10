@@ -705,6 +705,12 @@ fn run_app(
                         })
                     );
                     let _ = app.handle_event(event);
+                    #[cfg(unix)]
+                    let _ = kitty_dnd::cancel_active_drag_for_overlay(
+                        terminal.backend_mut(),
+                        &mut app,
+                        &mut pending_drag_out,
+                    )?;
                     if needs_render && terminal_focused {
                         dirty = true;
                     }

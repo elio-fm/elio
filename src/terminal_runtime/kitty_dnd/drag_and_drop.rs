@@ -213,6 +213,22 @@ pub(in crate::terminal_runtime) fn handle_event(
     Ok(())
 }
 
+pub(in crate::terminal_runtime) fn cancel_active_drag_for_overlay<W: Write>(
+    writer: &mut W,
+    app: &mut App,
+    pending_drag_out: &mut PendingDragOut,
+) -> Result<bool> {
+    if !pending_drag_out.active || !app.blocks_file_drag_and_drop() {
+        return Ok(false);
+    }
+
+    pending_drag_out.reset();
+    app.clear_drag_state();
+    writer.write_all(cancel_drag_sequence().as_bytes())?;
+    writer.flush()?;
+    Ok(true)
+}
+
 fn reject_event_while_overlay_open(
     terminal: &mut AppTerminal,
     app: &mut App,
