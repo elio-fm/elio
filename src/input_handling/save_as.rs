@@ -12,11 +12,19 @@ impl App {
         };
         if let Some(path) = state.overwrite_path() {
             match key.code {
-                KeyCode::Enter => {
+                KeyCode::Left | KeyCode::Char('h') => {
+                    state.select_overwrite_confirmation(true);
+                }
+                KeyCode::Right | KeyCode::Char('l') => {
+                    state.select_overwrite_confirmation(false);
+                }
+                KeyCode::Tab => state.toggle_overwrite_confirmation(),
+                KeyCode::Enter if state.overwrite_confirmed() => {
                     let path = path.to_path_buf();
                     state.cancel_overwrite();
                     self.confirm_save_as_path(&path, true);
                 }
+                KeyCode::Enter => state.cancel_overwrite(),
                 KeyCode::Esc => state.cancel_overwrite(),
                 KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     state.cancel_overwrite()
@@ -92,6 +100,43 @@ impl App {
             }
             _ => {}
         }
+    }
+    pub(crate) fn handle_save_as_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+        if !matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
+            || !self.chooser.save_as().is_some_and(|save| save.overwrite())
+        {
+            return Ok(());
+        }
+
+        let point = (mouse.column, mouse.row).into();
+        let regions = &self.input.screen_regions;
+        if !regions
+            .save_as_panel
+            .is_some_and(|panel| panel.contains(point))
+            || regions
+                .save_as_cancel_btn
+                .is_some_and(|button| button.contains(point))
+        {
+            if let Some(save) = self.chooser.save_as_mut() {
+                save.cancel_overwrite();
+            }
+            return Ok(());
+        }
+
+        if regions
+            .save_as_confirm_btn
+            .is_some_and(|button| button.contains(point))
+        {
+            let path = self.chooser.save_as_mut().and_then(|save| {
+                let path = save.overwrite_path()?.to_path_buf();
+                save.cancel_overwrite();
+                Some(path)
+            });
+            if let Some(path) = path {
+                self.confirm_save_as_path(&path, true);
+            }
+        }
+        Ok(())
     }
     pub(crate) fn submit_save_as(&mut self) {
         let Some(state) = self.chooser.save_as_mut() else {

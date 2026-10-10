@@ -40,7 +40,7 @@ impl App {
 
     pub(crate) fn handle_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if self.chooser.save_as().is_some_and(|save| save.is_open()) {
-            return Ok(());
+            return self.handle_save_as_mouse(mouse);
         }
         if self.file_operations.trash_is_open() {
             return self.handle_trash_mouse(mouse);

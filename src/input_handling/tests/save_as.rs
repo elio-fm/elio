@@ -79,7 +79,7 @@ fn save_as_editing_handles_unicode_and_single_line_paste() {
 }
 
 #[test]
-fn overwrite_requires_confirmation_and_escape_returns_to_input() {
+fn overwrite_requires_confirmation_and_selection_cancel_returns_to_input() {
     let root = temp_path("save-as-overwrite");
     let target = root.join("existing");
     fs::write(&target, "keep me").unwrap();
@@ -91,6 +91,15 @@ fn overwrite_requires_confirmation_and_escape_returns_to_input() {
     key(&mut app, KeyCode::Esc);
     assert!(!app.chooser.save_as().unwrap().overwrite());
     assert!(app.chooser.save_as().unwrap().is_open());
+    key(&mut app, KeyCode::Enter);
+    key(&mut app, KeyCode::Right);
+    assert!(!app.chooser.save_as().unwrap().overwrite_confirmed());
+    key(&mut app, KeyCode::Left);
+    assert!(app.chooser.save_as().unwrap().overwrite_confirmed());
+    key(&mut app, KeyCode::Tab);
+    key(&mut app, KeyCode::Enter);
+    assert!(!app.chooser.save_as().unwrap().overwrite());
+    assert!(app.take_chooser_exit().is_none());
     key(&mut app, KeyCode::Enter);
     key(&mut app, KeyCode::Enter);
     assert_eq!(

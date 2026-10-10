@@ -30,6 +30,8 @@ pub struct ScreenRegions {
     pub create_panel: Option<Rect>,
     pub rename_panel: Option<Rect>,
     pub save_as_panel: Option<Rect>,
+    pub save_as_confirm_btn: Option<Rect>,
+    pub save_as_cancel_btn: Option<Rect>,
     pub create_list_area: Option<Rect>,
     pub create_scroll_top: usize,
     pub bulk_rename_list_area: Option<Rect>,

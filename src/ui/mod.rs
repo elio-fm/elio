@@ -37,6 +37,9 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut ScreenRegions) {
     state.archive_password_visibility_btn = None;
     state.create_panel = None;
     state.rename_panel = None;
+    state.save_as_panel = None;
+    state.save_as_confirm_btn = None;
+    state.save_as_cancel_btn = None;
     state.create_list_area = None;
     state.create_scroll_top = 0;
     state.bulk_rename_list_area = None;

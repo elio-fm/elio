@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added support for using commands to provide destination paths for custom Go To entries. ([#315])
 
+### Changed
+
+- Changed the Save As overwrite confirmation to match the permanent-delete dialog.
+
 ### Fixed
 
 - Fixed text input fields ignoring Caps Lock. ([#321])

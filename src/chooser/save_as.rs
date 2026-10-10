@@ -12,6 +12,7 @@ pub(crate) struct SaveAsState {
     cursor_col: usize,
     open: bool,
     overwrite_path: Option<PathBuf>,
+    overwrite_confirmed: bool,
     error: Option<String>,
 }
 
@@ -34,11 +35,13 @@ impl SaveAsState {
     pub(crate) fn open(&mut self) {
         self.open = true;
         self.overwrite_path = None;
+        self.overwrite_confirmed = false;
         self.error = None;
     }
     pub(crate) fn close(&mut self) {
         self.open = false;
         self.overwrite_path = None;
+        self.overwrite_confirmed = false;
         self.error = None;
     }
     pub(crate) fn input(&self) -> &str {
@@ -67,10 +70,21 @@ impl SaveAsState {
     }
     pub(crate) fn ask_overwrite(&mut self, path: &Path) {
         self.overwrite_path = Some(path.to_path_buf());
+        self.overwrite_confirmed = true;
         self.error = None;
+    }
+    pub(crate) fn overwrite_confirmed(&self) -> bool {
+        self.overwrite_confirmed
+    }
+    pub(crate) fn select_overwrite_confirmation(&mut self, confirmed: bool) {
+        self.overwrite_confirmed = confirmed;
+    }
+    pub(crate) fn toggle_overwrite_confirmation(&mut self) {
+        self.overwrite_confirmed = !self.overwrite_confirmed;
     }
     pub(crate) fn cancel_overwrite(&mut self) {
         self.overwrite_path = None;
+        self.overwrite_confirmed = false;
     }
 }
 

@@ -3,7 +3,9 @@ use crate::{
     theme,
     ui::{self, helpers},
 };
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{
+    Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, layout::Rect, style::Modifier};
 use std::{
     fs,
@@ -780,20 +782,86 @@ fn save_as_prompt_and_contextual_help_register_popup_regions() {
     assert!(!rendered.contains("Enter save"));
     fs::write(root.join("draft.txt"), "keep").unwrap();
     app.submit_save_as();
-    draw_ui(&mut terminal, &mut app);
+    let state = draw_ui(&mut terminal, &mut app);
     let rendered = buffer_text(terminal.backend().buffer());
-    assert!(rendered.contains("Overwrite?"));
-    assert!(rendered.contains("Esc cancel"));
-    assert!(app.collect_popup_rects().contains(&panel));
-    app.chooser.save_as_mut().unwrap().cancel_overwrite();
+    assert!(rendered.contains("Overwrite existing file?"));
+    assert!(rendered.contains("draft.txt"));
+    assert!(rendered.contains("Confirm"));
+    assert!(rendered.contains("Cancel"));
+    assert!(!rendered.contains("Enter confirm"));
+    let overwrite_panel = state.save_as_panel.unwrap();
+    assert!(app.collect_popup_rects().contains(&overwrite_panel));
+    let cancel = state.save_as_cancel_btn.unwrap();
+    app.handle_event(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: cancel.x,
+        row: cancel.y,
+        modifiers: KeyModifiers::NONE,
+    }))
+    .unwrap();
+    assert!(!app.chooser.save_as().unwrap().overwrite());
+
     fs::remove_file(root.join("draft.txt")).unwrap();
     fs::create_dir(root.join("draft.txt")).unwrap();
     app.submit_save_as();
     draw_ui(&mut terminal, &mut app);
     assert!(buffer_text(terminal.backend().buffer()).contains("A directory already has that name"));
+
+    fs::remove_dir(root.join("draft.txt")).unwrap();
+    let target = root.join("draft.txt");
+    fs::write(&target, "keep").unwrap();
+    app.submit_save_as();
+    let confirm = draw_ui(&mut terminal, &mut app)
+        .save_as_confirm_btn
+        .unwrap();
+    app.handle_event(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: confirm.x,
+        row: confirm.y,
+        modifiers: KeyModifiers::NONE,
+    }))
+    .unwrap();
+    assert_eq!(
+        app.take_chooser_exit(),
+        Some(crate::chooser::ChooserExit::Confirmed(vec![target]))
+    );
     app.chooser.save_as_mut().unwrap().close();
     draw_ui(&mut terminal, &mut app);
     assert!(app.input.screen_regions.save_as_panel.is_none());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn narrow_save_as_overwrite_dialog_keeps_buttons_inside_the_popup() {
+    let root = temp_path("narrow-save-as-overwrite");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("draft.txt"), "keep").unwrap();
+    let mut app = App::new_at(root.clone()).unwrap();
+    app.enable_save_as_mode("draft.txt".into());
+    app.confirm_chooser();
+    app.submit_save_as();
+    let mut terminal = Terminal::new(TestBackend::new(24, 12)).unwrap();
+
+    let state = draw_ui(&mut terminal, &mut app);
+    let panel = state.save_as_panel.unwrap();
+    let confirm = state.save_as_confirm_btn.unwrap();
+    let cancel = state.save_as_cancel_btn.unwrap();
+    let panel_right = panel.x + panel.width;
+
+    assert_eq!(
+        panel.height, 6,
+        "overwrite dialog should leave a spacer row"
+    );
+    assert!(confirm.x >= panel.x && confirm.x + confirm.width <= panel_right);
+    assert!(cancel.x >= panel.x && cancel.x + cancel.width <= panel_right);
+    assert_eq!(confirm.y, cancel.y);
+    assert_eq!(
+        confirm.y,
+        panel.y + 4,
+        "buttons should follow the message spacer"
+    );
+    assert_eq!(confirm.x + confirm.width, cancel.x);
+
     fs::remove_dir_all(root).unwrap();
 }
 
