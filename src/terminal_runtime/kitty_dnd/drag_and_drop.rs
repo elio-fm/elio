@@ -4,6 +4,7 @@ use crate::{
     terminal_runtime::tui_drawing::AppTerminal, theme,
 };
 use anyhow::Result;
+use crossterm::terminal;
 use std::{
     io::Write,
     path::{Path, PathBuf},
@@ -304,6 +305,15 @@ fn clip_op_to_drop_finish(op: ClipOp) -> DropFinish {
     }
 }
 
+fn drag_card_cell_height() -> Option<f32> {
+    let size = terminal::window_size().ok()?;
+    drag_card_cell_height_from_dimensions(size.height, size.rows)
+}
+
+fn drag_card_cell_height_from_dimensions(pixels_height: u16, rows: u16) -> Option<f32> {
+    (pixels_height > 0 && rows > 0).then(|| f32::from(pixels_height) / f32::from(rows))
+}
+
 fn drag_icon_sequence(label: &DragIconLabel) -> String {
     let palette = theme::palette();
     if let Some(image) = render_drag_image(
@@ -312,6 +322,7 @@ fn drag_icon_sequence(label: &DragIconLabel) -> String {
         label.icon_color,
         palette.elevated,
         palette.text,
+        drag_card_cell_height(),
     ) {
         return present_drag_icon_png_sequence(image.width, image.height, &image.png);
     }
