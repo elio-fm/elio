@@ -54,6 +54,18 @@ pub(in crate::terminal_runtime) fn handle_event(
     pending_drag_out: &mut PendingDragOut,
     pending_drop_in: &mut PendingDropIn,
 ) -> Result<()> {
+    if app.blocks_file_drag_and_drop()
+        && reject_event_while_overlay_open(
+            terminal,
+            app,
+            &event,
+            pending_drag_out,
+            pending_drop_in,
+        )?
+    {
+        return Ok(());
+    }
+
     match event {
         KittyDndEvent::DropOffer {
             mime_index,
@@ -199,6 +211,52 @@ pub(in crate::terminal_runtime) fn handle_event(
         }
     }
     Ok(())
+}
+
+fn reject_event_while_overlay_open(
+    terminal: &mut AppTerminal,
+    app: &mut App,
+    event: &KittyDndEvent,
+    pending_drag_out: &mut PendingDragOut,
+    pending_drop_in: &mut PendingDropIn,
+) -> Result<bool> {
+    let mut sequence = match event {
+        KittyDndEvent::DropOffer { final_drop, .. } => {
+            pending_drop_in.reset();
+            if *final_drop {
+                finish_drop_sequence(DropFinish::Reject).to_string()
+            } else {
+                reject_drop_sequence().to_string()
+            }
+        }
+        KittyDndEvent::DropData { .. } | KittyDndEvent::DropDataError { .. } => {
+            pending_drop_in.reset();
+            finish_drop_sequence(DropFinish::Reject).to_string()
+        }
+        KittyDndEvent::DropUnsupported { final_drop } => {
+            pending_drop_in.reset();
+            if *final_drop {
+                finish_drop_sequence(DropFinish::Reject).to_string()
+            } else {
+                reject_drop_sequence().to_string()
+            }
+        }
+        KittyDndEvent::DragOffer { .. } | KittyDndEvent::DragDataRequested { .. } => {
+            pending_drop_in.reset();
+            app.clear_drag_state();
+            cancel_drag_sequence().to_string()
+        }
+        _ => return Ok(false),
+    };
+
+    if pending_drag_out.active {
+        pending_drag_out.reset();
+        app.clear_drag_state();
+        sequence.push_str(cancel_drag_sequence());
+    }
+    terminal.backend_mut().write_all(sequence.as_bytes())?;
+    terminal.backend_mut().flush()?;
+    Ok(true)
 }
 
 fn unsupported_drop_scheme_status(schemes: &[String]) -> String {

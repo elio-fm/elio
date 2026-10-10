@@ -6,6 +6,19 @@ use std::{
 };
 
 #[test]
+fn overlays_block_drag_and_drop() {
+    let mut app = App::new_at(std::env::temp_dir()).expect("app should initialize");
+    assert!(!app.blocks_file_drag_and_drop());
+
+    app.overlays.help = true;
+    assert!(app.blocks_file_drag_and_drop());
+    app.overlays.help = false;
+
+    app.open_create_prompt();
+    assert!(app.blocks_file_drag_and_drop());
+}
+
+#[test]
 fn unsupported_drop_scheme_status_names_one_or_many_schemes() {
     assert_eq!(
         unsupported_drop_scheme_status(&["trash".to_string()]),

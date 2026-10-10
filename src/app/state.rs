@@ -247,6 +247,26 @@ impl App {
         self.file_browser.selected_entry()
     }
 
+    /// Whether a rendered overlay owns interaction instead of the file browser.
+    /// Keep this in sync with the overlay precedence in `ui::render`.
+    pub(crate) fn blocks_file_drag_and_drop(&self) -> bool {
+        self.file_operations.trash_is_open()
+            || self.file_operations.restore_is_open()
+            || self.file_operations.archive_password_is_open()
+            || self.chooser.save_as().is_some_and(|save| save.is_open())
+            || self.file_operations.archive_create_is_open()
+            || self.file_operations.create_is_open()
+            || self.file_operations.rename_is_open()
+            || self.file_operations.bulk_rename_is_open()
+            || self.file_operations.editor_rename_confirm_is_open()
+            || self.goto_is_open()
+            || self.file_operations.copy_is_open()
+            || self.open_with_is_open()
+            || self.search_is_open()
+            || self.overlays.help
+            || self.duplicates_is_open()
+    }
+
     pub(crate) fn git_branch(&self) -> Option<&str> {
         self.file_browser.git_branch()
     }
