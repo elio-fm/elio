@@ -45,6 +45,7 @@ impl PendingDropIn {
 struct DragIconLabel {
     icon: String,
     text: String,
+    is_item_count: bool,
     icon_color: ratatui::style::Color,
 }
 
@@ -319,6 +320,7 @@ fn drag_icon_sequence(label: &DragIconLabel) -> String {
     if let Some(image) = render_drag_image(
         &label.icon,
         &label.text,
+        label.is_item_count,
         label.icon_color,
         palette.elevated,
         palette.text,
@@ -357,6 +359,7 @@ where
             return DragIconLabel {
                 icon,
                 text: truncate_drag_label_text(&text, MAX_LABEL_CHARS),
+                is_item_count: false,
                 icon_color,
             };
         }
@@ -369,6 +372,7 @@ where
     DragIconLabel {
         icon: icon.0,
         text,
+        is_item_count: true,
         icon_color: icon.1,
     }
 }

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed the Save As overwrite confirmation to match the permanent-delete dialog.
 - Made Kitty drag cards track terminal text size, keeping them consistent across displays and font sizes.
 - Made Kitty drag card labels bold to match focused item names.
+- Improved Kitty drag card icon and label spacing.
 
 ### Fixed
 

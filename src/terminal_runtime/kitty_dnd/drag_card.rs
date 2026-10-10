@@ -12,10 +12,9 @@ use ratatui::style::Color;
 
 const FONT_SIZE: f32 = 30.0;
 const ICON_SIZE: f32 = 33.0;
-const ICON_SLOT_WIDTH: u32 = 35;
 const PADDING_X: u32 = 20;
-const ICON_TEXT_GAP: u32 = 10;
-const WIDE_ICON_TEXT_GAP: u32 = 13;
+const ICON_LABEL_GAP: u32 = 8;
+const ITEM_COUNT_GAP: u32 = 8;
 const RADIUS: f32 = 14.0;
 const BASELINE: f32 = 35.0;
 const CARD_HEIGHT: f32 = 52.0;
@@ -65,6 +64,7 @@ pub(in crate::terminal_runtime) fn prewarm_drag_image_renderer() {
 pub(in crate::terminal_runtime) fn render_drag_image(
     icon: &str,
     text: &str,
+    compact_item_count: bool,
     icon_color: Color,
     card_color: Color,
     text_color: Color,
@@ -84,14 +84,21 @@ pub(in crate::terminal_runtime) fn render_drag_image(
     let text = truncate_text(text, MAX_TEXT_CHARS);
     let icon_width =
         measure_text(&fonts, icon, metrics.icon_size, TextWeight::Regular).ceil() as u32;
-    let icon_slot_width = icon_slot_width(icon_width, metrics.icon_slot_width);
-    let text_width = measure_text(&fonts, &text, metrics.font_size, TextWeight::Bold).ceil() as u32;
-    let icon_text_gap = icon_text_gap(icon_slot_width, &metrics);
+    let item_count_parts = compact_item_count.then(|| text.split_once(' ')).flatten();
+    let text_width = item_count_parts.map_or_else(
+        || measure_text(&fonts, &text, metrics.font_size, TextWeight::Bold).ceil() as u32,
+        |(count, noun)| {
+            (measure_text(&fonts, count, metrics.font_size, TextWeight::Bold)
+                + metrics.item_count_gap as f32
+                + measure_text(&fonts, noun, metrics.font_size, TextWeight::Bold))
+            .ceil() as u32
+        },
+    );
     let width = metrics
         .padding_x
         .checked_mul(2)?
-        .checked_add(icon_slot_width)?
-        .checked_add(icon_text_gap)?
+        .checked_add(icon_width)?
+        .checked_add(metrics.icon_label_gap)?
         .checked_add(text_width)?;
     let height = metrics.height;
     let pixel_len = drag_image_pixel_len(width, height)?;
@@ -121,24 +128,51 @@ pub(in crate::terminal_runtime) fn render_drag_image(
         icon,
         metrics.icon_size,
         Point {
-            x: (metrics.padding_x + icon_x_offset(icon_width, icon_slot_width)) as f32,
+            x: metrics.padding_x as f32,
             y: metrics.baseline + metrics.scale,
         },
         color_rgba(icon_color, 255),
         TextWeight::Regular,
     );
-    draw_text(
-        &mut canvas,
-        &fonts,
-        &text,
-        metrics.font_size,
-        Point {
-            x: (metrics.padding_x + icon_slot_width + icon_text_gap) as f32,
-            y: metrics.baseline,
-        },
-        style.text,
-        TextWeight::Bold,
-    );
+    let text_origin = Point {
+        x: (metrics.padding_x + icon_width + metrics.icon_label_gap) as f32,
+        y: metrics.baseline,
+    };
+    if let Some((count, noun)) = item_count_parts {
+        draw_text(
+            &mut canvas,
+            &fonts,
+            count,
+            metrics.font_size,
+            text_origin,
+            style.text,
+            TextWeight::Bold,
+        );
+        draw_text(
+            &mut canvas,
+            &fonts,
+            noun,
+            metrics.font_size,
+            Point {
+                x: text_origin.x
+                    + measure_text(&fonts, count, metrics.font_size, TextWeight::Bold)
+                    + metrics.item_count_gap as f32,
+                y: text_origin.y,
+            },
+            style.text,
+            TextWeight::Bold,
+        );
+    } else {
+        draw_text(
+            &mut canvas,
+            &fonts,
+            &text,
+            metrics.font_size,
+            text_origin,
+            style.text,
+            TextWeight::Bold,
+        );
+    }
 
     let mut png = Vec::new();
     PngEncoder::new(&mut png)
@@ -160,10 +194,9 @@ struct DragCardMetrics {
     scale: f32,
     font_size: f32,
     icon_size: f32,
-    icon_slot_width: u32,
     padding_x: u32,
-    icon_text_gap: u32,
-    wide_icon_text_gap: u32,
+    icon_label_gap: u32,
+    item_count_gap: u32,
     radius: f32,
     baseline: f32,
     height: u32,
@@ -183,10 +216,9 @@ fn drag_card_metrics(cell_height: Option<f32>) -> DragCardMetrics {
         scale,
         font_size: FONT_SIZE * scale,
         icon_size: ICON_SIZE * scale,
-        icon_slot_width: scaled(ICON_SLOT_WIDTH as f32),
         padding_x: scaled(PADDING_X as f32),
-        icon_text_gap: scaled(ICON_TEXT_GAP as f32),
-        wide_icon_text_gap: scaled(WIDE_ICON_TEXT_GAP as f32),
+        icon_label_gap: scaled(ICON_LABEL_GAP as f32),
+        item_count_gap: scaled(ITEM_COUNT_GAP as f32),
         radius: RADIUS * scale,
         baseline: BASELINE * scale,
         height: scaled(CARD_HEIGHT),
@@ -260,22 +292,6 @@ fn font_cache() -> &'static OnceLock<Option<FontSet>> {
 
 fn loaded_fonts() -> Option<&'static FontSet> {
     font_cache().get_or_init(load_font_from_disk).as_ref()
-}
-
-fn icon_text_gap(icon_width: u32, metrics: &DragCardMetrics) -> u32 {
-    if icon_width >= metrics.icon_size.ceil() as u32 {
-        metrics.wide_icon_text_gap
-    } else {
-        metrics.icon_text_gap
-    }
-}
-
-fn icon_slot_width(icon_width: u32, minimum_width: u32) -> u32 {
-    icon_width.max(minimum_width)
-}
-
-fn icon_x_offset(icon_width: u32, icon_slot_width: u32) -> u32 {
-    icon_slot_width.saturating_sub(icon_width) / 2
 }
 
 struct FontSet {
