@@ -88,7 +88,14 @@ fn creates_zip_with_top_level_names() {
     let file = File::open(root.join("archive.zip")).unwrap();
     let mut archive = zip::ZipArchive::new(file).unwrap();
     let mut names = (0..archive.len())
-        .map(|index| archive.by_index(index).unwrap().name().to_string())
+        .map(|index| {
+            archive
+                .by_index(index)
+                .unwrap()
+                .name()
+                .unwrap()
+                .into_owned()
+        })
         .collect::<Vec<_>>();
     names.sort();
     assert_eq!(

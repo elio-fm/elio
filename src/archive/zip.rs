@@ -271,7 +271,7 @@ where
 fn file_options<'a>(
     metadata: &fs::Metadata,
     password: Option<&'a ArchivePassword>,
-) -> FileOptions<'a, ()> {
+) -> FileOptions<'a, 'a, ()> {
     let options = FileOptions::default().compression_method(CompressionMethod::Stored);
     let options = {
         #[cfg(unix)]
@@ -289,9 +289,9 @@ fn file_options<'a>(
 }
 
 fn apply_encryption<'a>(
-    options: FileOptions<'a, ()>,
+    options: FileOptions<'a, 'a, ()>,
     password: Option<&'a ArchivePassword>,
-) -> FileOptions<'a, ()> {
+) -> FileOptions<'a, 'a, ()> {
     match password {
         Some(password) => options.with_aes_encryption(AesMode::Aes256, password.as_str()),
         None => options,
@@ -340,8 +340,12 @@ where
         }
         let mut entry = entry_by_index(&mut archive, index, password)?;
         let encrypted = entry.encrypted();
+        let name = entry
+            .name()
+            .context("Could not decode ZIP entry name")?
+            .into_owned();
         let Some(enclosed) = entry.enclosed_name() else {
-            return Err(anyhow!("Archive entry escapes the destination: {}", entry.name()).into());
+            return Err(anyhow!("Archive entry escapes the destination: {name}").into());
         };
         let out_path = checked_output_path(&plan.dest_dir, enclosed.as_ref())?;
         if entry.is_dir() {

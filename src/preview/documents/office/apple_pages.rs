@@ -66,7 +66,10 @@ fn detect_pages_variant<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>) ->
         let Ok(entry) = archive.by_index(index) else {
             continue;
         };
-        let name = entry.name().to_ascii_lowercase();
+        let Ok(name) = entry.name() else {
+            continue;
+        };
+        let name = name.to_ascii_lowercase();
         saw_iwa |= name.ends_with(".iwa");
         saw_legacy_index |= name.ends_with("index.xml") || name.ends_with("index.xml.gz");
     }

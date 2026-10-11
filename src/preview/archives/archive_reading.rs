@@ -68,7 +68,7 @@ where
         }
         let entry = archive.by_index(index).ok()?;
         let is_dir = entry.is_dir();
-        let name = entry.name().to_string();
+        let name = entry.name().ok()?.into_owned();
         if let Some(path) = normalize_archive_path(&name, false) {
             entries.push(ArchiveEntry { path, is_dir });
         }

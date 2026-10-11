@@ -181,7 +181,11 @@ where
 
     // Use file_names() to iterate the central directory without seeking to each
     // entry — much faster for archives with many pages.
-    let names: Vec<String> = archive.file_names().map(|n| n.to_string()).collect();
+    let names: Vec<String> = archive
+        .file_names()
+        .map(|name| name.map(|name| name.into_owned()))
+        .collect::<Result<_, _>>()
+        .ok()?;
     for name in &names {
         if canceled() {
             return None;

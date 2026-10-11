@@ -84,6 +84,7 @@ fn archive_part_count<R: Read + Seek>(
 ) -> Option<u64> {
     let count = archive
         .file_names()
+        .filter_map(Result::ok)
         .filter(|name| {
             name.strip_prefix(prefix)
                 .and_then(|rest| rest.strip_suffix(suffix))
