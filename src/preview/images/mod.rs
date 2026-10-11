@@ -9,9 +9,9 @@ pub(crate) use self::image_inspection::{
     static_image_format_for_cached_path, static_image_format_for_path,
 };
 pub(crate) use self::image_preparation::{
-    ImagePrepareRequest, PreparedStaticImageAsset, SixelDcsKey, SixelPrepareConfig, StaticImageKey,
-    prepare_static_image_asset, static_image_can_prepare_inline,
-    static_image_supports_iterm_source_passthrough,
+    ImagePrepareRequest, PreparedStaticImageAsset, STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES,
+    SixelDcsKey, SixelPrepareConfig, StaticImageKey, prepare_static_image_asset,
+    static_image_can_prepare_inline, static_image_supports_iterm_source_passthrough,
 };
 pub(super) use self::image_preview::build_image_preview;
 #[cfg(test)]

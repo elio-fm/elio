@@ -1,6 +1,6 @@
 use super::{
-    SixelDcsKey, StaticImageFormat, StaticImageKey, static_image_format_for_cached_path,
-    static_image_supports_iterm_source_passthrough,
+    STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES, SixelDcsKey, StaticImageFormat, StaticImageKey,
+    static_image_format_for_cached_path, static_image_supports_iterm_source_passthrough,
 };
 use crate::preview::{PreparedStaticImage, StaticImageOverlayRequest, state::ImagePreviewState};
 use crate::terminal_images::ImageProtocol;
@@ -99,6 +99,7 @@ fn can_use_source_path(protocol: ImageProtocol, request: &StaticImageOverlayRequ
     match protocol {
         ImageProtocol::KittyGraphics | ImageProtocol::KittyDirectGraphics => {
             !request.force_render_to_cache
+                && request.size <= STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES
                 && static_image_format_for_cached_path(
                     &request.path,
                     request.size,

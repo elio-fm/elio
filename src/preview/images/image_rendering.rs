@@ -133,7 +133,7 @@ pub(super) fn render_raster_to_png_with_ffmpeg(
         .arg("1")
         .arg("-vf")
         .arg(format!(
-            "scale=w={}:h={}:force_original_aspect_ratio=decrease",
+            "scale=w='min({},iw)':h='min({},ih)':force_original_aspect_ratio=decrease",
             target_width_px.max(1),
             target_height_px.max(1)
         ));
@@ -264,6 +264,9 @@ where
 pub(super) fn should_render_raster_with_ffmpeg(format: StaticImageFormat) -> bool {
     matches!(
         format,
-        StaticImageFormat::Jpeg | StaticImageFormat::Gif | StaticImageFormat::Webp
+        StaticImageFormat::Png
+            | StaticImageFormat::Jpeg
+            | StaticImageFormat::Gif
+            | StaticImageFormat::Webp
     )
 }

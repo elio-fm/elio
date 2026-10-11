@@ -5,8 +5,8 @@ use super::{
 use crate::app::App;
 use crate::filesystem::Entry;
 use crate::preview::images::{
-    StaticImageFormat, static_image_can_prepare_inline, static_image_format_for_cached_path,
-    static_image_format_for_path,
+    STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES, StaticImageFormat, static_image_can_prepare_inline,
+    static_image_format_for_cached_path, static_image_format_for_path,
 };
 use crate::preview::{self, PreviewLoadState};
 use crate::terminal_images::{ImageProtocol, command_exists};
@@ -150,7 +150,8 @@ impl App {
         matches!(
             self.preview.terminal_images.protocol,
             ImageProtocol::KittyGraphics | ImageProtocol::KittyDirectGraphics
-        ) && !request.force_render_to_cache
+        ) && request.size <= STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES
+            && !request.force_render_to_cache
             && static_image_format_for_cached_path(&request.path, request.size, request.modified)
                 == Some(StaticImageFormat::Png)
     }
@@ -237,7 +238,7 @@ impl App {
             .ffmpeg_available
             .unwrap_or_else(|| command_exists("ffmpeg"));
         !static_image_can_prepare_inline(visual.size, format, ffmpeg_available)
-            || self.uses_iterm_inline_protocol_inside_tmux()
+            || self.static_image_force_render_to_cache(visual.size)
     }
 
     pub(crate) fn displayed_static_image_matches_active(&self) -> bool {
@@ -316,10 +317,22 @@ impl App {
             target_width_px: image_target_width_px(area, self.cached_terminal_window()),
             target_height_px: image_target_height_px(area, self.cached_terminal_window()),
             mode: StaticImageOverlayMode::FullPane,
-            force_render_to_cache: self.uses_iterm_inline_protocol_inside_tmux(),
+            force_render_to_cache: self.static_image_force_render_to_cache(entry.size),
             prepare_inline_payload: self.preview.terminal_images.protocol
                 == ImageProtocol::ItermInline,
         })
+    }
+
+    /// Large PNGs must be fitted before sending them through Kitty Graphics.
+    /// Unlike the iTerm path, the Kitty backends otherwise pass the original
+    /// file straight to the terminal, where Konsole and Warp can block while
+    /// parsing and decoding a multi-megabyte payload.
+    fn static_image_force_render_to_cache(&self, size: u64) -> bool {
+        self.uses_iterm_inline_protocol_inside_tmux()
+            || (matches!(
+                self.preview.terminal_images.protocol,
+                ImageProtocol::KittyGraphics | ImageProtocol::KittyDirectGraphics
+            ) && size > STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES)
     }
 
     fn current_page_preview_loading_active(&self) -> bool {

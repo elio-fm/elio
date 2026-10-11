@@ -24,8 +24,12 @@ use std::{
 
 const STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES: u64 = 512 * 1024;
 const STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES: u64 = 16 * 1024 * 1024;
-const STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES: u64 = 700 * 1024;
-const STATIC_IMAGE_RENDER_CACHE_VERSION: usize = 5;
+/// Largest source image that may be sent to a terminal without first fitting it
+/// to the preview area.  Above this limit, protocol implementations that accept
+/// PNG source files directly can spend enough time receiving and decoding the
+/// payload to make their UI unresponsive.
+pub(crate) const STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES: u64 = 700 * 1024;
+const STATIC_IMAGE_RENDER_CACHE_VERSION: usize = 6;
 
 /// Parameters needed to pre-encode a Sixel image alongside its rendered file.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -446,7 +450,7 @@ pub(crate) fn static_image_supports_iterm_source_passthrough(
     modified: Option<SystemTime>,
     force_render_to_cache: bool,
 ) -> bool {
-    if force_render_to_cache || size > STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES {
+    if force_render_to_cache || size > STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES {
         return false;
     }
     static_image_format_for_cached_path(path, size, modified)
@@ -459,7 +463,7 @@ fn static_image_supports_iterm_source_passthrough_for_prepare(
 ) -> bool {
     request.prepare_inline_payload
         && !request.force_render_to_cache
-        && request.size <= STATIC_IMAGE_ITERM_SOURCE_PASSTHROUGH_MAX_BYTES
+        && request.size <= STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES
         && static_image_supports_iterm_source_format(&request.path, format)
 }
 

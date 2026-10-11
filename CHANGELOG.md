@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed Save As not closing when clicking outside its popup.
 - Fixed overlays not blocking drag and drop.
 - Fixed UI lag in Duplicate Finder when navigating past large image previews.
+- Fixed brief UI stalls while loading large PNG previews in terminals using the Kitty Graphics Protocol.
 
 ## [1.13.0] - 2026-10-07
 

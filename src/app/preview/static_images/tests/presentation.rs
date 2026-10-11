@@ -67,6 +67,40 @@ fn konsole_png_overlay_uses_source_path_for_direct_display() {
 }
 
 #[test]
+fn large_kitty_graphics_png_overlays_prepare_a_fitted_asset_before_display() {
+    for protocol in [
+        ImageProtocol::KittyGraphics,
+        ImageProtocol::KittyDirectGraphics,
+    ] {
+        let (mut app, root, image_path) =
+            build_selected_static_image_app("kitty-large-source", "demo.png");
+        app.preview.terminal_images.protocol = protocol;
+        app.file_browser.entries[0].size =
+            crate::preview::images::STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES + 1;
+        app.refresh_preview();
+        let request = ready_static_image_overlay(&mut app);
+        let key = StaticImageKey::from_request(&request);
+
+        assert!(request.force_render_to_cache, "{protocol:?}");
+        match app.prepared_static_image_for_overlay(&request) {
+            StaticImageOverlayPreparation::Pending => {}
+            StaticImageOverlayPreparation::Ready(prepared) => {
+                assert_ne!(
+                    prepared.display_path, image_path,
+                    "{protocol:?} must not send a large source directly"
+                )
+            }
+            StaticImageOverlayPreparation::Failed => {
+                panic!("{protocol:?} should prepare large PNGs")
+            }
+        }
+        assert!(app.preview.image.pending_prepares.contains(&key));
+
+        fs::remove_dir_all(root).expect("failed to remove temp root");
+    }
+}
+
+#[test]
 fn cached_rendered_overlay_reuses_cached_path_and_inline_payload() {
     let (mut app, root, image_path) = build_selected_static_image_app("cache-reuse", "demo.png");
     let mut request = ready_static_image_overlay(&mut app);

@@ -130,7 +130,7 @@ fn concurrent_inline_raster_prepares_keep_shared_render_cache_readable() {
                     prepared
                         .display_path
                         .parent()
-                        .is_some_and(|parent| parent.ends_with("elio-image-preview-v5"))
+                        .is_some_and(|parent| parent.ends_with("elio-image-preview-v6"))
                 );
             }
         }));

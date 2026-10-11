@@ -31,3 +31,8 @@ fn iterm_inline_forced_cache_does_not_use_fast_png_rendering() {
         false, true,
     )));
 }
+
+#[test]
+fn ffmpeg_raster_renderer_supports_png_sources() {
+    assert!(should_render_raster_with_ffmpeg(StaticImageFormat::Png));
+}
