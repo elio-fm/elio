@@ -277,9 +277,16 @@ impl App {
 
     pub(crate) fn active_preview_entry(&self) -> Option<Entry> {
         if let Some(duplicates) = &self.duplicate_finder.session {
+            if duplicates.preview_pending {
+                return None;
+            }
             return duplicates
                 .preview_visible
-                .then(|| duplicates.focused_entry())
+                .then(|| {
+                    duplicates
+                        .preview_entry()
+                        .or_else(|| duplicates.focused_entry())
+                })
                 .flatten();
         }
         self.selected_entry().cloned()
@@ -385,6 +392,23 @@ impl App {
     }
 
     pub(crate) fn refresh_duplicate_preview(&mut self) {
+        self.commit_duplicate_preview_target();
+        self.refresh_preview();
+    }
+
+    pub(crate) fn schedule_duplicate_preview(&mut self) {
+        const DUPLICATE_PREVIEW_IDLE_DELAY: std::time::Duration =
+            std::time::Duration::from_millis(250);
+        if let Some(duplicates) = &mut self.duplicate_finder.session {
+            duplicates.preview_path = None;
+            duplicates.preview_pending = true;
+        }
+        self.queue_terminal_image_geometry_clear();
+        self.preview.state.deferred_refresh_at =
+            Some(std::time::Instant::now() + DUPLICATE_PREVIEW_IDLE_DELAY);
+    }
+
+    pub(crate) fn commit_duplicate_preview_target(&mut self) {
         let Some(path) = self.duplicate_focused_path() else {
             return;
         };
@@ -400,7 +424,7 @@ impl App {
         }
         if let Some(duplicates) = &mut self.duplicate_finder.session {
             duplicates.preview_path = Some(path);
+            duplicates.preview_pending = false;
         }
-        self.refresh_preview();
     }
 }

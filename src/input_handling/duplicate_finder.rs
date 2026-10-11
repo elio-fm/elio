@@ -135,7 +135,7 @@ impl App {
             duplicates.move_selection(delta);
         }
         self.sync_duplicate_scroll();
-        self.refresh_duplicate_preview();
+        self.schedule_duplicate_preview();
     }
     pub(crate) fn page_duplicate_selection(&mut self, direction: isize) {
         let visible = self.input.screen_regions.duplicate_rows_visible.max(1) as isize;
@@ -262,6 +262,7 @@ impl App {
             hidden = !overlay.preview_visible;
             if hidden {
                 overlay.preview_path = None;
+                overlay.preview_pending = false;
             }
         }
         if hidden {

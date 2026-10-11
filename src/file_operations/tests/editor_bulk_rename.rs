@@ -178,6 +178,7 @@ fn finish_editor_bulk_rename_opens_confirmation_with_relative_paths() {
         error: None,
         preview_visible: true,
         preview_path: Some(alpha.clone()),
+        preview_pending: false,
     });
 
     app.confirm_editor_rename()

@@ -29,6 +29,7 @@ pub(crate) struct DuplicateFinderSession {
     pub(crate) error: Option<String>,
     pub(crate) preview_visible: bool,
     pub(crate) preview_path: Option<PathBuf>,
+    pub(crate) preview_pending: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -58,6 +59,7 @@ impl DuplicateFinderSession {
             error: None,
             preview_visible: true,
             preview_path: None,
+            preview_pending: false,
         }
     }
 
@@ -67,16 +69,16 @@ impl DuplicateFinderSession {
 
     pub(crate) fn focused_entry(&self) -> Option<Entry> {
         let file = self.file_at(self.selected)?;
-        Some(Entry {
-            path: file.path.clone(),
-            name: file.name.clone(),
-            name_key: file.name.to_lowercase(),
-            kind: EntryKind::File,
-            symlink: None,
-            size: file.size,
-            modified: file.modified,
-            readonly: false,
-        })
+        Some(entry_from_duplicate_file(file))
+    }
+
+    pub(crate) fn preview_entry(&self) -> Option<Entry> {
+        let path = self.preview_path.as_ref()?;
+        self.groups
+            .iter()
+            .flat_map(|group| &group.files)
+            .find(|file| file.path == *path)
+            .map(entry_from_duplicate_file)
     }
 
     pub(crate) fn rows(&self, max_rows: usize) -> Vec<DuplicateRow> {
@@ -220,6 +222,19 @@ impl DuplicateFinderSession {
             remaining = remaining.saturating_sub(group.files.len());
         }
         None
+    }
+}
+
+fn entry_from_duplicate_file(file: &DuplicateFile) -> Entry {
+    Entry {
+        path: file.path.clone(),
+        name: file.name.clone(),
+        name_key: file.name.to_lowercase(),
+        kind: EntryKind::File,
+        symlink: None,
+        size: file.size,
+        modified: file.modified,
+        readonly: false,
     }
 }
 

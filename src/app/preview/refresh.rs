@@ -223,6 +223,9 @@ impl App {
         if Instant::now() < deadline {
             return false;
         }
+        if self.duplicates_is_open() {
+            self.commit_duplicate_preview_target();
+        }
         self.refresh_preview();
         true
     }

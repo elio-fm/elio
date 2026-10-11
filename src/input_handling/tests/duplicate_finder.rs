@@ -5,7 +5,7 @@ use crate::terminal_images::{ImageProtocol, TerminalIdentity};
 use std::{
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 struct DiscoveredOpenWithAppsGuard;
@@ -349,6 +349,40 @@ fn selection_summary_tracks_duplicate_focus() {
     assert_eq!(app.selection_count(), 1);
     app.set_duplicate_selection(2);
     assert_eq!(app.selection_summary(), "3/4  gamma.txt");
+
+    app.close_duplicate_finder();
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn duplicate_focus_moves_without_retargeting_preview_until_idle() {
+    let root = temp_path("duplicate-preview-target");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    for name in ["alpha.txt", "beta.txt"] {
+        fs::write(root.join(name), name).expect("failed to write test file");
+    }
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.open_duplicate_finder();
+    let overlay = app
+        .duplicate_finder
+        .session
+        .as_mut()
+        .expect("duplicate finder should be open");
+    overlay.groups = vec![duplicate_group_at(&root, 1, 10, &["alpha.txt", "beta.txt"])];
+    overlay.loading = false;
+    app.refresh_duplicate_preview();
+
+    app.move_duplicate_selection(1);
+    assert_eq!(app.duplicate_focused_path(), Some(root.join("beta.txt")));
+    assert!(app.active_preview_entry().is_none());
+    assert!(app.preview.state.deferred_refresh_at.is_some());
+
+    app.preview.state.deferred_refresh_at = Some(Instant::now());
+    assert!(app.process_preview_refresh_timers());
+    assert_eq!(
+        app.active_preview_entry().map(|entry| entry.path),
+        Some(root.join("beta.txt"))
+    );
 
     app.close_duplicate_finder();
     fs::remove_dir_all(root).expect("failed to remove temp root");
