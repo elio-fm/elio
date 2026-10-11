@@ -9,8 +9,6 @@ Snappy, batteries-included terminal file manager with rich previews, inline imag
 - Installation: https://elio-fm.github.io/install/
 - Docs: https://elio-fm.github.io/docs/
 
----
-
 ## Features
 
 - **Three-pane layout** — Places, Files, and Preview side by side
@@ -29,8 +27,6 @@ Snappy, batteries-included terminal file manager with rich previews, inline imag
 - **Shell integration** — install cd-on-exit wrappers for bash, zsh, fish, and Nushell
 - **File chooser** — use elio as the file chooser on Linux and FreeBSD
 - **Theming** — full palette and file-class control via `theme.toml`
-
----
 
 ## Installation
 
@@ -107,8 +103,6 @@ cargo install elio
 > [!TIP]
 > Recommended: use a Nerd Font in your terminal so icons display correctly.
 
----
-
 ## Example Themes
 
 A few bundled themes are shown below. More are available in [`examples/themes/`](examples/themes/). See [Theming](#theming) for theme paths and docs.
@@ -121,11 +115,7 @@ A few bundled themes are shown below. More are available in [`examples/themes/`]
 |---|---|
 | <p align="center"><img src="examples/themes/amber-dusk/screenshot.webp" alt="Amber Dusk" width="440"></p> | <p align="center"><img src="examples/themes/blush-light/screenshot.webp" alt="Blush Light" width="440"></p> |
 
----
-
-## Image Previews
-
-Inline visual previews, including images, covers, thumbnails, and rendered pages, work automatically on supported terminals.
+## Image Preview Compatibility
 
 | Terminal | Protocol | Status |
 |---|---|---|
@@ -141,26 +131,6 @@ Inline visual previews, including images, covers, thumbnails, and rendered pages
 | Alacritty | — | Not supported |
 | Other | Kitty Graphics Protocol | Set `ELIO_IMAGE_PREVIEWS=1` to enable |
 
-> Sixel terminals can render large or first-time previews more slowly than Kitty Graphics or iTerm2 Inline backends.
->
-> In Konsole, inline previews are temporarily cleared while modal popups are open to avoid rendering artifacts.
-
-Useful environment variables:
-
-<details>
-<summary><strong>Environment Variables</strong></summary>
-
-| Variable | Effect |
-|---|---|
-| `ELIO_IMAGE_PREVIEWS=1` | Force-enable on unrecognized terminals that support the Kitty Graphics Protocol |
-| `ELIO_ZOXIDE_OPTS` | Extra options appended to the zoxide interactive picker options |
-| `ELIO_DEBUG_PREVIEW` | Log image preview activity to `elio-preview.log` in the system temp directory |
-| `ELIO_LOG_MOUSE` | Log raw mouse events to `elio-mouse.log` in the system temp directory |
-
-</details>
-
----
-
 ## Preview Coverage
 
 elio previews many file types:
@@ -174,8 +144,6 @@ elio previews many file types:
 See the preview docs:
 https://elio-fm.github.io/docs/previews/
 
----
-
 ## Optional Preview Tools
 
 elio works out of the box. Optional tools unlock richer previews:
@@ -188,15 +156,11 @@ elio works out of the box. Optional tools unlock richer previews:
 See the optional tools docs:
 https://elio-fm.github.io/docs/optional-tools/
 
----
-
 ## Using elio over SSH
 
 elio works over SSH. For the best experience, use a supported terminal and install optional tools on the remote host.
 
 Opening files with terminal apps works normally inside SSH sessions. Desktop apps may open files on the remote host or do nothing useful.
-
----
 
 ## Shell Integration
 
@@ -211,8 +175,6 @@ Restart your shell, then run `elio` normally. Press `q` to quit and move your sh
 See the shell integration docs for uninstall steps, supported shells, and manual setup:
 https://elio-fm.github.io/docs/shell-integration/
 
----
-
 ## File Chooser
 
 You can make elio your file chooser on Linux and FreeBSD:
@@ -225,8 +187,6 @@ This sets elio as the file chooser for your current desktop environment or windo
 
 See the file chooser docs for setup details and supported behavior:
 https://elio-fm.github.io/docs/file-chooser/
-
----
 
 ## Configuration
 
@@ -242,8 +202,6 @@ Use `elio --config FILE` to load configuration from a custom path instead of the
 
 See [`examples/config.toml`](examples/config.toml) for an annotated example, or the configuration docs:
 https://elio-fm.github.io/docs/configuration/
-
----
 
 ## Theming
 
@@ -364,8 +322,6 @@ https://elio-fm.github.io/docs/configuration/
 | `Q` `*` | Quit without changing the shell directory |
 
 </details>
-
----
 
 ## License
 
