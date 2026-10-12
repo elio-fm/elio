@@ -1,6 +1,6 @@
 use super::item_styling::{ClassStyle, RuleOverride};
 use crate::{config, file_classification::FileClass};
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier};
 use serde::Deserialize;
 use std::{
     collections::HashMap,
@@ -51,6 +51,29 @@ pub(crate) struct Palette {
 }
 
 #[derive(Clone, Copy)]
+pub(crate) struct FocusedEntryStyle {
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+}
+
+impl FocusedEntryStyle {
+    pub(crate) fn modifiers(self) -> Modifier {
+        let mut modifiers = Modifier::empty();
+        if self.bold {
+            modifiers |= Modifier::BOLD;
+        }
+        if self.italic {
+            modifiers |= Modifier::ITALIC;
+        }
+        if self.underline {
+            modifiers |= Modifier::UNDERLINED;
+        }
+        modifiers
+    }
+}
+
+#[derive(Clone, Copy)]
 pub(crate) struct CodePreviewPalette {
     pub fg: Color,
     pub bg: Color,
@@ -80,6 +103,7 @@ pub(super) struct PreviewTheme {
 #[derive(Clone)]
 pub(super) struct Theme {
     pub(super) palette: Palette,
+    pub(super) focused_entry: FocusedEntryStyle,
     pub(super) preview: PreviewTheme,
     pub(super) classes: HashMap<FileClass, ClassStyle>,
     pub(super) extensions: HashMap<String, RuleOverride>,
@@ -97,6 +121,10 @@ pub(crate) fn initialize(path: Option<&Path>) -> anyhow::Result<()> {
 
 pub(crate) fn palette() -> Palette {
     active_theme().palette
+}
+
+pub(crate) fn focused_entry_style() -> FocusedEntryStyle {
+    active_theme().focused_entry
 }
 
 pub(crate) fn code_preview_palette() -> CodePreviewPalette {
@@ -151,6 +179,7 @@ fn theme_path() -> Option<PathBuf> {
 #[derive(Deserialize, Default)]
 struct ThemeFile {
     palette: Option<PaletteOverride>,
+    focused_entry: Option<FocusedEntryStyleOverride>,
     preview: Option<PreviewOverride>,
     classes: Option<HashMap<String, ClassStyleOverride>>,
     extensions: Option<HashMap<String, RuleOverrideDef>>,
@@ -195,6 +224,13 @@ struct PaletteOverride {
 #[derive(Deserialize, Default)]
 struct PreviewOverride {
     code: Option<CodePreviewOverride>,
+}
+
+#[derive(Deserialize, Default)]
+struct FocusedEntryStyleOverride {
+    bold: Option<bool>,
+    italic: Option<bool>,
+    underline: Option<bool>,
 }
 
 #[derive(Deserialize, Default)]
@@ -266,6 +302,9 @@ impl Theme {
 
         if let Some(palette) = parsed.palette {
             apply_palette_overrides(&mut self.palette, palette)?;
+        }
+        if let Some(focused_entry) = parsed.focused_entry {
+            apply_focused_entry_style_overrides(&mut self.focused_entry, focused_entry);
         }
         if let Some(preview) = parsed.preview {
             apply_preview_overrides(&mut self.preview, preview)?;
@@ -362,6 +401,8 @@ impl ThemeFile {
     fn into_complete_theme(self) -> anyhow::Result<Theme> {
         Ok(Theme {
             palette: required(self.palette, "palette")?.into_complete_palette()?,
+            focused_entry: required(self.focused_entry, "focused_entry")?
+                .into_complete_focused_entry_style()?,
             preview: required(self.preview, "preview")?.into_complete_preview()?,
             classes: parse_complete_classes(required(self.classes, "classes")?)?,
             extensions: parse_rule_map(required(self.extensions, "extensions")?)?,
@@ -410,6 +451,16 @@ impl PaletteOverride {
             button_bg: color!(button_bg),
             button_disabled_bg: color!(button_disabled_bg),
             path_bg: color!(path_bg),
+        })
+    }
+}
+
+impl FocusedEntryStyleOverride {
+    fn into_complete_focused_entry_style(self) -> anyhow::Result<FocusedEntryStyle> {
+        Ok(FocusedEntryStyle {
+            bold: required(self.bold, "focused_entry.bold")?,
+            italic: required(self.italic, "focused_entry.italic")?,
+            underline: required(self.underline, "focused_entry.underline")?,
         })
     }
 }
@@ -557,6 +608,21 @@ fn apply_palette_overrides(
     )?;
     apply_palette_color(&mut palette.path_bg, overrides.path_bg)?;
     Ok(())
+}
+
+fn apply_focused_entry_style_overrides(
+    style: &mut FocusedEntryStyle,
+    overrides: FocusedEntryStyleOverride,
+) {
+    if let Some(bold) = overrides.bold {
+        style.bold = bold;
+    }
+    if let Some(italic) = overrides.italic {
+        style.italic = italic;
+    }
+    if let Some(underline) = overrides.underline {
+        style.underline = underline;
+    }
 }
 
 fn apply_palette_color(target: &mut Color, value: Option<String>) -> anyhow::Result<()> {

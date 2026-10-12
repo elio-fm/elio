@@ -1,5 +1,5 @@
 use super::*;
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier};
 use std::{
     env,
     ffi::OsString,
@@ -381,6 +381,32 @@ color = "#112233"
     assert_eq!(
         entry_name_color(&default_entry, default_names.palette),
         default_names.palette.text
+    );
+}
+
+#[test]
+fn focused_entry_style_defaults_and_overrides_independent_modifiers() {
+    let default_theme = Theme::default_theme();
+    assert!(default_theme.focused_entry.bold);
+    assert!(!default_theme.focused_entry.italic);
+    assert!(!default_theme.focused_entry.underline);
+
+    let theme = Theme::from_config_str(
+        r#"
+[focused_entry]
+bold = false
+italic = true
+underline = true
+"#,
+    )
+    .expect("theme should parse focused entry overrides");
+
+    assert!(!theme.focused_entry.bold);
+    assert!(theme.focused_entry.italic);
+    assert!(theme.focused_entry.underline);
+    assert_eq!(
+        theme.focused_entry.modifiers(),
+        Modifier::ITALIC | Modifier::UNDERLINED
     );
 }
 

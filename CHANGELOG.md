@@ -9,16 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added `theme.toml` options to color entry names globally (`[palette] colored_names`) or per rule (`name_color`). ([#327])
 - Added support for using commands to provide destination paths for custom Go To entries. ([#315])
+- Added `theme.toml` options to color entry names globally (`[palette] colored_names`) or per rule (`name_color`). ([#327])
+- Added `[focused_entry]` theme options for bold, italic, and underline styles for focused entry names. ([#328])
 
 ### Changed
 
-- Made grid entry names bold only when focused.
 - Changed the Save As overwrite confirmation to match the permanent-delete dialog.
 - Made Kitty drag cards track terminal text size, keeping them consistent across displays and font sizes.
 - Made Kitty drag card labels bold to match focused item names.
 - Improved Kitty drag card icon and label spacing.
+- Made grid entry names bold only when focused.
 
 ### Fixed
 

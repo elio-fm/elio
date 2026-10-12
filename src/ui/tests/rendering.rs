@@ -1,6 +1,6 @@
-use super::super::file_browser_pane::render_compact_list_row;
 #[cfg(unix)]
 use super::super::file_browser_pane::symlink_target_detail;
+use super::super::file_browser_pane::{compact_entry_name_spans, render_compact_list_row};
 use super::super::helpers;
 use super::super::pane_layout::resolve_pane_layout;
 use super::super::places_pane::render_places_pane;
@@ -12,7 +12,13 @@ use crate::preview::default_code_preview_line_limit;
 use crate::theme;
 use crate::ui;
 use crossterm::event::{Event, KeyCode, KeyEvent};
-use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, layout::Rect};
+use ratatui::{
+    Terminal,
+    backend::TestBackend,
+    buffer::Buffer,
+    layout::Rect,
+    style::{Modifier, Style},
+};
 use std::{
     fs,
     path::PathBuf,
@@ -1115,6 +1121,36 @@ fn visible_directory_rows_show_cached_item_counts() {
         rendered.contains("2 items"),
         "expected visible directory rows to show cached item counts, got: {rendered:?}"
     );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn compact_entry_name_padding_does_not_inherit_underlining() {
+    let root = temp_path("underlined-compact-name-padding");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("src"), "").expect("failed to create entry");
+
+    let app = App::new_at(root.clone()).expect("app should load temp directory");
+    let entry = app
+        .file_browser
+        .entries
+        .iter()
+        .find(|entry| entry.name == "src")
+        .expect("entry should be present");
+    let spans = compact_entry_name_spans(
+        entry,
+        20,
+        None,
+        false,
+        Style::default().add_modifier(Modifier::UNDERLINED),
+        Style::default(),
+    );
+
+    assert_eq!(spans[0].content, "src");
+    assert!(spans[0].style.add_modifier.contains(Modifier::UNDERLINED));
+    assert_eq!(spans[1].content, " ".repeat(17));
+    assert!(!spans[1].style.add_modifier.contains(Modifier::UNDERLINED));
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

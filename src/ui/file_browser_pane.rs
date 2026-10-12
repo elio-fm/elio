@@ -292,7 +292,7 @@ pub(super) fn render_compact_list_row(
         .add_modifier(Modifier::BOLD);
     let name_color = theme::entry_name_color(&appearance, palette);
     let name_style = Style::default().fg(name_color).add_modifier(if selected {
-        Modifier::BOLD
+        theme::focused_entry_style().modifiers()
     } else {
         Modifier::empty()
     });
@@ -396,7 +396,7 @@ pub(super) fn render_compact_list_row(
     Line::from(spans)
 }
 
-fn compact_entry_name_spans(
+pub(super) fn compact_entry_name_spans(
     entry: &Entry,
     width: usize,
     symlink_target: Option<&str>,
@@ -411,10 +411,12 @@ fn compact_entry_name_spans(
         return compact_symlink_name_spans(&entry.name, &suffix, width, name_style, muted_style);
     }
 
-    vec![Span::styled(
-        pad_right(helpers::clamp_label(&entry.name, width), width),
-        name_style,
-    )]
+    let label = helpers::clamp_label(&entry.name, width);
+    let padding = width.saturating_sub(helpers::display_width(&label));
+    vec![
+        Span::styled(label, name_style),
+        Span::raw(" ".repeat(padding)),
+    ]
 }
 
 fn compact_symlink_name_spans(
@@ -431,13 +433,12 @@ fn compact_symlink_name_spans(
     let suffix = sanitize_terminal_text(suffix);
 
     if width < MIN_NAME_WIDTH + MIN_SUFFIX_WIDTH {
-        return vec![Span::styled(
-            pad_right(
-                helpers::truncate_middle(&format!("{name}{suffix}"), width),
-                width,
-            ),
-            name_style,
-        )];
+        let label = helpers::truncate_middle(&format!("{name}{suffix}"), width);
+        let padding = width.saturating_sub(helpers::display_width(&label));
+        return vec![
+            Span::styled(label, name_style),
+            Span::raw(" ".repeat(padding)),
+        ];
     }
 
     let name_width = helpers::display_width(&name);
@@ -805,7 +806,7 @@ fn render_tile(
             Span::styled(
                 helpers::clamp_label(&entry.name, band.width.saturating_sub(5) as usize),
                 Style::default().fg(band_name_fg).add_modifier(if selected {
-                    Modifier::BOLD
+                    theme::focused_entry_style().modifiers()
                 } else {
                     Modifier::empty()
                 }),

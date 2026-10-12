@@ -10,5 +10,5 @@ pub(crate) use self::{
         path_color_with_symlink, path_symbol, path_symbol_with_symlink, resolve_browser_entry,
         resolve_entry, resolve_path, resolve_path_with_class,
     },
-    theme_loading::{Palette, code_preview_palette, initialize, palette},
+    theme_loading::{Palette, code_preview_palette, focused_entry_style, initialize, palette},
 };
