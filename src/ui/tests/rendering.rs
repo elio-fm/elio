@@ -1,6 +1,8 @@
 #[cfg(unix)]
 use super::super::file_browser_pane::symlink_target_detail;
-use super::super::file_browser_pane::{compact_entry_name_spans, render_compact_list_row};
+use super::super::file_browser_pane::{
+    compact_entry_name_spans, focused_tile_content_bg, render_compact_list_row,
+};
 use super::super::helpers;
 use super::super::pane_layout::resolve_pane_layout;
 use super::super::places_pane::render_places_pane;
@@ -896,6 +898,60 @@ fn grid_view_only_bolds_the_focused_entry_name() {
 
     assert!(name_is_bold(focused_index, "f"));
     assert!(!name_is_bold(other_index, "o"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn grid_view_uses_focus_background_for_the_entire_tile() {
+    let root = temp_path("grid-focused-tile");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("focused.txt"), "focused\n").expect("failed to create focused file");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.file_browser.view_mode = crate::file_browser::ViewMode::Grid;
+    let focused_index = app.file_browser.selected;
+    let mut terminal = Terminal::new(TestBackend::new(140, 30)).expect("terminal should init");
+
+    let state = draw_ui(&mut terminal, &mut app);
+    let rect = state.entry_hits[focused_index].rect;
+    let buffer = terminal.backend().buffer();
+
+    assert_eq!(buffer[(rect.x, rect.y)].bg, theme::palette().selected_bg);
+    for y in rect.y..rect.y.saturating_add(rect.height) {
+        assert_eq!(buffer[(rect.x, y)].symbol(), "▌");
+        assert_eq!(buffer[(rect.x, y)].fg, theme::palette().selected_border);
+    }
+    assert_eq!(
+        buffer[(rect.x, rect.y.saturating_add(1))].bg,
+        focused_tile_content_bg(theme::palette().selected_bg)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn grid_view_marks_space_selected_entry_with_a_full_height_indicator() {
+    let root = temp_path("grid-focus-and-selection");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("focused.txt"), "focused\n").expect("failed to create focused file");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.file_browser.view_mode = crate::file_browser::ViewMode::Grid;
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char(' '))))
+        .expect("space selection should succeed");
+    let focused_index = app.file_browser.selected;
+    let mut terminal = Terminal::new(TestBackend::new(140, 30)).expect("terminal should init");
+
+    let state = draw_ui(&mut terminal, &mut app);
+    let rect = state.entry_hits[focused_index].rect;
+    let buffer = terminal.backend().buffer();
+
+    assert_eq!(buffer[(rect.x, rect.y)].bg, theme::palette().selected_bg);
+    for y in rect.y..rect.y.saturating_add(rect.height) {
+        assert_eq!(buffer[(rect.x, y)].symbol(), "▌");
+        assert_eq!(buffer[(rect.x, y)].fg, theme::palette().selection_bar);
+    }
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

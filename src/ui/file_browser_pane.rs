@@ -11,7 +11,7 @@ use crate::theme::{self, Palette};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
@@ -735,6 +735,22 @@ struct TileState {
     clip_op: Option<ClipOp>,
 }
 
+pub(super) fn focused_tile_content_bg(focused_bg: Color) -> Color {
+    const DARKEN_WEIGHT: u16 = 32;
+
+    match focused_bg {
+        Color::Rgb(red, green, blue) => {
+            let remaining = 255 - DARKEN_WEIGHT;
+            Color::Rgb(
+                (u16::from(red) * remaining / 255) as u8,
+                (u16::from(green) * remaining / 255) as u8,
+                (u16::from(blue) * remaining / 255) as u8,
+            )
+        }
+        _ => focused_bg,
+    }
+}
+
 fn render_tile(
     frame: &mut Frame<'_>,
     rect: Rect,
@@ -753,19 +769,25 @@ fn render_tile(
     let icon_color = appearance.color;
     let background = palette.surface;
     let content_bg = if selected {
-        theme::mix_color(palette.selected_bg, icon_color, 22)
+        focused_tile_content_bg(palette.selected_bg)
     } else {
         palette.surface
     };
-    // Band background carries the clipboard/selection state.  The cursor position
-    // (selected) is already communicated by the content background tint and does
-    // not change the band so tiles stay visually consistent while navigating.
-    let band_bg = if clip_op == Some(ClipOp::Yank) {
-        palette.grid_yank_band
+    // The full-height indicator distinguishes focus or a marked/clipboard state,
+    // while a marked/clipboard color takes priority when states overlap.
+    let indicator_color = if clip_op == Some(ClipOp::Yank) {
+        Some(palette.yank_bar)
     } else if clip_op == Some(ClipOp::Cut) {
-        palette.grid_cut_band
+        Some(palette.cut_bar)
     } else if multi_selected {
-        palette.grid_selection_band
+        Some(palette.selection_bar)
+    } else if selected {
+        Some(palette.selected_border)
+    } else {
+        None
+    };
+    let band_bg = if selected {
+        palette.selected_bg
     } else {
         palette.elevated
     };
@@ -857,6 +879,18 @@ fn render_tile(
         frame.render_widget(
             Paragraph::new(lines).style(Style::default().bg(content_bg).fg(palette.text)),
             content_inner,
+        );
+    }
+    if let Some(indicator_color) = indicator_color {
+        frame.render_widget(
+            Paragraph::new("▌\n".repeat(rect.height as usize))
+                .style(Style::default().fg(indicator_color)),
+            Rect {
+                x: rect.x,
+                y: rect.y,
+                width: 1,
+                height: rect.height,
+            },
         );
     }
 }

@@ -207,6 +207,27 @@ fn exact_file_rules_override_extension_defaults() {
 }
 
 #[test]
+fn legacy_grid_band_palette_keys_are_ignored() {
+    let theme = Theme::from_config_str(
+        r##"
+[palette]
+grid_selection_band = "#ffffff"
+grid_yank_band = "#ffffff"
+grid_cut_band = "#ffffff"
+"##,
+    )
+    .expect("legacy grid palette keys should not prevent a theme from loading");
+    let default_theme = Theme::default_theme();
+
+    assert_eq!(
+        theme.palette.selection_bar,
+        default_theme.palette.selection_bar
+    );
+    assert_eq!(theme.palette.yank_bar, default_theme.palette.yank_bar);
+    assert_eq!(theme.palette.cut_bar, default_theme.palette.cut_bar);
+}
+
+#[test]
 fn theme_file_overrides_class_icon_and_palette() {
     let theme = Theme::from_config_str(
         r##"

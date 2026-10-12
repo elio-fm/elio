@@ -75,21 +75,6 @@ pub(crate) fn resolve_browser_entry(entry: &Entry) -> ResolvedAppearance<'static
     active_theme().resolve_with_builtin_class(&entry.path, entry.kind, builtin_class)
 }
 
-pub(crate) fn mix_color(base: Color, tint: Color, tint_weight: u8) -> Color {
-    match (base, tint) {
-        (Color::Rgb(br, bg, bb), Color::Rgb(tr, tg, tb)) => {
-            let weight = u16::from(tint_weight);
-            let base_weight = 255 - weight;
-            Color::Rgb(
-                ((u16::from(br) * base_weight + u16::from(tr) * weight) / 255) as u8,
-                ((u16::from(bg) * base_weight + u16::from(tg) * weight) / 255) as u8,
-                ((u16::from(bb) * base_weight + u16::from(tb) * weight) / 255) as u8,
-            )
-        }
-        _ => base,
-    }
-}
-
 pub(crate) fn entry_color(entry: &Entry, palette: Palette) -> Color {
     let _ = palette;
     resolve_entry(entry).color

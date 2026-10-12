@@ -39,9 +39,6 @@ pub(crate) struct Palette {
     pub yank_bar: Color,
     pub cut_bar: Color,
     pub progress_bar: Color,
-    pub grid_selection_band: Color,
-    pub grid_yank_band: Color,
-    pub grid_cut_band: Color,
     pub trash_bar: Color,
     pub restore_bar: Color,
     pub sidebar_active: Color,
@@ -210,9 +207,6 @@ struct PaletteOverride {
     yank_bar: Option<String>,
     cut_bar: Option<String>,
     progress_bar: Option<String>,
-    grid_selection_band: Option<String>,
-    grid_yank_band: Option<String>,
-    grid_cut_band: Option<String>,
     trash_bar: Option<String>,
     restore_bar: Option<String>,
     sidebar_active: Option<String>,
@@ -442,9 +436,6 @@ impl PaletteOverride {
             yank_bar: color!(yank_bar),
             cut_bar: color!(cut_bar),
             progress_bar: color!(progress_bar),
-            grid_selection_band: color!(grid_selection_band),
-            grid_yank_band: color!(grid_yank_band),
-            grid_cut_band: color!(grid_cut_band),
             trash_bar: color!(trash_bar),
             restore_bar: color!(restore_bar),
             sidebar_active: color!(sidebar_active),
@@ -592,12 +583,6 @@ fn apply_palette_overrides(
     apply_palette_color(&mut palette.yank_bar, overrides.yank_bar)?;
     apply_palette_color(&mut palette.cut_bar, overrides.cut_bar)?;
     apply_palette_color(&mut palette.progress_bar, overrides.progress_bar)?;
-    apply_palette_color(
-        &mut palette.grid_selection_band,
-        overrides.grid_selection_band,
-    )?;
-    apply_palette_color(&mut palette.grid_yank_band, overrides.grid_yank_band)?;
-    apply_palette_color(&mut palette.grid_cut_band, overrides.grid_cut_band)?;
     apply_palette_color(&mut palette.trash_bar, overrides.trash_bar)?;
     apply_palette_color(&mut palette.restore_bar, overrides.restore_bar)?;
     apply_palette_color(&mut palette.sidebar_active, overrides.sidebar_active)?;

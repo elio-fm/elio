@@ -365,9 +365,6 @@ fn nord_example_theme_parses_as_user_theme_and_applies_palette_consistently() {
     assert_eq!(theme.palette.chrome_alt, rgb(0x2b, 0x30, 0x3c));
     assert_eq!(theme.palette.path_bg, rgb(0x34, 0x3b, 0x49));
     assert_eq!(theme.palette.selected_bg, rgb(0x4c, 0x56, 0x6a));
-    assert_eq!(theme.palette.grid_selection_band, rgb(0x87, 0x58, 0x49));
-    assert_eq!(theme.palette.grid_yank_band, rgb(0x5a, 0x69, 0x4d));
-    assert_eq!(theme.palette.grid_cut_band, rgb(0x99, 0x4e, 0x55));
     assert_eq!(theme.palette.accent, rgb(0x88, 0xc0, 0xd0));
     assert_eq!(theme.preview.code.line_number, rgb(0x73, 0x7f, 0x97));
     assert_eq!(theme.preview.code.keyword, rgb(0x81, 0xa1, 0xc1));
