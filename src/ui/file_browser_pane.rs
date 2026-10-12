@@ -804,9 +804,11 @@ fn render_tile(
             Span::raw(" "),
             Span::styled(
                 helpers::clamp_label(&entry.name, band.width.saturating_sub(5) as usize),
-                Style::default()
-                    .fg(band_name_fg)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(band_name_fg).add_modifier(if selected {
+                    Modifier::BOLD
+                } else {
+                    Modifier::empty()
+                }),
             ),
         ]))
         .style(Style::default().bg(band_bg).fg(band_fg)),

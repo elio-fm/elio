@@ -859,6 +859,42 @@ fn grid_view_keeps_entry_hits_inside_the_entries_panel() {
 }
 
 #[test]
+fn grid_view_only_bolds_the_focused_entry_name() {
+    let root = temp_path("grid-focused-name-weight");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("focused.txt"), "focused\n").expect("failed to create focused file");
+    fs::write(root.join("other.txt"), "other\n").expect("failed to create other file");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.file_browser.view_mode = crate::file_browser::ViewMode::Grid;
+    let focused_index = app.file_browser.selected;
+    let other_index = app
+        .file_browser
+        .entries
+        .iter()
+        .position(|entry| entry.name == "other.txt")
+        .expect("other entry should be present");
+    let mut terminal = Terminal::new(TestBackend::new(140, 30)).expect("terminal should init");
+
+    let state = draw_ui(&mut terminal, &mut app);
+    let buffer = terminal.backend().buffer();
+    let name_is_bold = |entry_index: usize, first_char: &str| {
+        let rect = state.entry_hits[entry_index].rect;
+        let x = (rect.x..rect.x.saturating_add(rect.width))
+            .find(|&x| buffer[(x, rect.y)].symbol() == first_char)
+            .expect("entry name should be rendered in its tile");
+        buffer[(x, rect.y)]
+            .modifier
+            .contains(ratatui::style::Modifier::BOLD)
+    };
+
+    assert!(name_is_bold(focused_index, "f"));
+    assert!(!name_is_bold(other_index, "o"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn preview_title_row_is_cleared_when_switching_to_shorter_names() {
     let root = temp_path("preview-title");
     fs::create_dir_all(&root).expect("failed to create temp root");
