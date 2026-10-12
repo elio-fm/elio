@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `theme.toml` options to color entry names globally (`[palette] colored_names`) or per rule (`name_color`). ([#327])
 - Added support for using commands to provide destination paths for custom Go To entries. ([#315])
 
 ### Changed
@@ -388,6 +389,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#327]: https://github.com/elio-fm/elio/issues/327
 [#324]: https://github.com/elio-fm/elio/issues/324
 [#321]: https://github.com/elio-fm/elio/issues/321
 [#315]: https://github.com/elio-fm/elio/issues/315

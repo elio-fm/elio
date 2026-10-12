@@ -29,6 +29,7 @@ pub(crate) struct Palette {
     pub border: Color,
     pub text: Color,
     pub muted: Color,
+    pub colored_names: bool,
     pub accent: Color,
     pub accent_soft: Color,
     pub accent_text: Color,
@@ -170,6 +171,7 @@ struct PaletteOverride {
     border: Option<String>,
     text: Option<String>,
     muted: Option<String>,
+    colored_names: Option<bool>,
     accent: Option<String>,
     accent_soft: Option<String>,
     accent_text: Option<String>,
@@ -221,6 +223,7 @@ struct CodePreviewOverride {
 struct ClassStyleOverride {
     icon: Option<String>,
     color: Option<String>,
+    name_color: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -231,6 +234,7 @@ enum RuleOverrideDef {
         class: Option<String>,
         icon: Option<String>,
         color: Option<String>,
+        name_color: Option<String>,
     },
 }
 
@@ -257,6 +261,7 @@ impl Theme {
 
     fn apply_overrides(&mut self, parsed: ThemeFile) -> anyhow::Result<()> {
         let mut symlink_directory_color_overridden = false;
+        let mut symlink_directory_name_color_overridden = false;
         let mut broken_symlink_color_overridden = false;
 
         if let Some(palette) = parsed.palette {
@@ -270,7 +275,11 @@ impl Theme {
             for (name, override_style) in classes {
                 let class = parse_class_name(&name)
                     .ok_or_else(|| anyhow::anyhow!("unknown class `{name}`"))?;
-                let ClassStyleOverride { icon, color } = override_style;
+                let ClassStyleOverride {
+                    icon,
+                    color,
+                    name_color,
+                } = override_style;
                 let style = self
                     .classes
                     .get_mut(&class)
@@ -287,10 +296,17 @@ impl Theme {
                     }
                     style.color = parse_color(&color)?;
                 }
+                if let Some(name_color) = name_color {
+                    if class == FileClass::SymlinkDirectory {
+                        symlink_directory_name_color_overridden = true;
+                    }
+                    style.name_color = Some(parse_color(&name_color)?);
+                }
             }
         }
         self.apply_derived_symlink_class_colors(
             symlink_directory_color_overridden,
+            symlink_directory_name_color_overridden,
             broken_symlink_color_overridden,
         );
 
@@ -310,6 +326,7 @@ impl Theme {
     fn apply_derived_symlink_class_colors(
         &mut self,
         symlink_directory_color_overridden: bool,
+        symlink_directory_name_color_overridden: bool,
         broken_symlink_color_overridden: bool,
     ) {
         if !symlink_directory_color_overridden
@@ -320,6 +337,16 @@ impl Theme {
             && let Some(style) = self.classes.get_mut(&FileClass::SymlinkDirectory)
         {
             style.color = color;
+        }
+
+        if !symlink_directory_name_color_overridden
+            && let Some(name_color) = self
+                .classes
+                .get(&FileClass::Directory)
+                .and_then(|style| style.name_color)
+            && let Some(style) = self.classes.get_mut(&FileClass::SymlinkDirectory)
+        {
+            style.name_color = Some(name_color);
         }
 
         let invalid_color = self.preview.code.invalid;
@@ -364,6 +391,7 @@ impl PaletteOverride {
             border: color!(border),
             text: color!(text),
             muted: color!(muted),
+            colored_names: required(self.colored_names, "palette.colored_names")?,
             accent: color!(accent),
             accent_soft: color!(accent_soft),
             accent_text: color!(accent_text),
@@ -445,6 +473,10 @@ fn parse_complete_classes(
             ClassStyle {
                 icon: required(style.icon, &format!("classes.{name}.icon"))?,
                 color: parse_required_color(style.color, &format!("classes.{name}.color"))?,
+                name_color: style
+                    .name_color
+                    .map(|color| parse_color(&color))
+                    .transpose()?,
             },
         );
     }
@@ -497,6 +529,9 @@ fn apply_palette_overrides(
     apply_palette_color(&mut palette.border, overrides.border)?;
     apply_palette_color(&mut palette.text, overrides.text)?;
     apply_palette_color(&mut palette.muted, overrides.muted)?;
+    if let Some(colored_names) = overrides.colored_names {
+        palette.colored_names = colored_names;
+    }
     apply_palette_color(&mut palette.accent, overrides.accent)?;
     apply_palette_color(&mut palette.accent_soft, overrides.accent_soft)?;
     apply_palette_color(&mut palette.accent_text, overrides.accent_text)?;
@@ -585,7 +620,12 @@ fn parse_rule_override(value: RuleOverrideDef) -> anyhow::Result<RuleOverride> {
             ),
             ..RuleOverride::default()
         }),
-        RuleOverrideDef::Rich { class, icon, color } => Ok(RuleOverride {
+        RuleOverrideDef::Rich {
+            class,
+            icon,
+            color,
+            name_color,
+        } => Ok(RuleOverride {
             class: match class {
                 Some(class) => Some(
                     parse_class_name(&class)
@@ -595,6 +635,10 @@ fn parse_rule_override(value: RuleOverrideDef) -> anyhow::Result<RuleOverride> {
             },
             icon,
             color: match color {
+                Some(color) => Some(parse_color(&color)?),
+                None => None,
+            },
+            name_color: match name_color {
                 Some(color) => Some(parse_color(&color)?),
                 None => None,
             },

@@ -222,7 +222,7 @@ fn render_list_view(
                         Span::styled(
                             helpers::clamp_label(&entry.name, row.width.saturating_sub(8) as usize),
                             Style::default()
-                                .fg(palette.text)
+                                .fg(theme::entry_name_color(&appearance, palette))
                                 .add_modifier(Modifier::BOLD),
                         ),
                     ]),
@@ -290,15 +290,12 @@ pub(super) fn render_compact_list_row(
     let icon_style = Style::default()
         .fg(appearance.color)
         .add_modifier(Modifier::BOLD);
-    let name_style = if selected {
-        Style::default()
-            .fg(palette.text)
-            .add_modifier(Modifier::BOLD)
-    } else if clip_op == Some(ClipOp::Cut) {
-        Style::default().fg(palette.muted)
+    let name_color = theme::entry_name_color(&appearance, palette);
+    let name_style = Style::default().fg(name_color).add_modifier(if selected {
+        Modifier::BOLD
     } else {
-        Style::default().fg(palette.text)
-    };
+        Modifier::empty()
+    });
     let muted_style = Style::default().fg(palette.muted);
     let available_width = row_width.saturating_sub(COMPACT_PREFIX_WIDTH as u16).max(1) as usize;
     let min_name_width = available_width.min(COMPACT_NAME_MIN_WIDTH);
@@ -773,7 +770,7 @@ fn render_tile(
     };
     let band_fg = palette.text;
     let band_icon = icon_color;
-    let band_name_fg = band_fg;
+    let band_name_fg = theme::entry_name_color(&appearance, palette);
 
     frame.render_widget(
         Block::default().style(Style::default().bg(background).fg(palette.text)),

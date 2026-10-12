@@ -1084,6 +1084,68 @@ fn visible_directory_rows_show_cached_item_counts() {
 }
 
 #[test]
+fn compact_list_rows_use_resolved_icon_colors_for_names_when_enabled() {
+    let root = temp_path("colored-compact-list-name");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("main.rs"), "fn main() {}\n").expect("failed to create Rust file");
+
+    let app = App::new_at(root.clone()).expect("app should load temp directory");
+    let entry = app
+        .file_browser
+        .entries
+        .iter()
+        .find(|entry| entry.name == "main.rs")
+        .expect("Rust file should be present");
+    let appearance = theme::resolve_browser_entry(entry);
+    let mut palette = theme::palette();
+    palette.colored_names = true;
+    let line = render_compact_list_row(&app, entry, false, 80, palette);
+    let name = line
+        .spans
+        .iter()
+        .find(|span| span.content.trim_end() == entry.name)
+        .expect("compact row should contain the entry name");
+
+    assert_eq!(name.style.fg, Some(appearance.color));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn selected_cut_compact_list_rows_keep_resolved_name_colors_and_bold() {
+    let root = temp_path("selected-cut-compact-list-name");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    fs::write(root.join("main.rs"), "fn main() {}\n").expect("failed to create Rust file");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.cut();
+    let entry = app
+        .file_browser
+        .entries
+        .iter()
+        .find(|entry| entry.name == "main.rs")
+        .expect("Rust file should be present");
+    let appearance = theme::resolve_browser_entry(entry);
+    let mut palette = theme::palette();
+    palette.colored_names = true;
+    let line = render_compact_list_row(&app, entry, true, 80, palette);
+    let name = line
+        .spans
+        .iter()
+        .find(|span| span.content.trim_end() == entry.name)
+        .expect("compact row should contain the entry name");
+
+    assert_eq!(name.style.fg, Some(appearance.color));
+    assert!(
+        name.style
+            .add_modifier
+            .contains(ratatui::style::Modifier::BOLD)
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn compact_list_rows_keep_metadata_visible_for_wide_names() {
     let root = temp_path("wide-list-metadata");
     let series = root.join("北斗の拳究極版北斗の拳究極版北斗の拳究極版北斗の拳究極版");

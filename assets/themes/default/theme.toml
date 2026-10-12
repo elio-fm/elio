@@ -12,6 +12,7 @@ elevated = "#1d1d1d"
 border = "#303030"
 text = "#e7edf5"
 muted = "#8c97a8"
+colored_names = false
 accent = "#7aaeff"
 accent_soft = "#1a2740"
 accent_text = "#eef4ff"
