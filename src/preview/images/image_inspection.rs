@@ -10,6 +10,7 @@ pub(crate) enum StaticImageFormat {
     Jpeg,
     Gif,
     Webp,
+    Heif,
     Svg,
 }
 
@@ -21,6 +22,7 @@ impl StaticImageFormat {
             Self::Jpeg => "JPEG image",
             Self::Gif => "GIF image",
             Self::Webp => "WebP image",
+            Self::Heif => "HEIF image",
             Self::Svg => "SVG image",
         }
     }
@@ -32,6 +34,7 @@ impl StaticImageFormat {
             "JPEG image" => Some(Self::Jpeg),
             "GIF image" => Some(Self::Gif),
             "WebP image" => Some(Self::Webp),
+            "HEIF image" => Some(Self::Heif),
             "SVG image" => Some(Self::Svg),
             _ => None,
         }

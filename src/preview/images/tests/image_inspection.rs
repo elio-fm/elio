@@ -18,7 +18,7 @@ fn svg_dimensions_handle_unicode_attributes_and_invalid_utf8() {
 }
 
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -28,6 +28,16 @@ fn temp_path(label: &str) -> PathBuf {
         .expect("system time should be after unix epoch")
         .as_nanos();
     std::env::temp_dir().join(format!("elio-static-image-format-{label}-{unique}"))
+}
+
+#[test]
+fn static_image_format_recognizes_heif_extensions() {
+    for path in [Path::new("photo.heic"), Path::new("photo.heif")] {
+        assert_eq!(
+            static_image_format_for_path(path),
+            Some(StaticImageFormat::Heif)
+        );
+    }
 }
 
 #[test]

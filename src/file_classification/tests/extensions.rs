@@ -476,6 +476,16 @@ fn svg_keeps_image_identity_while_using_markup_preview() {
 }
 
 #[test]
+fn heif_extensions_keep_image_identity() {
+    for path in ["photo.heic", "photo.heif"] {
+        let facts = inspect_path(Path::new(path), EntryKind::File);
+
+        assert_eq!(facts.builtin_class, FileClass::Image, "{path}");
+        assert_eq!(facts.specific_type_label, Some("HEIF image"), "{path}");
+    }
+}
+
+#[test]
 fn office_and_pages_documents_use_metadata_preview() {
     let doc = inspect_path(Path::new("legacy.doc"), EntryKind::File);
     let docx = inspect_path(Path::new("report.docx"), EntryKind::File);

@@ -63,6 +63,35 @@ fn write_test_image(root: &Path, file_name: &str) {
 }
 
 #[test]
+fn heif_preparation_requires_ffmpeg_without_trying_the_rust_image_decoder() {
+    let root = temp_root("heif-no-ffmpeg");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("photo.heic");
+    fs::write(&path, b"not a raster image").expect("failed to write HEIF placeholder");
+    let metadata = fs::metadata(&path).expect("image metadata should exist");
+
+    let prepared = prepare_static_image_asset(
+        &ImagePrepareRequest {
+            path,
+            size: metadata.len(),
+            modified: None,
+            target_width_px: 768,
+            target_height_px: 540,
+            ffmpeg_available: false,
+            resvg_available: false,
+            magick_available: false,
+            force_render_to_cache: false,
+            prepare_inline_payload: false,
+            sixel_prepare: None,
+        },
+        || false,
+    );
+
+    assert!(prepared.is_none());
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn extensionless_png_static_image_preparation_succeeds() {
     let root = temp_root("image-prepare-noext");
     fs::create_dir_all(&root).expect("failed to create temp root");

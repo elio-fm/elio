@@ -579,6 +579,7 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
         "gif" => plain(FileClass::Image, Some("GIF image")),
         "webp" => plain(FileClass::Image, Some("WebP image")),
         "avif" => plain(FileClass::Image, Some("AVIF image")),
+        "heic" | "heif" => plain(FileClass::Image, Some("HEIF image")),
         "mp3" => plain(FileClass::Audio, Some("MP3 audio")),
         "wav" => plain(FileClass::Audio, Some("WAV audio")),
         "flac" => plain(FileClass::Audio, Some("FLAC audio")),

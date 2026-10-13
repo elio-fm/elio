@@ -268,5 +268,6 @@ pub(super) fn should_render_raster_with_ffmpeg(format: StaticImageFormat) -> boo
             | StaticImageFormat::Jpeg
             | StaticImageFormat::Gif
             | StaticImageFormat::Webp
+            | StaticImageFormat::Heif
     )
 }

@@ -134,14 +134,6 @@ where
     }
     let format =
         static_image_format_for_cached_path(&request.path, request.size, request.modified)?;
-    let source_dimensions = if format == StaticImageFormat::Svg {
-        read_svg_dimensions(&request.path)?
-    } else {
-        read_raster_dimensions(&request.path)?
-    };
-    if canceled() {
-        return None;
-    }
     let target_width_px = request.target_width_px.max(1);
     let target_height_px = request.target_height_px.max(1);
     let key = StaticImageKey::from_parts(
@@ -153,6 +145,38 @@ where
         request.force_render_to_cache,
         request.prepare_inline_payload,
     );
+    let rendered_heif_cache_path = if format == StaticImageFormat::Heif {
+        if !request.ffmpeg_available {
+            return None;
+        }
+        let cache_path = static_image_render_cache_path(&key, StaticImageRenderCacheFormat::Png)?;
+        if !cache_path.exists() {
+            let temp_path = static_image_render_temp_path(&cache_path)?;
+            if !render_raster_to_png_with_ffmpeg(
+                &request.path,
+                &temp_path,
+                target_width_px,
+                target_height_px,
+                static_image_use_fast_png_render(request),
+                &canceled,
+            ) {
+                let _ = fs::remove_file(temp_path);
+                return None;
+            }
+            finalize_static_image_render(&temp_path, &cache_path)?;
+        }
+        Some(cache_path)
+    } else {
+        None
+    };
+    let source_dimensions = match rendered_heif_cache_path.as_deref() {
+        Some(path) => read_raster_dimensions(path)?,
+        None if format == StaticImageFormat::Svg => read_svg_dimensions(&request.path)?,
+        None => read_raster_dimensions(&request.path)?,
+    };
+    if canceled() {
+        return None;
+    }
     let inline_payload = |path: &Path| -> Option<Option<Arc<str>>> {
         if !request.prepare_inline_payload {
             return Some(None);
@@ -181,6 +205,18 @@ where
         let key = SixelDcsKey::new(display_path, fitted, config.window_size);
         (Some(dcs), Some(key))
     };
+
+    if let Some(cache_path) = rendered_heif_cache_path {
+        let payload = inline_payload(&cache_path)?;
+        let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
+        return Some(PreparedStaticImageAsset {
+            dimensions: source_dimensions,
+            display_path: cache_path,
+            inline_payload: payload,
+            sixel_dcs,
+            sixel_dcs_key,
+        });
+    }
 
     if static_image_supports_iterm_source_passthrough_for_prepare(request, format) {
         let payload = inline_payload(&request.path)?;
@@ -440,6 +476,9 @@ pub(crate) fn static_image_can_prepare_inline(
                 size <= STATIC_IMAGE_INLINE_FALLBACK_PREPARE_MAX_BYTES
             }
         }
+        StaticImageFormat::Heif => {
+            ffmpeg_available && size <= STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES
+        }
         StaticImageFormat::Svg => false,
     }
 }
@@ -472,7 +511,10 @@ fn static_image_supports_iterm_source_format(path: &Path, format: StaticImageFor
         StaticImageFormat::Png => true,
         StaticImageFormat::Ico => false,
         StaticImageFormat::Jpeg => read_exif_orientation(path).unwrap_or(1) == 1,
-        StaticImageFormat::Gif | StaticImageFormat::Webp | StaticImageFormat::Svg => false,
+        StaticImageFormat::Gif
+        | StaticImageFormat::Webp
+        | StaticImageFormat::Heif
+        | StaticImageFormat::Svg => false,
     }
 }
 
