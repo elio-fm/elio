@@ -1,12 +1,59 @@
 use super::{
     ChooserRequest, ChooserRequestMode, Completion, OPEN_OPTIONS, SAVE_OPTIONS, SelectionKind,
-    accepted, file_uri, has_only_options, option_bool, option_path, save_startup,
-    valid_ignored_options,
+    accepted, chooser_executable_with_fallback, file_uri, has_only_options, invocation_launcher,
+    option_bool, option_path, save_startup, valid_ignored_options,
 };
 use std::collections::HashMap;
 use zbus::zvariant::OwnedValue;
 
 type Filter = (String, Vec<(u32, String)>);
+
+#[test]
+fn invocation_launcher_keeps_an_absolute_wrapper_path() {
+    use std::{fs, os::unix::fs::PermissionsExt, process};
+
+    let directory = std::env::temp_dir().join(format!("elio-portal-service-{}", process::id()));
+    let _ = fs::remove_dir_all(&directory);
+    fs::create_dir(&directory).expect("create test directory");
+    let launcher = directory.join("elio");
+    fs::write(&launcher, "#!/bin/sh\nexec elio \"$@\"\n").expect("create wrapper-style launcher");
+    let mut permissions = fs::metadata(&launcher)
+        .expect("read wrapper permissions")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&launcher, permissions).expect("make wrapper executable");
+
+    assert_eq!(
+        invocation_launcher(Some(launcher.clone().into_os_string())),
+        Some(launcher.clone())
+    );
+    assert_eq!(
+        chooser_executable_with_fallback(Some(launcher.clone().into_os_string()), || {
+            panic!("valid wrapper must not use fallback")
+        })
+        .expect("select wrapper launcher"),
+        launcher
+    );
+    assert_ne!(
+        fs::canonicalize(&launcher).expect("canonicalize launcher"),
+        std::env::current_exe().expect("find test executable")
+    );
+    assert_eq!(invocation_launcher(Some("elio".into())), None);
+    assert_eq!(
+        invocation_launcher(Some(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).into_os_string()
+        )),
+        None
+    );
+    let fallback = std::path::PathBuf::from("/fallback/elio");
+    assert_eq!(
+        chooser_executable_with_fallback(Some("elio".into()), || Ok(fallback.clone()))
+            .expect("fall back from relative launcher"),
+        fallback
+    );
+
+    fs::remove_dir_all(directory).expect("remove test directory");
+}
 
 fn zen_filters() -> Vec<Filter> {
     vec![

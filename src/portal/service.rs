@@ -13,7 +13,9 @@ use super::{
 use anyhow::{Context, Result};
 use std::{
     collections::HashMap,
+    env, fs,
     future::Future,
+    os::unix::fs::PermissionsExt,
     path::Path,
     pin::Pin,
     process::{Child, Command},
@@ -62,15 +64,25 @@ pub(crate) fn run() -> Result<()> {
     crate::config::initialize(None)?;
     let terminal = crate::config::portal_terminal()
         .context("[portal].terminal must be configured before starting the portal service")?;
-    zbus::block_on(run_async(terminal))
+    let chooser_executable = chooser_executable()?;
+    zbus::block_on(run_async(terminal, chooser_executable))
 }
 
-async fn run_async(terminal: TerminalAdapter) -> Result<()> {
+async fn run_async(
+    terminal: TerminalAdapter,
+    chooser_executable: std::path::PathBuf,
+) -> Result<()> {
     let connection = Connection::session().await?;
     connection.request_name(PORTAL_NAME).await?;
     connection
         .object_server()
-        .at(PORTAL_PATH, FileChooser { terminal })
+        .at(
+            PORTAL_PATH,
+            FileChooser {
+                terminal,
+                chooser_executable,
+            },
+        )
         .await?;
     connection.closed().await;
     Ok(())
@@ -78,6 +90,7 @@ async fn run_async(terminal: TerminalAdapter) -> Result<()> {
 
 struct FileChooser {
     terminal: TerminalAdapter,
+    chooser_executable: std::path::PathBuf,
 }
 
 #[zbus::interface(name = "org.freedesktop.impl.portal.FileChooser")]
@@ -180,8 +193,14 @@ impl FileChooser {
 
         let worker_state = Arc::clone(&state);
         let terminal = self.terminal;
+        let chooser_executable = self.chooser_executable.clone();
         thread::spawn(move || {
-            let response = run_request(terminal, request, Arc::clone(&worker_state));
+            let response = run_request(
+                terminal,
+                chooser_executable,
+                request,
+                Arc::clone(&worker_state),
+            );
             worker_state.complete(response);
         });
         let response = CompletionFuture {
@@ -307,6 +326,7 @@ impl Future for CompletionFuture {
 
 fn run_request(
     terminal: TerminalAdapter,
+    chooser_executable: std::path::PathBuf,
     request: ChooserRequest,
     state: Arc<RequestState>,
 ) -> (u32, HashMap<String, OwnedValue>) {
@@ -317,12 +337,8 @@ fn run_request(
         Ok(endpoint) => endpoint,
         Err(_) => return failed(),
     };
-    let executable = match std::env::current_exe() {
-        Ok(path) => path,
-        Err(_) => return failed(),
-    };
     let child_argv = [
-        executable.into_os_string(),
+        chooser_executable.into_os_string(),
         "--portal-chooser".into(),
         "--socket".into(),
         endpoint.socket_path().as_os_str().to_owned(),
@@ -400,6 +416,34 @@ fn run_request(
             Ok(_) => failed(),
         },
     )
+}
+
+/// Keep the service's original launcher spelling so an executable replacement
+/// cannot turn `/proc/self/exe` into a path ending in ` (deleted)`.
+fn chooser_executable() -> Result<std::path::PathBuf> {
+    chooser_executable_with_fallback(env::args_os().next(), || {
+        env::current_exe()
+            .context("error: could not determine an executable for launching the portal chooser")
+    })
+}
+
+fn chooser_executable_with_fallback(
+    invoked: Option<std::ffi::OsString>,
+    fallback: impl FnOnce() -> Result<std::path::PathBuf>,
+) -> Result<std::path::PathBuf> {
+    invocation_launcher(invoked)
+        .map(Ok)
+        .unwrap_or_else(fallback)
+}
+
+fn invocation_launcher(invoked: Option<std::ffi::OsString>) -> Option<std::path::PathBuf> {
+    let launcher = std::path::PathBuf::from(invoked?);
+    (launcher.is_absolute() && is_executable_file(&launcher)).then_some(launcher)
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    fs::metadata(path)
+        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
 }
 
 fn finish(

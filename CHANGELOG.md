@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added FileChooser portal support for `footclient` via manual configuration. ([#322])
 - Added support for using commands to provide destination paths for custom Go To entries. ([#315])
 - Added `theme.toml` options to color entry names globally (`[palette] colored_names`) or per rule (`name_color`). ([#327])
 - Added `[focused_entry]` theme options for bold, italic, and underline styles for focused entry names. ([#328])
+- Added FileChooser portal support for `footclient` via manual configuration. ([#322])
 
 ### Changed
 
@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed text input fields ignoring Caps Lock. ([#321])
 - Fixed Ghostty showing configuration errors when opening the FileChooser portal. ([#324])
+- Fixed the FileChooser portal failing after elio is updated or otherwise replaced while its portal service is running. ([#342])
 - Fixed Save As not closing when clicking outside its popup.
 - Fixed overlays not blocking drag and drop.
 - Fixed UI lag in Duplicate Finder when navigating past large image previews.
@@ -393,6 +394,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#342]: https://github.com/elio-fm/elio/issues/342
 [#327]: https://github.com/elio-fm/elio/issues/327
 [#324]: https://github.com/elio-fm/elio/issues/324
 [#322]: https://github.com/elio-fm/elio/issues/322
