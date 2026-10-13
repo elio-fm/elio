@@ -13,8 +13,8 @@
 
 # Terminal used by elio's file chooser portal.
 # `elio portal enable` detects and sets this automatically when possible.
-# Supported values: kitty, ghostty, foot, wezterm, alacritty, rio, konsole,
-# gnome-terminal, xterm.
+# Supported values: kitty, ghostty, foot, footclient, wezterm, alacritty, rio,
+# konsole, gnome-terminal, xterm.
 #
 # [portal]
 # terminal = "kitty"

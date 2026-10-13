@@ -39,6 +39,13 @@ fn chooser_args_give_portal_windows_a_stable_identity() {
             ][..],
         ),
         (
+            TerminalAdapter::FootClient,
+            &[
+                "--title=elio File Chooser",
+                "--app-id=io.github.elio_fm.elio.filechooser",
+            ][..],
+        ),
+        (
             TerminalAdapter::WezTerm,
             &[
                 "start",
@@ -110,6 +117,7 @@ fn supported_config_names_round_trip() {
         "kitty",
         "ghostty",
         "foot",
+        "footclient",
         "wezterm",
         "alacritty",
         "rio",

@@ -11,6 +11,8 @@ pub enum TerminalAdapter {
     Kitty,
     Ghostty,
     Foot,
+    #[serde(rename = "footclient")]
+    FootClient,
     #[serde(rename = "wezterm")]
     WezTerm,
     Alacritty,
@@ -27,6 +29,7 @@ impl TerminalAdapter {
             "kitty" => Some(Self::Kitty),
             "ghostty" => Some(Self::Ghostty),
             "foot" => Some(Self::Foot),
+            "footclient" => Some(Self::FootClient),
             "wezterm" => Some(Self::WezTerm),
             "alacritty" => Some(Self::Alacritty),
             "rio" => Some(Self::Rio),
@@ -42,6 +45,7 @@ impl TerminalAdapter {
             Self::Kitty => "kitty",
             Self::Ghostty => "ghostty",
             Self::Foot => "foot",
+            Self::FootClient => "footclient",
             Self::WezTerm => "wezterm",
             Self::Alacritty => "alacritty",
             Self::Rio => "rio",
@@ -82,7 +86,10 @@ impl TerminalAdapter {
                 format!("--class={APP_ID}").into(),
                 "-e".into(),
             ],
-            Self::Foot => vec![
+            // footclient takes the same -T/-a overrides as foot itself; it just
+            // asks the already-running `foot --server` to open the window
+            // instead of starting a whole new foot process.
+            Self::Foot | Self::FootClient => vec![
                 format!("--title={TITLE}").into(),
                 format!("--app-id={APP_ID}").into(),
             ],

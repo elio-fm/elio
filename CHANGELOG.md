@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added FileChooser portal support for `footclient` via manual configuration. ([#322])
 - Added support for using commands to provide destination paths for custom Go To entries. ([#315])
 - Added `theme.toml` options to color entry names globally (`[palette] colored_names`) or per rule (`name_color`). ([#327])
 - Added `[focused_entry]` theme options for bold, italic, and underline styles for focused entry names. ([#328])
@@ -394,6 +395,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
 [#327]: https://github.com/elio-fm/elio/issues/327
 [#324]: https://github.com/elio-fm/elio/issues/324
+[#322]: https://github.com/elio-fm/elio/issues/322
 [#321]: https://github.com/elio-fm/elio/issues/321
 [#315]: https://github.com/elio-fm/elio/issues/315
 [#314]: https://github.com/elio-fm/elio/issues/314

@@ -20,6 +20,7 @@ fn portal_terminal_accepts_the_canonical_names() {
         ("kitty", TerminalAdapter::Kitty),
         ("ghostty", TerminalAdapter::Ghostty),
         ("foot", TerminalAdapter::Foot),
+        ("footclient", TerminalAdapter::FootClient),
         ("wezterm", TerminalAdapter::WezTerm),
         ("alacritty", TerminalAdapter::Alacritty),
         ("rio", TerminalAdapter::Rio),
