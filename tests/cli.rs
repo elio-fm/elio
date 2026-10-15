@@ -82,7 +82,7 @@ fn help_prints_usage() {
             "elio shell uninstall [SHELL]  Remove integration; detect shell when omitted"
         )
     );
-    assert!(stdout.contains("Supported shells: bash, zsh, fish, nu"));
+    assert!(stdout.contains("Supported shells: bash, zsh, fish, nu, pwsh"));
     assert!(stdout.contains("Portal integration:"));
     assert!(
         stdout
@@ -117,17 +117,17 @@ fn shell_help_is_available_for_group_and_subcommands() {
         (
             &["shell", "init"],
             "Usage: elio shell init <SHELL>",
-            &["<SHELL>  Target shell: bash, zsh, fish, or nu"],
+            &["<SHELL>  Target shell: bash, zsh, fish, nu, or pwsh"],
         ),
         (
             &["shell", "install"],
             "Usage: elio shell install [SHELL]",
-            &["[SHELL]  Target shell (bash, zsh, fish, or nu); detected when omitted"],
+            &["[SHELL]  Target shell (bash, zsh, fish, nu, or pwsh); detected when omitted"],
         ),
         (
             &["shell", "uninstall"],
             "Usage: elio shell uninstall [SHELL]",
-            &["[SHELL]  Target shell (bash, zsh, fish, or nu); detected when omitted"],
+            &["[SHELL]  Target shell (bash, zsh, fish, nu, or pwsh); detected when omitted"],
         ),
     ];
 

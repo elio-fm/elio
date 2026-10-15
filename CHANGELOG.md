@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `[focused_entry]` theme options for bold, italic, and underline styles for focused entry names. ([#328])
 - Added FileChooser portal support for `footclient` via manual configuration. ([#322])
 - Added HEIC and HEIF image previews when ffmpeg is available. ([#338])
+- Added shell integration for PowerShell.
 
 ### Changed
 

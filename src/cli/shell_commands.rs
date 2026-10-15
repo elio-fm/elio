@@ -23,13 +23,18 @@ pub(super) fn execute(command: ShellIntegrationCommand) -> Result<()> {
         ShellIntegrationCommand::Install(shell) => {
             let executable = env::current_exe()?;
             let invocation = env::args().next();
-            let shell = match shell {
-                Some(shell) => shell,
-                None => shell_integration::detect_shell(ShellIntegrationAction::Install)?,
+            let (shell, detected_executable) = match shell {
+                Some(shell) => (shell, None),
+                None => {
+                    let detected =
+                        shell_integration::detect_shell(ShellIntegrationAction::Install)?;
+                    (detected.shell, detected.executable)
+                }
             };
             let binary =
                 shell_integration::binary_command(shell, invocation.as_deref(), &executable);
-            let report = shell_integration::install(shell, &binary)?;
+            let report =
+                shell_integration::install(shell, &binary, detected_executable.as_deref())?;
             println!(
                 "Installed elio shell integration for {}.",
                 report.shell.name()
@@ -45,7 +50,7 @@ pub(super) fn execute(command: ShellIntegrationCommand) -> Result<()> {
         ShellIntegrationCommand::Uninstall(shell) => {
             let shell = match shell {
                 Some(shell) => shell,
-                None => shell_integration::detect_shell(ShellIntegrationAction::Uninstall)?,
+                None => shell_integration::detect_shell(ShellIntegrationAction::Uninstall)?.shell,
             };
             let report = shell_integration::uninstall(shell)?;
             println!(
