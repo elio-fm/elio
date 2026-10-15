@@ -121,8 +121,8 @@
 #
 # Keys may be one-character strings, named keys, or modifier bindings.
 # Supported named keys: "left", "right", "up", "down", "enter", "space",
-# "tab", "backtab", "shift+tab", "backspace", "delete", "del", "pageup",
-# "pagedown", "home", "end", "f1".."f12".
+# "tab", "backtab", "shift+tab", "backspace", "delete", "del", "insert",
+# "ins", "pageup", "pagedown", "home", "end", "f1".."f12".
 # Named keys and modifiers are case-insensitive: "F2", "PageUp", "Ctrl+O".
 #
 # Examples: open_with = ["O", "w"], open = "ctrl+o", nav_right = "shift+right".
