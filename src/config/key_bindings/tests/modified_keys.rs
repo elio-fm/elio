@@ -232,6 +232,43 @@ delete_permanently = ["D", "shift+delete"]
 }
 
 #[test]
+fn insert_named_key_supports_insert_and_ins_aliases() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+create = ["a", "insert"]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.create.to_string(), "a/Insert");
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Insert, KeyModifiers::NONE)),
+        Some(Action::Create)
+    );
+
+    let config = Config::from_str(
+        r#"
+[keys]
+open = ["o", "ins"]
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.open.to_string(), "o/Insert");
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Insert, KeyModifiers::NONE)),
+        Some(Action::Open)
+    );
+}
+
+#[test]
 fn keys_match_modifiers_exactly() {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
