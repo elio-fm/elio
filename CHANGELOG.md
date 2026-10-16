@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `theme.toml` options to color entry names globally (`[palette] colored_names`) or per rule (`name_color`). ([#327])
 - Added `[focused_entry]` theme options for bold, italic, and underline styles for focused entry names. ([#328])
 - Added FileChooser portal support for `footclient` via manual configuration. ([#322])
-- Added HEIC and HEIF image previews when ffmpeg is available. ([#338])
+- Added HEIC and HEIF image previews when ffmpeg is available. ([#338], [#351])
 - Added shell integration for PowerShell.
 - Added support for the `Insert` key in `[keys]` bindings, with `ins` as an alias. ([#349])
 
@@ -397,6 +397,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#351]: https://github.com/elio-fm/elio/issues/351
 [#349]: https://github.com/elio-fm/elio/issues/349
 [#342]: https://github.com/elio-fm/elio/issues/342
 [#338]: https://github.com/elio-fm/elio/issues/338

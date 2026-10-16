@@ -114,6 +114,7 @@ pub(super) fn render_raster_to_png_with_ffmpeg(
     target_width_px: u32,
     target_height_px: u32,
     force_render_to_cache: bool,
+    format: StaticImageFormat,
     canceled: &impl Fn() -> bool,
 ) -> bool {
     if let Some(parent) = output_path.parent()
@@ -131,7 +132,13 @@ pub(super) fn render_raster_to_png_with_ffmpeg(
         .arg(input_path)
         .arg("-frames:v")
         .arg("1")
-        .arg("-vf")
+        // Tiled HEICs are assembled by FFmpeg as a complex filter graph. A
+        // simple `-vf` filter cannot be applied to that output.
+        .arg(if format == StaticImageFormat::Heif {
+            "-filter_complex"
+        } else {
+            "-vf"
+        })
         .arg(format!(
             "scale=w='min({},iw)':h='min({},ih)':force_original_aspect_ratio=decrease",
             target_width_px.max(1),
