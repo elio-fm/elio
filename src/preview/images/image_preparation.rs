@@ -158,6 +158,7 @@ where
                 target_width_px,
                 target_height_px,
                 static_image_use_fast_png_render(request),
+                format,
                 &canceled,
             ) {
                 let _ = fs::remove_file(temp_path);
@@ -311,6 +312,7 @@ where
                 target_width_px,
                 target_height_px,
                 static_image_use_fast_png_render(request),
+                format,
                 &canceled,
             ),
         };
