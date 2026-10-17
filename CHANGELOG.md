@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added Trash support on Windows through the system drive's Recycle Bin. ([#355])
+
 ### Changed
 
 - Made Trash, Delete, and Restore popup scrollbars match the style of the rest of the scrollbars.
@@ -406,6 +410,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#355]: https://github.com/elio-fm/elio/issues/355
 [#352]: https://github.com/elio-fm/elio/issues/352
 [#351]: https://github.com/elio-fm/elio/issues/351
 [#349]: https://github.com/elio-fm/elio/issues/349

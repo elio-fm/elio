@@ -77,13 +77,23 @@ fn build_copy_overlay(cwd: &Path, paths: &[PathBuf]) -> CopyOverlay {
         .iter()
         .map(|path| directory_path_for(path))
         .collect::<Vec<_>>();
+    // Recycle Bin entries are named by their original name, not the opaque
+    // `$R…` one; their paths stay the real, usable ones.
     let file_name_values = absolute_paths
         .iter()
-        .map(|path| file_name_for_path(path))
+        .map(|path| {
+            crate::filesystem::recycle_bin_original_name(path)
+                .unwrap_or_else(|| file_name_for_path(path))
+        })
         .collect::<Vec<_>>();
     let stem_values = absolute_paths
         .iter()
-        .map(|path| name_without_extension_for_path(path))
+        .map(
+            |path| match crate::filesystem::recycle_bin_original_name(path) {
+                Some(name) => name_without_extension_for_path(Path::new(&name)),
+                None => name_without_extension_for_path(path),
+            },
+        )
         .collect::<Vec<_>>();
     let target_count = absolute_paths.len();
     let rows = vec![
@@ -422,6 +432,15 @@ impl FileOperationsState {
             .as_ref()
             .and_then(|overlay| overlay.rows.get(index))
             .map(|row| row.label.as_str())
+            .unwrap_or("")
+    }
+
+    #[cfg(test)]
+    pub fn copy_row_value(&self, index: usize) -> &str {
+        self.copy
+            .as_ref()
+            .and_then(|overlay| overlay.rows.get(index))
+            .map(|row| row.value.as_str())
             .unwrap_or("")
     }
 
