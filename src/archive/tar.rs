@@ -378,7 +378,7 @@ where
     }
     skipped_links += extract_deferred_symlinks(&plan.dest_dir, symlinks)?;
     Ok(ExtractSummary {
-        dest_dir: plan.dest_dir.clone(),
+        dest_path: plan.dest_dir.clone(),
         completed,
         total,
         skipped_links,

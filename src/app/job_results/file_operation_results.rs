@@ -71,7 +71,7 @@ impl App {
                 }
                 return true;
             }
-            self.finish_archive_extract(build.status.unwrap_or_default(), build.dest_dir);
+            self.finish_archive_extract(build.status.unwrap_or_default(), build.dest_path);
         } else {
             self.file_operations
                 .update_archive_extract_progress(build.completed, build.total);

@@ -173,7 +173,7 @@ pub(crate) struct ArchiveExtractBuild {
     /// `true` on the final result; `false` on intermediate progress updates.
     pub(crate) done: bool,
     /// Populated only when `done = true`.
-    pub(crate) dest_dir: Option<PathBuf>,
+    pub(crate) dest_path: Option<PathBuf>,
     /// Populated only when `done = true`.
     pub(crate) status: Option<String>,
     /// Populated only when `done = true` and extraction needs password input.

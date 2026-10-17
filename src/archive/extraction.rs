@@ -2,6 +2,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use sevenz_rust2::Password as SevenZipPassword;
 use std::{
     error::Error,
+    ffi::OsStr,
     fmt::{self, Display},
     fs,
     path::{Path, PathBuf},
@@ -108,13 +109,15 @@ impl ExtractFormat {
     }
 }
 
-fn unique_destination(parent: &Path, stem: &str) -> PathBuf {
-    let first = parent.join(stem);
+fn unique_destination(parent: &Path, name: &OsStr) -> PathBuf {
+    let first = parent.join(name);
     if fs::symlink_metadata(&first).is_err() {
         return first;
     }
     for index in 1u32.. {
-        let candidate = parent.join(format!("{stem}_{index}"));
+        let mut candidate = name.to_os_string();
+        candidate.push(format!("_{index}"));
+        let candidate = parent.join(candidate);
         if fs::symlink_metadata(&candidate).is_err() {
             return candidate;
         }
@@ -153,7 +156,7 @@ pub(crate) struct ExtractProgress {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ExtractSummary {
-    pub(crate) dest_dir: PathBuf,
+    pub(crate) dest_path: PathBuf,
     pub(crate) completed: usize,
     pub(crate) total: Option<usize>,
     pub(crate) skipped_links: usize,
@@ -238,7 +241,7 @@ pub(crate) fn plan_extract(path: &Path) -> Result<ExtractPlan> {
         .ok_or_else(|| anyhow!("Cannot determine extraction folder name"))?;
     Ok(ExtractPlan {
         archive_path: path.to_path_buf(),
-        dest_dir: unique_destination(parent, &stem),
+        dest_dir: unique_destination(parent, OsStr::new(&stem)),
         backend: format.backend(),
     })
 }
@@ -286,34 +289,57 @@ where
         }
     };
 
-    let dest_dir = if plan.dest_dir.exists() {
-        let parent = plan
-            .dest_dir
-            .parent()
-            .ok_or_else(|| anyhow!("Cannot determine extraction parent"))?;
-        let name = plan
-            .dest_dir
-            .file_name()
-            .and_then(|name| name.to_str())
-            .ok_or_else(|| anyhow!("Cannot determine extraction folder name"))?;
-        unique_destination(parent, name)
-    } else {
-        plan.dest_dir.clone()
+    let dest_path = match place_extracted_contents(&staging_dir, &plan.dest_dir) {
+        Ok(dest_path) => dest_path,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&staging_dir);
+            return Err(error.into());
+        }
     };
-    fs::rename(&staging_dir, &dest_dir).with_context(|| {
-        format!(
-            "Could not move {} to {}",
-            staging_dir.display(),
-            dest_dir.display()
-        )
-    })?;
 
     Ok(ExtractSummary {
-        dest_dir,
+        dest_path,
         completed: summary.completed,
         total: summary.total,
         skipped_links: summary.skipped_links,
     })
+}
+
+fn place_extracted_contents(staging_dir: &Path, fallback_dest_dir: &Path) -> Result<PathBuf> {
+    let parent = fallback_dest_dir
+        .parent()
+        .ok_or_else(|| anyhow!("Cannot determine extraction parent"))?;
+    let mut entries = fs::read_dir(staging_dir)
+        .with_context(|| format!("Could not read {}", staging_dir.display()))?;
+    let first = entries.next().transpose()?;
+    let has_multiple_items = entries.next().transpose()?.is_some();
+    let promote_single_item = match first.as_ref() {
+        Some(entry) if !has_multiple_items => !entry.file_type()?.is_symlink(),
+        _ => false,
+    };
+    let (source, name) = if promote_single_item {
+        let first = first.expect("single staged item should exist");
+        (first.path(), first.file_name())
+    } else {
+        let name = fallback_dest_dir
+            .file_name()
+            .ok_or_else(|| anyhow!("Cannot determine extraction folder name"))?;
+        (staging_dir.to_path_buf(), name.to_os_string())
+    };
+    let dest_path = unique_destination(parent, &name);
+    fs::rename(&source, &dest_path).with_context(|| {
+        format!(
+            "Could not move {} to {}",
+            source.display(),
+            dest_path.display()
+        )
+    })?;
+
+    if source != staging_dir {
+        let _ = fs::remove_dir(staging_dir);
+    }
+
+    Ok(dest_path)
 }
 
 fn preflight_extract(plan: &ExtractPlan, password: Option<&ArchivePassword>) -> ExtractResult<()> {

@@ -18,7 +18,7 @@ fn e_extracts_focused_zip_archive() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('e'))))
         .expect("e should start archive extraction");
 
-    let extracted_file = root.join("sample/dir/file.txt");
+    let extracted_file = root.join("dir/file.txt");
     for _ in 0..200 {
         let _ = app.process_background_jobs();
         if extracted_file.exists() && app.file_operations.archive_extract_progress().is_none() {
@@ -29,10 +29,10 @@ fn e_extracts_focused_zip_archive() {
     wait_for_directory_load(&mut app);
 
     assert_eq!(fs::read_to_string(&extracted_file).unwrap(), "hello");
-    assert_eq!(app.status_message(), "Extracted 1 item to \"sample\"");
+    assert_eq!(app.status_message(), "Extracted 1 item to \"dir\"");
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
-        Some(root.join("sample").as_path())
+        Some(root.join("dir").as_path())
     );
 
     cleanup_app_temp_root(app, root);
@@ -62,8 +62,8 @@ fn e_extracts_selected_archives_as_one_batch_and_skips_other_files() {
         "selected archives should be consumed once extraction starts"
     );
 
-    let alpha_file = root.join("alpha/file.txt");
-    let beta_file = root.join("beta/file.txt");
+    let alpha_file = root.join("file.txt");
+    let beta_file = root.join("file.txt_1");
     for _ in 0..300 {
         let _ = app.process_background_jobs();
         if alpha_file.exists()
@@ -139,8 +139,8 @@ fn e_skips_password_archive_on_cancel_and_continues_batch() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Esc)))
         .expect("esc should skip password archive");
 
-    let alpha_file = root.join("alpha/file.txt");
-    let beta_file = root.join("beta/file.txt");
+    let alpha_file = root.join("file.txt");
+    let beta_file = root.join("file.txt_1");
     for _ in 0..300 {
         let _ = app.process_background_jobs();
         if alpha_file.exists()
@@ -154,7 +154,7 @@ fn e_skips_password_archive_on_cancel_and_continues_batch() {
     }
     wait_for_directory_load(&mut app);
 
-    assert!(!root.join("secret/file.txt").exists());
+    assert!(!root.join("secret").exists());
     assert_eq!(fs::read_to_string(&alpha_file).unwrap(), "alpha");
     assert_eq!(fs::read_to_string(&beta_file).unwrap(), "beta");
     assert_eq!(app.status_message(), "Extracted 2 archives, 1 skipped");
@@ -198,7 +198,7 @@ fn e_prompts_and_retries_encrypted_seven_zip_archive() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
         .expect("enter should submit correct password");
 
-    let extracted_file = root.join("sample/dir/file.txt");
+    let extracted_file = root.join("dir/file.txt");
     for _ in 0..200 {
         let _ = app.process_background_jobs();
         if extracted_file.exists()
@@ -212,10 +212,10 @@ fn e_prompts_and_retries_encrypted_seven_zip_archive() {
     wait_for_directory_load(&mut app);
 
     assert_eq!(fs::read_to_string(&extracted_file).unwrap(), "hello");
-    assert_eq!(app.status_message(), "Extracted 1 item to \"sample\"");
+    assert_eq!(app.status_message(), "Extracted 1 item to \"dir\"");
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
-        Some(root.join("sample").as_path())
+        Some(root.join("dir").as_path())
     );
 
     cleanup_app_temp_root(app, root);
@@ -257,7 +257,7 @@ fn e_prompts_and_retries_encrypted_rar_archive() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
         .expect("enter should submit correct password");
 
-    let extracted_file = root.join("sample/dir/file.txt");
+    let extracted_file = root.join("dir/file.txt");
     for _ in 0..200 {
         let _ = app.process_background_jobs();
         if extracted_file.exists()
@@ -271,10 +271,10 @@ fn e_prompts_and_retries_encrypted_rar_archive() {
     wait_for_directory_load(&mut app);
 
     assert_eq!(fs::read_to_string(&extracted_file).unwrap(), "hello");
-    assert_eq!(app.status_message(), "Extracted 1 item to \"sample\"");
+    assert_eq!(app.status_message(), "Extracted 1 item to \"dir\"");
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
-        Some(root.join("sample").as_path())
+        Some(root.join("dir").as_path())
     );
 
     cleanup_app_temp_root(app, root);
@@ -316,7 +316,7 @@ fn e_prompts_and_retries_encrypted_zip_archive() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Enter)))
         .expect("enter should submit correct password");
 
-    let extracted_file = root.join("sample/dir/file.txt");
+    let extracted_file = root.join("dir/file.txt");
     for _ in 0..200 {
         let _ = app.process_background_jobs();
         if extracted_file.exists()
@@ -330,10 +330,10 @@ fn e_prompts_and_retries_encrypted_zip_archive() {
     wait_for_directory_load(&mut app);
 
     assert_eq!(fs::read_to_string(&extracted_file).unwrap(), "hello");
-    assert_eq!(app.status_message(), "Extracted 1 item to \"sample\"");
+    assert_eq!(app.status_message(), "Extracted 1 item to \"dir\"");
     assert_eq!(
         app.selected_entry().map(|entry| entry.path.as_path()),
-        Some(root.join("sample").as_path())
+        Some(root.join("dir").as_path())
     );
 
     cleanup_app_temp_root(app, root);
