@@ -268,7 +268,7 @@ where
     skipped_links +=
         extract_deferred_symlinks(&plan.dest_dir, symlinks).map_err(ExtractError::Other)?;
     Ok(ExtractSummary {
-        dest_dir: plan.dest_dir.clone(),
+        dest_path: plan.dest_dir.clone(),
         completed,
         total: Some(total),
         skipped_links,

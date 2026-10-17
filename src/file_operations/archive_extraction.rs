@@ -15,7 +15,7 @@ pub(crate) struct ArchiveExtractBatchState {
     pub(crate) failed_archives: usize,
     pub(crate) skipped_archives: usize,
     pub(crate) skipped_non_archives: usize,
-    pub(crate) dest_dirs: Vec<PathBuf>,
+    pub(crate) dest_paths: Vec<PathBuf>,
 }
 
 impl ArchiveExtractBatchState {
@@ -26,7 +26,7 @@ impl ArchiveExtractBatchState {
             failed_archives: 0,
             skipped_archives: 0,
             skipped_non_archives,
-            dest_dirs: Vec::new(),
+            dest_paths: Vec::new(),
         }
     }
 
@@ -40,19 +40,19 @@ impl ArchiveExtractBatchState {
 
     pub(crate) fn reselect_path(&self) -> Option<PathBuf> {
         self.is_single_archive()
-            .then(|| self.dest_dirs.first().cloned())
+            .then(|| self.dest_paths.first().cloned())
             .flatten()
     }
 
     pub(crate) fn status(&self) -> String {
         if self.is_single_archive()
             && self.completed_archives == 1
-            && let Some(dest_dir) = self.dest_dirs.first()
+            && let Some(dest_path) = self.dest_paths.first()
         {
-            let name = dest_dir
+            let name = dest_path
                 .file_name()
                 .and_then(|name| name.to_str())
-                .unwrap_or("folder");
+                .unwrap_or("item");
             return format!("Extracted 1 archive to \"{name}\"");
         }
 

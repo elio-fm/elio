@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed overlays not blocking drag and drop.
 - Fixed UI lag in Duplicate Finder when navigating past large image previews.
 - Fixed brief UI stalls while loading large PNG previews in terminals using the Kitty Graphics Protocol.
+- Fixed archive extraction nesting a single root item in an extra directory. ([#352])
 
 ## [1.13.0] - 2026-10-07
 
@@ -397,6 +398,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#352]: https://github.com/elio-fm/elio/issues/352
 [#351]: https://github.com/elio-fm/elio/issues/351
 [#349]: https://github.com/elio-fm/elio/issues/349
 [#342]: https://github.com/elio-fm/elio/issues/342

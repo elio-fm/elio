@@ -84,7 +84,10 @@ fn unique_destination_uses_paste_style_suffix() {
     let root = temp_path("unique-destination");
     fs::create_dir_all(root.join("app")).unwrap();
     fs::create_dir_all(root.join("app_1")).unwrap();
-    assert_eq!(unique_destination(&root, "app"), root.join("app_2"));
+    assert_eq!(
+        unique_destination(&root, OsStr::new("app")),
+        root.join("app_2")
+    );
     let _ = fs::remove_dir_all(root);
 }
 
@@ -131,7 +134,7 @@ fn rejects_unsafe_external_7z_listing_paths() {
 }
 
 #[test]
-fn extracts_zip_archive() {
+fn promotes_single_root_directory_from_zip() {
     let root = temp_path("zip");
     fs::create_dir_all(&root).unwrap();
     let archive_path = root.join("sample.zip");
@@ -148,9 +151,116 @@ fn extracts_zip_archive() {
     let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
     assert_eq!(summary.completed, 2);
     assert_eq!(
-        fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+        fs::read_to_string(root.join("dir/file.txt")).unwrap(),
         "hello"
     );
+    assert!(!root.join("sample").exists());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn promotes_single_file_from_zip() {
+    let root = temp_path("zip-single-file");
+    fs::create_dir_all(&root).unwrap();
+    let archive_path = root.join("readme.zip");
+    {
+        let file = File::create(&archive_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("README.md", options).unwrap();
+        zip.write_all(b"hello").unwrap();
+        zip.finish().unwrap();
+    }
+
+    let plan = plan_extract(&archive_path).unwrap();
+    let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+
+    assert_eq!(summary.completed, 1);
+    assert_eq!(fs::read_to_string(root.join("README.md")).unwrap(), "hello");
+    assert!(!root.join("readme").exists());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn keeps_multiple_root_entries_in_archive_named_directory() {
+    let root = temp_path("zip-multiple-roots");
+    fs::create_dir_all(&root).unwrap();
+    let archive_path = root.join("source.zip");
+    {
+        let file = File::create(&archive_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("README.md", options).unwrap();
+        zip.write_all(b"readme").unwrap();
+        zip.start_file("Cargo.toml", options).unwrap();
+        zip.write_all(b"[package]").unwrap();
+        zip.finish().unwrap();
+    }
+
+    let plan = plan_extract(&archive_path).unwrap();
+    let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+
+    assert_eq!(summary.completed, 2);
+    assert_eq!(
+        fs::read_to_string(root.join("source/README.md")).unwrap(),
+        "readme"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("source/Cargo.toml")).unwrap(),
+        "[package]"
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn suffixes_promoted_root_directory_on_collision() {
+    let root = temp_path("zip-single-root-collision");
+    fs::create_dir_all(root.join("dir")).unwrap();
+    let archive_path = root.join("sample.zip");
+    {
+        let file = File::create(&archive_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        zip.add_directory("dir/", options).unwrap();
+        zip.start_file("dir/file.txt", options).unwrap();
+        zip.write_all(b"hello").unwrap();
+        zip.finish().unwrap();
+    }
+
+    let plan = plan_extract(&archive_path).unwrap();
+    let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+
+    assert_eq!(summary.completed, 2);
+    assert_eq!(
+        fs::read_to_string(root.join("dir_1/file.txt")).unwrap(),
+        "hello"
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn keeps_empty_zip_in_archive_named_directory() {
+    let root = temp_path("zip-empty");
+    fs::create_dir_all(&root).unwrap();
+    let archive_path = root.join("empty.zip");
+    {
+        let file = File::create(&archive_path).unwrap();
+        let zip = zip::ZipWriter::new(file);
+        zip.finish().unwrap();
+    }
+
+    let plan = plan_extract(&archive_path).unwrap();
+    let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+
+    assert_eq!(summary.completed, 0);
+    assert!(root.join("empty").is_dir());
+    assert!(fs::read_dir(&root).unwrap().all(|entry| {
+        !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains(".elio-extracting-")
+    }));
     let _ = fs::remove_dir_all(root);
 }
 
@@ -183,6 +293,39 @@ fn extracts_safe_zip_symlink() {
             .is_symlink()
     );
     assert_eq!(fs::read_link(link_path).unwrap(), Path::new("target.txt"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+#[cfg(unix)]
+fn keeps_single_root_symlink_in_archive_named_directory() {
+    let root = temp_path("zip-single-link");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("sibling.txt"), "outside").unwrap();
+    let archive_path = root.join("sample.zip");
+    {
+        let file = File::create(&archive_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        let link_options = options.unix_permissions(0o777);
+        zip.add_symlink("link.txt", "sibling.txt", link_options)
+            .unwrap();
+        zip.finish().unwrap();
+    }
+
+    let plan = plan_extract(&archive_path).unwrap();
+    let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
+
+    assert_eq!(summary.completed, 1);
+    let link_path = root.join("sample/link.txt");
+    assert!(
+        fs::symlink_metadata(&link_path)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(fs::read_link(&link_path).unwrap(), Path::new("sibling.txt"));
+    assert!(fs::symlink_metadata(root.join("link.txt")).is_err());
     let _ = fs::remove_dir_all(root);
 }
 
@@ -290,10 +433,7 @@ fn encrypted_zip_extracts_with_password() {
 
     assert_eq!(summary.completed, 1);
     assert_eq!(summary.total, Some(1));
-    assert_eq!(
-        fs::read_to_string(root.join("sample/file.txt")).unwrap(),
-        "hello"
-    );
+    assert_eq!(fs::read_to_string(root.join("file.txt")).unwrap(), "hello");
     let _ = fs::remove_dir_all(root);
 }
 
@@ -316,10 +456,7 @@ fn aes_encrypted_zip_extracts_with_password() {
 
     assert_eq!(summary.completed, 1);
     assert_eq!(summary.total, Some(1));
-    assert_eq!(
-        fs::read_to_string(root.join("sample/file.txt")).unwrap(),
-        "hello"
-    );
+    assert_eq!(fs::read_to_string(root.join("file.txt")).unwrap(), "hello");
     let _ = fs::remove_dir_all(root);
 }
 
@@ -343,7 +480,7 @@ fn extracts_tar_archive() {
     let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
     assert_eq!(summary.completed, 2);
     assert_eq!(
-        fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+        fs::read_to_string(root.join("dir/file.txt")).unwrap(),
         "hello"
     );
     let _ = fs::remove_dir_all(root);
@@ -443,7 +580,7 @@ fn tar_symlink_parent_does_not_redirect_later_entries() {
     assert_eq!(summary.completed, 2);
     assert_eq!(summary.skipped_links, 1);
     assert_eq!(
-        fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+        fs::read_to_string(root.join("dir/file.txt")).unwrap(),
         "safe"
     );
     assert!(!root.join("outside/file.txt").exists());
@@ -471,7 +608,7 @@ fn extracts_tar_gzip_archive() {
     let summary = extract_archive_with_password(&plan, None, |_| {}, || false).unwrap();
     assert_eq!(summary.completed, 2);
     assert_eq!(
-        fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+        fs::read_to_string(root.join("dir/file.txt")).unwrap(),
         "hello"
     );
     let _ = fs::remove_dir_all(root);
@@ -491,7 +628,7 @@ fn extracts_tar_xz_archive() {
 
     assert_eq!(summary.completed, 2);
     assert_eq!(
-        fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+        fs::read_to_string(root.join("dir/file.txt")).unwrap(),
         "hello"
     );
     let _ = fs::remove_dir_all(root);
@@ -514,7 +651,7 @@ fn extracts_tar_bzip2_archive() {
 
     assert_eq!(summary.completed, 2);
     assert_eq!(
-        fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+        fs::read_to_string(root.join("dir/file.txt")).unwrap(),
         "hello"
     );
     let _ = fs::remove_dir_all(root);
@@ -532,7 +669,7 @@ fn extracts_tar_zstd_archive() {
 
     assert_eq!(summary.completed, 2);
     assert_eq!(
-        fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+        fs::read_to_string(root.join("dir/file.txt")).unwrap(),
         "hello"
     );
     let _ = fs::remove_dir_all(root);
@@ -563,7 +700,7 @@ fn extracts_seven_zip_archive() {
         Some((2, Some(2)))
     );
     assert_eq!(
-        fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+        fs::read_to_string(root.join("dir/file.txt")).unwrap(),
         "hello"
     );
     let _ = fs::remove_dir_all(root);
@@ -646,7 +783,7 @@ fn extracts_rar_with_external_seven_zip_fallback() {
     assert_eq!(summary.completed, 2);
     assert_eq!(summary.total, Some(2));
     assert_eq!(
-        fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+        fs::read_to_string(root.join("dir/file.txt")).unwrap(),
         "hello"
     );
     let _ = fs::remove_dir_all(root);
@@ -763,7 +900,7 @@ fn encrypted_rar_extracts_with_password() {
     assert_eq!(summary.completed, 2);
     assert_eq!(summary.total, Some(2));
     assert_eq!(
-        fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+        fs::read_to_string(root.join("dir/file.txt")).unwrap(),
         "hello"
     );
     let _ = fs::remove_dir_all(root);
@@ -849,7 +986,7 @@ fn encrypted_seven_zip_extracts_with_password() {
     assert_eq!(summary.completed, 2);
     assert_eq!(summary.total, Some(2));
     assert_eq!(
-        fs::read_to_string(root.join("sample/dir/file.txt")).unwrap(),
+        fs::read_to_string(root.join("dir/file.txt")).unwrap(),
         "hello"
     );
     let _ = fs::remove_dir_all(root);

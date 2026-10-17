@@ -164,16 +164,16 @@ fn run_extract(
 
         match result {
             Ok(summary) if stopped_early => {
-                request.batch.dest_dirs.push(summary.dest_dir);
+                request.batch.dest_paths.push(summary.dest_path);
                 break;
             }
             Ok(summary) => {
                 if request.batch.is_single_archive() {
                     let name = summary
-                        .dest_dir
+                        .dest_path
                         .file_name()
                         .and_then(|name| name.to_str())
-                        .unwrap_or("folder")
+                        .unwrap_or("item")
                         .to_string();
                     let noun = if summary.completed == 1 {
                         "item"
@@ -191,7 +191,7 @@ fn run_extract(
                     ));
                 }
                 request.batch.completed_archives += 1;
-                request.batch.dest_dirs.push(summary.dest_dir);
+                request.batch.dest_paths.push(summary.dest_path);
                 request.archives.remove(0);
             }
             Err(ExtractError::PasswordRequired) => {
@@ -203,7 +203,7 @@ fn run_extract(
                         completed: request.batch.finished_archives(),
                         total: Some(request.batch.total_archives),
                         done: true,
-                        dest_dir: None,
+                        dest_path: None,
                         status: None,
                         password_prompt: Some(ArchivePasswordPrompt::Required),
                         password_request: Some(request),
@@ -220,7 +220,7 @@ fn run_extract(
                         completed: request.batch.finished_archives(),
                         total: Some(request.batch.total_archives),
                         done: true,
-                        dest_dir: None,
+                        dest_path: None,
                         status: None,
                         password_prompt: Some(ArchivePasswordPrompt::BadPassword),
                         password_request: Some(request),
@@ -265,7 +265,7 @@ fn run_extract(
             .or(single_error_status)
             .or_else(|| Some(request.batch.status()))
     };
-    let dest_dir = request.batch.reselect_path();
+    let dest_path = request.batch.reselect_path();
     send_extract_done(
         result_tx,
         ArchiveExtractBuild {
@@ -273,7 +273,7 @@ fn run_extract(
             completed: request.batch.finished_archives(),
             total: Some(request.batch.total_archives),
             done: true,
-            dest_dir,
+            dest_path,
             status,
             password_prompt: None,
             password_request: None,
@@ -299,7 +299,7 @@ fn send_extract_progress(
             completed,
             total,
             done: false,
-            dest_dir: None,
+            dest_path: None,
             status: None,
             password_prompt: None,
             password_request: None,

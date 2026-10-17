@@ -120,7 +120,7 @@ where
     });
     if cancelled() {
         return Ok(ExtractSummary {
-            dest_dir: plan.dest_dir.clone(),
+            dest_path: plan.dest_dir.clone(),
             completed: 0,
             total,
             skipped_links: 0,
@@ -139,7 +139,7 @@ where
     let completed = entries.len();
     progress(ExtractProgress { completed, total });
     Ok(ExtractSummary {
-        dest_dir: plan.dest_dir.clone(),
+        dest_path: plan.dest_dir.clone(),
         completed,
         total,
         skipped_links: 0,
