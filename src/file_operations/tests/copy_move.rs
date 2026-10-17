@@ -325,6 +325,80 @@ fn cut_and_paste_moves_file_to_destination() {
 }
 
 #[test]
+fn yank_and_cut_reject_selections_containing_a_recycle_bin_item() {
+    let bin = temp_path("clipboard-rules-bin");
+    let outside = temp_path("clipboard-rules-outside");
+    fs::create_dir_all(&bin).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    let recycled = crate::filesystem::write_test_pair(
+        &bin,
+        "0A5E05.txt",
+        r"C:\Users\someone\notes.txt",
+        1_710_498_600,
+    );
+    fs::write(outside.join("plain.txt"), "data").unwrap();
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+
+    let mut app = App::new_at(outside.clone()).unwrap();
+    // A mixed selection: one ordinary file and one Recycle Bin item.
+    app.file_browser
+        .selected_paths
+        .insert(outside.join("plain.txt"));
+    app.file_browser.selected_paths.insert(recycled.clone());
+
+    app.yank();
+    assert_eq!(app.file_operations.clipboard_info(), None);
+    assert!(app.status.contains("Cannot yank"), "status: {}", app.status);
+
+    app.cut();
+    assert_eq!(app.file_operations.clipboard_info(), None);
+    assert!(app.status.contains("Cannot cut"), "status: {}", app.status);
+
+    // Paths inside a recycled folder are Recycle Bin items too.
+    app.file_browser.selected_paths.clear();
+    app.file_browser
+        .selected_paths
+        .insert(bin.join("$R0A5E06").join("nested.txt"));
+    app.yank();
+    assert_eq!(app.file_operations.clipboard_info(), None);
+
+    fs::remove_dir_all(&bin).unwrap();
+    fs::remove_dir_all(&outside).unwrap();
+}
+
+#[test]
+fn paste_rejects_the_recycle_bin_as_destination() {
+    let bin = temp_path("paste-rules-bin");
+    let outside = temp_path("paste-rules-outside");
+    fs::create_dir_all(&bin).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join("plain.txt"), "data").unwrap();
+
+    let mut app = App::new_at(outside.clone()).unwrap();
+    app.yank();
+    assert_eq!(
+        app.file_operations.clipboard_info(),
+        Some((1, ClipOp::Yank))
+    );
+
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+    app.file_browser.cwd = bin.clone();
+    app.paste().unwrap();
+    wait_for_paste(&mut app);
+
+    assert_eq!(app.status, "Cannot paste into the Recycle Bin");
+    assert!(!bin.join("plain.txt").exists(), "nothing should be pasted");
+    assert_eq!(
+        app.file_operations.clipboard_info(),
+        Some((1, ClipOp::Yank)),
+        "the clipboard is kept for pasting elsewhere"
+    );
+
+    fs::remove_dir_all(&bin).unwrap();
+    fs::remove_dir_all(&outside).unwrap();
+}
+
+#[test]
 fn yank_allows_selected_parent_of_current_directory() {
     let root = temp_path("yank-parent-selection");
     let parent = root.join("parent");

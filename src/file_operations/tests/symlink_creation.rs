@@ -100,3 +100,29 @@ fn link_yanked_refuses_cut_clipboard() {
     fs::remove_dir_all(&src_dir).unwrap();
     fs::remove_dir_all(&dst_dir).unwrap();
 }
+
+#[test]
+fn link_yanked_rejects_the_recycle_bin_as_destination() {
+    let bin = temp_path("link-rules-bin");
+    let outside = temp_path("link-rules-outside");
+    fs::create_dir_all(&bin).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join("plain.txt"), "data").unwrap();
+
+    let mut app = App::new_at(outside.clone()).unwrap();
+    app.yank();
+
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+    app.file_browser.cwd = bin.clone();
+    app.link_yanked(false).unwrap();
+
+    assert_eq!(app.status_message(), "Cannot link into the Recycle Bin");
+    assert!(!bin.join("plain.txt").exists(), "nothing should be linked");
+    assert_eq!(
+        app.file_operations.clipboard_info(),
+        Some((1, ClipOp::Yank))
+    );
+
+    fs::remove_dir_all(&bin).unwrap();
+    fs::remove_dir_all(&outside).unwrap();
+}

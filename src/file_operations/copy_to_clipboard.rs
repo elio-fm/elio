@@ -86,6 +86,17 @@ impl FileOperationsState {
             .map(|row| row.label.as_str())
             .unwrap_or("")
     }
+    #[cfg(test)]
+    pub fn copy_row_value(&self, index: usize) -> &str {
+        self.copy
+            .as_ref()
+            .and_then(|copy| copy.rows.get(index))
+            .and_then(|row| match &row.value {
+                CopyValue::Text(text) => Some(text.as_str()),
+                CopyValue::Items(_) => None,
+            })
+            .unwrap_or("")
+    }
     pub fn copy_row_shortcut(&self, index: usize) -> Option<char> {
         self.copy
             .as_ref()
@@ -105,7 +116,18 @@ fn build_copy_overlay(cwd: &Path, paths: &[PathBuf]) -> CopyOverlay {
             }
         })
         .collect::<Vec<_>>();
-    let names = absolute
+    // Recycle Bin entries are named by their original name, not the opaque
+    // `$R…` one; their paths stay the real, usable ones.
+    let display_names = absolute
+        .iter()
+        .map(|path| crate::filesystem::recycle_bin_original_name(path).map(PathBuf::from))
+        .collect::<Vec<_>>();
+    let named = absolute
+        .iter()
+        .zip(&display_names)
+        .map(|(path, name)| name.as_deref().unwrap_or(path))
+        .collect::<Vec<_>>();
+    let names = named
         .iter()
         .map(|path| {
             path.file_name()
@@ -114,7 +136,7 @@ fn build_copy_overlay(cwd: &Path, paths: &[PathBuf]) -> CopyOverlay {
                 .into_owned()
         })
         .collect::<Vec<_>>();
-    let stems = absolute
+    let stems = named
         .iter()
         .map(|path| {
             path.file_stem()

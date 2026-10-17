@@ -156,6 +156,35 @@ fn item_shortcut_copies_uri_list_outside_gnome() {
     fs::remove_dir_all(root).expect("failed to remove test root");
 }
 
+#[test]
+fn copy_overlay_uses_original_names_but_real_paths_for_recycle_bin_entries() {
+    let bin = temp_path("copy-overlay-recycle-bin");
+    fs::create_dir_all(&bin).expect("failed to create bin dir");
+    let item = crate::filesystem::write_test_pair(
+        &bin,
+        "0A5E05.md",
+        r"C:\Users\someone\report.final.md",
+        1_710_498_600,
+    );
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+
+    let mut app = App::new_at(bin.clone()).expect("failed to create app");
+    app.open_copy_overlay_for_paths(vec![item.clone()]);
+
+    assert_eq!(app.file_operations.copy_row_value(0), "report.final.md");
+    assert_eq!(app.file_operations.copy_row_value(1), "report.final");
+    assert_eq!(
+        app.file_operations.copy_row_value(2),
+        item.display().to_string()
+    );
+    assert_eq!(
+        app.file_operations.copy_row_value(3),
+        bin.display().to_string()
+    );
+
+    fs::remove_dir_all(bin).expect("failed to remove bin dir");
+}
+
 #[cfg(any(
     target_os = "linux",
     target_os = "freebsd",

@@ -16,7 +16,7 @@ static RESTORE_ORIGINS_PROCESS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::ne
 
 /// Restores a trashed item to its original location.
 ///
-/// Two backends are supported:
+/// Three backends are supported:
 ///
 /// - **FreeDesktop trash** (Linux, BSD, and any macOS installation that uses
 ///   XDG tools): `entry_path` must be inside a `Trash/files/` directory and a
@@ -27,9 +27,12 @@ static RESTORE_ORIGINS_PROCESS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::ne
 ///   restore-origins store, falling back to Finder's `.DS_Store` metadata,
 ///   then moves the item back directly.
 ///
+/// - **Windows Recycle Bin**: the paired `$I` sidecar records the original
+///   path; the `$R` content is moved back there.
+///
 /// The FreeDesktop path is tried first (it works even on macOS if the XDG
 /// layout happens to be present), then the macOS path, then an unsupported
-/// error for any other layout (e.g. Windows Recycle Bin).
+/// error for any other layout.
 pub(crate) fn restore_trash_item(entry_path: &Path) -> anyhow::Result<()> {
     if let Some(info_dir) = freedesktop_info_dir(entry_path) {
         return restore_trash_item_freedesktop(entry_path, info_dir);
@@ -44,7 +47,15 @@ pub(crate) fn restore_trash_item(entry_path: &Path) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // Any other layout (e.g. Windows Recycle Bin) is not supported.
+    // Windows: the `$I` sidecar records the original path.  Only entries that
+    // actually live in the Recycle Bin qualify — anything else falls through
+    // to the unsupported-layout error below.
+    #[cfg(windows)]
+    if super::recycle_bin::is_recycle_bin_entry(entry_path) {
+        return restore_recycle_bin_item(entry_path);
+    }
+
+    // Any other layout is not supported.
     #[cfg(not(target_os = "macos"))]
     anyhow::bail!("restore is not supported for this trash location")
 }
@@ -77,6 +88,30 @@ pub(crate) fn restore_trash_item_checked_metadata(
     Ok(remove_restore_origins_checked(&[&file_name]).err())
 }
 
+/// Windows Recycle Bin restore: reads the paired `$I` sidecar for the original
+/// path, moves the `$R` content back, then removes the sidecar.
+#[cfg(any(windows, test))]
+fn restore_recycle_bin_item(entry_path: &Path) -> anyhow::Result<()> {
+    let file_name = entry_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| anyhow::anyhow!("cannot determine file name for {:?}", entry_path))?;
+
+    let info = super::recycle_bin::read_info(entry_path).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no Recycle Bin metadata found for \"{file_name}\" \
+             (the $I sidecar is missing or unreadable)"
+        )
+    })?;
+    move_to_original_path(entry_path, &info.original_path)?;
+
+    // Only drop the sidecar once the content has moved, so a failed rename
+    // leaves the pair intact and the item still restorable.
+    super::recycle_bin::remove_info_sidecar(entry_path);
+
+    Ok(())
+}
+
 /// FreeDesktop-specific restore: reads the `.trashinfo` sidecar and moves the
 /// item back to its original path.
 fn restore_trash_item_freedesktop(entry_path: &Path, info_dir: PathBuf) -> anyhow::Result<()> {
@@ -92,6 +127,16 @@ fn restore_trash_item_freedesktop(entry_path: &Path, info_dir: PathBuf) -> anyho
     let original = crate::filesystem::parse_original_path(&content)
         .ok_or_else(|| anyhow::anyhow!("cannot parse original path from {:?}", info_path))?;
 
+    move_to_original_path(entry_path, &original)?;
+
+    let _ = fs::remove_file(&info_path);
+
+    Ok(())
+}
+
+/// Moves a trashed item back to `original`, recreating missing parent
+/// directories. Refuses to overwrite anything already there.
+fn move_to_original_path(entry_path: &Path, original: &Path) -> anyhow::Result<()> {
     if original.exists() {
         anyhow::bail!("destination already exists: {:?}", original);
     }
@@ -103,10 +148,8 @@ fn restore_trash_item_freedesktop(entry_path: &Path, info_dir: PathBuf) -> anyho
             .with_context(|| format!("cannot create parent dir {:?}", parent))?;
     }
 
-    fs::rename(entry_path, &original)
+    fs::rename(entry_path, original)
         .with_context(|| format!("cannot move {:?} to {:?}", entry_path, original))?;
-
-    let _ = fs::remove_file(&info_path);
 
     Ok(())
 }

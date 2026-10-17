@@ -15,6 +15,20 @@ impl App {
 
     fn set_clipboard(&mut self, op: ClipOp) {
         let paths = self.file_browser.selected_or_focused_paths_sorted();
+        // A `$R…` entry copied or moved out of the Recycle Bin keeps its opaque
+        // stored name, and a move orphans its `$I…` sidecar; restore is the way
+        // out. Only Windows has a Recycle Bin, so this never fires elsewhere.
+        if paths
+            .iter()
+            .any(|path| crate::filesystem::is_in_recycle_bin(path))
+        {
+            self.status = match op {
+                ClipOp::Yank => "Cannot yank from the Recycle Bin — restore instead",
+                ClipOp::Cut => "Cannot cut from the Recycle Bin — restore instead",
+            }
+            .to_string();
+            return;
+        }
         if self.file_operations.set_clipboard(paths, op) {
             self.file_browser.selected_paths.clear();
             self.status.clear();
@@ -22,6 +36,10 @@ impl App {
     }
 
     pub(crate) fn paste(&mut self) -> Result<()> {
+        if crate::filesystem::is_in_recycle_bin(&self.file_browser.cwd) {
+            self.status = "Cannot paste into the Recycle Bin".to_string();
+            return Ok(());
+        }
         let preparation = self.file_operations.prepare_paste(&self.file_browser.cwd);
         if let Some(request) = preparation.request {
             self.job_scheduler.submit_paste(request);
@@ -175,6 +193,10 @@ impl App {
     }
 
     pub(crate) fn link_yanked(&mut self, relative: bool) -> Result<()> {
+        if crate::filesystem::is_in_recycle_bin(&self.file_browser.cwd) {
+            self.status = "Cannot link into the Recycle Bin".to_string();
+            return Ok(());
+        }
         let completion = self
             .file_operations
             .create_symlinks(&self.file_browser.cwd, relative)?;
