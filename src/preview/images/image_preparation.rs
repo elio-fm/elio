@@ -1,11 +1,12 @@
+use super::heif::probe_render_info as probe_heif_render_info;
 use super::image_inspection::{
     StaticImageFormat, read_exif_orientation, read_raster_dimensions, read_svg_dimensions,
     static_image_format_for_cached_path,
 };
 use super::image_rendering::{
-    apply_raster_orientation, render_raster_to_jpeg_with_ffmpeg, render_raster_to_png_with_ffmpeg,
-    render_svg_to_png_with_magick, render_svg_to_png_with_resvg, should_render_raster_with_ffmpeg,
-    shrink_image_to_fit,
+    RasterPngRenderOptions, apply_raster_orientation, render_raster_to_jpeg_with_ffmpeg,
+    render_raster_to_png_with_ffmpeg, render_svg_to_png_with_magick, render_svg_to_png_with_resvg,
+    should_render_raster_with_ffmpeg, shrink_image_to_fit,
 };
 use crate::terminal_images::{
     RenderedImageDimensions, TerminalWindowSize, area_pixel_size, encode_iterm_inline_payload,
@@ -30,6 +31,7 @@ const STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES: u64 = 16 * 1024 * 1024;
 /// payload to make their UI unresponsive.
 pub(crate) const STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES: u64 = 700 * 1024;
 const STATIC_IMAGE_RENDER_CACHE_VERSION: usize = 6;
+const HEIF_RENDER_CACHE_VERSION: usize = 2;
 
 /// Parameters needed to pre-encode a Sixel image alongside its rendered file.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -145,11 +147,15 @@ where
         request.force_render_to_cache,
         request.prepare_inline_payload,
     );
+    let heif_render_info = (format == StaticImageFormat::Heif && request.ffmpeg_available)
+        .then(|| probe_heif_render_info(&request.path, &canceled))
+        .flatten();
     let rendered_heif_cache_path = if format == StaticImageFormat::Heif {
         if !request.ffmpeg_available {
             return None;
         }
-        let cache_path = static_image_render_cache_path(&key, StaticImageRenderCacheFormat::Png)?;
+        let cache_path =
+            static_image_render_cache_path(&key, StaticImageRenderCacheFormat::Png, format)?;
         if !cache_path.exists() {
             let temp_path = static_image_render_temp_path(&cache_path)?;
             if !render_raster_to_png_with_ffmpeg(
@@ -157,8 +163,11 @@ where
                 &temp_path,
                 target_width_px,
                 target_height_px,
-                static_image_use_fast_png_render(request),
-                format,
+                RasterPngRenderOptions {
+                    force_render_to_cache: static_image_use_fast_png_render(request),
+                    format,
+                    heif_render_info: heif_render_info.as_ref(),
+                },
                 &canceled,
             ) {
                 let _ = fs::remove_file(temp_path);
@@ -171,7 +180,10 @@ where
         None
     };
     let source_dimensions = match rendered_heif_cache_path.as_deref() {
-        Some(path) => read_raster_dimensions(path)?,
+        Some(path) => heif_render_info
+            .as_ref()
+            .map(|info| info.dimensions)
+            .unwrap_or(read_raster_dimensions(path)?),
         None if format == StaticImageFormat::Svg => read_svg_dimensions(&request.path)?,
         None => read_raster_dimensions(&request.path)?,
     };
@@ -232,7 +244,8 @@ where
     }
 
     if format == StaticImageFormat::Svg {
-        let cache_path = static_image_render_cache_path(&key, StaticImageRenderCacheFormat::Png)?;
+        let cache_path =
+            static_image_render_cache_path(&key, StaticImageRenderCacheFormat::Png, format)?;
         if cache_path.exists() {
             let payload = inline_payload(&cache_path)?;
             let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
@@ -279,7 +292,7 @@ where
     }
 
     let render_format = static_image_render_cache_format(request, format);
-    let cache_path = static_image_render_cache_path(&key, render_format)?;
+    let cache_path = static_image_render_cache_path(&key, render_format, format)?;
     if cache_path.exists() {
         let payload = inline_payload(&cache_path)?;
         let (sixel_dcs, sixel_dcs_key) = prepare_sixel_dcs(&cache_path);
@@ -311,8 +324,11 @@ where
                 &temp_path,
                 target_width_px,
                 target_height_px,
-                static_image_use_fast_png_render(request),
-                format,
+                RasterPngRenderOptions {
+                    force_render_to_cache: static_image_use_fast_png_render(request),
+                    format,
+                    heif_render_info: heif_render_info.as_ref(),
+                },
                 &canceled,
             ),
         };
@@ -408,9 +424,13 @@ fn save_dynamic_image(
 fn static_image_render_cache_path(
     key: &StaticImageKey,
     format: StaticImageRenderCacheFormat,
+    source_format: StaticImageFormat,
 ) -> Option<PathBuf> {
     let mut hasher = DefaultHasher::new();
     STATIC_IMAGE_RENDER_CACHE_VERSION.hash(&mut hasher);
+    if source_format == StaticImageFormat::Heif {
+        HEIF_RENDER_CACHE_VERSION.hash(&mut hasher);
+    }
     format.hash(&mut hasher);
     key.path.hash(&mut hasher);
     key.size.hash(&mut hasher);

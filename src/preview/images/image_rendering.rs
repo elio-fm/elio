@@ -1,3 +1,4 @@
+use super::heif::HeifRenderInfo;
 use super::image_inspection::StaticImageFormat;
 use crate::terminal_images::{RenderedImageDimensions, TerminalWindowSize};
 use image::{DynamicImage, GenericImageView, imageops::FilterType};
@@ -11,6 +12,12 @@ use std::{
 const FAST_FORCE_RENDER_FFMPEG_RASTER_ARGS: [&str; 4] =
     ["-compression_level", "1", "-sws_flags", "fast_bilinear"];
 const DEFAULT_FFMPEG_RASTER_ARGS: [&str; 0] = [];
+
+pub(super) struct RasterPngRenderOptions<'a> {
+    pub(super) force_render_to_cache: bool,
+    pub(super) format: StaticImageFormat,
+    pub(super) heif_render_info: Option<&'a HeifRenderInfo>,
+}
 
 pub(crate) fn ffmpeg_raster_render_args(force_render_to_cache: bool) -> &'static [&'static str] {
     if force_render_to_cache {
@@ -113,8 +120,7 @@ pub(super) fn render_raster_to_png_with_ffmpeg(
     output_path: &Path,
     target_width_px: u32,
     target_height_px: u32,
-    force_render_to_cache: bool,
-    format: StaticImageFormat,
+    options: RasterPngRenderOptions<'_>,
     canceled: &impl Fn() -> bool,
 ) -> bool {
     if let Some(parent) = output_path.parent()
@@ -129,22 +135,29 @@ pub(super) fn render_raster_to_png_with_ffmpeg(
         .arg("error")
         .arg("-y")
         .arg("-i")
-        .arg(input_path)
-        .arg("-frames:v")
-        .arg("1")
-        // Tiled HEICs are assembled by FFmpeg as a complex filter graph. A
-        // simple `-vf` filter cannot be applied to that output.
-        .arg(if format == StaticImageFormat::Heif {
+        .arg(input_path);
+    let scale = scale_filter(target_width_px, target_height_px);
+    if let Some(filter) = options
+        .heif_render_info
+        .and_then(|info| info.tile_grid_filter(&scale))
+    {
+        command
+            .arg("-filter_complex")
+            .arg(filter)
+            .arg("-map")
+            .arg("[out]");
+    } else {
+        // Modern FFmpeg versions assemble tiled HEICs internally. Keep that
+        // path for non-tiled HEIF and for all other raster formats.
+        command.arg(if options.format == StaticImageFormat::Heif {
             "-filter_complex"
         } else {
             "-vf"
-        })
-        .arg(format!(
-            "scale=w='min({},iw)':h='min({},ih)':force_original_aspect_ratio=decrease",
-            target_width_px.max(1),
-            target_height_px.max(1)
-        ));
-    command.args(ffmpeg_raster_render_args(force_render_to_cache));
+        });
+        command.arg(scale);
+    }
+    command.arg("-frames:v").arg("1");
+    command.args(ffmpeg_raster_render_args(options.force_render_to_cache));
     command
         .arg(output_path)
         .stdout(Stdio::null())
@@ -152,6 +165,14 @@ pub(super) fn render_raster_to_png_with_ffmpeg(
 
     run_cancelable_command(&mut command, canceled)
         .is_some_and(|status| status.success() && output_path.exists())
+}
+
+fn scale_filter(target_width_px: u32, target_height_px: u32) -> String {
+    format!(
+        "scale=w='min({},iw)':h='min({},ih)':force_original_aspect_ratio=decrease",
+        target_width_px.max(1),
+        target_height_px.max(1)
+    )
 }
 
 pub(super) fn render_raster_to_jpeg_with_ffmpeg(
