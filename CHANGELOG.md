@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-10-19
+
 ### Added
 
 - Added support for using commands to provide destination paths for custom Go To entries. ([#315])
@@ -20,11 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Reworked grid view styling to align it with list view and improve focus clarity in transparent themes. Grid view now shares list view's selection, yank, and cut indicator colors; the `grid_*_band` palette keys are no longer used.
+- Made grid entry names bold only when focused, matching list view.
 - Changed the Save As overwrite confirmation to match the permanent-delete dialog.
 - Made Kitty drag cards track terminal text size, keeping them consistent across displays and font sizes.
 - Made Kitty drag card labels bold to match focused item names.
 - Improved Kitty drag card icon and label spacing.
-- Made grid entry names bold only when focused.
 
 ### Fixed
 
@@ -379,7 +381,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Trash and restore support for safer file management workflows.
 - Optional external-tool integrations such as Poppler, ffmpeg, ffprobe, resvg, and 7-Zip for richer previews and metadata.
 
-[Unreleased]: https://github.com/elio-fm/elio/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/elio-fm/elio/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/elio-fm/elio/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/elio-fm/elio/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/elio-fm/elio/compare/v1.11.2...v1.12.0
 [1.11.2]: https://github.com/elio-fm/elio/compare/v1.11.1...v1.11.2

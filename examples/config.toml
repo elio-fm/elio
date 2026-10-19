@@ -56,7 +56,7 @@
 # - "downloads"
 # - { builtin = "downloads", key = "D" }
 # - { title = "tmp", path = "/tmp", key = "T" }
-# - { title = "Repo root", command = "git rev-parse --show-toplevel", key = "R" }
+# - { title = "repo root", command = "git rev-parse --show-toplevel", key = "r" }
 #
 # Custom entries use either `path` or `command`. Commands run in the current
 # directory and must print an absolute destination path.
@@ -71,7 +71,7 @@
 #   "config",
 #   "trash",
 #   { title = "tmp", path = "/tmp", key = "T" },
-#   { title = "Repo root", command = "git rev-parse --show-toplevel", key = "R" },
+#   { title = "repo root", command = "git rev-parse --show-toplevel", key = "r" },
 # ]
 #
 # Override elio's open action without changing system defaults. Rules are

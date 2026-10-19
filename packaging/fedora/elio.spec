@@ -1,5 +1,5 @@
 %bcond_with check
-%global fallback_version 1.13.0
+%global fallback_version 1.14.0
 %global fallback_release 1
 
 Name:           elio
@@ -53,6 +53,11 @@ desktop-file-validate packaging/linux/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Mon Oct 19 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.14.0-1
+- Add PowerShell integration, HEIC/HEIF previews, command-backed Go To entries, and focused-entry theme styles
+- Improve grid styling and Kitty drag-card presentation
+- Fix FileChooser portal recovery, Caps Lock input, Save As and drag-and-drop interactions, archive extraction, and preview responsiveness
+
 * Wed Oct 07 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.13.0-1
 - Add XDG Desktop Portal FileChooser integration and Save As support
 - Add a Nix flake and configurable browser sorting and folder-size calculation
