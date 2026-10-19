@@ -25,6 +25,13 @@ impl App {
             .map_or(0, crate::fuzzy_finder::SearchState::match_count)
     }
 
+    pub fn search_displayed_match_count(&self) -> usize {
+        self.fuzzy_finder
+            .search
+            .as_ref()
+            .map_or(0, |search| search.matches.len())
+    }
+
     #[cfg(test)]
     pub fn search_candidate_count(&self) -> usize {
         self.fuzzy_finder
@@ -184,6 +191,19 @@ impl App {
             search.select_index(index);
         }
         self.sync_search_scroll();
+    }
+
+    pub(crate) fn set_search_scrollbar_position(
+        &mut self,
+        index: usize,
+        scroll_top: usize,
+        visible_rows: usize,
+    ) {
+        if let Some(search) = &mut self.fuzzy_finder.search {
+            search.select_index(index);
+            search.scroll =
+                scroll_top.min(search.matches.len().saturating_sub(visible_rows.max(1)));
+        }
     }
 
     pub(crate) fn confirm_search_selection(&mut self) -> Result<()> {

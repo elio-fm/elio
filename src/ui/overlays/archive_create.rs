@@ -1,9 +1,11 @@
 use crate::{
-    app::{App, ScreenRegions},
+    app::{App, ScreenRegions, ScrollbarTarget},
     theme::{self, Palette},
     ui::{
         helpers,
-        scrollbars::{render_overlay_scrollbar_on_bg, visible_edit_rows},
+        scrollbars::{
+            ScrollbarContext, ScrollbarSpec, render_overlay_scrollbar_on_bg, visible_edit_rows,
+        },
     },
 };
 use ratatui::{
@@ -215,11 +217,10 @@ fn render_contents_list(
         render_overlay_scrollbar_on_bg(
             frame,
             scrollbar_area,
-            source_names.len(),
-            visible_lines,
-            scroll_top,
+            ScrollbarSpec::new(source_names.len(), visible_lines, scroll_top),
             palette,
             palette.path_bg,
+            ScrollbarContext::new(state, ScrollbarTarget::ArchiveCreate),
         );
     }
 }

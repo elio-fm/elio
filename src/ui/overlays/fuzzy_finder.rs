@@ -1,7 +1,10 @@
 use crate::{
-    app::{App, ScreenRegions, SearchHit, SearchScope},
+    app::{App, ScreenRegions, ScrollbarTarget, SearchHit, SearchScope},
     theme::{self, Palette},
-    ui::{helpers, scrollbars::render_overlay_scrollbar},
+    ui::{
+        helpers,
+        scrollbars::{ScrollbarContext, ScrollbarSpec, render_overlay_scrollbar},
+    },
 };
 use ratatui::{
     Frame,
@@ -120,7 +123,7 @@ pub(in crate::ui) fn render_fuzzy_finder_overlay(
 
     let row_height = 2u16;
     let visible_rows = (rows[2].height / row_height).max(1) as usize;
-    let needs_scrollbar = app.search_match_count() > visible_rows;
+    let needs_scrollbar = app.search_displayed_match_count() > visible_rows;
     let (results_area, scrollbar_area) = if needs_scrollbar && rows[2].width >= 6 {
         (
             Rect {
@@ -258,10 +261,13 @@ pub(in crate::ui) fn render_fuzzy_finder_overlay(
         render_overlay_scrollbar(
             frame,
             scrollbar,
-            app.search_match_count(),
-            visible_rows,
-            app.search_scroll_top(),
+            ScrollbarSpec::new(
+                app.search_displayed_match_count(),
+                visible_rows,
+                app.search_scroll_top(),
+            ),
             palette,
+            ScrollbarContext::new(state, ScrollbarTarget::Search),
         );
     }
 }

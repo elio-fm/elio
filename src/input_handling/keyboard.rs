@@ -13,7 +13,11 @@ impl App {
             Event::Key(key) => self.handle_key(crate::config::normalize_caps_lock_character(key)),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             Event::Paste(text) => self.handle_paste(&text),
-            Event::Resize(_, _) | Event::FocusGained | Event::FocusLost => Ok(()),
+            Event::FocusLost => {
+                self.cancel_scrollbar_drag();
+                Ok(())
+            }
+            Event::Resize(_, _) | Event::FocusGained => Ok(()),
         };
 
         if let Err(error) = result {
@@ -256,6 +260,7 @@ impl App {
         if key.kind == KeyEventKind::Release {
             return Ok(());
         }
+        self.cancel_scrollbar_drag();
 
         if self.file_operations.trash_is_open() {
             return self.handle_trash_key(key);

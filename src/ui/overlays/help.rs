@@ -1,8 +1,11 @@
-use crate::app::{App, ScreenRegions};
+use crate::app::{App, ScreenRegions, ScrollbarTarget};
 use crate::config::{KeyBindings, KeyList};
 use crate::{
     theme::Palette,
-    ui::{helpers, scrollbars::render_overlay_scrollbar},
+    ui::{
+        helpers,
+        scrollbars::{ScrollbarContext, ScrollbarSpec, render_overlay_scrollbar},
+    },
 };
 use ratatui::{
     Frame,
@@ -255,7 +258,13 @@ fn render_compact_help(
         content,
     );
     if let Some(area) = scrollbar {
-        render_overlay_scrollbar(frame, area, total, visible, scroll_top, palette);
+        render_overlay_scrollbar(
+            frame,
+            area,
+            ScrollbarSpec::new(total, visible, scroll_top),
+            palette,
+            ScrollbarContext::new(state, ScrollbarTarget::Help),
+        );
     }
 }
 

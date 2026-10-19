@@ -148,6 +148,20 @@ impl App {
         self.sync_duplicate_scroll();
         self.refresh_duplicate_preview();
     }
+
+    pub(crate) fn set_duplicate_scrollbar_position(
+        &mut self,
+        index: usize,
+        scroll_top: usize,
+        visible_rows: usize,
+    ) {
+        if let Some(duplicates) = &mut self.duplicate_finder.session {
+            duplicates.set_selection(index);
+            duplicates.scroll =
+                scroll_top.min(duplicates.file_count().saturating_sub(visible_rows.max(1)));
+        }
+        self.refresh_duplicate_preview();
+    }
     pub(crate) fn sync_duplicate_scroll(&mut self) -> bool {
         let rows_visible = self.input.screen_regions.duplicate_rows_visible;
         self.duplicate_finder

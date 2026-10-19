@@ -1,7 +1,10 @@
-use crate::app::{App, ScreenRegions};
+use crate::app::{App, ScreenRegions, ScrollbarTarget};
 use crate::{
     theme::Palette,
-    ui::{helpers, scrollbars::render_overlay_scrollbar_on_bg},
+    ui::{
+        helpers,
+        scrollbars::{ScrollbarContext, ScrollbarSpec, render_overlay_scrollbar_on_bg},
+    },
 };
 use ratatui::{
     Frame,
@@ -102,11 +105,10 @@ pub(in crate::ui) fn render_editor_rename_confirm_overlay(
         render_overlay_scrollbar_on_bg(
             frame,
             scrollbar_area,
-            item_count,
-            visible_lines as usize,
-            scroll_top,
+            ScrollbarSpec::new(item_count, visible_lines as usize, scroll_top),
             palette,
             palette.path_bg,
+            ScrollbarContext::new(state, ScrollbarTarget::EditorRenameConfirm),
         );
     }
 

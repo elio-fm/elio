@@ -110,6 +110,10 @@ impl App {
         self.set_selected_with_preview_mode(index, PreviewRefreshMode::Immediate);
     }
 
+    pub(crate) fn set_selected_from_scrollbar(&mut self, index: usize) {
+        self.set_selected_with_preview_mode(index, PreviewRefreshMode::Deferred);
+    }
+
     fn set_selected_with_preview_mode(&mut self, index: usize, preview_mode: PreviewRefreshMode) {
         let next = self.file_browser.clamped_selection_index(index);
         if next != self.file_browser.selected {

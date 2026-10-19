@@ -6,8 +6,48 @@ use super::App;
 
 pub use crate::fuzzy_finder::SearchScope;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ScrollbarTarget {
+    Browser,
+    Preview,
+    DuplicatePreview,
+    Help,
+    Search,
+    DuplicateResults,
+    OpenWith,
+    Trash,
+    Restore,
+    Create,
+    BulkRename,
+    EditorRenameConfirm,
+    ArchiveCreate,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ScrollbarHit {
+    pub(crate) rect: Rect,
+    pub(crate) track: Rect,
+    pub(crate) total_rows: usize,
+    pub(crate) visible_rows: usize,
+    pub(crate) scroll_row: usize,
+    pub(crate) target: ScrollbarTarget,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ScrollbarDrag {
+    pub(crate) track: Rect,
+    pub(crate) max_scroll: usize,
+    pub(crate) max_thumb_top: usize,
+    pub(crate) grab_offset: isize,
+    pub(crate) target: ScrollbarTarget,
+    pub(crate) visible_rows: usize,
+    pub(crate) focus_row: usize,
+    pub(crate) focus_col: usize,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ScreenRegions {
+    pub(crate) scrollbar_hits: Vec<ScrollbarHit>,
     pub sidebar_hits: Vec<PathHit>,
     pub entry_hits: Vec<EntryHit>,
     pub search_hits: Vec<SearchHit>,

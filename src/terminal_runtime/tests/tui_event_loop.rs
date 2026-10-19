@@ -1,8 +1,11 @@
 use super::{
     ACTIVE_SCROLL_POLL_INTERVAL, EditorTempCleanup, IDLE_POLL_INTERVAL,
-    event_implies_terminal_focus, event_poll_interval, keyboard_enhancement_is_unsupported,
+    event_implies_terminal_focus, event_poll_interval, handle_terminal_state_event,
+    keyboard_enhancement_is_unsupported,
 };
+use crate::app::{App, ScrollbarDrag, ScrollbarTarget};
 use crossterm::event::Event;
+use ratatui::layout::Rect;
 use std::{
     fs, io,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -118,6 +121,50 @@ fn focus_and_resize_events_do_not_imply_terminal_focus() {
     assert!(!event_implies_terminal_focus(&Event::FocusLost));
     assert!(!event_implies_terminal_focus(&Event::FocusGained));
     assert!(!event_implies_terminal_focus(&Event::Resize(80, 24)));
+}
+
+#[test]
+fn runtime_focus_loss_and_resize_cancel_active_scrollbar_drag() {
+    let cwd = std::env::temp_dir().join(format!(
+        "elio-runtime-scrollbar-cancel-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&cwd).unwrap();
+    let mut app = App::new_at(cwd.clone()).expect("create app");
+    let drag = ScrollbarDrag {
+        track: Rect::new(4, 2, 1, 20),
+        max_scroll: 10,
+        max_thumb_top: 10,
+        grab_offset: 0,
+        target: ScrollbarTarget::Browser,
+        visible_rows: 10,
+        focus_row: 0,
+        focus_col: 0,
+    };
+    app.input.scrollbar_drag = Some(drag);
+    let mut terminal_focused = true;
+
+    assert_eq!(
+        handle_terminal_state_event(&mut app, &Event::FocusLost, &mut terminal_focused),
+        Some(false)
+    );
+    assert!(!terminal_focused);
+    assert!(app.input.scrollbar_drag.is_none());
+
+    app.input.scrollbar_drag = Some(drag);
+    assert_eq!(
+        handle_terminal_state_event(&mut app, &Event::Resize(100, 40), &mut terminal_focused),
+        Some(true)
+    );
+    assert!(app.input.scrollbar_drag.is_none());
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(cwd).unwrap();
 }
 
 #[test]

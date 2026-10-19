@@ -1,4 +1,4 @@
-use crate::app::App;
+use crate::app::{App, ScreenRegions, ScrollbarTarget};
 use crate::theme::Palette;
 use ratatui::{
     Frame,
@@ -8,6 +8,34 @@ use ratatui::{
     widgets::Paragraph,
 };
 
+#[derive(Clone, Copy)]
+pub(super) struct ScrollbarSpec {
+    total_rows: usize,
+    visible_rows: usize,
+    scroll_row: usize,
+}
+
+impl ScrollbarSpec {
+    pub(super) fn new(total_rows: usize, visible_rows: usize, scroll_row: usize) -> Self {
+        Self {
+            total_rows,
+            visible_rows,
+            scroll_row,
+        }
+    }
+}
+
+pub(super) struct ScrollbarContext<'a> {
+    state: &'a mut ScreenRegions,
+    target: ScrollbarTarget,
+}
+
+impl<'a> ScrollbarContext<'a> {
+    pub(super) fn new(state: &'a mut ScreenRegions, target: ScrollbarTarget) -> Self {
+        Self { state, target }
+    }
+}
+
 pub(super) fn render_preview_scrollbar(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -15,17 +43,14 @@ pub(super) fn render_preview_scrollbar(
     visible_rows: usize,
     visible_cols: usize,
     palette: Palette,
+    context: ScrollbarContext<'_>,
 ) {
-    let total = app.preview_total_lines(visible_cols);
-    render_scrollbar(
-        frame,
-        area,
-        total,
+    let spec = ScrollbarSpec::new(
+        app.preview_total_lines(visible_cols),
         visible_rows,
         app.preview_scroll_offset(),
-        palette,
-        palette.panel,
     );
+    render_scrollbar(frame, area, spec, palette, palette.panel, context);
 }
 
 pub(super) fn split_scrollbar_area(area: Rect) -> (Rect, Option<Rect>) {
@@ -43,70 +68,47 @@ pub(super) fn split_scrollbar_area(area: Rect) -> (Rect, Option<Rect>) {
 pub(super) fn render_browser_scrollbar(
     frame: &mut Frame<'_>,
     area: Rect,
-    total_rows: usize,
-    visible_rows: usize,
-    scroll_row: usize,
+    spec: ScrollbarSpec,
     palette: Palette,
+    context: ScrollbarContext<'_>,
 ) {
-    render_scrollbar(
-        frame,
-        area,
-        total_rows,
-        visible_rows,
-        scroll_row,
-        palette,
-        palette.panel_alt,
-    );
+    render_scrollbar(frame, area, spec, palette, palette.panel_alt, context);
 }
 
 pub(super) fn render_overlay_scrollbar(
     frame: &mut Frame<'_>,
     area: Rect,
-    total_rows: usize,
-    visible_rows: usize,
-    scroll_row: usize,
+    spec: ScrollbarSpec,
     palette: Palette,
+    context: ScrollbarContext<'_>,
 ) {
-    render_scrollbar(
-        frame,
-        area,
-        total_rows,
-        visible_rows,
-        scroll_row,
-        palette,
-        palette.chrome_alt,
-    );
+    render_scrollbar(frame, area, spec, palette, palette.chrome_alt, context);
 }
 
 pub(super) fn render_overlay_scrollbar_on_bg(
     frame: &mut Frame<'_>,
     area: Rect,
-    total_rows: usize,
-    visible_rows: usize,
-    scroll_row: usize,
+    spec: ScrollbarSpec,
     palette: Palette,
     background: Color,
+    context: ScrollbarContext<'_>,
 ) {
-    render_scrollbar(
-        frame,
-        area,
-        total_rows,
-        visible_rows,
-        scroll_row,
-        palette,
-        background,
-    );
+    render_scrollbar(frame, area, spec, palette, background, context);
 }
 
 fn render_scrollbar(
     frame: &mut Frame<'_>,
     area: Rect,
-    total_rows: usize,
-    visible_rows: usize,
-    scroll_row: usize,
+    spec: ScrollbarSpec,
     palette: Palette,
     background: Color,
+    context: ScrollbarContext<'_>,
 ) {
+    let ScrollbarSpec {
+        total_rows,
+        visible_rows,
+        scroll_row,
+    } = spec;
     if area.height == 0 || total_rows <= visible_rows.max(1) {
         frame.render_widget(
             Paragraph::new(" ").style(Style::default().bg(background).fg(palette.border)),
@@ -114,6 +116,15 @@ fn render_scrollbar(
         );
         return;
     }
+
+    register_scrollbar_hit(
+        context.state,
+        area,
+        total_rows,
+        visible_rows,
+        scroll_row,
+        context.target,
+    );
 
     let track = vec![
         Line::from(Span::styled("│", Style::default().fg(palette.border)));
@@ -155,15 +166,25 @@ fn render_scrollbar(
     );
 }
 
-const MAX_EDIT_OVERLAY_VISIBLE_ROWS: usize = 12;
-
-pub(super) fn scroll_top_for_cursor(cursor_line: usize, visible_rows: usize) -> usize {
-    if cursor_line < visible_rows {
-        0
-    } else {
-        cursor_line - visible_rows + 1
-    }
+fn register_scrollbar_hit(
+    state: &mut ScreenRegions,
+    track: Rect,
+    total_rows: usize,
+    visible_rows: usize,
+    scroll_row: usize,
+    target: ScrollbarTarget,
+) {
+    state.scrollbar_hits.push(crate::app::ScrollbarHit {
+        rect: track,
+        track,
+        total_rows,
+        visible_rows: visible_rows.max(1),
+        scroll_row: scroll_row.min(total_rows.saturating_sub(visible_rows.max(1))),
+        target,
+    });
 }
+
+const MAX_EDIT_OVERLAY_VISIBLE_ROWS: usize = 12;
 
 pub(super) fn visible_edit_rows(area: Rect, row_count: usize, popup_chrome_height: u16) -> u16 {
     let available_rows = area
