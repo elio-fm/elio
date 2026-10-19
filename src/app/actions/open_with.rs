@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::super::{App, state::PendingTerminalTask};
+use super::super::{App, scroll_top_for_cursor_with_override, state::PendingTerminalTask};
 #[cfg(any(test, target_os = "macos", not(unix)))]
 use crate::opening::open_in_system;
 use crate::opening::{
@@ -63,6 +63,25 @@ impl App {
             .as_ref()
             .map(|overlay| overlay.selected)
             .unwrap_or(0)
+    }
+
+    pub fn open_with_scroll_top(&self, visible_rows: usize) -> usize {
+        let row_count = self.open_with_row_count();
+        if visible_rows == 0 || row_count <= visible_rows {
+            return 0;
+        }
+
+        let max_scroll = row_count.saturating_sub(visible_rows);
+        self.overlays
+            .open_with
+            .as_ref()
+            .and_then(|overlay| overlay.scroll_top_override)
+            .unwrap_or_else(|| {
+                self.open_with_selected_index()
+                    .saturating_add(1)
+                    .saturating_sub(visible_rows)
+            })
+            .min(max_scroll)
     }
 }
 
@@ -179,8 +198,28 @@ impl App {
     }
 
     pub(crate) fn move_open_with_selection(&mut self, delta: isize) {
+        let visible_rows = self.input.screen_regions.open_with_hits.len();
         if let Some(selection) = self.overlays.open_with.as_mut() {
             selection.move_selection(delta);
+            if let Some(scroll_top) = selection.scroll_top_override {
+                selection.scroll_top_override = Some(scroll_top_for_cursor_with_override(
+                    selection.selected,
+                    visible_rows,
+                    selection.rows.len(),
+                    Some(scroll_top),
+                ));
+            }
+        }
+    }
+
+    pub(crate) fn select_open_with_index_from_scrollbar(
+        &mut self,
+        index: usize,
+        scroll_top: usize,
+    ) {
+        if let Some(selection) = self.overlays.open_with.as_mut() {
+            selection.selected = index.min(selection.rows.len().saturating_sub(1));
+            selection.scroll_top_override = Some(scroll_top);
         }
     }
 

@@ -106,6 +106,7 @@ fn confirm_bulk_rename_apply_failure_keeps_review_context() {
         cursor_line: 0,
         cursor_col: 0,
         preferred_col: 0,
+        scroll_top_override: None,
         line_errors: vec![None],
     });
 

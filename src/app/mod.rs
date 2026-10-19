@@ -3,6 +3,7 @@ mod directory_counts;
 mod job_results;
 pub(crate) mod preview;
 mod screen_regions;
+mod scroll_position;
 mod selection;
 mod state;
 
@@ -19,6 +20,8 @@ pub use self::screen_regions::{
     CopyHit, DuplicateHit, EntryHit, GoToHit, OpenWithHit, PathHit, ScreenRegions, SearchHit,
     SearchScope, ViewMetrics,
 };
+pub(crate) use self::screen_regions::{ScrollbarDrag, ScrollbarHit, ScrollbarTarget};
+pub(crate) use self::scroll_position::scroll_top_for_cursor_with_override;
 pub use self::state::App;
 pub(crate) use self::state::{
     ClickState, NavigationRepeatKey, PendingTerminalTask, ScrollLane, ScrollState, WheelProfile,

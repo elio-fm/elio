@@ -1,9 +1,11 @@
 use crate::{
-    app::{App, ScreenRegions},
+    app::{App, ScreenRegions, ScrollbarTarget, scroll_top_for_cursor_with_override},
     theme::{self, Palette},
     ui::{
         helpers,
-        scrollbars::{render_overlay_scrollbar_on_bg, scroll_top_for_cursor, visible_edit_rows},
+        scrollbars::{
+            ScrollbarContext, ScrollbarSpec, render_overlay_scrollbar_on_bg, visible_edit_rows,
+        },
     },
 };
 use ratatui::{
@@ -56,7 +58,12 @@ pub(in crate::ui) fn render_bulk_rename_overlay(
     let cursor_line = app.file_operations.bulk_rename_cursor_line();
     let cursor_col = app.file_operations.bulk_rename_cursor_col();
 
-    let scroll_top = scroll_top_for_cursor(cursor_line, visible_lines as usize);
+    let scroll_top = scroll_top_for_cursor_with_override(
+        cursor_line,
+        visible_lines as usize,
+        item_count,
+        app.file_operations.bulk_rename_scroll_top_override(),
+    );
     state.bulk_rename_list_area = Some(list_area);
     state.bulk_rename_scroll_top = scroll_top;
 
@@ -140,11 +147,10 @@ pub(in crate::ui) fn render_bulk_rename_overlay(
         render_overlay_scrollbar_on_bg(
             frame,
             scrollbar_area,
-            item_count,
-            visible_lines as usize,
-            scroll_top,
+            ScrollbarSpec::new(item_count, visible_lines as usize, scroll_top),
             palette,
             palette.path_bg,
+            ScrollbarContext::new(state, ScrollbarTarget::BulkRename),
         );
     }
 

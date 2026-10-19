@@ -1,7 +1,10 @@
-use crate::app::{App, OpenWithHit, ScreenRegions};
+use crate::app::{App, OpenWithHit, ScreenRegions, ScrollbarTarget};
 use crate::{
     theme::Palette,
-    ui::{helpers, scrollbars::render_overlay_scrollbar},
+    ui::{
+        helpers,
+        scrollbars::{ScrollbarContext, ScrollbarSpec, render_overlay_scrollbar},
+    },
 };
 use ratatui::{
     Frame,
@@ -66,7 +69,7 @@ pub(in crate::ui) fn render_open_with_overlay(
         (inner, None)
     };
     let visible_rows = rows_area.height as usize;
-    let scroll_top = open_with_scroll_top(app.open_with_selected_index(), row_count, visible_rows);
+    let scroll_top = app.open_with_scroll_top(visible_rows);
 
     for (visible_index, index) in (scroll_top..row_count).enumerate() {
         let rect = Rect {
@@ -121,21 +124,9 @@ pub(in crate::ui) fn render_open_with_overlay(
         render_overlay_scrollbar(
             frame,
             scrollbar,
-            row_count,
-            visible_rows,
-            scroll_top,
+            ScrollbarSpec::new(row_count, visible_rows, scroll_top),
             palette,
+            ScrollbarContext::new(state, ScrollbarTarget::OpenWith),
         );
     }
-}
-
-fn open_with_scroll_top(selected: usize, row_count: usize, visible_rows: usize) -> usize {
-    if visible_rows == 0 || row_count <= visible_rows {
-        return 0;
-    }
-
-    selected
-        .saturating_add(1)
-        .saturating_sub(visible_rows)
-        .min(row_count.saturating_sub(visible_rows))
 }

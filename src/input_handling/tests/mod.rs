@@ -13,3 +13,4 @@ mod portal;
 mod preview;
 mod preview_wheel;
 mod save_as;
+mod scrollbar_regressions;

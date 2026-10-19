@@ -676,15 +676,10 @@ fn run_app(
                             writeln!(f, "{:?} col={} row={}", m.kind, m.column, m.row)
                         });
                 }
-                if matches!(event, Event::FocusLost) {
-                    terminal_focused = false;
-                } else if matches!(event, Event::FocusGained) {
-                    terminal_focused = true;
-                    app.handle_terminal_image_focus_gained();
-                    dirty = true;
-                } else if matches!(event, Event::Resize(_, _)) {
-                    app.handle_terminal_image_resize();
-                    dirty = true;
+                if let Some(event_dirty) =
+                    handle_terminal_state_event(&mut app, &event, &mut terminal_focused)
+                {
+                    dirty |= event_dirty;
                 } else {
                     // Input doubles as an implicit FocusGained; see
                     // event_implies_terminal_focus for why the real one can be dropped.
@@ -693,11 +688,9 @@ fn run_app(
                         app.handle_terminal_image_focus_gained();
                         dirty = true;
                     }
-                    // Mouse move events only update the hover/target state — nothing
-                    // visual changes, so they don't need a re-render. Skipping dirty here
-                    // avoids the constant re-render storm that ?1003h (any-event tracking)
-                    // causes in terminals like Alacritty, Ghostty, and Gnome Terminal.
-                    let needs_render = !matches!(
+                    // Mouse move events only update routing state. Avoid repainting for every
+                    // ?1003h event.
+                    let is_mouse_move = matches!(
                         event,
                         Event::Mouse(MouseEvent {
                             kind: MouseEventKind::Moved,
@@ -711,7 +704,7 @@ fn run_app(
                         &mut app,
                         &mut pending_drag_out,
                     )?;
-                    if needs_render && terminal_focused {
+                    if !is_mouse_move && terminal_focused {
                         dirty = true;
                     }
                 };
@@ -833,6 +826,31 @@ fn run_app(
 /// returns focus. Focus and resize events carry no such implication.
 fn event_implies_terminal_focus(event: &Event) -> bool {
     matches!(event, Event::Key(_) | Event::Mouse(_) | Event::Paste(_))
+}
+
+fn handle_terminal_state_event(
+    app: &mut App,
+    event: &Event,
+    terminal_focused: &mut bool,
+) -> Option<bool> {
+    match event {
+        Event::FocusLost => {
+            *terminal_focused = false;
+            app.cancel_scrollbar_drag();
+            Some(false)
+        }
+        Event::FocusGained => {
+            *terminal_focused = true;
+            app.handle_terminal_image_focus_gained();
+            Some(true)
+        }
+        Event::Resize(_, _) => {
+            app.cancel_scrollbar_drag();
+            app.handle_terminal_image_resize();
+            Some(true)
+        }
+        _ => None,
+    }
 }
 
 #[cfg(unix)]

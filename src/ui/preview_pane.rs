@@ -1,6 +1,6 @@
 use super::helpers;
-use super::scrollbars::render_preview_scrollbar;
-use crate::app::{App, ScreenRegions};
+use super::scrollbars::{ScrollbarContext, render_preview_scrollbar};
+use crate::app::{App, ScreenRegions, ScrollbarTarget};
 use crate::theme::{self, Palette};
 use ratatui::{
     Frame,
@@ -219,6 +219,7 @@ fn render_preview_body(
             visible_rows,
             text_area.width as usize,
             palette,
+            ScrollbarContext::new(state, ScrollbarTarget::Preview),
         );
     }
 }

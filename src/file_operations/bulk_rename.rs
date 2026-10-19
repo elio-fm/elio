@@ -16,6 +16,7 @@ pub(crate) struct BulkRenameOverlay {
     pub(crate) cursor_line: usize,
     pub(crate) cursor_col: usize,
     pub(crate) preferred_col: usize,
+    pub(crate) scroll_top_override: Option<usize>,
     pub(crate) line_errors: Vec<Option<String>>,
 }
 
@@ -52,6 +53,7 @@ impl FileOperationsState {
             cursor_line: 0,
             cursor_col: 0,
             preferred_col: 0,
+            scroll_top_override: None,
             line_errors: vec![None; count],
         });
     }
@@ -77,6 +79,7 @@ impl FileOperationsState {
             cursor_line: 0,
             cursor_col: 0,
             preferred_col: 0,
+            scroll_top_override: None,
             line_errors: vec![None; count],
         });
     }
@@ -169,6 +172,12 @@ impl FileOperationsState {
 
     pub fn bulk_rename_cursor_line(&self) -> usize {
         self.bulk_rename.as_ref().map_or(0, |r| r.cursor_line)
+    }
+
+    pub(crate) fn bulk_rename_scroll_top_override(&self) -> Option<usize> {
+        self.bulk_rename
+            .as_ref()
+            .and_then(|r| r.scroll_top_override)
     }
 
     pub fn bulk_rename_cursor_col(&self) -> usize {

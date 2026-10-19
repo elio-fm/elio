@@ -1,7 +1,10 @@
 use crate::{
-    app::{App, ScreenRegions},
+    app::{App, ScreenRegions, ScrollbarTarget},
     theme::{self, Palette},
-    ui::{helpers, scrollbars::render_overlay_scrollbar_on_bg},
+    ui::{
+        helpers,
+        scrollbars::{ScrollbarContext, ScrollbarSpec, render_overlay_scrollbar_on_bg},
+    },
 };
 use ratatui::{
     Frame,
@@ -109,11 +112,10 @@ pub(in crate::ui) fn render_restore_overlay(
                 width: 1,
                 height: visible as u16,
             },
-            app.file_operations.restore_target_count(),
-            visible,
-            scroll,
+            ScrollbarSpec::new(app.file_operations.restore_target_count(), visible, scroll),
             palette,
             palette.path_bg,
+            ScrollbarContext::new(state, ScrollbarTarget::Restore),
         );
     }
 

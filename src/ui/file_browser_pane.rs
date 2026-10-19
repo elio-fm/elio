@@ -1,6 +1,8 @@
 use super::helpers;
-use super::scrollbars::{render_browser_scrollbar, split_scrollbar_area};
-use crate::app::{App, EntryHit, ScreenRegions, ViewMetrics};
+use super::scrollbars::{
+    ScrollbarContext, ScrollbarSpec, render_browser_scrollbar, split_scrollbar_area,
+};
+use crate::app::{App, EntryHit, ScreenRegions, ScrollbarTarget, ViewMetrics};
 use crate::file_browser::ViewMode;
 use crate::file_operations::ClipOp;
 use crate::filesystem::{
@@ -245,10 +247,13 @@ fn render_list_view(
         render_browser_scrollbar(
             frame,
             sb,
-            app.file_browser.entries.len(),
-            state.metrics.rows_visible,
-            app.file_browser.scroll_row,
+            ScrollbarSpec::new(
+                app.file_browser.entries.len(),
+                state.metrics.rows_visible,
+                app.file_browser.scroll_row,
+            ),
             palette,
+            ScrollbarContext::new(state, ScrollbarTarget::Browser),
         );
     }
 }
@@ -721,10 +726,9 @@ fn render_grid_view(
         render_browser_scrollbar(
             frame,
             sb,
-            total_rows,
-            rows_visible,
-            app.file_browser.scroll_row,
+            ScrollbarSpec::new(total_rows, rows_visible, app.file_browser.scroll_row),
             palette,
+            ScrollbarContext::new(state, ScrollbarTarget::Browser),
         );
     }
 }

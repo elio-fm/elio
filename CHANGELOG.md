@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Made Trash, Delete, and Restore popup scrollbars match the rest of the scrollbars.
+- Made Trash, Delete, and Restore popup scrollbars match the style of the rest of the scrollbars.
+- Made scrollbars draggable.
 
 ## [1.14.0] - 2026-10-19
 

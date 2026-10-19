@@ -12,6 +12,7 @@ pub(crate) struct ApplicationSelection {
     pub(crate) title: String,
     pub(crate) rows: Vec<ApplicationSelectionRow>,
     pub(crate) selected: usize,
+    pub(crate) scroll_top_override: Option<usize>,
 }
 
 impl ApplicationSelection {
@@ -39,6 +40,7 @@ impl ApplicationSelection {
             title: "Open With".to_string(),
             rows,
             selected: 0,
+            scroll_top_override: None,
         }
     }
 
@@ -88,6 +90,7 @@ impl ApplicationSelection {
                 )
                 .collect(),
             selected: 0,
+            scroll_top_override: None,
         }
     }
 }

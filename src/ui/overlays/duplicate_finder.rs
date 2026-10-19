@@ -1,9 +1,11 @@
 use crate::{
-    app::{App, DuplicateHit, ScreenRegions},
+    app::{App, DuplicateHit, ScreenRegions, ScrollbarTarget},
     theme::{self, Palette},
     ui::{
         helpers,
-        scrollbars::{render_overlay_scrollbar, render_preview_scrollbar},
+        scrollbars::{
+            ScrollbarContext, ScrollbarSpec, render_overlay_scrollbar, render_preview_scrollbar,
+        },
     },
 };
 use ratatui::{
@@ -314,10 +316,13 @@ fn render_results(
         render_overlay_scrollbar(
             frame,
             scrollbar,
-            app.duplicate_file_count(),
-            visible,
-            app.duplicate_scroll_top(),
+            ScrollbarSpec::new(
+                app.duplicate_file_count(),
+                visible,
+                app.duplicate_scroll_top(),
+            ),
             palette,
+            ScrollbarContext::new(state, ScrollbarTarget::DuplicateResults),
         );
     }
 }
@@ -496,6 +501,7 @@ fn render_duplicate_preview(
             visible_rows,
             text_area.width as usize,
             palette,
+            ScrollbarContext::new(state, ScrollbarTarget::DuplicatePreview),
         );
     }
 }
