@@ -17,7 +17,16 @@ fn write(cwd_file: &Path, final_cwd: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn write(cwd_file: &Path, final_cwd: &Path) -> Result<()> {
+    std::fs::write(
+        cwd_file,
+        crate::filesystem::display_path(final_cwd).as_bytes(),
+    )?;
+    Ok(())
+}
+
+#[cfg(all(not(unix), not(windows)))]
 fn write(cwd_file: &Path, final_cwd: &Path) -> Result<()> {
     std::fs::write(cwd_file, final_cwd.to_string_lossy().as_bytes())?;
     Ok(())

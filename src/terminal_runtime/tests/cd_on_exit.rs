@@ -34,3 +34,21 @@ fn cwd_file_writes_path_without_trailing_newline() {
 
     fs::remove_dir_all(root).expect("temp directory should be removed");
 }
+
+#[cfg(windows)]
+#[test]
+fn cwd_file_strips_windows_verbatim_prefix() {
+    let root = temp_path("cwd-file-windows-verbatim");
+    fs::create_dir_all(&root).expect("temp directory should be created");
+    let cwd_file = root.join("cwd");
+    let final_cwd = Path::new(r"\\?\C:\Users\miguel\Contacts");
+
+    write_if_requested(Some(&cwd_file), final_cwd).expect("cwd file should be written");
+
+    assert_eq!(
+        fs::read_to_string(&cwd_file).expect("cwd file should be readable"),
+        r"C:\Users\miguel\Contacts"
+    );
+
+    fs::remove_dir_all(root).expect("temp directory should be removed");
+}
