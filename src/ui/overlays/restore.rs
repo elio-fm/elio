@@ -1,7 +1,7 @@
 use crate::{
     app::{App, ScreenRegions},
     theme::{self, Palette},
-    ui::helpers,
+    ui::{helpers, scrollbars::render_overlay_scrollbar_on_bg},
 };
 use ratatui::{
     Frame,
@@ -19,7 +19,6 @@ pub(in crate::ui) fn render_restore_overlay(
     palette: Palette,
 ) {
     let block_title = format!(" {} ", app.file_operations.restore_title());
-    let count = app.file_operations.restore_target_count();
     let list_rows = app.file_operations.restore_visible_rows().max(1) as u16;
     let popup_height = (list_rows + 2) + 1 + 2;
     let popup_width = area.width.saturating_sub(8).clamp(40, 60);
@@ -49,18 +48,7 @@ pub(in crate::ui) fn render_restore_overlay(
     let visible = app.file_operations.restore_visible_rows().max(1);
     let scroll = app.file_operations.restore_scroll();
 
-    let show_scrollbar = count > visible;
-    let thumb_size = if show_scrollbar {
-        (visible * visible / count).max(1)
-    } else {
-        0
-    };
-    let max_scroll = count.saturating_sub(visible);
-    let thumb_pos = scroll
-        .checked_mul(visible - thumb_size)
-        .and_then(|offset| offset.checked_div(max_scroll))
-        .unwrap_or(0);
-    let bar_x = list_area.x + list_area.width.saturating_sub(1);
+    let show_scrollbar = app.file_operations.restore_target_count() > visible;
 
     for row_offset in 0..visible {
         let item_index = scroll + row_offset;
@@ -110,19 +98,23 @@ pub(in crate::ui) fn render_restore_overlay(
             .style(Style::default().bg(palette.path_bg)),
             name_rect,
         );
+    }
 
-        if show_scrollbar {
-            let in_thumb = row_offset >= thumb_pos && row_offset < thumb_pos + thumb_size;
-            let bar_char = if in_thumb { "▐" } else { " " };
-            let bar_color = if in_thumb {
-                palette.muted
-            } else {
-                palette.path_bg
-            };
-            frame.buffer_mut()[(bar_x, y)].set_symbol(bar_char);
-            frame.buffer_mut()[(bar_x, y)]
-                .set_style(Style::default().bg(palette.path_bg).fg(bar_color));
-        }
+    if show_scrollbar {
+        render_overlay_scrollbar_on_bg(
+            frame,
+            Rect {
+                x: list_area.x + list_area.width.saturating_sub(1),
+                y: list_area.y,
+                width: 1,
+                height: visible as u16,
+            },
+            app.file_operations.restore_target_count(),
+            visible,
+            scroll,
+            palette,
+            palette.path_bg,
+        );
     }
 
     let confirmed = app.file_operations.restore_confirmed();
