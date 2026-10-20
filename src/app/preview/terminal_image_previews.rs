@@ -347,8 +347,48 @@ impl App {
         if !self.preview.terminal_images.protocol.is_raster() {
             return Vec::new();
         }
-        let mut areas = std::mem::take(&mut self.preview.terminal_images.pending_iterm_erase);
         let keep_stale = self.keep_displayed_static_image_overlay_while_pending();
+        let stale_overlay = (self.static_image_overlay_displayed()
+            && !self.displayed_static_image_matches_active()
+            && !keep_stale)
+            || (self.pdf_overlay_displayed() && !self.displayed_pdf_overlay_matches_active());
+        if self.preview.terminal_images.protocol == ImageProtocol::ItermInline
+            && (stale_overlay || self.preview.terminal_images.pending_resize_clear)
+        {
+            // WezTerm can leave pixels from an inline image outside its recorded
+            // placement after a page or layout change. Erase the whole preview
+            // body, then reset ratatui's diff buffer so this frame paints it back.
+            self.preview.terminal_images.pending_resize_clear = true;
+            let area = self
+                .input
+                .screen_regions
+                .preview_body_area
+                .or(self.input.screen_regions.preview_content_area)
+                .or_else(|| self.displayed_static_image_clear_area())
+                .or_else(|| self.displayed_pdf_overlay_area());
+            let Some(mut area) = area else {
+                return Vec::new();
+            };
+            if let Some(window) = self.preview.terminal_images.window {
+                let bounds = Rect {
+                    x: 0,
+                    y: 0,
+                    width: window.cells_width,
+                    height: window.cells_height,
+                };
+                let Some(clipped) = terminal_images::intersect_rect(area, bounds) else {
+                    return Vec::new();
+                };
+                area = clipped;
+                let bottom = area.y.saturating_add(area.height);
+                area.height = area
+                    .height
+                    .saturating_add(2.min(bounds.height.saturating_sub(bottom)));
+            }
+            self.preview.terminal_images.pending_iterm_erase.clear();
+            return terminal_images::erase_cells(area);
+        }
+        let mut areas = std::mem::take(&mut self.preview.terminal_images.pending_iterm_erase);
         if self.static_image_overlay_displayed()
             && !self.displayed_static_image_matches_active()
             && !keep_stale
