@@ -73,6 +73,7 @@ fn kitty_placeholder_sequence_sets_panel_background_for_transparency() {
             height: 2,
         },
         &[],
+        None,
     ))
     .expect("placeholder sequence should be utf8");
 
@@ -82,6 +83,9 @@ fn kitty_placeholder_sequence_sets_panel_background_for_transparency() {
 }
 
 #[test]
-fn build_kitty_clear_sequence_deletes_visible_images() {
-    assert_eq!(build_kitty_clear_sequence(), "\u{1b}_Ga=d,d=A,q=2\u{1b}\\");
+fn build_kitty_clear_sequence_only_deletes_the_preview_image() {
+    assert_eq!(
+        build_kitty_clear_sequence(1234),
+        "\u{1b}_Ga=d,d=I,i=1234,p=1,q=2\u{1b}\\"
+    );
 }

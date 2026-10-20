@@ -16,13 +16,42 @@ pub(super) fn place_terminal_image_with_kitty_protocol(
 ) -> Result<Vec<u8>> {
     let id = kitty_image_id();
     let mut out = build_kitty_upload_sequence(path, id, area)?;
-    out.extend(build_kitty_placeholder_sequence(id, area, excluded));
+    out.extend(build_kitty_placeholder_sequence(id, area, excluded, None));
     Ok(maybe_wrap_kitty_apcs_for_tmux(out))
+}
+
+/// Uploads an image under a caller-chosen id, without placing it. Used by the
+/// grid thumbnail overlay, which manages many images at once and places their
+/// unicode placeholder cells separately.
+pub(super) fn upload_kitty_image_with_id(path: &Path, id: u32, area: Rect) -> Result<Vec<u8>> {
+    Ok(maybe_wrap_kitty_apcs_for_tmux(build_kitty_upload_sequence(
+        path, id, area,
+    )?))
+}
+
+/// Emits the unicode placeholder cells for an already-uploaded image.
+pub(super) fn kitty_placeholder_cells(
+    id: u32,
+    area: Rect,
+    excluded: &[Rect],
+    background: Option<Color>,
+) -> Vec<u8> {
+    build_kitty_placeholder_sequence(id, area, excluded, background)
+}
+
+/// Deletes one image (data and placements) by id, without touching the image
+/// used by the preview pane.
+pub(super) fn delete_kitty_image(id: u32) -> Vec<u8> {
+    maybe_wrap_kitty_apcs_for_tmux(format!("\u{1b}_Ga=d,d=I,i={id},p=1,q=2\u{1b}\\").into_bytes())
+}
+
+pub(super) fn preview_kitty_image_id() -> u32 {
+    kitty_image_id()
 }
 
 pub(super) fn clear_terminal_images_with_kitty_protocol() -> Result<Vec<u8>> {
     Ok(maybe_wrap_kitty_apcs_for_tmux(
-        build_kitty_clear_sequence().as_bytes().to_vec(),
+        build_kitty_clear_sequence(kitty_image_id()).into_bytes(),
     ))
 }
 
@@ -74,10 +103,15 @@ fn build_kitty_upload_sequence(path: &Path, id: u32, area: Rect) -> Result<Vec<u
     Ok(out)
 }
 
-fn build_kitty_placeholder_sequence(id: u32, area: Rect, excluded: &[Rect]) -> Vec<u8> {
+fn build_kitty_placeholder_sequence(
+    id: u32,
+    area: Rect,
+    excluded: &[Rect],
+    background: Option<Color>,
+) -> Vec<u8> {
     let mut buf = Vec::with_capacity(usize::from(area.width) * usize::from(area.height) * 8 + 32);
     let (r, g, b) = ((id >> 16) & 0xff, (id >> 8) & 0xff, id & 0xff);
-    match crate::theme::palette().panel {
+    match background.unwrap_or(crate::theme::palette().panel) {
         Color::Rgb(bg_r, bg_g, bg_b) => {
             let _ = write!(
                 buf,
@@ -118,8 +152,11 @@ fn build_kitty_placeholder_sequence(id: u32, area: Rect, excluded: &[Rect]) -> V
     buf
 }
 
-fn build_kitty_clear_sequence() -> &'static str {
-    "\u{1b}_Ga=d,d=A,q=2\u{1b}\\"
+fn build_kitty_clear_sequence(id: u32) -> String {
+    // Delete only the preview overlay's own image. A blanket `d=A` would also
+    // wipe the grid thumbnail overlay, which lives in the same terminal and is
+    // expensive to re-upload on every preview change.
+    format!("\u{1b}_Ga=d,d=I,i={id},p=1,q=2\u{1b}\\")
 }
 
 fn kitty_cell_in_rect(col: u16, row: u16, rect: &Rect) -> bool {

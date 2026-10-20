@@ -13,6 +13,7 @@ Snappy, batteries-included terminal file manager.
 
 - **Three-pane layout** — Places, Files, and Preview side by side
 - **Grid and list views** — switch with `v`, zoom the grid with `Ctrl++` / `Ctrl+-`
+- **Grid thumbnails** — inline image and video previews in grid view on Kitty Graphics Protocol terminals
 - **Keyboard and mouse navigation** — browse comfortably either way
 - **Customizable places and devices** — pinned folders and auto-detected drives and mounts
 - **Quick actions** — Go-to, Open With, and copy-to-clipboard

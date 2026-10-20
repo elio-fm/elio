@@ -735,7 +735,7 @@ struct TileState {
     clip_op: Option<ClipOp>,
 }
 
-pub(super) fn focused_tile_content_bg(focused_bg: Color) -> Color {
+pub(crate) fn focused_tile_content_bg(focused_bg: Color) -> Color {
     const DARKEN_WEIGHT: u16 = 32;
 
     match focused_bg {
@@ -848,6 +848,9 @@ fn render_tile(
         width: rect.width,
         height: rect.height.saturating_sub(1),
     };
+    // A ready Kitty thumbnail replaces the metadata lines; the overlay draws
+    // the image itself after this frame, over an intentionally blank body.
+    let has_thumbnail = app.grid_thumbnail_ready_for(entry, content);
     let content_inner = content.inner(Margin {
         horizontal: spec.padding_x,
         vertical: 0,
@@ -876,10 +879,12 @@ fn render_tile(
             Block::default().style(Style::default().bg(content_bg).fg(palette.text)),
             content,
         );
-        frame.render_widget(
-            Paragraph::new(lines).style(Style::default().bg(content_bg).fg(palette.text)),
-            content_inner,
-        );
+        if !has_thumbnail {
+            frame.render_widget(
+                Paragraph::new(lines).style(Style::default().bg(content_bg).fg(palette.text)),
+                content_inner,
+            );
+        }
     }
     if let Some(indicator_color) = indicator_color {
         frame.render_widget(

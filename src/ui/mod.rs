@@ -1,4 +1,6 @@
 mod file_browser_pane;
+
+pub(crate) use file_browser_pane::focused_tile_content_bg;
 mod helpers;
 mod navigation_bar;
 mod overlays;

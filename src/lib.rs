@@ -19,6 +19,7 @@ mod file_operations;
 mod filesystem;
 mod fuzzy_finder;
 mod goto_menu;
+mod grid_thumbnails;
 mod input_handling;
 mod opening;
 mod places;

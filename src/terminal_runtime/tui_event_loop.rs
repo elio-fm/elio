@@ -556,6 +556,10 @@ fn run_app(
             dirty = true;
         }
 
+        if app.process_grid_thumbnail_results() {
+            dirty = true;
+        }
+
         if app.process_terminal_image_resize_settle_timer() {
             dirty = true;
         }

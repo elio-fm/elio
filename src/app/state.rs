@@ -17,6 +17,7 @@ use crate::file_operations::FileOperationsState;
 use crate::filesystem::Entry;
 use crate::fuzzy_finder::FuzzyFinderState;
 use crate::goto_menu::GotoMenu;
+use crate::grid_thumbnails::GridThumbnails;
 use crate::opening::open_with::ApplicationSelection;
 use crate::places::PlacesState;
 use crate::preview::PreviewRuntime;
@@ -144,6 +145,7 @@ pub struct App {
     pub(crate) duplicate_finder: DuplicateFinderState,
     pub(crate) overlays: OverlayState,
     pub(crate) job_scheduler: JobScheduler,
+    pub(crate) grid_thumbnails: GridThumbnails,
     pub(crate) input: InputRuntime,
     pub(crate) status: String,
     pub(crate) pending_goto_command: Option<u64>,
@@ -186,6 +188,7 @@ impl App {
             duplicate_finder: DuplicateFinderState::default(),
             overlays: OverlayState::default(),
             job_scheduler: scheduler,
+            grid_thumbnails: GridThumbnails::default(),
             input: InputRuntime {
                 screen_regions: ScreenRegions::default(),
                 last_click: None,

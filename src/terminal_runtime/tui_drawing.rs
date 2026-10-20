@@ -197,9 +197,11 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
         //   stale image content visible after navigation or resize.
         let pre_erase = app.iterm_pre_draw_erase();
         let kitty_erase = app.kitty_pre_draw_erase();
-        if !pre_erase.is_empty() || !kitty_erase.is_empty() {
+        let grid_erase = app.grid_thumbnail_pre_draw_erase();
+        if !pre_erase.is_empty() || !kitty_erase.is_empty() || !grid_erase.is_empty() {
             terminal.backend_mut().write_all(&pre_erase)?;
             terminal.backend_mut().write_all(&kitty_erase)?;
+            terminal.backend_mut().write_all(&grid_erase)?;
         }
         let mut screen_regions = app::ScreenRegions::default();
         let (
@@ -265,6 +267,8 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
         if !skip_overlay_present && !app.browser_wheel_burst_active() {
             let overlay_bytes = app.present_preview_overlay()?;
             write_bytes_preserving_cursor(terminal.backend_mut(), &overlay_bytes)?;
+            let grid_bytes = app.present_grid_thumbnails();
+            write_bytes_preserving_cursor(terminal.backend_mut(), &grid_bytes)?;
         }
         terminal.backend_mut().flush()?;
         Ok(dirty)

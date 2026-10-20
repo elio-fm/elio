@@ -8,7 +8,7 @@ mod tmux;
 mod window;
 
 use anyhow::Result;
-use ratatui::layout::Rect;
+use ratatui::{layout::Rect, style::Color};
 use std::{env, io::Write as _, path::Path};
 
 pub(crate) use self::geometry::{
@@ -124,6 +124,33 @@ pub(crate) fn place_terminal_image(
         }
         ImageProtocol::None => Ok(Vec::new()),
     }
+}
+
+/// Uploads one grid thumbnail under `id` without placing it. The returned bytes
+/// are already wrapped for tmux passthrough when needed.
+pub(crate) fn upload_kitty_thumbnail(path: &Path, id: u32, area: Rect) -> Result<Vec<u8>> {
+    kitty::upload_kitty_image_with_id(path, id, area)
+}
+
+/// Unicode placeholder cells for an uploaded grid thumbnail.
+pub(crate) fn kitty_thumbnail_placeholders(
+    id: u32,
+    area: Rect,
+    excluded: &[Rect],
+    background: Option<Color>,
+) -> Vec<u8> {
+    kitty::kitty_placeholder_cells(id, area, excluded, background)
+}
+
+/// Deletes one grid thumbnail by id.
+pub(crate) fn delete_kitty_thumbnail(id: u32) -> Vec<u8> {
+    kitty::delete_kitty_image(id)
+}
+
+/// The image id reserved by the preview overlay. Grid thumbnails allocate ids
+/// outside this value so clearing one never deletes the other.
+pub(crate) fn kitty_preview_image_id() -> u32 {
+    kitty::preview_kitty_image_id()
 }
 
 pub(crate) fn clear_terminal_images(protocol: ImageProtocol) -> Result<Vec<u8>> {
