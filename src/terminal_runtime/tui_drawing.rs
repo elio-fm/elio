@@ -185,10 +185,6 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
     }
 
     let draw_result = (|| -> Result<bool> {
-        if app.take_pending_resize_clear() {
-            clear_for_full_repaint(terminal)?;
-        }
-
         // Erase stale image cells before terminal.draw() so ratatui can
         // overpaint them with the correct panel background in the same pass.
         // - iTerm2: images are drawn at pixel level; erasing prevents ghost pixels.
@@ -196,6 +192,9 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
         //   ratatui's differential renderer skips "unchanged" cells leaving
         //   stale image content visible after navigation or resize.
         let pre_erase = app.iterm_pre_draw_erase();
+        if app.take_pending_resize_clear() {
+            clear_for_full_repaint(terminal)?;
+        }
         let kitty_erase = app.kitty_pre_draw_erase();
         if !pre_erase.is_empty() || !kitty_erase.is_empty() {
             terminal.backend_mut().write_all(&pre_erase)?;

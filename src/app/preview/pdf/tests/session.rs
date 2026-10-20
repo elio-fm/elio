@@ -279,6 +279,50 @@ fn sync_pdf_preview_selection_queues_initial_probe_for_current_page() {
 }
 
 #[test]
+fn stale_iterm_pdf_overlay_erases_preview_body_before_dropping_display_state() {
+    let (mut app, root) = build_pdf_overlay_test_app("iterm-pdf-stale-overlay-erase");
+    configure_iterm_image_support(&mut app);
+    let request = app
+        .active_pdf_overlay_request()
+        .expect("PDF overlay request should be available");
+    app.preview.pdf.page_dimensions.insert(
+        PdfPageKey::from_request(&request),
+        PdfPageDimensions {
+            width_pts: 595.0,
+            height_pts: 842.0,
+        },
+    );
+    let placement = app
+        .overlay_placement_for_request(&request)
+        .expect("PDF placement should be available");
+    app.preview.pdf.displayed = Some(DisplayedPdfPreview::from_request(&request, placement));
+    app.input.screen_regions.preview_body_area = Some(Rect {
+        x: 1,
+        y: 2,
+        width: 56,
+        height: 28,
+    });
+    app.preview.pdf.session = None;
+
+    let erase = String::from_utf8(app.iterm_pre_draw_erase())
+        .expect("iTerm erase output should be valid UTF-8");
+    assert!(
+        erase.contains("\x1b[3;2H"),
+        "a stale PDF should erase from the top-left of the complete preview body"
+    );
+    assert!(
+        app.take_pending_resize_clear(),
+        "stale inline images should reset ratatui's diff buffer before redraw"
+    );
+    assert!(
+        !app.pdf_overlay_displayed(),
+        "stale PDF display state should be dropped after its old pixels are erased"
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn preview_uses_image_overlay_only_for_current_render_target() {
     let (mut app, root) = build_pdf_overlay_test_app("overlay-match");
     let request = app
