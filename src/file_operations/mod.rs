@@ -10,6 +10,14 @@ mod rename;
 mod restore;
 mod symlink_creation;
 mod trash_delete;
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+mod wayland_file_clipboard;
 
 pub(crate) use archive_creation::{
     ArchiveCreateOverlay, ArchiveCreateProgress, ArchiveCreateRequest,

@@ -72,6 +72,7 @@ impl ClipboardEnvGuard {
     pub(super) fn isolate() -> Self {
         const VARS: &[&str] = &[
             "ELIO_TEST_CLIPBOARD_TOOL",
+            "ELIO_TEST_ITEM_CLIPBOARD_TOOL",
             "ELIO_TEST_OSC52_CAPTURE",
             "ELIO_TEST_TMUX_SET_CLIPBOARD",
             "ELIO_CLIPBOARD_OSC52",
@@ -82,6 +83,10 @@ impl ClipboardEnvGuard {
             "WARP_SESSION_ID",
             "ALACRITTY_SOCKET",
             "VTE_VERSION",
+            "WAYLAND_DISPLAY",
+            "DISPLAY",
+            "XDG_SESSION_TYPE",
+            "XDG_CURRENT_DESKTOP",
             "PATH",
         ];
 

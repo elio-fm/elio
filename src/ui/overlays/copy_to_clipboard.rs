@@ -51,30 +51,53 @@ pub(in crate::ui) fn render_copy_to_clipboard_overlay(
         ])
         .split(inner);
     let action_row = rows[1];
-    let columns = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(25),
-            Constraint::Length(2),
-            Constraint::Percentage(25),
-            Constraint::Length(2),
-            Constraint::Percentage(25),
-            Constraint::Length(2),
-            Constraint::Percentage(25),
-        ])
-        .split(action_row);
+    let action_count = row_count.min(5);
+    let gap_count = action_count.saturating_add(1);
+    let actions = (0..action_count)
+        .map(|index| {
+            let shortcut = app
+                .file_operations
+                .copy_row_shortcut(index)
+                .unwrap_or('?')
+                .to_ascii_lowercase();
+            (
+                index,
+                shortcut,
+                display_label(shortcut, app.file_operations.copy_row_label(index)),
+            )
+        })
+        .collect::<Vec<_>>();
+    let label_budget = (action_row.width as usize)
+        .saturating_sub(action_count * COPY_ACTION_PREFIX_WIDTH + gap_count * COPY_ACTION_MIN_GAP);
+    let labels = fit_copy_labels(
+        &actions
+            .iter()
+            .map(|(_, _, label)| *label)
+            .collect::<Vec<_>>(),
+        label_budget,
+    );
+    let action_widths = actions
+        .iter()
+        .zip(&labels)
+        .map(|(_, label)| (COPY_ACTION_PREFIX_WIDTH + helpers::display_width(label)) as u16)
+        .collect::<Vec<_>>();
+    let action_width = action_widths
+        .iter()
+        .map(|width| *width as usize)
+        .sum::<usize>();
+    let gap_width = (action_row.width as usize).saturating_sub(action_width) / gap_count.max(1);
+    let group_width = action_width + gap_width * gap_count;
+    let mut x =
+        action_row.x + action_row.width.saturating_sub(group_width as u16) / 2 + gap_width as u16;
 
-    for index in 0..row_count.min(4) {
-        let rect = columns[index * 2];
-        let shortcut = app
-            .file_operations
-            .copy_row_shortcut(index)
-            .unwrap_or('?')
-            .to_ascii_lowercase();
-        let label = helpers::clamp_label(
-            display_label(shortcut, app.file_operations.copy_row_label(index)),
-            rect.width.saturating_sub(5) as usize,
-        );
+    for (((index, shortcut, _), label), width) in actions.into_iter().zip(labels).zip(action_widths)
+    {
+        let rect = Rect {
+            x,
+            y: action_row.y,
+            width,
+            height: action_row.height,
+        };
 
         frame.render_widget(
             Paragraph::new(Line::from(vec![
@@ -86,7 +109,6 @@ pub(in crate::ui) fn render_copy_to_clipboard_overlay(
             .style(Style::default().bg(palette.chrome_alt).fg(palette.text)),
             rect,
         );
-
         state.copy_hits.push(CopyHit {
             rect: Rect {
                 x: rect.x,
@@ -96,15 +118,52 @@ pub(in crate::ui) fn render_copy_to_clipboard_overlay(
             },
             index,
         });
+        x = x.saturating_add(width + gap_width as u16);
     }
+}
+
+const COPY_ACTION_PREFIX_WIDTH: usize = 5;
+const COPY_ACTION_MIN_GAP: usize = 2;
+
+fn fit_copy_labels(labels: &[&str], budget: usize) -> Vec<String> {
+    let desired_widths = labels
+        .iter()
+        .map(|label| helpers::display_width(label))
+        .collect::<Vec<_>>();
+    if desired_widths.iter().sum::<usize>() <= budget {
+        return labels.iter().map(|label| (*label).to_string()).collect();
+    }
+
+    let mut widths = vec![0; labels.len()];
+    let mut used = 0;
+    while used < budget {
+        let mut grew = false;
+        for (width, desired) in widths.iter_mut().zip(&desired_widths) {
+            if *width < *desired && used < budget {
+                *width += 1;
+                used += 1;
+                grew = true;
+            }
+        }
+        if !grew {
+            break;
+        }
+    }
+
+    labels
+        .iter()
+        .zip(widths)
+        .map(|(label, width)| helpers::clamp_label(label, width))
+        .collect()
 }
 
 fn display_label(shortcut: char, fallback: &str) -> &str {
     match shortcut {
-        'c' => "file name",
+        'i' => "item",
+        'c' => "name",
         'n' => "name w/o ext",
-        'p' => "file path",
-        'd' => "directory path",
+        'p' => "path",
+        'd' => "directory",
         _ => fallback,
     }
 }

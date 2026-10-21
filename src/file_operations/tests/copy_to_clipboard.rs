@@ -15,7 +15,7 @@ fn copy_overlay_populates_expected_rows_for_selected_file() {
         "copy overlay should open"
     );
     assert_eq!(app.file_operations.copy_title(), "Copy to clipboard");
-    assert_eq!(app.file_operations.copy_row_count(), 4);
+    assert_eq!(app.file_operations.copy_row_count(), 5);
     assert_eq!(app.file_operations.copy_row_label(0), "Copy file name");
     assert_eq!(
         app.file_operations.copy_row_label(1),
@@ -23,8 +23,106 @@ fn copy_overlay_populates_expected_rows_for_selected_file() {
     );
     assert_eq!(app.file_operations.copy_row_label(2), "File path");
     assert_eq!(app.file_operations.copy_row_label(3), "Directory path");
+    assert_eq!(app.file_operations.copy_row_label(4), "Item");
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn item_shortcut_copies_gnome_file_references_for_multiple_items() {
+    let _lock = clipboard_env_lock();
+    let root = temp_path("copy-overlay-items");
+    let source = root.join("résumé #1.txt");
+    let link = root.join("linked file");
+    let capture = root.join("clipboard.bin");
+    fs::create_dir_all(&root).expect("failed to create test root");
+    fs::write(&source, "notes").expect("failed to write source");
+    std::os::unix::fs::symlink(&source, &link).expect("failed to create symlink");
+    let tool = install_fake_clipboard_tool(&root, &capture);
+    let _env = ClipboardEnvGuard::isolate();
+
+    unsafe {
+        env::set_var("ELIO_TEST_ITEM_CLIPBOARD_TOOL", &tool);
+        env::set_var("XDG_CURRENT_DESKTOP", "GNOME");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.file_browser.selected_paths.insert(source.clone());
+    app.file_browser.selected_paths.insert(link.clone());
+    app.open_copy_overlay();
+    app.handle_copy_key(crossterm::event::KeyEvent::from(
+        crossterm::event::KeyCode::Char('i'),
+    ))
+    .expect("item copy shortcut should succeed");
+
+    assert_eq!(
+        fs::read_to_string(&capture).expect("fake clipboard tool should capture payload"),
+        format!(
+            "copy\nfile://{}\nfile://{}",
+            link.as_os_str()
+                .as_encoded_bytes()
+                .iter()
+                .map(|byte| match byte {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'/' | b'-' | b'.' | b'_' | b'~' => {
+                        (*byte as char).to_string()
+                    }
+                    byte => format!("%{byte:02X}"),
+                })
+                .collect::<String>(),
+            source
+                .as_os_str()
+                .as_encoded_bytes()
+                .iter()
+                .map(|byte| match byte {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'/' | b'-' | b'.' | b'_' | b'~' => {
+                        (*byte as char).to_string()
+                    }
+                    byte => format!("%{byte:02X}"),
+                })
+                .collect::<String>(),
+        )
+    );
+    assert_eq!(app.status, "Copied items");
+    assert!(!app.file_operations.copy_is_open());
+
+    fs::remove_dir_all(root).expect("failed to remove test root");
+}
+
+#[cfg(unix)]
+#[test]
+fn item_shortcut_copies_uri_list_outside_gnome() {
+    let _lock = clipboard_env_lock();
+    let root = temp_path("copy-overlay-uri-list");
+    let first = root.join("first file");
+    let second = root.join("second file");
+    let capture = root.join("clipboard.bin");
+    fs::create_dir_all(&root).expect("failed to create test root");
+    fs::write(&first, "first").expect("failed to write first file");
+    fs::write(&second, "second").expect("failed to write second file");
+    let tool = install_fake_clipboard_tool(&root, &capture);
+    let _env = ClipboardEnvGuard::isolate();
+
+    unsafe {
+        env::set_var("ELIO_TEST_ITEM_CLIPBOARD_TOOL", &tool);
+        env::set_var("XDG_CURRENT_DESKTOP", "KDE");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.file_browser.selected_paths.insert(first.clone());
+    app.file_browser.selected_paths.insert(second.clone());
+    app.open_copy_overlay();
+    app.handle_copy_key(crossterm::event::KeyEvent::from(
+        crossterm::event::KeyCode::Char('i'),
+    ))
+    .expect("item copy shortcut should succeed");
+
+    let payload = fs::read_to_string(&capture).expect("fake clipboard tool should capture payload");
+    assert!(payload.contains("\r\n"), "URI lists use CRLF separators");
+    assert!(payload.contains(&format!("file://{}", first.display()).replace(' ', "%20")));
+    assert!(payload.contains(&format!("file://{}", second.display()).replace(' ', "%20")));
+
+    fs::remove_dir_all(root).expect("failed to remove test root");
 }
 
 #[cfg(unix)]

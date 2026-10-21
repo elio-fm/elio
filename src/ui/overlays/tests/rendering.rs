@@ -255,7 +255,7 @@ fn copy_overlay_renders_expected_labels_and_hit_rects() {
     );
     assert_eq!(
         state.copy_hits.len(),
-        4,
+        5,
         "copy overlay should expose one hit rect per visible row"
     );
     assert!(
@@ -263,15 +263,23 @@ fn copy_overlay_renders_expected_labels_and_hit_rects() {
         "expected copy overlay title to be rendered, got: {rendered:?}"
     );
     assert!(
-        rendered.contains("c -> file name"),
+        rendered.contains("i -> item"),
+        "expected copy overlay to render the item shortcut row, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("c -> name"),
         "expected copy overlay to render the file-name shortcut row, got: {rendered:?}"
     );
     assert!(
-        rendered.contains("d -> directory path"),
+        rendered.contains("n -> name w/o"),
+        "expected copy overlay to render the name-without-extension shortcut row, got: {rendered:?}"
+    );
+    assert!(
+        rendered.contains("d -> directory"),
         "expected copy overlay to render the directory-path shortcut row, got: {rendered:?}"
     );
     assert!(
-        rendered.contains("p -> file path"),
+        rendered.contains("p -> path"),
         "expected copy overlay to render the file-path shortcut row, got: {rendered:?}"
     );
 
