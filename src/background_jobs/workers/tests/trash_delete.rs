@@ -52,6 +52,49 @@ fn restore_origin_cleanup_collects_only_names_inside_selected_trash() {
     assert_eq!(names, vec!["inside.txt".to_string()]);
 }
 
+#[test]
+fn permanent_delete_removes_sidecars_only_for_recycle_bin_entries() {
+    let bin = make_tmp_dir("recycle-bin-delete");
+    let outside = make_tmp_dir("recycle-bin-delete-outside");
+    let in_bin =
+        crate::filesystem::write_test_pair(&bin, "0A5E05.txt", r"C:\x\a.txt", 1_710_498_600);
+    let elsewhere =
+        crate::filesystem::write_test_pair(&outside, "0A5E05.txt", r"C:\x\a.txt", 1_710_498_600);
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+
+    let target = |path: &PathBuf| crate::file_operations::TrashTarget {
+        path: path.clone(),
+        name: "a.txt".to_string(),
+        is_dir: false,
+    };
+    let request = crate::file_operations::TrashRequest {
+        token: 1,
+        targets: vec![target(&in_bin), target(&elsewhere)],
+        permanent: true,
+    };
+    let (result_tx, _result_rx) = mpsc::channel();
+    let (completed, errors, stopped_early) = run_permanent_delete(
+        &request,
+        &result_tx,
+        &AtomicBool::new(false),
+        &AtomicU64::new(0),
+    );
+
+    assert_eq!((completed, stopped_early), (2, false));
+    assert!(errors.is_empty(), "errors: {errors:?}");
+    assert!(
+        !bin.join("$I0A5E05.txt").exists(),
+        "the deleted entry's sidecar should be removed"
+    );
+    assert!(
+        outside.join("$I0A5E05.txt").exists(),
+        "a `$I…` file outside the Recycle Bin is unrelated and must be kept"
+    );
+
+    fs::remove_dir_all(&bin).unwrap();
+    fs::remove_dir_all(&outside).unwrap();
+}
+
 fn trash_identity(device: u64, inode: u64) -> TrashEntryIdentity {
     TrashEntryIdentity { device, inode }
 }

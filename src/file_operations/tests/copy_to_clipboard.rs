@@ -27,6 +27,35 @@ fn copy_overlay_populates_expected_rows_for_selected_file() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
+#[test]
+fn copy_overlay_uses_original_names_but_real_paths_for_recycle_bin_entries() {
+    let bin = temp_path("copy-overlay-recycle-bin");
+    fs::create_dir_all(&bin).expect("failed to create bin dir");
+    let item = crate::filesystem::write_test_pair(
+        &bin,
+        "0A5E05.md",
+        r"C:\Users\someone\report.final.md",
+        1_710_498_600,
+    );
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+
+    let mut app = App::new_at(bin.clone()).expect("failed to create app");
+    app.open_copy_overlay_for_paths(vec![item.clone()]);
+
+    assert_eq!(app.file_operations.copy_row_value(0), "report.final.md");
+    assert_eq!(app.file_operations.copy_row_value(1), "report.final");
+    assert_eq!(
+        app.file_operations.copy_row_value(2),
+        item.display().to_string()
+    );
+    assert_eq!(
+        app.file_operations.copy_row_value(3),
+        bin.display().to_string()
+    );
+
+    fs::remove_dir_all(bin).expect("failed to remove bin dir");
+}
+
 #[cfg(unix)]
 #[test]
 fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {

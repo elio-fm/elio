@@ -383,6 +383,58 @@ fn trash_snapshot_keeps_stored_name_without_original_path_metadata() {
 }
 
 #[test]
+fn recycle_bin_listing_hides_sidecars_and_shows_original_names() {
+    let bin = temp_path("recycle-bin-listing");
+    fs::create_dir_all(&bin).expect("failed to create bin dir");
+    crate::filesystem::write_test_pair(
+        &bin,
+        "0A5E05.pdf",
+        r"C:\Users\someone\Reports\report.pdf",
+        1_710_498_600,
+    );
+    fs::write(bin.join("desktop.ini"), "[.ShellClassInfo]").expect("failed to write desktop.ini");
+
+    let mut entries = read_entries(&bin, true, &|| false).expect("should read bin");
+    apply_recycle_bin_metadata(&mut entries, &|| false).expect("should apply metadata");
+
+    assert_eq!(entries.len(), 1, "only the recycled item is listed");
+    let entry = &entries[0];
+    assert_eq!(entry.name, "report.pdf");
+    assert_eq!(entry.name_key, "report.pdf");
+    assert_eq!(
+        entry.path.file_name().and_then(|n| n.to_str()),
+        Some("$R0A5E05.pdf")
+    );
+    assert_eq!(
+        entry.modified,
+        Some(UNIX_EPOCH + std::time::Duration::from_secs(1_710_498_600))
+    );
+
+    fs::remove_dir_all(bin).expect("failed to remove bin dir");
+}
+
+#[test]
+fn recycle_bin_fingerprint_matches_the_listing() {
+    let bin = temp_path("recycle-bin-fingerprint");
+    fs::create_dir_all(&bin).expect("failed to create bin dir");
+    crate::filesystem::write_test_pair(
+        &bin,
+        "0A5E05.pdf",
+        r"C:\Users\someone\report.pdf",
+        1_710_498_600,
+    );
+    fs::write(bin.join("desktop.ini"), "[.ShellClassInfo]").expect("failed to write desktop.ini");
+
+    let mut entries = read_entries(&bin, true, &|| false).expect("should read bin");
+    apply_recycle_bin_metadata(&mut entries, &|| false).expect("should apply metadata");
+    let scanned = scan_fingerprint(&bin, true, true, &|| false).expect("failed to fingerprint");
+
+    assert_eq!(entries_fingerprint(&entries), scanned);
+
+    fs::remove_dir_all(bin).expect("failed to remove bin dir");
+}
+
+#[test]
 fn trash_fingerprint_tracks_original_name_from_trashinfo() {
     let root = temp_path("trash-fingerprint-display-name");
     let files_dir = root.join("files");
