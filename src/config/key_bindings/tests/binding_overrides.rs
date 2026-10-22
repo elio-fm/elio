@@ -76,6 +76,35 @@ fullscreen_preview = "F"
 }
 
 #[test]
+fn legacy_copy_path_binding_remains_accepted() {
+    let config = Config::from_str(
+        r#"
+[keys]
+copy_path = "M"
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.action_for('M'), Some(Action::CopyToClipboard));
+    assert_eq!(config.keys.action_for('c'), None);
+}
+
+#[test]
+fn copy_to_clipboard_binding_takes_precedence_over_legacy_name() {
+    let config = Config::from_str(
+        r#"
+[keys]
+copy_path = "M"
+copy_to_clipboard = "N"
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.action_for('N'), Some(Action::CopyToClipboard));
+    assert_eq!(config.keys.action_for('M'), None);
+}
+
+#[test]
 fn symlink_keys_can_be_overridden() {
     let config = Config::from_str(
         r#"

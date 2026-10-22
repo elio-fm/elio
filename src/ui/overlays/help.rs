@@ -423,10 +423,10 @@ fn clipboard_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
         keys.action(&kb.select_all, "select all"),
         e("Esc", "clear selection"),
         keys.action(&kb.yank, "yank (copy)"),
-        keys.action(&kb.copy_path, "copy path details"),
-        keys.action(&kb.copy_item, "copy items to system clipboard"),
         keys.action(&kb.cut, "cut"),
         keys.action(&kb.paste, "paste"),
+        keys.action(&kb.copy_to_clipboard, "copy to clipboard"),
+        keys.action(&kb.copy_item, "copy item"),
         keys.action(&kb.symlink_absolute, "symlink absolute"),
         keys.action(&kb.symlink_relative, "symlink relative"),
     ])

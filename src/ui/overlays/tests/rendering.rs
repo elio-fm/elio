@@ -915,8 +915,8 @@ fn chooser_help_overlay_uses_chooser_actions_without_changing_esc() {
         "expected chooser help to keep Esc as clear selection, got: {rendered:?}"
     );
     assert!(
-        rendered.contains("copy path details"),
-        "expected chooser help to keep copy path visible, got: {rendered:?}"
+        rendered.contains("copy to clipboard"),
+        "expected chooser help to keep copy to clipboard visible, got: {rendered:?}"
     );
     assert!(
         rendered.contains("cut"),

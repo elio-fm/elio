@@ -28,7 +28,7 @@ impl Default for KeyBindings {
                 KeySpec::shift_named(NamedKey::Function(2)),
             ]),
             restore_from_trash: KeyList::one('r'),
-            copy_path: KeyList::one('c'),
+            copy_to_clipboard: KeyList::one('c'),
             copy_item: KeyList(vec![KeySpec::ctrl_char('c')]),
             search_folders: KeyList::one('f'),
             search_files: KeyList(vec![KeySpec::ctrl_char('f')]),
