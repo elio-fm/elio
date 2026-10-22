@@ -20,6 +20,7 @@ pub(crate) enum Action {
     RenameInEditor,
     RestoreFromTrash,
     CopyPath,
+    CopyItem,
     SearchFolders,
     SearchFiles,
     FilterDirectory,
@@ -321,6 +322,25 @@ impl KeySpec {
             KeyCodeSpec::Named(named) => named.matches(event_code),
         }
     }
+
+    fn matches_legacy_shifted_event(self, key: KeyEvent) -> bool {
+        let (event_code, event_modifiers) = normalize_key_event(key);
+        if !event_modifiers.shift
+            || self.modifiers.shift
+            || self.modifiers.is_empty()
+            || (KeyModifierSpec {
+                shift: false,
+                ..event_modifiers
+            }) != self.modifiers
+        {
+            return false;
+        }
+
+        match self.code {
+            KeyCodeSpec::Char(c) => matches!(event_code, KeyCode::Char(actual) if actual == c),
+            KeyCodeSpec::Named(named) => named.matches(event_code),
+        }
+    }
 }
 
 fn normalize_key_event(key: KeyEvent) -> (KeyCode, KeyModifierSpec) {
@@ -328,7 +348,6 @@ fn normalize_key_event(key: KeyEvent) -> (KeyCode, KeyModifierSpec) {
     let mut modifiers = KeyModifierSpec::from_event(key.modifiers);
     let code = match key.code {
         KeyCode::Char(c) if modifiers.ctrl || modifiers.alt => {
-            modifiers.shift = false;
             KeyCode::Char(c.to_ascii_lowercase())
         }
         KeyCode::Char(c) => {
@@ -412,6 +431,12 @@ impl KeyList {
         self.0.iter().any(|spec| spec.matches_event(key))
     }
 
+    fn matches_legacy_shifted_event(&self, key: KeyEvent) -> bool {
+        self.0
+            .iter()
+            .any(|spec| spec.matches_legacy_shifted_event(key))
+    }
+
     pub(super) fn keys(&self) -> impl Iterator<Item = KeySpec> + '_ {
         self.0.iter().copied()
     }
@@ -479,6 +504,7 @@ pub(crate) struct KeyBindings {
     pub rename_in_editor: KeyList,
     pub restore_from_trash: KeyList,
     pub copy_path: KeyList,
+    pub copy_item: KeyList,
     pub search_folders: KeyList,
     pub search_files: KeyList,
     pub filter_directory: KeyList,
@@ -527,13 +553,24 @@ impl KeyBindings {
         key: KeyEvent,
         context: KeyContext,
     ) -> Option<Action> {
+        self.find_action_for_key(key, context, false)
+            .or_else(|| self.find_action_for_key(key, context, true))
+    }
+
+    fn find_action_for_key(
+        &self,
+        key: KeyEvent,
+        context: KeyContext,
+        legacy_shifted: bool,
+    ) -> Option<Action> {
         self.bindings().iter().find_map(|(keys, action)| {
-            action
-                .key_contexts()
-                .contains(context)
-                .then_some(())
-                .filter(|_| keys.matches_event(key))
-                .map(|_| *action)
+            (action.key_contexts().contains(context)
+                && if legacy_shifted {
+                    keys.matches_legacy_shifted_event(key)
+                } else {
+                    keys.matches_event(key)
+                })
+            .then_some(*action)
         })
     }
 
@@ -548,8 +585,20 @@ impl KeyBindings {
         if self.quit.matches_event(key) || self.quit_without_cd.matches_event(key) {
             return Some(ChooserKeyAction::Cancel);
         }
-        self.action_for_key_in_context(key, context)
+        self.find_action_for_key(key, context, false)
             .map(ChooserKeyAction::Normal)
+            .or_else(|| {
+                if self.choose.matches_legacy_shifted_event(key) {
+                    Some(ChooserKeyAction::Choose)
+                } else if self.quit.matches_legacy_shifted_event(key)
+                    || self.quit_without_cd.matches_legacy_shifted_event(key)
+                {
+                    Some(ChooserKeyAction::Cancel)
+                } else {
+                    self.find_action_for_key(key, context, true)
+                        .map(ChooserKeyAction::Normal)
+                }
+            })
     }
 
     pub(crate) fn open_with_reserved_shortcuts(&self) -> Vec<char> {
@@ -560,7 +609,7 @@ impl KeyBindings {
             .collect()
     }
 
-    fn bindings(&self) -> [(&KeyList, Action); 50] {
+    fn bindings(&self) -> [(&KeyList, Action); 51] {
         [
             (&self.quit, Action::Quit),
             (&self.quit_without_cd, Action::QuitWithoutCd),
@@ -612,6 +661,7 @@ impl KeyBindings {
             (&self.scroll_preview_right, Action::ScrollPreviewRight),
             (&self.scroll_preview_up, Action::ScrollPreviewUp),
             (&self.scroll_preview_down, Action::ScrollPreviewDown),
+            (&self.copy_item, Action::CopyItem),
         ]
     }
 

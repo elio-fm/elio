@@ -39,6 +39,8 @@ const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const ACTIVE_SCROLL_POLL_INTERVAL: Duration = Duration::from_millis(12);
 const WINDOWS_TERMINAL_ACTIVE_POLL_INTERVAL: Duration = Duration::from_millis(24);
 const RELATIVE_TIME_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
+const KITTY_ELIO_ACTIVE: &str = "\x1b]1337;SetUserVar=elio=MQ==\x07";
+const KITTY_ELIO_INACTIVE: &str = "\x1b]1337;SetUserVar=elio\x07";
 
 #[derive(Debug)]
 struct AppExit {
@@ -85,6 +87,7 @@ fn try_init_terminal() -> Result<(AppTerminal, Drainer, kitty_dnd::KittyDndRunti
         "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h"
     )?;
     write!(terminal_output, "\x1b[>4;1m")?;
+    set_kitty_elio_active(&mut terminal_output, true)?;
 
     if kitty_dnd.is_enabled() {
         write!(
@@ -117,6 +120,18 @@ fn terminal_output_handles() -> io::Result<(Box<dyn Write + Send>, Box<dyn Write
     Ok((Box::new(io::stdout()), Box::new(io::stdout())))
 }
 
+fn set_kitty_elio_active<W: Write>(writer: &mut W, active: bool) -> io::Result<()> {
+    if std::env::var_os("KITTY_WINDOW_ID").is_none() {
+        return Ok(());
+    }
+
+    writer.write_all(if active {
+        KITTY_ELIO_ACTIVE.as_bytes()
+    } else {
+        KITTY_ELIO_INACTIVE.as_bytes()
+    })
+}
+
 pub(super) fn clear_for_full_repaint(terminal: &mut AppTerminal) -> io::Result<()> {
     let size = terminal.size()?;
     terminal.resize(Rect::new(0, 0, size.width, size.height))
@@ -129,6 +144,7 @@ fn suspend_terminal(
     kitty_dnd: &kitty_dnd::KittyDndRuntime,
 ) -> Result<()> {
     let backend = terminal.backend_mut();
+    set_kitty_elio_active(backend, false)?;
     if kitty_dnd.is_enabled() {
         write!(backend, "{}", kitty_dnd::disable_sequence())?;
     }
@@ -172,6 +188,7 @@ fn resume_terminal(
         )?;
         write!(backend, "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h")?;
         write!(backend, "\x1b[>4;1m")?;
+        set_kitty_elio_active(backend, true)?;
         if kitty_dnd.is_enabled() {
             write!(
                 backend,
@@ -194,6 +211,7 @@ fn restore_terminal(
     kitty_dnd: &kitty_dnd::KittyDndRuntime,
 ) -> Result<()> {
     let backend = terminal.backend_mut();
+    set_kitty_elio_active(backend, false)?;
     if kitty_dnd.is_enabled() {
         write!(backend, "{}", kitty_dnd::disable_sequence())?;
     }
@@ -218,6 +236,7 @@ fn restore_terminal(
 
 fn cleanup_terminal_state() -> io::Result<()> {
     if let Ok((mut terminal_output, _)) = terminal_output_handles() {
+        let _ = set_kitty_elio_active(&mut terminal_output, false);
         let _ = write!(terminal_output, "\x1b[>4;0m");
         let _ = write!(terminal_output, "{}", kitty_dnd::disable_sequence());
         let _ = write!(

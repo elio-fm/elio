@@ -60,6 +60,19 @@ impl App {
         self.open_copy_overlay_for_paths(paths);
     }
 
+    pub(crate) fn copy_items_to_system_clipboard(&mut self) {
+        let paths = self.file_browser.selected_or_focused_paths_sorted();
+        self.copy_paths_to_system_clipboard(paths);
+    }
+
+    pub(crate) fn copy_paths_to_system_clipboard(&mut self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            self.status = "Nothing to copy".to_string();
+            return;
+        }
+        self.status = self.file_operations.copy_items_to_system_clipboard(&paths);
+    }
+
     pub(crate) fn open_copy_overlay_for_paths(&mut self, paths: Vec<PathBuf>) {
         if !self
             .file_operations
@@ -79,7 +92,7 @@ impl App {
     }
 
     pub(crate) fn handle_copy_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
+        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
             self.file_operations.dismiss_copy();
             return Ok(());
         }

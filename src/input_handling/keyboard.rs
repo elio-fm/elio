@@ -227,7 +227,7 @@ impl App {
     }
 
     fn handle_help_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
+        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
             self.overlays.help = false;
             return Ok(());
         }
@@ -340,17 +340,6 @@ impl App {
             return Ok(());
         }
 
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            if self.exit_fullscreen_preview() {
-                return Ok(());
-            }
-
-            if !self.cancel_active_file_job() {
-                self.clear_selection();
-                self.file_operations.clear_clipboard();
-            }
-            return Ok(());
-        }
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {
                 KeyCode::Char('+') | KeyCode::Char('=') => {
@@ -486,6 +475,7 @@ impl App {
             Action::Yank => self.yank(),
             Action::Cut => self.cut(),
             Action::Paste => self.paste()?,
+            Action::CopyItem => self.copy_items_to_system_clipboard(),
             Action::CreateArchive => self.open_archive_create_prompt(),
             Action::ExtractArchive => self.extract_focused_archive()?,
             Action::SymlinkAbsolute => self.link_yanked(false)?,
@@ -736,6 +726,7 @@ pub(super) fn fullscreen_preview_exits_then_dispatches(action: crate::config::Ac
             | Action::SymlinkRelative
             | Action::SelectAll
             | Action::CopyPath
+            | Action::CopyItem
             | Action::SearchFolders
             | Action::SearchFiles
             | Action::FilterDirectory
@@ -782,7 +773,7 @@ fn should_use_grid_zoom_for_symlink_key(
 
 fn is_cancel_key(key: KeyEvent) -> bool {
     matches!(key.code, KeyCode::Esc)
-        || key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c'))
+        || key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c'))
 }
 
 fn is_help_shortcut(key: KeyEvent) -> bool {

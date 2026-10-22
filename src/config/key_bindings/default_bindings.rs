@@ -29,6 +29,7 @@ impl Default for KeyBindings {
             ]),
             restore_from_trash: KeyList::one('r'),
             copy_path: KeyList::one('c'),
+            copy_item: KeyList(vec![KeySpec::ctrl_char('c')]),
             search_folders: KeyList::one('f'),
             search_files: KeyList(vec![KeySpec::ctrl_char('f')]),
             filter_directory: KeyList::one('/'),

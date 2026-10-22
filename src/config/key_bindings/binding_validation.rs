@@ -11,7 +11,6 @@ const RESERVED_CHARS: &[char] = &[
 
 /// Modified keys that are still hard-wired before configurable browser actions.
 const RESERVED_MODIFIED_CHARS: &[char] = &[
-    'c', // cancel/clear
     '+', '=', '-', '_', // grid zoom
 ];
 
@@ -345,6 +344,12 @@ pub(super) fn resolve_key_overrides(
             override_value: overrides.scroll_preview_down,
             default: defaults.scroll_preview_down.clone(),
         },
+        RawBinding {
+            name: "copy_item",
+            action: Action::CopyItem,
+            override_value: overrides.copy_item,
+            default: defaults.copy_item.clone(),
+        },
     ];
 
     // Step 1: parse each override independently, falling back to default on
@@ -451,6 +456,7 @@ pub(super) fn resolve_key_overrides(
         scroll_preview_right: resolved(47),
         scroll_preview_up: resolved(48),
         scroll_preview_down: resolved(49),
+        copy_item: resolved(50),
     }
 }
 
@@ -473,7 +479,8 @@ fn is_reserved_key_spec(spec: KeySpec) -> bool {
     match spec.code {
         KeyCodeSpec::Char(c) if spec.modifiers.is_empty() => RESERVED_CHARS.contains(&c),
         KeyCodeSpec::Char(c) if spec.modifiers.ctrl => {
-            RESERVED_MODIFIED_CHARS.contains(&c.to_ascii_lowercase())
+            let c = c.to_ascii_lowercase();
+            RESERVED_MODIFIED_CHARS.contains(&c)
         }
         _ => false,
     }

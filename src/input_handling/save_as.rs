@@ -26,7 +26,7 @@ impl App {
                 }
                 KeyCode::Enter => state.cancel_overwrite(),
                 KeyCode::Esc => state.cancel_overwrite(),
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => {
                     state.cancel_overwrite()
                 }
                 _ => {}
@@ -60,7 +60,7 @@ impl App {
                 state.clear_error();
             }
             KeyCode::Esc => state.close(),
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => state.close(),
+            KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => state.close(),
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => self.submit_save_as(),
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
                 let (_, cursor) = state.input_mut();

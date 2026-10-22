@@ -29,6 +29,7 @@ pub(in crate::config) struct KeysConfigOverride {
     pub(super) rename_in_editor: Option<KeyConfigOverride>,
     pub(super) restore_from_trash: Option<KeyConfigOverride>,
     pub(super) copy_path: Option<KeyConfigOverride>,
+    pub(super) copy_item: Option<KeyConfigOverride>,
     pub(super) search_folders: Option<KeyConfigOverride>,
     pub(super) search_files: Option<KeyConfigOverride>,
     pub(super) filter_directory: Option<KeyConfigOverride>,

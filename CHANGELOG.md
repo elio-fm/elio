@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Changed Ctrl+C from cancel to the configurable `copy_item` action, which copies selected or focused items to the system clipboard.
 - Made Trash, Delete, and Restore popup scrollbars match the style of the rest of the scrollbars.
 - Made scrollbars draggable.
 

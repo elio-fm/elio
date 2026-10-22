@@ -187,7 +187,7 @@ impl App {
     }
 
     pub(crate) fn handle_archive_create_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
+        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
             self.file_operations.dismiss_archive_create();
             return Ok(());
         }
@@ -391,7 +391,7 @@ impl App {
     }
 
     pub(crate) fn handle_archive_password_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
+        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
             self.cancel_archive_password_prompt()?;
             return Ok(());
         }

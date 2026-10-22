@@ -179,7 +179,7 @@ impl App {
     }
 
     pub(crate) fn handle_bulk_rename_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
+        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
             self.file_operations.dismiss_bulk_rename();
             return Ok(());
         }
@@ -394,7 +394,7 @@ impl App {
     }
 
     pub(crate) fn handle_editor_rename_confirm_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
+        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
             self.cancel_editor_rename_confirm();
             return Ok(());
         }
@@ -482,7 +482,7 @@ impl App {
     }
 
     pub(crate) fn handle_rename_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
+        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
             self.file_operations.dismiss_rename();
             return Ok(());
         }
