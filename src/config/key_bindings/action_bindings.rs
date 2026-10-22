@@ -9,6 +9,7 @@ pub(crate) enum Action {
     Yank,
     Cut,
     Paste,
+    PasteItem,
     CreateArchive,
     ExtractArchive,
     SymlinkAbsolute,
@@ -506,6 +507,7 @@ pub(crate) struct KeyBindings {
     pub yank: KeyList,
     pub cut: KeyList,
     pub paste: KeyList,
+    pub paste_item: KeyList,
     pub create_archive: KeyList,
     pub extract_archive: KeyList,
     pub symlink_absolute: KeyList,
@@ -622,7 +624,7 @@ impl KeyBindings {
             .collect()
     }
 
-    fn bindings(&self) -> [(&KeyList, Action); 53] {
+    fn bindings(&self) -> [(&KeyList, Action); 54] {
         [
             (&self.clear_selection, Action::ClearSelection),
             (&self.cancel, Action::Cancel),
@@ -631,6 +633,7 @@ impl KeyBindings {
             (&self.yank, Action::Yank),
             (&self.cut, Action::Cut),
             (&self.paste, Action::Paste),
+            (&self.paste_item, Action::PasteItem),
             (&self.create_archive, Action::CreateArchive),
             (&self.extract_archive, Action::ExtractArchive),
             (&self.symlink_absolute, Action::SymlinkAbsolute),

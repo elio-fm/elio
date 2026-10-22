@@ -153,6 +153,9 @@
 # yank                 = "y"
 # cut                  = "x"
 # paste                = "p"
+# copy_to_clipboard    = "c"       # Open the Copy to clipboard menu.
+# copy_item            = "ctrl+c"  # Copy items to the system clipboard.
+# paste_item           = "ctrl+v"  # Paste items from the system clipboard.
 # extract_archive      = "e"
 # create_archive       = "C"
 # symlink_absolute     = "-"
@@ -163,8 +166,6 @@
 # rename               = ["r", "F2"]
 # rename_in_editor     = ["R", "shift+F2"]
 # restore_from_trash   = "r"
-# copy_to_clipboard    = "c"
-# copy_item            = "ctrl+c"
 # search_folders       = "f"
 # search_files         = "ctrl+f"
 # find_duplicates      = "alt+d"

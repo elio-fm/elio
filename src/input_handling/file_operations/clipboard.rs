@@ -32,6 +32,13 @@ impl App {
         Ok(())
     }
 
+    pub(crate) fn paste_external_file_clipboard(&mut self) -> Result<()> {
+        if let Some(clipboard) = crate::file_operations::read_external_file_clipboard() {
+            self.drop_external_paths(clipboard.paths, clipboard.op)?;
+        }
+        Ok(())
+    }
+
     #[cfg(any(unix, test))]
     pub(crate) fn drop_external_paths(&mut self, paths: Vec<PathBuf>, op: ClipOp) -> Result<bool> {
         let preparation = self

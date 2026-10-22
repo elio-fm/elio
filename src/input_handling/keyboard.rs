@@ -77,6 +77,10 @@ impl App {
             return self.paste_into_local_filter(text);
         }
 
+        if !self.blocks_file_drag_and_drop() && !self.chooser_mode() && !self.preview_fullscreen() {
+            self.paste_external_file_clipboard()?;
+        }
+
         Ok(())
     }
 
@@ -462,6 +466,7 @@ impl App {
             Action::Yank => self.yank(),
             Action::Cut => self.cut(),
             Action::Paste => self.paste()?,
+            Action::PasteItem => self.paste_external_file_clipboard()?,
             Action::CopyItem => self.copy_items_to_system_clipboard(),
             Action::CreateArchive => self.open_archive_create_prompt(),
             Action::ExtractArchive => self.extract_focused_archive()?,
@@ -730,6 +735,7 @@ pub(super) fn fullscreen_preview_exits_then_dispatches(action: crate::config::Ac
         Action::Yank
             | Action::Cut
             | Action::Paste
+            | Action::PasteItem
             | Action::Trash
             | Action::DeletePermanently
             | Action::SymlinkAbsolute
