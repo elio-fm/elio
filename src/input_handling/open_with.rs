@@ -5,33 +5,26 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 
 impl App {
     pub(crate) fn handle_open_with_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.overlays.open_with = None;
             return Ok(());
         }
 
-        match key.code {
-            KeyCode::Esc => {
-                self.overlays.open_with = None;
-            }
-            _ => match crate::config::key_bindings()
-                .action_for_key_in_context(key, self.key_context())
-            {
-                Some(Action::NavDown) => self.move_open_with_selection(1),
-                Some(Action::NavUp) => self.move_open_with_selection(-1),
-                Some(Action::OpenOrEnter) => self.confirm_selected_open_with_row()?,
-                _ => match key.code {
-                    KeyCode::Char(ch)
-                        if !key
-                            .modifiers
-                            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-                    {
-                        if let Some(index) = self.open_with_row_index_for_shortcut(ch) {
-                            self.confirm_open_with_index(index)?;
-                        }
+        match crate::config::key_bindings().action_for_key_in_context(key, self.key_context()) {
+            Some(Action::NavDown) => self.move_open_with_selection(1),
+            Some(Action::NavUp) => self.move_open_with_selection(-1),
+            Some(Action::OpenOrEnter) => self.confirm_selected_open_with_row()?,
+            _ => match key.code {
+                KeyCode::Char(ch)
+                    if !key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+                {
+                    if let Some(index) = self.open_with_row_index_for_shortcut(ch) {
+                        self.confirm_open_with_index(index)?;
                     }
-                    _ => {}
-                },
+                }
+                _ => {}
             },
         }
 

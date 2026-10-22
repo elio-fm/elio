@@ -42,15 +42,12 @@ impl App {
     }
 
     pub(crate) fn handle_local_filter_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.clear_local_filter();
             return Ok(());
         }
 
         match key.code {
-            KeyCode::Esc => {
-                self.clear_local_filter();
-            }
             KeyCode::Enter => {
                 self.file_browser.local_filter.finish_editing();
                 self.status.clear();

@@ -13,6 +13,8 @@ pub(super) enum KeyConfigOverride {
 #[derive(Deserialize, Default)]
 pub(in crate::config) struct KeysConfigOverride {
     pub(super) choose: Option<KeyConfigOverride>,
+    pub(super) clear_selection: Option<KeyConfigOverride>,
+    pub(super) cancel: Option<KeyConfigOverride>,
     pub(super) quit: Option<KeyConfigOverride>,
     pub(super) quit_without_cd: Option<KeyConfigOverride>,
     pub(super) yank: Option<KeyConfigOverride>,

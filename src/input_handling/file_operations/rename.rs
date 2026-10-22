@@ -179,15 +179,12 @@ impl App {
     }
 
     pub(crate) fn handle_bulk_rename_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.file_operations.dismiss_bulk_rename();
             return Ok(());
         }
 
         match key.code {
-            KeyCode::Esc => {
-                self.file_operations.dismiss_bulk_rename();
-            }
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 self.confirm_bulk_rename()?;
             }
@@ -394,15 +391,12 @@ impl App {
     }
 
     pub(crate) fn handle_editor_rename_confirm_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.cancel_editor_rename_confirm();
             return Ok(());
         }
 
         match key.code {
-            KeyCode::Esc if key.modifiers == KeyModifiers::NONE => {
-                self.cancel_editor_rename_confirm();
-            }
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 if self.file_operations.editor_rename_confirmed() {
                     self.confirm_editor_rename()?;
@@ -482,15 +476,12 @@ impl App {
     }
 
     pub(crate) fn handle_rename_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.file_operations.dismiss_rename();
             return Ok(());
         }
 
         match key.code {
-            KeyCode::Esc => {
-                self.file_operations.dismiss_rename();
-            }
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 self.confirm_rename()?;
             }

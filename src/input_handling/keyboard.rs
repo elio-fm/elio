@@ -189,10 +189,6 @@ impl App {
         }
     }
 
-    fn has_active_cancelable_job(&self) -> bool {
-        self.file_operations.has_active_job()
-    }
-
     fn cancel_active_file_job(&mut self) -> bool {
         if let Some(token) = self.file_operations.cancel_trash_job() {
             self.job_scheduler.cancel_trash(token);
@@ -227,12 +223,11 @@ impl App {
     }
 
     fn handle_help_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.overlays.help = false;
             return Ok(());
         }
         match key.code {
-            KeyCode::Esc => self.overlays.help = false,
             KeyCode::Up | KeyCode::Char('k') => {
                 self.scroll_help_by(-1);
             }
@@ -327,10 +322,9 @@ impl App {
             return self.handle_local_filter_key(key);
         }
 
-        // Modal handlers above own cancellation before browser selection/job shortcuts.
-        if is_cancel_key(key)
+        let key_bindings = crate::config::key_bindings();
+        if key_bindings.matches_clear_selection_key(key)
             && !self.file_browser.selected_paths.is_empty()
-            && self.has_active_cancelable_job()
         {
             self.clear_selection();
             return Ok(());
@@ -364,19 +358,18 @@ impl App {
                     self.cancel_chooser();
                     return Ok(());
                 }
-                Some(crate::config::ChooserKeyAction::Normal(action)) => Some(action),
+                Some(crate::config::ChooserKeyAction::Normal(action)) => {
+                    Some(self.resolve_clear_selection_cancel_action(key, action))
+                }
                 None => None,
             }
         } else {
-            crate::config::key_bindings().action_for_key_in_context(key, self.key_context())
+            crate::config::key_bindings()
+                .action_for_key_in_context(key, self.key_context())
+                .map(|action| self.resolve_clear_selection_cancel_action(key, action))
         };
 
         if self.preview_fullscreen() {
-            if matches!(key.code, KeyCode::Esc) {
-                self.exit_fullscreen_preview();
-                return Ok(());
-            }
-
             if is_help_shortcut(key) {
                 self.clear_wheel_scroll();
                 self.overlays.help_scroll = 0;
@@ -432,14 +425,6 @@ impl App {
         }
 
         match key.code {
-            KeyCode::Esc => {
-                if !self.file_browser.selected_paths.is_empty() {
-                    self.clear_selection();
-                } else if !self.cancel_active_file_job() {
-                    self.clear_selection();
-                    self.file_operations.clear_clipboard();
-                }
-            }
             _ if is_help_shortcut(key) => {
                 self.clear_wheel_scroll();
                 self.overlays.help_scroll = 0;
@@ -472,6 +457,8 @@ impl App {
                 self.should_change_directory_on_quit = false;
                 self.should_quit = true;
             }
+            Action::Cancel => self.cancel_browser_state(),
+            Action::ClearSelection => self.clear_selection(),
             Action::Yank => self.yank(),
             Action::Cut => self.cut(),
             Action::Paste => self.paste()?,
@@ -577,6 +564,28 @@ impl App {
         Ok(())
     }
 
+    fn cancel_browser_state(&mut self) {
+        if self.preview_fullscreen() {
+            self.exit_fullscreen_preview();
+        } else if !self.cancel_active_file_job() {
+            self.file_operations.clear_clipboard();
+        }
+    }
+
+    fn resolve_clear_selection_cancel_action(
+        &self,
+        key: KeyEvent,
+        action: crate::config::Action,
+    ) -> crate::config::Action {
+        if action == crate::config::Action::ClearSelection
+            && crate::config::key_bindings().matches_cancel_key(key)
+        {
+            crate::config::Action::Cancel
+        } else {
+            action
+        }
+    }
+
     pub(crate) fn key_context(&self) -> crate::config::KeyContext {
         if self.file_browser.in_trash || self.cwd_is_inside_trash_subfolder() {
             crate::config::KeyContext::Trash
@@ -659,6 +668,7 @@ fn fullscreen_preview_action_policy(
     match action {
         Action::FullscreenPreview
         | Action::TogglePreview
+        | Action::Cancel
         | Action::Quit
         | Action::QuitWithoutCd
         | Action::ScrollPreviewLeft
@@ -769,11 +779,6 @@ fn should_use_grid_zoom_for_symlink_key(
             Some(crate::config::Action::SymlinkAbsolute | crate::config::Action::SymlinkRelative)
         )
         && !app.file_operations.clipboard_has_yanked_paths()
-}
-
-fn is_cancel_key(key: KeyEvent) -> bool {
-    matches!(key.code, KeyCode::Esc)
-        || key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c'))
 }
 
 fn is_help_shortcut(key: KeyEvent) -> bool {

@@ -625,15 +625,9 @@ fn archive_create_tar_with_existing_password_shows_actionable_conflict() {
 }
 
 #[test]
-fn cancel_keys_clear_selection_before_cancelling_archive_creation() {
-    for (label, key) in [
-        ("esc", KeyEvent::from(KeyCode::Esc)),
-        (
-            "ctrl-c",
-            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
-        ),
-    ] {
-        let root = temp_path(&format!("archive-cancel-selection-first-{label}"));
+fn cancel_key_clears_selection_before_cancelling_archive_creation() {
+    {
+        let root = temp_path("archive-cancel-selection-first-esc");
         fs::create_dir_all(&root).expect("failed to create temp root");
         let alpha = root.join("alpha.txt");
         fs::write(&alpha, "alpha").expect("failed to write alpha");
@@ -644,7 +638,7 @@ fn cancel_keys_clear_selection_before_cancelling_archive_creation() {
         app.file_operations
             .set_archive_create_progress_for_test(0, 1);
 
-        app.handle_event(Event::Key(key))
+        app.handle_event(Event::Key(KeyEvent::from(KeyCode::Esc)))
             .expect("cancel key should be handled");
 
         assert!(app.file_browser.selected_paths.is_empty());

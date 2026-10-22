@@ -365,6 +365,18 @@ pub(super) fn resolve_key_overrides(
             override_value: overrides.copy_item,
             default: defaults.copy_item.clone(),
         },
+        RawBinding {
+            name: "clear_selection",
+            action: Action::ClearSelection,
+            override_value: overrides.clear_selection,
+            default: defaults.clear_selection.clone(),
+        },
+        RawBinding {
+            name: "cancel",
+            action: Action::Cancel,
+            override_value: overrides.cancel,
+            default: defaults.cancel.clone(),
+        },
     ];
 
     // Step 1: parse each override independently, falling back to default on
@@ -375,6 +387,16 @@ pub(super) fn resolve_key_overrides(
         .map(|entry| match &entry.override_value {
             None => (entry.default.clone(), false),
             Some(value) => match parse_key_override(entry.name, value, &entry.default) {
+                Some(keys)
+                    if entry.action == Action::Cancel
+                        && keys.keys().any(KeySpec::is_unmodified_character) =>
+                {
+                    eprintln!(
+                        "elio: keys.cancel: bare character keys cannot be used because cancel may be active in text fields; using default '{}'",
+                        entry.default
+                    );
+                    (entry.default.clone(), false)
+                }
                 Some(keys) => (keys, true),
                 None => (entry.default.clone(), false),
             },
@@ -398,6 +420,11 @@ pub(super) fn resolve_key_overrides(
                             .action
                             .key_contexts()
                             .intersects(raw[other_index].action.key_contexts())
+                            && !matches!(
+                                (raw[index].action, raw[other_index].action),
+                                (Action::Cancel, Action::ClearSelection)
+                                    | (Action::ClearSelection, Action::Cancel)
+                            )
                             && candidates[other_index].0.contains(candidate)
                     })
                     .map(|other_index| (candidate, other_index))
@@ -421,6 +448,8 @@ pub(super) fn resolve_key_overrides(
     let resolved = |index: usize| candidates[index].0.clone();
     KeyBindings {
         choose,
+        clear_selection: resolved(51),
+        cancel: resolved(52),
         quit: resolved(0),
         quit_without_cd: resolved(1),
         yank: resolved(2),

@@ -21,6 +21,8 @@ pub(crate) enum Action {
     RestoreFromTrash,
     CopyToClipboard,
     CopyItem,
+    ClearSelection,
+    Cancel,
     SearchFolders,
     SearchFiles,
     FilterDirectory,
@@ -66,6 +68,7 @@ pub(crate) enum ChooserKeyAction {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum NamedKey {
+    Esc,
     Left,
     Right,
     Up,
@@ -89,6 +92,7 @@ impl NamedKey {
         let normalized = value.to_ascii_lowercase();
 
         match normalized.as_str() {
+            "esc" | "escape" => Some(Self::Esc),
             "left" => Some(Self::Left),
             "right" => Some(Self::Right),
             "up" => Some(Self::Up),
@@ -115,7 +119,8 @@ impl NamedKey {
 
     fn matches(self, code: KeyCode) -> bool {
         match (self, code) {
-            (Self::Left, KeyCode::Left)
+            (Self::Esc, KeyCode::Esc)
+            | (Self::Left, KeyCode::Left)
             | (Self::Right, KeyCode::Right)
             | (Self::Up, KeyCode::Up)
             | (Self::Down, KeyCode::Down)
@@ -139,6 +144,7 @@ impl NamedKey {
 impl std::fmt::Display for NamedKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
+            Self::Esc => "Esc",
             Self::Left => "←",
             Self::Right => "→",
             Self::Up => "↑",
@@ -292,6 +298,11 @@ impl KeySpec {
                 ..KeyModifierSpec::NONE
             },
         }
+    }
+
+    pub(super) fn is_unmodified_character(self) -> bool {
+        matches!(self.code, KeyCodeSpec::Char(_)) && self.modifiers.is_empty()
+            || matches!(self.code, KeyCodeSpec::Named(NamedKey::Space)) && self.modifiers.is_empty()
     }
 
     pub(super) fn shift_named(named: NamedKey) -> Self {
@@ -482,12 +493,14 @@ impl PartialEq<char> for KeyList {
 /// string (`open = "o"`) or a list of strings (`open = ["o", "e"]`).
 /// Empty lists unbind the action (`open = []`).
 /// Character bindings must be one character; named bindings currently support
-/// `left`, `right`, `up`, `down`, `enter`, `space`, `tab`, `backtab`,
+/// `esc`, `left`, `right`, `up`, `down`, `enter`, `space`, `tab`, `backtab`,
 /// `shift+tab`, `backspace`, `delete`, `del`, `insert`, `ins`, `pageup`,
 /// `pagedown`, `home`, `end`, and `f1`..`f12`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct KeyBindings {
     pub choose: KeyList,
+    pub clear_selection: KeyList,
+    pub cancel: KeyList,
     pub quit: KeyList,
     pub quit_without_cd: KeyList,
     pub yank: KeyList,
@@ -609,8 +622,10 @@ impl KeyBindings {
             .collect()
     }
 
-    fn bindings(&self) -> [(&KeyList, Action); 51] {
+    fn bindings(&self) -> [(&KeyList, Action); 53] {
         [
+            (&self.clear_selection, Action::ClearSelection),
+            (&self.cancel, Action::Cancel),
             (&self.quit, Action::Quit),
             (&self.quit_without_cd, Action::QuitWithoutCd),
             (&self.yank, Action::Yank),
@@ -663,6 +678,15 @@ impl KeyBindings {
             (&self.scroll_preview_down, Action::ScrollPreviewDown),
             (&self.copy_item, Action::CopyItem),
         ]
+    }
+
+    pub(crate) fn matches_cancel_key(&self, key: KeyEvent) -> bool {
+        self.cancel.matches_event(key) || self.cancel.matches_legacy_shifted_event(key)
+    }
+
+    pub(crate) fn matches_clear_selection_key(&self, key: KeyEvent) -> bool {
+        self.clear_selection.matches_event(key)
+            || self.clear_selection.matches_legacy_shifted_event(key)
     }
 
     /// Returns the action bound to `c`, if any.

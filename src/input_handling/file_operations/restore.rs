@@ -1,6 +1,6 @@
 use crate::app::App;
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use std::collections::HashSet;
 
 impl App {
@@ -105,14 +105,11 @@ impl App {
     }
 
     pub(crate) fn handle_restore_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.file_operations.dismiss_restore();
             return Ok(());
         }
         match key.code {
-            KeyCode::Esc => {
-                self.file_operations.dismiss_restore();
-            }
             KeyCode::Up | KeyCode::Char('k') => {
                 if let Some(r) = self.file_operations.restore_overlay_mut() {
                     r.scroll = r.scroll.saturating_sub(1);

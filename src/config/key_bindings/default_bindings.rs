@@ -4,6 +4,8 @@ impl Default for KeyBindings {
     fn default() -> Self {
         Self {
             choose: KeyList(vec![KeySpec::named(NamedKey::Enter)]),
+            clear_selection: KeyList(vec![KeySpec::named(NamedKey::Esc)]),
+            cancel: KeyList(vec![KeySpec::named(NamedKey::Esc)]),
             quit: KeyList::one('q'),
             quit_without_cd: KeyList::one('Q'),
             yank: KeyList::one('y'),

@@ -4,16 +4,12 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 
 impl App {
     pub(crate) fn handle_search_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.close_search_overlay();
             self.status.clear();
             return Ok(());
         }
         match key.code {
-            KeyCode::Esc => {
-                self.close_search_overlay();
-                self.status.clear();
-            }
             KeyCode::Enter => self.confirm_search_selection()?,
             KeyCode::Tab if key.modifiers.is_empty() => self.toggle_search_scope()?,
             KeyCode::Left if key.modifiers.contains(KeyModifiers::CONTROL) => {
