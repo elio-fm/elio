@@ -728,8 +728,8 @@ fn compact_help_overlay_scrolls_instead_of_truncating_small_terminals() {
     let rendered = buffer_text(terminal.backend().buffer());
 
     assert!(
-        rendered.contains("File Actions") && rendered.contains("open with"),
-        "compact help should keep late sections reachable, got: {rendered:?}"
+        rendered.contains("open with"),
+        "compact help should keep late File Actions entries reachable, got: {rendered:?}"
     );
     assert!(
         !rendered.contains("?/Esc") && !rendered.contains("? / Esc"),

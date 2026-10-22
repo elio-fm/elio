@@ -51,6 +51,7 @@ pub(in crate::ui) fn render_help_overlay(
     ]);
     let clipboard_entries = clipboard_entries(&keys);
     let files_entries = entries([
+        keys.action(&kb.cancel, "cancel / close"),
         keys.action(&kb.create, "create file or folder"),
         e("/… or …/", "folder in create prompt"),
         e("Alt/Shift+Enter", "add line in create prompt"),
@@ -128,12 +129,23 @@ pub(in crate::ui) fn render_help_overlay(
         },
     ];
 
-    let popup_width = if area.width >= 92 {
+    let normal_width = if area.width >= 92 {
         90
     } else {
         area.width.saturating_sub(4).clamp(44, 90)
     };
-    let popup_height = area.height.saturating_sub(2).clamp(9, 38);
+    let popup_height = area.height.saturating_sub(2).clamp(9, 37);
+    let normal_popup = helpers::centered_rect(area, normal_width, popup_height);
+    let normal_inner = helpers::inner_with_padding(normal_popup);
+    let wide_layout = wide_help_fits(normal_inner, &sections, palette);
+    let compact_scrolls = !wide_layout
+        && flowing_help_lines(normal_inner.width, &sections, palette).len()
+            > normal_inner.height as usize;
+    let popup_width = if compact_scrolls {
+        area.width.saturating_sub(4).clamp(44, 100)
+    } else {
+        normal_width
+    };
     let popup = helpers::centered_rect(area, popup_width, popup_height);
     state.help_panel = Some(popup);
     frame.render_widget(Clear, popup);
@@ -162,7 +174,7 @@ pub(in crate::ui) fn render_help_overlay(
     );
 
     let inner = helpers::inner_with_padding(popup);
-    if wide_help_fits(inner, &sections, palette) {
+    if wide_layout {
         render_wide_help(frame, inner, &sections, state, palette);
     } else {
         render_compact_help(frame, inner, &sections, scroll_top, state, palette);
@@ -431,7 +443,6 @@ fn navigation_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
             "cycle places",
         ),
         keys.pair_action(&kb.history_back, &kb.history_forward, "back / forward"),
-        keys.action(&kb.cancel, "cancel / close"),
     ]);
     entries(items)
 }
