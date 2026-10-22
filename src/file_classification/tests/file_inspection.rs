@@ -382,3 +382,85 @@ fn config_fifo_is_not_opened_for_content_sniffing() {
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[cfg(unix)]
+fn make_executable(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = fs::metadata(path)
+        .expect("metadata should exist")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(path, permissions).expect("failed to set exec bit");
+}
+
+#[cfg(unix)]
+#[test]
+fn executable_bit_files_are_classified_as_executable() {
+    let (root, path) = write_temp_file("executable-bit-script", "deploy", "#!/bin/sh\nexit 0\n");
+    make_executable(&path);
+
+    let facts = inspect_path(&path, EntryKind::File);
+    assert_eq!(facts.builtin_class, FileClass::Executable);
+    assert_eq!(facts.specific_type_label, Some("Executable"));
+
+    let metadata = fs::metadata(&path).expect("metadata should exist");
+    let entry = Entry {
+        path: path.clone(),
+        name: "deploy".to_string(),
+        name_key: "deploy".to_string(),
+        kind: EntryKind::File,
+        symlink: None,
+        size: metadata.len(),
+        modified: metadata.modified().ok(),
+        readonly: false,
+    };
+    assert_eq!(
+        inspect_entry_fast(&entry).builtin_class,
+        FileClass::Executable
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn executable_bit_wins_over_extension_and_exact_name() {
+    let (root, image) = write_temp_file("executable-bit-image", "photo.jpg", "not-really-jpeg");
+    make_executable(&image);
+    assert_eq!(
+        inspect_path(&image, EntryKind::File).builtin_class,
+        FileClass::Executable
+    );
+
+    let (root2, license) = write_temp_file("executable-bit-license", "LICENSE", "MIT\n");
+    make_executable(&license);
+    assert_eq!(
+        inspect_path(&license, EntryKind::File).builtin_class,
+        FileClass::Executable
+    );
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+    fs::remove_dir_all(root2).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn non_executable_files_keep_name_and_extension_classes() {
+    let (root, image) = write_temp_file("plain-image", "photo.jpg", "not-really-jpeg");
+    assert_eq!(
+        inspect_path(&image, EntryKind::File).builtin_class,
+        FileClass::Image
+    );
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(not(unix))]
+#[test]
+fn executable_class_is_inert_without_exec_bits() {
+    let (root, path) = write_temp_file("no-exec-bit-platform", "run.sh", "#!/bin/sh\nexit 0\n");
+    assert_ne!(
+        inspect_path(&path, EntryKind::File).builtin_class,
+        FileClass::Executable
+    );
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}

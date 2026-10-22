@@ -711,3 +711,43 @@ fn builtin_classification_covers_new_special_file_types() {
         FileClass::Font
     );
 }
+
+#[test]
+fn executable_class_takes_precedence_over_name_and_extension_rules() {
+    let theme = Theme::from_config_str(
+        r##"
+[classes.executable]
+icon = "E"
+color = "#50fa7b"
+name_color = "#50fa7b"
+
+[files.deploy]
+icon = "F"
+color = "#ff0000"
+
+[extensions.sh]
+icon = "S"
+color = "#00ff00"
+"##,
+    )
+    .expect("theme should parse executable class overrides");
+
+    let by_extension = theme.resolve_with_builtin_class(
+        Path::new("run.sh"),
+        EntryKind::File,
+        FileClass::Executable,
+    );
+    assert_eq!(by_extension.class, FileClass::Executable);
+    assert_eq!(by_extension.icon, "E");
+    assert_eq!(by_extension.color, rgb(0x50, 0xfa, 0x7b));
+    assert_eq!(by_extension.name_color, Some(rgb(0x50, 0xfa, 0x7b)));
+
+    let by_exact_name = theme.resolve_with_builtin_class(
+        Path::new("deploy"),
+        EntryKind::File,
+        FileClass::Executable,
+    );
+    assert_eq!(by_exact_name.class, FileClass::Executable);
+    assert_eq!(by_exact_name.icon, "E");
+    assert_eq!(by_exact_name.color, rgb(0x50, 0xfa, 0x7b));
+}

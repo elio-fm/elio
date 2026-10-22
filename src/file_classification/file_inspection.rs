@@ -41,11 +41,27 @@ pub(crate) fn inspect_path(path: &Path, kind: EntryKind) -> FileFacts {
     inspect_path_with_name(path, None, kind)
 }
 
+#[cfg(unix)]
+fn is_executable_file(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    fs::metadata(path)
+        .map(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable_file(_path: &Path) -> bool {
+    false
+}
+
 pub(crate) fn inspect_entry_fast(entry: &Entry) -> FileFacts {
     inspect_path_with_name_fast(&entry.path, Some(&entry.name), entry.kind)
 }
 
 fn inspect_path_with_name(path: &Path, display_name: Option<&str>, kind: EntryKind) -> FileFacts {
+    if kind == EntryKind::File && is_executable_file(path) {
+        return super::types::executable_file_facts();
+    }
     let (_name_for_type, name, ext, mut facts) =
         inspect_path_with_name_base(path, display_name, kind);
     if ext.is_empty() {
@@ -63,6 +79,9 @@ fn inspect_path_with_name_fast(
     display_name: Option<&str>,
     kind: EntryKind,
 ) -> FileFacts {
+    if kind == EntryKind::File && is_executable_file(path) {
+        return super::types::executable_file_facts();
+    }
     let (_name_for_type, name, ext, mut facts) =
         inspect_path_with_name_base(path, display_name, kind);
     if ext.is_empty() {

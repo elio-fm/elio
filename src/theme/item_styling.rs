@@ -219,9 +219,13 @@ impl Theme {
             builtin_class,
             FileClass::SymlinkDirectory | FileClass::BrokenSymlink
         );
+        // The executable bit reflects how an entry can be used, which the
+        // issue #339 asks to rank above name and extension styling.
+        let prefer_builtin_executable = builtin_class == FileClass::Executable;
+        let prefer_builtin = prefer_builtin_symlink || prefer_builtin_executable;
         let prefer_builtin_license = exact_rule.is_none() && builtin_class == FileClass::License;
 
-        let class = if prefer_builtin_symlink {
+        let class = if prefer_builtin {
             builtin_class
         } else {
             exact_rule
@@ -237,7 +241,7 @@ impl Theme {
                 .expect("default file style")
         });
 
-        let icon = if prefer_builtin_symlink {
+        let icon = if prefer_builtin {
             base.icon.as_str()
         } else {
             exact_rule
@@ -249,7 +253,7 @@ impl Theme {
                 })
                 .unwrap_or(base.icon.as_str())
         };
-        let color = if prefer_builtin_symlink {
+        let color = if prefer_builtin {
             base.color
         } else {
             exact_rule
@@ -261,7 +265,7 @@ impl Theme {
                 })
                 .unwrap_or(base.color)
         };
-        let name_color = if prefer_builtin_symlink {
+        let name_color = if prefer_builtin {
             base.name_color
         } else {
             exact_rule

@@ -712,6 +712,7 @@ pub(super) fn parse_class_name(name: &str) -> Option<FileClass> {
         "archive" | "compressed" => Some(FileClass::Archive),
         "font" => Some(FileClass::Font),
         "data" => Some(FileClass::Data),
+        "executable" | "exe" => Some(FileClass::Executable),
         "file" | "plain" => Some(FileClass::File),
         _ => None,
     }

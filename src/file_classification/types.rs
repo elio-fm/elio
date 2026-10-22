@@ -14,6 +14,7 @@ pub(crate) enum FileClass {
     Font,
     Data,
     File,
+    Executable,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -357,6 +358,10 @@ pub(super) const fn plain(
         specific_type_label,
         preview: PreviewSpec::plain_text(),
     }
+}
+
+pub(super) const fn executable_file_facts() -> FileFacts {
+    plain(FileClass::Executable, Some("Executable"))
 }
 
 pub(super) const fn source_only(

@@ -107,6 +107,11 @@ color = "#d78eff"
 icon = "󰆼"
 color = "#59de94"
 
+[classes.executable]
+icon = ""
+color = "#50fa7b"
+name_color = "#50fa7b"
+
 [classes.file]
 icon = "󰈔"
 color = "#d6def0"
