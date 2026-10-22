@@ -292,6 +292,7 @@ https://elio-fm.github.io/docs/configuration/
 |---|---|
 | `Space` `*` | Toggle selection |
 | `Ctrl+A` `*` | Select all |
+| `Esc` `*` | Clear selection |
 | `y` `*` | Yank (copy) |
 | `Ctrl+C` `*` | Copy selected or focused items to the system clipboard |
 | `x` `*` | Cut |
@@ -314,7 +315,7 @@ https://elio-fm.github.io/docs/configuration/
 | Key | Action |
 |---|---|
 | `?` | Open help overlay |
-| `Esc` | Cancel / clear selection / close overlay |
+| `Esc` `*` | Cancel current task / close overlay |
 | `q` `*` | Quit |
 | `Q` `*` | Quit without changing the shell directory |
 

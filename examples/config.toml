@@ -121,7 +121,7 @@
 #
 # Keys may be one-character strings, named keys, or modifier bindings.
 # Supported named keys: "left", "right", "up", "down", "enter", "space",
-# "tab", "backtab", "shift+tab", "backspace", "delete", "del", "insert",
+# "esc", "tab", "backtab", "shift+tab", "backspace", "delete", "del", "insert",
 # "ins", "pageup", "pagedown", "home", "end", "f1".."f12".
 # Named keys and modifiers are case-insensitive: "F2", "PageUp", "Ctrl+O".
 #
@@ -149,6 +149,7 @@
 # nav_right            = ["l", "right"]
 # quit                 = "q"
 # quit_without_cd      = "Q"
+# cancel               = "esc"  # Non-character keys only, to avoid conflicts with text inputs.
 # yank                 = "y"
 # cut                  = "x"
 # paste                = "p"
@@ -176,6 +177,8 @@
 # go_to                = "g"
 # filter_directory     = "/"
 # toggle_selection     = "space"
+# select_all           = "ctrl+a"
+# clear_selection      = "esc"
 # cycle_places_next    = "tab"
 # cycle_places_previous = "backtab"
 # go_parent            = "backspace"
@@ -183,7 +186,6 @@
 # page_down            = "pagedown"
 # jump_first           = "home"
 # jump_last            = ["G", "end"]
-# select_all           = "ctrl+a"
 # history_back         = "alt+left"
 # history_forward      = "alt+right"
 # sort                 = "s"

@@ -4,11 +4,16 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 impl App {
     pub(crate) fn handle_duplicate_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
-            if self.duplicate_loading() {
-                self.stop_duplicate_scan_with_partial_results();
-                return Ok(());
-            }
+        if crate::config::key_bindings().matches_cancel_key(key) && self.duplicate_loading() {
+            self.stop_duplicate_scan_with_partial_results();
+            return Ok(());
+        }
+        if crate::config::key_bindings().matches_clear_selection_key(key)
+            && self.clear_duplicate_selection()
+        {
+            return Ok(());
+        }
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.clear_duplicate_selection_or_close();
             return Ok(());
         }
@@ -121,13 +126,6 @@ impl App {
                 _ => {}
             }
         }
-        if key.modifiers == KeyModifiers::NONE && matches!(key.code, KeyCode::Esc) {
-            if self.duplicate_loading() {
-                self.stop_duplicate_scan_with_partial_results();
-                return Ok(());
-            }
-            self.clear_duplicate_selection_or_close();
-        }
         Ok(())
     }
 
@@ -190,16 +188,21 @@ impl App {
         }
     }
     pub(crate) fn clear_duplicate_selection_or_close(&mut self) {
-        if self
+        if !self.clear_duplicate_selection() {
+            self.close_duplicate_finder();
+        }
+    }
+
+    pub(crate) fn clear_duplicate_selection(&mut self) -> bool {
+        let cleared = self
             .duplicate_finder
             .session
             .as_mut()
-            .is_some_and(crate::duplicate_finder::DuplicateFinderSession::clear_selection)
-        {
+            .is_some_and(crate::duplicate_finder::DuplicateFinderSession::clear_selection);
+        if cleared {
             self.status.clear();
-            return;
         }
-        self.close_duplicate_finder();
+        cleared
     }
     pub(crate) fn reveal_duplicate_focus(&mut self) -> Result<()> {
         let Some(path) = self.duplicate_focused_path() else {

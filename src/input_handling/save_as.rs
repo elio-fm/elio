@@ -10,6 +10,14 @@ impl App {
         let Some(state) = self.chooser.save_as_mut() else {
             return;
         };
+        if crate::config::key_bindings().matches_cancel_key(key) {
+            if state.overwrite_path().is_some() {
+                state.cancel_overwrite();
+            } else {
+                state.close();
+            }
+            return;
+        }
         if let Some(path) = state.overwrite_path() {
             match key.code {
                 KeyCode::Left | KeyCode::Char('h') => {
@@ -25,10 +33,6 @@ impl App {
                     self.confirm_save_as_path(&path, true);
                 }
                 KeyCode::Enter => state.cancel_overwrite(),
-                KeyCode::Esc => state.cancel_overwrite(),
-                KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => {
-                    state.cancel_overwrite()
-                }
                 _ => {}
             }
             return;
@@ -59,8 +63,6 @@ impl App {
                 remove_char_range(input, *cursor, end);
                 state.clear_error();
             }
-            KeyCode::Esc => state.close(),
-            KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => state.close(),
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => self.submit_save_as(),
             KeyCode::Left if key.modifiers == KeyModifiers::NONE => {
                 let (_, cursor) = state.input_mut();

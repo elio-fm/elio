@@ -2640,7 +2640,7 @@ fn open_with_shortcut_confirms_row_and_closes_overlay() {
 }
 
 #[test]
-fn ctrl_c_closes_open_with_overlay() {
+fn ctrl_c_does_not_close_open_with_overlay() {
     let root = temp_path("open-with-overlay-ctrl-c");
 
     let mut app = App::new_at(root.clone()).expect("failed to create app");
@@ -2650,8 +2650,8 @@ fn ctrl_c_closes_open_with_overlay() {
         KeyCode::Char('c'),
         KeyModifiers::CONTROL,
     )))
-    .expect("Ctrl-C should close the overlay");
-    assert!(app.overlays.open_with.is_none());
+    .expect("Ctrl-C should be handled");
+    assert!(app.overlays.open_with.is_some());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }

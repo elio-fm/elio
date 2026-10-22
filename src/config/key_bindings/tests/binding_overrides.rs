@@ -25,10 +25,80 @@ fn keys_default_bindings_are_sane() {
     );
     assert_eq!(config.keys.delete_permanently.to_string(), "D/Shift+Del");
     assert_eq!(config.keys.choose.to_string(), "Enter");
+    assert_eq!(config.keys.clear_selection.to_string(), "Esc");
+    assert_eq!(config.keys.cancel.to_string(), "Esc");
     assert_eq!(config.keys.quit, 'q');
     assert_eq!(config.keys.quit_without_cd, 'Q');
     assert_eq!(config.keys.zoxide, 'z');
     assert_eq!(config.keys.shell, '!');
+}
+
+#[test]
+fn cancel_binding_can_be_overridden() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+cancel = "ctrl+q"
+"#,
+    )
+    .expect("config should parse");
+
+    let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL);
+    assert_eq!(config.keys.action_for_key(key), Some(Action::Cancel));
+    assert_eq!(
+        config.keys.action_for_key(KeyEvent::from(KeyCode::Esc)),
+        Some(Action::ClearSelection)
+    );
+}
+
+#[test]
+fn clear_selection_can_use_a_character_binding() {
+    let config = Config::from_str(
+        r#"
+[keys]
+clear_selection = "T"
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.action_for('T'), Some(Action::ClearSelection));
+    assert_eq!(config.keys.clear_selection.to_string(), "T");
+}
+
+#[test]
+fn cancel_rejects_bare_character_bindings() {
+    let config = Config::from_str(
+        r#"
+[keys]
+cancel = "T"
+"#,
+    )
+    .expect("config should parse");
+
+    assert_eq!(config.keys.cancel.to_string(), "Esc");
+}
+
+#[test]
+fn clear_selection_and_cancel_may_share_a_binding() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let config = Config::from_str(
+        r#"
+[keys]
+clear_selection = "ctrl+q"
+cancel = "ctrl+q"
+"#,
+    )
+    .expect("config should parse");
+
+    let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL);
+    assert_eq!(
+        config.keys.action_for_key(key),
+        Some(Action::ClearSelection)
+    );
+    assert!(config.keys.matches_cancel_key(key));
 }
 
 #[test]

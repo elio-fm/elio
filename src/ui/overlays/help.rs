@@ -133,7 +133,7 @@ pub(in crate::ui) fn render_help_overlay(
     } else {
         area.width.saturating_sub(4).clamp(44, 90)
     };
-    let popup_height = area.height.saturating_sub(2).clamp(9, 37);
+    let popup_height = area.height.saturating_sub(2).clamp(9, 38);
     let popup = helpers::centered_rect(area, popup_width, popup_height);
     state.help_panel = Some(popup);
     frame.render_widget(Clear, popup);
@@ -162,7 +162,7 @@ pub(in crate::ui) fn render_help_overlay(
     );
 
     let inner = helpers::inner_with_padding(popup);
-    if inner.width >= 88 && inner.height >= 33 {
+    if wide_help_fits(inner, &sections, palette) {
         render_wide_help(frame, inner, &sections, state, palette);
     } else {
         render_compact_help(frame, inner, &sections, scroll_top, state, palette);
@@ -218,6 +218,25 @@ fn render_wide_help(
             .wrap(Wrap { trim: false }),
         cols[2],
     );
+}
+
+fn wide_help_fits(body: Rect, sections: &[HelpSection], palette: Palette) -> bool {
+    if body.width < 88 || sections.len() < 5 {
+        return false;
+    }
+
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(40),
+            Constraint::Length(3),
+            Constraint::Length(45),
+        ])
+        .split(body);
+    let left_lines = help_column_lines(cols[0].width, &sections[..4], palette).len();
+    let right_lines = help_column_lines(cols[2].width, &sections[4..], palette).len();
+
+    left_lines.max(right_lines) <= body.height as usize
 }
 
 fn render_compact_help(
@@ -412,6 +431,7 @@ fn navigation_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
             "cycle places",
         ),
         keys.pair_action(&kb.history_back, &kb.history_forward, "back / forward"),
+        keys.action(&kb.cancel, "cancel / close"),
     ]);
     entries(items)
 }
@@ -421,7 +441,7 @@ fn clipboard_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
     entries([
         keys.action(&kb.toggle_selection, "toggle selection"),
         keys.action(&kb.select_all, "select all"),
-        e("Esc", "clear selection"),
+        keys.action(&kb.clear_selection, "clear selection"),
         keys.action(&kb.yank, "yank (copy)"),
         keys.action(&kb.cut, "cut"),
         keys.action(&kb.paste, "paste"),

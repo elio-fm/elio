@@ -92,15 +92,12 @@ impl App {
     }
 
     pub(crate) fn handle_copy_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.file_operations.dismiss_copy();
             return Ok(());
         }
 
         match key.code {
-            KeyCode::Esc => {
-                self.file_operations.dismiss_copy();
-            }
             KeyCode::Char(ch)
                 if !key
                     .modifiers

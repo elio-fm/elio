@@ -48,14 +48,6 @@ pub(crate) struct FileOperationsState {
 }
 
 impl FileOperationsState {
-    pub(crate) fn has_active_job(&self) -> bool {
-        self.trash_progress.is_some()
-            || self.restore_progress.is_some()
-            || self.archive_create_progress.is_some()
-            || self.archive_extract_progress.is_some()
-            || self.paste_progress.is_some()
-    }
-
     pub(crate) fn overlay_blocks_terminal_images(&self) -> bool {
         self.trash.is_some()
             || self.restore.is_some()

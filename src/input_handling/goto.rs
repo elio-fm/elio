@@ -1,25 +1,18 @@
 use crate::app::App;
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 
 impl App {
     pub(crate) fn handle_goto_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.dismiss_goto_overlay();
             return Ok(());
         }
 
-        match key.code {
-            KeyCode::Esc => {
-                self.dismiss_goto_overlay();
-            }
-            _ => {
-                if let Some(index) = crate::config::normalized_plain_key_char(key)
-                    .and_then(|ch| self.goto_row_index_for_shortcut(ch))
-                {
-                    self.confirm_goto_index(index)?;
-                }
-            }
+        if let Some(index) = crate::config::normalized_plain_key_char(key)
+            .and_then(|ch| self.goto_row_index_for_shortcut(ch))
+        {
+            self.confirm_goto_index(index)?;
         }
 
         Ok(())

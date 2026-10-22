@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added i → Item to the Copy to Clipboard overlay, allowing files and folders to be copied and pasted across compatible applications on Linux and BSD.
+- Added configurable `clear_selection` and `cancel` actions, both bound to Esc by default.
 
 ### Changed
 

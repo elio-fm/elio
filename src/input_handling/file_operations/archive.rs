@@ -187,13 +187,12 @@ impl App {
     }
 
     pub(crate) fn handle_archive_create_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.file_operations.dismiss_archive_create();
             return Ok(());
         }
 
         match key.code {
-            KeyCode::Esc => self.file_operations.dismiss_archive_create(),
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => self.confirm_archive_create(),
             KeyCode::Char('p' | 'P')
                 if key.modifiers.contains(KeyModifiers::ALT)
@@ -391,7 +390,7 @@ impl App {
     }
 
     pub(crate) fn handle_archive_password_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
+        if crate::config::key_bindings().matches_cancel_key(key) {
             self.cancel_archive_password_prompt()?;
             return Ok(());
         }
@@ -402,9 +401,6 @@ impl App {
         }
 
         match key.code {
-            KeyCode::Esc => {
-                self.cancel_archive_password_prompt()?;
-            }
             KeyCode::Enter if key.modifiers == KeyModifiers::NONE => {
                 self.confirm_archive_password()?;
             }
