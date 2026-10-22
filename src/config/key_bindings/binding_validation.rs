@@ -377,6 +377,12 @@ pub(super) fn resolve_key_overrides(
             override_value: overrides.cancel,
             default: defaults.cancel.clone(),
         },
+        RawBinding {
+            name: "paste_item",
+            action: Action::PasteItem,
+            override_value: overrides.paste_item,
+            default: defaults.paste_item.clone(),
+        },
     ];
 
     // Step 1: parse each override independently, falling back to default on
@@ -455,6 +461,7 @@ pub(super) fn resolve_key_overrides(
         yank: resolved(2),
         cut: resolved(3),
         paste: resolved(4),
+        paste_item: resolved(53),
         create_archive: resolved(5),
         extract_archive: resolved(6),
         symlink_absolute: resolved(7),

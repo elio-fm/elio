@@ -294,12 +294,13 @@ https://elio-fm.github.io/docs/configuration/
 | `Ctrl+A` `*` | Select all |
 | `Esc` `*` | Clear selection |
 | `y` `*` | Yank (copy) |
-| `Ctrl+C` `*` | Copy selected or focused items to the system clipboard |
 | `x` `*` | Cut |
 | `p` `*` | Paste |
+| `c` `*` | Open the Copy to clipboard menu |
+| `Ctrl+C` `*` | Copy items to the system clipboard |
+| `Ctrl+v` `*` | Paste items from the system clipboard |
 | `-` `*` | Create absolute symlink from yanked items |
 | `_` `*` | Create relative symlink from yanked items |
-| `c` `*` | Copy path details to clipboard |
 
 ### Mouse
 

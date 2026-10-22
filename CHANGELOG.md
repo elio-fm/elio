@@ -10,13 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added i → Item to the Copy to Clipboard overlay, allowing files and folders to be copied and pasted across compatible applications on Linux and BSD.
+- Added file pasting from the system clipboard via the terminal's paste shortcut or configurable `paste_item` (`Ctrl+v`) action on Linux and BSD.
 - Added configurable `clear_selection` and `cancel` actions, both bound to Esc by default.
 
 ### Changed
 
 - Made Trash, Delete, and Restore popup scrollbars match the style of the rest of the scrollbars.
 - Made scrollbars draggable.
-- Changed Ctrl+C from cancel to the configurable `copy_item` action, which copies selected or focused items to the system clipboard.
+- Changed Ctrl+C from cancel to the configurable `copy_item` action, which copies items to the system clipboard.
 - Renamed the `copy_path` keybinding to `copy_to_clipboard`; `copy_path` remains accepted for existing configs.
 
 ## [1.14.0] - 2026-10-19

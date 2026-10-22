@@ -5,6 +5,7 @@ mod copy_move;
 mod copy_to_clipboard;
 mod create;
 mod editor_bulk_rename;
+mod external_file_clipboard;
 mod file_operations_state;
 mod rename;
 mod restore;
@@ -41,6 +42,7 @@ pub(crate) use editor_bulk_rename::{BulkRenameConfirmation, EditorRenameConfirmO
 pub(crate) use editor_bulk_rename::{
     BulkRenameEditorSession, EditorBulkRenameLaunch, EditorRenameReview,
 };
+pub(crate) use external_file_clipboard::read_external_file_clipboard;
 pub(crate) use file_operations_state::FileOperationsState;
 pub(crate) use rename::RenameOverlay;
 pub(crate) use restore::{RestoreConfirmation, RestoreOverlay, RestoreProgress, RestoreRequest};

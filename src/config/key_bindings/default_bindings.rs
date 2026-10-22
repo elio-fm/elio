@@ -11,6 +11,7 @@ impl Default for KeyBindings {
             yank: KeyList::one('y'),
             cut: KeyList::one('x'),
             paste: KeyList::one('p'),
+            paste_item: KeyList(vec![KeySpec::ctrl_char('v')]),
             create_archive: KeyList::one('C'),
             extract_archive: KeyList::one('e'),
             symlink_absolute: KeyList::one('-'),

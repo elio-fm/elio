@@ -108,44 +108,6 @@ impl FileOperationsState {
     }
 }
 
-#[cfg(all(
-    test,
-    any(
-        target_os = "linux",
-        target_os = "freebsd",
-        target_os = "openbsd",
-        target_os = "netbsd",
-        target_os = "dragonfly"
-    )
-))]
-mod item_clipboard_tests {
-    use super::*;
-
-    #[test]
-    fn wayland_offer_includes_file_operation_and_portable_uri_targets() {
-        let payloads = item_clipboard_payloads(&[PathBuf::from("/tmp/résumé #1")]);
-        assert_eq!(
-            payloads
-                .iter()
-                .map(|(mime, _)| mime.as_str())
-                .collect::<Vec<_>>(),
-            [
-                "x-special/gnome-copied-files",
-                "text/uri-list",
-                "text/plain;charset=utf-8",
-            ]
-        );
-        assert_eq!(
-            String::from_utf8_lossy(&payloads[0].1),
-            "copy\nfile:///tmp/r%C3%A9sum%C3%A9%20%231"
-        );
-        assert_eq!(
-            String::from_utf8_lossy(&payloads[1].1),
-            "file:///tmp/r%C3%A9sum%C3%A9%20%231"
-        );
-    }
-}
-
 fn clipboard_status_message(error: &anyhow::Error) -> String {
     let detail = error.to_string();
     if detail.contains("no clipboard tool succeeded") || detail.contains("os error 2") {
@@ -333,7 +295,7 @@ fn write_items_to_system_clipboard(paths: &[PathBuf]) -> Result<()> {
     target_os = "netbsd",
     target_os = "dragonfly"
 ))]
-fn item_clipboard_payloads(paths: &[PathBuf]) -> Vec<(String, Vec<u8>)> {
+pub(super) fn item_clipboard_payloads(paths: &[PathBuf]) -> Vec<(String, Vec<u8>)> {
     let uris = item_clipboard_uris(paths);
     vec![
         (

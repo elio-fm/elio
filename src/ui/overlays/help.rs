@@ -447,6 +447,7 @@ fn clipboard_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
         keys.action(&kb.paste, "paste"),
         keys.action(&kb.copy_to_clipboard, "copy to clipboard"),
         keys.action(&kb.copy_item, "copy item"),
+        keys.action(&kb.paste_item, "paste item"),
         keys.action(&kb.symlink_absolute, "symlink absolute"),
         keys.action(&kb.symlink_relative, "symlink relative"),
     ])
