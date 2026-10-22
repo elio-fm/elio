@@ -139,7 +139,7 @@
 # that use the same key.
 #
 # Reserved bare keys: ? + =
-# Reserved shortcuts: Ctrl+C, Ctrl+Plus/Minus
+# Reserved shortcuts: Ctrl+Plus/Minus
 # Omit any key to keep the built-in default shown in the comment.
 #
 # [keys]
@@ -163,6 +163,7 @@
 # rename_in_editor     = ["R", "shift+F2"]
 # restore_from_trash   = "r"
 # copy_path            = "c"
+# copy_item            = "ctrl+c"
 # search_folders       = "f"
 # search_files         = "ctrl+f"
 # find_duplicates      = "alt+d"

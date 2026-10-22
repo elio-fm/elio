@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 impl App {
     pub(crate) fn handle_duplicate_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
+        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
             if self.duplicate_loading() {
                 self.stop_duplicate_scan_with_partial_results();
                 return Ok(());
@@ -39,6 +39,10 @@ impl App {
                 }
                 Action::CopyPath => {
                     self.open_copy_overlay_for_paths(self.duplicate_action_paths());
+                    return Ok(());
+                }
+                Action::CopyItem => {
+                    self.copy_paths_to_system_clipboard(self.duplicate_action_paths());
                     return Ok(());
                 }
                 Action::Rename => {

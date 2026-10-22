@@ -56,6 +56,17 @@ pub(crate) struct CopyOverlay {
 }
 
 impl FileOperationsState {
+    pub(crate) fn copy_items_to_system_clipboard(&mut self, paths: &[PathBuf]) -> String {
+        match write_items_to_system_clipboard(paths) {
+            Ok(()) => format!(
+                "Copied {} {}",
+                paths.len(),
+                if paths.len() == 1 { "item" } else { "items" }
+            ),
+            Err(error) => item_clipboard_status_message(&error),
+        }
+    }
+
     pub(crate) fn copy_overlay(&self) -> Option<&CopyOverlay> {
         self.copy.as_ref()
     }

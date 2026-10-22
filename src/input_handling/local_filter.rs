@@ -42,7 +42,7 @@ impl App {
     }
 
     pub(crate) fn handle_local_filter_key(&mut self, key: KeyEvent) -> Result<()> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
+        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('c')) {
             self.clear_local_filter();
             return Ok(());
         }

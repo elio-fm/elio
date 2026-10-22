@@ -143,11 +143,22 @@ fn esc_clears_selection_after_directory_change() {
 }
 
 #[test]
-fn ctrl_c_clears_selection_after_directory_change() {
-    assert_clear_selection_after_directory_change(
-        "persistent-selection-ctrl-c",
-        KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
-    );
+fn ctrl_c_keeps_selection_after_directory_change() {
+    let (root, child, _, mut app) =
+        app_in_child_with_parent_selection("persistent-selection-ctrl-c");
+
+    assert_eq!(app.file_browser.cwd, child);
+    assert_eq!(app.selection_count(), 1);
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('c'),
+        KeyModifiers::CONTROL,
+    )))
+    .expect("Ctrl+C should copy the selected item");
+
+    assert_eq!(app.selection_count(), 1);
+
+    cleanup_app_temp_root(app, root);
 }
 
 #[test]

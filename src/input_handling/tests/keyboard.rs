@@ -616,7 +616,7 @@ fn capital_p_enters_and_escape_keys_exit_fullscreen_preview() {
     .expect("Ctrl+C should leave fullscreen preview");
     assert!(app.preview_visible());
     assert!(!app.preview_fullscreen());
-    assert_eq!(app.status_message(), "Exited fullscreen preview");
+    assert_eq!(app.status_message(), "Nothing to copy");
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
