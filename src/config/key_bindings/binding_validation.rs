@@ -37,6 +37,21 @@ pub(super) fn resolve_key_overrides(
 ) -> KeyBindings {
     warn_unknown_key_actions(&overrides.unknown);
 
+    let copy_to_clipboard = match (overrides.copy_to_clipboard, overrides.copy_path) {
+        (Some(current), Some(_)) => {
+            eprintln!(
+                "elio: keys.copy_path is deprecated; keys.copy_to_clipboard takes precedence"
+            );
+            Some(current)
+        }
+        (Some(current), None) => Some(current),
+        (None, Some(legacy)) => {
+            eprintln!("elio: keys.copy_path is deprecated; use keys.copy_to_clipboard");
+            Some(legacy)
+        }
+        (None, None) => None,
+    };
+
     let choose = overrides
         .choose
         .as_ref()
@@ -135,10 +150,10 @@ pub(super) fn resolve_key_overrides(
             default: defaults.restore_from_trash.clone(),
         },
         RawBinding {
-            name: "copy_path",
-            action: Action::CopyPath,
-            override_value: overrides.copy_path,
-            default: defaults.copy_path.clone(),
+            name: "copy_to_clipboard",
+            action: Action::CopyToClipboard,
+            override_value: copy_to_clipboard,
+            default: defaults.copy_to_clipboard.clone(),
         },
         RawBinding {
             name: "search_folders",
@@ -421,7 +436,7 @@ pub(super) fn resolve_key_overrides(
         rename: resolved(12),
         rename_in_editor: resolved(13),
         restore_from_trash: resolved(14),
-        copy_path: resolved(15),
+        copy_to_clipboard: resolved(15),
         search_folders: resolved(16),
         search_files: resolved(17),
         filter_directory: resolved(18),

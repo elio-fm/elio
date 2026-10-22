@@ -57,7 +57,7 @@ fn fullscreen_preview_explicit_commands_exit_before_dispatch() {
         Action::SymlinkAbsolute,
         Action::SymlinkRelative,
         Action::SelectAll,
-        Action::CopyPath,
+        Action::CopyToClipboard,
         Action::SearchFolders,
         Action::SearchFiles,
         Action::FilterDirectory,
@@ -861,7 +861,7 @@ fn fullscreen_preview_exits_for_explicit_overlays_and_terminal_tasks() {
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('P'))))
         .expect("P should fullscreen preview");
     app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('c'))))
-        .expect("CopyPath should exit fullscreen and open copy overlay");
+        .expect("CopyToClipboard should exit fullscreen and open copy overlay");
     assert!(!app.preview_fullscreen());
     assert!(app.file_operations.copy_is_open());
     app.file_operations.dismiss_copy();

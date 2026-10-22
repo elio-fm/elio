@@ -37,7 +37,7 @@ impl App {
                     self.reveal_duplicate_focus()?;
                     return Ok(());
                 }
-                Action::CopyPath => {
+                Action::CopyToClipboard => {
                     self.open_copy_overlay_for_paths(self.duplicate_action_paths());
                     return Ok(());
                 }

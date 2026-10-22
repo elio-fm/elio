@@ -502,7 +502,7 @@ impl App {
                         .to_string();
                 }
             }
-            Action::CopyPath => self.open_copy_overlay(),
+            Action::CopyToClipboard => self.open_copy_overlay(),
             Action::SearchFolders => self.open_search_with_status(SearchScope::Folders),
             Action::SearchFiles => self.open_search_with_status(SearchScope::Files),
             Action::FilterDirectory => self.open_local_filter(),
@@ -725,7 +725,7 @@ pub(super) fn fullscreen_preview_exits_then_dispatches(action: crate::config::Ac
             | Action::SymlinkAbsolute
             | Action::SymlinkRelative
             | Action::SelectAll
-            | Action::CopyPath
+            | Action::CopyToClipboard
             | Action::CopyItem
             | Action::SearchFolders
             | Action::SearchFiles
