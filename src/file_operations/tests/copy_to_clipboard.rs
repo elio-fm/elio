@@ -353,7 +353,7 @@ fn copy_overlay_reports_short_error_when_no_clipboard_backend_is_available() {
     ))
     .expect("copy shortcut should not error");
 
-    assert_eq!(app.status, "Clipboard helper not found");
+    assert_eq!(app.status, "Clipboard unavailable");
     assert!(
         app.file_operations.copy_is_open(),
         "copy overlay should remain open when clipboard copy fails"

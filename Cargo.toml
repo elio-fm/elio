@@ -98,3 +98,7 @@ zbus = { version = "5.19", default-features = false, features = ["async-io"] }
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))'.dependencies]
 wayland-client = "0.31"
 wayland-protocols-wlr = { version = "0.2", features = ["client"] }
+# RustConnection speaks the X11 wire protocol directly. Do not enable x11rb's
+# libxcb-backed unsafe transport: minimal Linux installs may not provide libxcb's
+# development linker name, and elio does not use that implementation.
+x11rb = { version = "0.13", default-features = false }
