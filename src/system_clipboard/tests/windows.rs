@@ -41,3 +41,23 @@ fn unicode_text_payload_decodes_until_the_nul_terminator() {
         Some("hello résumé")
     );
 }
+
+#[test]
+fn file_text_strips_verbatim_prefixes_without_changing_file_drop_paths() {
+    let paths = [
+        PathBuf::from(r"\\?\C:\Users\miguel\Documents\PowerShell"),
+        PathBuf::from(r"\\?\UNC\server\share\folder with spaces"),
+    ];
+
+    assert_eq!(
+        windows::file_text_for_test(&paths).as_deref(),
+        Some("C:\\Users\\miguel\\Documents\\PowerShell\r\n\\\\server\\share\\folder with spaces")
+    );
+
+    let drop_data = windows::file_drop_data_for_test(&paths).unwrap();
+    assert_eq!(
+        windows::drop_files_from_bytes_for_test(&drop_data).unwrap(),
+        paths,
+        "CF_HDROP must retain verbatim paths"
+    );
+}
