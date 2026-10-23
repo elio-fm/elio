@@ -64,7 +64,7 @@ fn copy_overlay_populates_expected_rows_for_selected_file() {
 
 #[cfg(unix)]
 #[test]
-fn item_shortcut_copies_gnome_file_references_for_multiple_items() {
+fn item_shortcut_copies_uri_list_references_for_multiple_items() {
     let _lock = clipboard_env_lock();
     let root = temp_path("copy-overlay-items");
     let source = root.join("résumé #1.txt");
@@ -93,7 +93,7 @@ fn item_shortcut_copies_gnome_file_references_for_multiple_items() {
     assert_eq!(
         fs::read_to_string(&capture).expect("fake clipboard tool should capture payload"),
         format!(
-            "copy\nfile://{}\nfile://{}",
+            "file://{}\r\nfile://{}",
             link.as_os_str()
                 .as_encoded_bytes()
                 .iter()
