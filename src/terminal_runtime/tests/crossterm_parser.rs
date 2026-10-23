@@ -1,3 +1,4 @@
+// Parser regression coverage shared by Unix raw input and Windows VT input.
 use crossterm::event::{KeyEventState, KeyModifiers, MouseButton, MouseEvent};
 
 use super::*;

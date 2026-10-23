@@ -1,7 +1,7 @@
-// Adapted from crossterm 0.29's MIT-licensed Unix event parser so elio can
-// intercept Kitty OSC 72 DND before normal event parsing. This is intentionally
-// kept close to upstream crossterm; when bumping crossterm, compare and port
-// parser fixes.
+// Adapted from crossterm 0.29's MIT-licensed event parser. Unix uses it to
+// intercept Kitty OSC 72 DND before normal event parsing; Windows uses it for
+// VT input, including bracketed paste. This is intentionally kept close to
+// upstream crossterm; when bumping crossterm, compare and port parser fixes.
 use std::io;
 
 use crossterm::event::{
@@ -10,7 +10,7 @@ use crossterm::event::{
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) enum InternalEvent {
+pub(in crate::terminal_runtime) enum InternalEvent {
     Event(Event),
     CursorPosition(u16, u16),
     KeyboardEnhancementFlags(KeyboardEnhancementFlags),
@@ -33,7 +33,7 @@ fn could_not_parse_event_error() -> io::Error {
     io::Error::other("Could not parse an event.")
 }
 
-pub(super) fn parse_event(
+pub(in crate::terminal_runtime) fn parse_event(
     buffer: &[u8],
     input_available: bool,
 ) -> io::Result<Option<InternalEvent>> {
