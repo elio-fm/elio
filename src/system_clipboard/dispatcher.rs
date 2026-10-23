@@ -1,5 +1,7 @@
 #[cfg(target_os = "macos")]
 use super::macos;
+#[cfg(windows)]
+use super::windows;
 use super::{ClipboardError, FileClipboard, PathBuf};
 #[cfg(any(
     target_os = "linux",
@@ -15,6 +17,10 @@ pub(super) fn read_files() -> Option<FileClipboard> {
     #[cfg(target_os = "macos")]
     {
         macos::read_files()
+    }
+    #[cfg(windows)]
+    {
+        windows::read_files()
     }
     #[cfg(any(
         target_os = "linux",
@@ -36,6 +42,7 @@ pub(super) fn read_files() -> Option<FileClipboard> {
     }
     #[cfg(not(any(
         target_os = "macos",
+        windows,
         target_os = "linux",
         target_os = "freebsd",
         target_os = "openbsd",
@@ -52,6 +59,10 @@ pub(super) fn read_text() -> Option<String> {
     #[cfg(target_os = "macos")]
     {
         macos::read_text()
+    }
+    #[cfg(windows)]
+    {
+        windows::read_text()
     }
     #[cfg(any(
         target_os = "linux",
@@ -73,6 +84,7 @@ pub(super) fn read_text() -> Option<String> {
     }
     #[cfg(not(any(
         target_os = "macos",
+        windows,
         target_os = "linux",
         target_os = "freebsd",
         target_os = "openbsd",
@@ -89,6 +101,10 @@ pub(super) fn write_files(paths: &[PathBuf]) -> Result<(), ClipboardError> {
     #[cfg(target_os = "macos")]
     {
         macos::write_files(paths)
+    }
+    #[cfg(windows)]
+    {
+        windows::write_files(paths)
     }
     #[cfg(any(
         target_os = "linux",
@@ -110,6 +126,7 @@ pub(super) fn write_files(paths: &[PathBuf]) -> Result<(), ClipboardError> {
     }
     #[cfg(not(any(
         target_os = "macos",
+        windows,
         target_os = "linux",
         target_os = "freebsd",
         target_os = "openbsd",
@@ -143,9 +160,7 @@ pub(super) fn write_text(text: &str) -> Result<(), ClipboardError> {
     #[cfg(target_os = "macos")]
     return macos::write_text(text);
     #[cfg(windows)]
-    {
-        return run_text_helper("clip.exe", &[], text);
-    }
+    return windows::write_text(text);
     #[cfg(not(any(unix, windows)))]
     {
         let _ = text;
@@ -153,13 +168,7 @@ pub(super) fn write_text(text: &str) -> Result<(), ClipboardError> {
     }
 }
 
-#[cfg(windows)]
-fn run_text_helper(program: &str, args: &[&str], text: &str) -> Result<(), ClipboardError> {
-    platform_command(program, args, text)
-}
-
 #[cfg(any(
-    windows,
     target_os = "linux",
     target_os = "freebsd",
     target_os = "openbsd",

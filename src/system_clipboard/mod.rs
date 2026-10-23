@@ -10,6 +10,7 @@ use std::path::PathBuf;
 pub(crate) enum FileClipboardOperation {
     Copy,
     #[cfg(any(
+        windows,
         target_os = "linux",
         target_os = "freebsd",
         target_os = "openbsd",
@@ -29,7 +30,6 @@ pub(crate) struct FileClipboard {
 pub(crate) enum ClipboardError {
     Unavailable,
     #[cfg(any(
-        windows,
         target_os = "linux",
         target_os = "freebsd",
         target_os = "openbsd",
@@ -44,7 +44,6 @@ impl ClipboardError {
     pub(crate) fn item_status(self) -> &'static str {
         match self {
             #[cfg(any(
-                windows,
                 target_os = "linux",
                 target_os = "freebsd",
                 target_os = "openbsd",
@@ -58,7 +57,6 @@ impl ClipboardError {
     pub(crate) fn text_status(self) -> &'static str {
         match self {
             #[cfg(any(
-                windows,
                 target_os = "linux",
                 target_os = "freebsd",
                 target_os = "openbsd",
@@ -91,6 +89,8 @@ mod macos;
     target_os = "dragonfly"
 ))]
 mod wayland;
+#[cfg(windows)]
+mod windows;
 #[cfg(any(
     target_os = "linux",
     target_os = "freebsd",

@@ -39,6 +39,7 @@ impl App {
                 match clipboard.operation {
                     crate::system_clipboard::FileClipboardOperation::Copy => ClipOp::Yank,
                     #[cfg(any(
+                        windows,
                         target_os = "linux",
                         target_os = "freebsd",
                         target_os = "openbsd",
@@ -57,7 +58,7 @@ impl App {
         self.prepare_drag_and_drop_paths(paths, op)
     }
 
-    #[cfg(any(unix, test))]
+    #[cfg(any(unix, windows, test))]
     fn prepare_system_clipboard_paths(&mut self, paths: Vec<PathBuf>, op: ClipOp) -> Result<bool> {
         let preparation =
             self.file_operations

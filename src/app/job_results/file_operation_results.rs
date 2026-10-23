@@ -104,11 +104,10 @@ impl App {
                 && (nav_target.is_none() || nav_to_dest)
                 && !defer_reload_for_same_dest
             {
-                let reselect_path = if matches!(
-                    completion.origin,
-                    Some(crate::file_operations::PasteOrigin::Drop)
-                        | Some(crate::file_operations::PasteOrigin::SystemClipboard)
-                ) {
+                let reselect_path = if completion
+                    .origin
+                    .is_some_and(crate::file_operations::PasteOrigin::reselects_destination)
+                {
                     build.destination_paths.first().cloned()
                 } else {
                     None
