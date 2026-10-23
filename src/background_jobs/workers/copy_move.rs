@@ -1,5 +1,5 @@
 use super::*;
-use crate::file_operations::ClipOp;
+use crate::file_operations::{ClipOp, PasteOrigin};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -64,9 +64,10 @@ impl PastePool {
                 );
                 PasteShared::set_active(&shared_worker, false);
 
-                let verb = match request.op {
-                    ClipOp::Yank => "Copied",
-                    ClipOp::Cut => "Moved",
+                let verb = match (request.origin, request.op) {
+                    (PasteOrigin::ExternalClipboard, ClipOp::Yank) => "Pasted",
+                    (_, ClipOp::Yank) => "Copied",
+                    (_, ClipOp::Cut) => "Moved",
                 };
                 let status = if stopped_early {
                     match completed {

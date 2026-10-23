@@ -104,12 +104,15 @@ impl App {
                 && (nav_target.is_none() || nav_to_dest)
                 && !defer_reload_for_same_dest
             {
-                let reselect_path =
-                    if completion.origin == Some(crate::file_operations::PasteOrigin::Drop) {
-                        build.destination_paths.first().cloned()
-                    } else {
-                        None
-                    };
+                let reselect_path = if matches!(
+                    completion.origin,
+                    Some(crate::file_operations::PasteOrigin::Drop)
+                        | Some(crate::file_operations::PasteOrigin::ExternalClipboard)
+                ) {
+                    build.destination_paths.first().cloned()
+                } else {
+                    None
+                };
                 let _ = self.queue_directory_load(PendingDirectoryLoad {
                     token: 0,
                     target_cwd: dest_dir,

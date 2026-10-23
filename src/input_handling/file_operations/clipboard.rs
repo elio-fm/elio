@@ -34,16 +34,30 @@ impl App {
 
     pub(crate) fn paste_external_file_clipboard(&mut self) -> Result<()> {
         if let Some(clipboard) = crate::file_operations::read_external_file_clipboard() {
-            self.drop_external_paths(clipboard.paths, clipboard.op)?;
+            self.prepare_external_paths(
+                clipboard.paths,
+                clipboard.op,
+                crate::file_operations::PasteOrigin::ExternalClipboard,
+            )?;
         }
         Ok(())
     }
 
     #[cfg(any(unix, test))]
     pub(crate) fn drop_external_paths(&mut self, paths: Vec<PathBuf>, op: ClipOp) -> Result<bool> {
-        let preparation = self
-            .file_operations
-            .prepare_drop(&self.file_browser.cwd, paths, op);
+        self.prepare_external_paths(paths, op, crate::file_operations::PasteOrigin::Drop)
+    }
+
+    #[cfg(any(unix, test))]
+    fn prepare_external_paths(
+        &mut self,
+        paths: Vec<PathBuf>,
+        op: ClipOp,
+        origin: crate::file_operations::PasteOrigin,
+    ) -> Result<bool> {
+        let preparation =
+            self.file_operations
+                .prepare_drop(&self.file_browser.cwd, paths, op, origin);
         if let Some(request) = preparation.request {
             self.job_scheduler.submit_paste(request);
         }

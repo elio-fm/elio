@@ -253,24 +253,35 @@ fn write_items_to_system_clipboard(paths: &[PathBuf]) -> Result<()> {
         target_os = "dragonfly"
     ))]
     {
+        let mut errors = Vec::new();
         if wayland_session() {
-            return crate::file_operations::wayland_file_clipboard::offer(item_clipboard_payloads(
+            match crate::file_operations::wayland_file_clipboard::offer(item_clipboard_payloads(
                 paths,
-            ));
+            )) {
+                Ok(()) => return Ok(()),
+                Err(error) => errors.push(format!("Wayland clipboard: {error}")),
+            }
         }
 
         let (mime_type, payload) = item_clipboard_x11_payload(paths);
-        let mut errors = Vec::new();
-        for (program, args) in item_clipboard_command_candidates(&mime_type) {
-            match run_clipboard_command(&program, &args, &payload) {
+        let commands = item_clipboard_command_candidates(&mime_type);
+        for (program, args) in &commands {
+            match run_clipboard_command(program, args, &payload) {
                 Ok(()) => return Ok(()),
                 Err(error) => errors.push(format!("{program}: {error}")),
             }
         }
-        Err(anyhow!(
-            "no item clipboard tool succeeded ({})",
-            errors.join("; ")
-        ))
+        if commands.is_empty() {
+            Err(anyhow!(
+                "no item clipboard tool succeeded ({})",
+                errors.join("; ")
+            ))
+        } else {
+            Err(anyhow!(
+                "item clipboard tools failed ({})",
+                errors.join("; ")
+            ))
+        }
     }
 
     #[cfg(not(any(
@@ -348,33 +359,9 @@ fn gnome_copied_files_payload(uris: &[String]) -> String {
 ))]
 fn item_clipboard_x11_payload(paths: &[PathBuf]) -> (String, String) {
     let uris = item_clipboard_uris(paths);
-    if desktop_prefers_gnome_file_clipboard() {
-        (
-            GNOME_COPIED_FILES_MIME.to_string(),
-            gnome_copied_files_payload(&uris),
-        )
-    } else {
-        (URI_LIST_MIME.to_string(), uris.join("\r\n"))
-    }
-}
-
-#[cfg(any(
-    target_os = "linux",
-    target_os = "freebsd",
-    target_os = "openbsd",
-    target_os = "netbsd",
-    target_os = "dragonfly"
-))]
-fn desktop_prefers_gnome_file_clipboard() -> bool {
-    env::var("XDG_CURRENT_DESKTOP")
-        .unwrap_or_default()
-        .split(':')
-        .any(|desktop| {
-            matches!(
-                desktop.trim().to_ascii_lowercase().as_str(),
-                "gnome" | "ubuntu" | "cinnamon" | "pantheon" | "budgie"
-            )
-        })
+    // xclip can publish one explicit target. Use the portable URI-list format
+    // so both file managers and terminal paste handlers can consume it.
+    (URI_LIST_MIME.to_string(), uris.join("\r\n"))
 }
 
 #[cfg(any(

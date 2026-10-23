@@ -21,9 +21,10 @@ pub(crate) struct PasteProgress {
     pub(crate) origin: PasteOrigin,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PasteOrigin {
     Clipboard,
+    ExternalClipboard,
     Drop,
 }
 
@@ -41,6 +42,7 @@ pub(crate) struct PasteRequest {
     pub(crate) dest_dir: PathBuf,
     pub(crate) paths: Vec<PathBuf>,
     pub(crate) op: ClipOp,
+    pub(crate) origin: PasteOrigin,
 }
 
 pub(crate) struct PastePreparation {
@@ -165,6 +167,7 @@ impl FileOperationsState {
         cwd: &Path,
         paths: Vec<PathBuf>,
         op: ClipOp,
+        origin: PasteOrigin,
     ) -> DropPreparation {
         let paths: Vec<PathBuf> = paths.into_iter().filter(|path| path.exists()).collect();
         if paths.is_empty() {
@@ -192,7 +195,7 @@ impl FileOperationsState {
             dest_dir: cwd.to_path_buf(),
             paths,
             op,
-            origin: PasteOrigin::Drop,
+            origin,
         };
         if paste_would_copy_directory_into_itself(&request) {
             return DropPreparation {
@@ -256,6 +259,7 @@ impl FileOperationsState {
             dest_dir: request.dest_dir,
             paths: request.paths,
             op: request.op,
+            origin: request.origin,
         }
     }
 }
