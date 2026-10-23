@@ -5,6 +5,8 @@ use crossterm::event::{self, Event};
 
 #[cfg(unix)]
 use super::kitty_dnd;
+#[cfg(windows)]
+use super::windows_vt_input;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum InputEvent {
@@ -17,10 +19,25 @@ pub(super) enum InputReader {
     Crossterm,
     #[cfg(unix)]
     KittyDnd(kitty_dnd::InputReader),
+    #[cfg(windows)]
+    WindowsVt(windows_vt_input::InputReader),
 }
 
 impl InputReader {
     pub(super) fn new(use_kitty_dnd_input: bool) -> io::Result<Self> {
+        #[cfg(windows)]
+        {
+            let _ = use_kitty_dnd_input;
+            // VT input is the only Windows path that receives Windows
+            // Terminal's bracketed-paste delimiters as a stream. If the
+            // console rejects it, retain crossterm's established reader.
+            return match windows_vt_input::InputReader::spawn() {
+                Ok(reader) => Ok(Self::WindowsVt(reader)),
+                Err(_) => Ok(Self::Crossterm),
+            };
+        }
+
+        #[cfg(not(windows))]
         if use_kitty_dnd_input {
             #[cfg(unix)]
             {
@@ -46,6 +63,8 @@ impl InputReader {
             }
             #[cfg(unix)]
             Self::KittyDnd(reader) => Ok(reader.recv_timeout(timeout)?),
+            #[cfg(windows)]
+            Self::WindowsVt(reader) => Ok(reader.recv_timeout(timeout)?),
         }
     }
 
@@ -60,6 +79,8 @@ impl InputReader {
             }
             #[cfg(unix)]
             Self::KittyDnd(reader) => Ok(reader.try_recv()?),
+            #[cfg(windows)]
+            Self::WindowsVt(reader) => Ok(reader.try_recv()?),
         }
     }
 
@@ -68,7 +89,11 @@ impl InputReader {
         if let Self::KittyDnd(reader) = self {
             reader.set_paused(paused);
         }
-        #[cfg(not(unix))]
+        #[cfg(windows)]
+        if let Self::WindowsVt(reader) = self {
+            reader.set_paused(paused);
+        }
+        #[cfg(not(any(unix, windows)))]
         let _ = paused;
     }
 

@@ -1,6 +1,4 @@
 #[cfg(unix)]
-mod crossterm_parser;
-#[cfg(unix)]
 mod drag_and_drop;
 #[cfg(unix)]
 mod drag_card;
