@@ -84,6 +84,19 @@ impl App {
         Ok(())
     }
 
+    fn text_input_is_open(&self) -> bool {
+        self.chooser
+            .save_as()
+            .is_some_and(|save| save.is_open() && !save.overwrite())
+            || self.file_operations.archive_password_is_open()
+            || self.file_operations.archive_create_is_open()
+            || self.file_operations.create_is_open()
+            || self.file_operations.rename_is_open()
+            || self.file_operations.bulk_rename_is_open()
+            || self.fuzzy_finder.search.is_some()
+            || self.local_filter_is_editing()
+    }
+
     fn paste_into_archive_password(&mut self, text: &str) -> Result<()> {
         let text = single_line_paste_text(text);
         if let Some(overlay) = self.file_operations.archive_password_overlay_mut() {
@@ -259,6 +272,17 @@ impl App {
         if key.kind == KeyEventKind::Release {
             return Ok(());
         }
+
+        if self.text_input_is_open()
+            && crate::config::key_bindings().action_for_key_in_context(key, self.key_context())
+                == Some(crate::config::Action::PasteItem)
+        {
+            if let Some(text) = crate::file_operations::read_external_text_clipboard() {
+                self.handle_paste(&text)?;
+            }
+            return Ok(());
+        }
+
         self.cancel_scrollbar_drag();
 
         if self.file_operations.trash_is_open() {

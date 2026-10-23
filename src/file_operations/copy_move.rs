@@ -251,7 +251,7 @@ impl FileOperationsState {
             completed: 0,
             total: request.paths.len(),
             op: request.op,
-            origin: request.origin.clone(),
+            origin: request.origin,
         });
         self.paste_dest_dir = Some(request.dest_dir.clone());
         PasteRequest {
