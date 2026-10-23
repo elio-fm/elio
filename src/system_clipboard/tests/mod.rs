@@ -8,3 +8,5 @@
 mod freedesktop;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(windows)]
+mod windows;

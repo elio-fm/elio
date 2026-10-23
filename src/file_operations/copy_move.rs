@@ -25,7 +25,19 @@ pub(crate) struct PasteProgress {
 pub(crate) enum PasteOrigin {
     Clipboard,
     SystemClipboard,
+    #[cfg(any(unix, test))]
     Drop,
+}
+
+impl PasteOrigin {
+    pub(crate) fn reselects_destination(self) -> bool {
+        match self {
+            Self::Clipboard => false,
+            Self::SystemClipboard => true,
+            #[cfg(any(unix, test))]
+            Self::Drop => true,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -74,6 +86,7 @@ struct ImportedPathPreparation {
 #[derive(Clone, Copy)]
 enum ImportedTransferKind {
     SystemClipboard,
+    #[cfg(any(unix, test))]
     DragAndDrop,
 }
 
@@ -81,6 +94,7 @@ impl ImportedTransferKind {
     fn origin(self) -> PasteOrigin {
         match self {
             Self::SystemClipboard => PasteOrigin::SystemClipboard,
+            #[cfg(any(unix, test))]
             Self::DragAndDrop => PasteOrigin::Drop,
         }
     }
@@ -88,6 +102,7 @@ impl ImportedTransferKind {
     fn empty_status(self) -> &'static str {
         match self {
             Self::SystemClipboard => "Clipboard contains no local files",
+            #[cfg(any(unix, test))]
             Self::DragAndDrop => "Drop contains no local files",
         }
     }
@@ -95,6 +110,7 @@ impl ImportedTransferKind {
     fn self_copy_status(self) -> &'static str {
         match self {
             Self::SystemClipboard => "Cannot paste a folder into itself",
+            #[cfg(any(unix, test))]
             Self::DragAndDrop => "Cannot drop a folder into itself",
         }
     }
@@ -102,6 +118,7 @@ impl ImportedTransferKind {
     fn queued_label(self) -> &'static str {
         match self {
             Self::SystemClipboard => "Queued paste",
+            #[cfg(any(unix, test))]
             Self::DragAndDrop => "Queued drop",
         }
     }
