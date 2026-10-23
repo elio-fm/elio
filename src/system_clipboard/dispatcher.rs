@@ -122,7 +122,7 @@ pub(super) fn write_files(paths: &[PathBuf]) -> Result<(), ClipboardError> {
         {
             return x11::write_files(paths);
         }
-        Err(ClipboardError::HelperMissing)
+        Err(ClipboardError::Unavailable)
     }
     #[cfg(not(any(
         target_os = "macos",

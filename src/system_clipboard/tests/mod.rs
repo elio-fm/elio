@@ -10,3 +10,11 @@ mod freedesktop;
 mod macos;
 #[cfg(windows)]
 mod windows;
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+mod x11;

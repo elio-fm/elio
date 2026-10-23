@@ -3,6 +3,9 @@
 use super::{FileClipboard, FileClipboardOperation};
 use std::path::{Path, PathBuf};
 
+const KDE_URI_LIST: &str = "application/x-kde4-urilist";
+const KDE_CUT_SELECTION: &str = "application/x-kde-cutselection";
+
 pub(super) fn read_file_clipboard(
     mut read_type: impl FnMut(&str) -> Option<Vec<u8>>,
     types: &[&str],
@@ -13,16 +16,15 @@ pub(super) fn read_file_clipboard(
     {
         return Some(clipboard);
     }
-    if !types.contains(&"text/uri-list") {
-        return None;
-    }
-    let paths = parse_uri_list(&read_type("text/uri-list")?);
-    if paths.is_empty() {
-        return None;
-    }
-    let operation = if types.contains(&"application/x-kde-cutselection")
-        && read_type("application/x-kde-cutselection").and_then(|value| value.first().copied())
-            == Some(b'1')
+    let paths = ["text/uri-list", KDE_URI_LIST]
+        .into_iter()
+        .filter(|mime| types.contains(mime))
+        .find_map(|mime| {
+            let paths = parse_uri_list(&read_type(mime)?);
+            (!paths.is_empty()).then_some(paths)
+        })?;
+    let operation = if types.contains(&KDE_CUT_SELECTION)
+        && read_type(KDE_CUT_SELECTION).and_then(|value| value.first().copied()) == Some(b'1')
     {
         FileClipboardOperation::Cut
     } else {
@@ -46,12 +48,21 @@ pub(super) fn read_text(
 
 pub(super) fn file_payloads(paths: &[PathBuf]) -> Vec<(String, Vec<u8>)> {
     let uris = uri_list(paths);
+    // GNOME's private payload rejects an empty final URI line. Its newline
+    // framing is deliberately distinct from the CRLF-terminated URI-list
+    // payloads used by portable and KDE consumers.
+    let gnome_uris = uris
+        .strip_suffix("\r\n")
+        .unwrap_or(&uris)
+        .replace("\r\n", "\n");
     vec![
         (
             "x-special/gnome-copied-files".to_string(),
-            format!("copy\n{}", uris.replace("\r\n", "\n")).into_bytes(),
+            format!("copy\n{gnome_uris}").into_bytes(),
         ),
         ("text/uri-list".to_string(), uris.clone().into_bytes()),
+        (KDE_URI_LIST.to_string(), uris.clone().into_bytes()),
+        (KDE_CUT_SELECTION.to_string(), b"0".to_vec()),
         (
             "text/plain;charset=utf-8".to_string(),
             paths
@@ -65,11 +76,16 @@ pub(super) fn file_payloads(paths: &[PathBuf]) -> Vec<(String, Vec<u8>)> {
 }
 
 pub(super) fn uri_list(paths: &[PathBuf]) -> String {
-    paths
+    let uris = paths
         .iter()
         .map(|path| file_uri(path))
         .collect::<Vec<_>>()
-        .join("\r\n")
+        .join("\r\n");
+    if uris.is_empty() {
+        String::new()
+    } else {
+        format!("{uris}\r\n")
+    }
 }
 
 fn parse_gnome_copied_files(payload: &[u8]) -> Option<FileClipboard> {
