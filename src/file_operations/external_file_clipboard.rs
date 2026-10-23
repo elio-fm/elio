@@ -29,6 +29,94 @@ pub(crate) fn read_external_file_clipboard() -> Option<ExternalFileClipboard> {
     None
 }
 
+pub(crate) fn read_external_text_clipboard() -> Option<String> {
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    {
+        if wayland_session()
+            && let Some(text) = read_wayland_text_clipboard()
+        {
+            return Some(text);
+        }
+        if std::env::var_os("DISPLAY").is_some() {
+            return read_x11_text_clipboard();
+        }
+    }
+
+    None
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+fn read_wayland_text_clipboard() -> Option<String> {
+    let output = run_command("wl-paste", &["--list-types"])?;
+    if !output.status.success() {
+        return None;
+    }
+    let types = String::from_utf8_lossy(&output.stdout);
+    let types = types.lines().map(str::trim).collect::<Vec<_>>();
+    read_text_clipboard_types(
+        |mime| {
+            let output = run_command("wl-paste", &["--no-newline", "--type", mime])?;
+            output.status.success().then_some(output.stdout)
+        },
+        &types,
+    )
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+fn read_x11_text_clipboard() -> Option<String> {
+    let output = run_command("xclip", &["-selection", "clipboard", "-t", "TARGETS", "-o"])?;
+    if !output.status.success() {
+        return None;
+    }
+    let targets = String::from_utf8_lossy(&output.stdout);
+    let targets = targets.lines().map(str::trim).collect::<Vec<_>>();
+    read_text_clipboard_types(
+        |mime| {
+            let output = run_command("xclip", &["-selection", "clipboard", "-t", mime, "-o"])?;
+            output.status.success().then_some(output.stdout)
+        },
+        &targets,
+    )
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+fn read_text_clipboard_types(
+    mut read_type: impl FnMut(&str) -> Option<Vec<u8>>,
+    types: &[&str],
+) -> Option<String> {
+    let mime = types.iter().copied().find(|mime| {
+        let mime = mime.to_ascii_lowercase();
+        mime == "text/plain"
+            || mime.starts_with("text/plain;")
+            || matches!(mime.as_str(), "utf8_string" | "string" | "text")
+    })?;
+    String::from_utf8(read_type(mime)?).ok()
+}
+
 #[cfg(any(
     target_os = "linux",
     target_os = "freebsd",
