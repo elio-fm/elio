@@ -65,9 +65,11 @@ pub(super) fn read_text() -> Option<String> {
 
 pub(super) fn write_files(paths: &[PathBuf]) -> Result<(), ClipboardError> {
     let files = file_drop_data(paths).ok_or(ClipboardError::WriteFailed)?;
+    let text = file_text(paths).ok_or(ClipboardError::WriteFailed)?;
     let clipboard = Clipboard::open().ok_or(ClipboardError::Unavailable)?;
     replace_contents(&clipboard)?;
     set_global_data(CF_HDROP as u32, &files)?;
+    set_global_data(CF_UNICODETEXT as u32, &utf16_nul_bytes(&text))?;
     set_global_data(
         preferred_drop_effect_format()?,
         &DROPEFFECT_COPY.to_le_bytes(),
@@ -241,6 +243,29 @@ fn file_drop_data(paths: &[PathBuf]) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
+/// Text consumers need readable Windows paths, while CF_HDROP retains the
+/// exact native paths required for Explorer and long-path support.
+fn file_text(paths: &[PathBuf]) -> Option<String> {
+    (!paths.is_empty()).then(|| {
+        paths
+            .iter()
+            .map(|path| display_path_for_text(path))
+            .collect::<Vec<_>>()
+            .join("\r\n")
+    })
+}
+
+fn display_path_for_text(path: &std::path::Path) -> String {
+    let path = path.display().to_string();
+    if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = path.strip_prefix(r"\\?\") {
+        rest.to_string()
+    } else {
+        path
+    }
+}
+
 fn text_from_global(handle: HANDLE) -> Option<String> {
     let units = utf16_units(&global_bytes(handle)?)?
         .into_iter()
@@ -292,4 +317,9 @@ pub(super) fn text_from_utf16_bytes_for_test(bytes: &[u8]) -> Option<String> {
         .take_while(|unit| *unit != 0)
         .collect::<Vec<_>>();
     String::from_utf16(&units).ok()
+}
+
+#[cfg(test)]
+pub(super) fn file_text_for_test(paths: &[PathBuf]) -> Option<String> {
+    file_text(paths)
 }
