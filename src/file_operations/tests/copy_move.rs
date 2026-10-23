@@ -1,4 +1,5 @@
 use super::clipboard_test_support::*;
+use crate::file_operations::PasteOrigin;
 
 // ── yank / copy path ─────────────────────────────────────────────────────────
 
@@ -113,6 +114,98 @@ fn external_drop_move_moves_file_to_current_directory() {
 
     fs::remove_dir_all(&src_dir).unwrap();
     fs::remove_dir_all(&dst_dir).unwrap();
+}
+
+#[test]
+fn system_clipboard_paste_and_drag_drop_keep_distinct_origins_and_statuses() {
+    let root = temp_path("separate-import-origins");
+    let destination = root.join("destination");
+    let source = root.join("source.txt");
+    fs::create_dir_all(&destination).unwrap();
+    fs::write(&source, "payload").unwrap();
+
+    let mut app = App::new_at(destination.clone()).unwrap();
+    let clipboard = app.file_operations.prepare_system_clipboard_paste(
+        &destination,
+        vec![source.clone()],
+        ClipOp::Yank,
+    );
+    assert!(clipboard.accepted);
+    assert_eq!(clipboard.status, None);
+    assert_eq!(
+        clipboard.request.unwrap().origin,
+        PasteOrigin::SystemClipboard
+    );
+
+    app.file_operations.finish_paste_job();
+    let drop = app
+        .file_operations
+        .prepare_drag_and_drop(&destination, vec![source], ClipOp::Yank);
+    assert!(drop.accepted);
+    assert_eq!(drop.status, None);
+    assert_eq!(drop.request.unwrap().origin, PasteOrigin::Drop);
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn imported_transfers_only_report_rejections_or_queues_while_active() {
+    let root = temp_path("imported-transfer-statuses");
+    let destination = root.join("destination");
+    let source = root.join("source.txt");
+    fs::create_dir_all(&destination).unwrap();
+    fs::write(&source, "payload").unwrap();
+
+    let mut app = App::new_at(destination.clone()).unwrap();
+    let active = app.file_operations.prepare_system_clipboard_paste(
+        &destination,
+        vec![source.clone()],
+        ClipOp::Yank,
+    );
+    assert!(active.accepted);
+    assert!(active.request.is_some());
+    assert_eq!(
+        active.status, None,
+        "the progress chip owns active feedback"
+    );
+
+    let queued =
+        app.file_operations
+            .prepare_drag_and_drop(&destination, vec![source.clone()], ClipOp::Yank);
+    assert!(queued.accepted);
+    assert!(queued.request.is_none());
+    assert_eq!(queued.status.as_deref(), Some("Queued drop (1 pending)"));
+
+    let rejected = app.file_operations.prepare_system_clipboard_paste(
+        &destination,
+        vec![root.join("missing")],
+        ClipOp::Yank,
+    );
+    assert!(!rejected.accepted);
+    assert_eq!(
+        rejected.status.as_deref(),
+        Some("Clipboard contains no local files")
+    );
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn accepted_drop_clears_a_stale_right_side_status_while_progress_is_active() {
+    let root = temp_path("drop-clears-running-status");
+    let destination = root.join("destination");
+    let source = root.join("source.txt");
+    fs::create_dir_all(&destination).unwrap();
+    fs::write(&source, "payload").unwrap();
+
+    let mut app = App::new_at(destination.clone()).unwrap();
+    app.status = "Old completed operation".to_string();
+    assert!(app.drop_external_paths(vec![source], ClipOp::Yank).unwrap());
+    assert!(app.file_operations.paste_progress().is_some());
+    assert!(app.status.is_empty());
+    wait_for_paste(&mut app);
+
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

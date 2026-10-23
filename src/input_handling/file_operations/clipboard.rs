@@ -32,12 +32,14 @@ impl App {
         Ok(())
     }
 
-    pub(crate) fn paste_external_file_clipboard(&mut self) -> Result<()> {
-        if let Some(clipboard) = crate::file_operations::read_external_file_clipboard() {
-            self.prepare_external_paths(
+    pub(crate) fn paste_system_file_clipboard(&mut self) -> Result<()> {
+        if let Some(clipboard) = crate::system_clipboard::read_files() {
+            self.prepare_system_clipboard_paths(
                 clipboard.paths,
-                clipboard.op,
-                crate::file_operations::PasteOrigin::ExternalClipboard,
+                match clipboard.operation {
+                    crate::system_clipboard::FileClipboardOperation::Copy => ClipOp::Yank,
+                    crate::system_clipboard::FileClipboardOperation::Cut => ClipOp::Cut,
+                },
             )?;
         }
         Ok(())
@@ -45,23 +47,34 @@ impl App {
 
     #[cfg(any(unix, test))]
     pub(crate) fn drop_external_paths(&mut self, paths: Vec<PathBuf>, op: ClipOp) -> Result<bool> {
-        self.prepare_external_paths(paths, op, crate::file_operations::PasteOrigin::Drop)
+        self.prepare_drag_and_drop_paths(paths, op)
     }
 
     #[cfg(any(unix, test))]
-    fn prepare_external_paths(
-        &mut self,
-        paths: Vec<PathBuf>,
-        op: ClipOp,
-        origin: crate::file_operations::PasteOrigin,
-    ) -> Result<bool> {
+    fn prepare_system_clipboard_paths(&mut self, paths: Vec<PathBuf>, op: ClipOp) -> Result<bool> {
         let preparation =
             self.file_operations
-                .prepare_drop(&self.file_browser.cwd, paths, op, origin);
+                .prepare_system_clipboard_paste(&self.file_browser.cwd, paths, op);
         if let Some(request) = preparation.request {
             self.job_scheduler.submit_paste(request);
         }
-        self.status = preparation.status;
+        // Progress is rendered by the left status-bar chip. Do not leave a
+        // stale right-side message competing with it while the transfer runs.
+        self.status = preparation.status.unwrap_or_default();
+        Ok(preparation.accepted)
+    }
+
+    #[cfg(any(unix, test))]
+    fn prepare_drag_and_drop_paths(&mut self, paths: Vec<PathBuf>, op: ClipOp) -> Result<bool> {
+        let preparation =
+            self.file_operations
+                .prepare_drag_and_drop(&self.file_browser.cwd, paths, op);
+        if let Some(request) = preparation.request {
+            self.job_scheduler.submit_paste(request);
+        }
+        // Drag-and-drop uses the same progress chip, not a second running
+        // message in the right-side status area.
+        self.status = preparation.status.unwrap_or_default();
         Ok(preparation.accepted)
     }
 

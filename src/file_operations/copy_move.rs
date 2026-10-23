@@ -24,7 +24,7 @@ pub(crate) struct PasteProgress {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PasteOrigin {
     Clipboard,
-    ExternalClipboard,
+    SystemClipboard,
     Drop,
 }
 
@@ -50,11 +50,61 @@ pub(crate) struct PastePreparation {
     pub(crate) status: Option<String>,
 }
 
-#[cfg(any(unix, test))]
-pub(crate) struct DropPreparation {
+/// Result of preparing a paste sourced from the operating system clipboard.
+pub(crate) struct SystemClipboardPastePreparation {
     pub(crate) accepted: bool,
     pub(crate) request: Option<PasteRequest>,
-    pub(crate) status: String,
+    pub(crate) status: Option<String>,
+}
+
+/// Result of preparing a pointer drag-and-drop transfer.
+#[cfg(any(unix, test))]
+pub(crate) struct DragDropPreparation {
+    pub(crate) accepted: bool,
+    pub(crate) request: Option<PasteRequest>,
+    pub(crate) status: Option<String>,
+}
+
+struct ImportedPathPreparation {
+    accepted: bool,
+    request: Option<PasteRequest>,
+    status: Option<String>,
+}
+
+#[derive(Clone, Copy)]
+enum ImportedTransferKind {
+    SystemClipboard,
+    DragAndDrop,
+}
+
+impl ImportedTransferKind {
+    fn origin(self) -> PasteOrigin {
+        match self {
+            Self::SystemClipboard => PasteOrigin::SystemClipboard,
+            Self::DragAndDrop => PasteOrigin::Drop,
+        }
+    }
+
+    fn empty_status(self) -> &'static str {
+        match self {
+            Self::SystemClipboard => "Clipboard contains no local files",
+            Self::DragAndDrop => "Drop contains no local files",
+        }
+    }
+
+    fn self_copy_status(self) -> &'static str {
+        match self {
+            Self::SystemClipboard => "Cannot paste a folder into itself",
+            Self::DragAndDrop => "Cannot drop a folder into itself",
+        }
+    }
+
+    fn queued_label(self) -> &'static str {
+        match self {
+            Self::SystemClipboard => "Queued paste",
+            Self::DragAndDrop => "Queued drop",
+        }
+    }
 }
 
 pub(crate) struct PasteJobCompletion {
@@ -161,20 +211,50 @@ impl FileOperationsState {
         }
     }
 
-    #[cfg(any(unix, test))]
-    pub(crate) fn prepare_drop(
+    pub(crate) fn prepare_system_clipboard_paste(
         &mut self,
         cwd: &Path,
         paths: Vec<PathBuf>,
         op: ClipOp,
-        origin: PasteOrigin,
-    ) -> DropPreparation {
+    ) -> SystemClipboardPastePreparation {
+        let preparation =
+            self.prepare_imported_paths(cwd, paths, op, ImportedTransferKind::SystemClipboard);
+        SystemClipboardPastePreparation {
+            accepted: preparation.accepted,
+            request: preparation.request,
+            status: preparation.status,
+        }
+    }
+
+    #[cfg(any(unix, test))]
+    pub(crate) fn prepare_drag_and_drop(
+        &mut self,
+        cwd: &Path,
+        paths: Vec<PathBuf>,
+        op: ClipOp,
+    ) -> DragDropPreparation {
+        let preparation =
+            self.prepare_imported_paths(cwd, paths, op, ImportedTransferKind::DragAndDrop);
+        DragDropPreparation {
+            accepted: preparation.accepted,
+            request: preparation.request,
+            status: preparation.status,
+        }
+    }
+
+    fn prepare_imported_paths(
+        &mut self,
+        cwd: &Path,
+        paths: Vec<PathBuf>,
+        op: ClipOp,
+        kind: ImportedTransferKind,
+    ) -> ImportedPathPreparation {
         let paths: Vec<PathBuf> = paths.into_iter().filter(|path| path.exists()).collect();
         if paths.is_empty() {
-            return DropPreparation {
+            return ImportedPathPreparation {
                 accepted: false,
                 request: None,
-                status: "Drop contains no local files".to_string(),
+                status: Some(kind.empty_status().to_string()),
             };
         }
         if op == ClipOp::Cut
@@ -184,10 +264,10 @@ impl FileOperationsState {
                     .unwrap_or(false)
             })
         {
-            return DropPreparation {
+            return ImportedPathPreparation {
                 accepted: false,
                 request: None,
-                status: "Already here".to_string(),
+                status: Some("Already here".to_string()),
             };
         }
 
@@ -195,33 +275,33 @@ impl FileOperationsState {
             dest_dir: cwd.to_path_buf(),
             paths,
             op,
-            origin,
+            origin: kind.origin(),
         };
         if paste_would_copy_directory_into_itself(&request) {
-            return DropPreparation {
+            return ImportedPathPreparation {
                 accepted: false,
                 request: None,
-                status: "Cannot drop a folder into itself".to_string(),
+                status: Some(kind.self_copy_status().to_string()),
             };
         }
         if self.paste_progress.is_some() {
             self.queued_pastes.push_back(request);
             let pending = self.queued_pastes.len();
             let status = if pending == 1 {
-                "Queued drop (1 pending)".to_string()
+                format!("{} (1 pending)", kind.queued_label())
             } else {
-                format!("Queued drop ({pending} pending)")
+                format!("{} ({pending} pending)", kind.queued_label())
             };
-            DropPreparation {
+            ImportedPathPreparation {
                 accepted: true,
                 request: None,
-                status,
+                status: Some(status),
             }
         } else {
-            DropPreparation {
+            ImportedPathPreparation {
                 accepted: true,
                 request: Some(self.start_paste_request(request)),
-                status: "Dropping files…".to_string(),
+                status: None,
             }
         }
     }

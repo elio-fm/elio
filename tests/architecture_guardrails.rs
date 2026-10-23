@@ -52,6 +52,15 @@ fn file_operations_do_not_depend_on_app() {
 }
 
 #[test]
+fn system_clipboard_stays_independent_of_application_and_operation_layers() {
+    assert_tree_has_no_pattern("src/system_clipboard", "app::", &[]);
+    assert_tree_has_no_pattern("src/system_clipboard", "background_jobs::", &[]);
+    assert_tree_has_no_pattern("src/system_clipboard", "file_operations::", &[]);
+    assert_tree_has_no_pattern("src/system_clipboard", "input_handling::", &[]);
+    assert_tree_has_no_pattern("src/system_clipboard", "crate::ui::", &[]);
+}
+
+#[test]
 fn file_operation_state_fields_stay_inside_file_operations() {
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("src/file_operations/file_operations_state.rs");

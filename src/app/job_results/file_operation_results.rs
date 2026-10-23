@@ -107,7 +107,7 @@ impl App {
                 let reselect_path = if matches!(
                     completion.origin,
                     Some(crate::file_operations::PasteOrigin::Drop)
-                        | Some(crate::file_operations::PasteOrigin::ExternalClipboard)
+                        | Some(crate::file_operations::PasteOrigin::SystemClipboard)
                 ) {
                     build.destination_paths.first().cloned()
                 } else {

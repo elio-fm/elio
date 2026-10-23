@@ -52,6 +52,7 @@ A brief overview of the repository layout:
 │   ├── portal/                 # XDG Desktop Portal FileChooser integration and routing
 │   ├── preview/                # Preview construction and format-specific processing
 │   ├── shell_integration/      # Shell scripts and install/uninstall support
+│   ├── system_clipboard/       # Native text and file-item clipboard API with private platform backends
 │   ├── terminal_images/        # Terminal detection, image protocols, placement, and geometry
 │   ├── terminal_runtime/       # Terminal lifecycle, drawing, input acquisition, and session output
 │   ├── theme/                  # Theme loading and item styling

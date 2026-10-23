@@ -3,6 +3,7 @@ use super::super::status_bar::{
 };
 use crate::{
     app::{App, ScreenRegions},
+    file_operations::ClipOp,
     theme,
     ui::helpers,
 };
@@ -123,6 +124,41 @@ fn idle_status_keeps_the_message_area_empty() {
 #[test]
 fn real_status_messages_expand_to_fit_their_text() {
     assert!(status_section_width(100, "Clipboard helper not found while copying") > 1);
+}
+
+#[test]
+fn active_system_paste_and_drop_use_only_the_left_progress_chip() {
+    let root = temp_path("import-progress-only");
+    let destination = root.join("destination");
+    let source = root.join("source.txt");
+    fs::create_dir_all(&destination).unwrap();
+    fs::write(&source, "payload").unwrap();
+
+    let mut system_paste = App::new_at(destination.clone()).unwrap();
+    let preparation = system_paste.file_operations.prepare_system_clipboard_paste(
+        &destination,
+        vec![source.clone()],
+        ClipOp::Yank,
+    );
+    assert!(preparation.accepted && preparation.request.is_some());
+    assert_eq!(preparation.status, None);
+    system_paste.status.clear();
+    let rendered = row_text(&render_footer(&system_paste, 100), 0);
+    assert!(rendered.contains("Copying 0/1"), "{rendered:?}");
+    assert!(!rendered.contains("Pasting files"), "{rendered:?}");
+
+    let mut drop = App::new_at(destination.clone()).unwrap();
+    let preparation =
+        drop.file_operations
+            .prepare_drag_and_drop(&destination, vec![source], ClipOp::Yank);
+    assert!(preparation.accepted && preparation.request.is_some());
+    assert_eq!(preparation.status, None);
+    drop.status.clear();
+    let rendered = row_text(&render_footer(&drop, 100), 0);
+    assert!(rendered.contains("Copying 0/1"), "{rendered:?}");
+    assert!(!rendered.contains("Dropping files"), "{rendered:?}");
+
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
