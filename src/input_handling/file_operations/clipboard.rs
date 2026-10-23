@@ -38,6 +38,13 @@ impl App {
                 clipboard.paths,
                 match clipboard.operation {
                     crate::system_clipboard::FileClipboardOperation::Copy => ClipOp::Yank,
+                    #[cfg(any(
+                        target_os = "linux",
+                        target_os = "freebsd",
+                        target_os = "openbsd",
+                        target_os = "netbsd",
+                        target_os = "dragonfly"
+                    ))]
                     crate::system_clipboard::FileClipboardOperation::Cut => ClipOp::Cut,
                 },
             )?;

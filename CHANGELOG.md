@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added i → Item to the Copy to Clipboard overlay, allowing files and folders to be copied and pasted across compatible applications on Linux and BSD.
-- Added file pasting from the system clipboard via the terminal's paste shortcut or configurable `paste_item` (`Ctrl+v`) action on Linux and BSD.
+- Added i → Item to the Copy to Clipboard overlay, allowing files and folders to be copied and pasted across compatible applications on Linux, BSD, and macOS.
+- Added file pasting from the system clipboard via the terminal's paste shortcut or configurable `paste_item` (`Ctrl+v`) action on Linux, BSD, and macOS.
 - Added clipboard text pasting to text-entry overlays via `paste_item`.
 - Added configurable `clear_selection` and `cancel` actions, both bound to Esc by default.
 

@@ -9,6 +9,13 @@ use std::path::PathBuf;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum FileClipboardOperation {
     Copy,
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
     Cut,
 }
 
@@ -21,6 +28,14 @@ pub(crate) struct FileClipboard {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ClipboardError {
     Unavailable,
+    #[cfg(any(
+        windows,
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
     HelperMissing,
     WriteFailed,
 }
@@ -28,12 +43,28 @@ pub(crate) enum ClipboardError {
 impl ClipboardError {
     pub(crate) fn item_status(self) -> &'static str {
         match self {
+            #[cfg(any(
+                windows,
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "openbsd",
+                target_os = "netbsd",
+                target_os = "dragonfly"
+            ))]
             Self::HelperMissing => "File clipboard helper not found",
             Self::Unavailable | Self::WriteFailed => "File clipboard unavailable",
         }
     }
     pub(crate) fn text_status(self) -> &'static str {
         match self {
+            #[cfg(any(
+                windows,
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "openbsd",
+                target_os = "netbsd",
+                target_os = "dragonfly"
+            ))]
             Self::HelperMissing => "Clipboard helper not found",
             Self::Unavailable => "Clipboard unavailable",
             Self::WriteFailed => "Clipboard write failed",
@@ -50,6 +81,8 @@ mod dispatcher;
     target_os = "dragonfly"
 ))]
 mod freedesktop;
+#[cfg(target_os = "macos")]
+mod macos;
 #[cfg(any(
     target_os = "linux",
     target_os = "freebsd",
@@ -80,14 +113,5 @@ pub(crate) fn write_text(text: &str) -> Result<(), ClipboardError> {
     dispatcher::write_text(text)
 }
 
-#[cfg(all(
-    test,
-    any(
-        target_os = "linux",
-        target_os = "freebsd",
-        target_os = "openbsd",
-        target_os = "netbsd",
-        target_os = "dragonfly"
-    )
-))]
+#[cfg(test)]
 mod tests;

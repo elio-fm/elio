@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+use super::macos;
 use super::{ClipboardError, FileClipboard, PathBuf};
 #[cfg(any(
     target_os = "linux",
@@ -10,6 +12,10 @@ use super::{wayland, x11};
 
 /// Reads native file items, if the current system clipboard offers any.
 pub(super) fn read_files() -> Option<FileClipboard> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::read_files()
+    }
     #[cfg(any(
         target_os = "linux",
         target_os = "freebsd",
@@ -29,6 +35,7 @@ pub(super) fn read_files() -> Option<FileClipboard> {
             .flatten()
     }
     #[cfg(not(any(
+        target_os = "macos",
         target_os = "linux",
         target_os = "freebsd",
         target_os = "openbsd",
@@ -42,6 +49,10 @@ pub(super) fn read_files() -> Option<FileClipboard> {
 
 /// Reads text from the system clipboard, without interpreting it as files.
 pub(super) fn read_text() -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::read_text()
+    }
     #[cfg(any(
         target_os = "linux",
         target_os = "freebsd",
@@ -61,6 +72,7 @@ pub(super) fn read_text() -> Option<String> {
             .flatten()
     }
     #[cfg(not(any(
+        target_os = "macos",
         target_os = "linux",
         target_os = "freebsd",
         target_os = "openbsd",
@@ -74,6 +86,10 @@ pub(super) fn read_text() -> Option<String> {
 
 /// Publishes local file references in the OS-native file clipboard.
 pub(super) fn write_files(paths: &[PathBuf]) -> Result<(), ClipboardError> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::write_files(paths)
+    }
     #[cfg(any(
         target_os = "linux",
         target_os = "freebsd",
@@ -93,6 +109,7 @@ pub(super) fn write_files(paths: &[PathBuf]) -> Result<(), ClipboardError> {
         Err(ClipboardError::HelperMissing)
     }
     #[cfg(not(any(
+        target_os = "macos",
         target_os = "linux",
         target_os = "freebsd",
         target_os = "openbsd",
@@ -124,9 +141,7 @@ pub(super) fn write_text(text: &str) -> Result<(), ClipboardError> {
         x11::write_text(text)
     }
     #[cfg(target_os = "macos")]
-    {
-        return run_text_helper("pbcopy", &[], text);
-    }
+    return macos::write_text(text);
     #[cfg(windows)]
     {
         return run_text_helper("clip.exe", &[], text);
@@ -138,11 +153,19 @@ pub(super) fn write_text(text: &str) -> Result<(), ClipboardError> {
     }
 }
 
-#[cfg(any(target_os = "macos", windows))]
+#[cfg(windows)]
 fn run_text_helper(program: &str, args: &[&str], text: &str) -> Result<(), ClipboardError> {
     platform_command(program, args, text)
 }
 
+#[cfg(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 pub(super) fn platform_command(
     program: &str,
     args: &[&str],
@@ -179,12 +202,26 @@ pub(super) fn platform_command(
         .ok_or(ClipboardError::WriteFailed)
 }
 
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 fn wayland_session() -> bool {
     std::env::var_os("WAYLAND_DISPLAY").is_some()
         || std::env::var_os("XDG_SESSION_TYPE")
             .is_some_and(|value| value.to_string_lossy().eq_ignore_ascii_case("wayland"))
 }
 
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 fn terminal_supports_osc52() -> bool {
     if std::env::var_os("TMUX").is_some() && !tmux_accepts_application_osc52() {
         return false;
@@ -196,6 +233,13 @@ fn terminal_supports_osc52() -> bool {
     std::env::var_os("ELIO_CLIPBOARD_OSC52").is_some()
 }
 
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 fn tmux_accepts_application_osc52() -> bool {
     #[cfg(test)]
     if let Some(value) = std::env::var_os("ELIO_TEST_TMUX_SET_CLIPBOARD") {
@@ -210,6 +254,13 @@ fn tmux_accepts_application_osc52() -> bool {
         .is_some_and(|value| value.trim().eq_ignore_ascii_case("on"))
 }
 
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 fn write_osc52(text: &str) -> Result<(), ClipboardError> {
     use base64::Engine as _;
     let sequence = format!(
