@@ -10,6 +10,8 @@ This crate is organized around focused subsystems.
   counts.
 - `file_operations`: state, requests, and actions for creating, renaming, copying, moving,
   trashing, restoring, or archiving items.
+- `system_clipboard`: platform-neutral access to native text and file-item clipboard formats,
+  with private OS protocol backends.
 - `background_jobs`: shared job scheduling, workers, requests, and result messages.
 - `chooser`: chooser-mode selection, confirmed or cancelled outcome, and selected-path output.
 - `portal`: XDG Desktop Portal FileChooser integration on Linux and FreeBSD, including backend
@@ -38,7 +40,15 @@ Current boundary rules:
   filesystem primitives, including trash metadata and restoration, belong to `filesystem`.
   `file_operations` returns explicit outcomes instead of depending on `app`; `input_handling`
   supplies browser context and coordinates navigation or job submission. Background workers remain
-  centralized in `background_jobs` with Elio's other workers.
+  centralized in `background_jobs` with elio's other workers.
+- The internal clipboard (the `y`/`x`/`p` file-operation selection) belongs to
+  `file_operations`. Native system clipboard reads and writes belong to `system_clipboard`;
+  it returns platform-neutral text or file-item values and must not depend on input handling,
+  UI, file-operation state, or background jobs. `input_handling` translates a system file
+  clipboard paste into a file-operation request. Drag-and-drop is a separate pointer-transfer
+  path owned by terminal runtime/input handling: it may share file-operation validation and
+  workers with clipboard paste, but keeps separate entry points, origins, statuses, and protocol
+  semantics.
 - Current-directory browsing state and pure browser transitions belong to `file_browser`; places
   pane state remains in `places`. Git status for the current directory and the browser-item drag
   selection also belong to `file_browser`; job execution, mouse hit testing, and terminal drag
@@ -54,7 +64,7 @@ Current boundary rules:
 - Top-level startup orchestration initializes `config` and `theme` before handing control to
   `terminal_runtime`.
 - Raw Crossterm and Kitty input acquisition belongs to `terminal_runtime`; mapping those events to
-  Elio behavior belongs to `input_handling`.
+  elio behavior belongs to `input_handling`.
 - `filesystem` and `file_classification` should not depend on `app`.
 - Code-language recognition belongs to `file_classification`, not to a preview renderer.
 - Preview construction and media processing in `preview` should not depend on `app` or

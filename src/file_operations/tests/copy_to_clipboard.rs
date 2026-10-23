@@ -1,39 +1,5 @@
 use super::clipboard_test_support::*;
 
-#[cfg(any(
-    target_os = "linux",
-    target_os = "freebsd",
-    target_os = "openbsd",
-    target_os = "netbsd",
-    target_os = "dragonfly"
-))]
-#[test]
-fn wayland_offer_includes_file_operation_and_portable_uri_targets() {
-    let payloads =
-        crate::file_operations::copy_to_clipboard::item_clipboard_payloads(&[PathBuf::from(
-            "/tmp/résumé #1",
-        )]);
-    assert_eq!(
-        payloads
-            .iter()
-            .map(|(mime, _)| mime.as_str())
-            .collect::<Vec<_>>(),
-        [
-            "x-special/gnome-copied-files",
-            "text/uri-list",
-            "text/plain;charset=utf-8",
-        ]
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&payloads[0].1),
-        "copy\nfile:///tmp/r%C3%A9sum%C3%A9%20%231"
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&payloads[1].1),
-        "file:///tmp/r%C3%A9sum%C3%A9%20%231"
-    );
-}
-
 #[test]
 fn copy_overlay_populates_expected_rows_for_selected_file() {
     let root = temp_path("copy-overlay-rows");

@@ -12,7 +12,6 @@ mod editor_bulk_rename;
     target_os = "netbsd",
     target_os = "dragonfly"
 ))]
-mod external_file_clipboard;
 mod mutation_test_support;
 mod rename;
 mod restore;

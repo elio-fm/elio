@@ -78,7 +78,7 @@ impl App {
         }
 
         if !self.blocks_file_drag_and_drop() && !self.chooser_mode() && !self.preview_fullscreen() {
-            self.paste_external_file_clipboard()?;
+            self.paste_system_file_clipboard()?;
         }
 
         Ok(())
@@ -277,7 +277,7 @@ impl App {
             && crate::config::key_bindings().action_for_key_in_context(key, self.key_context())
                 == Some(crate::config::Action::PasteItem)
         {
-            if let Some(text) = crate::file_operations::read_external_text_clipboard() {
+            if let Some(text) = crate::system_clipboard::read_text() {
                 self.handle_paste(&text)?;
             }
             return Ok(());
@@ -490,7 +490,7 @@ impl App {
             Action::Yank => self.yank(),
             Action::Cut => self.cut(),
             Action::Paste => self.paste()?,
-            Action::PasteItem => self.paste_external_file_clipboard()?,
+            Action::PasteItem => self.paste_system_file_clipboard()?,
             Action::CopyItem => self.copy_items_to_system_clipboard(),
             Action::CreateArchive => self.open_archive_create_prompt(),
             Action::ExtractArchive => self.extract_focused_archive()?,

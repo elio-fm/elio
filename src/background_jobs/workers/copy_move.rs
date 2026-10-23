@@ -65,7 +65,7 @@ impl PastePool {
                 PasteShared::set_active(&shared_worker, false);
 
                 let verb = match (request.origin, request.op) {
-                    (PasteOrigin::ExternalClipboard, ClipOp::Yank) => "Pasted",
+                    (PasteOrigin::SystemClipboard, ClipOp::Yank) => "Pasted",
                     (_, ClipOp::Yank) => "Copied",
                     (_, ClipOp::Cut) => "Moved",
                 };

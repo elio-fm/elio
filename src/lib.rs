@@ -24,6 +24,7 @@ mod opening;
 mod places;
 pub mod portal;
 mod preview;
+mod system_clipboard;
 mod terminal_images;
 mod terminal_runtime;
 mod theme;

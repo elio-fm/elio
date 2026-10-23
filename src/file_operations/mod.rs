@@ -5,20 +5,11 @@ mod copy_move;
 mod copy_to_clipboard;
 mod create;
 mod editor_bulk_rename;
-mod external_file_clipboard;
 mod file_operations_state;
 mod rename;
 mod restore;
 mod symlink_creation;
 mod trash_delete;
-#[cfg(any(
-    target_os = "linux",
-    target_os = "freebsd",
-    target_os = "openbsd",
-    target_os = "netbsd",
-    target_os = "dragonfly"
-))]
-mod wayland_file_clipboard;
 
 pub(crate) use archive_creation::{
     ArchiveCreateOverlay, ArchiveCreateProgress, ArchiveCreateRequest,
@@ -41,9 +32,6 @@ pub(crate) use editor_bulk_rename::{BulkRenameConfirmation, EditorRenameConfirmO
 #[cfg(unix)]
 pub(crate) use editor_bulk_rename::{
     BulkRenameEditorSession, EditorBulkRenameLaunch, EditorRenameReview,
-};
-pub(crate) use external_file_clipboard::{
-    read_external_file_clipboard, read_external_text_clipboard,
 };
 pub(crate) use file_operations_state::FileOperationsState;
 pub(crate) use rename::RenameOverlay;

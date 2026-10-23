@@ -1,7 +1,9 @@
+use super::{ClipboardError, FileClipboard, dispatcher::platform_command, freedesktop};
 use anyhow::{Context, Result, anyhow};
 use std::{
     io::Write,
     os::fd::{AsRawFd, OwnedFd},
+    path::PathBuf,
     sync::mpsc,
     thread,
 };
@@ -20,7 +22,7 @@ use wayland_protocols_wlr::data_control::v1::client::{
 /// it or elio exits. This does not require, or integrate with, a clipboard
 /// manager. A manager may persist the offer after elio exits, but must retain
 /// all offered MIME types for a later paste to remain a file operation.
-pub(crate) fn offer(payloads: Vec<(String, Vec<u8>)>) -> Result<()> {
+pub(super) fn offer(payloads: Vec<(String, Vec<u8>)>) -> Result<()> {
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
     thread::Builder::new()
         .name("elio-file-clipboard".to_string())
@@ -30,6 +32,46 @@ pub(crate) fn offer(payloads: Vec<(String, Vec<u8>)>) -> Result<()> {
     ready_rx
         .recv()
         .map_err(|_| anyhow!("Wayland clipboard worker stopped before it was ready"))?
+}
+
+pub(super) fn read_files() -> Option<FileClipboard> {
+    let types = types()?;
+    let refs = types.iter().map(String::as_str).collect::<Vec<_>>();
+    freedesktop::read_file_clipboard(read_type, &refs)
+}
+
+pub(super) fn read_text() -> Option<String> {
+    let types = types()?;
+    let refs = types.iter().map(String::as_str).collect::<Vec<_>>();
+    freedesktop::read_text(read_type, &refs)
+}
+
+pub(super) fn write_files(paths: &[PathBuf]) -> Result<(), ClipboardError> {
+    offer(freedesktop::file_payloads(paths)).map_err(|_| ClipboardError::Unavailable)
+}
+
+pub(super) fn write_text(text: &str) -> Result<(), ClipboardError> {
+    platform_command("wl-copy", &["--type", "text/plain;charset=utf-8"], text)
+}
+
+fn types() -> Option<Vec<String>> {
+    let output = command("wl-paste", &["--list-types"])?;
+    output.status.success().then(|| {
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(str::trim)
+            .map(str::to_owned)
+            .collect()
+    })
+}
+
+fn read_type(mime: &str) -> Option<Vec<u8>> {
+    let output = command("wl-paste", &["--no-newline", "--type", mime])?;
+    output.status.success().then_some(output.stdout)
+}
+
+fn command(program: &str, args: &[&str]) -> Option<std::process::Output> {
+    std::process::Command::new(program).args(args).output().ok()
 }
 
 struct State {
