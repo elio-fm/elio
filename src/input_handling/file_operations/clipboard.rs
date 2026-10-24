@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::file_operations::ClipOp;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 impl App {
     pub(crate) fn yank(&mut self) {
@@ -33,24 +33,94 @@ impl App {
     }
 
     pub(crate) fn paste_system_file_clipboard(&mut self) -> Result<()> {
-        if let Some(clipboard) = crate::system_clipboard::read_files() {
-            self.prepare_system_clipboard_paths(
-                clipboard.paths,
-                match clipboard.operation {
-                    crate::system_clipboard::FileClipboardOperation::Copy => ClipOp::Yank,
-                    #[cfg(any(
-                        windows,
-                        target_os = "linux",
-                        target_os = "freebsd",
-                        target_os = "openbsd",
-                        target_os = "netbsd",
-                        target_os = "dragonfly"
-                    ))]
-                    crate::system_clipboard::FileClipboardOperation::Cut => ClipOp::Cut,
-                },
-            )?;
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+            target_os = "dragonfly"
+        ))]
+        {
+            self.request_system_clipboard_file_read();
+        }
+        #[cfg(not(any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+            target_os = "dragonfly"
+        )))]
+        {
+            if let Some(clipboard) = crate::system_clipboard::read_files() {
+                self.prepare_system_clipboard_paths(
+                    &self.file_browser.cwd.clone(),
+                    clipboard.paths,
+                    match clipboard.operation {
+                        crate::system_clipboard::FileClipboardOperation::Copy => ClipOp::Yank,
+                        #[cfg(any(
+                            windows,
+                            target_os = "linux",
+                            target_os = "freebsd",
+                            target_os = "openbsd",
+                            target_os = "netbsd",
+                            target_os = "dragonfly"
+                        ))]
+                        crate::system_clipboard::FileClipboardOperation::Cut => ClipOp::Cut,
+                    },
+                )?;
+            }
         }
         Ok(())
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    fn request_system_clipboard_file_read(&mut self) {
+        let token = self.next_system_clipboard_read_token();
+        let request = crate::background_jobs::job_requests::SystemClipboardReadRequest::Files {
+            token,
+            cwd: self.file_browser.cwd.clone(),
+        };
+        if self.job_scheduler.submit_system_clipboard_read(request) {
+            self.status = "Reading clipboard…".to_string();
+        } else {
+            self.status = "Clipboard unavailable".to_string();
+        }
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    pub(crate) fn apply_system_clipboard_file_read(
+        &mut self,
+        cwd: PathBuf,
+        clipboard: Option<crate::system_clipboard::FileClipboard>,
+    ) -> bool {
+        let Some(clipboard) = clipboard else {
+            self.status.clear();
+            return true;
+        };
+        self.prepare_system_clipboard_paths(
+            &cwd,
+            clipboard.paths,
+            match clipboard.operation {
+                crate::system_clipboard::FileClipboardOperation::Copy => ClipOp::Yank,
+                crate::system_clipboard::FileClipboardOperation::Cut => ClipOp::Cut,
+            },
+        )
+        .unwrap_or_else(|error| {
+            self.report_runtime_error("Clipboard paste failed", &error);
+            false
+        })
     }
 
     #[cfg(any(unix, test))]
@@ -59,10 +129,15 @@ impl App {
     }
 
     #[cfg(any(unix, windows, test))]
-    fn prepare_system_clipboard_paths(&mut self, paths: Vec<PathBuf>, op: ClipOp) -> Result<bool> {
-        let preparation =
-            self.file_operations
-                .prepare_system_clipboard_paste(&self.file_browser.cwd, paths, op);
+    fn prepare_system_clipboard_paths(
+        &mut self,
+        cwd: &Path,
+        paths: Vec<PathBuf>,
+        op: ClipOp,
+    ) -> Result<bool> {
+        let preparation = self
+            .file_operations
+            .prepare_system_clipboard_paste(cwd, paths, op);
         if let Some(request) = preparation.request {
             self.job_scheduler.submit_paste(request);
         }
@@ -70,6 +145,19 @@ impl App {
         // stale right-side message competing with it while the transfer runs.
         self.status = preparation.status.unwrap_or_default();
         Ok(preparation.accepted)
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    pub(crate) fn next_system_clipboard_read_token(&mut self) -> u64 {
+        self.input.system_clipboard_read_token =
+            self.input.system_clipboard_read_token.wrapping_add(1);
+        self.input.system_clipboard_read_token
     }
 
     #[cfg(any(unix, test))]

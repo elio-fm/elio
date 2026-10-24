@@ -9,6 +9,39 @@ use crate::preview::{
 };
 use std::{path::PathBuf, sync::Arc, time::SystemTime};
 
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+#[derive(Debug)]
+pub(crate) enum SystemClipboardRead {
+    Files {
+        cwd: PathBuf,
+        clipboard: Option<crate::system_clipboard::FileClipboard>,
+    },
+    Text {
+        target: crate::background_jobs::job_requests::SystemClipboardTextTarget,
+        input_generation: u64,
+        text: Option<String>,
+    },
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+#[derive(Debug)]
+pub(crate) struct SystemClipboardReadBuild {
+    pub(crate) token: u64,
+    pub(crate) result: SystemClipboardRead,
+}
+
 #[derive(Debug)]
 pub(crate) struct SearchBuild {
     pub(crate) token: u64,
@@ -216,6 +249,14 @@ pub(crate) struct RestoreBuild {
 
 #[derive(Debug)]
 pub(crate) enum JobResult {
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    SystemClipboardRead(SystemClipboardReadBuild),
     Directory(DirectoryBuild),
     DirectoryFingerprint(DirectoryFingerprintBuild),
     DirectoryItemCount(DirectoryItemCountBuild),

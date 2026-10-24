@@ -14,7 +14,7 @@ use crate::input_handling::keyboard::{
 };
 use crate::places::{PlaceItem, PlaceKind, PlaceRow};
 use crate::preview::PreviewDirectoryStatsState;
-use crossterm::event::{KeyEventKind, KeyEventState};
+use crossterm::event::{KeyEventKind, KeyEventState, MouseEvent, MouseEventKind};
 use std::{
     fs,
     path::PathBuf,
@@ -290,6 +290,102 @@ fn pasted_text_updates_create_prompt_without_submitting() {
     assert_eq!(app.file_operations.create_line(1), "two.txt");
     assert_eq!(app.file_operations.create_cursor_line(), 1);
     assert_eq!(app.file_operations.create_cursor_col(), 7);
+
+    cleanup_app_temp_root(app, root);
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+#[test]
+fn delayed_system_clipboard_text_does_not_land_after_input_changes() {
+    use crate::background_jobs::job_requests::SystemClipboardTextTarget;
+
+    let root = temp_path("delayed-system-clipboard-text");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.open_create_prompt();
+    let generation = app.input.system_clipboard_text_input_generation;
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('x'),
+        KeyModifiers::NONE,
+    )))
+    .expect("typing should update create input");
+
+    assert!(!app.apply_system_clipboard_text_read(
+        SystemClipboardTextTarget::Create,
+        generation,
+        Some("stale.txt".to_string())
+    ));
+    assert_eq!(app.file_operations.create_line(0), "x");
+
+    cleanup_app_temp_root(app, root);
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+#[test]
+fn delayed_system_clipboard_text_does_not_cross_to_another_prompt() {
+    use crate::background_jobs::job_requests::SystemClipboardTextTarget;
+
+    let root = temp_path("delayed-system-clipboard-target");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.open_create_prompt();
+    let generation = app.input.system_clipboard_text_input_generation;
+
+    app.handle_event(Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)))
+        .expect("escape should close create prompt");
+    app.open_local_filter();
+
+    assert!(!app.apply_system_clipboard_text_read(
+        SystemClipboardTextTarget::Create,
+        generation,
+        Some("stale".to_string())
+    ));
+    assert_eq!(app.local_filter_query(), "");
+
+    cleanup_app_temp_root(app, root);
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+#[test]
+fn delayed_system_clipboard_text_survives_passive_mouse_movement() {
+    use crate::background_jobs::job_requests::SystemClipboardTextTarget;
+
+    let root = temp_path("delayed-system-clipboard-mouse-move");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.open_create_prompt();
+    let generation = app.input.system_clipboard_text_input_generation;
+
+    app.handle_event(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Moved,
+        column: 1,
+        row: 1,
+        modifiers: KeyModifiers::NONE,
+    }))
+    .expect("mouse movement should be handled");
+
+    assert!(app.apply_system_clipboard_text_read(
+        SystemClipboardTextTarget::Create,
+        generation,
+        Some("pasted.txt".to_string())
+    ));
+    assert_eq!(app.file_operations.create_line(0), "pasted.txt");
 
     cleanup_app_temp_root(app, root);
 }

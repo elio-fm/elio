@@ -3,6 +3,45 @@ use crate::fuzzy_finder::SearchScope;
 use crate::{preview, preview::PreviewWorkClass};
 use std::{path::PathBuf, time::SystemTime};
 
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SystemClipboardTextTarget {
+    SaveAs,
+    ArchivePassword,
+    ArchiveCreate,
+    Create,
+    Rename,
+    BulkRename,
+    Search,
+    LocalFilter,
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+#[derive(Clone, Debug)]
+pub(crate) enum SystemClipboardReadRequest {
+    Files {
+        token: u64,
+        cwd: PathBuf,
+    },
+    Text {
+        token: u64,
+        target: SystemClipboardTextTarget,
+        input_generation: u64,
+    },
+}
+
 pub(crate) use crate::preview::images::{ImagePrepareRequest, SixelPrepareConfig};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
