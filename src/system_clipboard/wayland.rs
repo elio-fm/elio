@@ -1,12 +1,21 @@
-use super::{ClipboardError, FileClipboard, dispatcher::platform_command, freedesktop};
+use super::{ClipboardError, FileClipboard, freedesktop};
 use anyhow::{Context, Result, anyhow};
 use std::{
-    io::Write,
-    os::fd::{AsRawFd, OwnedFd},
+    io::{Read, Write},
+    os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd},
     path::PathBuf,
     sync::mpsc,
     thread,
 };
+
+/// A Wayland selection can be current yet irrelevant to the requested paste.
+/// Keep that distinct from an unavailable data-control protocol so callers do
+/// not resurrect an older XWayland selection.
+pub(super) enum ReadResult<T> {
+    Unavailable,
+    Empty,
+    Value(T),
+}
 use wayland_client::{
     Connection, Dispatch, EventQueue, QueueHandle,
     protocol::{wl_registry, wl_seat::WlSeat},
@@ -34,16 +43,28 @@ pub(super) fn offer(payloads: Vec<(String, Vec<u8>)>) -> Result<()> {
         .map_err(|_| anyhow!("Wayland clipboard worker stopped before it was ready"))?
 }
 
-pub(super) fn read_files() -> Option<FileClipboard> {
-    let types = types()?;
+pub(super) fn read_files() -> ReadResult<FileClipboard> {
+    let Ok(mut reader) = Reader::open() else {
+        return ReadResult::Unavailable;
+    };
+    let types = reader.types().to_vec();
     let refs = types.iter().map(String::as_str).collect::<Vec<_>>();
-    freedesktop::read_file_clipboard(read_type, &refs)
+    match freedesktop::read_file_clipboard(|mime| reader.read_type(mime), &refs) {
+        Some(files) => ReadResult::Value(files),
+        None => ReadResult::Empty,
+    }
 }
 
-pub(super) fn read_text() -> Option<String> {
-    let types = types()?;
+pub(super) fn read_text() -> ReadResult<String> {
+    let Ok(mut reader) = Reader::open() else {
+        return ReadResult::Unavailable;
+    };
+    let types = reader.types().to_vec();
     let refs = types.iter().map(String::as_str).collect::<Vec<_>>();
-    freedesktop::read_text(read_type, &refs)
+    match freedesktop::read_text(|mime| reader.read_type(mime), &refs) {
+        Some(text) => ReadResult::Value(text),
+        None => ReadResult::Empty,
+    }
 }
 
 pub(super) fn write_files(paths: &[PathBuf]) -> Result<(), ClipboardError> {
@@ -51,27 +72,7 @@ pub(super) fn write_files(paths: &[PathBuf]) -> Result<(), ClipboardError> {
 }
 
 pub(super) fn write_text(text: &str) -> Result<(), ClipboardError> {
-    platform_command("wl-copy", &["--type", "text/plain;charset=utf-8"], text)
-}
-
-fn types() -> Option<Vec<String>> {
-    let output = command("wl-paste", &["--list-types"])?;
-    output.status.success().then(|| {
-        String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(str::trim)
-            .map(str::to_owned)
-            .collect()
-    })
-}
-
-fn read_type(mime: &str) -> Option<Vec<u8>> {
-    let output = command("wl-paste", &["--no-newline", "--type", mime])?;
-    output.status.success().then_some(output.stdout)
-}
-
-fn command(program: &str, args: &[&str]) -> Option<std::process::Output> {
-    std::process::Command::new(program).args(args).output().ok()
+    offer(freedesktop::text_payloads(text)).map_err(|_| ClipboardError::Unavailable)
 }
 
 struct State {
@@ -79,6 +80,9 @@ struct State {
     seat: Option<WlSeat>,
     payloads: Vec<(String, Vec<u8>)>,
     cancelled: bool,
+    selection: Option<ZwlrDataControlOfferV1>,
+    selection_types: Vec<String>,
+    pending_offer_types: Vec<String>,
 }
 
 impl State {
@@ -88,6 +92,9 @@ impl State {
             seat: None,
             payloads,
             cancelled: false,
+            selection: None,
+            selection_types: Vec::new(),
+            pending_offer_types: Vec::new(),
         }
     }
 }
@@ -168,22 +175,97 @@ impl Dispatch<ZwlrDataControlDeviceV1, ()> for State {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if matches!(event, zwlr_data_control_device_v1::Event::Finished) {
-            state.cancelled = true;
+        match event {
+            zwlr_data_control_device_v1::Event::DataOffer { .. } => {
+                state.pending_offer_types.clear();
+            }
+            zwlr_data_control_device_v1::Event::Selection { id } => {
+                state.selection = id;
+                state.selection_types = std::mem::take(&mut state.pending_offer_types);
+            }
+            zwlr_data_control_device_v1::Event::Finished => state.cancelled = true,
+            _ => {}
         }
     }
 }
 
 impl Dispatch<ZwlrDataControlOfferV1, ()> for State {
     fn event(
-        _: &mut Self,
+        state: &mut Self,
         _: &ZwlrDataControlOfferV1,
-        _: zwlr_data_control_offer_v1::Event,
+        event: zwlr_data_control_offer_v1::Event,
         _: &(),
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        if let zwlr_data_control_offer_v1::Event::Offer { mime_type } = event {
+            state.pending_offer_types.push(mime_type);
+        }
     }
+}
+
+struct Reader {
+    _connection: Connection,
+    queue: EventQueue<State>,
+    _device: ZwlrDataControlDeviceV1,
+    offer: Option<ZwlrDataControlOfferV1>,
+    types: Vec<String>,
+}
+
+impl Reader {
+    fn open() -> Result<Self> {
+        let connection = Connection::connect_to_env().context("connect to Wayland")?;
+        let mut queue = connection.new_event_queue();
+        let qh = queue.handle();
+        let display = connection.display();
+        let _registry = display.get_registry(&qh, ());
+        let mut state = State::new(Vec::new());
+        queue.roundtrip(&mut state)?;
+        let manager = state
+            .manager
+            .as_ref()
+            .context("compositor lacks Wayland data-control clipboard support")?
+            .clone();
+        let seat = state
+            .seat
+            .as_ref()
+            .context("Wayland session has no seat")?
+            .clone();
+        let device = manager.get_data_device(&seat, &qh, ());
+        queue.roundtrip(&mut state)?;
+        Ok(Self {
+            _connection: connection,
+            queue,
+            _device: device,
+            offer: state.selection.clone(),
+            types: state.selection_types.clone(),
+        })
+    }
+
+    fn types(&self) -> &[String] {
+        &self.types
+    }
+
+    fn read_type(&mut self, mime: &str) -> Option<Vec<u8>> {
+        let offer = self.offer.as_ref()?;
+        let (read_fd, write_fd) = pipe().ok()?;
+        offer.receive(mime.to_string(), write_fd.as_fd());
+        self.queue.flush().ok()?;
+        drop(write_fd);
+        let mut bytes = Vec::new();
+        std::fs::File::from(read_fd).read_to_end(&mut bytes).ok()?;
+        Some(bytes)
+    }
+}
+
+fn pipe() -> std::io::Result<(OwnedFd, OwnedFd)> {
+    let mut fds = [0; 2];
+    // `pipe` initializes both entries on success, transferring ownership to
+    // the two OwnedFd values below.
+    if unsafe { libc::pipe(fds.as_mut_ptr()) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) })
 }
 
 impl Dispatch<ZwlrDataControlSourceV1, ()> for State {

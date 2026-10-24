@@ -75,6 +75,13 @@ pub(super) fn file_payloads(paths: &[PathBuf]) -> Vec<(String, Vec<u8>)> {
     ]
 }
 
+pub(super) fn text_payloads(text: &str) -> Vec<(String, Vec<u8>)> {
+    ["text/plain;charset=utf-8", "text/plain", "UTF8_STRING"]
+        .into_iter()
+        .map(|mime| (mime.to_string(), text.as_bytes().to_vec()))
+        .collect()
+}
+
 pub(super) fn uri_list(paths: &[PathBuf]) -> String {
     let uris = paths
         .iter()

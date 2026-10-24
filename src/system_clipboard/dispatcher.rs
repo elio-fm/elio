@@ -30,10 +30,11 @@ pub(super) fn read_files() -> Option<FileClipboard> {
         target_os = "dragonfly"
     ))]
     {
-        if wayland_session()
-            && let Some(files) = wayland::read_files()
-        {
-            return Some(files);
+        if wayland_session() {
+            let native = wayland::read_files();
+            if !native_unavailable(&native) {
+                return native_result(native);
+            }
         }
         std::env::var_os("DISPLAY")
             .is_some()
@@ -72,10 +73,11 @@ pub(super) fn read_text() -> Option<String> {
         target_os = "dragonfly"
     ))]
     {
-        if wayland_session()
-            && let Some(text) = wayland::read_text()
-        {
-            return Some(text);
+        if wayland_session() {
+            let native = wayland::read_text();
+            if !native_unavailable(&native) {
+                return native_result(native);
+            }
         }
         std::env::var_os("DISPLAY")
             .is_some()
@@ -94,6 +96,55 @@ pub(super) fn read_text() -> Option<String> {
     {
         None
     }
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+fn native_result<T>(result: wayland::ReadResult<T>) -> Option<T> {
+    match result {
+        wayland::ReadResult::Value(value) => Some(value),
+        wayland::ReadResult::Empty | wayland::ReadResult::Unavailable => None,
+    }
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+fn native_unavailable<T>(result: &wayland::ReadResult<T>) -> bool {
+    matches!(result, wayland::ReadResult::Unavailable)
+}
+
+#[cfg(test)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+pub(super) fn native_result_for_test<T>(result: wayland::ReadResult<T>) -> Option<T> {
+    native_result(result)
+}
+
+#[cfg(test)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+pub(super) fn native_fallback_allowed_for_test<T>(result: &wayland::ReadResult<T>) -> bool {
+    native_unavailable(result)
 }
 
 /// Publishes local file references in the OS-native file clipboard.
@@ -168,12 +219,15 @@ pub(super) fn write_text(text: &str) -> Result<(), ClipboardError> {
     }
 }
 
-#[cfg(any(
-    target_os = "linux",
-    target_os = "freebsd",
-    target_os = "openbsd",
-    target_os = "netbsd",
-    target_os = "dragonfly"
+#[cfg(all(
+    test,
+    any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    )
 ))]
 pub(super) fn platform_command(
     program: &str,
@@ -190,13 +244,7 @@ pub(super) fn platform_command(
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                ClipboardError::HelperMissing
-            } else {
-                ClipboardError::Unavailable
-            }
-        })?;
+        .map_err(|_| ClipboardError::Unavailable)?;
     child
         .stdin
         .take()

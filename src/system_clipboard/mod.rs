@@ -29,41 +29,17 @@ pub(crate) struct FileClipboard {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ClipboardError {
     Unavailable,
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "freebsd",
-        target_os = "openbsd",
-        target_os = "netbsd",
-        target_os = "dragonfly"
-    ))]
-    HelperMissing,
     WriteFailed,
 }
 
 impl ClipboardError {
     pub(crate) fn item_status(self) -> &'static str {
         match self {
-            #[cfg(any(
-                target_os = "linux",
-                target_os = "freebsd",
-                target_os = "openbsd",
-                target_os = "netbsd",
-                target_os = "dragonfly"
-            ))]
-            Self::HelperMissing => "File clipboard helper not found",
             Self::Unavailable | Self::WriteFailed => "File clipboard unavailable",
         }
     }
     pub(crate) fn text_status(self) -> &'static str {
         match self {
-            #[cfg(any(
-                target_os = "linux",
-                target_os = "freebsd",
-                target_os = "openbsd",
-                target_os = "netbsd",
-                target_os = "dragonfly"
-            ))]
-            Self::HelperMissing => "Clipboard helper not found",
             Self::Unavailable => "Clipboard unavailable",
             Self::WriteFailed => "Clipboard write failed",
         }
