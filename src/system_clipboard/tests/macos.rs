@@ -23,13 +23,19 @@ fn file_urls_round_trip_multiple_files_directories_and_unicode() {
 
     macos::write_files_for_test(&pasteboard, &paths).unwrap();
     let clipboard = macos::read_files_for_test(&pasteboard).unwrap();
+    assert_eq!(clipboard.paths.len(), paths.len());
+    for (actual, expected) in clipboard.paths.iter().zip(&paths) {
+        assert_eq!(
+            fs::canonicalize(actual).unwrap(),
+            fs::canonicalize(expected).unwrap()
+        );
+    }
     let expected_text = paths
         .iter()
         .map(|path| path.to_string_lossy())
         .collect::<Vec<_>>()
         .join("\n");
 
-    assert_eq!(clipboard.paths, paths);
     assert_eq!(clipboard.operation, FileClipboardOperation::Copy);
     assert_eq!(
         macos::read_text_for_test(&pasteboard).as_deref(),

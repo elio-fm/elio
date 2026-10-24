@@ -14,7 +14,15 @@ use crate::input_handling::keyboard::{
 };
 use crate::places::{PlaceItem, PlaceKind, PlaceRow};
 use crate::preview::PreviewDirectoryStatsState;
-use crossterm::event::{KeyEventKind, KeyEventState, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyEventKind, KeyEventState};
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+use crossterm::event::{MouseEvent, MouseEventKind};
 use std::{
     fs,
     path::PathBuf,
