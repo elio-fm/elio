@@ -96,6 +96,8 @@ pub(crate) struct OverlayState {
 }
 
 pub(crate) struct InputRuntime {
+    pub(crate) system_clipboard_read_token: u64,
+    pub(crate) system_clipboard_text_input_generation: u64,
     pub(crate) screen_regions: ScreenRegions,
     pub(crate) scrollbar_drag: Option<ScrollbarDrag>,
     pub(crate) scrollbar_drag_cancelled_until_release: bool,
@@ -189,6 +191,8 @@ impl App {
             overlays: OverlayState::default(),
             job_scheduler: scheduler,
             input: InputRuntime {
+                system_clipboard_read_token: 0,
+                system_clipboard_text_input_generation: 0,
                 screen_regions: ScreenRegions::default(),
                 scrollbar_drag: None,
                 scrollbar_drag_cancelled_until_release: false,

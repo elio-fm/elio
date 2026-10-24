@@ -19,6 +19,16 @@ impl App {
             };
             processed += 1;
             dirty |= match job {
+                #[cfg(any(
+                    target_os = "linux",
+                    target_os = "freebsd",
+                    target_os = "openbsd",
+                    target_os = "netbsd",
+                    target_os = "dragonfly"
+                ))]
+                JobResult::SystemClipboardRead(build) => {
+                    self.apply_system_clipboard_read_job_result(build)
+                }
                 JobResult::Directory(build) => self.apply_directory_job_result(build),
                 JobResult::DirectoryFingerprint(build) => {
                     self.apply_directory_fingerprint_job_result(build)

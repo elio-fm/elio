@@ -1,5 +1,13 @@
 #[cfg(test)]
 use super::scheduler_metrics::SchedulerMetricsSnapshot;
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+use super::workers::system_clipboard::SystemClipboardReadPool;
 #[cfg(test)]
 use super::workers::{
     fuzzy_finder::FuzzyFinderJobKey, pdf_page_inspection::PdfProbeJobKey,
@@ -75,6 +83,14 @@ pub(crate) struct JobScheduler {
     search: FuzzyFinderPool,
     duplicates: DuplicateFinderPool,
     preview: PreviewPool,
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    system_clipboard: SystemClipboardReadPool,
     result_rx: mpsc::Receiver<JobResult>,
     buffered_results: Mutex<VecDeque<JobResult>>,
     #[cfg(test)]
@@ -145,9 +161,17 @@ impl JobScheduler {
             preview: PreviewPool::new(
                 config.preview_worker_count,
                 config.preview_queue_limit,
-                result_tx,
+                result_tx.clone(),
                 Arc::clone(&metrics),
             ),
+            #[cfg(any(
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "openbsd",
+                target_os = "netbsd",
+                target_os = "dragonfly"
+            ))]
+            system_clipboard: SystemClipboardReadPool::new(result_tx),
             result_rx,
             buffered_results: Mutex::new(VecDeque::new()),
             #[cfg(test)]
@@ -314,6 +338,17 @@ impl JobScheduler {
         self.preview.submit(request)
     }
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    pub(crate) fn submit_system_clipboard_read(&self, request: SystemClipboardReadRequest) -> bool {
+        self.system_clipboard.submit(request)
+    }
+
     pub(crate) fn try_recv(&self) -> Result<JobResult, mpsc::TryRecvError> {
         if let Some(job) = lock_unpoison(&self.buffered_results).pop_front() {
             return Ok(job);
@@ -345,6 +380,29 @@ impl JobScheduler {
             || self.search.has_pending_work()
             || self.duplicates.has_pending_work()
             || self.preview.has_pending_work()
+            || self.system_clipboard_has_pending_work()
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    fn system_clipboard_has_pending_work(&self) -> bool {
+        self.system_clipboard.has_pending_work()
+    }
+
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    )))]
+    fn system_clipboard_has_pending_work(&self) -> bool {
+        false
     }
 
     #[cfg(test)]

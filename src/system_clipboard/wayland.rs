@@ -1,12 +1,16 @@
 use super::{ClipboardError, FileClipboard, freedesktop};
 use anyhow::{Context, Result, anyhow};
 use std::{
-    io::{Read, Write},
+    io::Write,
     os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd},
     path::PathBuf,
     sync::mpsc,
     thread,
+    time::{Duration, Instant},
 };
+
+const CLIPBOARD_READ_TIMEOUT: Duration = Duration::from_secs(2);
+const MAX_CLIPBOARD_READ_BYTES: usize = 8 * 1024 * 1024;
 
 /// A Wayland selection can be current yet irrelevant to the requested paste.
 /// Keep that distinct from an unavailable data-control protocol so callers do
@@ -330,13 +334,7 @@ impl Reader {
             return None;
         }
         drop(write_fd);
-        let mut bytes = Vec::new();
-        if let Err(error) = std::fs::File::from(read_fd).read_to_end(&mut bytes) {
-            debug(format_args!(
-                "zwlr-data-control cannot read {mime}: {error}"
-            ));
-            return None;
-        }
+        let bytes = read_pipe(read_fd, mime, "zwlr-data-control")?;
         debug(format_args!(
             "zwlr-data-control read {mime}: {} bytes",
             bytes.len()
@@ -370,6 +368,66 @@ fn pipe() -> std::io::Result<(OwnedFd, OwnedFd)> {
         return Err(std::io::Error::last_os_error());
     }
     Ok(unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) })
+}
+
+/// Read clipboard data without allowing an external Wayland owner to block the
+/// terminal forever or make it allocate an unbounded amount of memory.
+fn read_pipe(read_fd: OwnedFd, mime: &str, protocol: &str) -> Option<Vec<u8>> {
+    let raw = read_fd.as_raw_fd();
+    let deadline = Instant::now() + CLIPBOARD_READ_TIMEOUT;
+    let mut bytes = Vec::new();
+    let mut chunk = [0_u8; 8192];
+
+    loop {
+        let remaining = deadline.checked_duration_since(Instant::now())?;
+        let timeout_ms = remaining.as_millis().max(1).min(i32::MAX as u128) as i32;
+        let mut poll_fd = libc::pollfd {
+            fd: raw,
+            events: libc::POLLIN | libc::POLLHUP,
+            revents: 0,
+        };
+        let ready = unsafe { libc::poll(&mut poll_fd, 1, timeout_ms) };
+        if ready == 0 {
+            debug(format_args!("{protocol} timed out reading {mime}"));
+            return None;
+        }
+        if ready < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.raw_os_error() == Some(libc::EINTR) {
+                continue;
+            }
+            debug(format_args!("{protocol} cannot wait for {mime}: {error}"));
+            return None;
+        }
+        if poll_fd.revents & libc::POLLNVAL != 0 {
+            debug(format_args!(
+                "{protocol} received an invalid pipe for {mime}"
+            ));
+            return None;
+        }
+
+        let read = unsafe { libc::read(raw, chunk.as_mut_ptr().cast(), chunk.len()) };
+        if read == 0 {
+            return Some(bytes);
+        }
+        if read < 0 {
+            let error = std::io::Error::last_os_error();
+            if matches!(error.raw_os_error(), Some(libc::EINTR) | Some(libc::EAGAIN)) {
+                continue;
+            }
+            debug(format_args!("{protocol} cannot read {mime}: {error}"));
+            return None;
+        }
+
+        let read = read as usize;
+        if bytes.len().saturating_add(read) > MAX_CLIPBOARD_READ_BYTES {
+            debug(format_args!(
+                "{protocol} rejected {mime}: clipboard data exceeds {MAX_CLIPBOARD_READ_BYTES} bytes"
+            ));
+            return None;
+        }
+        bytes.extend_from_slice(&chunk[..read]);
+    }
 }
 
 struct ExtState {
@@ -590,11 +648,7 @@ impl ClipboardReader for ExtReader {
             return None;
         }
         drop(write_fd);
-        let mut bytes = Vec::new();
-        if let Err(error) = std::fs::File::from(read_fd).read_to_end(&mut bytes) {
-            debug(format_args!("ext-data-control cannot read {mime}: {error}"));
-            return None;
-        }
+        let bytes = read_pipe(read_fd, mime, "ext-data-control")?;
         debug(format_args!(
             "ext-data-control read {mime}: {} bytes",
             bytes.len()
@@ -730,4 +784,37 @@ fn write_payload(fd: OwnedFd, data: &[u8]) -> Result<()> {
     let mut file = std::fs::File::from(fd);
     file.write_all(data).context("write clipboard data")?;
     file.flush().context("flush clipboard data")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pipe_reader_collects_a_complete_payload() {
+        let (read_fd, write_fd) = pipe().expect("create pipe");
+        let writer = thread::spawn(move || write_payload(write_fd, b"clipboard data"));
+
+        assert_eq!(
+            read_pipe(read_fd, "text/plain", "test"),
+            Some(b"clipboard data".to_vec())
+        );
+        writer
+            .join()
+            .expect("writer thread")
+            .expect("write payload");
+    }
+
+    #[test]
+    fn pipe_reader_times_out_when_owner_never_writes() {
+        let (read_fd, write_fd) = pipe().expect("create pipe");
+        let started = Instant::now();
+
+        assert_eq!(read_pipe(read_fd, "text/plain", "test"), None);
+        assert!(
+            started.elapsed() >= CLIPBOARD_READ_TIMEOUT - Duration::from_millis(50),
+            "clipboard read returned before its timeout"
+        );
+        drop(write_fd);
+    }
 }

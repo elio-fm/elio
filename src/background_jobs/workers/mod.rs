@@ -25,4 +25,12 @@ pub(super) mod preview_building;
 pub(super) mod preview_line_counts;
 pub(super) mod restore;
 pub(super) mod static_image_preparation;
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+pub(super) mod system_clipboard;
 pub(super) mod trash_delete;

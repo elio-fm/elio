@@ -9,6 +9,15 @@ pub(super) const KEY_REPEAT_NAV_INTERVAL: Duration = Duration::from_millis(28);
 
 impl App {
     pub fn handle_event(&mut self, event: Event) -> Result<()> {
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+            target_os = "dragonfly"
+        ))]
+        self.invalidate_pending_system_clipboard_text_read(&event);
+
         let result = match event {
             Event::Key(key) => self.handle_key(crate::config::normalize_caps_lock_character(key)),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
@@ -84,6 +93,24 @@ impl App {
         Ok(())
     }
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    fn text_input_is_open(&self) -> bool {
+        self.system_clipboard_text_target().is_some()
+    }
+
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    )))]
     fn text_input_is_open(&self) -> bool {
         self.chooser
             .save_as()
@@ -95,6 +122,116 @@ impl App {
             || self.file_operations.bulk_rename_is_open()
             || self.fuzzy_finder.search.is_some()
             || self.local_filter_is_editing()
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    fn request_system_clipboard_text_read(&mut self) {
+        let Some(target) = self.system_clipboard_text_target() else {
+            return;
+        };
+        let token = self.next_system_clipboard_read_token();
+        if self.job_scheduler.submit_system_clipboard_read(
+            crate::background_jobs::job_requests::SystemClipboardReadRequest::Text {
+                token,
+                target,
+                input_generation: self.input.system_clipboard_text_input_generation,
+            },
+        ) {
+            self.status = "Reading clipboard…".to_string();
+        } else {
+            self.status = "Clipboard unavailable".to_string();
+        }
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    pub(crate) fn apply_system_clipboard_text_read(
+        &mut self,
+        target: crate::background_jobs::job_requests::SystemClipboardTextTarget,
+        input_generation: u64,
+        text: Option<String>,
+    ) -> bool {
+        if self.system_clipboard_text_target() != Some(target)
+            || self.input.system_clipboard_text_input_generation != input_generation
+        {
+            return false;
+        }
+        self.status.clear();
+        if let Some(text) = text
+            && let Err(error) = self.handle_paste(&text)
+        {
+            self.report_runtime_error("Clipboard paste failed", &error);
+        }
+        true
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    fn invalidate_pending_system_clipboard_text_read(&mut self, event: &Event) {
+        let changes_input = match event {
+            Event::Key(_) | Event::Paste(_) => true,
+            Event::Mouse(mouse) => mouse.kind != MouseEventKind::Moved,
+            Event::Resize(_, _) | Event::FocusGained | Event::FocusLost => false,
+        };
+        if self.system_clipboard_text_target().is_some() && changes_input {
+            self.input.system_clipboard_text_input_generation = self
+                .input
+                .system_clipboard_text_input_generation
+                .wrapping_add(1);
+        }
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    fn system_clipboard_text_target(
+        &self,
+    ) -> Option<crate::background_jobs::job_requests::SystemClipboardTextTarget> {
+        use crate::background_jobs::job_requests::SystemClipboardTextTarget;
+
+        if self
+            .chooser
+            .save_as()
+            .is_some_and(|save| save.is_open() && !save.overwrite())
+        {
+            Some(SystemClipboardTextTarget::SaveAs)
+        } else if self.file_operations.archive_password_is_open() {
+            Some(SystemClipboardTextTarget::ArchivePassword)
+        } else if self.file_operations.archive_create_is_open() {
+            Some(SystemClipboardTextTarget::ArchiveCreate)
+        } else if self.file_operations.create_is_open() {
+            Some(SystemClipboardTextTarget::Create)
+        } else if self.file_operations.rename_is_open() {
+            Some(SystemClipboardTextTarget::Rename)
+        } else if self.file_operations.bulk_rename_is_open() {
+            Some(SystemClipboardTextTarget::BulkRename)
+        } else if self.fuzzy_finder.search.is_some() {
+            Some(SystemClipboardTextTarget::Search)
+        } else if self.local_filter_is_editing() {
+            Some(SystemClipboardTextTarget::LocalFilter)
+        } else {
+            None
+        }
     }
 
     fn paste_into_archive_password(&mut self, text: &str) -> Result<()> {
@@ -277,8 +414,27 @@ impl App {
             && crate::config::key_bindings().action_for_key_in_context(key, self.key_context())
                 == Some(crate::config::Action::PasteItem)
         {
-            if let Some(text) = crate::system_clipboard::read_text() {
-                self.handle_paste(&text)?;
+            #[cfg(any(
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "openbsd",
+                target_os = "netbsd",
+                target_os = "dragonfly"
+            ))]
+            {
+                self.request_system_clipboard_text_read();
+            }
+            #[cfg(not(any(
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "openbsd",
+                target_os = "netbsd",
+                target_os = "dragonfly"
+            )))]
+            {
+                if let Some(text) = crate::system_clipboard::read_text() {
+                    self.handle_paste(&text)?;
+                }
             }
             return Ok(());
         }
