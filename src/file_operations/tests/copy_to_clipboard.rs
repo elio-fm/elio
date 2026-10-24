@@ -59,7 +59,7 @@ fn item_shortcut_copies_uri_list_references_for_multiple_items() {
     assert_eq!(
         fs::read_to_string(&capture).expect("fake clipboard tool should capture payload"),
         format!(
-            "file://{}\r\nfile://{}",
+            "file://{}\r\nfile://{}\r\n",
             link.as_os_str()
                 .as_encoded_bytes()
                 .iter()
