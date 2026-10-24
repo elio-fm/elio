@@ -20,6 +20,12 @@ use wayland_client::{
     Connection, Dispatch, EventQueue, QueueHandle,
     protocol::{wl_registry, wl_seat::WlSeat},
 };
+use wayland_protocols::ext::data_control::v1::client::{
+    ext_data_control_device_v1::{self, ExtDataControlDeviceV1},
+    ext_data_control_manager_v1::{self, ExtDataControlManagerV1},
+    ext_data_control_offer_v1::{self, ExtDataControlOfferV1},
+    ext_data_control_source_v1::{self, ExtDataControlSourceV1},
+};
 use wayland_protocols_wlr::data_control::v1::client::{
     zwlr_data_control_device_v1::{self, ZwlrDataControlDeviceV1},
     zwlr_data_control_manager_v1::ZwlrDataControlManagerV1,
@@ -32,6 +38,16 @@ use wayland_protocols_wlr::data_control::v1::client::{
 /// manager. A manager may persist the offer after elio exits, but must retain
 /// all offered MIME types for a later paste to remain a file operation.
 pub(super) fn offer(payloads: Vec<(String, Vec<u8>)>) -> Result<()> {
+    match offer_ext(payloads.clone()) {
+        Ok(()) => return Ok(()),
+        Err(error) => debug(format_args!(
+            "ext-data-control unavailable for write: {error:#}"
+        )),
+    }
+    offer_wlr(payloads)
+}
+
+fn offer_wlr(payloads: Vec<(String, Vec<u8>)>) -> Result<()> {
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
     thread::Builder::new()
         .name("elio-file-clipboard".to_string())
@@ -44,26 +60,66 @@ pub(super) fn offer(payloads: Vec<(String, Vec<u8>)>) -> Result<()> {
 }
 
 pub(super) fn read_files() -> ReadResult<FileClipboard> {
-    let Ok(mut reader) = Reader::open() else {
-        return ReadResult::Unavailable;
+    match ExtReader::open() {
+        Ok(mut reader) => return read_files_from(&mut reader),
+        Err(error) => debug(format_args!(
+            "ext-data-control unavailable while reading files: {error:#}"
+        )),
+    }
+    let mut reader = match Reader::open() {
+        Ok(reader) => reader,
+        Err(error) => {
+            debug(format_args!(
+                "zwlr-data-control unavailable while reading files: {error:#}"
+            ));
+            return ReadResult::Unavailable;
+        }
     };
+    read_files_from(&mut reader)
+}
+
+fn read_files_from(reader: &mut impl ClipboardReader) -> ReadResult<FileClipboard> {
     let types = reader.types().to_vec();
     let refs = types.iter().map(String::as_str).collect::<Vec<_>>();
     match freedesktop::read_file_clipboard(|mime| reader.read_type(mime), &refs) {
         Some(files) => ReadResult::Value(files),
-        None => ReadResult::Empty,
+        None => {
+            debug(format_args!(
+                "selection has no usable local-file representation"
+            ));
+            ReadResult::Empty
+        }
     }
 }
 
 pub(super) fn read_text() -> ReadResult<String> {
-    let Ok(mut reader) = Reader::open() else {
-        return ReadResult::Unavailable;
+    match ExtReader::open() {
+        Ok(mut reader) => return read_text_from(&mut reader),
+        Err(error) => debug(format_args!(
+            "ext-data-control unavailable while reading text: {error:#}"
+        )),
+    }
+    let mut reader = match Reader::open() {
+        Ok(reader) => reader,
+        Err(error) => {
+            debug(format_args!(
+                "zwlr-data-control unavailable while reading text: {error:#}"
+            ));
+            return ReadResult::Unavailable;
+        }
     };
+    read_text_from(&mut reader)
+}
+
+fn read_text_from(reader: &mut impl ClipboardReader) -> ReadResult<String> {
     let types = reader.types().to_vec();
     let refs = types.iter().map(String::as_str).collect::<Vec<_>>();
     match freedesktop::read_text(|mime| reader.read_type(mime), &refs) {
         Some(text) => ReadResult::Value(text),
-        None => ReadResult::Empty,
+        None => {
+            debug(format_args!("selection has no usable text representation"));
+            ReadResult::Empty
+        }
     }
 }
 
@@ -212,6 +268,11 @@ struct Reader {
     types: Vec<String>,
 }
 
+trait ClipboardReader {
+    fn types(&self) -> &[String];
+    fn read_type(&mut self, mime: &str) -> Option<Vec<u8>>;
+}
+
 impl Reader {
     fn open() -> Result<Self> {
         let connection = Connection::connect_to_env().context("connect to Wayland")?;
@@ -224,7 +285,7 @@ impl Reader {
         let manager = state
             .manager
             .as_ref()
-            .context("compositor lacks Wayland data-control clipboard support")?
+            .context("compositor lacks zwlr-data-control clipboard support")?
             .clone();
         let seat = state
             .seat
@@ -233,6 +294,10 @@ impl Reader {
             .clone();
         let device = manager.get_data_device(&seat, &qh, ());
         queue.roundtrip(&mut state)?;
+        debug(format_args!(
+            "zwlr-data-control selected; selection offer: {:?}",
+            state.selection_types
+        ));
         Ok(Self {
             _connection: connection,
             queue,
@@ -248,13 +313,52 @@ impl Reader {
 
     fn read_type(&mut self, mime: &str) -> Option<Vec<u8>> {
         let offer = self.offer.as_ref()?;
-        let (read_fd, write_fd) = pipe().ok()?;
+        let (read_fd, write_fd) = match pipe() {
+            Ok(pipe) => pipe,
+            Err(error) => {
+                debug(format_args!(
+                    "zwlr-data-control cannot create pipe for {mime}: {error}"
+                ));
+                return None;
+            }
+        };
         offer.receive(mime.to_string(), write_fd.as_fd());
-        self.queue.flush().ok()?;
+        if let Err(error) = self.queue.flush() {
+            debug(format_args!(
+                "zwlr-data-control cannot request {mime}: {error}"
+            ));
+            return None;
+        }
         drop(write_fd);
         let mut bytes = Vec::new();
-        std::fs::File::from(read_fd).read_to_end(&mut bytes).ok()?;
+        if let Err(error) = std::fs::File::from(read_fd).read_to_end(&mut bytes) {
+            debug(format_args!(
+                "zwlr-data-control cannot read {mime}: {error}"
+            ));
+            return None;
+        }
+        debug(format_args!(
+            "zwlr-data-control read {mime}: {} bytes",
+            bytes.len()
+        ));
         Some(bytes)
+    }
+}
+
+impl ClipboardReader for Reader {
+    fn types(&self) -> &[String] {
+        self.types()
+    }
+
+    fn read_type(&mut self, mime: &str) -> Option<Vec<u8>> {
+        self.read_type(mime)
+    }
+}
+
+fn debug(message: std::fmt::Arguments<'_>) {
+    // Developer-only transport trace for compositor-specific clipboard reports.
+    if std::env::var_os("ELIO_DEBUG_WAYLAND_CLIPBOARD").is_some() {
+        eprintln!("elio Wayland clipboard: {message}");
     }
 }
 
@@ -266,6 +370,287 @@ fn pipe() -> std::io::Result<(OwnedFd, OwnedFd)> {
         return Err(std::io::Error::last_os_error());
     }
     Ok(unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) })
+}
+
+struct ExtState {
+    manager: Option<ExtDataControlManagerV1>,
+    seat: Option<WlSeat>,
+    payloads: Vec<(String, Vec<u8>)>,
+    cancelled: bool,
+    selection: Option<ExtDataControlOfferV1>,
+    selection_types: Vec<String>,
+    pending_offer_types: Vec<String>,
+}
+
+impl ExtState {
+    fn new(payloads: Vec<(String, Vec<u8>)>) -> Self {
+        Self {
+            manager: None,
+            seat: None,
+            payloads,
+            cancelled: false,
+            selection: None,
+            selection_types: Vec::new(),
+            pending_offer_types: Vec::new(),
+        }
+    }
+}
+
+impl Dispatch<wl_registry::WlRegistry, ()> for ExtState {
+    fn event(
+        state: &mut Self,
+        registry: &wl_registry::WlRegistry,
+        event: wl_registry::Event,
+        _: &(),
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        if let wl_registry::Event::Global {
+            name,
+            interface,
+            version,
+        } = event
+        {
+            match interface.as_str() {
+                "ext_data_control_manager_v1" => {
+                    state.manager = Some(registry.bind::<ExtDataControlManagerV1, _, _>(
+                        name,
+                        version.min(1),
+                        qh,
+                        (),
+                    ))
+                }
+                "wl_seat" if state.seat.is_none() => {
+                    state.seat = Some(registry.bind::<WlSeat, _, _>(name, version.min(7), qh, ()))
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+impl Dispatch<ExtDataControlManagerV1, ()> for ExtState {
+    fn event(
+        _: &mut Self,
+        _: &ExtDataControlManagerV1,
+        _: ext_data_control_manager_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
+impl Dispatch<WlSeat, ()> for ExtState {
+    fn event(
+        _: &mut Self,
+        _: &WlSeat,
+        _: wayland_client::protocol::wl_seat::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
+impl Dispatch<ExtDataControlDeviceV1, ()> for ExtState {
+    fn event_created_child(
+        opcode: u16,
+        qh: &QueueHandle<Self>,
+    ) -> std::sync::Arc<dyn wayland_client::backend::ObjectData> {
+        match opcode {
+            0 => qh.make_data::<ExtDataControlOfferV1, ()>(()),
+            _ => panic!("unexpected ext data-control device child opcode {opcode}"),
+        }
+    }
+
+    fn event(
+        state: &mut Self,
+        _: &ExtDataControlDeviceV1,
+        event: ext_data_control_device_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        match event {
+            ext_data_control_device_v1::Event::DataOffer { .. } => {
+                state.pending_offer_types.clear()
+            }
+            ext_data_control_device_v1::Event::Selection { id } => {
+                state.selection = id;
+                state.selection_types = std::mem::take(&mut state.pending_offer_types);
+            }
+            ext_data_control_device_v1::Event::Finished => state.cancelled = true,
+            _ => {}
+        }
+    }
+}
+
+impl Dispatch<ExtDataControlOfferV1, ()> for ExtState {
+    fn event(
+        state: &mut Self,
+        _: &ExtDataControlOfferV1,
+        event: ext_data_control_offer_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        if let ext_data_control_offer_v1::Event::Offer { mime_type } = event {
+            state.pending_offer_types.push(mime_type);
+        }
+    }
+}
+
+impl Dispatch<ExtDataControlSourceV1, ()> for ExtState {
+    fn event(
+        state: &mut Self,
+        _: &ExtDataControlSourceV1,
+        event: ext_data_control_source_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        match event {
+            ext_data_control_source_v1::Event::Send { mime_type, fd } => {
+                let fd: OwnedFd = fd;
+                if let Some((_, data)) = state.payloads.iter().find(|(mime, _)| mime == &mime_type)
+                {
+                    let _ = write_payload(fd, data);
+                }
+            }
+            ext_data_control_source_v1::Event::Cancelled => state.cancelled = true,
+            _ => {}
+        }
+    }
+}
+
+struct ExtReader {
+    _connection: Connection,
+    queue: EventQueue<ExtState>,
+    _device: ExtDataControlDeviceV1,
+    offer: Option<ExtDataControlOfferV1>,
+    types: Vec<String>,
+}
+
+impl ExtReader {
+    fn open() -> Result<Self> {
+        let connection = Connection::connect_to_env().context("connect to Wayland")?;
+        let mut queue = connection.new_event_queue();
+        let qh = queue.handle();
+        let _registry = connection.display().get_registry(&qh, ());
+        let mut state = ExtState::new(Vec::new());
+        queue.roundtrip(&mut state)?;
+        let manager = state
+            .manager
+            .as_ref()
+            .context("compositor lacks ext-data-control clipboard support")?
+            .clone();
+        let seat = state
+            .seat
+            .as_ref()
+            .context("Wayland session has no seat")?
+            .clone();
+        let device = manager.get_data_device(&seat, &qh, ());
+        queue.roundtrip(&mut state)?;
+        debug(format_args!(
+            "ext-data-control selected; selection offer: {:?}",
+            state.selection_types
+        ));
+        Ok(Self {
+            _connection: connection,
+            queue,
+            _device: device,
+            offer: state.selection.clone(),
+            types: state.selection_types.clone(),
+        })
+    }
+}
+
+impl ClipboardReader for ExtReader {
+    fn types(&self) -> &[String] {
+        &self.types
+    }
+
+    fn read_type(&mut self, mime: &str) -> Option<Vec<u8>> {
+        let offer = self.offer.as_ref()?;
+        let (read_fd, write_fd) = match pipe() {
+            Ok(pipe) => pipe,
+            Err(error) => {
+                debug(format_args!(
+                    "ext-data-control cannot create pipe for {mime}: {error}"
+                ));
+                return None;
+            }
+        };
+        offer.receive(mime.to_string(), write_fd.as_fd());
+        if let Err(error) = self.queue.flush() {
+            debug(format_args!(
+                "ext-data-control cannot request {mime}: {error}"
+            ));
+            return None;
+        }
+        drop(write_fd);
+        let mut bytes = Vec::new();
+        if let Err(error) = std::fs::File::from(read_fd).read_to_end(&mut bytes) {
+            debug(format_args!("ext-data-control cannot read {mime}: {error}"));
+            return None;
+        }
+        debug(format_args!(
+            "ext-data-control read {mime}: {} bytes",
+            bytes.len()
+        ));
+        Some(bytes)
+    }
+}
+
+fn offer_ext(payloads: Vec<(String, Vec<u8>)>) -> Result<()> {
+    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
+    thread::Builder::new()
+        .name("elio-ext-file-clipboard".to_string())
+        .spawn(move || run_ext_offer(payloads, ready_tx))
+        .context("start ext Wayland clipboard worker")?;
+    ready_rx
+        .recv()
+        .map_err(|_| anyhow!("ext Wayland clipboard worker stopped before it was ready"))?
+}
+
+fn run_ext_offer(payloads: Vec<(String, Vec<u8>)>, ready: mpsc::SyncSender<Result<()>>) {
+    let result = (|| -> Result<()> {
+        let connection = Connection::connect_to_env().context("connect to Wayland")?;
+        let mut queue: EventQueue<ExtState> = connection.new_event_queue();
+        let qh = queue.handle();
+        let _registry = connection.display().get_registry(&qh, ());
+        let mut state = ExtState::new(payloads);
+        queue.roundtrip(&mut state)?;
+        let manager = state
+            .manager
+            .as_ref()
+            .context("compositor lacks ext-data-control clipboard support")?
+            .clone();
+        debug(format_args!("ext-data-control selected for write"));
+        let seat = state
+            .seat
+            .as_ref()
+            .context("Wayland session has no seat")?
+            .clone();
+        let device = manager.get_data_device(&seat, &qh, ());
+        let source = manager.create_data_source(&qh, ());
+        for (mime, _) in &state.payloads {
+            source.offer(mime.clone());
+        }
+        device.set_selection(Some(&source));
+        queue.flush()?;
+        ready.send(Ok(())).ok();
+        while !state.cancelled {
+            queue.blocking_dispatch(&mut state)?;
+        }
+        source.destroy();
+        device.destroy();
+        Ok(())
+    })();
+    if let Err(error) = result {
+        ready.send(Err(error)).ok();
+    }
 }
 
 impl Dispatch<ZwlrDataControlSourceV1, ()> for State {
@@ -304,7 +689,8 @@ fn run_offer(payloads: Vec<(String, Vec<u8>)>, ready: mpsc::SyncSender<Result<()
         let manager = state
             .manager
             .as_ref()
-            .context("compositor lacks Wayland data-control clipboard support")?;
+            .context("compositor lacks zwlr-data-control clipboard support")?;
+        debug(format_args!("zwlr-data-control selected for write"));
         let seat = state.seat.as_ref().context("Wayland session has no seat")?;
         let device = manager.get_data_device(seat, &qh, ());
         let source = manager.create_data_source(&qh, ());
