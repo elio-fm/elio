@@ -16,7 +16,7 @@ pub(super) fn temp_root(label: &str) -> PathBuf {
 }
 
 pub(super) fn configure_terminal_image_support(app: &mut App) {
-    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
+    let (cells_width, cells_height) = (120, 40);
     app.preview.terminal_images.protocol = ImageProtocol::KittyGraphics;
     app.preview.terminal_images.window = Some(TerminalWindowSize {
         cells_width,
@@ -27,7 +27,7 @@ pub(super) fn configure_terminal_image_support(app: &mut App) {
 }
 
 pub(super) fn configure_iterm_image_support(app: &mut App) {
-    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
+    let (cells_width, cells_height) = (120, 40);
     app.preview.terminal_images.protocol = ImageProtocol::ItermInline;
     app.preview.terminal_images.window = Some(TerminalWindowSize {
         cells_width,

@@ -3,7 +3,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{buffer::Buffer, text::Line};
 
 fn configure_iterm_image_support(app: &mut App) {
-    let (cells_width, cells_height) = crossterm::terminal::size().unwrap_or((120, 40));
+    let (cells_width, cells_height) = (120, 40);
     app.preview.terminal_images.protocol = ImageProtocol::ItermInline;
     app.preview.terminal_images.window = Some(TerminalWindowSize {
         cells_width,

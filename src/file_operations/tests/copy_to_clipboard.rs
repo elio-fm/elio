@@ -1,4 +1,23 @@
-use super::clipboard_test_support::*;
+use super::clipboard_test_support::{App, fs, temp_path};
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+use super::clipboard_test_support::{
+    ClipboardEnvGuard, clipboard_env_lock, install_backgrounding_clipboard_tool,
+    install_fake_clipboard_tool,
+};
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+use std::{env, time::Duration};
 
 #[test]
 fn copy_overlay_populates_expected_rows_for_selected_file() {
@@ -28,7 +47,13 @@ fn copy_overlay_populates_expected_rows_for_selected_file() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
-#[cfg(unix)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 #[test]
 fn item_shortcut_copies_uri_list_references_for_multiple_items() {
     let _lock = clipboard_env_lock();
@@ -89,7 +114,13 @@ fn item_shortcut_copies_uri_list_references_for_multiple_items() {
     fs::remove_dir_all(root).expect("failed to remove test root");
 }
 
-#[cfg(unix)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 #[test]
 fn item_shortcut_copies_uri_list_outside_gnome() {
     let _lock = clipboard_env_lock();
@@ -125,7 +156,13 @@ fn item_shortcut_copies_uri_list_outside_gnome() {
     fs::remove_dir_all(root).expect("failed to remove test root");
 }
 
-#[cfg(unix)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 #[test]
 fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {
     let _lock = clipboard_env_lock();
@@ -163,7 +200,13 @@ fn copy_overlay_shortcut_writes_expected_text_to_system_clipboard() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
-#[cfg(unix)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 #[test]
 fn copy_overlay_shortcut_uses_osc52_when_no_clipboard_tool_is_installed() {
     let _lock = clipboard_env_lock();
@@ -205,7 +248,13 @@ fn copy_overlay_shortcut_uses_osc52_when_no_clipboard_tool_is_installed() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
-#[cfg(unix)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 #[test]
 fn copy_overlay_shortcut_uses_osc52_in_alacritty_without_clipboard_tool() {
     let _lock = clipboard_env_lock();
@@ -247,7 +296,13 @@ fn copy_overlay_shortcut_uses_osc52_in_alacritty_without_clipboard_tool() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
-#[cfg(unix)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 #[test]
 fn copy_overlay_shortcut_uses_osc52_override_for_unknown_terminals() {
     let _lock = clipboard_env_lock();
@@ -289,7 +344,13 @@ fn copy_overlay_shortcut_uses_osc52_override_for_unknown_terminals() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
-#[cfg(unix)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 #[test]
 fn copy_overlay_skips_osc52_in_tmux_when_tmux_rejects_application_clipboard() {
     let _lock = clipboard_env_lock();
@@ -331,7 +392,13 @@ fn copy_overlay_skips_osc52_in_tmux_when_tmux_rejects_application_clipboard() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
-#[cfg(unix)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 #[test]
 fn copy_overlay_reports_short_error_when_no_clipboard_backend_is_available() {
     let _lock = clipboard_env_lock();
@@ -362,7 +429,13 @@ fn copy_overlay_reports_short_error_when_no_clipboard_backend_is_available() {
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
 
-#[cfg(unix)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 #[test]
 fn copy_overlay_does_not_block_on_backgrounding_clipboard_helpers() {
     let _lock = clipboard_env_lock();

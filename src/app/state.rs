@@ -96,7 +96,21 @@ pub(crate) struct OverlayState {
 }
 
 pub(crate) struct InputRuntime {
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
     pub(crate) system_clipboard_read_token: u64,
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
     pub(crate) system_clipboard_text_input_generation: u64,
     pub(crate) screen_regions: ScreenRegions,
     pub(crate) scrollbar_drag: Option<ScrollbarDrag>,
@@ -191,7 +205,21 @@ impl App {
             overlays: OverlayState::default(),
             job_scheduler: scheduler,
             input: InputRuntime {
+                #[cfg(any(
+                    target_os = "linux",
+                    target_os = "freebsd",
+                    target_os = "openbsd",
+                    target_os = "netbsd",
+                    target_os = "dragonfly"
+                ))]
                 system_clipboard_read_token: 0,
+                #[cfg(any(
+                    target_os = "linux",
+                    target_os = "freebsd",
+                    target_os = "openbsd",
+                    target_os = "netbsd",
+                    target_os = "dragonfly"
+                ))]
                 system_clipboard_text_input_generation: 0,
                 screen_regions: ScreenRegions::default(),
                 scrollbar_drag: None,

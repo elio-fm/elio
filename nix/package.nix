@@ -66,6 +66,11 @@ rustPlatform.buildRustPackage {
     "--skip=shell_install_detects_current_parent_shell_before_login_shell_environment"
     "--skip=shell_install_rejects_unsupported_current_shell_before_login_shell_environment"
     "--skip=shell_uninstall_rejects_unsupported_current_shell_before_login_shell_environment"
+    # AppKit pasteboard tests need the WindowServer pasteboard service, which
+    # is unavailable in the Darwin Nix sandbox. Ordinary macOS CI retains them.
+    "--skip=system_clipboard::tests::macos::"
+    "--skip=input_handling::tests::keyboard::pasted_text_is_ignored_in_browser_mode"
+    "--skip=input_handling::tests::navigation::ctrl_c_keeps_selection_after_directory_change"
   ];
 
   postInstall = lib.optionalString stdenv.hostPlatform.isLinux ''
