@@ -7,8 +7,8 @@ use objc2::{
     runtime::{AnyObject, ProtocolObject},
 };
 use objc2_app_kit::{
-    NSApplication, NSPasteboard, NSPasteboardTypeString, NSPasteboardURLReadingFileURLsOnlyKey,
-    NSPasteboardWriting,
+    NSApplication, NSPasteboard, NSPasteboardItem, NSPasteboardTypeFileURL, NSPasteboardTypeString,
+    NSPasteboardURLReadingFileURLsOnlyKey, NSPasteboardWriting,
 };
 use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString, NSURL};
 use std::path::PathBuf;
@@ -59,24 +59,26 @@ fn read_files_from(pasteboard: &NSPasteboard) -> Option<FileClipboard> {
 }
 
 fn read_text_from(pasteboard: &NSPasteboard) -> Option<String> {
-    pasteboard
-        .stringForType(text_type())
-        .map(|text| text.to_string())
+    let texts = pasteboard.pasteboardItems().map_or_else(Vec::new, |items| {
+        items
+            .iter()
+            .filter_map(|item| item.stringForType(text_type()))
+            .map(|text| text.to_string())
+            .collect::<Vec<_>>()
+    });
+    (!texts.is_empty()).then(|| texts.join("\n")).or_else(|| {
+        pasteboard
+            .stringForType(text_type())
+            .map(|text| text.to_string())
+    })
 }
 
 fn write_files_to(pasteboard: &NSPasteboard, paths: &[PathBuf]) -> Result<(), ClipboardError> {
-    let urls = paths
+    let objects = paths
         .iter()
-        .map(|path| {
-            if path.is_dir() {
-                NSURL::from_directory_path(path)
-            } else {
-                NSURL::from_file_path(path)
-            }
-            .ok_or(ClipboardError::WriteFailed)
-        })
+        .map(file_pasteboard_item)
         .collect::<Result<Vec<_>, _>>()?;
-    let objects = urls
+    let objects = objects
         .into_iter()
         .map(ProtocolObject::<dyn NSPasteboardWriting>::from_retained)
         .collect::<Vec<_>>();
@@ -86,6 +88,27 @@ fn write_files_to(pasteboard: &NSPasteboard, paths: &[PathBuf]) -> Result<(), Cl
         .writeObjects(&objects)
         .then_some(())
         .ok_or(ClipboardError::WriteFailed)
+}
+
+fn file_pasteboard_item(
+    path: &PathBuf,
+) -> Result<objc2::rc::Retained<NSPasteboardItem>, ClipboardError> {
+    let url = if path.is_dir() {
+        NSURL::from_directory_path(path)
+    } else {
+        NSURL::from_file_path(path)
+    }
+    .ok_or(ClipboardError::WriteFailed)?;
+    let file_url = url.absoluteString().ok_or(ClipboardError::WriteFailed)?;
+    let path_text = url.path().ok_or(ClipboardError::WriteFailed)?;
+    let utf16_type = utf16_text_type();
+    let item = NSPasteboardItem::new();
+
+    (item.setString_forType(&file_url, file_url_type())
+        && item.setString_forType(&path_text, text_type())
+        && item.setString_forType(&path_text, &utf16_type))
+    .then_some(item)
+    .ok_or(ClipboardError::WriteFailed)
 }
 
 fn write_text_to(pasteboard: &NSPasteboard, text: &str) -> Result<(), ClipboardError> {
@@ -99,6 +122,15 @@ fn write_text_to(pasteboard: &NSPasteboard, text: &str) -> Result<(), ClipboardE
 fn text_type() -> &'static NSString {
     // AppKit exports this pasteboard type as an extern static.
     unsafe { NSPasteboardTypeString }
+}
+
+fn file_url_type() -> &'static NSString {
+    // AppKit exports this pasteboard type as an extern static.
+    unsafe { NSPasteboardTypeFileURL }
+}
+
+fn utf16_text_type() -> objc2::rc::Retained<NSString> {
+    NSString::from_str("public.utf16-external-plain-text")
 }
 
 fn file_urls_only_key() -> &'static NSString {

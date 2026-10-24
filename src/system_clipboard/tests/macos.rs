@@ -23,10 +23,60 @@ fn file_urls_round_trip_multiple_files_directories_and_unicode() {
 
     macos::write_files_for_test(&pasteboard, &paths).unwrap();
     let clipboard = macos::read_files_for_test(&pasteboard).unwrap();
+    let expected_text = paths
+        .iter()
+        .map(|path| path.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("\n");
 
     assert_eq!(clipboard.paths, paths);
     assert_eq!(clipboard.operation, FileClipboardOperation::Copy);
+    assert_eq!(
+        macos::read_text_for_test(&pasteboard).as_deref(),
+        Some(expected_text.as_str())
+    );
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn file_export_includes_native_url_and_text_representations() {
+    let pasteboard = pasteboard();
+    let paths = [
+        PathBuf::from("/tmp/clipboard résumé 📁.txt"),
+        PathBuf::from("/tmp/clipboard second file.txt"),
+    ];
+
+    macos::write_files_for_test(&pasteboard, &paths).unwrap();
+
+    let items = pasteboard.pasteboardItems().unwrap();
+    assert_eq!(items.len(), paths.len());
+
+    for (item, path) in items.iter().zip(&paths) {
+        let expected_url = NSURL::from_file_path(path)
+            .unwrap()
+            .absoluteString()
+            .unwrap();
+        let expected_path = path.to_string_lossy();
+
+        assert_eq!(
+            item.stringForType(&NSString::from_str("public.file-url"))
+                .unwrap()
+                .to_string(),
+            expected_url.to_string()
+        );
+        assert_eq!(
+            item.stringForType(&NSString::from_str("public.utf8-plain-text"))
+                .unwrap()
+                .to_string(),
+            expected_path
+        );
+        assert_eq!(
+            item.stringForType(&NSString::from_str("public.utf16-external-plain-text"))
+                .unwrap()
+                .to_string(),
+            expected_path
+        );
+    }
 }
 
 #[test]
