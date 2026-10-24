@@ -89,6 +89,69 @@ fn external_drop_copy_copies_file_to_current_directory() {
     fs::remove_dir_all(&dst_dir).unwrap();
 }
 
+#[cfg(unix)]
+#[test]
+fn external_drop_copy_preserves_a_dangling_symlink() {
+    let src_dir = temp_path("drop-dangling-link-src");
+    let dst_dir = temp_path("drop-dangling-link-dst");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst_dir).unwrap();
+    let source = src_dir.join("missing-target-link");
+    let target = src_dir.join("does-not-exist");
+    std::os::unix::fs::symlink(&target, &source).expect("create dangling symlink");
+
+    let mut app = App::new_at(dst_dir.clone()).unwrap();
+    assert!(
+        app.drop_external_paths(vec![source.clone()], ClipOp::Yank)
+            .unwrap()
+    );
+    wait_for_paste_and_reload(&mut app);
+
+    let destination = dst_dir.join("missing-target-link");
+    assert!(
+        fs::symlink_metadata(&destination)
+            .expect("copied link metadata")
+            .file_type()
+            .is_symlink(),
+        "the dangling link entry should be copied"
+    );
+    assert_eq!(fs::read_link(&destination).unwrap(), target);
+    assert!(fs::symlink_metadata(&source).is_ok());
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst_dir).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn external_drop_copy_suffixes_when_destination_has_a_dangling_symlink() {
+    let src_dir = temp_path("drop-dangling-link-collision-src");
+    let dst_dir = temp_path("drop-dangling-link-collision-dst");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&dst_dir).unwrap();
+    let source = src_dir.join("missing-target-link");
+    let source_target = src_dir.join("source-does-not-exist");
+    std::os::unix::fs::symlink(&source_target, &source).expect("create source dangling link");
+
+    let existing = dst_dir.join("missing-target-link");
+    let existing_target = dst_dir.join("existing-does-not-exist");
+    std::os::unix::fs::symlink(&existing_target, &existing)
+        .expect("create destination dangling link");
+
+    let mut app = App::new_at(dst_dir.clone()).unwrap();
+    assert!(app.drop_external_paths(vec![source], ClipOp::Yank).unwrap());
+    wait_for_paste_and_reload(&mut app);
+
+    assert_eq!(fs::read_link(&existing).unwrap(), existing_target);
+    assert_eq!(
+        fs::read_link(dst_dir.join("missing-target-link_1")).unwrap(),
+        source_target
+    );
+
+    fs::remove_dir_all(&src_dir).unwrap();
+    fs::remove_dir_all(&dst_dir).unwrap();
+}
+
 #[test]
 fn external_drop_move_moves_file_to_current_directory() {
     let src_dir = temp_path("drop-move-src");

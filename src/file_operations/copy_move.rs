@@ -266,7 +266,10 @@ impl FileOperationsState {
         op: ClipOp,
         kind: ImportedTransferKind,
     ) -> ImportedPathPreparation {
-        let paths: Vec<PathBuf> = paths.into_iter().filter(|path| path.exists()).collect();
+        let paths: Vec<PathBuf> = paths
+            .into_iter()
+            .filter(|path| path_entry_exists(path))
+            .collect();
         if paths.is_empty() {
             return ImportedPathPreparation {
                 accepted: false,
@@ -366,6 +369,12 @@ fn paste_would_copy_directory_into_itself(request: &QueuedPaste) -> bool {
         .paths
         .iter()
         .any(|path| path.is_dir() && request.dest_dir.starts_with(path))
+}
+
+/// Check for a directory entry without following a symbolic link. A dangling
+/// link is still a valid item to paste or drop.
+fn path_entry_exists(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
 }
 
 impl FileOperationsState {

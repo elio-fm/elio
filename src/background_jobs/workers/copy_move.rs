@@ -214,7 +214,7 @@ fn run_paste(
             continue;
         };
 
-        if !src.exists() {
+        if !path_entry_exists(src) {
             errors.push(format!("\"{}\" no longer exists", file_name));
             if !send_paste_progress(result_tx, request.token, completed, &mut last_progress_at) {
                 break;
@@ -337,7 +337,7 @@ fn send_paste_progress(
 /// not collide with any existing file.
 fn unique_dest(dir: &Path, name: &str) -> PathBuf {
     let first = dir.join(name);
-    if !first.exists() {
+    if !path_entry_exists(&first) {
         return first;
     }
     let base = Path::new(name);
@@ -349,7 +349,7 @@ fn unique_dest(dir: &Path, name: &str) -> PathBuf {
 fn next_literal_dest(dir: &Path, stem: &str, ext: Option<&str>) -> PathBuf {
     for i in 1u32.. {
         let path = dir.join(format_copy_name(stem, ext, Some(i)));
-        if !path.exists() {
+        if !path_entry_exists(&path) {
             return path;
         }
     }
@@ -369,6 +369,11 @@ fn format_copy_name(stem: &str, ext: Option<&str>, suffix: Option<u32>) -> Strin
 
 /// Recursively copy `src` to `dest`.
 fn copy_recursive(src: &Path, dest: &Path) -> anyhow::Result<()> {
+    let metadata = fs::symlink_metadata(src)
+        .map_err(|e| anyhow::anyhow!("Cannot read \"{}\": {e}", src.display()))?;
+    if metadata.file_type().is_symlink() && !src.exists() {
+        return copy_symlink(src, dest);
+    }
     if source_contains_destination(src, dest) {
         anyhow::bail!("Cannot paste a folder into itself");
     }
@@ -396,6 +401,46 @@ fn copy_recursive(src: &Path, dest: &Path) -> anyhow::Result<()> {
 
 fn source_contains_destination(src: &Path, dest: &Path) -> bool {
     src.is_dir() && dest.starts_with(src)
+}
+
+fn path_entry_exists(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok()
+}
+
+#[cfg(unix)]
+fn copy_symlink(src: &Path, dest: &Path) -> anyhow::Result<()> {
+    let target = fs::read_link(src)
+        .map_err(|e| anyhow::anyhow!("Cannot read symbolic link \"{}\": {e}", src.display()))?;
+    std::os::unix::fs::symlink(&target, dest).map_err(|e| {
+        anyhow::anyhow!(
+            "Cannot copy symbolic link \"{}\" to \"{}\": {e}",
+            src.display(),
+            dest.display()
+        )
+    })
+}
+
+#[cfg(windows)]
+fn copy_symlink(src: &Path, dest: &Path) -> anyhow::Result<()> {
+    use std::os::windows::fs::FileTypeExt;
+
+    let target = fs::read_link(src)
+        .map_err(|e| anyhow::anyhow!("Cannot read symbolic link \"{}\": {e}", src.display()))?;
+    let file_type = fs::symlink_metadata(src)
+        .map_err(|e| anyhow::anyhow!("Cannot read symbolic link \"{}\": {e}", src.display()))?
+        .file_type();
+    let create_link = if file_type.is_symlink_dir() {
+        std::os::windows::fs::symlink_dir
+    } else {
+        std::os::windows::fs::symlink_file
+    };
+    create_link(&target, dest).map_err(|e| {
+        anyhow::anyhow!(
+            "Cannot copy symbolic link \"{}\" to \"{}\": {e}",
+            src.display(),
+            dest.display()
+        )
+    })
 }
 
 #[cfg(test)]
