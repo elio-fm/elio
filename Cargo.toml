@@ -39,7 +39,7 @@ toml_edit = "0.25"
 unicode-width = "0.2"
 zip = { version = "9.0.1", default-features = false, features = ["aes-crypto", "deflate"] }
 trash = "5.2.5"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 xz2 = { version = "0.1.7", features = ["static"] }
 bzip2 = "0.6.1"
 zstd = { version = "0.14", default-features = false }
