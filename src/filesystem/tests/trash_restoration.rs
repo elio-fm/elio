@@ -122,7 +122,11 @@ fn restore_recycle_bin_moves_item_to_original_path_and_removes_sidecar() {
     );
 
     let result = restore_recycle_bin_item(&content);
-    assert!(result.is_ok(), "restore should succeed: {:?}", result);
+    assert!(
+        matches!(result, Ok(None)),
+        "restore should succeed without warnings: {:?}",
+        result
+    );
     assert_eq!(
         fs::read(&original).expect("restored file should exist"),
         b"recycled content"

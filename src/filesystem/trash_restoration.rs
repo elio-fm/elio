@@ -52,7 +52,7 @@ pub(crate) fn restore_trash_item(entry_path: &Path) -> anyhow::Result<()> {
     // to the unsupported-layout error below.
     #[cfg(windows)]
     if super::recycle_bin::is_recycle_bin_entry(entry_path) {
-        return restore_recycle_bin_item(entry_path);
+        return restore_recycle_bin_item(entry_path).map(|_| ());
     }
 
     // Any other layout is not supported.
@@ -88,10 +88,23 @@ pub(crate) fn restore_trash_item_checked_metadata(
     Ok(remove_restore_origins_checked(&[&file_name]).err())
 }
 
+/// Restores as usual but checks Recycle Bin `$I` sidecar cleanup. A returned
+/// error means the item was restored and only removing its sidecar failed.
+#[cfg(windows)]
+pub(crate) fn restore_trash_item_checked_metadata(
+    entry_path: &Path,
+) -> anyhow::Result<Option<anyhow::Error>> {
+    if super::recycle_bin::is_recycle_bin_entry(entry_path) {
+        return restore_recycle_bin_item(entry_path);
+    }
+    restore_trash_item(entry_path).map(|()| None)
+}
+
 /// Windows Recycle Bin restore: reads the paired `$I` sidecar for the original
-/// path, moves the `$R` content back, then removes the sidecar.
+/// path, moves the `$R` content back, then removes the sidecar. A returned
+/// inner error means the content was restored but the sidecar was left behind.
 #[cfg(any(windows, test))]
-fn restore_recycle_bin_item(entry_path: &Path) -> anyhow::Result<()> {
+fn restore_recycle_bin_item(entry_path: &Path) -> anyhow::Result<Option<anyhow::Error>> {
     let file_name = entry_path
         .file_name()
         .and_then(|name| name.to_str())
@@ -107,9 +120,9 @@ fn restore_recycle_bin_item(entry_path: &Path) -> anyhow::Result<()> {
 
     // Only drop the sidecar once the content has moved, so a failed rename
     // leaves the pair intact and the item still restorable.
-    super::recycle_bin::remove_info_sidecar(entry_path);
-
-    Ok(())
+    Ok(super::recycle_bin::remove_info_sidecar(entry_path)
+        .err()
+        .map(|error| anyhow::anyhow!("could not remove its Recycle Bin metadata: {error}")))
 }
 
 /// FreeDesktop-specific restore: reads the `.trashinfo` sidecar and moves the

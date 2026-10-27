@@ -191,12 +191,16 @@ pub(crate) fn read_info(content_path: &Path) -> Option<RecycleInfo> {
     parse_info(&fs::read(info_path).ok()?)
 }
 
-/// Deletes the `$I` sidecar paired with `content_path`. Best-effort: a
-/// missing or unreadable sidecar is not an error, since the content file is
-/// already gone by the time this is called.
-pub(crate) fn remove_info_sidecar(content_path: &Path) {
-    if let Some(info_path) = info_path_for(content_path) {
-        let _ = fs::remove_file(info_path);
+/// Deletes the `$I` sidecar paired with `content_path`. A sidecar that is
+/// already gone is not an error; any other failure is returned so callers can
+/// report the orphaned sidecar.
+pub(crate) fn remove_info_sidecar(content_path: &Path) -> std::io::Result<()> {
+    let Some(info_path) = info_path_for(content_path) else {
+        return Ok(());
+    };
+    match fs::remove_file(info_path) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
+        _ => Ok(()),
     }
 }
 

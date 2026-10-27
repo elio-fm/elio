@@ -73,7 +73,7 @@ fn permanent_delete_removes_sidecars_only_for_recycle_bin_entries() {
         permanent: true,
     };
     let (result_tx, _result_rx) = mpsc::channel();
-    let (completed, errors, stopped_early) = run_permanent_delete(
+    let (completed, errors, warnings, stopped_early) = run_permanent_delete(
         &request,
         &result_tx,
         &AtomicBool::new(false),
@@ -82,6 +82,7 @@ fn permanent_delete_removes_sidecars_only_for_recycle_bin_entries() {
 
     assert_eq!((completed, stopped_early), (2, false));
     assert!(errors.is_empty(), "errors: {errors:?}");
+    assert!(warnings.is_empty(), "warnings: {warnings:?}");
     assert!(
         !bin.join("$I0A5E05.txt").exists(),
         "the deleted entry's sidecar should be removed"
@@ -93,6 +94,69 @@ fn permanent_delete_removes_sidecars_only_for_recycle_bin_entries() {
 
     fs::remove_dir_all(&bin).unwrap();
     fs::remove_dir_all(&outside).unwrap();
+}
+
+#[test]
+fn permanent_delete_reports_sidecar_failures_and_keeps_going() {
+    let bin = make_tmp_dir("recycle-bin-delete-sidecar-failure");
+    let stuck =
+        crate::filesystem::write_test_pair(&bin, "0A5E05.txt", r"C:\x\a.txt", 1_710_498_600);
+    let fine = crate::filesystem::write_test_pair(&bin, "0B6F16.txt", r"C:\x\b.txt", 1_710_498_600);
+    // A non-empty directory in place of the first `$I` sidecar makes its
+    // removal fail on every platform.
+    let stuck_sidecar = bin.join("$I0A5E05.txt");
+    fs::remove_file(&stuck_sidecar).unwrap();
+    fs::create_dir_all(stuck_sidecar.join("child")).unwrap();
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+
+    let target = |path: &PathBuf, name: &str| crate::file_operations::TrashTarget {
+        path: path.clone(),
+        name: name.to_string(),
+        is_dir: false,
+    };
+    let request = crate::file_operations::TrashRequest {
+        token: 1,
+        targets: vec![target(&stuck, "a.txt"), target(&fine, "b.txt")],
+        permanent: true,
+    };
+    let (result_tx, _result_rx) = mpsc::channel();
+    let (completed, errors, warnings, stopped_early) = run_permanent_delete(
+        &request,
+        &result_tx,
+        &AtomicBool::new(false),
+        &AtomicU64::new(0),
+    );
+
+    assert_eq!((completed, stopped_early), (2, false));
+    assert!(errors.is_empty(), "errors: {errors:?}");
+    assert_eq!(warnings.len(), 1, "warnings: {warnings:?}");
+    assert!(
+        warnings[0].starts_with("Deleted \"a.txt\", but could not remove its Recycle Bin metadata"),
+        "unexpected warning: {}",
+        warnings[0]
+    );
+    assert!(
+        !stuck.exists() && !fine.exists(),
+        "both items should be deleted"
+    );
+    assert!(
+        !bin.join("$I0B6F16.txt").exists(),
+        "the later item's sidecar should still be removed"
+    );
+
+    fs::remove_dir_all(&bin).unwrap();
+}
+
+#[test]
+fn delete_warnings_report_count_and_first_item() {
+    assert_eq!(
+        format_delete_warnings(&["first".to_string()]),
+        "warning: first"
+    );
+    assert_eq!(
+        format_delete_warnings(&["first".to_string(), "second".to_string()]),
+        "2 warnings — first: first"
+    );
 }
 
 fn trash_identity(device: u64, inode: u64) -> TrashEntryIdentity {

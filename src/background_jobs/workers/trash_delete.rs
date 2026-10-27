@@ -113,7 +113,9 @@ impl TrashPool {
                         errors[0]
                     )
                 };
-                if !warnings.is_empty() {
+                if !warnings.is_empty() && request.permanent {
+                    status = format!("{status}; {}", format_delete_warnings(&warnings));
+                } else if !warnings.is_empty() {
                     let warning = format_restore_metadata_warning(verb, completed, &warnings);
                     status = if !stopped_early && errors.is_empty() && completed > 0 {
                         warning
@@ -210,11 +212,19 @@ fn run_trash(
     cancel_token: &AtomicU64,
 ) -> (usize, Vec<String>, Vec<String>, bool) {
     if request.permanent {
-        let (completed, errors, stopped_early) =
-            run_permanent_delete(request, result_tx, cancelled, cancel_token);
-        (completed, errors, Vec::new(), stopped_early)
+        run_permanent_delete(request, result_tx, cancelled, cancel_token)
     } else {
         run_trash_batch(request, cancelled, cancel_token)
+    }
+}
+
+/// Formats permanent-delete warnings the same way the restore worker does:
+/// the failure count and the first affected item.
+fn format_delete_warnings(warnings: &[String]) -> String {
+    if warnings.len() == 1 {
+        format!("warning: {}", warnings[0])
+    } else {
+        format!("{} warnings — first: {}", warnings.len(), warnings[0])
     }
 }
 
@@ -257,11 +267,13 @@ fn run_permanent_delete(
     result_tx: &mpsc::Sender<JobResult>,
     cancelled: &AtomicBool,
     cancel_token: &AtomicU64,
-) -> (usize, Vec<String>, bool) {
+) -> (usize, Vec<String>, Vec<String>, bool) {
     let staging = staging_dir();
     let mut staged: Vec<(String, PathBuf)> = Vec::new();
     let mut completed = 0usize;
     let mut errors: Vec<String> = Vec::new();
+    // Items deleted whose Recycle Bin `$I` sidecar could not be removed.
+    let mut warnings: Vec<String> = Vec::new();
     let mut stopped_early = false;
     let mut last_progress_at: Option<Instant> = None;
     #[cfg(target_os = "macos")]
@@ -273,11 +285,8 @@ fn run_permanent_delete(
     // is reclaimed.
     #[cfg(target_os = "macos")]
     let mut deleted_names: Vec<String> = Vec::new();
-    // Recycle Bin `$R` entries successfully deleted, whose paired `$I`
-    // sidecars are removed after the loop. Keyed by path because the displayed
-    // name is the original, not the `$R` name. Always empty off Windows.
+    // `None` off Windows, so no sidecar cleanup ever happens there.
     let recycle_bin = crate::filesystem::recycle_bin_dir();
-    let mut deleted_recycle_bin_entries: Vec<&Path> = Vec::new();
 
     for target in &request.targets {
         if cancelled.load(Ordering::Relaxed)
@@ -324,11 +333,18 @@ fn run_permanent_delete(
                 restore_origins_trash_dir.as_deref(),
                 &mut deleted_names,
             );
+            // The `$R` content is gone (or staged out of the bin), so its paired
+            // `$I` sidecar must go too. A failure orphans only that sidecar;
+            // keep going and report it.
             if recycle_bin
                 .as_deref()
                 .is_some_and(|bin| crate::filesystem::is_recycle_bin_entry_in(&target.path, bin))
+                && let Err(error) = crate::filesystem::remove_info_sidecar(&target.path)
             {
-                deleted_recycle_bin_entries.push(target.path.as_path());
+                warnings.push(format!(
+                    "Deleted \"{}\", but could not remove its Recycle Bin metadata: {error}",
+                    target.name
+                ));
             }
         }
 
@@ -352,11 +368,7 @@ fn run_permanent_delete(
         errors.push(format!("Could not update Trash restore metadata: {error}"));
     }
 
-    for path in deleted_recycle_bin_entries {
-        crate::filesystem::remove_info_sidecar(path);
-    }
-
-    (completed, errors, stopped_early)
+    (completed, errors, warnings, stopped_early)
 }
 
 #[cfg(target_os = "macos")]

@@ -153,6 +153,10 @@ impl App {
         paths: Vec<PathBuf>,
         op: ClipOp,
     ) -> Result<bool> {
+        if crate::filesystem::is_in_recycle_bin(cwd) {
+            self.status = "Cannot paste into the Recycle Bin".to_string();
+            return Ok(false);
+        }
         let preparation = self
             .file_operations
             .prepare_system_clipboard_paste(cwd, paths, op);
@@ -220,6 +224,15 @@ impl App {
     pub(crate) fn copy_paths_to_system_clipboard(&mut self, paths: Vec<PathBuf>) {
         if paths.is_empty() {
             self.status = "Nothing to copy".to_string();
+            return;
+        }
+        // Same reason yank and cut refuse Recycle Bin items: pasted elsewhere
+        // they keep their `$R…` name, and a cut orphans the `$I…` sidecar.
+        if paths
+            .iter()
+            .any(|path| crate::filesystem::is_in_recycle_bin(path))
+        {
+            self.status = "Cannot copy items from the Recycle Bin — restore instead".to_string();
             return;
         }
         self.status = self.file_operations.copy_items_to_system_clipboard(&paths);

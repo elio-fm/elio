@@ -45,10 +45,14 @@ pub(crate) struct TrashJobCompletion {
 }
 
 pub(crate) fn trash_target_from_path(path: PathBuf) -> TrashTarget {
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(str::to_owned)
+    // Recycle Bin entries are named by their original name, not the opaque
+    // `$R…` one, matching how the listing shows them.
+    let name = crate::filesystem::recycle_bin_original_name(&path)
+        .or_else(|| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(str::to_owned)
+        })
         .unwrap_or_else(|| path.display().to_string());
     let is_dir = path.is_dir();
     TrashTarget { path, name, is_dir }

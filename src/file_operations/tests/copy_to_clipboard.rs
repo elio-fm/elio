@@ -181,6 +181,18 @@ fn copy_overlay_uses_original_names_but_real_paths_for_recycle_bin_entries() {
         app.file_operations.copy_row_value(3),
         bin.display().to_string()
     );
+    assert_eq!(
+        app.file_operations.copy_row_count(),
+        4,
+        "the Item row is withheld for Recycle Bin entries"
+    );
+
+    app.file_operations.dismiss_copy();
+    app.copy_paths_to_system_clipboard(vec![item.clone()]);
+    assert_eq!(
+        app.status,
+        "Cannot copy items from the Recycle Bin — restore instead"
+    );
 
     fs::remove_dir_all(bin).expect("failed to remove bin dir");
 }

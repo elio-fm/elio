@@ -157,67 +157,75 @@ fn build_copy_overlay(cwd: &Path, paths: &[PathBuf]) -> CopyOverlay {
             status_label,
             value: CopyValue::Text(values.join("\n")),
         };
+    let mut rows = vec![
+        text(
+            'c',
+            if plural {
+                "Copy file names"
+            } else {
+                "Copy file name"
+            }
+            .to_string(),
+            if plural { "file names" } else { "file name" }.to_string(),
+            names,
+        ),
+        text(
+            'n',
+            if plural {
+                "Names without extension"
+            } else {
+                "Name without extension"
+            }
+            .to_string(),
+            if plural {
+                "names without extension"
+            } else {
+                "name without extension"
+            }
+            .to_string(),
+            stems,
+        ),
+        text(
+            'p',
+            if plural { "File paths" } else { "File path" }.to_string(),
+            if plural { "file paths" } else { "file path" }.to_string(),
+            absolute
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect(),
+        ),
+        text(
+            'd',
+            if plural {
+                "Directory paths"
+            } else {
+                "Directory path"
+            }
+            .to_string(),
+            if plural {
+                "directory paths"
+            } else {
+                "directory path"
+            }
+            .to_string(),
+            dirs,
+        ),
+    ];
+    // Copied as items, Recycle Bin entries would paste under their `$R…` name;
+    // restore is the way out, as with yank and cut.
+    if !absolute
+        .iter()
+        .any(|path| crate::filesystem::is_in_recycle_bin(path))
+    {
+        rows.push(CopyOverlayRow {
+            shortcut: 'i',
+            label: "Item".to_string(),
+            status_label: if plural { "items" } else { "item" }.to_string(),
+            value: CopyValue::Items(absolute),
+        });
+    }
     CopyOverlay {
         title: "Copy to clipboard".to_string(),
-        rows: vec![
-            text(
-                'c',
-                if plural {
-                    "Copy file names"
-                } else {
-                    "Copy file name"
-                }
-                .to_string(),
-                if plural { "file names" } else { "file name" }.to_string(),
-                names,
-            ),
-            text(
-                'n',
-                if plural {
-                    "Names without extension"
-                } else {
-                    "Name without extension"
-                }
-                .to_string(),
-                if plural {
-                    "names without extension"
-                } else {
-                    "name without extension"
-                }
-                .to_string(),
-                stems,
-            ),
-            text(
-                'p',
-                if plural { "File paths" } else { "File path" }.to_string(),
-                if plural { "file paths" } else { "file path" }.to_string(),
-                absolute
-                    .iter()
-                    .map(|path| path.display().to_string())
-                    .collect(),
-            ),
-            text(
-                'd',
-                if plural {
-                    "Directory paths"
-                } else {
-                    "Directory path"
-                }
-                .to_string(),
-                if plural {
-                    "directory paths"
-                } else {
-                    "directory path"
-                }
-                .to_string(),
-                dirs,
-            ),
-            CopyOverlayRow {
-                shortcut: 'i',
-                label: "Item".to_string(),
-                status_label: if plural { "items" } else { "item" }.to_string(),
-                value: CopyValue::Items(absolute),
-            },
-        ],
+        rows,
     }
 }

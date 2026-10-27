@@ -36,6 +36,8 @@ pub use sort::SortMode;
 pub(crate) use sort::natural_cmp;
 pub(crate) use trash_metadata::{original_basename_from_path_value, parse_original_path};
 pub(crate) use trash_restoration::restore_trash_item;
+#[cfg(windows)]
+pub(crate) use trash_restoration::restore_trash_item_checked_metadata;
 #[cfg(target_os = "macos")]
 pub(crate) use trash_restoration::{
     remove_restore_origins, remove_restore_origins_checked, restore_trash_item_checked_metadata,

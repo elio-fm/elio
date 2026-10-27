@@ -398,6 +398,38 @@ fn paste_rejects_the_recycle_bin_as_destination() {
     fs::remove_dir_all(&outside).unwrap();
 }
 
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+#[test]
+fn system_clipboard_paste_rejects_the_recycle_bin_as_destination() {
+    let bin = temp_path("system-paste-rules-bin");
+    let outside = temp_path("system-paste-rules-outside");
+    fs::create_dir_all(&bin).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join("plain.txt"), "data").unwrap();
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+
+    let mut app = App::new_at(bin.clone()).unwrap();
+    app.apply_system_clipboard_file_read(
+        bin.clone(),
+        Some(crate::system_clipboard::FileClipboard {
+            paths: vec![outside.join("plain.txt")],
+            operation: crate::system_clipboard::FileClipboardOperation::Copy,
+        }),
+    );
+
+    assert_eq!(app.status, "Cannot paste into the Recycle Bin");
+    assert!(!bin.join("plain.txt").exists(), "nothing should be pasted");
+
+    fs::remove_dir_all(&bin).unwrap();
+    fs::remove_dir_all(&outside).unwrap();
+}
+
 #[test]
 fn yank_allows_selected_parent_of_current_directory() {
     let root = temp_path("yank-parent-selection");
