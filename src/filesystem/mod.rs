@@ -35,6 +35,9 @@ pub(crate) use recycle_bin::{override_recycle_bin_for_test, write_test_pair};
 pub use sort::SortMode;
 pub(crate) use sort::natural_cmp;
 pub(crate) use trash_metadata::{original_basename_from_path_value, parse_original_path};
+// Windows restores through `restore_trash_item_checked_metadata`; only the
+// Recycle Bin round-trip test still calls this there.
+#[cfg(any(not(windows), test))]
 pub(crate) use trash_restoration::restore_trash_item;
 #[cfg(windows)]
 pub(crate) use trash_restoration::restore_trash_item_checked_metadata;
