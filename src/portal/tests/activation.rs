@@ -46,8 +46,10 @@ fn replacement_owner_must_differ_from_the_previous_owner() {
 
 #[test]
 fn activation_must_start_the_service_instead_of_reusing_an_owner() {
-    assert!(service_started(START_SERVICE_REPLY_SUCCESS));
-    assert!(!service_started(2));
+    assert!(service_started(zbus::fdo::StartServiceReply::Success));
+    assert!(!service_started(
+        zbus::fdo::StartServiceReply::AlreadyRunning
+    ));
 }
 
 #[test]

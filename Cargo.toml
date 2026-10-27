@@ -93,7 +93,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = ["NSAppl
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Threading", "Win32_UI_Shell"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
-zbus = { version = "5.19", default-features = false, features = ["async-io"] }
+zbus = { version = "6.1", default-features = false, features = ["default-rt", "proxy", "service"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))'.dependencies]
 wayland-client = "0.31"

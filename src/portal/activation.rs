@@ -566,8 +566,6 @@ fn hash(contents: &[u8]) -> String {
 const OWNER_HANDOFF_TIMEOUT: Duration = Duration::from_secs(5);
 const OWNER_HANDOFF_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const ACTIVATION_METHOD_TIMEOUT: Duration = Duration::from_secs(5);
-const START_SERVICE_REPLY_SUCCESS: u32 = 1;
-
 #[derive(Debug, Eq, PartialEq)]
 enum OwnerHandoff {
     Released,
@@ -587,8 +585,8 @@ fn is_new_owner(previous: Option<&str>, current: Option<&str>) -> bool {
     current.is_some_and(|current| previous != Some(current))
 }
 
-fn service_started(reply: u32) -> bool {
-    reply == START_SERVICE_REPLY_SUCCESS
+fn service_started(reply: zbus::fdo::StartServiceReply) -> bool {
+    reply == zbus::fdo::StartServiceReply::Success
 }
 
 fn owner_uid_matches(owner_uid: u32, effective_uid: u32) -> bool {
@@ -601,7 +599,6 @@ fn portal_owner_name(name: &str) -> zbus::names::BusName<'_> {
 
 async fn activation_connection(context: &'static str) -> Result<Connection> {
     zbus::connection::Builder::session()
-        .context(context)?
         .method_timeout(ACTIVATION_METHOD_TIMEOUT)
         .build()
         .await
