@@ -261,3 +261,37 @@ fn confirm_restore_while_in_progress_shows_status_and_dismisses_overlay() {
     drop(app);
     let _ = fs::remove_dir_all(root);
 }
+
+#[test]
+fn restore_and_delete_overlays_show_original_names_for_selected_recycle_bin_items() {
+    let bin = temp_path("restore-recycle-bin-selected-names");
+    fs::create_dir_all(&bin).expect("failed to create bin dir");
+    let report =
+        crate::filesystem::write_test_pair(&bin, "0A5E05.md", r"C:\x\report.md", 1_710_498_600);
+    let notes =
+        crate::filesystem::write_test_pair(&bin, "0B6F16.txt", r"C:\x\notes.txt", 1_710_498_600);
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+
+    let mut app = App::new_at(bin.clone()).expect("failed to create app");
+    app.file_browser.in_trash = true;
+    app.file_browser.selected_paths.insert(report);
+    app.file_browser.selected_paths.insert(notes);
+
+    app.open_restore_prompt();
+    let restore_names = (0..app.file_operations.restore_target_count())
+        .filter_map(|index| app.file_operations.restore_target_name_at(index))
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    app.file_operations.dismiss_restore();
+    assert_eq!(restore_names, ["report.md", "notes.txt"]);
+
+    app.open_delete_permanently_prompt();
+    let delete_names = (0..app.file_operations.trash_target_count())
+        .filter_map(|index| app.file_operations.trash_target_label_at(&bin, index))
+        .collect::<Vec<_>>();
+    assert_eq!(delete_names, ["report.md", "notes.txt"]);
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(bin).expect("failed to remove bin dir");
+}

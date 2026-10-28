@@ -109,6 +109,69 @@ fn restore_freedesktop_fails_when_trashinfo_is_missing() {
 }
 
 #[test]
+fn restore_recycle_bin_moves_item_to_original_path_and_removes_sidecar() {
+    let bin = temp_path("restore-recycle-bin-ok");
+    let restore_target = temp_path("restore-recycle-bin-ok-dest");
+    fs::create_dir_all(&bin).expect("failed to create bin dir");
+    let original = restore_target.join("nested").join("report.pdf");
+    let content = crate::filesystem::write_test_pair(
+        &bin,
+        "0A5E05.pdf",
+        original.to_str().unwrap(),
+        1_710_498_600,
+    );
+
+    let result = restore_recycle_bin_item(&content);
+    assert!(
+        matches!(result, Ok(None)),
+        "restore should succeed without warnings: {:?}",
+        result
+    );
+    assert_eq!(
+        fs::read(&original).expect("restored file should exist"),
+        b"recycled content"
+    );
+    assert!(!content.exists(), "$R content should be gone");
+    assert!(
+        !bin.join("$I0A5E05.pdf").exists(),
+        "$I sidecar should be removed"
+    );
+
+    fs::remove_dir_all(bin).expect("failed to remove bin dir");
+    fs::remove_dir_all(restore_target).expect("failed to remove restore target");
+}
+
+#[test]
+fn restore_recycle_bin_keeps_the_pair_when_destination_exists() {
+    let bin = temp_path("restore-recycle-bin-exists");
+    let restore_target = temp_path("restore-recycle-bin-exists-dest");
+    fs::create_dir_all(&bin).expect("failed to create bin dir");
+    fs::create_dir_all(&restore_target).expect("failed to create restore target");
+    let original = restore_target.join("report.pdf");
+    fs::write(&original, "already here").expect("failed to write existing file");
+    let content = crate::filesystem::write_test_pair(
+        &bin,
+        "0A5E05.pdf",
+        original.to_str().unwrap(),
+        1_710_498_600,
+    );
+
+    let error = restore_recycle_bin_item(&content).expect_err("restore should refuse");
+    assert!(
+        error.to_string().contains("destination already exists"),
+        "unexpected error: {error}"
+    );
+    assert!(content.exists(), "$R content should stay in the bin");
+    assert!(
+        bin.join("$I0A5E05.pdf").exists(),
+        "$I sidecar should stay so the item remains restorable"
+    );
+
+    fs::remove_dir_all(bin).expect("failed to remove bin dir");
+    fs::remove_dir_all(restore_target).expect("failed to remove restore target");
+}
+
+#[test]
 fn restore_fails_for_path_outside_any_known_trash_layout() {
     let tmp = temp_path("restore-unsupported");
     fs::create_dir_all(&tmp).expect("failed to create temp dir");

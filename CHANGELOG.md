@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added file pasting from the system clipboard via the terminal's paste shortcut or configurable `paste_item` (`Ctrl+v`) action.
 - Added clipboard text pasting to text-entry overlays via `paste_item`.
 - Added configurable `clear_selection` and `cancel` actions, both bound to Esc by default.
+- Added Trash support on Windows through the system drive's Recycle Bin. ([#355])
 
 ### Changed
 
@@ -415,6 +416,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#355]: https://github.com/elio-fm/elio/issues/355
 [#352]: https://github.com/elio-fm/elio/issues/352
 [#351]: https://github.com/elio-fm/elio/issues/351
 [#349]: https://github.com/elio-fm/elio/issues/349

@@ -492,9 +492,16 @@ pub(super) fn normalize_absolute_path(path: &Path) -> PathBuf {
 ///   `~/.local/share/Trash/files`. The `files/` subdirectory holds the actual items;
 ///   the sibling `info/` directory holds `.trashinfo` metadata used for restore.
 /// - **macOS:** `~/.Trash`
-/// - **Windows:** always returns `None`. The Recycle Bin is a virtual shell folder
-///   that is not practically accessible as a regular filesystem path.
+/// - **Windows:** `<system drive>\$Recycle.Bin\<user SID>`. Only the system
+///   drive's bin; the Recycle Bin is per-volume.
 pub(crate) fn trash_dir(home: &Path) -> Option<PathBuf> {
+    // Windows: checked first so a stray `Trash/files` or `.Trash` folder never
+    // shadows the real Recycle Bin.
+    #[cfg(windows)]
+    if let Some(recycle_bin) = crate::filesystem::recycle_bin_dir() {
+        return Some(recycle_bin);
+    }
+
     #[cfg(all(unix, not(target_os = "macos")))]
     let data_dir = if crate::elevated_session::trash_home_dir().as_deref() == Some(home) {
         crate::elevated_session::trash_data_dir()

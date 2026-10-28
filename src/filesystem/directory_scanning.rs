@@ -211,6 +211,10 @@ pub(crate) fn load_directory_snapshot_cancellable(
         }
     }
 
+    if super::recycle_bin::is_recycle_bin_dir(dir) {
+        apply_recycle_bin_metadata(&mut entries, canceled)?;
+    }
+
     check_scan_canceled(canceled)?;
     sort_entries(&mut entries, sort_mode, folders_first);
     check_scan_canceled(canceled)?;
@@ -219,6 +223,29 @@ pub(crate) fn load_directory_snapshot_cancellable(
         entries,
         fingerprint,
     })
+}
+
+/// The Windows Recycle Bin stores each item as a `$R…` content file paired
+/// with a `$I…` metadata sidecar. Hide the sidecars and use them to display the
+/// original name and deletion time, mirroring the freedesktop handling. Entry
+/// paths keep pointing at the `$R…` file so restore and delete still operate on
+/// the real target.
+fn apply_recycle_bin_metadata(entries: &mut Vec<Entry>, canceled: &dyn Fn() -> bool) -> Result<()> {
+    entries.retain(|entry| !super::recycle_bin::is_hidden_in_listing(&entry.name));
+    for entry in entries {
+        check_scan_canceled(canceled)?;
+        let Some(info) = super::recycle_bin::read_info(&entry.path) else {
+            continue;
+        };
+        if let Some(deleted_at) = info.deleted_at {
+            entry.modified = Some(deleted_at);
+        }
+        if let Some(original_name) = info.original_name() {
+            entry.name = original_name;
+            entry.name_key = entry.name.to_lowercase();
+        }
+    }
+    Ok(())
 }
 
 fn entries_fingerprint(entries: &[Entry]) -> DirectoryFingerprint {
@@ -249,6 +276,18 @@ pub(crate) fn scan_directory_fingerprint_cancellable(
     show_hidden: bool,
     canceled: &dyn Fn() -> bool,
 ) -> Result<DirectoryFingerprint> {
+    let recycle_bin = super::recycle_bin::is_recycle_bin_dir(dir);
+    scan_fingerprint(dir, show_hidden, recycle_bin, canceled)
+}
+
+/// Must agree with [`load_directory_snapshot_cancellable`] on names and times,
+/// or every change check reports a difference and forces a reload.
+fn scan_fingerprint(
+    dir: &Path,
+    show_hidden: bool,
+    recycle_bin: bool,
+    canceled: &dyn Fn() -> bool,
+) -> Result<DirectoryFingerprint> {
     let mut parts = Vec::new();
     let trash_info_dir = trash_info_dir_for_files_dir(dir);
     for item in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
@@ -259,6 +298,9 @@ pub(crate) fn scan_directory_fingerprint_cancellable(
         };
         let file_name = item.file_name();
         if super::is_hidden_entry(&item) && !show_hidden {
+            continue;
+        }
+        if recycle_bin && super::recycle_bin::is_hidden_in_listing(&file_name.to_string_lossy()) {
             continue;
         }
 
@@ -278,6 +320,14 @@ pub(crate) fn scan_directory_fingerprint_cancellable(
             }
             if let Some(date) = metadata.deletion_date {
                 modified = Some(date);
+            }
+        }
+        if recycle_bin && let Some(info) = super::recycle_bin::read_info(&item.path()) {
+            if let Some(original_name) = info.original_name() {
+                name = original_name;
+            }
+            if let Some(deleted_at) = info.deleted_at {
+                modified = Some(deleted_at);
             }
         }
         parts.push(FingerprintPart {
