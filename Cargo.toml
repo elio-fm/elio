@@ -39,14 +39,14 @@ toml_edit = "0.25"
 unicode-width = "0.2"
 zip = { version = "9.0.1", default-features = false, features = ["aes-crypto", "deflate"] }
 trash = "5.2.5"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 xz2 = { version = "0.1.7", features = ["static"] }
 bzip2 = "0.6.1"
 zstd = { version = "0.14", default-features = false }
 sevenz-rust2 = { version = "0.24.0", default-features = false, features = ["aes256", "compress"] }
-icu_collator = { version = "=2.3.1", default-features = false, features = ["compiled_data"] }
-icu_locale_core = { version = "=2.3.0", default-features = false, features = ["alloc"] }
-icu_normalizer = { version = "=2.3.0", default-features = false, features = ["compiled_data"] }
+icu_collator = { version = "=2.4.0", default-features = false, features = ["compiled_data"] }
+icu_locale_core = { version = "=2.4.0", default-features = false, features = ["alloc"] }
+icu_normalizer = { version = "=2.4.0", default-features = false, features = ["compiled_data"] }
 sys-locale = "=0.3.2"
 
 [dev-dependencies]
@@ -93,13 +93,13 @@ objc2-app-kit = { version = "0.3", default-features = false, features = ["NSAppl
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Threading", "Win32_UI_Shell"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
-zbus = { version = "5.19", default-features = false, features = ["async-io"] }
+zbus = { version = "6.1", default-features = false, features = ["default-rt", "proxy", "service"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))'.dependencies]
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
-wayland-protocols-wlr = { version = "0.2", features = ["client"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 # RustConnection speaks the X11 wire protocol directly. Do not enable x11rb's
 # libxcb-backed unsafe transport: minimal Linux installs may not provide libxcb's
 # development linker name, and elio does not use that implementation.
-x11rb = { version = "0.13", default-features = false }
+x11rb = { version = "0.14", default-features = false }

@@ -27,10 +27,7 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use zbus::{
-    Connection,
-    zvariant::{OwnedObjectPath, OwnedValue},
-};
+use zbus::{Connection, OwnedObjectPath, OwnedVariant};
 
 const PORTAL_PATH: &str = "/org/freedesktop/portal/desktop";
 const PORTAL_NAME: &str = "io.github.elio_fm.elio.Portal";
@@ -101,9 +98,9 @@ impl FileChooser {
         _app_id: String,
         _parent_window: String,
         _title: String,
-        options: HashMap<String, OwnedValue>,
+        options: HashMap<String, OwnedVariant>,
         #[zbus(connection)] connection: &Connection,
-    ) -> (u32, HashMap<String, OwnedValue>) {
+    ) -> (u32, HashMap<String, OwnedVariant>) {
         if !has_only_options(&options, OPEN_OPTIONS) || !valid_ignored_options(&options) {
             return failed();
         }
@@ -138,9 +135,9 @@ impl FileChooser {
         _app_id: String,
         _parent_window: String,
         _title: String,
-        options: HashMap<String, OwnedValue>,
+        options: HashMap<String, OwnedVariant>,
         #[zbus(connection)] connection: &Connection,
-    ) -> (u32, HashMap<String, OwnedValue>) {
+    ) -> (u32, HashMap<String, OwnedVariant>) {
         if !has_only_options(&options, SAVE_OPTIONS) || !valid_ignored_options(&options) {
             return failed();
         }
@@ -164,8 +161,8 @@ impl FileChooser {
         _app_id: String,
         _parent_window: String,
         _title: String,
-        _options: HashMap<String, OwnedValue>,
-    ) -> (u32, HashMap<String, OwnedValue>) {
+        _options: HashMap<String, OwnedVariant>,
+    ) -> (u32, HashMap<String, OwnedVariant>) {
         failed()
     }
 }
@@ -176,7 +173,7 @@ impl FileChooser {
         handle: OwnedObjectPath,
         request: ChooserRequest,
         connection: &Connection,
-    ) -> (u32, HashMap<String, OwnedValue>) {
+    ) -> (u32, HashMap<String, OwnedVariant>) {
         let path = handle.to_string();
         let state = Arc::new(RequestState::default());
         let request_object = Request {
@@ -234,14 +231,14 @@ struct Completion {
 
 #[derive(Default)]
 struct CompletionState {
-    value: Option<(u32, HashMap<String, OwnedValue>)>,
+    value: Option<(u32, HashMap<String, OwnedVariant>)>,
     waker: Option<Waker>,
 }
 
 impl Completion {
     /// The request outcome is immutable. Close, child completion, and a socket
     /// failure may race; the first terminal transition wins.
-    fn complete(&self, value: (u32, HashMap<String, OwnedValue>)) {
+    fn complete(&self, value: (u32, HashMap<String, OwnedVariant>)) {
         let waker = {
             let mut state = self.state.lock().expect("completion lock poisoned");
             if state.value.is_some() {
@@ -255,7 +252,7 @@ impl Completion {
         }
     }
 
-    fn poll(&self, waker: &Waker) -> Poll<(u32, HashMap<String, OwnedValue>)> {
+    fn poll(&self, waker: &Waker) -> Poll<(u32, HashMap<String, OwnedVariant>)> {
         let mut state = self.state.lock().expect("completion lock poisoned");
         if let Some(value) = state.value.take() {
             Poll::Ready(value)
@@ -294,7 +291,7 @@ impl RequestState {
         self.cancelled.load(Ordering::Acquire)
     }
 
-    fn complete(&self, value: (u32, HashMap<String, OwnedValue>)) {
+    fn complete(&self, value: (u32, HashMap<String, OwnedVariant>)) {
         self.completion.complete(value);
     }
 
@@ -317,7 +314,7 @@ struct CompletionFuture {
 }
 
 impl Future for CompletionFuture {
-    type Output = (u32, HashMap<String, OwnedValue>);
+    type Output = (u32, HashMap<String, OwnedVariant>);
 
     fn poll(self: Pin<&mut Self>, context: &mut TaskContext<'_>) -> Poll<Self::Output> {
         self.state.completion.poll(context.waker())
@@ -329,7 +326,7 @@ fn run_request(
     chooser_executable: std::path::PathBuf,
     request: ChooserRequest,
     state: Arc<RequestState>,
-) -> (u32, HashMap<String, OwnedValue>) {
+) -> (u32, HashMap<String, OwnedVariant>) {
     if state.cancelled() {
         return cancelled();
     }
@@ -448,8 +445,8 @@ fn is_executable_file(path: &Path) -> bool {
 
 fn finish(
     state: &RequestState,
-    response: (u32, HashMap<String, OwnedValue>),
-) -> (u32, HashMap<String, OwnedValue>) {
+    response: (u32, HashMap<String, OwnedVariant>),
+) -> (u32, HashMap<String, OwnedVariant>) {
     if response.0 == 0 {
         state.reap_child();
     } else {
@@ -458,7 +455,7 @@ fn finish(
     response
 }
 
-fn accepted(paths: Vec<Vec<u8>>, request: &ChooserRequest) -> (u32, HashMap<String, OwnedValue>) {
+fn accepted(paths: Vec<Vec<u8>>, request: &ChooserRequest) -> (u32, HashMap<String, OwnedVariant>) {
     let multiple = matches!(
         request.mode,
         ChooserRequestMode::Open { multiple: true, .. }
@@ -479,7 +476,7 @@ fn accepted(paths: Vec<Vec<u8>>, request: &ChooserRequest) -> (u32, HashMap<Stri
     let mut results = HashMap::new();
     results.insert(
         "uris".to_owned(),
-        OwnedValue::try_from(zbus::zvariant::Value::from(uris))
+        OwnedVariant::try_from(zbus::Variant::from(uris))
             .expect("a string array is a valid D-Bus value"),
     );
     (0, results)
@@ -508,21 +505,21 @@ fn matches_selection(path: &[u8], request: &ChooserRequest) -> bool {
     }
 }
 
-fn option_bool(options: &HashMap<String, OwnedValue>, key: &str) -> Option<bool> {
+fn option_bool(options: &HashMap<String, OwnedVariant>, key: &str) -> Option<bool> {
     match options.get(key) {
         Some(value) => bool::try_from(value).ok(),
         None => Some(false),
     }
 }
 
-fn valid_ignored_options(options: &HashMap<String, OwnedValue>) -> bool {
+fn valid_ignored_options(options: &HashMap<String, OwnedVariant>) -> bool {
     option_bool(options, "modal").is_some()
         && option_string(options, "accept_label").is_some()
         && option_filters(options, "filters").is_some()
         && option_filter(options, "current_filter").is_some()
 }
 
-fn option_filters(options: &HashMap<String, OwnedValue>, key: &str) -> Option<()> {
+fn option_filters(options: &HashMap<String, OwnedVariant>, key: &str) -> Option<()> {
     let Some(value) = options.get(key) else {
         return Some(());
     };
@@ -530,7 +527,7 @@ fn option_filters(options: &HashMap<String, OwnedValue>, key: &str) -> Option<()
     (filters.len() <= MAX_FILTERS && filters.iter().all(valid_filter)).then_some(())
 }
 
-fn option_filter(options: &HashMap<String, OwnedValue>, key: &str) -> Option<()> {
+fn option_filter(options: &HashMap<String, OwnedVariant>, key: &str) -> Option<()> {
     let Some(value) = options.get(key) else {
         return Some(());
     };
@@ -546,7 +543,7 @@ fn valid_filter((name, rules): &Filter) -> bool {
             .all(|(kind, value)| matches!(kind, 0 | 1) && value.len() <= MAX_TEXT_BYTES)
 }
 
-fn option_string(options: &HashMap<String, OwnedValue>, key: &str) -> Option<String> {
+fn option_string(options: &HashMap<String, OwnedVariant>, key: &str) -> Option<String> {
     match options.get(key) {
         Some(value) => {
             let value = String::try_from(value.try_clone().ok()?).ok()?;
@@ -556,7 +553,7 @@ fn option_string(options: &HashMap<String, OwnedValue>, key: &str) -> Option<Str
     }
 }
 
-fn option_path(options: &HashMap<String, OwnedValue>, key: &str) -> Option<Option<Vec<u8>>> {
+fn option_path(options: &HashMap<String, OwnedVariant>, key: &str) -> Option<Option<Vec<u8>>> {
     let Some(value) = options.get(key) else {
         return Some(None);
     };
@@ -567,7 +564,7 @@ fn option_path(options: &HashMap<String, OwnedValue>, key: &str) -> Option<Optio
     (!bytes.contains(&0) && bytes.starts_with(b"/")).then_some(Some(bytes))
 }
 
-fn save_startup(options: &HashMap<String, OwnedValue>) -> Option<(Option<Vec<u8>>, String)> {
+fn save_startup(options: &HashMap<String, OwnedVariant>) -> Option<(Option<Vec<u8>>, String)> {
     let current_folder = option_path(options, "current_folder")?;
     let current_name = option_string(options, "current_name")?;
     let current_file = option_path(options, "current_file")?;
@@ -600,7 +597,7 @@ fn current_file_parts(path: &[u8]) -> Option<(Vec<u8>, &[u8])> {
     })
 }
 
-fn has_only_options(options: &HashMap<String, OwnedValue>, allowed: &[&str]) -> bool {
+fn has_only_options(options: &HashMap<String, OwnedVariant>, allowed: &[&str]) -> bool {
     options.len() <= MAX_OPTIONS && options.keys().all(|key| allowed.contains(&key.as_str()))
 }
 
@@ -620,11 +617,11 @@ fn file_uri(path: &[u8]) -> Option<String> {
     Some(uri)
 }
 
-fn failed() -> (u32, HashMap<String, OwnedValue>) {
+fn failed() -> (u32, HashMap<String, OwnedVariant>) {
     (2, HashMap::new())
 }
 
-fn cancelled() -> (u32, HashMap<String, OwnedValue>) {
+fn cancelled() -> (u32, HashMap<String, OwnedVariant>) {
     (1, HashMap::new())
 }
 

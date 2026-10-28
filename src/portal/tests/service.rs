@@ -4,7 +4,7 @@ use super::{
     option_bool, option_path, save_startup, valid_ignored_options,
 };
 use std::collections::HashMap;
-use zbus::zvariant::OwnedValue;
+use zbus::OwnedVariant;
 
 type Filter = (String, Vec<(u32, String)>);
 
@@ -65,53 +65,53 @@ fn zen_filters() -> Vec<Filter> {
     ]
 }
 
-fn zen_open_options() -> HashMap<String, OwnedValue> {
+fn zen_open_options() -> HashMap<String, OwnedVariant> {
     let filters = zen_filters();
     let current_filter = filters[0].clone();
     HashMap::from([
-        ("modal".into(), OwnedValue::from(true)),
-        ("multiple".into(), OwnedValue::from(true)),
+        ("modal".into(), OwnedVariant::from(true)),
+        ("multiple".into(), OwnedVariant::from(true)),
         (
             "filters".into(),
-            OwnedValue::try_from(zbus::zvariant::Value::from(filters))
+            OwnedVariant::try_from(zbus::Variant::from(filters))
                 .expect("Zen filter list is a valid D-Bus value"),
         ),
         (
             "current_filter".into(),
-            OwnedValue::try_from(zbus::zvariant::Value::from(current_filter))
+            OwnedVariant::try_from(zbus::Variant::from(current_filter))
                 .expect("Zen current filter is a valid D-Bus value"),
         ),
     ])
 }
 
-fn zen_save_options() -> HashMap<String, OwnedValue> {
+fn zen_save_options() -> HashMap<String, OwnedVariant> {
     let filters = zen_filters();
     let current_filter = filters[0].clone();
     HashMap::from([
-        ("modal".into(), OwnedValue::from(true)),
+        ("modal".into(), OwnedVariant::from(true)),
         (
             "accept_label".into(),
-            OwnedValue::try_from(zbus::zvariant::Value::from("Save"))
+            OwnedVariant::try_from(zbus::Variant::from("Save"))
                 .expect("Zen accept label is a valid D-Bus value"),
         ),
         (
             "filters".into(),
-            OwnedValue::try_from(zbus::zvariant::Value::from(filters))
+            OwnedVariant::try_from(zbus::Variant::from(filters))
                 .expect("Zen filter list is a valid D-Bus value"),
         ),
         (
             "current_filter".into(),
-            OwnedValue::try_from(zbus::zvariant::Value::from(current_filter))
+            OwnedVariant::try_from(zbus::Variant::from(current_filter))
                 .expect("Zen current filter is a valid D-Bus value"),
         ),
         (
             "current_folder".into(),
-            OwnedValue::try_from(zbus::zvariant::Value::from(b"/tmp\0".to_vec()))
+            OwnedVariant::try_from(zbus::Variant::from(b"/tmp\0".to_vec()))
                 .expect("Zen current folder is a valid D-Bus value"),
         ),
         (
             "current_name".into(),
-            OwnedValue::try_from(zbus::zvariant::Value::from("download.png"))
+            OwnedVariant::try_from(zbus::Variant::from("download.png"))
                 .expect("Zen current name is a valid D-Bus value"),
         ),
     ])
@@ -144,13 +144,13 @@ fn zen_open_and_save_option_shapes_are_allowed_and_validated() {
 #[test]
 fn ignored_options_require_documented_types_and_bounds() {
     let mut options = zen_open_options();
-    options.insert("filters".into(), OwnedValue::from(true));
+    options.insert("filters".into(), OwnedVariant::from(true));
     assert!(!valid_ignored_options(&options));
 
     let mut options = zen_save_options();
     options.insert(
         "accept_label".into(),
-        OwnedValue::try_from(zbus::zvariant::Value::from("x".repeat(4097)))
+        OwnedVariant::try_from(zbus::Variant::from("x".repeat(4097)))
             .expect("a string is a valid D-Bus value"),
     );
     assert!(!valid_ignored_options(&options));
@@ -161,10 +161,8 @@ fn current_file_supplies_save_startup_when_more_specific_hints_are_absent() {
     let mut options = HashMap::new();
     options.insert(
         "current_file".into(),
-        OwnedValue::try_from(zbus::zvariant::Value::from(
-            b"/tmp/downloads/report.png\0".to_vec(),
-        ))
-        .expect("current file is a valid D-Bus value"),
+        OwnedVariant::try_from(zbus::Variant::from(b"/tmp/downloads/report.png\0".to_vec()))
+            .expect("current file is a valid D-Bus value"),
     );
     assert_eq!(
         save_startup(&options),
@@ -173,12 +171,12 @@ fn current_file_supplies_save_startup_when_more_specific_hints_are_absent() {
 
     options.insert(
         "current_folder".into(),
-        OwnedValue::try_from(zbus::zvariant::Value::from(b"/tmp/elsewhere\0".to_vec()))
+        OwnedVariant::try_from(zbus::Variant::from(b"/tmp/elsewhere\0".to_vec()))
             .expect("current folder is a valid D-Bus value"),
     );
     options.insert(
         "current_name".into(),
-        OwnedValue::try_from(zbus::zvariant::Value::from("renamed.png"))
+        OwnedVariant::try_from(zbus::Variant::from("renamed.png"))
             .expect("current name is a valid D-Bus value"),
     );
     assert_eq!(
@@ -190,7 +188,7 @@ fn current_file_supplies_save_startup_when_more_specific_hints_are_absent() {
 #[test]
 fn choices_remain_rejected() {
     let mut options = HashMap::new();
-    options.insert("choices".to_owned(), OwnedValue::from(true));
+    options.insert("choices".to_owned(), OwnedVariant::from(true));
     assert!(!has_only_options(&options, OPEN_OPTIONS));
 }
 
@@ -224,7 +222,7 @@ fn typed_boolean_options_do_not_silently_default() {
     let mut options = HashMap::new();
     options.insert(
         "multiple".into(),
-        OwnedValue::try_from(zbus::zvariant::Value::from("yes"))
+        OwnedVariant::try_from(zbus::Variant::from("yes"))
             .expect("a string is a valid D-Bus value"),
     );
     assert_eq!(option_bool(&options, "multiple"), None);
@@ -236,7 +234,7 @@ fn current_folder_requires_an_absolute_nonempty_byte_path() {
     let mut options = HashMap::new();
     options.insert(
         "current_folder".into(),
-        OwnedValue::try_from(zbus::zvariant::Value::from(vec![b'/', b't', b'm', b'p', 0]))
+        OwnedVariant::try_from(zbus::Variant::from(vec![b'/', b't', b'm', b'p', 0]))
             .expect("a byte array is a valid D-Bus value"),
     );
     assert_eq!(
@@ -245,7 +243,7 @@ fn current_folder_requires_an_absolute_nonempty_byte_path() {
     );
     options.insert(
         "current_folder".into(),
-        OwnedValue::try_from(zbus::zvariant::Value::from(Vec::<u8>::new()))
+        OwnedVariant::try_from(zbus::Variant::from(Vec::<u8>::new()))
             .expect("a byte array is a valid D-Bus value"),
     );
     assert_eq!(option_path(&options, "current_folder"), None);
