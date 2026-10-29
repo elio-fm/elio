@@ -32,6 +32,27 @@ fn save_as_preserves_name_across_navigation_and_does_not_create_destination() {
 }
 
 #[test]
+fn save_as_refuses_the_recycle_bin() {
+    let bin = temp_path("save-as-recycle-bin");
+    fs::create_dir_all(&bin).unwrap();
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+    let mut app = App::new_at(bin.clone()).unwrap();
+    app.file_browser.cwd = bin.clone();
+    app.enable_save_as_mode("draft.txt".into());
+
+    app.confirm_chooser();
+    key(&mut app, KeyCode::Enter);
+
+    assert_eq!(
+        app.chooser.save_as().unwrap().error(),
+        Some("Cannot save into the Recycle Bin")
+    );
+    assert!(app.chooser_exit().is_none());
+
+    cleanup_app_temp_root(app, bin);
+}
+
+#[test]
 fn overwrite_confirmation_stays_bound_to_submitted_directory() {
     let root = temp_path("save-as-pending-navigation");
     let child = root.join("child");

@@ -27,8 +27,8 @@ pub(crate) use item_display::{
     format_time_ago, sanitize_terminal_text, symlink_target_display_label,
 };
 pub(crate) use recycle_bin::{
-    is_in_recycle_bin, is_recycle_bin_entry_in, recycle_bin_dir, recycle_bin_original_name,
-    remove_info_sidecar,
+    RecycleBinScanContext, is_in_recycle_bin, is_recycle_bin_entry_in, recycle_bin_dir,
+    recycle_bin_original_name, remove_info_sidecar,
 };
 #[cfg(test)]
 pub(crate) use recycle_bin::{override_recycle_bin_for_test, write_test_pair};

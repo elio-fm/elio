@@ -9,6 +9,10 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 
 impl App {
     pub(crate) fn open_create_prompt(&mut self) {
+        if crate::filesystem::is_in_recycle_bin(&self.file_browser.cwd) {
+            self.status = "Cannot create in the Recycle Bin".to_string();
+            return;
+        }
         self.overlays.help = false;
         self.fuzzy_finder.search = None;
         self.file_operations.open_create_prompt();
@@ -16,6 +20,11 @@ impl App {
 
     pub(crate) fn confirm_create(&mut self) -> Result<()> {
         let cwd = self.file_browser.cwd.clone();
+        if crate::filesystem::is_in_recycle_bin(&cwd) {
+            self.file_operations.dismiss_create();
+            self.status = "Cannot create in the Recycle Bin".to_string();
+            return Ok(());
+        }
         let Some(completion) = self.file_operations.confirm_create(&cwd)? else {
             return Ok(());
         };

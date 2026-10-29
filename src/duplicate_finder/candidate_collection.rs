@@ -30,6 +30,7 @@ pub(super) fn collect_size_candidates(
     is_canceled: &impl Fn() -> bool,
 ) -> Result<(HashMap<u64, Vec<CandidateFile>>, DuplicateScanStats)> {
     let mut queue = VecDeque::from([cwd.to_path_buf()]);
+    let mut recycle_bin = crate::filesystem::RecycleBinScanContext::for_root(cwd);
     let mut stats = DuplicateScanStats::default();
     let mut size_groups: HashMap<u64, Vec<CandidateFile>> = HashMap::new();
 
@@ -64,7 +65,16 @@ pub(super) fn collect_size_candidates(
                 continue;
             };
             let path = entry.path();
-            let name = entry.file_name().to_string_lossy().to_string();
+            if recycle_bin.as_ref().is_some_and(|bin| bin.hides(&path)) {
+                continue;
+            }
+            let display = recycle_bin
+                .as_mut()
+                .and_then(|bin| bin.display_name_and_relative(&path));
+            let name = display
+                .as_ref()
+                .map(|(name, _)| name.clone())
+                .unwrap_or_else(|| entry.file_name().to_string_lossy().to_string());
             let name_key = name.to_lowercase();
             stats.visited_nodes += 1;
             breathe_after_node(stats.visited_nodes);
@@ -85,10 +95,14 @@ pub(super) fn collect_size_candidates(
                 continue;
             }
             stats.scanned_files += 1;
-            let Ok(relative_path) = path.strip_prefix(cwd) else {
-                continue;
+            let relative = if let Some((_, relative)) = display {
+                relative
+            } else {
+                let Ok(relative_path) = path.strip_prefix(cwd) else {
+                    continue;
+                };
+                relative_path.to_string_lossy().replace('\\', "/")
             };
-            let relative = relative_path.to_string_lossy().replace('\\', "/");
             size_groups.entry(size).or_default().push(CandidateFile {
                 path: path.clone(),
                 name,

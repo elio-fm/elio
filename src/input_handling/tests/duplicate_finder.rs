@@ -558,6 +558,101 @@ fn duplicate_finder_uses_normal_action_bindings_even_when_browser_is_in_trash() 
 }
 
 #[test]
+fn duplicate_finder_refuses_rename_for_recycle_bin_items() {
+    let bin = temp_path("duplicate-recycle-bin-rename");
+    fs::create_dir_all(&bin).expect("failed to create bin");
+    let recycled = crate::filesystem::write_test_pair(
+        &bin,
+        "0A5E05.txt",
+        r"C:\Users\someone\report.txt",
+        1_710_498_600,
+    );
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+    let mut app = App::new_at(bin.clone()).expect("failed to create app");
+    app.file_browser.cwd = bin.clone();
+    app.file_browser.in_trash = true;
+    app.open_duplicate_finder();
+    let overlay = app
+        .duplicate_finder
+        .session
+        .as_mut()
+        .expect("duplicate finder should be open");
+    overlay.groups = vec![crate::duplicate_finder::DuplicateGroup {
+        id: 1,
+        size: 16,
+        files: vec![crate::duplicate_finder::DuplicateFile {
+            path: recycled,
+            name: "report.txt".to_string(),
+            relative: "report.txt".to_string(),
+            size: 16,
+            modified: None,
+        }],
+    }];
+    overlay.loading = false;
+
+    app.handle_duplicate_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
+        .expect("rename action should be handled");
+
+    assert!(!app.file_operations.rename_is_open());
+    assert_eq!(app.status_message(), "Cannot rename items from Trash");
+
+    app.close_duplicate_finder();
+    fs::remove_dir_all(bin).expect("failed to remove bin");
+}
+
+#[test]
+fn duplicate_finder_trash_bindings_permanently_delete_recycle_bin_items() {
+    let bin = temp_path("duplicate-recycle-bin-delete");
+    fs::create_dir_all(&bin).expect("failed to create bin");
+    let recycled = crate::filesystem::write_test_pair(
+        &bin,
+        "0A5E05.txt",
+        r"C:\Users\someone\report.txt",
+        1_710_498_600,
+    );
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+    let mut app = App::new_at(bin.clone()).expect("failed to create app");
+    app.file_browser.cwd = bin.clone();
+    app.file_browser.in_trash = true;
+    app.open_duplicate_finder();
+    let overlay = app
+        .duplicate_finder
+        .session
+        .as_mut()
+        .expect("duplicate finder should be open");
+    overlay.groups = vec![crate::duplicate_finder::DuplicateGroup {
+        id: 1,
+        size: 16,
+        files: vec![crate::duplicate_finder::DuplicateFile {
+            path: recycled,
+            name: "report.txt".to_string(),
+            relative: "report.txt".to_string(),
+            size: 16,
+            modified: None,
+        }],
+    }];
+    overlay.loading = false;
+
+    app.handle_duplicate_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE))
+        .expect("trash action should be handled");
+    assert!(app.file_operations.trash_is_permanent());
+    assert_eq!(
+        app.file_operations
+            .trash_target_label_at(&bin, 0)
+            .as_deref(),
+        Some("report.txt")
+    );
+
+    app.file_operations.dismiss_trash();
+    app.handle_duplicate_key(KeyEvent::new(KeyCode::Char('D'), KeyModifiers::SHIFT))
+        .expect("permanent delete action should be handled");
+    assert!(app.file_operations.trash_is_permanent());
+
+    app.close_duplicate_finder();
+    fs::remove_dir_all(bin).expect("failed to remove bin");
+}
+
+#[test]
 fn duplicate_permanent_delete_prompt_opens_on_top_after_scan() {
     let root = temp_path("delete-permanent-on-top");
     fs::create_dir_all(&root).expect("failed to create temp root");

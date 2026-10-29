@@ -154,6 +154,7 @@ fn collect_candidates_with_limits_and_emitter(
     mut emit_batch: impl FnMut(SearchIndexBatch) -> bool,
 ) -> Result<SearchIndex> {
     let mut queue = VecDeque::from([cwd.to_path_buf()]);
+    let mut recycle_bin = crate::filesystem::RecycleBinScanContext::for_root(cwd);
     let mut visited_nodes = 0usize;
     let mut node_limit_reached = false;
     let mut candidates = Vec::new();
@@ -211,6 +212,9 @@ fn collect_candidates_with_limits_and_emitter(
             };
 
             let path = entry.path();
+            if recycle_bin.as_ref().is_some_and(|bin| bin.hides(&path)) {
+                continue;
+            }
             let classified = classify_entry(&path, &file_type);
             let Some(classified) = classified else {
                 continue;
@@ -251,7 +255,13 @@ fn collect_candidates_with_limits_and_emitter(
                 continue;
             }
 
-            let name = file_name.to_string_lossy().to_string();
+            let display = recycle_bin
+                .as_mut()
+                .and_then(|bin| bin.display_name_and_relative(&path));
+            let name = display
+                .as_ref()
+                .map(|(name, _)| name.clone())
+                .unwrap_or_else(|| file_name.to_string_lossy().to_string());
             let name_key = name.to_lowercase();
             let enqueue_children = is_dir && !is_symlink_entry && !should_prune_dir(&name_key);
             if !include_candidate && !enqueue_children {
@@ -259,10 +269,14 @@ fn collect_candidates_with_limits_and_emitter(
             }
 
             let (relative, relative_key) = if include_candidate {
-                let Ok(relative_path) = path.strip_prefix(cwd) else {
-                    continue;
+                let relative = if let Some((_, relative)) = display {
+                    relative
+                } else {
+                    let Ok(relative_path) = path.strip_prefix(cwd) else {
+                        continue;
+                    };
+                    relative_path.to_string_lossy().replace('\\', "/")
                 };
-                let relative = relative_path.to_string_lossy().replace('\\', "/");
                 let relative_key = relative.to_lowercase();
                 (Some(relative), Some(relative_key))
             } else {

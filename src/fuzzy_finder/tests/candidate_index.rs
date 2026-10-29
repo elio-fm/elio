@@ -47,6 +47,48 @@ fn collect_candidates_respects_hidden_toggle() {
 }
 
 #[test]
+fn recycle_bin_candidates_hide_sidecars_and_use_original_paths() {
+    let bin = temp_path("recycle-bin-display");
+    fs::create_dir_all(&bin).expect("failed to create bin");
+    crate::filesystem::write_test_pair(
+        &bin,
+        "0A5E05.txt",
+        r"C:\Users\someone\report.txt",
+        1_710_498_600,
+    );
+    let recycled_dir = crate::filesystem::write_test_pair(
+        &bin,
+        "0B6F16",
+        r"C:\Users\someone\Projects",
+        1_710_498_600,
+    );
+    fs::remove_file(&recycled_dir).expect("replace recycled file with directory");
+    fs::create_dir_all(recycled_dir.join("nested")).expect("failed to create recycled directory");
+    fs::write(recycled_dir.join("nested/notes.txt"), "notes").expect("failed to write nested file");
+    fs::write(bin.join("desktop.ini"), "system").expect("failed to write desktop.ini");
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+
+    let candidates = collect_candidates_with_limits(&bin, true, SearchScope::Files, 100, 1_000)
+        .expect("failed to collect recycle bin candidates")
+        .candidates;
+    let paths = candidates
+        .iter()
+        .map(|candidate| candidate.relative.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(paths.contains(&"report.txt"));
+    assert!(paths.contains(&"Projects/nested/notes.txt"));
+    assert!(
+        !paths
+            .iter()
+            .any(|path| path.contains("$I") || path.contains("$R"))
+    );
+    assert!(!paths.iter().any(|path| path.contains("desktop.ini")));
+
+    fs::remove_dir_all(bin).expect("failed to remove bin");
+}
+
+#[test]
 fn collect_candidates_follow_stable_breadth_first_order_under_limit() {
     let root = temp_path("breadth-first-order");
     fs::create_dir_all(root.join(".hidden-root/needle")).expect("failed to create target dir");
