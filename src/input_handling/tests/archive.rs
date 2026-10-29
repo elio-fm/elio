@@ -39,6 +39,57 @@ fn e_extracts_focused_zip_archive() {
 }
 
 #[test]
+fn archive_actions_are_refused_in_the_recycle_bin() {
+    let bin = temp_path("archive-recycle-bin");
+    fs::create_dir_all(&bin).expect("failed to create bin");
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+    let mut app = App::new_at(bin.clone()).expect("failed to create app");
+    app.file_browser.cwd = bin.clone();
+
+    app.open_archive_create_prompt();
+    assert!(!app.file_operations.archive_create_is_open());
+    assert_eq!(
+        app.status_message(),
+        "Cannot create an archive in the Recycle Bin"
+    );
+
+    app.extract_focused_archive()
+        .expect("extract action should be handled");
+    assert!(app.file_operations.archive_extract_progress().is_none());
+    assert_eq!(app.status_message(), "Cannot extract into the Recycle Bin");
+
+    cleanup_app_temp_root(app, bin);
+}
+
+#[test]
+fn archive_creation_refuses_recycle_bin_sources() {
+    let root = temp_path("archive-recycle-bin-source");
+    let bin = temp_path("archive-recycle-bin-source-bin");
+    fs::create_dir_all(&root).expect("failed to create root");
+    fs::create_dir_all(&bin).expect("failed to create bin");
+    let recycled = crate::filesystem::write_test_pair(
+        &bin,
+        "0A5E05.txt",
+        r"C:\Users\someone\report.txt",
+        1_710_498_600,
+    );
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.file_browser.selected_paths.insert(recycled);
+
+    app.open_archive_create_prompt();
+
+    assert!(!app.file_operations.archive_create_is_open());
+    assert_eq!(
+        app.status_message(),
+        "Cannot archive items from the Recycle Bin — restore instead"
+    );
+
+    cleanup_app_temp_root(app, root);
+    fs::remove_dir_all(bin).expect("failed to remove bin");
+}
+
+#[test]
 fn e_extracts_selected_archives_as_one_batch_and_skips_other_files() {
     let root = temp_path("extract-selected-archives");
     fs::create_dir_all(&root).expect("failed to create temp root");

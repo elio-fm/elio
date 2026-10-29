@@ -65,3 +65,22 @@ fn confirm_create_reports_duplicate_names_after_dir_marker_normalization() {
     drop(app);
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
+
+#[test]
+fn create_is_refused_in_the_recycle_bin() {
+    let bin = temp_path("create-recycle-bin");
+    fs::create_dir_all(&bin).expect("failed to create bin");
+    let _bin = crate::filesystem::override_recycle_bin_for_test(&bin);
+    let mut app = App::new_at(bin.clone()).expect("failed to create app");
+    app.file_browser.cwd = bin.clone();
+
+    app.open_create_prompt();
+
+    assert!(app.file_operations.create.is_none());
+    assert_eq!(app.status_message(), "Cannot create in the Recycle Bin");
+    assert!(!bin.join("new-file.txt").exists());
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(bin).expect("failed to remove bin");
+}

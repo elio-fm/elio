@@ -10,6 +10,10 @@ use std::path::PathBuf;
 
 impl App {
     pub(crate) fn extract_focused_archive(&mut self) -> Result<()> {
+        if crate::filesystem::is_in_recycle_bin(&self.file_browser.cwd) {
+            self.status = "Cannot extract into the Recycle Bin".to_string();
+            return Ok(());
+        }
         let selection_active = self.selection_count() > 0;
         let focused_is_dir =
             !selection_active && self.selected_entry().is_some_and(|entry| entry.is_dir());
@@ -40,6 +44,10 @@ impl App {
         &mut self,
         request: crate::file_operations::ArchiveExtractRequest,
     ) -> bool {
+        if crate::filesystem::is_in_recycle_bin(&self.file_browser.cwd) {
+            self.status = "Cannot extract into the Recycle Bin".to_string();
+            return false;
+        }
         let Some(request) = self
             .file_operations
             .start_archive_extract(request, self.file_browser.cwd.clone())
@@ -137,6 +145,10 @@ impl App {
     }
 
     pub(crate) fn open_archive_create_prompt(&mut self) {
+        if crate::filesystem::is_in_recycle_bin(&self.file_browser.cwd) {
+            self.status = "Cannot create an archive in the Recycle Bin".to_string();
+            return;
+        }
         if self.file_operations.archive_creation_in_progress() {
             self.status = "Archive creation already in progress".to_string();
             return;
@@ -150,6 +162,13 @@ impl App {
         } else {
             (self.selected_paths_sorted(), "archive.zip".to_string())
         };
+        if sources
+            .iter()
+            .any(|path| crate::filesystem::is_in_recycle_bin(path))
+        {
+            self.status = "Cannot archive items from the Recycle Bin — restore instead".to_string();
+            return;
+        }
         self.overlays.help = false;
         self.overlays.goto = None;
         self.overlays.open_with = None;
@@ -160,6 +179,11 @@ impl App {
     }
 
     fn confirm_archive_create(&mut self) {
+        if crate::filesystem::is_in_recycle_bin(&self.file_browser.cwd) {
+            self.file_operations.dismiss_archive_create();
+            self.status = "Cannot create an archive in the Recycle Bin".to_string();
+            return;
+        }
         let Some(request) = self
             .file_operations
             .confirm_archive_create(&self.file_browser.cwd)

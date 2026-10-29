@@ -16,6 +16,8 @@
 //! volume live in that volume's own `$Recycle.Bin` and are not listed here.
 
 use std::{
+    collections::HashMap,
+    ffi::OsString,
     fs,
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -139,6 +141,77 @@ pub(crate) fn recycle_bin_original_name(path: &Path) -> Option<String> {
         return None;
     }
     read_info(path)?.original_name()
+}
+
+/// Presentation data for a recursive scan rooted at the Recycle Bin.
+///
+/// The normal directory listing resolves `$R` names before rendering. Search
+/// and duplicate scans walk the directory themselves, so they use this context
+/// to apply the same names without rereading a top-level `$I` sidecar for every
+/// descendant of a recycled directory.
+pub(crate) struct RecycleBinScanContext {
+    bin: PathBuf,
+    root_names: HashMap<OsString, Option<String>>,
+}
+
+impl RecycleBinScanContext {
+    /// Returns a context only when a scan starts at the Recycle Bin itself.
+    /// A scan started inside a recycled directory already sees its ordinary
+    /// child names, while a scan outside the Bin must not reinterpret arbitrary
+    /// `$R`-looking paths.
+    pub(crate) fn for_root(root: &Path) -> Option<Self> {
+        let bin = recycle_bin_dir()?;
+        (root == bin).then_some(Self {
+            bin,
+            root_names: HashMap::new(),
+        })
+    }
+
+    /// True for implementation files that must never become search or
+    /// duplicate candidates.
+    pub(crate) fn hides(&self, path: &Path) -> bool {
+        path.parent() == Some(self.bin.as_path())
+            && path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(is_hidden_in_listing)
+    }
+
+    /// Returns the display name and slash-separated path relative to the scan
+    /// root. The first `$R…` path component is replaced with the name from its
+    /// `$I…` sidecar; descendants retain their real names.
+    pub(crate) fn display_name_and_relative(&mut self, path: &Path) -> Option<(String, String)> {
+        let relative = path.strip_prefix(&self.bin).ok()?;
+        let mut components = relative.components();
+        let first = components.next()?.as_os_str().to_os_string();
+        let root_name = self.root_display_name(&first);
+        let mut display_relative = root_name.clone();
+        let mut last_name = root_name;
+        for component in components {
+            let component = component.as_os_str().to_string_lossy().into_owned();
+            display_relative.push('/');
+            display_relative.push_str(&component);
+            last_name = component;
+        }
+        Some((last_name, display_relative))
+    }
+
+    fn root_display_name(&mut self, root: &OsString) -> String {
+        if let Some(name) = self.root_names.get(root) {
+            return name
+                .clone()
+                .unwrap_or_else(|| root.to_string_lossy().into_owned());
+        }
+        let path = self.bin.join(root);
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| is_content_name(name))
+            .and_then(|_| read_info(&path))
+            .and_then(|info| info.original_name());
+        self.root_names.insert(root.clone(), name.clone());
+        name.unwrap_or_else(|| root.to_string_lossy().into_owned())
+    }
 }
 
 /// Returns `true` when `path` is a `$R…` content entry directly inside `bin`.

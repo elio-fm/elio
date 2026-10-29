@@ -175,6 +175,10 @@ impl App {
         let Some(state) = self.chooser.save_as_mut() else {
             return;
         };
+        if crate::filesystem::is_in_recycle_bin(path) {
+            state.set_error("Cannot save into the Recycle Bin");
+            return;
+        }
         match path.parent().map(std::fs::metadata) {
             Some(Ok(meta)) if meta.is_dir() => {}
             _ => {

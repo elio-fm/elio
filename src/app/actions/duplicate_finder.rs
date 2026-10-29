@@ -1,8 +1,7 @@
 use super::super::App;
 use crate::background_jobs::job_requests::DuplicateScanRequest;
 use crate::duplicate_finder::DuplicateRow;
-use crate::file_operations::TrashTarget;
-use crate::filesystem::Entry;
+use crate::{file_operations::TrashTarget, filesystem::Entry};
 use anyhow::Result;
 use std::{
     fs,
@@ -27,6 +26,14 @@ impl App {
     }
     pub(crate) fn open_duplicate_rename(&mut self) {
         if self
+            .duplicate_action_paths()
+            .iter()
+            .any(|path| crate::filesystem::is_in_recycle_bin(path))
+        {
+            self.status = "Cannot rename items from Trash".to_string();
+            return;
+        }
+        if self
             .duplicate_finder
             .session
             .as_ref()
@@ -44,6 +51,13 @@ impl App {
     pub(crate) fn open_duplicate_bulk_rename(&mut self) {
         let paths = self.duplicate_action_paths();
         if paths.is_empty() {
+            return;
+        }
+        if paths
+            .iter()
+            .any(|path| crate::filesystem::is_in_recycle_bin(path))
+        {
+            self.status = "Cannot rename items from Trash".to_string();
             return;
         }
         self.file_operations
@@ -101,14 +115,7 @@ impl App {
         let action_paths = self.duplicate_action_paths();
         let targets = action_paths
             .into_iter()
-            .filter_map(|path| {
-                let name = path.file_name()?.to_string_lossy().to_string();
-                Some(TrashTarget {
-                    path,
-                    name,
-                    is_dir: false,
-                })
-            })
+            .map(crate::file_operations::trash_target_from_path)
             .collect::<Vec<_>>();
         if targets.is_empty() {
             return None;
@@ -132,6 +139,11 @@ impl App {
             self.file_operations.dismiss_rename();
             return Ok(());
         };
+        if crate::filesystem::is_in_recycle_bin(&old_path) {
+            self.file_operations.dismiss_rename();
+            self.status = "Cannot rename items from Trash".to_string();
+            return Ok(());
+        }
         if old_path.file_name().and_then(|name| name.to_str()) != Some(original_name.as_str()) {
             self.file_operations.dismiss_rename();
             return Ok(());
