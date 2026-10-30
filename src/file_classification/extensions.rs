@@ -12,7 +12,7 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
     match ext {
         "md" | "markdown" | "mdown" | "mkd" | "mdx" | "qmd" => FileFacts {
             builtin_class: FileClass::Document,
-            specific_type_label: None,
+            specific_type_label: Some("Markdown document"),
             preview: PreviewSpec::markdown(),
         },
         "iso" => FileFacts {
@@ -60,9 +60,19 @@ pub(super) fn inspect_extension(ext: &str) -> FileFacts {
             specific_type_label: Some("HTML document"),
             preview: preview_for_extension(ext),
         },
-        "xml" | "xsd" | "xsl" | "xslt" => FileFacts {
+        "xml" => FileFacts {
             builtin_class: FileClass::Code,
-            specific_type_label: Some("XML document"),
+            specific_type_label: Some("XML file"),
+            preview: preview_for_extension(ext),
+        },
+        "xsd" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("XML Schema file"),
+            preview: preview_for_extension(ext),
+        },
+        "xsl" | "xslt" => FileFacts {
+            builtin_class: FileClass::Code,
+            specific_type_label: Some("XSL stylesheet"),
             preview: preview_for_extension(ext),
         },
         "css" => FileFacts {

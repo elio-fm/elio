@@ -376,6 +376,20 @@ impl App {
         }
     }
 
+    pub(crate) fn scroll_item_details_by(&mut self, delta: isize) {
+        let max_scroll = self.input.screen_regions.item_details_scroll_max;
+        self.overlays.item_details_scroll = if delta.is_negative() {
+            self.overlays
+                .item_details_scroll
+                .saturating_sub(delta.unsigned_abs())
+        } else {
+            self.overlays
+                .item_details_scroll
+                .saturating_add(delta as usize)
+                .min(max_scroll)
+        };
+    }
+
     fn handle_help_key(&mut self, key: KeyEvent) -> Result<()> {
         if crate::config::key_bindings().matches_cancel_key(key) {
             self.overlays.help = false;
@@ -407,6 +421,42 @@ impl App {
         // Press, Repeat, and Release events. Ignore Release so each keystroke is only
         // handled once. Repeat is kept so held navigation keys continue to scroll.
         if key.kind == KeyEventKind::Release {
+            return Ok(());
+        }
+
+        if self.overlays.item_details.is_some() {
+            if crate::config::key_bindings().matches_cancel_key(key)
+                || crate::config::key_bindings().action_for_key_in_context(key, self.key_context())
+                    == Some(crate::config::Action::ToggleItemDetails)
+            {
+                self.overlays.item_details = None;
+            } else {
+                match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => self.scroll_item_details_by(-1),
+                    KeyCode::Down | KeyCode::Char('j') => self.scroll_item_details_by(1),
+                    KeyCode::PageUp => self.scroll_item_details_by(
+                        -(self
+                            .input
+                            .screen_regions
+                            .item_details_rows_visible
+                            .saturating_sub(2)
+                            .max(1) as isize),
+                    ),
+                    KeyCode::PageDown => self.scroll_item_details_by(
+                        self.input
+                            .screen_regions
+                            .item_details_rows_visible
+                            .saturating_sub(2)
+                            .max(1) as isize,
+                    ),
+                    KeyCode::Home => self.overlays.item_details_scroll = 0,
+                    KeyCode::End => {
+                        self.overlays.item_details_scroll =
+                            self.input.screen_regions.item_details_scroll_max
+                    }
+                    _ => {}
+                }
+            }
             return Ok(());
         }
 
@@ -708,6 +758,14 @@ impl App {
             Action::ToggleView => self.toggle_view_mode(),
             Action::TogglePreview => self.toggle_preview_pane(),
             Action::FullscreenPreview => self.toggle_fullscreen_preview(),
+            Action::ToggleItemDetails => {
+                let details = self
+                    .selected_entry()
+                    .cloned()
+                    .map(|entry| self.build_item_details(&entry));
+                self.overlays.item_details = details;
+                self.overlays.item_details_scroll = 0;
+            }
             Action::ToggleHidden => self.toggle_hidden_files()?,
             Action::NavLeft => {
                 if self.file_browser.view_mode == ViewMode::Grid {
@@ -777,6 +835,114 @@ impl App {
         } else {
             crate::config::KeyContext::Normal
         }
+    }
+
+    pub(crate) fn build_item_details(
+        &self,
+        entry: &crate::filesystem::Entry,
+    ) -> crate::item_details::ItemDetails {
+        let current_preview_matches = self.active_preview_entry().is_some_and(|active| {
+            active.path == entry.path
+                && active.size == entry.size
+                && active.modified == entry.modified
+        });
+        let current_preview = (current_preview_matches
+            && (self.preview_visible() || self.duplicate_preview_rendered())
+            && self.preview.state.load_state.is_none())
+        .then_some(&self.preview.state.content);
+        let cached_preview = current_preview.or_else(|| {
+            self.preview
+                .state
+                .result_order
+                .iter()
+                .rev()
+                .filter_map(|key| {
+                    let cached = self.preview.state.result_cache.get(key)?;
+                    (key.path == entry.path
+                        && cached.size == entry.size
+                        && cached.modified == entry.modified)
+                        .then_some(&cached.preview)
+                })
+                .next()
+        });
+        let document_preview = cached_preview.filter(|preview| {
+            matches!(
+                preview.kind,
+                crate::preview::PreviewKind::Document | crate::preview::PreviewKind::Comic
+            )
+        });
+        let pdf_document_key = crate::preview::PdfDocumentKey::from_entry(entry);
+        let document_author = self
+            .preview
+            .pdf
+            .document_authors
+            .get(&pdf_document_key)
+            .cloned()
+            .or_else(|| document_preview.and_then(|preview| preview.document_author.clone()));
+        let document_page_count = self
+            .preview
+            .pdf
+            .document_page_counts
+            .get(&pdf_document_key)
+            .map(usize::to_string)
+            .or_else(|| document_preview.and_then(|preview| preview.document_page_count.clone()));
+        let comic_session = self.preview.comic.session.as_ref().filter(|session| {
+            session.path == entry.path
+                && session.size == entry.size
+                && session.modified == entry.modified
+        });
+        let current_comic_preview = (comic_session.is_some()
+            && self.preview.state.load_state.is_none()
+            && self.preview.state.content.kind == crate::preview::PreviewKind::Comic)
+            .then_some(&self.preview.state.content);
+        let document_page_count = document_page_count.or_else(|| {
+            comic_session
+                .and_then(|session| session.total_pages)
+                .or_else(|| {
+                    current_comic_preview
+                        .and_then(|preview| preview.navigation_position.as_ref())
+                        .filter(|position| position.label == "Page")
+                        .map(|position| position.count)
+                })
+                .map(|count| count.to_string())
+        });
+        let comic_writer = document_preview
+            .and_then(|preview| preview.comic_writer.clone())
+            .or_else(|| current_comic_preview.and_then(|preview| preview.comic_writer.clone()));
+        let comic_penciller = document_preview
+            .and_then(|preview| preview.comic_penciller.clone())
+            .or_else(|| current_comic_preview.and_then(|preview| preview.comic_penciller.clone()));
+        let audio_preview =
+            cached_preview.filter(|preview| preview.kind == crate::preview::PreviewKind::Audio);
+        let media_preview =
+            cached_preview.filter(|preview| preview.kind == crate::preview::PreviewKind::Video);
+        let archive_preview =
+            cached_preview.filter(|preview| preview.kind == crate::preview::PreviewKind::Archive);
+        crate::item_details::ItemDetails::from_entry(
+            entry,
+            self.preview.terminal_images.protocol,
+            self.cached_terminal_window(),
+            crate::item_details::PreviewMetadata {
+                document_author,
+                document_page_count,
+                comic_writer,
+                comic_penciller,
+                audio_artist: audio_preview.and_then(|preview| preview.audio_artist.clone()),
+                audio_album: audio_preview.and_then(|preview| preview.audio_album.clone()),
+                media_duration: media_preview.and_then(|preview| preview.media_duration.clone()),
+                media_dimensions: media_preview
+                    .and_then(|preview| preview.media_dimensions.clone()),
+                media_codec: media_preview.and_then(|preview| preview.media_codec.clone()),
+                media_frame_rate: media_preview
+                    .and_then(|preview| preview.media_frame_rate.clone()),
+                archive_entry_count: archive_preview
+                    .and_then(|preview| preview.archive_entry_count),
+                archive_unpacked_size: archive_preview
+                    .and_then(|preview| preview.archive_unpacked_size),
+                archive_password_protected: archive_preview
+                    .and_then(|preview| preview.archive_password_protected),
+            },
+        )
     }
 
     fn should_debounce_navigation_key(&mut self, key: KeyEvent) -> bool {
@@ -927,6 +1093,7 @@ pub(super) fn fullscreen_preview_exits_then_dispatches(action: crate::config::Ac
             | Action::SearchFiles
             | Action::FilterDirectory
             | Action::FindDuplicates
+            | Action::ToggleItemDetails
             | Action::GoTo
             | Action::OpenWith
             | Action::Open

@@ -42,7 +42,7 @@ fn odt_preview_shows_document_metadata() {
     assert!(
         line_texts
             .iter()
-            .any(|text| text.contains("Created") && text.contains("2026"))
+            .any(|text| text.contains("Document created") && text.contains("2026"))
     );
     assert!(
         line_texts

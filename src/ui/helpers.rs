@@ -165,12 +165,27 @@ fn truncate_path_tail(path: &str, max_chars: usize) -> String {
     }
 
     let last = parts.last().copied().unwrap_or_default();
-    let reserve = display_width(prefix) + display_width(last) + 4;
-    if reserve >= max_chars {
-        return truncate_middle(&path, max_chars);
+    let mut suffix = last.to_owned();
+    for part in parts.iter().rev().skip(1) {
+        let candidate = format!("{prefix}…/{part}/{suffix}");
+        if display_width(&candidate) > max_chars {
+            let base_width = display_width(&format!("{prefix}…/"))
+                .saturating_add(1)
+                .saturating_add(display_width(&suffix));
+            let partial_width = max_chars.saturating_sub(base_width.saturating_add(1));
+            if partial_width > 0 {
+                let tail = take_suffix_width(part, partial_width);
+                let partial = format!("{prefix}…/…{tail}/{suffix}");
+                if display_width(&partial) <= max_chars {
+                    return partial;
+                }
+            }
+            break;
+        }
+        suffix = format!("{part}/{suffix}");
     }
 
-    let mut result = format!("{prefix}…/{last}");
+    let mut result = format!("{prefix}…/{suffix}");
     if display_width(&result) > max_chars {
         result = truncate_middle(&path, max_chars);
     }

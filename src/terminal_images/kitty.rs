@@ -5,6 +5,7 @@ use std::{
     fs::File,
     io::{Read, Write as _},
     path::Path,
+    sync::atomic::{AtomicU32, Ordering},
 };
 
 use super::tmux::maybe_wrap_kitty_apcs_for_tmux;
@@ -18,6 +19,24 @@ pub(super) fn place_terminal_image_with_kitty_protocol(
     let mut out = build_kitty_upload_sequence(path, id, area)?;
     out.extend(build_kitty_placeholder_sequence(id, area, excluded));
     Ok(maybe_wrap_kitty_apcs_for_tmux(out))
+}
+
+pub(super) fn place_item_details_icon_with_kitty_protocol(
+    path: &Path,
+    area: Rect,
+) -> Result<(Vec<u8>, u32)> {
+    static NEXT_ICON_ID: AtomicU32 = AtomicU32::new(0);
+    let id = kitty_image_id()
+        .wrapping_add(NEXT_ICON_ID.fetch_add(1, Ordering::Relaxed).wrapping_add(1))
+        & 0x00ff_ffff;
+    let id = if id == 0 { 1 } else { id };
+    let mut out = build_kitty_upload_sequence(path, id, area)?;
+    out.extend(build_kitty_placeholder_sequence(id, area, &[]));
+    Ok((maybe_wrap_kitty_apcs_for_tmux(out), id))
+}
+
+pub(super) fn clear_item_details_icon_with_kitty_protocol(id: u32) -> Vec<u8> {
+    maybe_wrap_kitty_apcs_for_tmux(format!("\u{1b}_Ga=d,d=I,i={id},q=2\u{1b}\\").into_bytes())
 }
 
 pub(super) fn clear_terminal_images_with_kitty_protocol() -> Result<Vec<u8>> {

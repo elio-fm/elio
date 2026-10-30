@@ -47,6 +47,7 @@ A brief overview of the repository layout:
 │   ├── fuzzy_finder/           # Candidate indexing and fuzzy matching
 │   ├── goto_menu/              # Configured Go To entries and destination resolution
 │   ├── input_handling/         # Keyboard, mouse, paste, and wheel interaction handling
+│   ├── item_details/           # Selected-item metadata snapshots and icon lifecycle support
 │   ├── opening/                # Open rules, application launching, and Open With discovery
 │   ├── places/                 # Places list and mounted-device discovery
 │   ├── portal/                 # XDG Desktop Portal FileChooser integration and routing

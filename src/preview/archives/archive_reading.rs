@@ -61,12 +61,14 @@ where
         ..ArchiveMetadata::default()
     };
     let mut manifest = ZipManifestMetadata::default();
+    let mut contains_encrypted_entry = false;
 
     for index in 0..total_entries.min(ARCHIVE_ENTRY_SCAN_LIMIT) {
         if canceled() {
             return None;
         }
         let entry = archive.by_index(index).ok()?;
+        contains_encrypted_entry |= entry.encrypted();
         let is_dir = entry.is_dir();
         let name = entry.name().ok()?.into_owned();
         if let Some(path) = normalize_archive_path(&name, false) {
@@ -100,6 +102,13 @@ where
             }
         }
     }
+    metadata.password_protected = if contains_encrypted_entry {
+        Some(true)
+    } else if total_entries <= ARCHIVE_ENTRY_SCAN_LIMIT {
+        Some(false)
+    } else {
+        None
+    };
 
     let comment = String::from_utf8_lossy(archive.comment());
     let comment = comment.trim();
@@ -253,6 +262,9 @@ fn collect_tar_listing_from_reader<R: Read>(
     let mut metadata = ArchiveMetadata {
         format_label: Some(archive_format_name(format).to_string()),
         physical_size: fs::metadata(path).ok().map(|metadata| metadata.len()),
+        // TAR archives and their compression wrappers have no password
+        // protection mechanism, so report that explicitly in item details.
+        password_protected: Some(false),
         ..ArchiveMetadata::default()
     };
     let mut total_entries = 0usize;

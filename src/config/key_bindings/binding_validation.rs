@@ -383,6 +383,12 @@ pub(super) fn resolve_key_overrides(
             override_value: overrides.paste_item,
             default: defaults.paste_item.clone(),
         },
+        RawBinding {
+            name: "item_details",
+            action: Action::ToggleItemDetails,
+            override_value: overrides.item_details,
+            default: defaults.item_details.clone(),
+        },
     ];
 
     // Step 1: parse each override independently, falling back to default on
@@ -498,6 +504,7 @@ pub(super) fn resolve_key_overrides(
         toggle_view: resolved(38),
         toggle_preview: resolved(39),
         fullscreen_preview: resolved(40),
+        item_details: resolved(54),
         toggle_hidden: resolved(41),
         nav_left: resolved(42),
         nav_down: resolved(43),

@@ -50,6 +50,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut ScreenRegions) {
     state.search_panel = None;
     state.duplicate_panel = None;
     state.help_panel = None;
+    state.item_details_panel = None;
+    state.item_details_icon_area = None;
     state.preview_panel = None;
     state.preview_body_area = None;
     state.preview_media_area = None;
@@ -145,6 +147,10 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut ScreenRegions) {
         overlays::render_fuzzy_finder_overlay(frame, area, app, state, palette);
     } else if app.overlays.help {
         overlays::render_help_overlay(frame, area, app, state, palette);
+    }
+
+    if app.overlays.item_details.is_some() {
+        overlays::render_item_details_overlay(frame, area, app, state, palette);
     }
 }
 

@@ -17,6 +17,28 @@ fn package_lock_uses_one_shared_definition() {
 }
 
 #[test]
+fn item_details_exact_name_labels_remain_specific() {
+    let cases = [
+        ("Cargo.lock", "Lockfile"),
+        ("package-lock.json", "Lockfile"),
+        ("package.json", "Node.js package manifest"),
+        ("tsconfig.json", "TypeScript config"),
+        ("deno.json", "Deno config"),
+        ("compose.yaml", "Docker Compose config"),
+        ("pnpm-workspace.yaml", "pnpm workspace config"),
+        ("pnpm-lock.yaml", "Lockfile"),
+    ];
+
+    for (path, label) in cases {
+        assert_eq!(
+            inspect_path(Path::new(path), EntryKind::File).specific_type_label,
+            Some(label),
+            "{path} should retain its specific details label"
+        );
+    }
+}
+
+#[test]
 fn lockfile_variants_get_targeted_preview_support() {
     let uv = inspect_path(Path::new("uv.lock"), EntryKind::File);
     let flake = inspect_path(Path::new("flake.lock"), EntryKind::File);

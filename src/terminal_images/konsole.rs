@@ -5,6 +5,7 @@ use std::{
     fs::File,
     io::{Read, Write as _},
     path::Path,
+    sync::atomic::{AtomicU32, Ordering},
 };
 
 use super::tmux::{self, TmuxPaneOrigin};
@@ -22,6 +23,35 @@ pub(super) fn place_terminal_image_with_konsole_protocol(
     build_konsole_placement_sequence(path, id, area)
 }
 
+pub(super) fn place_item_details_icon_with_konsole_protocol(
+    path: &Path,
+    area: Rect,
+    vertical_offset: Option<u32>,
+) -> Result<(Vec<u8>, u32)> {
+    static NEXT_ICON_ID: AtomicU32 = AtomicU32::new(0);
+    let id = konsole_image_id()
+        .wrapping_add(NEXT_ICON_ID.fetch_add(1, Ordering::Relaxed).wrapping_add(1))
+        & 0x00ff_ffff;
+    let id = if id == 0 { 1 } else { id };
+    let bytes = if tmux::inside_tmux() {
+        let origin = tmux::query_pane_origin()
+            .ok_or_else(|| anyhow::anyhow!("tmux pane origin unavailable"))?;
+        build_konsole_tmux_placement_sequence_with_offset(path, id, area, origin, vertical_offset)?
+    } else {
+        build_konsole_placement_sequence_with_offset(path, id, area, vertical_offset)?
+    };
+    Ok((bytes, id))
+}
+
+pub(super) fn clear_item_details_icon_with_konsole_protocol(id: u32) -> Vec<u8> {
+    let raw = build_konsole_clear_sequence(id).into_bytes();
+    if tmux::inside_tmux() {
+        tmux::wrap_sequence_for_tmux(&raw)
+    } else {
+        raw
+    }
+}
+
 pub(super) fn clear_terminal_images_with_konsole_protocol() -> Result<Vec<u8>> {
     let raw = build_konsole_clear_sequence(konsole_image_id())
         .as_bytes()
@@ -34,6 +64,15 @@ pub(super) fn clear_terminal_images_with_konsole_protocol() -> Result<Vec<u8>> {
 }
 
 fn build_konsole_placement_sequence(path: &Path, id: u32, area: Rect) -> Result<Vec<u8>> {
+    build_konsole_placement_sequence_with_offset(path, id, area, None)
+}
+
+fn build_konsole_placement_sequence_with_offset(
+    path: &Path,
+    id: u32,
+    area: Rect,
+    vertical_offset: Option<u32>,
+) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     let _ = write!(
         out,
@@ -41,7 +80,7 @@ fn build_konsole_placement_sequence(path: &Path, id: u32, area: Rect) -> Result<
         area.y.saturating_add(1),
         area.x.saturating_add(1)
     );
-    for chunk in build_konsole_upload_chunks(path, id, area)? {
+    for chunk in build_konsole_upload_chunks_with_offset(path, id, area, vertical_offset)? {
         out.extend(chunk);
     }
     Ok(out)
@@ -53,8 +92,18 @@ fn build_konsole_tmux_placement_sequence(
     area: Rect,
     origin: TmuxPaneOrigin,
 ) -> Result<Vec<u8>> {
+    build_konsole_tmux_placement_sequence_with_offset(path, id, area, origin, None)
+}
+
+fn build_konsole_tmux_placement_sequence_with_offset(
+    path: &Path,
+    id: u32,
+    area: Rect,
+    origin: TmuxPaneOrigin,
+    vertical_offset: Option<u32>,
+) -> Result<Vec<u8>> {
     let (row, col) = origin.absolute_cursor_for(area);
-    let mut chunks = build_konsole_upload_chunks(path, id, area)?
+    let mut chunks = build_konsole_upload_chunks_with_offset(path, id, area, vertical_offset)?
         .into_iter()
         .peekable();
     let mut out = Vec::new();
@@ -74,7 +123,12 @@ fn build_konsole_tmux_placement_sequence(
     Ok(out)
 }
 
-fn build_konsole_upload_chunks(path: &Path, id: u32, area: Rect) -> Result<Vec<Vec<u8>>> {
+fn build_konsole_upload_chunks_with_offset(
+    path: &Path,
+    id: u32,
+    area: Rect,
+    vertical_offset: Option<u32>,
+) -> Result<Vec<Vec<u8>>> {
     let mut file = File::open(path)
         .with_context(|| format!("failed to open Konsole preview image {}", path.display()))?;
     let total = file
@@ -98,9 +152,13 @@ fn build_konsole_upload_chunks(path: &Path, id: u32, area: Rect) -> Result<Vec<V
         let payload = base64::engine::general_purpose::STANDARD.encode(&chunk[..chunk_len]);
         let mut out = Vec::new();
         if sent == chunk_len {
+            let vertical_offset = vertical_offset
+                .filter(|offset| *offset > 0)
+                .map(|offset| format!(",Y={offset}"))
+                .unwrap_or_default();
             write!(
                 out,
-                "\u{1b}_Ga=T,q=2,f=100,i={id},p=1,c={},r={},C=1,m={};{payload}\u{1b}\\",
+                "\u{1b}_Ga=T,q=2,f=100,i={id},p=1,c={},r={},C=1{vertical_offset},m={};{payload}\u{1b}\\",
                 area.width.max(1),
                 area.height.max(1),
                 if more { 1 } else { 0 },

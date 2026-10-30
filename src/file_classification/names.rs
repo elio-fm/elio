@@ -108,7 +108,7 @@ pub(super) fn inspect_exact_name(name: &str) -> Option<FileFacts> {
         }),
         "cargo.lock" | "poetry.lock" => Some(FileFacts {
             builtin_class: FileClass::Data,
-            specific_type_label: None,
+            specific_type_label: Some("Lockfile"),
             preview: preview_for_exact_name(name),
         }),
         "uv.lock" => Some(FileFacts {
@@ -116,14 +116,24 @@ pub(super) fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: Some("Lockfile"),
             preview: preview_for_exact_name(name),
         }),
-        "package.json" | "tsconfig.json" | "deno.json" => Some(FileFacts {
+        "package.json" => Some(FileFacts {
             builtin_class: FileClass::Config,
-            specific_type_label: None,
+            specific_type_label: Some("Node.js package manifest"),
+            preview: preview_for_exact_name(name),
+        }),
+        "tsconfig.json" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("TypeScript config"),
+            preview: preview_for_exact_name(name),
+        }),
+        "deno.json" => Some(FileFacts {
+            builtin_class: FileClass::Config,
+            specific_type_label: Some("Deno config"),
             preview: preview_for_exact_name(name),
         }),
         "package-lock.json" => Some(FileFacts {
             builtin_class: FileClass::Data,
-            specific_type_label: None,
+            specific_type_label: Some("Lockfile"),
             preview: preview_for_exact_name(name),
         }),
         "composer.lock" | "pipfile.lock" | "flake.lock" => Some(FileFacts {
@@ -141,14 +151,21 @@ pub(super) fn inspect_exact_name(name: &str) -> Option<FileFacts> {
             specific_type_label: Some("JSON with comments"),
             preview: preview_for_exact_name(name),
         }),
-        "compose.yml"
-        | "compose.yaml"
-        | "docker-compose.yml"
-        | "docker-compose.yaml"
-        | "pnpm-lock.yaml"
-        | "pnpm-workspace.yaml" => Some(FileFacts {
+        "compose.yml" | "compose.yaml" | "docker-compose.yml" | "docker-compose.yaml" => {
+            Some(FileFacts {
+                builtin_class: FileClass::Config,
+                specific_type_label: Some("Docker Compose config"),
+                preview: preview_for_exact_name(name),
+            })
+        }
+        "pnpm-workspace.yaml" => Some(FileFacts {
             builtin_class: FileClass::Config,
-            specific_type_label: None,
+            specific_type_label: Some("pnpm workspace config"),
+            preview: preview_for_exact_name(name),
+        }),
+        "pnpm-lock.yaml" => Some(FileFacts {
+            builtin_class: FileClass::Data,
+            specific_type_label: Some("Lockfile"),
             preview: preview_for_exact_name(name),
         }),
         _ if is_env_name(name) => Some(FileFacts {

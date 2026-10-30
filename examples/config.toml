@@ -193,6 +193,7 @@
 # toggle_view          = "v"
 # toggle_preview       = "V"
 # fullscreen_preview   = "P"
+# item_details         = ["alt+enter", "i"]
 # toggle_hidden        = "."
 # scroll_preview_up    = ["K", "shift+up"]
 # scroll_preview_down  = ["J", "shift+down"]

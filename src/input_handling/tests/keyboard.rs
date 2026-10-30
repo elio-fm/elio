@@ -55,6 +55,71 @@ fn high_frequency_horizontal_emulation_only_uses_default_history_actions() {
 }
 
 #[test]
+fn item_details_bindings_toggle_the_overlay_and_escape_closes_it() {
+    let root = temp_path("item-details-bindings");
+    fs::write(root.join("notes.txt"), "details").expect("failed to write item");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('i'))))
+        .expect("i should open item details");
+    assert!(app.overlays.item_details.is_some());
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('i'))))
+        .expect("i should close item details");
+    assert!(app.overlays.item_details.is_none());
+
+    app.handle_event(Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT)))
+        .expect("Alt+Enter should open item details");
+    assert!(app.overlays.item_details.is_some());
+
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Esc)))
+        .expect("Escape should close item details");
+    assert!(app.overlays.item_details.is_none());
+
+    cleanup_app_temp_root(app, root);
+}
+
+#[test]
+fn item_details_keyboard_scroll_clamps_at_both_ends() {
+    let root = temp_path("item-details-scroll");
+    fs::write(root.join("notes.txt"), "details").expect("failed to write item");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('i'))))
+        .expect("i should open item details");
+    app.set_screen_regions(ScreenRegions {
+        item_details_scroll_max: 12,
+        item_details_rows_visible: 6,
+        ..ScreenRegions::default()
+    });
+
+    for key in [
+        KeyCode::Char('j'),
+        KeyCode::Down,
+        KeyCode::PageDown,
+        KeyCode::End,
+    ] {
+        app.handle_event(Event::Key(KeyEvent::from(key)))
+            .expect("downward item-details navigation should work");
+    }
+    assert_eq!(app.overlays.item_details_scroll, 12);
+
+    for key in [
+        KeyCode::Char('k'),
+        KeyCode::Up,
+        KeyCode::PageUp,
+        KeyCode::Home,
+    ] {
+        app.handle_event(Event::Key(KeyEvent::from(key)))
+            .expect("upward item-details navigation should work");
+    }
+    assert_eq!(app.overlays.item_details_scroll, 0);
+
+    cleanup_app_temp_root(app, root);
+}
+
+#[test]
 fn fullscreen_preview_explicit_commands_exit_before_dispatch() {
     for action in [
         Action::Yank,

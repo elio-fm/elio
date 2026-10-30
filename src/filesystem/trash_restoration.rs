@@ -4,6 +4,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(target_os = "macos")]
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 #[cfg(any(test, target_os = "macos"))]
 use std::io::Write;
 
@@ -197,7 +200,39 @@ pub(crate) fn save_restore_origins_checked(
     let Some(path) = restore_origins_path() else {
         anyhow::bail!("cannot determine restore-origins path");
     };
-    save_restore_origins_at_path_checked(&path, items)
+    let rejected = save_restore_origins_at_path_checked(&path, items)?;
+    save_restore_trash_times(items)?;
+    Ok(rejected)
+}
+
+#[cfg(target_os = "macos")]
+fn restore_trash_times_path() -> Option<PathBuf> {
+    dirs::data_dir().map(|d| d.join("elio").join("trash-times.json"))
+}
+
+#[cfg(target_os = "macos")]
+fn save_restore_trash_times(items: &[(String, PathBuf)]) -> anyhow::Result<()> {
+    let Some(path) = restore_trash_times_path() else {
+        anyhow::bail!("cannot determine Trash timestamp metadata path");
+    };
+    let trashed_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    with_restore_origins_transaction(&path, || {
+        let mut map: std::collections::HashMap<String, u64> = match fs::read(&path) {
+            Ok(bytes) => serde_json::from_slice(&bytes)
+                .with_context(|| format!("cannot parse {:?}", path))?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Default::default(),
+            Err(error) => return Err(error).with_context(|| format!("cannot read {:?}", path)),
+        };
+        map.extend(items.iter().map(|(name, _)| (name.clone(), trashed_at)));
+        let json = serde_json::to_vec_pretty(&map)
+            .with_context(|| format!("cannot serialize {:?}", path))?;
+        write_restore_origins_atomically(&path, &json)
+            .with_context(|| format!("cannot write {:?}", path))?;
+        Ok(())
+    })
 }
 
 #[cfg(any(test, target_os = "macos"))]
@@ -264,7 +299,32 @@ pub(crate) fn remove_restore_origins_checked(trash_names: &[&str]) -> anyhow::Re
     let Some(path) = restore_origins_path() else {
         anyhow::bail!("cannot determine restore-origins path");
     };
-    remove_restore_origins_at_path_checked(&path, trash_names)
+    remove_restore_origins_at_path_checked(&path, trash_names)?;
+    remove_restore_trash_times(trash_names)
+}
+
+#[cfg(target_os = "macos")]
+fn remove_restore_trash_times(trash_names: &[&str]) -> anyhow::Result<()> {
+    let Some(path) = restore_trash_times_path() else {
+        anyhow::bail!("cannot determine Trash timestamp metadata path");
+    };
+    with_restore_origins_transaction(&path, || {
+        let bytes = match fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error).with_context(|| format!("cannot read {:?}", path)),
+        };
+        let mut map: std::collections::HashMap<String, u64> =
+            serde_json::from_slice(&bytes).with_context(|| format!("cannot parse {:?}", path))?;
+        let changed = trash_names.iter().any(|name| map.remove(*name).is_some());
+        if changed {
+            let json = serde_json::to_vec_pretty(&map)
+                .with_context(|| format!("cannot serialize {:?}", path))?;
+            write_restore_origins_atomically(&path, &json)
+                .with_context(|| format!("cannot write {:?}", path))?;
+        }
+        Ok(())
+    })
 }
 
 #[cfg(any(test, target_os = "macos"))]
@@ -325,6 +385,47 @@ fn load_restore_origin(trash_name: &str) -> Option<PathBuf> {
     })
     .ok()
     .flatten()
+}
+
+#[cfg(target_os = "macos")]
+fn load_restore_trash_time(trash_name: &str) -> Option<SystemTime> {
+    let path = restore_trash_times_path()?;
+    let seconds = with_restore_origins_transaction(&path, || {
+        let map: std::collections::HashMap<String, u64> = serde_json::from_slice(&fs::read(&path)?)
+            .with_context(|| format!("cannot parse {:?}", path))?;
+        Ok(map.get(trash_name).copied())
+    })
+    .ok()
+    .flatten()?;
+    Some(UNIX_EPOCH + Duration::from_secs(seconds))
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn macos_trash_metadata(path: &Path) -> Option<(PathBuf, Option<SystemTime>)> {
+    let trash_dir = path.parent()?;
+    let is_user_trash = trash_dir.file_name().is_some_and(|name| name == ".Trash");
+    let is_volume_trash = trash_dir
+        .parent()
+        .and_then(Path::file_name)
+        .is_some_and(|name| name == ".Trashes");
+    if !is_user_trash && !is_volume_trash {
+        return None;
+    }
+    let name = path.file_name()?.to_str()?;
+    let original_path =
+        load_restore_origin(name).or_else(|| macos_ds_store_original_path(trash_dir, name))?;
+    Some((original_path, load_restore_trash_time(name)))
+}
+
+#[cfg(target_os = "macos")]
+fn macos_ds_store_original_path(trash_dir: &Path, file_name: &str) -> Option<PathBuf> {
+    let data = fs::read(trash_dir.join(".DS_Store")).ok()?;
+    let (parent_dir, original_name) = macos_ds_store_find_ptb(&data, file_name)?;
+    Some(if parent_dir.is_empty() {
+        PathBuf::from(format!("/{original_name}"))
+    } else {
+        PathBuf::from(format!("/{parent_dir}/{original_name}"))
+    })
 }
 
 #[cfg(any(test, target_os = "macos"))]

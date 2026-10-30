@@ -18,6 +18,9 @@ This crate is organized around focused subsystems.
   activation metadata, desktop-specific routing, frontend refresh, D-Bus service handling, and
   private chooser transport.
 - `fuzzy_finder` and `duplicate_finder`: feature state and behavior for finding items.
+- `item_details`: selected-item metadata snapshots and terminal-icon lifecycle support for the item
+  details overlay. `input_handling` assembles available preview metadata, and `ui` renders the
+  snapshot.
 - `goto_menu`: configured Go To entries and destination resolution.
 - `places`: configured places and mounted-device discovery.
 - `input_handling`: application-level keyboard, mouse, paste, and wheel interpretation.
@@ -56,6 +59,11 @@ Current boundary rules:
 - Fuzzy-finder, duplicate-finder, Go To menu, and Open With state and pure transitions belong to
   their feature subsystems; `input_handling` interprets user interaction, while `app` coordinates
   background jobs, navigation, and side effects.
+- Item-detail metadata extraction and its snapshot belong to `item_details`; it can use filesystem
+  and file-classification data, but must not depend on preview construction, input handling, UI, or
+  background jobs. `input_handling` supplies cached preview metadata, while `ui` owns overlay
+  rendering. The item-details terminal-icon adapter handles the small amount of `app` coordination
+  needed to place and clear its icon.
 - Chooser selection resolution and output belong to `chooser`; `app` only supplies the current
   browser selection and coordinates application exit.
 - `portal` owns XDG portal lifecycle, routing, D-Bus protocol handling, and private chooser

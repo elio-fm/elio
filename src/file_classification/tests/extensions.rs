@@ -17,6 +17,25 @@ fn json5_gets_parser_backed_preview_support() {
 }
 
 #[test]
+fn item_details_classification_labels_remain_specific() {
+    let cases = [
+        ("notes.md", "Markdown document"),
+        ("schema.xsd", "XML Schema file"),
+        ("transform.xsl", "XSL stylesheet"),
+        ("document.xml", "XML file"),
+        ("flake.nix", "Nix expression"),
+    ];
+
+    for (path, label) in cases {
+        assert_eq!(
+            inspect_path(Path::new(path), EntryKind::File).specific_type_label,
+            Some(label),
+            "{path} should retain its specific details label"
+        );
+    }
+}
+
+#[test]
 fn jupyter_notebooks_use_json_preview_support() {
     let facts = inspect_path(Path::new("analysis.ipynb"), EntryKind::File);
 
