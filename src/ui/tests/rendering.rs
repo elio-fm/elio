@@ -181,6 +181,212 @@ fn compact_browser_layout_keeps_entries_and_preview_side_by_side() {
 }
 
 #[test]
+fn item_details_overlay_renders_file_and_preview_metadata() {
+    let root = temp_path("item-details-overlay");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("notes.txt");
+    fs::write(&path, "hello").expect("failed to write temp file");
+
+    let entry = crate::filesystem::entry_from_path(path, "notes.txt".to_string())
+        .expect("entry should load");
+    let details = crate::item_details::ItemDetails::from_entry(
+        &entry,
+        crate::terminal_images::ImageProtocol::None,
+        None,
+        crate::item_details::PreviewMetadata {
+            document_author: Some("Example Author".to_string()),
+            document_page_count: Some("3".to_string()),
+            audio_artist: Some("Example Artist".to_string()),
+            audio_album: Some("Example Album".to_string()),
+            archive_entry_count: Some(14),
+            archive_unpacked_size: Some(57_300_000),
+            archive_password_protected: Some(false),
+            ..crate::item_details::PreviewMetadata::default()
+        },
+    );
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.overlays.item_details = Some(details);
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("terminal should init");
+    let state = draw_ui(&mut terminal, &mut app);
+    let rendered = buffer_text(terminal.backend().buffer());
+
+    assert!(state.item_details_panel.is_some());
+    for expected in [
+        "Item details",
+        "notes.txt",
+        "Text file",
+        "Example Author",
+        "3",
+        "Example Artist",
+        "Example Album",
+        "14 items",
+        "57.3 MB",
+        "Password",
+    ] {
+        assert!(
+            rendered.contains(expected),
+            "item details overlay should render {expected:?}:\n{rendered}"
+        );
+    }
+    assert!(rendered.contains("Created"));
+    assert!(rendered.contains("Modified"));
+    assert!(!rendered.contains("Document created"));
+    assert!(!rendered.contains("Document modified"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn short_item_details_overlay_scrolls_to_the_final_rows() {
+    let root = temp_path("short-item-details-overlay");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("archive.zip");
+    fs::write(&path, "archive").expect("failed to write temp archive");
+    let entry = crate::filesystem::entry_from_path(path, "archive.zip".to_string())
+        .expect("entry should load");
+    let details = crate::item_details::ItemDetails::from_entry(
+        &entry,
+        crate::terminal_images::ImageProtocol::None,
+        None,
+        crate::item_details::PreviewMetadata {
+            archive_entry_count: Some(14),
+            archive_unpacked_size: Some(57_300_000),
+            archive_password_protected: Some(false),
+            document_author: Some("Example Author".to_owned()),
+            document_page_count: Some("123".to_owned()),
+            ..crate::item_details::PreviewMetadata::default()
+        },
+    );
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.overlays.item_details = Some(details);
+    let mut terminal = Terminal::new(TestBackend::new(40, 12)).expect("terminal should init");
+
+    let state = draw_ui(&mut terminal, &mut app);
+    assert!(state.item_details_scroll_max > 0);
+    assert!(
+        state
+            .scrollbar_hits
+            .iter()
+            .any(|hit| hit.target == crate::app::ScrollbarTarget::ItemDetails)
+    );
+
+    app.overlays.item_details_scroll = state.item_details_scroll_max;
+    let _state = draw_ui(&mut terminal, &mut app);
+    assert!(buffer_text(terminal.backend().buffer()).contains("Location"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn item_details_directory_size_updates_from_calculating_to_total() {
+    let root = temp_path("item-details-directory-summary");
+    let directory = root.join("folder");
+    fs::create_dir_all(&directory).expect("failed to create test folder");
+    let entry = crate::filesystem::entry_from_path(directory.clone(), "folder".to_owned())
+        .expect("folder entry should load");
+    let details = crate::item_details::ItemDetails::from_entry(
+        &entry,
+        crate::terminal_images::ImageProtocol::None,
+        None,
+        crate::item_details::PreviewMetadata::default(),
+    );
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.overlays.item_details = Some(details);
+    app.preview.state.directory_stats = Some(crate::preview::PreviewDirectoryStatsState::Loading {
+        token: 1,
+        path: directory.clone(),
+    });
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("terminal should init");
+
+    let _state = draw_ui(&mut terminal, &mut app);
+    assert!(buffer_text(terminal.backend().buffer()).contains("Calculating…"));
+
+    app.preview.state.directory_stats =
+        Some(crate::preview::PreviewDirectoryStatsState::Complete {
+            token: 1,
+            path: directory,
+            stats: crate::filesystem::DirectoryStats {
+                item_count: 3,
+                folder_count: 1,
+                file_count: 2,
+                total_size_bytes: 1_500,
+            },
+        });
+    let _state = draw_ui(&mut terminal, &mut app);
+    assert!(buffer_text(terminal.backend().buffer()).contains("3 items • 1.5 kB"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn item_details_renders_symlink_and_broken_target_details() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_path("item-details-symlink-target");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let target = root.join("target.txt");
+    let linked = root.join("linked.txt");
+    let broken = root.join("broken.txt");
+    fs::write(&target, "target").expect("failed to write target");
+    symlink("target.txt", &linked).expect("failed to create symlink");
+    symlink("missing.txt", &broken).expect("failed to create broken symlink");
+
+    for (path, expected) in [(&linked, "target.txt"), (&broken, "missing.txt")] {
+        let entry = crate::filesystem::entry_from_path(
+            path.to_path_buf(),
+            path.file_name().unwrap().to_string_lossy().into_owned(),
+        )
+        .expect("symlink entry should load");
+        let details = crate::item_details::ItemDetails::from_entry(
+            &entry,
+            crate::terminal_images::ImageProtocol::None,
+            None,
+            crate::item_details::PreviewMetadata::default(),
+        );
+        let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+        app.overlays.item_details = Some(details);
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("terminal should init");
+        let _state = draw_ui(&mut terminal, &mut app);
+        let rendered = buffer_text(terminal.backend().buffer());
+        assert!(rendered.contains("Link target"));
+        assert!(rendered.contains(expected));
+    }
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn item_details_renders_trash_origin_and_timestamp() {
+    let root = temp_path("item-details-trash-metadata");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let path = root.join("notes.txt");
+    fs::write(&path, "notes").expect("failed to write test item");
+    let entry = crate::filesystem::entry_from_path(path, "notes.txt".to_owned())
+        .expect("entry should load");
+    let mut details = crate::item_details::ItemDetails::from_entry(
+        &entry,
+        crate::terminal_images::ImageProtocol::None,
+        None,
+        crate::item_details::PreviewMetadata::default(),
+    );
+    details.original_location = Some(PathBuf::from("/original/notes.txt"));
+    details.trashed_at = Some(SystemTime::now());
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.overlays.item_details = Some(details);
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("terminal should init");
+
+    let _state = draw_ui(&mut terminal, &mut app);
+    let rendered = buffer_text(terminal.backend().buffer());
+    assert!(rendered.contains("Original location"));
+    assert!(rendered.contains("/original"));
+    assert!(rendered.contains("Trashed"));
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
 fn list_view_ignores_grid_zoom_levels() {
     let root = temp_path("list-view-ignores-grid-zoom");
     fs::create_dir_all(&root).expect("failed to create temp root");

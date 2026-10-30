@@ -107,6 +107,14 @@ impl App {
                     self.toggle_duplicate_preview();
                     return Ok(());
                 }
+                Action::ToggleItemDetails => {
+                    let details = self
+                        .duplicate_focused_entry()
+                        .map(|entry| self.build_item_details(&entry));
+                    self.overlays.item_details = details;
+                    self.overlays.item_details_scroll = 0;
+                    return Ok(());
+                }
                 Action::ScrollPreviewUp => {
                     self.scroll_preview_lines(-1);
                     return Ok(());

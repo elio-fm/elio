@@ -243,6 +243,12 @@ impl App {
             Ok(result) => {
                 self.preview.pdf.failed_page_probes.remove(&key);
                 let mut dirty = current_key.as_ref() == Some(&key);
+                if let Some(author) = result.author.as_ref() {
+                    self.preview
+                        .pdf
+                        .document_authors
+                        .insert(PdfDocumentKey::from_page_key(&key), author.clone());
+                }
                 if let Some(total_pages) = result.total_pages {
                     let document_key = PdfDocumentKey::from_page_key(&key);
                     self.preview

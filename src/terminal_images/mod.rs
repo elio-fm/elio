@@ -126,6 +126,103 @@ pub(crate) fn place_terminal_image(
     }
 }
 
+pub(crate) fn place_item_details_icon(
+    protocol: ImageProtocol,
+    path: &Path,
+    area: Rect,
+    window_size: Option<TerminalWindowSize>,
+) -> Result<(Vec<u8>, Option<u32>)> {
+    match protocol {
+        ImageProtocol::KittyGraphics => {
+            let (bytes, id) = kitty::place_item_details_icon_with_kitty_protocol(path, area)?;
+            Ok((bytes, Some(id)))
+        }
+        ImageProtocol::KittyDirectGraphics => {
+            let icon_area = direct_icon_aspect_area(path, area, window_size).unwrap_or(area);
+            let (bytes, id) =
+                konsole::place_item_details_icon_with_konsole_protocol(path, icon_area, None)?;
+            Ok((bytes, Some(id)))
+        }
+        ImageProtocol::Sixel => {
+            let window_size = window_size.ok_or_else(|| {
+                anyhow::anyhow!("sixel protocol requires terminal window size, but none available")
+            })?;
+            Ok((
+                sixel::place_item_details_icon_with_sixel_protocol(path, area, window_size)?,
+                None,
+            ))
+        }
+        _ => Ok((
+            place_terminal_image(protocol, path, area, &[], None, window_size)?,
+            None,
+        )),
+    }
+}
+
+fn direct_icon_aspect_area(
+    path: &Path,
+    area: Rect,
+    window_size: Option<TerminalWindowSize>,
+) -> Option<Rect> {
+    let window = window_size?;
+    let (image_width, image_height) = image::image_dimensions(path).ok()?;
+    if image_width == 0 || image_height == 0 || window.cells_width == 0 || window.cells_height == 0
+    {
+        return None;
+    }
+    let cell_width_px = window.pixels_width as f64 / f64::from(window.cells_width);
+    let cell_height_px = window.pixels_height as f64 / f64::from(window.cells_height);
+    if cell_width_px <= 0.0 || cell_height_px <= 0.0 {
+        return None;
+    }
+    if area.width == 0 || area.height == 0 {
+        return None;
+    }
+
+    // Kitty placement fills a cell rectangle. Since terminal cells are taller
+    // than they are wide, using the full 4x3 icon slot stretches square glyphs
+    // vertically in terminals such as Konsole. Pick the largest integer cell
+    // rectangle whose pixel aspect ratio most closely matches the PNG.
+    let target_aspect = f64::from(image_width) / f64::from(image_height);
+    let mut best = None;
+    for height in 1..=area.height {
+        for width in 1..=area.width {
+            let aspect = f64::from(width) * cell_width_px / (f64::from(height) * cell_height_px);
+            let error = (aspect / target_aspect).ln().abs();
+            let area_cells = u32::from(width) * u32::from(height);
+            if best.is_none_or(|(best_error, best_area, _, _)| {
+                error < best_error || (error == best_error && area_cells > best_area)
+            }) {
+                best = Some((error, area_cells, width, height));
+            }
+        }
+    }
+    let (_, _, width, height) = best?;
+    Some(Rect {
+        x: area.x.saturating_add(area.width.saturating_sub(width) / 2),
+        y: area
+            .y
+            .saturating_add(area.height.saturating_sub(height) / 2),
+        width,
+        height,
+    })
+}
+
+pub(crate) fn clear_item_details_icon(
+    protocol: ImageProtocol,
+    image_id: Option<u32>,
+) -> Result<Vec<u8>> {
+    match (protocol, image_id) {
+        (ImageProtocol::KittyGraphics, Some(id)) => {
+            Ok(kitty::clear_item_details_icon_with_kitty_protocol(id))
+        }
+        (ImageProtocol::KittyDirectGraphics, Some(id)) => {
+            Ok(konsole::clear_item_details_icon_with_konsole_protocol(id))
+        }
+        _ => clear_terminal_images(protocol),
+    }
+}
+
 pub(crate) fn clear_terminal_images(protocol: ImageProtocol) -> Result<Vec<u8>> {
     match protocol {
         ImageProtocol::KittyGraphics => kitty::clear_terminal_images_with_kitty_protocol(),

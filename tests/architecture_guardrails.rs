@@ -124,6 +124,19 @@ fn duplicate_finder_does_not_depend_on_app() {
 }
 
 #[test]
+fn item_details_stays_independent_of_interaction_presentation_and_preview_layers() {
+    assert_tree_has_no_pattern("src/item_details", "input_handling::", &[]);
+    assert_tree_has_no_pattern("src/item_details", "crate::ui::", &[]);
+    assert_tree_has_no_pattern("src/item_details", "preview::", &[]);
+    assert_tree_has_no_pattern("src/item_details", "background_jobs::", &[]);
+}
+
+#[test]
+fn item_details_model_does_not_depend_on_app() {
+    assert_file_has_no_pattern("src/item_details/mod.rs", "app::");
+}
+
+#[test]
 fn goto_menu_does_not_depend_on_app() {
     assert_tree_has_no_pattern("src/goto_menu", "app::", &[]);
 }
@@ -191,6 +204,17 @@ fn assert_tree_has_no_pattern(root: &str, forbidden: &str, allowed_files: &[&str
         violations.is_empty(),
         "found forbidden `{forbidden}` references:\n{}",
         violations.join("\n")
+    );
+}
+
+fn assert_file_has_no_pattern(file: &str, forbidden: &str) {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(file);
+    let contents = fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+
+    assert!(
+        !strip_comments_and_strings(&contents).contains(forbidden),
+        "found forbidden `{forbidden}` reference in {file}"
     );
 }
 

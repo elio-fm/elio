@@ -29,6 +29,7 @@ fn apply_pdf_probe_build_updates_current_session_and_cached_dimensions() {
             total_pages: Some(3),
             width_pts: Some(300.0),
             height_pts: Some(144.0),
+            author: None,
         }),
     });
 
@@ -111,6 +112,7 @@ fn apply_pdf_probe_build_queues_render_for_current_page() {
             total_pages: Some(8),
             width_pts: Some(595.0),
             height_pts: Some(842.0),
+            author: None,
         }),
     });
 
@@ -145,6 +147,7 @@ fn apply_pdf_probe_build_queues_render_even_before_selection_activation_is_ready
             total_pages: Some(8),
             width_pts: Some(595.0),
             height_pts: Some(842.0),
+            author: None,
         }),
     });
 
@@ -186,6 +189,7 @@ fn apply_pdf_probe_build_prefetches_adjacent_page_probes_once_total_is_known() {
             total_pages: Some(4),
             width_pts: Some(595.0),
             height_pts: Some(842.0),
+            author: None,
         }),
     });
 

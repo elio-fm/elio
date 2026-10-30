@@ -7,11 +7,12 @@ pub(crate) struct PdfPageDimensions {
     pub(crate) height_pts: f32,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct PdfProbeResult {
     pub(crate) total_pages: Option<usize>,
     pub(crate) width_pts: Option<f32>,
     pub(crate) height_pts: Option<f32>,
+    pub(crate) author: Option<String>,
 }
 
 pub(crate) fn probe_pdf_page(path: &Path, page: usize) -> Result<PdfProbeResult> {
@@ -33,6 +34,17 @@ pub(crate) fn probe_pdf_page(path: &Path, page: usize) -> Result<PdfProbeResult>
         total_pages: parse_pdfinfo_page_count(&stdout),
         width_pts: dimensions.map(|dimensions| dimensions.width_pts),
         height_pts: dimensions.map(|dimensions| dimensions.height_pts),
+        author: parse_pdfinfo_author(&stdout),
+    })
+}
+
+fn parse_pdfinfo_author(output: &str) -> Option<String> {
+    output.lines().find_map(|line| {
+        let (label, value) = line.split_once(':')?;
+        (label.trim() == "Author")
+            .then_some(value.trim())
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
     })
 }
 

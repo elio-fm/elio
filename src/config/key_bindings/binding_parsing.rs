@@ -59,6 +59,7 @@ pub(in crate::config) struct KeysConfigOverride {
     pub(super) toggle_view: Option<KeyConfigOverride>,
     pub(super) toggle_preview: Option<KeyConfigOverride>,
     pub(super) fullscreen_preview: Option<KeyConfigOverride>,
+    pub(super) item_details: Option<KeyConfigOverride>,
     pub(super) toggle_hidden: Option<KeyConfigOverride>,
     pub(super) nav_left: Option<KeyConfigOverride>,
     pub(super) nav_down: Option<KeyConfigOverride>,

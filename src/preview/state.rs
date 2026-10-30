@@ -189,6 +189,7 @@ pub(crate) struct PdfPreviewState {
     pub(crate) pdf_tools_available: bool,
     pub(crate) session: Option<PdfSession>,
     pub(crate) document_page_counts: HashMap<PdfDocumentKey, usize>,
+    pub(crate) document_authors: HashMap<PdfDocumentKey, String>,
     pub(crate) page_dimensions: HashMap<PdfPageKey, PdfPageDimensions>,
     pub(crate) pending_page_probes: HashSet<PdfPageKey>,
     pub(crate) failed_page_probes: HashSet<PdfPageKey>,

@@ -11,7 +11,7 @@ mod trash_restoration;
 pub(crate) use directory_scanning::{
     DirectoryFingerprint, DirectorySnapshot, entry_from_path, load_directory_snapshot,
     load_directory_snapshot_cancellable, scan_directory_fingerprint_cancellable,
-    sort_entries_by_recursive_size,
+    sort_entries_by_recursive_size, trash_item_metadata,
 };
 pub(crate) use directory_statistics::{
     DirectoryStats, DirectoryStatsScanResult, count_directory_items, scan_directory_stats,

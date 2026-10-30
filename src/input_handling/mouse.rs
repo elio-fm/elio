@@ -45,6 +45,9 @@ impl App {
         if self.overlays.help {
             return target == ScrollbarTarget::Help;
         }
+        if self.overlays.item_details.is_some() {
+            return target == ScrollbarTarget::ItemDetails;
+        }
         if self.duplicates_is_open() {
             return matches!(
                 target,
@@ -111,6 +114,37 @@ impl App {
             // An outside click can dismiss an overlay before Kitty sends the matching
             // drag offer. Keep that press from becoming a browser drag afterward.
             self.suppress_drag_until_button_up();
+        }
+        if self.overlays.item_details.is_some() {
+            if self.handle_scrollbar_mouse(mouse) {
+                return Ok(());
+            }
+            if self
+                .input
+                .screen_regions
+                .item_details_panel
+                .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()))
+            {
+                match mouse.kind {
+                    MouseEventKind::ScrollDown => self.scroll_item_details_by(2),
+                    MouseEventKind::ScrollUp => self.scroll_item_details_by(-2),
+                    _ => {}
+                }
+            }
+            if matches!(mouse.kind, MouseEventKind::Down(_))
+                && !self
+                    .input
+                    .screen_regions
+                    .item_details_panel
+                    .is_some_and(|panel| panel.contains((mouse.column, mouse.row).into()))
+            {
+                self.overlays.item_details = None;
+                // Keep the suppression installed above until button-up: this
+                // dismissal press must not become a file drag beneath the modal.
+                return Ok(());
+            }
+            self.clear_drag_state();
+            return Ok(());
         }
         if self.handle_scrollbar_mouse(mouse) {
             return Ok(());
@@ -437,6 +471,10 @@ impl App {
             ScrollbarTarget::Help => {
                 self.overlays.help_scroll =
                     scroll_row.min(self.input.screen_regions.help_scroll_max);
+            }
+            ScrollbarTarget::ItemDetails => {
+                self.overlays.item_details_scroll =
+                    scroll_row.min(self.input.screen_regions.item_details_scroll_max);
             }
             ScrollbarTarget::Search => {
                 let index = scroll_row

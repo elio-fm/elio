@@ -203,6 +203,7 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
         let mut screen_regions = app::ScreenRegions::default();
         let (
             dirty,
+            stale_item_details_icon,
             image_behind_modal,
             sixel_collision_erase,
             popup_restore,
@@ -211,6 +212,7 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
         ) = {
             let completed = terminal.draw(|frame| ui::render(frame, app, &mut screen_regions))?;
             let dirty = app.set_screen_regions(screen_regions);
+            let stale_item_details_icon = app.clear_stale_item_details_icon()?;
             let modal_rects = app.collect_popup_rects();
             if !app.browser_wheel_burst_active()
                 && app.should_repaint_iterm_inline_under_modal(&modal_rects)
@@ -220,6 +222,7 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
                 let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
                 (
                     dirty,
+                    stale_item_details_icon,
                     image_behind_modal,
                     Vec::new(),
                     popup_restore,
@@ -236,6 +239,7 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
                 let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
                 (
                     dirty,
+                    stale_item_details_icon,
                     image_behind_modal,
                     sixel_collision_erase,
                     popup_restore,
@@ -249,6 +253,7 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
                 let modal_erase = app.modal_image_post_draw_erase(&modal_rects, completed.buffer);
                 (
                     dirty,
+                    stale_item_details_icon,
                     Vec::new(),
                     sixel_collision_erase,
                     popup_restore,
@@ -257,6 +262,7 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
                 )
             }
         };
+        write_bytes_preserving_cursor(terminal.backend_mut(), &stale_item_details_icon)?;
         write_bytes_preserving_cursor(terminal.backend_mut(), &image_behind_modal)?;
         write_bytes_preserving_cursor(terminal.backend_mut(), &sixel_collision_erase)?;
         draw_cells_preserving_cursor(terminal.backend_mut(), &popup_restore)?;
@@ -265,6 +271,9 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
             let overlay_bytes = app.present_preview_overlay()?;
             write_bytes_preserving_cursor(terminal.backend_mut(), &overlay_bytes)?;
         }
+        let item_details_icon =
+            app.present_item_details_icon(!popup_restore.is_empty() || !modal_erase.is_empty())?;
+        write_bytes_preserving_cursor(terminal.backend_mut(), &item_details_icon)?;
         terminal.backend_mut().flush()?;
         Ok(dirty)
     })();

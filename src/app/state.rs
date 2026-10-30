@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use ratatui::layout::Rect;
 
 use super::screen_regions::{ScreenRegions, ScrollbarDrag};
 use crate::background_jobs::JobScheduler;
@@ -91,6 +92,10 @@ pub(crate) enum NavigationRepeatKey {
 pub(crate) struct OverlayState {
     pub(crate) goto: Option<GotoMenu>,
     pub(crate) open_with: Option<ApplicationSelection>,
+    pub(crate) item_details: Option<crate::item_details::ItemDetails>,
+    pub(crate) item_details_scroll: usize,
+    pub(crate) item_details_icon_displayed: Option<(Rect, PathBuf, Option<u32>)>,
+    pub(crate) item_details_icon_geometry_invalidated: bool,
     pub(crate) help: bool,
     pub(crate) help_scroll: usize,
 }
@@ -299,6 +304,7 @@ impl App {
             || self.file_operations.copy_is_open()
             || self.open_with_is_open()
             || self.search_is_open()
+            || self.overlays.item_details.is_some()
             || self.overlays.help
             || self.duplicates_is_open()
     }

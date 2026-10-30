@@ -67,7 +67,25 @@ where
         probe_video_metadata(entry, canceled)
     };
     let lines = render_video_metadata_lines(metadata.as_ref(), byte_size);
-    let mut preview = PreviewContent::new(PreviewKind::Video, lines).with_detail(detail);
+    let mut preview = PreviewContent::new(PreviewKind::Video, lines)
+        .with_detail(detail)
+        .with_media_metadata(
+            metadata
+                .as_ref()
+                .and_then(|metadata| metadata.duration_seconds)
+                .map(format_duration),
+            metadata
+                .as_ref()
+                .and_then(|metadata| metadata.dimensions)
+                .map(|(width, height)| format!("{width} × {height} px")),
+            metadata
+                .as_ref()
+                .and_then(|metadata| metadata.codec.clone()),
+            metadata
+                .as_ref()
+                .and_then(|metadata| metadata.fps)
+                .map(format_fps),
+        );
     if canceled() {
         return preview;
     }

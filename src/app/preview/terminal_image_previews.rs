@@ -75,6 +75,7 @@ impl App {
     }
 
     pub(crate) fn handle_terminal_image_resize(&mut self) {
+        self.invalidate_item_details_icon_geometry();
         self.refresh_terminal_image_window_size();
         self.arm_terminal_image_resize_settle();
         self.queue_terminal_image_geometry_clear();
@@ -86,6 +87,7 @@ impl App {
         let previous_window = self.preview.terminal_images.window;
         self.refresh_terminal_image_window_size();
         if self.preview.terminal_images.window != previous_window {
+            self.invalidate_item_details_icon_geometry();
             self.arm_terminal_image_resize_settle();
             self.queue_terminal_image_geometry_clear();
             self.handle_pdf_overlay_resize();
@@ -124,6 +126,7 @@ impl App {
             return false;
         }
         self.preview.terminal_images.resize_settled_at = None;
+        self.refresh_item_details_icon_for_terminal_geometry();
         true
     }
 
@@ -273,18 +276,26 @@ impl App {
         if self.preview.terminal_images.protocol != ImageProtocol::KittyGraphics {
             return Vec::new();
         }
+        let mut stale_areas = Vec::new();
+        if let Some(area) = self.stale_item_details_icon_area() {
+            stale_areas.push(area);
+        }
         let keep_stale = self.keep_displayed_static_image_overlay_while_pending();
         let needs_clear = (self.static_image_overlay_displayed()
             && !self.displayed_static_image_matches_active()
             && !keep_stale)
             || (self.pdf_overlay_displayed() && !self.displayed_pdf_overlay_matches_active());
-        if !needs_clear {
-            return Vec::new();
+        if needs_clear
+            && let Some(area) = self
+                .displayed_static_image_clear_area()
+                .or_else(|| self.displayed_pdf_overlay_area())
+        {
+            terminal_images::push_unique_rect(&mut stale_areas, area);
         }
-        self.displayed_static_image_clear_area()
-            .or_else(|| self.displayed_pdf_overlay_area())
-            .map(terminal_images::erase_cells)
-            .unwrap_or_default()
+        stale_areas
+            .into_iter()
+            .flat_map(terminal_images::erase_cells)
+            .collect()
     }
 
     /// Erases blank modal cells that would otherwise show terminal image content
@@ -347,6 +358,7 @@ impl App {
         if !self.preview.terminal_images.protocol.is_raster() {
             return Vec::new();
         }
+        let stale_icon_area = self.stale_item_details_icon_area();
         let keep_stale = self.keep_displayed_static_image_overlay_while_pending();
         let stale_overlay = (self.static_image_overlay_displayed()
             && !self.displayed_static_image_matches_active()
@@ -386,9 +398,14 @@ impl App {
                     .saturating_add(2.min(bounds.height.saturating_sub(bottom)));
             }
             self.preview.terminal_images.pending_iterm_erase.clear();
-            return terminal_images::erase_cells(area);
+            let mut erase = terminal_images::erase_cells(area);
+            if let Some(icon_area) = stale_icon_area {
+                erase.extend(terminal_images::erase_cells(icon_area));
+            }
+            return erase;
         }
         let mut areas = std::mem::take(&mut self.preview.terminal_images.pending_iterm_erase);
+        let mut icon_areas = Vec::new();
         if self.static_image_overlay_displayed()
             && !self.displayed_static_image_matches_active()
             && !keep_stale
@@ -402,10 +419,13 @@ impl App {
         {
             terminal_images::push_unique_rect(&mut areas, area);
         }
-        if areas.is_empty() {
+        if let Some(area) = stale_icon_area {
+            terminal_images::push_unique_rect(&mut icon_areas, area);
+        }
+        if areas.is_empty() && icon_areas.is_empty() {
             return Vec::new();
         }
-        let mut expanded_areas = Vec::with_capacity(areas.len());
+        let mut expanded_areas = Vec::with_capacity(areas.len() + icon_areas.len());
         for area in areas {
             let (expand_right, expand_bottom) = if self.displayed_static_image_mode()
                 == Some(crate::app::preview::static_images::StaticImageOverlayMode::Inline)
@@ -427,6 +447,12 @@ impl App {
                     expand_bottom,
                 ),
             );
+        }
+        // Item icons are rendered into an exact 4×3-cell image canvas. Unlike
+        // preview images, they need no spill margin; expanding below the icon
+        // can erase the first metadata rows without making ratatui repaint them.
+        for area in icon_areas {
+            terminal_images::push_unique_rect(&mut expanded_areas, area);
         }
         expanded_areas
             .into_iter()
@@ -628,6 +654,9 @@ impl App {
         if let Some(r) = self.input.screen_regions.help_panel {
             rects.push(r);
         }
+        if let Some(r) = self.input.screen_regions.item_details_panel {
+            rects.push(r);
+        }
         rects
     }
 
@@ -636,6 +665,7 @@ impl App {
             || self.chooser.save_as().is_some_and(|save| save.is_open())
             || self.overlays.goto.is_some()
             || self.overlays.open_with.is_some()
+            || self.overlays.item_details.is_some()
             || self.fuzzy_finder.search.is_some()
             || self.overlays.help
     }

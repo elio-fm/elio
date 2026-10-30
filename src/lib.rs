@@ -20,6 +20,7 @@ mod filesystem;
 mod fuzzy_finder;
 mod goto_menu;
 mod input_handling;
+mod item_details;
 mod opening;
 mod places;
 pub mod portal;

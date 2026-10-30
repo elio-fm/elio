@@ -488,6 +488,7 @@ fn run_app(
     // All image bytes are routed through terminal.backend_mut() so they never bypass
     // crossterm and cannot corrupt mouse reporting.
     app.enable_terminal_image_previews();
+    crate::item_details::prewarm_icon_renderer();
 
     let input_reader = match InputReader::new(kitty_dnd.is_enabled()) {
         Ok(reader) => reader,

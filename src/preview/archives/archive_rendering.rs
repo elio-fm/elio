@@ -31,6 +31,7 @@ pub(super) struct ArchiveMetadata {
     pub(super) physical_size: Option<u64>,
     pub(super) compressed_size: Option<u64>,
     pub(super) unpacked_size: Option<u64>,
+    pub(super) password_protected: Option<bool>,
     pub(super) comment: Option<String>,
 }
 
@@ -470,6 +471,13 @@ pub(super) fn render_archive_preview(config: ArchiveRenderConfig) -> PreviewCont
     let mut preview = PreviewContent::new(PreviewKind::Archive, lines)
         .with_detail(config.detail)
         .with_directory_counts(total_items, folder_count, file_count);
+    preview = preview.with_archive_metadata(
+        config.total_entries_hint.unwrap_or(total_items),
+        (!config.scan_truncated)
+            .then_some(config.metadata.unpacked_size)
+            .flatten(),
+        config.metadata.password_protected,
+    );
     if !notes.is_empty() {
         preview = preview.with_truncation(notes.join("  •  "));
     }

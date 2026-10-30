@@ -30,7 +30,14 @@ pub(super) fn render_document_preview(
         lines.push(Line::from("No document metadata available"));
     }
 
-    PreviewContent::new(PreviewKind::Document, lines).with_detail(format.detail_label())
+    let page_count = metadata
+        .stats
+        .iter()
+        .find(|(label, _)| label.eq_ignore_ascii_case("Pages"))
+        .map(|(_, value)| value.clone());
+    PreviewContent::new(PreviewKind::Document, lines)
+        .with_detail(format.detail_label())
+        .with_document_metadata(metadata.author, page_count)
 }
 
 pub(super) fn render_document_preview_lines(metadata: &DocumentMetadata) -> Vec<Line<'static>> {
@@ -43,8 +50,8 @@ pub(super) fn render_document_preview_lines(metadata: &DocumentMetadata) -> Vec<
         ("Author", metadata.author.as_deref()),
         ("Modified By", metadata.modified_by.as_deref()),
         ("Application", metadata.application.as_deref()),
-        ("Created", metadata.created.as_deref()),
-        ("Modified", metadata.modified.as_deref()),
+        ("Document created", metadata.created.as_deref()),
+        ("Document modified", metadata.modified.as_deref()),
     ];
     let label_width = details
         .iter()

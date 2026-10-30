@@ -49,6 +49,7 @@ pub(crate) enum Action {
     ToggleView,
     TogglePreview,
     FullscreenPreview,
+    ToggleItemDetails,
     ToggleHidden,
     NavLeft,
     NavDown,
@@ -545,6 +546,7 @@ pub(crate) struct KeyBindings {
     pub toggle_view: KeyList,
     pub toggle_preview: KeyList,
     pub fullscreen_preview: KeyList,
+    pub item_details: KeyList,
     pub toggle_hidden: KeyList,
     pub nav_left: KeyList,
     pub nav_down: KeyList,
@@ -624,7 +626,7 @@ impl KeyBindings {
             .collect()
     }
 
-    fn bindings(&self) -> [(&KeyList, Action); 54] {
+    fn bindings(&self) -> [(&KeyList, Action); 55] {
         [
             (&self.clear_selection, Action::ClearSelection),
             (&self.cancel, Action::Cancel),
@@ -680,6 +682,7 @@ impl KeyBindings {
             (&self.scroll_preview_up, Action::ScrollPreviewUp),
             (&self.scroll_preview_down, Action::ScrollPreviewDown),
             (&self.copy_item, Action::CopyItem),
+            (&self.item_details, Action::ToggleItemDetails),
         ]
     }
 

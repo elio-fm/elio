@@ -78,6 +78,7 @@ pub(in crate::ui) fn render_help_overlay(
     };
     let view_entries = entries([
         keys.action(&kb.toggle_view, "toggle grid / list"),
+        keys.action(&kb.item_details, "item details"),
         e("Ctrl++ / Ctrl+-", "grid zoom in / out"),
         keys.action(&kb.toggle_hidden, "toggle dotfiles"),
         keys.action(&kb.sort, "cycle sort"),

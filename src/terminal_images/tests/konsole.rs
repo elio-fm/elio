@@ -28,7 +28,7 @@ fn write_test_raster_image(path: &Path, format: ImageFormat, width: u32, height:
 
 fn build_konsole_upload_sequence(path: &Path, id: u32, area: Rect) -> Result<Vec<u8>> {
     let mut out = Vec::new();
-    for chunk in build_konsole_upload_chunks(path, id, area)? {
+    for chunk in build_konsole_upload_chunks_with_offset(path, id, area, None)? {
         out.extend(chunk);
     }
     Ok(out)

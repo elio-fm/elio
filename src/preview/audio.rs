@@ -106,7 +106,25 @@ where
         probe_audio_metadata(entry, canceled)
     };
     let lines = render_audio_metadata_lines(probe.as_ref().map(|probe| &probe.metadata), byte_size);
-    let mut preview = PreviewContent::new(PreviewKind::Audio, lines).with_detail(detail);
+    let mut preview = PreviewContent::new(PreviewKind::Audio, lines)
+        .with_detail(detail)
+        .with_audio_tags(
+            probe
+                .as_ref()
+                .and_then(|probe| probe.metadata.artist.clone()),
+            probe
+                .as_ref()
+                .and_then(|probe| probe.metadata.album.clone()),
+        )
+        .with_media_metadata(
+            probe
+                .as_ref()
+                .and_then(|probe| probe.metadata.duration_seconds)
+                .map(format_duration),
+            None,
+            None,
+            None,
+        );
     if canceled() {
         return preview;
     }
@@ -158,7 +176,15 @@ where
 
     let lines = render_audio_metadata_lines(Some(&metadata), byte_size);
     let detail = type_detail.unwrap_or("Audio");
-    let mut preview = PreviewContent::new(PreviewKind::Audio, lines).with_detail(detail);
+    let mut preview = PreviewContent::new(PreviewKind::Audio, lines)
+        .with_detail(detail)
+        .with_audio_tags(metadata.artist.clone(), metadata.album.clone())
+        .with_media_metadata(
+            metadata.duration_seconds.map(format_duration),
+            None,
+            None,
+            None,
+        );
 
     if !canceled()
         && ffmpeg_available
