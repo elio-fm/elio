@@ -50,7 +50,18 @@ where
     let lines = comic_archive_details_lines(&comic);
     let mut preview = PreviewContent::new(PreviewKind::Comic, lines)
         .with_detail(detail)
-        .with_navigation_position("Page", current_index, comic.page_entries.len(), None);
+        .with_navigation_position("Page", current_index, comic.page_entries.len(), None)
+        .with_comic_metadata(
+            comic
+                .comic_info
+                .as_ref()
+                .and_then(|metadata| metadata.writer.clone()),
+            comic
+                .comic_info
+                .as_ref()
+                .and_then(|metadata| metadata.penciller.clone()),
+            comic.page_entries.len(),
+        );
 
     if canceled() {
         return None;

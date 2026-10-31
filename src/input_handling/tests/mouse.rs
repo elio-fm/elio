@@ -95,6 +95,46 @@ fn closing_overlay_with_mouse_suppresses_drag_until_release() {
 }
 
 #[test]
+fn outside_click_closes_item_details_without_selecting_or_dragging() {
+    let root = temp_path("item-details-outside-click");
+    let item = root.join("item.txt");
+    let other = root.join("other.txt");
+    fs::write(&item, "item").expect("failed to write item");
+    fs::write(&other, "other").expect("failed to write other item");
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    wait_for_directory_load(&mut app);
+    let item_index = app
+        .file_browser
+        .entries
+        .iter()
+        .position(|entry| entry.path == item)
+        .expect("item should be visible");
+    let other_index = app
+        .file_browser
+        .entries
+        .iter()
+        .position(|entry| entry.path == other)
+        .expect("other item should be visible");
+    app.file_browser.set_selected_index(item_index);
+    app.handle_event(Event::Key(KeyEvent::from(KeyCode::Char('i'))))
+        .expect("i should open item details");
+    app.set_screen_regions(ScreenRegions {
+        item_details_panel: Some(Rect::new(30, 10, 20, 5)),
+        entry_hits: vec![entry_hit(other_index, 3)],
+        ..ScreenRegions::default()
+    });
+
+    app.handle_event(left_click(2, 3))
+        .expect("outside click should close item details");
+    assert!(app.overlays.item_details.is_none());
+    assert_eq!(app.file_browser.selected, item_index);
+    assert!(app.take_drag_export_paths_at(2, 3).is_empty());
+
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
 fn drag_offer_outside_entry_exports_nothing() {
     let root = temp_path("drag-offer-outside-entry");
     fs::create_dir_all(&root).expect("failed to create temp root");

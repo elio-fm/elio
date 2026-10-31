@@ -59,6 +59,7 @@ where
             metadata: ArchiveMetadata {
                 format_label: Some(archive_format_name(format).to_string()),
                 physical_size: fs::metadata(path).ok().map(|metadata| metadata.len()),
+                password_protected: Some(true),
                 ..ArchiveMetadata::default()
             },
             entries: None,

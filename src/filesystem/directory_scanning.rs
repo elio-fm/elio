@@ -50,7 +50,57 @@ struct EntryDetails {
 #[derive(Clone, Debug, Default)]
 struct TrashInfoMetadata {
     original_name: Option<String>,
+    original_path: Option<PathBuf>,
     deletion_date: Option<SystemTime>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct TrashItemMetadata {
+    pub(crate) original_path: Option<PathBuf>,
+    pub(crate) trashed_at: Option<SystemTime>,
+}
+
+pub(crate) fn trash_item_metadata(path: &Path) -> Option<TrashItemMetadata> {
+    if let Some(info_dir) = path
+        .parent()
+        .filter(|parent| parent.file_name().is_some_and(|name| name == "files"))
+        .and_then(|files| files.parent().map(|trash| trash.join("info")))
+        .filter(|info| info.is_dir())
+        && let Some(info) =
+            read_trash_info_metadata(&info_dir, &path.file_name()?.to_string_lossy())
+    {
+        let trash_root = info_dir.parent()?;
+        let original_path = info.original_path.map(|original| {
+            if original.is_absolute() {
+                original
+            } else {
+                trash_root.parent().unwrap_or(trash_root).join(original)
+            }
+        });
+        return Some(TrashItemMetadata {
+            original_path,
+            trashed_at: info.deletion_date,
+        });
+    }
+
+    #[cfg(windows)]
+    if let Some(info) = super::recycle_bin::read_info(path) {
+        return Some(TrashItemMetadata {
+            original_path: Some(info.original_path),
+            trashed_at: info.deleted_at,
+        });
+    }
+
+    #[cfg(target_os = "macos")]
+    if let Some((original_path, trashed_at)) = super::trash_restoration::macos_trash_metadata(path)
+    {
+        return Some(TrashItemMetadata {
+            original_path: Some(original_path),
+            trashed_at,
+        });
+    }
+
+    None
 }
 
 fn trash_info_dir_for_files_dir(dir: &Path) -> Option<PathBuf> {
@@ -71,6 +121,7 @@ fn read_trash_info_metadata(info_dir: &Path, name: &str) -> Option<TrashInfoMeta
             metadata.deletion_date = parse_trash_deletion_date(date_str);
         } else if let Some(path_str) = line.trim().strip_prefix("Path=") {
             metadata.original_name = trash_original_name(path_str);
+            metadata.original_path = super::parse_original_path(&format!("Path={path_str}"));
         }
     }
     Some(metadata)

@@ -158,6 +158,19 @@ pub(crate) struct PreviewLineCoverage {
 pub(crate) struct PreviewContent {
     pub kind: PreviewKind,
     pub detail: Option<String>,
+    pub document_author: Option<String>,
+    pub document_page_count: Option<String>,
+    pub comic_writer: Option<String>,
+    pub comic_penciller: Option<String>,
+    pub audio_artist: Option<String>,
+    pub audio_album: Option<String>,
+    pub media_duration: Option<String>,
+    pub media_dimensions: Option<String>,
+    pub media_codec: Option<String>,
+    pub media_frame_rate: Option<String>,
+    pub archive_entry_count: Option<usize>,
+    pub archive_unpacked_size: Option<u64>,
+    pub archive_password_protected: Option<bool>,
     pub status_note: Option<String>,
     pub preview_visual: Option<PreviewVisual>,
     pub navigation_position: Option<PreviewNavigationPosition>,
@@ -188,6 +201,19 @@ impl PreviewContent {
         Self {
             kind,
             detail: None,
+            document_author: None,
+            document_page_count: None,
+            comic_writer: None,
+            comic_penciller: None,
+            audio_artist: None,
+            audio_album: None,
+            media_duration: None,
+            media_dimensions: None,
+            media_codec: None,
+            media_frame_rate: None,
+            archive_entry_count: None,
+            archive_unpacked_size: None,
+            archive_password_protected: None,
             status_note: None,
             preview_visual: None,
             navigation_position: None,
@@ -223,6 +249,60 @@ impl PreviewContent {
 
     pub(crate) fn with_detail(mut self, detail: impl Into<String>) -> Self {
         self.detail = Some(detail.into());
+        self
+    }
+
+    pub(crate) fn with_document_metadata(
+        mut self,
+        author: Option<String>,
+        page_count: Option<String>,
+    ) -> Self {
+        self.document_author = author.filter(|value| !value.trim().is_empty());
+        self.document_page_count = page_count.filter(|value| !value.trim().is_empty());
+        self
+    }
+
+    pub(crate) fn with_comic_metadata(
+        mut self,
+        writer: Option<String>,
+        penciller: Option<String>,
+        page_count: usize,
+    ) -> Self {
+        self.comic_writer = writer.filter(|value| !value.trim().is_empty());
+        self.comic_penciller = penciller.filter(|value| !value.trim().is_empty());
+        self.document_page_count = Some(page_count.to_string());
+        self
+    }
+
+    pub(crate) fn with_media_metadata(
+        mut self,
+        duration: Option<String>,
+        dimensions: Option<String>,
+        codec: Option<String>,
+        frame_rate: Option<String>,
+    ) -> Self {
+        self.media_duration = duration.filter(|value| !value.trim().is_empty());
+        self.media_dimensions = dimensions.filter(|value| !value.trim().is_empty());
+        self.media_codec = codec.filter(|value| !value.trim().is_empty());
+        self.media_frame_rate = frame_rate.filter(|value| !value.trim().is_empty());
+        self
+    }
+
+    pub(crate) fn with_audio_tags(mut self, artist: Option<String>, album: Option<String>) -> Self {
+        self.audio_artist = artist.filter(|value| !value.trim().is_empty());
+        self.audio_album = album.filter(|value| !value.trim().is_empty());
+        self
+    }
+
+    pub(crate) fn with_archive_metadata(
+        mut self,
+        entry_count: usize,
+        unpacked_size: Option<u64>,
+        password_protected: Option<bool>,
+    ) -> Self {
+        self.archive_entry_count = (entry_count > 0).then_some(entry_count);
+        self.archive_unpacked_size = unpacked_size;
+        self.archive_password_protected = password_protected;
         self
     }
 

@@ -274,6 +274,7 @@ https://elio-fm.github.io/docs/configuration/
 | `Ctrl++` / `Ctrl+-` | Grid zoom in / out |
 | `.` `*` | Show / hide dotfiles |
 | `s` `*` | Cycle sort (Name → Modified → Size) |
+| `i` / `Alt+Enter` `*` | Show item details |
 
 ### Preview
 

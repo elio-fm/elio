@@ -85,6 +85,7 @@ fn render_epub_preview(preview: EpubPreviewData) -> PreviewContent {
         parts.join("  •  ")
     });
     let mut content = PreviewContent::new(PreviewKind::Document, lines).with_detail(detail);
+    content = content.with_document_metadata(preview.metadata.author.clone(), None);
     if let Some(status_note) = status_note {
         content = content.with_status_note(status_note);
     }

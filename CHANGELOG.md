@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added clipboard text pasting to text-entry overlays via `paste_item`.
 - Added configurable `clear_selection` and `cancel` actions, both bound to Esc by default.
 - Added Trash support on Windows through the system drive's Recycle Bin. ([#355])
+- Added an item details overlay, opened with `i` or `Alt+Enter` by default.
 
 ### Changed
 

@@ -58,6 +58,10 @@ impl Default for KeyBindings {
             toggle_view: KeyList::one('v'),
             toggle_preview: KeyList::one('V'),
             fullscreen_preview: KeyList::one('P'),
+            item_details: KeyList(vec![
+                KeySpec::alt_named(NamedKey::Enter),
+                KeySpec::char('i'),
+            ]),
             toggle_hidden: KeyList::one('.'),
             nav_left: KeyList(vec![KeySpec::char('h'), KeySpec::named(NamedKey::Left)]),
             nav_down: KeyList(vec![KeySpec::char('j'), KeySpec::named(NamedKey::Down)]),
