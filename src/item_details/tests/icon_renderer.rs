@@ -19,7 +19,6 @@ fn private_use_detection_covers_nerd_font_codepoints() {
     assert!(!icon_renderer::is_private_use_character('\u{10fffe}'));
 }
 
-#[cfg(unix)]
 #[test]
 fn png_writer_preserves_icon_pixels() {
     let path = icon_renderer::write_png((
@@ -44,7 +43,6 @@ fn png_writer_preserves_icon_pixels() {
     std::fs::remove_file(path).expect("test icon PNG should be removable");
 }
 
-#[cfg(unix)]
 #[test]
 fn glyph_renderer_produces_a_decodable_png_when_a_font_is_available() {
     let Some(path) = icon_renderer::render_icon_png("󰈔", Color::Blue) else {

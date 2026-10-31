@@ -1,44 +1,31 @@
-#[cfg(unix)]
+use fontdue::{Font, FontSettings};
+use image::{ImageEncoder, codecs::png::PngEncoder};
+use ratatui::style::Color;
 use std::{
+    collections::HashMap,
     env, fs,
     fs::OpenOptions,
     io::Write,
-    process::{Command, Stdio},
+    path::PathBuf,
     sync::{
-        Mutex, OnceLock,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
 };
 
-use std::path::PathBuf;
-
-#[cfg(unix)]
-use fontdue::{Font, FontSettings};
-
-#[cfg(unix)]
-use image::{ImageEncoder, codecs::png::PngEncoder};
-use ratatui::style::Color;
-
-#[cfg(unix)]
 const ICON_FONT_SIZE: f32 = 56.0;
-#[cfg(unix)]
 const ICON_HEIGHT: u32 = 72;
-#[cfg(unix)]
 const MAX_ICON_WIDTH: u32 = 512;
-#[cfg(unix)]
 type RasterizedGlyphs = Vec<(fontdue::Metrics, Vec<u8>)>;
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(super) struct ResolvedFont {
+    pub(super) path: PathBuf,
+    pub(super) collection_index: u32,
+}
+
 pub(crate) fn render_icon_png(icon: &str, color: Color) -> Option<PathBuf> {
-    #[cfg(unix)]
-    {
-        write_png(render_with_system_font(icon, color)?)
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = icon;
-        let _ = color;
-        None
-    }
+    write_png(render_with_system_font(icon, color)?)
 }
 
 pub(crate) fn render_icon_png_for_cell_area(
@@ -47,41 +34,28 @@ pub(crate) fn render_icon_png_for_cell_area(
     width: u32,
     height: u32,
 ) -> Option<PathBuf> {
-    #[cfg(unix)]
-    {
-        if width == 0 || height == 0 || width > MAX_ICON_WIDTH || height > MAX_ICON_WIDTH {
-            return None;
-        }
-        write_png(render_with_system_font_in_canvas(
-            icon, color, width, height,
-        )?)
+    if width == 0 || height == 0 || width > MAX_ICON_WIDTH || height > MAX_ICON_WIDTH {
+        return None;
     }
-    #[cfg(not(unix))]
-    {
-        let _ = (icon, color, width, height);
-        None
-    }
+    write_png(render_with_system_font_in_canvas(
+        icon, color, width, height,
+    )?)
 }
 
 pub(crate) fn prewarm_icon_renderer() {
-    #[cfg(unix)]
-    {
-        let _ = std::thread::Builder::new()
-            .name("elio-item-icon-prewarm".to_owned())
-            .spawn(|| {
-                for ch in "󰆍󰒓󰈔󰈙".chars() {
-                    let _ = font_for_character(ch);
-                }
-            });
-    }
+    let _ = std::thread::Builder::new()
+        .name("elio-item-icon-prewarm".to_owned())
+        .spawn(|| {
+            for ch in "󰆍󰒓󰈔󰈙".chars() {
+                let _ = font_for_character(ch);
+            }
+        });
 }
 
-#[cfg(unix)]
 fn render_with_system_font(icon: &str, color: Color) -> Option<(u32, u32, Vec<u8>)> {
     render_with_system_font_in_canvas(icon, color, 0, ICON_HEIGHT)
 }
 
-#[cfg(unix)]
 fn render_with_system_font_in_canvas(
     icon: &str,
     color: Color,
@@ -148,7 +122,6 @@ fn render_with_system_font_in_canvas(
     Some((width, height, pixels))
 }
 
-#[cfg(unix)]
 fn rasterize_glyphs(icon: &str, font_size: f32) -> Option<(RasterizedGlyphs, f32, f32)> {
     let mut glyphs = Vec::new();
     let mut advance_x = 0.0f32;
@@ -167,23 +140,58 @@ fn rasterize_glyphs(icon: &str, font_size: f32) -> Option<(RasterizedGlyphs, f32
     Some((glyphs, min_x, max_x))
 }
 
-#[cfg(unix)]
-fn font_for_character(ch: char) -> Option<std::sync::Arc<Font>> {
-    use std::collections::HashMap;
-
-    static FONTS: OnceLock<Mutex<HashMap<PathBuf, std::sync::Arc<Font>>>> = OnceLock::new();
-    let path = font_path_for_character(ch)?;
+fn font_for_character(ch: char) -> Option<Arc<Font>> {
+    static FONTS: OnceLock<Mutex<HashMap<ResolvedFont, Arc<Font>>>> = OnceLock::new();
+    let source = font_source_for_character(ch)?;
     let fonts = FONTS.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Some(font) = fonts.lock().ok()?.get(&path).cloned() {
+    if let Some(font) = fonts.lock().ok()?.get(&source).cloned() {
         return Some(font);
     }
-    let bytes = fs::read(&path).ok()?;
-    let font = std::sync::Arc::new(Font::from_bytes(bytes, FontSettings::default()).ok()?);
-    fonts.lock().ok()?.insert(path, font.clone());
+    let bytes = fs::read(&source.path).ok()?;
+    let font = Arc::new(
+        Font::from_bytes(
+            bytes,
+            FontSettings {
+                collection_index: source.collection_index,
+                ..FontSettings::default()
+            },
+        )
+        .ok()?,
+    );
+    fonts.lock().ok()?.insert(source, font.clone());
     Some(font)
 }
 
-#[cfg(unix)]
+fn font_source_for_character(ch: char) -> Option<ResolvedFont> {
+    static SOURCES: OnceLock<Mutex<HashMap<char, ResolvedFont>>> = OnceLock::new();
+    let sources = SOURCES.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(source) = sources.lock().ok()?.get(&ch).cloned() {
+        return Some(source);
+    }
+    let source = resolve_font_source(ch)?;
+    sources.lock().ok()?.insert(ch, source.clone());
+    Some(source)
+}
+
+fn resolve_font_source(ch: char) -> Option<ResolvedFont> {
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    {
+        return super::fontconfig::font_for_character(ch);
+    }
+    #[cfg(windows)]
+    {
+        return super::windows::font_for_character(ch);
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
 fn color_rgb(color: Color) -> [u8; 3] {
     match color {
         Color::Rgb(r, g, b) => [r, g, b],
@@ -206,8 +214,9 @@ fn color_rgb(color: Color) -> [u8; 3] {
     }
 }
 
-#[cfg(unix)]
-pub(super) fn write_png((width, height, pixels): (u32, u32, Vec<u8>)) -> Option<PathBuf> {
+pub(in crate::item_details) fn write_png(
+    (width, height, pixels): (u32, u32, Vec<u8>),
+) -> Option<PathBuf> {
     static NEXT_ICON_FILE: AtomicU64 = AtomicU64::new(0);
 
     let mut png = Vec::new();
@@ -232,80 +241,6 @@ pub(super) fn write_png((width, height, pixels): (u32, u32, Vec<u8>)) -> Option<
     None
 }
 
-#[cfg(unix)]
-fn font_path_for_character(ch: char) -> Option<PathBuf> {
-    static FONT_PATHS: OnceLock<Mutex<std::collections::HashMap<char, PathBuf>>> = OnceLock::new();
-    let cache = FONT_PATHS.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
-    if let Some(path) = cache.lock().ok()?.get(&ch).cloned() {
-        return Some(path);
-    }
-
-    let charset = format!("charset={:x}", ch as u32);
-    let path = if is_private_use_character(ch) {
-        fontconfig_match(
-            &format!("Symbols Nerd Font:{charset}"),
-            Some("Symbols Nerd Font"),
-        )
-        .or_else(|| fontconfig_nerd_font_fallback(&charset))
-        .or_else(|| fontconfig_match(&format!(":{charset}"), None))?
-    } else {
-        fontconfig_match(&format!(":{charset}"), None)?
-    };
-    cache.lock().ok()?.insert(ch, path.clone());
-    Some(path)
-}
-
-#[cfg(unix)]
-fn fontconfig_nerd_font_fallback(charset: &str) -> Option<PathBuf> {
-    let output = Command::new("fc-match")
-        .arg("-s")
-        .arg("-f")
-        .arg("%{family}\n%{file}\n")
-        .arg(format!(":{charset}"))
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-
-    let output = String::from_utf8_lossy(&output.stdout);
-    let mut lines = output.lines().map(str::to_owned);
-    while let (Some(family), Some(path)) = (lines.next(), lines.next()) {
-        if family.contains("Nerd Font") {
-            let path = PathBuf::from(path);
-            if path.exists() {
-                return Some(path);
-            }
-        }
-    }
-    None
-}
-
-#[cfg(unix)]
-fn fontconfig_match(query: &str, required_family: Option<&str>) -> Option<PathBuf> {
-    let output = Command::new("fc-match")
-        .arg("-f")
-        .arg("%{family}\n%{file}\n")
-        .arg(query)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let output = String::from_utf8_lossy(&output.stdout);
-    let mut lines = output.lines();
-    let family = lines.next()?;
-    if required_family.is_some_and(|required| !family.contains(required)) {
-        return None;
-    }
-    let path = PathBuf::from(lines.next()?);
-    path.exists().then_some(path)
-}
-
-pub(super) fn is_private_use_character(ch: char) -> bool {
+pub(in crate::item_details) fn is_private_use_character(ch: char) -> bool {
     matches!(ch as u32, 0xE000..=0xF8FF | 0xF0000..=0xFFFFD | 0x100000..=0x10FFFD)
 }
