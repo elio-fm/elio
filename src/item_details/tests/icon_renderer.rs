@@ -5,7 +5,14 @@ use ratatui::style::Color;
 fn renderer_rejects_invalid_canvas_dimensions() {
     for (width, height) in [(0, 32), (32, 0), (513, 32), (32, 513)] {
         assert!(
-            icon_renderer::render_icon_png_for_cell_area("󰈔", Color::Blue, width, height).is_none(),
+            icon_renderer::render_icon_png_for_cell_area(
+                "󰈔",
+                Color::Blue,
+                Color::Black,
+                width,
+                height,
+            )
+            .is_none(),
             "{width}×{height} canvas should be rejected"
         );
     }
@@ -45,7 +52,7 @@ fn png_writer_preserves_icon_pixels() {
 
 #[test]
 fn glyph_renderer_produces_a_decodable_png_when_a_font_is_available() {
-    let Some(path) = icon_renderer::render_icon_png("󰈔", Color::Blue) else {
+    let Some(path) = icon_renderer::render_icon_png("󰈔", Color::Blue, Color::Black) else {
         return;
     };
     let image = image::ImageReader::open(&path)
@@ -55,6 +62,24 @@ fn glyph_renderer_produces_a_decodable_png_when_a_font_is_available() {
 
     assert!(image.width() > 0);
     assert!(image.height() > 0);
+
+    std::fs::remove_file(path).expect("rendered icon PNG should be removable");
+}
+
+#[test]
+fn glyph_renderer_flattens_opaque_panel_background_when_a_font_is_available() {
+    let background = Color::Rgb(18, 52, 86);
+    let Some(path) = icon_renderer::render_icon_png("󰈔", Color::Blue, background) else {
+        return;
+    };
+    let image = image::ImageReader::open(&path)
+        .expect("rendered icon PNG should open")
+        .decode()
+        .expect("rendered icon PNG should decode")
+        .to_rgba8();
+
+    assert!(image.pixels().all(|pixel| pixel.0[3] == u8::MAX));
+    assert!(image.pixels().any(|pixel| pixel.0 == [18, 52, 86, 255]));
 
     std::fs::remove_file(path).expect("rendered icon PNG should be removable");
 }

@@ -24,13 +24,14 @@ pub(super) struct ResolvedFont {
     pub(super) collection_index: u32,
 }
 
-pub(crate) fn render_icon_png(icon: &str, color: Color) -> Option<PathBuf> {
-    write_png(render_with_system_font(icon, color)?)
+pub(crate) fn render_icon_png(icon: &str, color: Color, background: Color) -> Option<PathBuf> {
+    write_png(render_with_system_font(icon, color, background)?)
 }
 
 pub(crate) fn render_icon_png_for_cell_area(
     icon: &str,
     color: Color,
+    background: Color,
     width: u32,
     height: u32,
 ) -> Option<PathBuf> {
@@ -38,7 +39,7 @@ pub(crate) fn render_icon_png_for_cell_area(
         return None;
     }
     write_png(render_with_system_font_in_canvas(
-        icon, color, width, height,
+        icon, color, background, width, height,
     )?)
 }
 
@@ -52,13 +53,18 @@ pub(crate) fn prewarm_icon_renderer() {
         });
 }
 
-fn render_with_system_font(icon: &str, color: Color) -> Option<(u32, u32, Vec<u8>)> {
-    render_with_system_font_in_canvas(icon, color, 0, ICON_HEIGHT)
+fn render_with_system_font(
+    icon: &str,
+    color: Color,
+    background: Color,
+) -> Option<(u32, u32, Vec<u8>)> {
+    render_with_system_font_in_canvas(icon, color, background, 0, ICON_HEIGHT)
 }
 
 fn render_with_system_font_in_canvas(
     icon: &str,
     color: Color,
+    background: Color,
     canvas_width: u32,
     canvas_height: u32,
 ) -> Option<(u32, u32, Vec<u8>)> {
@@ -94,7 +100,13 @@ fn render_with_system_font_in_canvas(
         .ok()?
         .checked_mul(height as usize)?
         .checked_mul(4)?;
+    let background = matches!(background, Color::Rgb(_, _, _)).then(|| color_rgb(background));
     let mut pixels = vec![0; pixel_len];
+    if let Some([r, g, b]) = background {
+        for pixel in pixels.as_chunks_mut::<4>().0 {
+            pixel.copy_from_slice(&[r, g, b, u8::MAX]);
+        }
+    }
     let [r, g, b] = color_rgb(color);
     let x_offset = if fixed_width {
         ((canvas_width as f32 - natural_width as f32) / 2.0).max(0.0)
@@ -114,12 +126,28 @@ fn render_with_system_font_in_canvas(
                 }
                 let alpha = bitmap[row * metrics.width + col];
                 let offset = (y as usize * width as usize + x as usize) * 4;
-                pixels[offset..offset + 4].copy_from_slice(&[r, g, b, alpha]);
+                if let Some([background_r, background_g, background_b]) = background {
+                    let alpha = u16::from(alpha);
+                    let inverse_alpha = u16::from(u8::MAX).saturating_sub(alpha);
+                    pixels[offset..offset + 4].copy_from_slice(&[
+                        blend_channel(r, background_r, alpha, inverse_alpha),
+                        blend_channel(g, background_g, alpha, inverse_alpha),
+                        blend_channel(b, background_b, alpha, inverse_alpha),
+                        u8::MAX,
+                    ]);
+                } else {
+                    pixels[offset..offset + 4].copy_from_slice(&[r, g, b, alpha]);
+                }
             }
         }
         cursor_x += metrics.advance_width.max(0.0);
     }
     Some((width, height, pixels))
+}
+
+fn blend_channel(foreground: u8, background: u8, alpha: u16, inverse_alpha: u16) -> u8 {
+    ((u16::from(foreground) * alpha + u16::from(background) * inverse_alpha) / u16::from(u8::MAX))
+        as u8
 }
 
 fn rasterize_glyphs(icon: &str, font_size: f32) -> Option<(RasterizedGlyphs, f32, f32)> {

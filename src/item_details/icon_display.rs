@@ -36,10 +36,11 @@ impl App {
             return;
         };
         let appearance = crate::theme::resolve_entry(&details.entry);
+        let panel_color = crate::theme::palette().panel;
         let icon_path = match protocol {
             ImageProtocol::None => None,
             ImageProtocol::KittyGraphics => {
-                super::icon_renderer::render_icon_png(details.icon, appearance.color)
+                super::icon_renderer::render_icon_png(details.icon, appearance.color, panel_color)
             }
             _ => window.and_then(|window| {
                 let cell_width = window.pixels_width / u32::from(window.cells_width.max(1));
@@ -47,6 +48,7 @@ impl App {
                 super::icon_renderer::render_icon_png_for_cell_area(
                     details.icon,
                     appearance.color,
+                    panel_color,
                     cell_width.saturating_mul(4),
                     cell_height.saturating_mul(3),
                 )

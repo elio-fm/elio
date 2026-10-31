@@ -58,17 +58,21 @@ impl ItemDetails {
     ) -> Self {
         let facts = file_classification::inspect_entry_fast(entry);
         let appearance = crate::theme::resolve_entry(entry);
+        let panel_color = crate::theme::palette().panel;
         let icon_png_path = match protocol {
             ImageProtocol::None => None,
-            ImageProtocol::KittyGraphics => {
-                super::icon_renderer::render_icon_png(appearance.icon, appearance.color)
-            }
+            ImageProtocol::KittyGraphics => super::icon_renderer::render_icon_png(
+                appearance.icon,
+                appearance.color,
+                panel_color,
+            ),
             _ => window_size.and_then(|window| {
                 let cell_width = window.pixels_width / u32::from(window.cells_width.max(1));
                 let cell_height = window.pixels_height / u32::from(window.cells_height.max(1));
                 super::icon_renderer::render_icon_png_for_cell_area(
                     appearance.icon,
                     appearance.color,
+                    panel_color,
                     cell_width.saturating_mul(4),
                     cell_height.saturating_mul(3),
                 )
