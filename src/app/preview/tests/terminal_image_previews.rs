@@ -31,8 +31,14 @@ fn item_details_kitty_icon_is_cleared_on_close_and_replaced_after_resize() {
     let mut app = App::new_at(root.clone()).expect("failed to create app");
     let entry = crate::filesystem::entry_from_path(path, "notes.txt".to_owned())
         .expect("entry should load");
+    let fixture = root.join("item-details-icon.png");
+    image::RgbaImage::from_pixel(1, 1, image::Rgba([91, 168, 255, 255]))
+        .save(&fixture)
+        .expect("failed to write item-details PNG fixture");
+    let mut details = app.build_item_details(&entry);
+    details.icon_png_path = Some(fixture);
     app.preview.terminal_images.protocol = ImageProtocol::KittyGraphics;
-    app.overlays.item_details = Some(app.build_item_details(&entry));
+    app.overlays.item_details = Some(details);
     app.set_screen_regions(ScreenRegions {
         item_details_icon_area: Some(Rect::new(4, 3, 4, 3)),
         ..ScreenRegions::default()

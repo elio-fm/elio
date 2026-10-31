@@ -201,7 +201,7 @@ fn font_source_for_character(ch: char) -> Option<ResolvedFont> {
     Some(source)
 }
 
-fn resolve_font_source(ch: char) -> Option<ResolvedFont> {
+fn resolve_font_source(_ch: char) -> Option<ResolvedFont> {
     #[cfg(any(
         target_os = "linux",
         target_os = "freebsd",
@@ -210,11 +210,11 @@ fn resolve_font_source(ch: char) -> Option<ResolvedFont> {
         target_os = "dragonfly"
     ))]
     {
-        return super::fontconfig::font_for_character(ch);
+        return super::fontconfig::font_for_character(_ch);
     }
     #[cfg(windows)]
     {
-        return super::windows::font_for_character(ch);
+        return super::windows::font_for_character(_ch);
     }
     #[allow(unreachable_code)]
     None
@@ -269,6 +269,15 @@ pub(in crate::item_details) fn write_png(
     None
 }
 
+#[cfg(any(
+    test,
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 pub(in crate::item_details) fn is_private_use_character(ch: char) -> bool {
     matches!(ch as u32, 0xE000..=0xF8FF | 0xF0000..=0xFFFFD | 0x100000..=0x10FFFD)
 }
