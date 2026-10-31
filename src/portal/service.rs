@@ -122,7 +122,7 @@ impl FileChooser {
             handle,
             ChooserRequest {
                 mode: ChooserRequestMode::Open { kind, multiple },
-                initial_path,
+                initial_path: existing_directory_or_ancestor(initial_path),
             },
             connection,
         )
@@ -148,7 +148,7 @@ impl FileChooser {
             handle,
             ChooserRequest {
                 mode: ChooserRequestMode::SaveFile { initial_name },
-                initial_path,
+                initial_path: existing_directory_or_ancestor(initial_path),
             },
             connection,
         )
@@ -562,6 +562,24 @@ fn option_path(options: &HashMap<String, OwnedVariant>, key: &str) -> Option<Opt
         return None;
     }
     (!bytes.contains(&0) && bytes.starts_with(b"/")).then_some(Some(bytes))
+}
+
+/// `current_folder` is a hint, so a deleted or otherwise unusable directory
+/// must not make the entire portal request fail. Keep valid native Unix bytes
+/// while walking upward to a directory the chooser can open.
+fn existing_directory_or_ancestor(initial_path: Option<Vec<u8>>) -> Option<Vec<u8>> {
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+
+    let initial_path = initial_path?;
+    let path = Path::new(std::ffi::OsStr::from_bytes(&initial_path));
+    path.ancestors()
+        .find(|candidate| fs::metadata(candidate).is_ok_and(|metadata| metadata.is_dir()))
+        .map(|directory| directory.as_os_str().as_bytes().to_vec())
+        .or_else(|| {
+            crate::elevated_session::home_dir()
+                .filter(|directory| fs::metadata(directory).is_ok_and(|metadata| metadata.is_dir()))
+                .map(|directory| directory.into_os_string().into_vec())
+        })
 }
 
 fn save_startup(options: &HashMap<String, OwnedVariant>) -> Option<(Option<Vec<u8>>, String)> {

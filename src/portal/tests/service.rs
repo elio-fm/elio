@@ -1,9 +1,17 @@
 use super::{
     ChooserRequest, ChooserRequestMode, Completion, OPEN_OPTIONS, SAVE_OPTIONS, SelectionKind,
-    accepted, chooser_executable_with_fallback, file_uri, has_only_options, invocation_launcher,
-    option_bool, option_path, save_startup, valid_ignored_options,
+    accepted, chooser_executable_with_fallback, existing_directory_or_ancestor, file_uri,
+    has_only_options, invocation_launcher, option_bool, option_path, save_startup,
+    valid_ignored_options,
 };
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fs,
+    os::unix::ffi::{OsStrExt, OsStringExt},
+    path::PathBuf,
+    process,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use zbus::OwnedVariant;
 
 type Filter = (String, Vec<(u32, String)>);
@@ -247,6 +255,66 @@ fn current_folder_requires_an_absolute_nonempty_byte_path() {
             .expect("a byte array is a valid D-Bus value"),
     );
     assert_eq!(option_path(&options, "current_folder"), None);
+}
+
+fn temporary_directory(label: &str) -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "elio-portal-{label}-{}-{}",
+        process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time must be after the Unix epoch")
+            .as_nanos()
+    ))
+}
+
+fn path_bytes(path: &std::path::Path) -> Vec<u8> {
+    path.as_os_str().as_bytes().to_vec()
+}
+
+#[test]
+fn missing_current_folder_uses_the_nearest_existing_parent() {
+    let root = temporary_directory("current-folder-parent");
+    let parent = root.join("parent");
+    fs::create_dir_all(&parent).expect("create test directory");
+    let missing = parent.join("deleted").join("child");
+
+    assert_eq!(
+        existing_directory_or_ancestor(Some(path_bytes(&missing))),
+        Some(path_bytes(&parent))
+    );
+
+    fs::remove_dir_all(root).expect("remove test directory");
+}
+
+#[test]
+fn initial_directory_fallback_preserves_non_utf8_unix_paths() {
+    let root = temporary_directory("current-folder-bytes");
+    let parent = root.join(std::ffi::OsString::from_vec(b"parent-\xff".to_vec()));
+    fs::create_dir_all(&parent).expect("create test directory");
+    let missing = parent.join("deleted");
+
+    assert_eq!(
+        existing_directory_or_ancestor(Some(path_bytes(&missing))),
+        Some(path_bytes(&parent))
+    );
+
+    fs::remove_dir_all(root).expect("remove test directory");
+}
+
+#[test]
+fn initial_directory_fallback_rejects_files_as_starting_directories() {
+    let root = temporary_directory("current-folder-file");
+    fs::create_dir_all(&root).expect("create test directory");
+    let file = root.join("not-a-directory");
+    fs::write(&file, "test").expect("create test file");
+
+    assert_eq!(
+        existing_directory_or_ancestor(Some(path_bytes(&file))),
+        Some(path_bytes(&root))
+    );
+
+    fs::remove_dir_all(root).expect("remove test directory");
 }
 
 #[test]
