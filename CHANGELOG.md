@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Made Trash, Delete, and Restore popup scrollbars match the style of the rest of the scrollbars.
 - Made scrollbars draggable.
 
+### Fixed
+
+- Fixed the FileChooser portal closing when an app's remembered folder has been deleted. ([#375])
+
 ## [1.14.0] - 2026-10-19
 
 ### Added
@@ -417,6 +421,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#375]: https://github.com/elio-fm/elio/issues/375
 [#355]: https://github.com/elio-fm/elio/issues/355
 [#352]: https://github.com/elio-fm/elio/issues/352
 [#351]: https://github.com/elio-fm/elio/issues/351
