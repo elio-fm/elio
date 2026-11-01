@@ -161,17 +161,26 @@ fn render_list_view(
         let clip_op = app.file_operations.clipboard_op_for(&entry.path);
         let appearance = theme::resolve_browser_entry(entry);
         let icon_color = appearance.color;
-        let bg = if selected {
-            palette.selected_bg
-        } else {
-            palette.panel_alt
-        };
+        let entry_text_color = theme::entry_name_color(&appearance, palette);
+        let bg = theme::focused_entry_reverse_background(
+            selected,
+            entry_text_color,
+            if selected {
+                palette.selected_bg
+            } else {
+                palette.panel_alt
+            },
+        );
         if row_height == 1 {
             frame.render_widget(
                 Paragraph::new(render_compact_list_row(
                     app, entry, selected, row.width, palette,
                 ))
-                .style(Style::default().bg(bg).fg(palette.text)),
+                .style(theme::focused_entry_reverse_style(
+                    selected,
+                    bg,
+                    Style::default().bg(bg).fg(palette.text),
+                )),
                 row,
             );
         } else {
@@ -218,22 +227,41 @@ fn render_list_view(
                     Line::from(vec![
                         Span::styled(
                             appearance.icon,
-                            Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
+                            theme::focused_entry_reverse_style(
+                                selected,
+                                bg,
+                                Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
+                            ),
                         ),
                         Span::raw(" "),
                         Span::styled(
                             helpers::clamp_label(&entry.name, row.width.saturating_sub(8) as usize),
-                            Style::default()
-                                .fg(theme::entry_name_color(&appearance, palette))
-                                .add_modifier(Modifier::BOLD),
+                            theme::focused_entry_reverse_style(
+                                selected,
+                                bg,
+                                Style::default()
+                                    .fg(entry_text_color)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
                         ),
                     ]),
                     Line::from(vec![
                         Span::raw("  "),
-                        Span::styled(secondary, Style::default().fg(palette.muted)),
+                        Span::styled(
+                            secondary,
+                            theme::focused_entry_reverse_style(
+                                selected,
+                                bg,
+                                Style::default().fg(palette.muted),
+                            ),
+                        ),
                     ]),
                 ])
-                .style(Style::default().bg(bg).fg(palette.text)),
+                .style(theme::focused_entry_reverse_style(
+                    selected,
+                    bg,
+                    Style::default().bg(bg).fg(palette.text),
+                )),
                 columns[1],
             );
         }
@@ -292,16 +320,45 @@ pub(super) fn render_compact_list_row(
     };
     let appearance = theme::resolve_browser_entry(entry);
     let icon = appearance.icon;
-    let icon_style = Style::default()
-        .fg(appearance.color)
-        .add_modifier(Modifier::BOLD);
     let name_color = theme::entry_name_color(&appearance, palette);
-    let name_style = Style::default().fg(name_color).add_modifier(if selected {
-        theme::focused_entry_style().modifiers()
+    let background = theme::focused_entry_reverse_background(
+        selected,
+        name_color,
+        if selected {
+            palette.selected_bg
+        } else {
+            palette.panel_alt
+        },
+    );
+    let icon_style = theme::focused_entry_reverse_style(
+        selected,
+        background,
+        Style::default()
+            .fg(appearance.color)
+            .add_modifier(Modifier::BOLD),
+    );
+    let name_style = theme::focused_entry_reverse_style(
+        selected,
+        background,
+        Style::default().fg(name_color).add_modifier(if selected {
+            theme::focused_entry_style().modifiers()
+        } else {
+            Modifier::empty()
+        }),
+    );
+    let muted_style = theme::focused_entry_reverse_style(
+        selected,
+        background,
+        Style::default().fg(palette.muted),
+    );
+    let marker_style = if selected && theme::focused_entry_style().reversed {
+        Style::default()
+            .fg(marker_color)
+            .bg(background)
+            .remove_modifier(Modifier::REVERSED)
     } else {
-        Modifier::empty()
-    });
-    let muted_style = Style::default().fg(palette.muted);
+        Style::default().fg(marker_color)
+    };
     let available_width = row_width.saturating_sub(COMPACT_PREFIX_WIDTH as u16).max(1) as usize;
     let min_name_width = available_width.min(COMPACT_NAME_MIN_WIDTH);
     let symlink_target = symlink_target_label(entry);
@@ -372,7 +429,7 @@ pub(super) fn render_compact_list_row(
             } else {
                 " "
             },
-            Style::default().fg(marker_color),
+            marker_style,
         ),
         Span::raw(" "),
         Span::styled(icon.to_string(), icon_style),
@@ -772,11 +829,6 @@ fn render_tile(
     let appearance = theme::resolve_browser_entry(entry);
     let icon_color = appearance.color;
     let background = palette.surface;
-    let content_bg = if selected {
-        focused_tile_content_bg(palette.selected_bg)
-    } else {
-        palette.surface
-    };
     // The full-height indicator distinguishes focus or a marked/clipboard state,
     // while a marked/clipboard color takes priority when states overlap.
     let indicator_color = if clip_op == Some(ClipOp::Yank) {
@@ -790,14 +842,23 @@ fn render_tile(
     } else {
         None
     };
-    let band_bg = if selected {
-        palette.selected_bg
-    } else {
-        palette.elevated
-    };
     let band_fg = palette.text;
     let band_icon = icon_color;
     let band_name_fg = theme::entry_name_color(&appearance, palette);
+    let band_bg = theme::focused_entry_reverse_background(
+        selected,
+        band_name_fg,
+        if selected {
+            palette.selected_bg
+        } else {
+            palette.elevated
+        },
+    );
+    let content_bg = if selected {
+        focused_tile_content_bg(band_bg)
+    } else {
+        palette.surface
+    };
 
     frame.render_widget(
         Block::default().style(Style::default().bg(background).fg(palette.text)),
@@ -819,26 +880,38 @@ fn render_tile(
         Paragraph::new(Line::from(vec![
             Span::styled(
                 appearance.icon,
-                Style::default().fg(band_icon).add_modifier(
-                    Modifier::BOLD
-                        | if spec.emphasize_icon {
-                            Modifier::ITALIC
-                        } else {
-                            Modifier::empty()
-                        },
+                theme::focused_entry_reverse_style(
+                    selected,
+                    band_bg,
+                    Style::default().fg(band_icon).add_modifier(
+                        Modifier::BOLD
+                            | if spec.emphasize_icon {
+                                Modifier::ITALIC
+                            } else {
+                                Modifier::empty()
+                            },
+                    ),
                 ),
             ),
             Span::raw(" "),
             Span::styled(
                 helpers::clamp_label(&entry.name, band.width.saturating_sub(5) as usize),
-                Style::default().fg(band_name_fg).add_modifier(if selected {
-                    theme::focused_entry_style().modifiers()
-                } else {
-                    Modifier::empty()
-                }),
+                theme::focused_entry_reverse_style(
+                    selected,
+                    band_bg,
+                    Style::default().fg(band_name_fg).add_modifier(if selected {
+                        theme::focused_entry_style().modifiers()
+                    } else {
+                        Modifier::empty()
+                    }),
+                ),
             ),
         ]))
-        .style(Style::default().bg(band_bg).fg(band_fg)),
+        .style(theme::focused_entry_reverse_style(
+            selected,
+            band_bg,
+            Style::default().bg(band_bg).fg(band_fg),
+        )),
         band.inner(Margin {
             horizontal: 1,
             vertical: 0,
@@ -862,18 +935,30 @@ fn render_tile(
     if spec.show_kind_hint {
         lines.push(Line::from(Span::styled(
             entry_kind_hint(entry),
-            Style::default().fg(icon_color),
+            theme::focused_entry_reverse_style(
+                selected,
+                content_bg,
+                Style::default().fg(icon_color),
+            ),
         )));
     }
     if let Some(detail) = detail {
         lines.push(Line::from(Span::styled(
             detail,
-            Style::default().fg(palette.muted),
+            theme::focused_entry_reverse_style(
+                selected,
+                content_bg,
+                Style::default().fg(palette.muted),
+            ),
         )));
     }
     lines.push(Line::from(Span::styled(
         modified,
-        Style::default().fg(palette.muted),
+        theme::focused_entry_reverse_style(
+            selected,
+            content_bg,
+            Style::default().fg(palette.muted),
+        ),
     )));
     if content.height > 0 {
         frame.render_widget(
@@ -881,7 +966,11 @@ fn render_tile(
             content,
         );
         frame.render_widget(
-            Paragraph::new(lines).style(Style::default().bg(content_bg).fg(palette.text)),
+            Paragraph::new(lines).style(theme::focused_entry_reverse_style(
+                selected,
+                content_bg,
+                Style::default().bg(content_bg).fg(palette.text),
+            )),
             content_inner,
         );
     }
