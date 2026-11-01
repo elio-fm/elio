@@ -52,6 +52,7 @@ pub(crate) struct FocusedEntryStyle {
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
+    pub reversed: bool,
 }
 
 impl FocusedEntryStyle {
@@ -225,6 +226,7 @@ struct FocusedEntryStyleOverride {
     bold: Option<bool>,
     italic: Option<bool>,
     underline: Option<bool>,
+    reversed: Option<bool>,
 }
 
 #[derive(Deserialize, Default)]
@@ -452,6 +454,7 @@ impl FocusedEntryStyleOverride {
             bold: required(self.bold, "focused_entry.bold")?,
             italic: required(self.italic, "focused_entry.italic")?,
             underline: required(self.underline, "focused_entry.underline")?,
+            reversed: self.reversed.unwrap_or(false),
         })
     }
 }
@@ -607,6 +610,9 @@ fn apply_focused_entry_style_overrides(
     }
     if let Some(underline) = overrides.underline {
         style.underline = underline;
+    }
+    if let Some(reversed) = overrides.reversed {
+        style.reversed = reversed;
     }
 }
 

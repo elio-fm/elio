@@ -34,6 +34,7 @@ path_bg = "#111111"
 bold = true
 italic = false
 underline = false
+reversed = false
 
 [preview.code]
 fg = "#d7e3f4"

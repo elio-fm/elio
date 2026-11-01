@@ -1,5 +1,5 @@
 use super::*;
-use ratatui::style::{Color, Modifier};
+use ratatui::style::{Color, Modifier, Style};
 use std::{
     env,
     ffi::OsString,
@@ -411,6 +411,7 @@ fn focused_entry_style_defaults_and_overrides_independent_modifiers() {
     assert!(default_theme.focused_entry.bold);
     assert!(!default_theme.focused_entry.italic);
     assert!(!default_theme.focused_entry.underline);
+    assert!(!default_theme.focused_entry.reversed);
 
     let theme = Theme::from_config_str(
         r#"
@@ -418,6 +419,7 @@ fn focused_entry_style_defaults_and_overrides_independent_modifiers() {
 bold = false
 italic = true
 underline = true
+reversed = true
 "#,
     )
     .expect("theme should parse focused entry overrides");
@@ -425,9 +427,31 @@ underline = true
     assert!(!theme.focused_entry.bold);
     assert!(theme.focused_entry.italic);
     assert!(theme.focused_entry.underline);
+    assert!(theme.focused_entry.reversed);
     assert_eq!(
         theme.focused_entry.modifiers(),
         Modifier::ITALIC | Modifier::UNDERLINED
+    );
+}
+
+#[test]
+fn reversed_focused_entry_uses_entry_text_color_as_background() {
+    let base = Style::default()
+        .fg(Color::Blue)
+        .bg(Color::Red)
+        .add_modifier(Modifier::ITALIC | Modifier::UNDERLINED);
+
+    let unchanged = focused_entry_reverse_style_with_reversal(true, false, Color::Green, base);
+    assert_eq!(unchanged.fg, Some(Color::Blue));
+    assert_eq!(unchanged.bg, Some(Color::Red));
+    assert_eq!(unchanged.add_modifier, base.add_modifier);
+
+    let reversed = focused_entry_reverse_style_with_reversal(true, true, Color::Green, base);
+    assert_eq!(reversed.fg, Some(Color::Green));
+    assert_eq!(reversed.bg, Some(Color::Reset));
+    assert_eq!(
+        reversed.add_modifier,
+        base.add_modifier | Modifier::REVERSED
     );
 }
 
