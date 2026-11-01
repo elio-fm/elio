@@ -1,7 +1,8 @@
 #[cfg(unix)]
 use super::super::file_browser_pane::symlink_target_detail;
 use super::super::file_browser_pane::{
-    compact_entry_name_spans, focused_tile_content_bg, render_compact_list_row,
+    active_indicator_color, compact_entry_name_spans, focused_tile_content_bg,
+    render_compact_list_row,
 };
 use super::super::helpers;
 use super::super::pane_layout::resolve_pane_layout;
@@ -9,6 +10,7 @@ use super::super::places_pane::render_places_pane;
 use super::super::scrollbars::split_scrollbar_area;
 use crate::app::{App, ScreenRegions};
 use crate::config::PaneWeights;
+use crate::file_operations::ClipOp;
 use crate::places::{PlaceItem, PlaceKind, PlaceRow};
 use crate::preview::default_code_preview_line_limit;
 use crate::theme;
@@ -19,7 +21,7 @@ use ratatui::{
     backend::TestBackend,
     buffer::Buffer,
     layout::Rect,
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
 };
 use std::{
     fs,
@@ -1160,6 +1162,31 @@ fn grid_view_marks_space_selected_entry_with_a_full_height_indicator() {
     }
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn transparent_focus_indicator_is_hidden_without_affecting_mark_indicators() {
+    let palette = crate::theme::Palette {
+        selected_border: Color::Reset,
+        selection_bar: Color::Green,
+        yank_bar: Color::Blue,
+        cut_bar: Color::Red,
+        ..theme::palette()
+    };
+
+    assert_eq!(active_indicator_color(None, false, true, palette), None);
+    assert_eq!(
+        active_indicator_color(None, true, true, palette),
+        Some(Color::Green)
+    );
+    assert_eq!(
+        active_indicator_color(Some(ClipOp::Yank), true, true, palette),
+        Some(Color::Blue)
+    );
+    assert_eq!(
+        active_indicator_color(Some(ClipOp::Cut), true, true, palette),
+        Some(Color::Red)
+    );
 }
 
 #[test]
