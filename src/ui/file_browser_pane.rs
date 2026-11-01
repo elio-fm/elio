@@ -186,29 +186,20 @@ fn render_list_view(
         } else {
             // All mark states take priority over the cursor colour for the bar —
             // the cursor position is already communicated by the row background.
-            let bar_color = if clip_op == Some(ClipOp::Yank) {
-                palette.yank_bar
-            } else if clip_op == Some(ClipOp::Cut) {
-                palette.cut_bar
-            } else if multi_selected {
-                palette.selection_bar
-            } else if selected {
-                palette.selected_border
-            } else {
-                bg
-            };
+            let indicator_color =
+                active_indicator_color(clip_op, multi_selected, selected, palette);
             let columns = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Length(1), Constraint::Min(1)])
                 .split(row);
             frame.render_widget(
-                Paragraph::new(if selected || multi_selected || clip_op.is_some() {
+                Paragraph::new(if indicator_color.is_some() {
                     "▌"
                 } else {
                     " "
                 })
                 .alignment(Alignment::Left)
-                .style(Style::default().bg(bg).fg(bar_color)),
+                .style(Style::default().bg(bg).fg(indicator_color.unwrap_or(bg))),
                 columns[0],
             );
             let secondary = if entry.is_dir() {
@@ -307,17 +298,8 @@ pub(super) fn render_compact_list_row(
     let clip_op = app.file_operations.clipboard_op_for(&entry.path);
     // All mark states take priority over the cursor colour for the bar — the
     // cursor position is already communicated by the row background.
-    let marker_color = if clip_op == Some(ClipOp::Yank) {
-        palette.yank_bar
-    } else if clip_op == Some(ClipOp::Cut) {
-        palette.cut_bar
-    } else if multi_selected {
-        palette.selection_bar
-    } else if selected {
-        palette.selected_border
-    } else {
-        palette.panel_alt
-    };
+    let indicator_color = active_indicator_color(clip_op, multi_selected, selected, palette);
+    let marker_color = indicator_color.unwrap_or(palette.panel_alt);
     let appearance = theme::resolve_browser_entry(entry);
     let icon = appearance.icon;
     let name_color = theme::entry_name_color(&appearance, palette);
@@ -351,14 +333,15 @@ pub(super) fn render_compact_list_row(
         background,
         Style::default().fg(palette.muted),
     );
-    let marker_style = if selected && theme::focused_entry_style().reversed {
-        Style::default()
-            .fg(marker_color)
-            .bg(background)
-            .remove_modifier(Modifier::REVERSED)
-    } else {
-        Style::default().fg(marker_color)
-    };
+    let marker_style =
+        if indicator_color.is_some() && selected && theme::focused_entry_style().reversed {
+            Style::default()
+                .fg(marker_color)
+                .bg(background)
+                .remove_modifier(Modifier::REVERSED)
+        } else {
+            Style::default().fg(marker_color)
+        };
     let available_width = row_width.saturating_sub(COMPACT_PREFIX_WIDTH as u16).max(1) as usize;
     let min_name_width = available_width.min(COMPACT_NAME_MIN_WIDTH);
     let symlink_target = symlink_target_label(entry);
@@ -422,15 +405,15 @@ pub(super) fn render_compact_list_row(
     let name_width = max_name_width
         .saturating_sub(trailing_gap_width)
         .max(min_name_width);
+    let marker = if indicator_color.is_some() {
+        Span::styled("▌", marker_style)
+    } else {
+        // A transparent marker must not introduce an explicit reset style:
+        // child spans override the reversed style used for a focused row.
+        Span::raw(" ")
+    };
     let mut spans = vec![
-        Span::styled(
-            if selected || multi_selected || clip_op.is_some() {
-                "▌"
-            } else {
-                " "
-            },
-            marker_style,
-        ),
+        marker,
         Span::raw(" "),
         Span::styled(icon.to_string(), icon_style),
         Span::raw(" "),
@@ -812,6 +795,27 @@ pub(super) fn focused_tile_content_bg(focused_bg: Color) -> Color {
     }
 }
 
+pub(super) fn active_indicator_color(
+    clip_op: Option<ClipOp>,
+    multi_selected: bool,
+    selected: bool,
+    palette: Palette,
+) -> Option<Color> {
+    let color = if clip_op == Some(ClipOp::Yank) {
+        Some(palette.yank_bar)
+    } else if clip_op == Some(ClipOp::Cut) {
+        Some(palette.cut_bar)
+    } else if multi_selected {
+        Some(palette.selection_bar)
+    } else if selected {
+        Some(palette.selected_border)
+    } else {
+        None
+    };
+
+    color.filter(|color| *color != Color::Reset)
+}
+
 fn render_tile(
     frame: &mut Frame<'_>,
     rect: Rect,
@@ -831,17 +835,7 @@ fn render_tile(
     let background = palette.surface;
     // The full-height indicator distinguishes focus or a marked/clipboard state,
     // while a marked/clipboard color takes priority when states overlap.
-    let indicator_color = if clip_op == Some(ClipOp::Yank) {
-        Some(palette.yank_bar)
-    } else if clip_op == Some(ClipOp::Cut) {
-        Some(palette.cut_bar)
-    } else if multi_selected {
-        Some(palette.selection_bar)
-    } else if selected {
-        Some(palette.selected_border)
-    } else {
-        None
-    };
+    let indicator_color = active_indicator_color(clip_op, multi_selected, selected, palette);
     let band_fg = palette.text;
     let band_icon = icon_color;
     let band_name_fg = theme::entry_name_color(&appearance, palette);

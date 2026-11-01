@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added configurable `clear_selection` and `cancel` actions, both bound to Esc by default.
 - Added Trash support on Windows through the system drive's Recycle Bin. ([#355])
 - Added an item details overlay, opened with `i` or `Alt+Enter` by default.
+- Added `[focused_entry] reversed` to render focused file-browser entries with a reversed focus surface based on their effective name color. ([#328])
 
 ### Changed
 
@@ -26,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed the FileChooser portal closing when an app's remembered folder has been deleted. ([#375])
+- Fixed transparent file-browser indicator colors rendering as the terminal default color; `none` now hides the indicator while preserving the focused entry surface.
 
 ## [1.14.0] - 2026-10-19
 
