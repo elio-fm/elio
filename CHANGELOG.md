@@ -7,19 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-11-02
+
 ### Added
 
-- Added i → Item to the Copy to Clipboard overlay, allowing files and folders to be copied and pasted across compatible applications.
-- Added file pasting from the system clipboard via the terminal's paste shortcut or configurable `paste_item` (`Ctrl+v`) action.
+- Added native cross-platform item clipboard support through the Copy to Clipboard overlay (i → Item), allowing files and folders to be copied between elio and other desktop applications.
+- Added item pasting from the system clipboard via the terminal's paste shortcut and the configurable `paste_item` action (`Ctrl+v` by default).
 - Added clipboard text pasting to text-entry overlays via `paste_item`.
-- Added configurable `clear_selection` and `cancel` actions, both bound to Esc by default.
 - Added Trash support on Windows through the system drive's Recycle Bin. ([#355])
 - Added an item details overlay, opened with `i` or `Alt+Enter` by default.
 - Added `[focused_entry] reversed` to render focused file-browser entries with a reversed focus surface based on their effective name color. ([#328])
 
 ### Changed
 
-- Changed Ctrl+C from cancel to the configurable `copy_item` action, which copies items to the system clipboard.
+- Changed `Ctrl+c` from cancel/clear selection to the configurable `copy_item` action, which copies items to the system clipboard.
+- Made clear selection and cancel configurable through the `clear_selection` and `cancel` actions, both bound to Esc by default.
 - Renamed the `copy_path` keybinding to `copy_to_clipboard`; `copy_path` remains accepted for existing configs.
 - Made Trash, Delete, and Restore popup scrollbars match the style of the rest of the scrollbars.
 - Made scrollbars draggable.
@@ -403,7 +405,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Trash and restore support for safer file management workflows.
 - Optional external-tool integrations such as Poppler, ffmpeg, ffprobe, resvg, and 7-Zip for richer previews and metadata.
 
-[Unreleased]: https://github.com/elio-fm/elio/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/elio-fm/elio/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/elio-fm/elio/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/elio-fm/elio/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/elio-fm/elio/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/elio-fm/elio/compare/v1.11.2...v1.12.0
@@ -430,6 +433,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#349]: https://github.com/elio-fm/elio/issues/349
 [#342]: https://github.com/elio-fm/elio/issues/342
 [#338]: https://github.com/elio-fm/elio/issues/338
+[#328]: https://github.com/elio-fm/elio/issues/328
 [#327]: https://github.com/elio-fm/elio/issues/327
 [#324]: https://github.com/elio-fm/elio/issues/324
 [#322]: https://github.com/elio-fm/elio/issues/322

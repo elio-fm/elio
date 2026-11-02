@@ -1,5 +1,5 @@
 %bcond_with check
-%global fallback_version 1.14.0
+%global fallback_version 1.15.0
 %global fallback_release 1
 
 Name:           elio
@@ -53,6 +53,11 @@ desktop-file-validate packaging/linux/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Mon Nov 02 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.15.0-1
+- Add cross-platform file clipboard support, an item details overlay, Windows Recycle Bin support, and reversed focused-entry styling
+- Add configurable cancel and clear-selection actions, clipboard item copy and paste, and draggable scrollbars
+- Fix FileChooser portal recovery and transparent focus-indicator rendering
+
 * Mon Oct 19 2026 Miguel Regueiro <miguelpr4242@gmail.com> - 1.14.0-1
 - Add PowerShell integration, HEIC/HEIF previews, command-backed Go To entries, and focused-entry theme styles
 - Improve grid styling and Kitty drag-card presentation
