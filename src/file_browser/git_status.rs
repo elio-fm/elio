@@ -1,4 +1,9 @@
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+static NEXT_GIT_STATUS_TOKEN: AtomicU64 = AtomicU64::new(1);
 
 pub(super) struct GitStatusState {
     token: u64,
@@ -16,6 +21,10 @@ impl GitStatusState {
             dirty: false,
         }
     }
+
+    pub(super) fn invalidate(&mut self) {
+        self.token = self.token.wrapping_add(1);
+    }
 }
 
 impl super::FileBrowserState {
@@ -26,7 +35,7 @@ impl super::FileBrowserState {
             self.git_status.branch = None;
             self.git_status.dirty = false;
         }
-        self.git_status.token = self.git_status.token.wrapping_add(1);
+        self.git_status.token = NEXT_GIT_STATUS_TOKEN.fetch_add(1, Ordering::Relaxed);
         (self.git_status.token, cwd)
     }
 

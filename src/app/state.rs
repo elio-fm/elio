@@ -11,7 +11,7 @@ use super::screen_regions::{ScreenRegions, ScrollbarDrag};
 use crate::background_jobs::JobScheduler;
 use crate::chooser::ChooserState;
 use crate::duplicate_finder::DuplicateFinderState;
-use crate::file_browser::FileBrowserState;
+use crate::file_browser::{BrowserTabs, FileBrowserState};
 #[cfg(unix)]
 use crate::file_operations::BulkRenameEditorSession;
 use crate::file_operations::FileOperationsState;
@@ -160,6 +160,7 @@ pub(crate) enum PendingTerminalTask {
 
 pub struct App {
     pub(crate) file_browser: FileBrowserState,
+    pub(crate) tabs: BrowserTabs,
     pub(crate) places: PlacesState,
     pub(crate) preview: PreviewRuntime,
     pub(crate) file_operations: FileOperationsState,
@@ -202,6 +203,7 @@ impl App {
                 crate::config::ui().grid_zoom,
                 crate::config::ui().show_hidden || reveal_hidden_start_focus,
             ),
+            tabs: BrowserTabs::new(),
             places: PlacesState::new(),
             preview: PreviewRuntime::new(),
             file_operations: FileOperationsState::default(),

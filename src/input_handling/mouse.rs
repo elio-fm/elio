@@ -208,6 +208,18 @@ impl App {
             return self.handle_search_mouse(mouse);
         }
 
+        if let MouseEventKind::Down(MouseButton::Left) = mouse.kind
+            && let Some(hit) = self
+                .input
+                .screen_regions
+                .tab_hits
+                .iter()
+                .find(|hit| hit.activate_rect.contains((mouse.column, mouse.row).into()))
+                .cloned()
+        {
+            return self.activate_tab(hit.index);
+        }
+
         if self.preview_fullscreen() {
             match mouse.kind {
                 MouseEventKind::ScrollDown => self.handle_wheel_event(mouse, 1),

@@ -5,3 +5,4 @@ mod git_status;
 mod item_dragging;
 mod selection;
 mod selection_navigation;
+mod tabs;

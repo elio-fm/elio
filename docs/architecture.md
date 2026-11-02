@@ -6,8 +6,8 @@ This crate is organized around focused subsystems.
 - `config`: configuration loading, validation, and key bindings.
 - `filesystem` and `file_classification`: filesystem access and file, format, and code-language
   identification.
-- `file_browser`: current-directory state, loading, navigation, selection, filtering, and item
-  counts.
+- `file_browser`: current-directory state and tab ordering, loading, navigation, selection,
+  filtering, and item counts.
 - `file_operations`: state, requests, and actions for creating, renaming, copying, moving,
   trashing, restoring, or archiving items.
 - `system_clipboard`: platform-neutral access to native text and file-item clipboard formats,
@@ -52,10 +52,10 @@ Current boundary rules:
   path owned by terminal runtime/input handling: it may share file-operation validation and
   workers with clipboard paste, but keeps separate entry points, origins, statuses, and protocol
   semantics.
-- Current-directory browsing state and pure browser transitions belong to `file_browser`; places
-  pane state remains in `places`. Git status for the current directory and the browser-item drag
-  selection also belong to `file_browser`; job execution, mouse hit testing, and terminal drag
-  protocols remain at their respective boundaries.
+- Current-directory browsing state, tab ordering, and pure browser transitions belong to
+  `file_browser`; places pane state remains in `places`. Git status for the current directory and
+  the browser-item drag selection also belong to `file_browser`; job execution, mouse hit testing,
+  and terminal drag protocols remain at their respective boundaries.
 - Fuzzy-finder, duplicate-finder, Go To menu, and Open With state and pure transitions belong to
   their feature subsystems; `input_handling` interprets user interaction, while `app` coordinates
   background jobs, navigation, and side effects.

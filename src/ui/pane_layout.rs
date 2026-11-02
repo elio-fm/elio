@@ -1,4 +1,4 @@
-use super::file_browser_pane::render_file_browser_pane;
+use super::file_browser_pane::{render_file_browser_pane, render_tab_strip};
 use super::places_pane::render_places_pane;
 use super::preview_pane::render_preview_pane;
 use crate::{
@@ -66,11 +66,51 @@ pub(in crate::ui) fn render_panes(
     if let Some(places) = layout.places {
         render_places_pane(frame, places, app, state, palette);
     }
-    if let Some(file_browser) = layout.file_browser {
+    let mut file_browser = layout.file_browser;
+    let mut preview = layout.preview;
+    if app.tabs.len() > 1
+        && let Some(browser) = file_browser
+        && browser.height >= 3
+    {
+        let (tab_area, shares_preview) = preview
+            .filter(|preview| panes_are_side_by_side(browser, *preview))
+            .map_or((browser, false), |preview| {
+                (
+                    Rect {
+                        x: browser.x,
+                        y: browser.y,
+                        width: browser.width.saturating_add(preview.width),
+                        height: 1,
+                    },
+                    true,
+                )
+            });
+        render_tab_strip(frame, tab_area, app, state, palette);
+        file_browser = Some(without_top_row(browser));
+        if shares_preview {
+            preview = preview.map(without_top_row);
+        }
+    }
+
+    if let Some(file_browser) = file_browser {
         render_file_browser_pane(frame, file_browser, app, state, palette);
     }
-    if let Some(preview) = layout.preview {
+    if let Some(preview) = preview {
         render_preview_pane(frame, preview, app, state, palette);
+    }
+}
+
+fn panes_are_side_by_side(file_browser: Rect, preview: Rect) -> bool {
+    file_browser.y == preview.y
+        && file_browser.height == preview.height
+        && file_browser.x.saturating_add(file_browser.width) == preview.x
+}
+
+fn without_top_row(area: Rect) -> Rect {
+    Rect {
+        y: area.y.saturating_add(1),
+        height: area.height.saturating_sub(1),
+        ..area
     }
 }
 

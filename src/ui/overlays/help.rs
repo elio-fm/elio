@@ -42,6 +42,7 @@ pub(in crate::ui) fn render_help_overlay(
     let keys = HelpKeys::new(kb, mode);
 
     let navigation_entries = navigation_entries(&keys);
+    let tab_entries = tab_entries(&keys);
     let search_entries = entries([
         keys.action(&kb.search_folders, "search folders"),
         keys.action(&kb.search_files, "search files"),
@@ -127,6 +128,10 @@ pub(in crate::ui) fn render_help_overlay(
         HelpSection {
             title: "File Actions",
             entries: files_entries,
+        },
+        HelpSection {
+            title: "Tabs",
+            entries: tab_entries,
         },
     ];
 
@@ -448,6 +453,73 @@ fn navigation_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
     entries(items)
 }
 
+fn tab_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
+    if keys.mode.is_chooser() {
+        return Vec::new();
+    }
+    let kb = keys.kb;
+    entries([
+        keys.action(&kb.new_tab, "new tab"),
+        keys.action(&kb.close_tab, "close tab"),
+        keys.action(&kb.cycle_tabs_next, "next tab"),
+        keys.action(&kb.cycle_tabs_previous, "previous tab"),
+    ])
+    .into_iter()
+    .chain(tab_switch_entries(kb))
+    .collect()
+}
+
+fn tab_switch_entries(kb: &KeyBindings) -> Vec<HelpEntry> {
+    let values = [
+        &kb.switch_tab_1,
+        &kb.switch_tab_2,
+        &kb.switch_tab_3,
+        &kb.switch_tab_4,
+        &kb.switch_tab_5,
+        &kb.switch_tab_6,
+        &kb.switch_tab_7,
+        &kb.switch_tab_8,
+        &kb.switch_tab_9,
+        &kb.switch_tab_10,
+    ]
+    .map(ToString::to_string);
+
+    if let Some(prefix) = values[0].strip_suffix('1')
+        && (1..9).all(|index| values[index] == format!("{prefix}{}", index + 1))
+        && values[9] == format!("{prefix}0")
+    {
+        return vec![entry(format!("{prefix}1–9 / {prefix}0"), "switch to tab")];
+    }
+
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, key)| {
+            entry(
+                if key.is_empty() {
+                    "—".to_string()
+                } else {
+                    key.clone()
+                },
+                TAB_SWITCH_ACTIONS[index],
+            )
+        })
+        .collect()
+}
+
+const TAB_SWITCH_ACTIONS: [&str; 10] = [
+    "switch to tab 1",
+    "switch to tab 2",
+    "switch to tab 3",
+    "switch to tab 4",
+    "switch to tab 5",
+    "switch to tab 6",
+    "switch to tab 7",
+    "switch to tab 8",
+    "switch to tab 9",
+    "switch to tab 10",
+];
+
 fn clipboard_entries(keys: &HelpKeys<'_>) -> Vec<HelpEntry> {
     let kb = keys.kb;
     entries([
@@ -520,10 +592,15 @@ fn help_column_lines(width: u16, sections: &[HelpSection], palette: Palette) -> 
     let action_width = content_width.saturating_sub(key_width + gap_width).max(1);
 
     let mut lines = Vec::new();
-    for (i, section) in sections.iter().enumerate() {
-        if i > 0 {
+    let mut has_section = false;
+    for section in sections
+        .iter()
+        .filter(|section| !section.entries.is_empty())
+    {
+        if has_section {
             lines.push(Line::default());
         }
+        has_section = true;
         lines.push(help_section_title(section.title, palette));
         for entry in &section.entries {
             lines.extend(help_entry_lines(entry, key_width, action_width, palette));

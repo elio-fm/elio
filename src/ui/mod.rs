@@ -19,6 +19,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App, state: &mut ScreenRegions) {
     let ui_config = config::ui();
 
     state.sidebar_hits.clear();
+    state.tab_hits.clear();
     state.entry_hits.clear();
     state.search_hits.clear();
     state.duplicate_hits.clear();

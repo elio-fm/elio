@@ -77,6 +77,27 @@ history_forward = "alt+l"
 }
 
 #[test]
+fn tab_switch_help_compacts_only_a_complete_numeric_binding_family() {
+    let defaults = KeyBindings::default();
+    let keys = HelpKeys::new(&defaults, HelpMode::Normal);
+    let compact = tab_entries(&keys);
+    assert_eq!(entry_key(&compact, "switch to tab"), "Ctrl+1–9 / Ctrl+0");
+
+    let rebound = KeyBindings::from_toml_str(
+        r#"[keys]
+switch_tab_2 = "2"
+switch_tab_4 = []
+"#,
+    );
+    let keys = HelpKeys::new(&rebound, HelpMode::Normal);
+    let expanded = tab_entries(&keys);
+    assert_eq!(entry_key(&expanded, "switch to tab 1"), "Ctrl+1");
+    assert_eq!(entry_key(&expanded, "switch to tab 2"), "2");
+    assert_eq!(entry_key(&expanded, "switch to tab 4"), "—");
+    assert_eq!(entry_key(&expanded, "switch to tab 10"), "Ctrl+0");
+}
+
+#[test]
 fn chooser_help_adds_choose_and_relabels_quit() {
     let kb = KeyBindings::default();
     let keys = HelpKeys::new(&kb, HelpMode::Chooser);
