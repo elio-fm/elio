@@ -18,7 +18,7 @@ pub(crate) use self::directory_counts::DIRECTORY_ITEM_COUNT_IDLE_DELAY;
 pub(crate) use self::preview::HIGH_FREQUENCY_PREVIEW_REFRESH_DELAY;
 pub use self::screen_regions::{
     CopyHit, DuplicateHit, EntryHit, GoToHit, OpenWithHit, PathHit, ScreenRegions, SearchHit,
-    SearchScope, ViewMetrics,
+    SearchScope, TabHit, ViewMetrics,
 };
 pub(crate) use self::screen_regions::{ScrollbarDrag, ScrollbarHit, ScrollbarTarget};
 pub(crate) use self::scroll_position::scroll_top_for_cursor_with_override;

@@ -46,6 +46,150 @@ fn draw_ui(terminal: &mut Terminal<TestBackend>, app: &mut App) -> ScreenRegions
     screen_regions
 }
 
+#[test]
+fn browser_tab_strip_exposes_activate_hit_regions_only_with_multiple_tabs() {
+    let root = temp_path("tab-strip");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("terminal should init");
+
+    let one_tab = draw_ui(&mut terminal, &mut app);
+    assert!(one_tab.tab_hits.is_empty());
+
+    app.new_tab().expect("new tab should open");
+    let tabs = draw_ui(&mut terminal, &mut app);
+    assert_eq!(tabs.tab_hits.len(), 2);
+    assert!(tabs.tab_hits[1].activate_rect.x > tabs.tab_hits[0].activate_rect.x);
+    assert_eq!(tabs.tab_hits[1].index, 1);
+    let active = tabs.tab_hits[1].activate_rect;
+    assert_eq!(
+        terminal.backend().buffer()[(active.x, active.y)].bg,
+        theme::palette().selected_bg,
+        "the active tab should use the same selection color as focused rows"
+    );
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn browser_tab_strip_spans_the_preview_when_panes_are_side_by_side() {
+    let root = temp_path("shared-tab-strip");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.new_tab().expect("new tab should open");
+    let mut terminal = Terminal::new(TestBackend::new(140, 30)).expect("terminal should init");
+
+    let regions = draw_ui(&mut terminal, &mut app);
+    let entries = regions.entries_panel.expect("browser panel should render");
+    let preview = regions.preview_panel.expect("preview panel should render");
+    let tab_y = entries.y.saturating_sub(1);
+
+    assert_eq!(
+        entries.y, preview.y,
+        "panes should align below the tab strip"
+    );
+    assert_eq!(
+        terminal.backend().buffer()[(preview.x, tab_y)].symbol(),
+        " ",
+        "the tab-strip background should continue across the preview pane"
+    );
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn browser_tab_strip_distributes_width_across_folder_names() {
+    let root = temp_path("tab-strip-folders");
+    let first = root.join("first");
+    let selected = root.join("selected_folder_with_a_very_long_name");
+    fs::create_dir_all(&first).expect("failed to create first directory");
+    fs::create_dir_all(&selected).expect("failed to create selected directory");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.file_browser.cwd = first;
+    app.new_tab().expect("new tab should open");
+    app.file_browser.cwd = selected;
+    let mut terminal = Terminal::new(TestBackend::new(25, 30)).expect("terminal should init");
+
+    let regions = draw_ui(&mut terminal, &mut app);
+    let entries = regions.entries_panel.expect("browser panel should render");
+    let tab_row = rect_row_text(
+        terminal.backend().buffer(),
+        Rect::new(entries.x, entries.y.saturating_sub(1), entries.width, 1),
+        entries.y.saturating_sub(1),
+    );
+    assert!(tab_row.contains("1 first"), "tab row: {tab_row:?}");
+    assert!(tab_row.contains('…'), "tab row: {tab_row:?}");
+    assert!(
+        !tab_row.contains("selected_folder_with_a_very_long_name"),
+        "long folder names should yield space to the other tabs"
+    );
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn browser_tab_strip_keeps_every_tab_identifiable_at_a_narrow_width() {
+    let root = temp_path("tab-strip-narrow-folders");
+    let elio = root.join("elio");
+    fs::create_dir_all(&elio).expect("failed to create tab directory");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.file_browser.cwd = elio;
+    for _ in 1..5 {
+        app.new_tab().expect("new tab should open");
+    }
+    let mut terminal = Terminal::new(TestBackend::new(40, 30)).expect("terminal should init");
+
+    let regions = draw_ui(&mut terminal, &mut app);
+    let entries = regions.entries_panel.expect("browser panel should render");
+    let tab_row = rect_row_text(
+        terminal.backend().buffer(),
+        Rect::new(entries.x, entries.y.saturating_sub(1), entries.width, 1),
+        entries.y.saturating_sub(1),
+    );
+    for tab in 1..=5 {
+        assert!(
+            tab_row.contains(&format!("{tab} el…")),
+            "tab {tab} should retain a compact folder label: {tab_row:?}"
+        );
+    }
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn browser_tab_strip_calls_the_trash_root_trash() {
+    let root = temp_path("tab-strip-trash");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    let mut app = App::new_at(root.clone()).expect("app should load temp directory");
+    app.file_browser.in_trash = true;
+    app.new_tab().expect("new tab should open");
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("terminal should init");
+
+    let regions = draw_ui(&mut terminal, &mut app);
+    let entries = regions.entries_panel.expect("browser panel should render");
+    let tab_row = rect_row_text(
+        terminal.backend().buffer(),
+        Rect::new(entries.x, entries.y.saturating_sub(1), entries.width, 1),
+        entries.y.saturating_sub(1),
+    );
+    assert!(tab_row.contains("1 Trash"));
+    assert!(tab_row.contains("2 Trash"));
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
 fn wait_for_directory_counts(app: &mut App) {
     for _ in 0..100 {
         let _ = app.process_directory_item_count_timer();

@@ -35,6 +35,34 @@ fn entry_hit(index: usize, row: u16) -> EntryHit {
 }
 
 #[test]
+fn tab_strip_clicks_activate_tabs() {
+    let root = temp_path("tab-strip-clicks");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    app.new_tab().expect("new tab should open");
+    app.set_screen_regions(ScreenRegions {
+        tab_hits: vec![
+            TabHit {
+                activate_rect: Rect::new(1, 1, 3, 1),
+                index: 0,
+            },
+            TabHit {
+                activate_rect: Rect::new(5, 1, 3, 1),
+                index: 1,
+            },
+        ],
+        ..ScreenRegions::default()
+    });
+
+    app.handle_event(left_click(1, 1))
+        .expect("tab click should activate the first tab");
+    assert_eq!(app.tabs.active_index(), 0);
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("temporary root should be removed");
+}
+
+#[test]
 fn drag_offer_without_click_candidate_uses_entry_hit() {
     let root = temp_path("drag-offer-entry-hit");
     fs::create_dir_all(&root).expect("failed to create temp root");

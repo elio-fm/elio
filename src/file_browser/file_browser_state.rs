@@ -73,4 +73,15 @@ impl FileBrowserState {
     pub(crate) fn selected_entry(&self) -> Option<&Entry> {
         self.entries.get(self.selected)
     }
+
+    /// Makes all directory and Git-status results issued while this tab was
+    /// active stale before its browser state is parked in another tab slot.
+    pub(crate) fn invalidate_pending_background_work(&mut self) {
+        self.directory_runtime.load_token = self.directory_runtime.load_token.wrapping_add(1);
+        self.directory_runtime.pending_load = None;
+        self.directory_runtime.fingerprint_token =
+            self.directory_runtime.fingerprint_token.wrapping_add(1);
+        self.directory_runtime.pending_fingerprint_scan = None;
+        self.git_status.invalidate();
+    }
 }

@@ -50,6 +50,7 @@ pub(crate) struct ScrollbarDrag {
 pub struct ScreenRegions {
     pub(crate) scrollbar_hits: Vec<ScrollbarHit>,
     pub sidebar_hits: Vec<PathHit>,
+    pub tab_hits: Vec<TabHit>,
     pub entry_hits: Vec<EntryHit>,
     pub search_hits: Vec<SearchHit>,
     pub duplicate_hits: Vec<DuplicateHit>,
@@ -110,6 +111,12 @@ pub struct ScreenRegions {
 pub struct PathHit {
     pub rect: Rect,
     pub path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct TabHit {
+    pub activate_rect: Rect,
+    pub index: usize,
 }
 
 #[derive(Clone, Debug)]

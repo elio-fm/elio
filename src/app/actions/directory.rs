@@ -7,12 +7,22 @@ use crate::file_browser::{
 use anyhow::{Result, anyhow, bail};
 use std::{
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
 };
 
 const AUTO_RELOAD_INTERVAL_SMALL: Duration = Duration::from_millis(500);
 const AUTO_RELOAD_INTERVAL_MEDIUM: Duration = Duration::from_secs(1);
 const AUTO_RELOAD_INTERVAL_LARGE: Duration = Duration::from_secs(2);
+
+// Tokens must be unique across tabs. A per-tab counter would let an old
+// directory result be mistaken for a newly activated tab that happens to be
+// browsing the same directory.
+static NEXT_BROWSER_WORK_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+fn next_browser_work_token() -> u64 {
+    NEXT_BROWSER_WORK_TOKEN.fetch_add(1, Ordering::Relaxed)
+}
 
 impl App {
     pub(crate) fn cwd_is_trash(&self) -> bool {
@@ -105,11 +115,7 @@ impl App {
         self.job_scheduler.cancel_directory_fingerprints();
         self.job_scheduler.cancel_directory_stats();
         self.preview.state.directory_stats_ready_at = None;
-        self.file_browser.directory_runtime.load_token = self
-            .file_browser
-            .directory_runtime
-            .load_token
-            .wrapping_add(1);
+        self.file_browser.directory_runtime.load_token = next_browser_work_token();
         load.token = self.file_browser.directory_runtime.load_token;
         let request = jobs::DirectoryRequest {
             token: load.token,
@@ -419,11 +425,7 @@ impl App {
             return Ok(false);
         }
         let show_hidden = self.effective_show_hidden();
-        self.file_browser.directory_runtime.fingerprint_token = self
-            .file_browser
-            .directory_runtime
-            .fingerprint_token
-            .wrapping_add(1);
+        self.file_browser.directory_runtime.fingerprint_token = next_browser_work_token();
         let token = self.file_browser.directory_runtime.fingerprint_token;
         let cwd = self.file_browser.cwd.clone();
         if !self

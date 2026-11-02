@@ -746,6 +746,11 @@ impl App {
             Action::ToggleSelection => self.toggle_selection(),
             Action::CyclePlacesNext => self.step_sidebar_place(1)?,
             Action::CyclePlacesPrevious => self.step_sidebar_place(-1)?,
+            Action::NewTab => self.new_tab()?,
+            Action::CloseTab => self.close_tab(self.tabs.active_index())?,
+            Action::CycleTabsNext => self.cycle_tabs(1)?,
+            Action::CycleTabsPrevious => self.cycle_tabs(-1)?,
+            Action::SwitchTab(index) => self.activate_tab(index as usize)?,
             Action::GoParent => self.go_parent()?,
             Action::PageUp => self.page(-1),
             Action::PageDown => self.page(1),
@@ -1055,6 +1060,11 @@ pub(super) fn fullscreen_preview_dispatches_then_exits(action: crate::config::Ac
             | Action::GoParent
             | Action::HistoryBack
             | Action::HistoryForward
+            | Action::NewTab
+            | Action::CloseTab
+            | Action::CycleTabsNext
+            | Action::CycleTabsPrevious
+            | Action::SwitchTab(_)
             | Action::NavLeft
             | Action::NavRight
     )

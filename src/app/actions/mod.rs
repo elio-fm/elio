@@ -5,6 +5,7 @@ mod fuzzy_finder;
 mod goto;
 mod navigation;
 pub(crate) mod open_with;
+mod tabs;
 
 #[cfg(test)]
 mod tests;

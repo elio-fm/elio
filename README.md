@@ -241,6 +241,9 @@ https://elio-fm.github.io/docs/configuration/
 | `PageUp` / `PageDown` `*` | Page up / down |
 | `Tab` / `Shift+Tab` `*` | Cycle places |
 | `Alt+←` / `Alt+→` `*` | Back / forward in history |
+| `Ctrl+T` / `Ctrl+W` `*` | New / close tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` `*` | Next / previous tab |
+| `Ctrl+1`–`Ctrl+9` / `Ctrl+0` `*` | Switch to tab 1–9 / 10 |
 
 ### Search
 

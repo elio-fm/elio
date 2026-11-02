@@ -13,13 +13,19 @@ use std::{
 #[derive(Debug, Default)]
 pub(in crate::terminal_runtime) struct PendingDragOut {
     active: bool,
+    paths: Vec<PathBuf>,
     uri_list: Vec<u8>,
 }
 
 impl PendingDragOut {
     fn reset(&mut self) {
         self.active = false;
+        self.paths.clear();
         self.uri_list.clear();
+    }
+
+    fn take_paths(&mut self) -> Vec<PathBuf> {
+        std::mem::take(&mut self.paths)
     }
 }
 
@@ -76,17 +82,12 @@ pub(in crate::terminal_runtime) fn handle_event(
         } => {
             let chosen_op = choose_drop_op(operation);
             let sequence = if pending_drag_out.active && final_drop {
-                pending_drag_out.reset();
                 pending_drop_in.reset();
-                app.clear_drag_state();
-                format!(
-                    "{}{}",
-                    finish_drop_sequence(DropFinish::Reject),
-                    cancel_drag_sequence()
-                )
+                let finish = finish_own_drop(app, pending_drag_out, chosen_op)?;
+                format!("{}{}", finish_drop_sequence(finish), cancel_drag_sequence())
             } else if pending_drag_out.active {
                 pending_drop_in.reset();
-                reject_drop_sequence().to_string()
+                accept_drop_sequence(drop_op_to_dnd_operation(chosen_op)).to_string()
             } else if final_drop {
                 pending_drop_in.set(chosen_op);
                 request_drop_data_sequence(mime_index)
@@ -185,6 +186,7 @@ pub(in crate::terminal_runtime) fn handle_event(
             terminal.backend_mut().flush()?;
 
             pending_drag_out.active = true;
+            pending_drag_out.paths = paths;
             pending_drag_out.uri_list = uri_list;
         }
         KittyDndEvent::DragDataRequested { mime_index } => {
@@ -304,6 +306,25 @@ fn clip_op_to_drop_finish(op: ClipOp) -> DropFinish {
         ClipOp::Yank => DropFinish::Copy,
         ClipOp::Cut => DropFinish::Move,
     }
+}
+
+/// Completes an Elio-to-Elio drop using the directory of whichever tab is
+/// active when the item is released. Kitty does not send our own URI payload
+/// back to us, so retain the exported paths for this case.
+fn finish_own_drop(
+    app: &mut App,
+    pending_drag_out: &mut PendingDragOut,
+    op: ClipOp,
+) -> Result<DropFinish> {
+    let paths = pending_drag_out.take_paths();
+    pending_drag_out.reset();
+    app.clear_drag_state();
+
+    Ok(if app.drop_external_paths(paths, op)? {
+        clip_op_to_drop_finish(op)
+    } else {
+        DropFinish::Reject
+    })
 }
 
 fn drag_card_cell_height() -> Option<f32> {

@@ -56,6 +56,58 @@ fn action_for_returns_correct_action_for_default_bindings() {
         )),
         Some(Action::HistoryForward)
     );
+    assert_eq!(
+        key_bindings.action_for_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('t'),
+            crossterm::event::KeyModifiers::CONTROL,
+        )),
+        Some(Action::NewTab)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('0'),
+            crossterm::event::KeyModifiers::CONTROL,
+        )),
+        Some(Action::SwitchTab(9))
+    );
+}
+
+#[test]
+fn tab_bindings_support_cycles_and_individual_rebinding() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let key_bindings = KeyBindings::default();
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::CONTROL)),
+        Some(Action::CycleTabsNext)
+    );
+    assert_eq!(
+        key_bindings.action_for_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::CONTROL)),
+        Some(Action::CycleTabsPrevious)
+    );
+
+    let config = Config::from_str(
+        r#"
+[keys]
+switch_tab_1 = "1"
+switch_tab_10 = "f10"
+new_tab = "alt+n"
+"#,
+    )
+    .expect("config should parse");
+    assert_eq!(config.keys.action_for('1'), Some(Action::SwitchTab(0)));
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::F(10), KeyModifiers::NONE)),
+        Some(Action::SwitchTab(9))
+    );
+    assert_eq!(
+        config
+            .keys
+            .action_for_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::ALT)),
+        Some(Action::NewTab)
+    );
 }
 
 #[test]

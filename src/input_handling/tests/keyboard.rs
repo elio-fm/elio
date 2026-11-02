@@ -55,6 +55,36 @@ fn high_frequency_horizontal_emulation_only_uses_default_history_actions() {
 }
 
 #[test]
+fn tab_keyboard_actions_open_cycle_select_and_close_tabs() {
+    let root = temp_path("tab-keyboard-actions");
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('t'),
+        KeyModifiers::CONTROL,
+    )))
+    .expect("ctrl+t should open a tab");
+    assert_eq!(app.tabs.len(), 2);
+    assert_eq!(app.tabs.active_index(), 1);
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('1'),
+        KeyModifiers::CONTROL,
+    )))
+    .expect("ctrl+1 should select the first tab");
+    assert_eq!(app.tabs.active_index(), 0);
+
+    app.handle_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('w'),
+        KeyModifiers::CONTROL,
+    )))
+    .expect("ctrl+w should close the active tab");
+    assert_eq!(app.tabs.len(), 1);
+
+    cleanup_app_temp_root(app, root);
+}
+
+#[test]
 fn item_details_bindings_toggle_the_overlay_and_escape_closes_it() {
     let root = temp_path("item-details-bindings");
     fs::write(root.join("notes.txt"), "details").expect("failed to write item");

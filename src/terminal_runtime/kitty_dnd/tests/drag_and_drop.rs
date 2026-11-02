@@ -1,8 +1,8 @@
 use super::*;
 use std::{
     fs,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
+    path::{Path, PathBuf},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 #[test]
@@ -11,6 +11,7 @@ fn opening_overlay_cancels_active_drag_immediately() {
     app.overlays.help = true;
     let mut pending_drag_out = PendingDragOut {
         active: true,
+        paths: vec![PathBuf::from("/tmp/item")],
         uri_list: b"file:///tmp/item".to_vec(),
     };
     let mut output = Vec::new();
@@ -21,7 +22,49 @@ fn opening_overlay_cancels_active_drag_immediately() {
     );
     assert_eq!(output, cancel_drag_sequence().as_bytes());
     assert!(!pending_drag_out.active);
+    assert!(pending_drag_out.paths.is_empty());
     assert!(pending_drag_out.uri_list.is_empty());
+}
+
+#[test]
+fn own_drop_uses_the_tab_active_when_the_drag_is_released() {
+    let root = temp_path("own-drop-tabs");
+    let source_dir = root.join("source");
+    let destination_dir = root.join("destination");
+    let source = source_dir.join("report.txt");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::create_dir_all(&destination_dir).unwrap();
+    fs::write(&source, "payload").unwrap();
+
+    let mut app = App::new_at(source_dir.clone()).expect("app should initialize");
+    app.new_tab().expect("second tab should open");
+    app.file_browser.cwd = destination_dir.clone();
+    app.activate_tab(0).expect("source tab should activate");
+
+    let mut pending_drag_out = PendingDragOut {
+        active: true,
+        paths: vec![source.clone()],
+        uri_list: uri_list_payload(std::slice::from_ref(&source)),
+    };
+    app.activate_tab(1)
+        .expect("destination tab should activate before drop");
+
+    assert_eq!(app.file_browser.cwd, destination_dir);
+    assert_eq!(
+        finish_own_drop(&mut app, &mut pending_drag_out, ClipOp::Cut)
+            .expect("own drop should prepare a move"),
+        DropFinish::Move
+    );
+    wait_for_paste(&mut app, &destination_dir.join("report.txt"));
+
+    assert!(!source.exists());
+    assert_eq!(
+        fs::read_to_string(destination_dir.join("report.txt")).unwrap(),
+        "payload"
+    );
+    assert!(!pending_drag_out.active);
+    assert!(pending_drag_out.paths.is_empty());
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -130,4 +173,25 @@ fn drag_icon_label_truncates_long_names() {
         .as_text(),
         "󰈔 abcdefghijklmnopqrstuvwxyz012..."
     );
+}
+
+fn temp_path(label: &str) -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "elio-kitty-dnd-{label}-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ))
+}
+
+fn wait_for_paste(app: &mut App, destination: &Path) {
+    for _ in 0..500 {
+        let _ = app.process_background_jobs();
+        if destination.exists() && app.file_operations.paste_progress().is_none() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for drag-and-drop transfer");
 }

@@ -37,6 +37,11 @@ pub(crate) enum Action {
     ToggleSelection,
     CyclePlacesNext,
     CyclePlacesPrevious,
+    NewTab,
+    CloseTab,
+    CycleTabsNext,
+    CycleTabsPrevious,
+    SwitchTab(u8),
     GoParent,
     PageUp,
     PageDown,
@@ -275,6 +280,16 @@ impl KeySpec {
     pub(super) fn ctrl_char(c: char) -> Self {
         Self {
             code: KeyCodeSpec::Char(c),
+            modifiers: KeyModifierSpec {
+                ctrl: true,
+                ..KeyModifierSpec::NONE
+            },
+        }
+    }
+
+    pub(super) fn ctrl_named(named: NamedKey) -> Self {
+        Self {
+            code: KeyCodeSpec::Named(named),
             modifiers: KeyModifierSpec {
                 ctrl: true,
                 ..KeyModifierSpec::NONE
@@ -534,6 +549,20 @@ pub(crate) struct KeyBindings {
     pub toggle_selection: KeyList,
     pub cycle_places_next: KeyList,
     pub cycle_places_previous: KeyList,
+    pub new_tab: KeyList,
+    pub close_tab: KeyList,
+    pub cycle_tabs_next: KeyList,
+    pub cycle_tabs_previous: KeyList,
+    pub switch_tab_1: KeyList,
+    pub switch_tab_2: KeyList,
+    pub switch_tab_3: KeyList,
+    pub switch_tab_4: KeyList,
+    pub switch_tab_5: KeyList,
+    pub switch_tab_6: KeyList,
+    pub switch_tab_7: KeyList,
+    pub switch_tab_8: KeyList,
+    pub switch_tab_9: KeyList,
+    pub switch_tab_10: KeyList,
     pub go_parent: KeyList,
     pub page_up: KeyList,
     pub page_down: KeyList,
@@ -626,7 +655,7 @@ impl KeyBindings {
             .collect()
     }
 
-    fn bindings(&self) -> [(&KeyList, Action); 55] {
+    fn bindings(&self) -> [(&KeyList, Action); 69] {
         [
             (&self.clear_selection, Action::ClearSelection),
             (&self.cancel, Action::Cancel),
@@ -683,6 +712,20 @@ impl KeyBindings {
             (&self.scroll_preview_down, Action::ScrollPreviewDown),
             (&self.copy_item, Action::CopyItem),
             (&self.item_details, Action::ToggleItemDetails),
+            (&self.new_tab, Action::NewTab),
+            (&self.close_tab, Action::CloseTab),
+            (&self.cycle_tabs_next, Action::CycleTabsNext),
+            (&self.cycle_tabs_previous, Action::CycleTabsPrevious),
+            (&self.switch_tab_1, Action::SwitchTab(0)),
+            (&self.switch_tab_2, Action::SwitchTab(1)),
+            (&self.switch_tab_3, Action::SwitchTab(2)),
+            (&self.switch_tab_4, Action::SwitchTab(3)),
+            (&self.switch_tab_5, Action::SwitchTab(4)),
+            (&self.switch_tab_6, Action::SwitchTab(5)),
+            (&self.switch_tab_7, Action::SwitchTab(6)),
+            (&self.switch_tab_8, Action::SwitchTab(7)),
+            (&self.switch_tab_9, Action::SwitchTab(8)),
+            (&self.switch_tab_10, Action::SwitchTab(9)),
         ]
     }
 

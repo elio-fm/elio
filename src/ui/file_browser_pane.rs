@@ -17,8 +17,149 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
+use std::path::Path;
+
+const MAX_TAB_FOLDER_LABEL_WIDTH: usize = 18;
+const PREFERRED_TAB_FOLDER_LABEL_WIDTH: usize = 4;
+const MIN_TAB_FOLDER_LABEL_WIDTH: usize = 2;
 
 pub(super) fn render_file_browser_pane(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    state: &mut ScreenRegions,
+    palette: Palette,
+) {
+    render_browser(frame, area, app, state, palette);
+}
+
+pub(super) fn render_tab_strip(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    state: &mut ScreenRegions,
+    palette: Palette,
+) {
+    helpers::fill_area(frame, area, palette.bg, palette.text);
+    let tab_count = app.tabs.len();
+    let numbers: Vec<_> = (1..=tab_count).map(|number| number.to_string()).collect();
+    let folders: Vec<_> = (0..tab_count)
+        .map(|index| {
+            if app
+                .tabs
+                .is_trash_at(&app.file_browser, index)
+                .unwrap_or(false)
+            {
+                "Trash".to_string()
+            } else {
+                app.tabs
+                    .cwd_at(&app.file_browser, index)
+                    .map(tab_folder_label)
+                    .unwrap_or_default()
+            }
+        })
+        .collect();
+    let bare_width = |index: usize| helpers::display_width(numbers[index].as_str()) as u16 + 2;
+    let used_by_numbers: u16 = (0..tab_count).map(bare_width).sum();
+    let mut label_widths = vec![0; tab_count];
+    let label_caps: Vec<_> = folders
+        .iter()
+        .map(|folder| helpers::display_width(folder).min(MAX_TAB_FOLDER_LABEL_WIDTH))
+        .collect();
+    let mut remaining = usize::from(area.width.saturating_sub(used_by_numbers));
+    let minimum_label_width = (MIN_TAB_FOLDER_LABEL_WIDTH..=PREFERRED_TAB_FOLDER_LABEL_WIDTH)
+        .rev()
+        .find(|&minimum| {
+            label_caps
+                .iter()
+                .map(|&cap| if cap > 0 { cap.min(minimum) + 1 } else { 0 })
+                .sum::<usize>()
+                <= remaining
+        });
+
+    // Give each tab a readable name before widening any one of them. When
+    // space is tight, reduce every label together rather than dropping all
+    // names at once. Long folder names are capped and share leftover columns
+    // fairly.
+    if let Some(minimum_label_width) = minimum_label_width {
+        for (width, &cap) in label_widths.iter_mut().zip(&label_caps) {
+            if cap > 0 {
+                *width = cap.min(minimum_label_width);
+                remaining -= *width + 1;
+            }
+        }
+        while remaining > 0 {
+            let Some(index) = (0..tab_count)
+                .filter(|&index| label_widths[index] < label_caps[index])
+                .min_by_key(|&index| {
+                    (
+                        label_widths[index],
+                        usize::from(index != app.tabs.active_index()),
+                        index,
+                    )
+                })
+            else {
+                break;
+            };
+            label_widths[index] += 1;
+            remaining -= 1;
+        }
+    }
+
+    let mut spans = Vec::new();
+    let mut x = area.x;
+    let right = area.x.saturating_add(area.width);
+    for index in 0..tab_count {
+        let label = if label_widths[index] > 0 {
+            format!(
+                "{} {}",
+                numbers[index],
+                helpers::clamp_label(&folders[index], label_widths[index])
+            )
+        } else {
+            numbers[index].clone()
+        };
+        let width = helpers::display_width(label.as_str()) as u16 + 2;
+        if x.saturating_add(width) > right {
+            break;
+        }
+        let active = app.tabs.is_active(index);
+        let style = if active {
+            Style::default()
+                .bg(palette.selected_bg)
+                .fg(palette.text)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().bg(palette.panel_alt).fg(palette.text)
+        };
+        spans.push(Span::styled(format!(" {label} "), style));
+        state.tab_hits.push(crate::app::TabHit {
+            activate_rect: Rect {
+                x,
+                y: area.y,
+                width,
+                height: 1,
+            },
+            index,
+        });
+        x = x.saturating_add(width);
+    }
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(palette.bg)),
+        area,
+    );
+}
+
+fn tab_folder_label(path: &Path) -> String {
+    sanitize_terminal_text(
+        &path
+            .file_name()
+            .unwrap_or(path.as_os_str())
+            .to_string_lossy(),
+    )
+}
+
+fn render_browser(
     frame: &mut Frame<'_>,
     area: Rect,
     app: &App,
