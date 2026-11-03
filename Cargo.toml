@@ -2,7 +2,7 @@
 name = "elio"
 version = "1.15.0"
 edition = "2024"
-rust-version = "1.98"
+rust-version = "1.99"
 description = "Snappy, batteries-included terminal file manager with rich previews, inline images, bulk actions, and trash support."
 license = "MIT"
 repository = "https://github.com/elio-fm/elio"
@@ -17,7 +17,7 @@ blake3 = "1"
 dirs = "7.0"
 libc = "0.2"
 base64 = { version = "0.23", default-features = false, features = ["std"] }
-cfb = "0.15"
+cfb = "0.16"
 crossterm = "0.29"
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 fontdue = "0.9"

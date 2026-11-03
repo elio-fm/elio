@@ -35,15 +35,30 @@ fn uid_parser_accepts_root_and_non_root_numeric_ids() {
 
 #[test]
 fn invoking_user_xdg_home_rejects_untrusted_paths() {
-    let user = test_user();
+    let mut user = test_user();
     assert_eq!(
         validated_xdg_home(Some(OsStr::new("relative/config")), &user),
         None
     );
-    assert_eq!(
-        validated_xdg_home(Some(OsStr::new("/root/custom")), &user),
-        None
-    );
+
+    // Use a directory this process owns, but give the simulated invoking user
+    // a different UID. Nix build sandboxes can make /root owned by the build
+    // user, so a hard-coded /root path does not reliably represent an
+    // untrusted location there.
+    let current_uid = unsafe { libc::geteuid() };
+    user.uid = current_uid.wrapping_add(1);
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time should follow the Unix epoch")
+        .as_nanos();
+    let base = std::env::temp_dir().join(format!(
+        "elio-untrusted-xdg-home-{}-{unique}",
+        std::process::id()
+    ));
+    std::fs::create_dir(&base).expect("failed to create untrusted XDG test directory");
+    let candidate = base.join("config");
+    assert_eq!(validated_xdg_home(Some(candidate.as_os_str()), &user), None);
+    std::fs::remove_dir(base).expect("failed to remove untrusted XDG test directory");
 }
 
 #[test]
