@@ -206,13 +206,13 @@ pub(in crate::ui) fn render_fuzzy_finder_overlay(
                 row.symlink.as_ref(),
                 palette,
             );
-            let name_width = rect.width.saturating_sub(6) as usize;
+            let name_width = rect.width.saturating_sub(5) as usize;
             let path_width = rect.width.saturating_sub(4) as usize;
             frame.render_widget(
                 Paragraph::new(Line::from(vec![
                     Span::raw("  "),
                     Span::styled(icon, Style::default().fg(icon_color)),
-                    Span::raw("  "),
+                    Span::raw(" "),
                     Span::styled(
                         helpers::clamp_label(&row.name, name_width.max(8)),
                         Style::default()

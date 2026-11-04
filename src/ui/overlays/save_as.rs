@@ -114,7 +114,7 @@ pub(in crate::ui) fn render_save_as_overlay(
             theme::path_color(&path, false, palette),
         )
     };
-    let prefix_width = helpers::display_width(icon).saturating_add(2) as u16;
+    let prefix_width = helpers::display_width(icon).saturating_add(1) as u16;
     let (text, col) = helpers::input_window(
         save.input(),
         save.cursor_col(),
@@ -136,7 +136,7 @@ pub(in crate::ui) fn render_save_as_overlay(
                 icon,
                 Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
             ),
-            Span::raw("  "),
+            Span::raw(" "),
             text,
         ]))
         .style(Style::default().bg(palette.path_bg).fg(palette.text)),

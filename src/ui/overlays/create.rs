@@ -99,7 +99,7 @@ pub(in crate::ui) fn render_create_overlay(
             )
         };
 
-        let prefix_width = helpers::display_width(icon).saturating_add(2) as u16;
+        let prefix_width = helpers::display_width(icon).saturating_add(1) as u16;
         let text_width = list_area
             .width
             .saturating_sub(prefix_width)
@@ -121,7 +121,7 @@ pub(in crate::ui) fn render_create_overlay(
                     icon,
                     Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
                 ),
-                Span::raw("  "),
+                Span::raw(" "),
                 Span::styled("name…", Style::default().fg(palette.muted)),
             ])
         } else {
@@ -130,7 +130,7 @@ pub(in crate::ui) fn render_create_overlay(
                     icon,
                     Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
                 ),
-                Span::raw("  "),
+                Span::raw(" "),
                 Span::styled(visible_text, text_style),
             ])
         };
