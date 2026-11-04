@@ -190,7 +190,7 @@ fn render_contents_list(
             theme::path_symbol(&live_path, is_dir),
             theme::path_color(&live_path, is_dir, palette),
         );
-        let prefix_width = helpers::display_width(icon).saturating_add(2) as u16;
+        let prefix_width = helpers::display_width(icon).saturating_add(1) as u16;
         let text_width = row_width.saturating_sub(prefix_width);
         let visible_text = helpers::clamp_label(name, text_width as usize);
         let row_rect = Rect {
@@ -205,7 +205,7 @@ fn render_contents_list(
                     icon,
                     Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
                 ),
-                Span::raw("  "),
+                Span::raw(" "),
                 Span::styled(visible_text, Style::default().fg(palette.text)),
             ]))
             .style(Style::default().bg(palette.path_bg).fg(palette.text)),

@@ -94,7 +94,7 @@ pub(in crate::ui) fn render_bulk_rename_overlay(
             theme::path_color(&live_path, is_dir, palette),
         );
 
-        let prefix_width = helpers::display_width(icon).saturating_add(2) as u16;
+        let prefix_width = helpers::display_width(icon).saturating_add(1) as u16;
         let text_width = list_area
             .width
             .saturating_sub(prefix_width)
@@ -125,7 +125,7 @@ pub(in crate::ui) fn render_bulk_rename_overlay(
                     icon,
                     Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
                 ),
-                Span::raw("  "),
+                Span::raw(" "),
                 Span::styled(visible_text, text_style),
             ]))
             .style(Style::default().bg(palette.path_bg).fg(palette.text)),

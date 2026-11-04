@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added multi-tab browsing with up to 10 tabs, and configurable `new_tab`, `close_tab`, next/previous-tab, and `switch_tab_1`–`switch_tab_10` bindings. ([#268], [#360])
 
+### Changed
+
+- Made the spacing between item icons and names consistent across overlays.
+
 ## [1.15.0] - 2026-11-02
 
 ### Added

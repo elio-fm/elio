@@ -58,7 +58,7 @@ pub(in crate::ui) fn render_rename_overlay(
         theme::path_symbol(&live_path, is_dir),
         theme::path_color(&live_path, is_dir, palette),
     );
-    let prefix_width = helpers::display_width(icon).saturating_add(2) as u16;
+    let prefix_width = helpers::display_width(icon).saturating_add(1) as u16;
     let text_width = input_area.width.saturating_sub(prefix_width);
     let (visible_text, visible_cursor_col) = helpers::input_window(input, cursor_col, text_width);
 
@@ -68,7 +68,7 @@ pub(in crate::ui) fn render_rename_overlay(
                 icon,
                 Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
             ),
-            Span::raw("  "),
+            Span::raw(" "),
             Span::styled("name…", Style::default().fg(palette.muted)),
         ])
     } else {
@@ -77,7 +77,7 @@ pub(in crate::ui) fn render_rename_overlay(
                 icon,
                 Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
             ),
-            Span::raw("  "),
+            Span::raw(" "),
             Span::styled(
                 visible_text,
                 Style::default()
