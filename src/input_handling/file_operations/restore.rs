@@ -80,7 +80,7 @@ impl App {
     pub(crate) fn selected_trash_targets(&self) -> Vec<crate::file_operations::TrashTarget> {
         if !self.file_browser.selected_paths.is_empty() {
             return self
-                .selected_paths_sorted()
+                .paths_in_browser_order(self.selected_paths_sorted())
                 .into_iter()
                 .map(crate::file_operations::trash_target_from_path)
                 .collect();

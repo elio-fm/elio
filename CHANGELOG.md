@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Made the spacing between item icons and names consistent across overlays.
+- Made bulk action overlays and bulk rename in the editor follow the file browser's active sort order when opened.
 
 ## [1.15.0] - 2026-11-02
 

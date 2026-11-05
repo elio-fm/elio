@@ -2,7 +2,7 @@ use super::mutation_test_support::*;
 
 #[cfg(unix)]
 #[test]
-fn editor_bulk_rename_file_preserves_selection_order() {
+fn editor_bulk_rename_file_starts_in_browser_order() {
     let _env_guard = env_lock();
     let _visual_guard = EnvVarGuard::set_path("VISUAL", Path::new("true"));
 
@@ -34,7 +34,7 @@ fn editor_bulk_rename_file_preserves_selection_order() {
     let edited = fs::read_to_string(&session.temp_path).expect("failed to read temp rename file");
     assert_eq!(
         edited,
-        "ui-workspace/angular.json\nanalysis.ipynb\nanalytics.sqlite3\n"
+        "analysis.ipynb\nanalytics.sqlite3\nui-workspace/angular.json\n"
     );
     let _ = fs::remove_file(&session.temp_path);
 

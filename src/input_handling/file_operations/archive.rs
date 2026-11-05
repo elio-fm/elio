@@ -160,7 +160,10 @@ impl App {
             };
             (vec![entry.path.clone()], format!("{}.zip", entry.name))
         } else {
-            (self.selected_paths_sorted(), "archive.zip".to_string())
+            (
+                self.paths_in_browser_order(self.selected_paths_sorted()),
+                "archive.zip".to_string(),
+            )
         };
         if sources
             .iter()

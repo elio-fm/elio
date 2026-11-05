@@ -19,6 +19,10 @@ impl App {
         self.file_browser.selected_paths_sorted()
     }
 
+    pub(crate) fn paths_in_browser_order(&self, paths: Vec<PathBuf>) -> Vec<PathBuf> {
+        self.file_browser.paths_in_browser_order(paths)
+    }
+
     #[cfg(unix)]
     pub(crate) fn selected_paths_in_selection_order(&self) -> Vec<PathBuf> {
         self.file_browser.selected_paths_in_selection_order()
