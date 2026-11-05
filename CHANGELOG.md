@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added multi-tab browsing with up to 10 tabs, and configurable `new_tab`, `close_tab`, next/previous-tab, and `switch_tab_1`–`switch_tab_10` bindings. ([#268], [#360])
+- Added `[ui] date_format` to choose relative or absolute timestamps for items. ([#381])
 
 ### Changed
 
@@ -436,6 +437,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#381]: https://github.com/elio-fm/elio/issues/381
 [#375]: https://github.com/elio-fm/elio/issues/375
 [#360]: https://github.com/elio-fm/elio/issues/360
 [#355]: https://github.com/elio-fm/elio/issues/355

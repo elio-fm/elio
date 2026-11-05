@@ -6,6 +6,7 @@
 # show_hidden = false  # show dotfiles and hidden files on startup (toggle with .)
 # folders_first = true  # false mixes folders and files in the browser and directory previews
 # default_sort = "name"  # initial browser sort: name, modified, or size (cycle with s)
+# date_format = "relative"  # relative or absolute timestamps for items
 # start_in_grid = false  # open in grid view on startup (toggle with v)
 
 # [preview]

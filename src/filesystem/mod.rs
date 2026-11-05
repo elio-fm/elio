@@ -24,7 +24,7 @@ pub(crate) use entries::is_hidden_entry;
 pub use entries::{Entry, EntryKind, SymlinkInfo};
 pub(crate) use item_display::{
     describe_io_error, display_path, format_item_count, format_size, format_size_parts,
-    format_time_ago, sanitize_terminal_text, symlink_target_display_label,
+    format_time_absolute, format_time_ago, sanitize_terminal_text, symlink_target_display_label,
 };
 pub(crate) use recycle_bin::{
     RecycleBinScanContext, is_in_recycle_bin, is_recycle_bin_entry_in, recycle_bin_dir,

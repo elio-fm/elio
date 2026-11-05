@@ -3,11 +3,12 @@ use super::scrollbars::{
     ScrollbarContext, ScrollbarSpec, render_browser_scrollbar, split_scrollbar_area,
 };
 use crate::app::{App, EntryHit, ScreenRegions, ScrollbarTarget, ViewMetrics};
+use crate::config::{self, DateFormat};
 use crate::file_browser::ViewMode;
 use crate::file_operations::ClipOp;
 use crate::filesystem::{
-    Entry, format_size, format_size_parts, format_time_ago, sanitize_terminal_text,
-    symlink_target_display_label,
+    Entry, format_size, format_size_parts, format_time_absolute, format_time_ago,
+    sanitize_terminal_text, symlink_target_display_label,
 };
 use crate::theme::{self, Palette};
 use ratatui::{
@@ -219,7 +220,10 @@ fn entry_detail(app: &App, entry: &Entry) -> Option<String> {
 fn entry_modified(entry: &Entry) -> String {
     entry
         .modified
-        .map(format_time_ago)
+        .map(|time| match config::ui().date_format {
+            DateFormat::Relative => format_time_ago(time),
+            DateFormat::Absolute => format_time_absolute(time),
+        })
         .unwrap_or_else(|| "unknown".to_string())
 }
 
@@ -429,7 +433,8 @@ pub(super) fn render_compact_list_row(
     const COMPACT_NAME_MIN_WIDTH: usize = 18;
     const COMPACT_NAME_SOFT_MAX_WIDTH: usize = 56;
     const COMPACT_DETAIL_SLOT_WIDTH: usize = 10;
-    const COMPACT_MODIFIED_SLOT_WIDTH: usize = 10;
+    const COMPACT_RELATIVE_MODIFIED_SLOT_WIDTH: usize = 10;
+    const COMPACT_ABSOLUTE_MODIFIED_SLOT_WIDTH: usize = 12;
     const COMPACT_METADATA_LEADING_GAP: usize = 2;
     const COMPACT_METADATA_COLUMN_GAP: usize = 1;
     const COMPACT_MAX_TRAILING_GAP: usize = 1;
@@ -499,6 +504,10 @@ pub(super) fn render_compact_list_row(
         COMPACT_DETAIL_SLOT_WIDTH
     };
     let modified_text = entry_modified(entry);
+    let modified_slot_width = match config::ui().date_format {
+        DateFormat::Relative => COMPACT_RELATIVE_MODIFIED_SLOT_WIDTH,
+        DateFormat::Absolute => COMPACT_ABSOLUTE_MODIFIED_SLOT_WIDTH,
+    };
 
     let mut reserved_metadata_width = 0usize;
     let mut show_detail = false;
@@ -525,7 +534,7 @@ pub(super) fn render_compact_list_row(
                 } else {
                     COMPACT_METADATA_LEADING_GAP
                 })
-                .saturating_add(COMPACT_MODIFIED_SLOT_WIDTH)
+                .saturating_add(modified_slot_width)
     {
         show_modified = true;
         reserved_metadata_width = reserved_metadata_width
@@ -534,7 +543,7 @@ pub(super) fn render_compact_list_row(
             } else {
                 COMPACT_METADATA_LEADING_GAP
             })
-            .saturating_add(COMPACT_MODIFIED_SLOT_WIDTH);
+            .saturating_add(modified_slot_width);
     }
 
     let max_name_width = available_width
@@ -568,13 +577,13 @@ pub(super) fn render_compact_list_row(
         muted_style,
     ));
     if show_detail {
-        spans.push(Span::raw(if show_modified { "   " } else { "  " }));
+        spans.push(Span::raw("  "));
         spans.push(Span::styled(detail_text, muted_style));
     }
     if show_modified {
-        spans.push(Span::raw(if show_detail { " " } else { "  " }));
+        spans.push(Span::raw("  "));
         spans.push(Span::styled(
-            pad_left(modified_text, COMPACT_MODIFIED_SLOT_WIDTH),
+            pad_left(modified_text, modified_slot_width),
             muted_style,
         ));
     }

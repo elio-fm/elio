@@ -1,6 +1,14 @@
 use crate::filesystem::SortMode;
 use serde::Deserialize;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum DateFormat {
+    #[default]
+    Relative,
+    Absolute,
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct UiConfig {
     pub show_top_bar: bool,
@@ -8,6 +16,7 @@ pub(crate) struct UiConfig {
     pub show_hidden: bool,
     pub folders_first: bool,
     pub default_sort: SortMode,
+    pub date_format: DateFormat,
     pub start_in_grid: bool,
 }
 
@@ -19,6 +28,7 @@ impl Default for UiConfig {
             show_hidden: false,
             folders_first: true,
             default_sort: SortMode::Name,
+            date_format: DateFormat::Relative,
             start_in_grid: false,
         }
     }
@@ -31,6 +41,7 @@ pub(super) struct UiConfigOverride {
     show_hidden: Option<bool>,
     folders_first: Option<bool>,
     default_sort: Option<SortMode>,
+    date_format: Option<DateFormat>,
     start_in_grid: Option<bool>,
 }
 
@@ -50,6 +61,9 @@ impl UiConfig {
         }
         if let Some(default_sort) = overrides.default_sort {
             self.default_sort = default_sort;
+        }
+        if let Some(date_format) = overrides.date_format {
+            self.date_format = date_format;
         }
         if let Some(start_in_grid) = overrides.start_in_grid {
             self.start_in_grid = start_in_grid;
