@@ -61,7 +61,14 @@ pub(crate) fn format_time_ago(time: SystemTime) -> String {
         60..=3599 => format!("{}m ago", seconds / 60),
         3600..=86_399 => format!("{}h ago", seconds / 3600),
         86_400..=2_592_000 => format!("{}d ago", seconds / 86_400),
-        _ => format!("{}mo ago", seconds / 2_592_000),
+        _ => {
+            let months = seconds / 2_592_000;
+            if months >= 24 {
+                format!("{}y ago", months / 12)
+            } else {
+                format!("{months}mo ago")
+            }
+        }
     }
 }
 
