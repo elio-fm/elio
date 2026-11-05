@@ -1,5 +1,12 @@
 use super::mutation_test_support::*;
 
+fn assert_browser_order<'a>(names: impl IntoIterator<Item = &'a str>) {
+    assert_eq!(
+        names.into_iter().collect::<Vec<_>>(),
+        ["gamma.txt", "beta.txt", "alpha.txt"]
+    );
+}
+
 #[test]
 fn confirm_bulk_rename_renames_changed_entries_and_skips_unchanged_rows() {
     let root = temp_path("bulk-rename-success");
@@ -36,6 +43,90 @@ fn confirm_bulk_rename_renames_changed_entries_and_skips_unchanged_rows() {
     let (status, reselect_path) = take_pending_status(&mut app);
     assert_eq!(status, "Renamed \"alpha.txt\" → \"gamma.txt\"");
     assert_eq!(reselect_path, Some(root.join("gamma.txt")));
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn bulk_rename_captures_the_current_browser_order() {
+    let root = temp_path("bulk-rename-browser-order");
+    fs::create_dir_all(&root).expect("failed to create temp root");
+    for name in ["alpha.txt", "beta.txt", "gamma.txt"] {
+        fs::write(root.join(name), name).expect("failed to write test file");
+    }
+
+    let mut app = App::new_at(root.clone()).expect("failed to create app");
+    for name in ["alpha.txt", "beta.txt", "gamma.txt"] {
+        app.file_browser.selected_paths.insert(root.join(name));
+    }
+    app.file_browser.entries.reverse();
+    app.file_browser.unfiltered_entries.reverse();
+
+    app.open_bulk_rename_prompt();
+    let overlay = app
+        .file_operations
+        .bulk_rename
+        .as_ref()
+        .expect("bulk rename overlay should be open");
+    assert_browser_order(overlay.items.iter().map(|item| item.original_name.as_str()));
+    assert_eq!(
+        overlay.cursor_line, 0,
+        "the editor should still start on row zero"
+    );
+
+    app.file_browser.entries.reverse();
+    app.file_browser.unfiltered_entries.reverse();
+    assert_browser_order(
+        app.file_operations
+            .bulk_rename
+            .as_ref()
+            .expect("overlay should remain open")
+            .items
+            .iter()
+            .map(|item| item.original_name.as_str()),
+    );
+
+    app.file_browser.entries.reverse();
+    app.file_browser.unfiltered_entries.reverse();
+    app.file_operations.dismiss_bulk_rename();
+    app.open_trash_prompt();
+    assert_browser_order(
+        app.file_operations
+            .trash
+            .as_ref()
+            .expect("trash overlay should be open")
+            .targets
+            .iter()
+            .map(|target| target.name.as_str()),
+    );
+    app.file_operations.dismiss_trash();
+
+    app.file_browser.in_trash = true;
+    app.open_restore_prompt();
+    assert_browser_order(
+        app.file_operations
+            .restore
+            .as_ref()
+            .expect("restore overlay should be open")
+            .targets
+            .iter()
+            .map(|target| target.name.as_str()),
+    );
+    app.file_operations.dismiss_restore();
+    app.file_browser.in_trash = false;
+
+    app.open_archive_create_prompt();
+    assert_browser_order(
+        app.file_operations
+            .archive_create
+            .as_ref()
+            .expect("archive create overlay should be open")
+            .source_names
+            .iter()
+            .map(String::as_str),
+    );
 
     app.file_browser.directory_runtime.watch = None;
     drop(app);

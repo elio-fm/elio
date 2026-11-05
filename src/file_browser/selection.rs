@@ -111,6 +111,30 @@ impl super::FileBrowserState {
         paths
     }
 
+    /// Orders a captured path list by the browser's current display order.
+    /// Paths outside the loaded directory keep their caller-provided order.
+    pub(crate) fn paths_in_browser_order(&self, paths: Vec<PathBuf>) -> Vec<PathBuf> {
+        let mut remaining: HashSet<PathBuf> = paths.iter().cloned().collect();
+        let mut ordered = Vec::with_capacity(paths.len());
+
+        // Visible entries come first; filtered entries follow in active sort order.
+        for entry in self.entries.iter().chain(&self.unfiltered_entries) {
+            if remaining.remove(&entry.path) {
+                ordered.push(entry.path.clone());
+            }
+        }
+
+        // Explicit targets can come from outside this directory (for
+        // example, another view). Preserve their original order.
+        for path in paths {
+            if remaining.remove(&path) {
+                ordered.push(path);
+            }
+        }
+
+        ordered
+    }
+
     pub(crate) fn selected_or_focused_paths_sorted(&self) -> Vec<PathBuf> {
         if !self.selected_paths.is_empty() {
             return self.selected_paths_sorted();

@@ -26,7 +26,7 @@ impl App {
         if self.file_browser.in_trash {
             return;
         }
-        let selected_paths = self.selected_paths_sorted();
+        let selected_paths = self.paths_in_browser_order(self.selected_paths_sorted());
         if selected_paths
             .iter()
             .any(|path| self.trash_target_is_inside_trash(path))
@@ -58,6 +58,13 @@ impl App {
                 .unwrap_or_default()
         } else {
             self.selected_paths_in_selection_order()
+        };
+        // The duplicate finder has its own explicit ordering. For regular
+        // browser selections, seed the editor in the same order as the list.
+        let selected_paths = if self.duplicates_is_open() {
+            selected_paths
+        } else {
+            self.paths_in_browser_order(selected_paths)
         };
         if selected_paths.is_empty() {
             return Ok(());

@@ -283,13 +283,13 @@ fn restore_and_delete_overlays_show_original_names_for_selected_recycle_bin_item
         .map(str::to_owned)
         .collect::<Vec<_>>();
     app.file_operations.dismiss_restore();
-    assert_eq!(restore_names, ["report.md", "notes.txt"]);
+    assert_eq!(restore_names, ["notes.txt", "report.md"]);
 
     app.open_delete_permanently_prompt();
     let delete_names = (0..app.file_operations.trash_target_count())
         .filter_map(|index| app.file_operations.trash_target_label_at(&bin, index))
         .collect::<Vec<_>>();
-    assert_eq!(delete_names, ["report.md", "notes.txt"]);
+    assert_eq!(delete_names, ["notes.txt", "report.md"]);
 
     app.file_browser.directory_runtime.watch = None;
     drop(app);
