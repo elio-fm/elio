@@ -1,4 +1,5 @@
 use super::*;
+use chrono::{Datelike, Local, TimeZone};
 use std::path::PathBuf;
 
 #[test]
@@ -16,6 +17,31 @@ fn item_count_format_uses_singular_and_grouping() {
     assert_eq!(format_item_count(1), "1 item");
     assert_eq!(format_item_count(24), "24 items");
     assert_eq!(format_item_count(1_234), "1,234 items");
+}
+
+#[test]
+fn absolute_time_format_uses_a_twelve_column_ls_layout() {
+    let current_year = Local::now().year();
+    let current = Local
+        .with_ymd_and_hms(current_year, 11, 1, 17, 11, 0)
+        .single()
+        .unwrap()
+        .into();
+    let prior = Local
+        .with_ymd_and_hms(current_year - 1, 8, 23, 0, 0, 0)
+        .single()
+        .unwrap()
+        .into();
+
+    let current_display = format_time_absolute(current);
+    let prior_display = format_time_absolute(prior);
+    assert_eq!(current_display, "Nov 01 17:11");
+    assert_eq!(
+        prior_display,
+        format!("Aug 23  {year}", year = current_year - 1)
+    );
+    assert_eq!(current_display.len(), 12);
+    assert_eq!(prior_display.len(), 12);
 }
 
 #[test]

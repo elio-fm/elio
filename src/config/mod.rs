@@ -24,7 +24,7 @@ pub(crate) use self::{
     places::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},
     portal::{ConfigurePortalTerminal, PortalConfig, ensure_portal_terminal},
     preview::PreviewConfig,
-    ui::UiConfig,
+    ui::{DateFormat, UiConfig},
 };
 
 #[cfg(test)]

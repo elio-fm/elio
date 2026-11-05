@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::filesystem::SortMode;
+use crate::{config::DateFormat, filesystem::SortMode};
 
 #[test]
 fn config_default_sort_defaults_and_valid_values() {
@@ -24,6 +24,34 @@ fn config_default_sort_defaults_and_valid_values() {
 fn config_default_sort_rejects_invalid_values() {
     for value in ["\"date\"", "\"Name\"", "\"\"", "1", "true", "[]", "{}"] {
         assert!(Config::from_str(&format!("[ui]\ndefault_sort = {value}")).is_err());
+    }
+}
+
+#[test]
+fn config_date_format_defaults_to_relative_and_accepts_absolute() {
+    assert_eq!(
+        Config::default_config().ui.date_format,
+        DateFormat::Relative
+    );
+    for source in ["", "[ui]", "[ui]\ndate_format = \"relative\""] {
+        assert_eq!(
+            Config::from_str(source).unwrap().ui.date_format,
+            DateFormat::Relative
+        );
+    }
+    assert_eq!(
+        Config::from_str("[ui]\ndate_format = \"absolute\"")
+            .unwrap()
+            .ui
+            .date_format,
+        DateFormat::Absolute
+    );
+}
+
+#[test]
+fn config_date_format_rejects_invalid_values() {
+    for value in ["\"ago\"", "\"Relative\"", "\"\"", "1", "true", "[]", "{}"] {
+        assert!(Config::from_str(&format!("[ui]\ndate_format = {value}")).is_err());
     }
 }
 

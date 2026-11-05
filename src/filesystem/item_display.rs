@@ -1,4 +1,5 @@
 use super::SymlinkInfo;
+use chrono::{Datelike, Local};
 use std::{io, path::Path, time::SystemTime};
 
 const SIZE_UNITS: [&str; 7] = ["B", "kB", "MB", "GB", "TB", "PB", "EB"];
@@ -69,6 +70,15 @@ pub(crate) fn format_time_ago(time: SystemTime) -> String {
                 format!("{months}mo ago")
             }
         }
+    }
+}
+
+pub(crate) fn format_time_absolute(time: SystemTime) -> String {
+    let time = chrono::DateTime::<Local>::from(time);
+    if time.year() == Local::now().year() {
+        time.format("%b %d %H:%M").to_string()
+    } else {
+        time.format("%b %e  %Y").to_string()
     }
 }
 

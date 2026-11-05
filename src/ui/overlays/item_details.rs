@@ -1,6 +1,10 @@
 use crate::{
     app::{App, ScreenRegions, ScrollbarTarget},
-    filesystem::{format_item_count, format_size, format_time_ago, sanitize_terminal_text},
+    config::{self, DateFormat},
+    filesystem::{
+        format_item_count, format_size, format_time_absolute, format_time_ago,
+        sanitize_terminal_text,
+    },
     preview::PreviewDirectoryStatsState,
     theme::{self, Palette},
     ui::{
@@ -15,6 +19,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Clear, Paragraph, Wrap},
 };
+use std::time::SystemTime;
 use unicode_width::UnicodeWidthStr;
 
 const DETAIL_LABEL_WIDTH: usize = 17;
@@ -95,6 +100,7 @@ pub(in crate::ui) fn render_item_details_overlay(
     });
 
     let name = sanitize_terminal_text(&details.entry.name);
+    let date_format = config::ui().date_format;
     let name_x = if stack_name {
         header.x
     } else {
@@ -230,13 +236,17 @@ pub(in crate::ui) fn render_item_details_overlay(
         "Modified",
         details
             .modified
-            .map(format_time_ago)
+            .map(|time| format_timestamp(time, date_format))
             .as_deref()
             .unwrap_or("Unknown"),
         palette,
     ));
     if let Some(created) = details.created {
-        rows.push(detail_row("Created", &format_time_ago(created), palette));
+        rows.push(detail_row(
+            "Created",
+            &format_timestamp(created, date_format),
+            palette,
+        ));
     }
     rows.push(detail_row(
         "Permissions",
@@ -260,7 +270,11 @@ pub(in crate::ui) fn render_item_details_overlay(
         rows.push(detail_row("Original location", &original_location, palette));
     }
     if let Some(trashed_at) = details.trashed_at {
-        rows.push(detail_row("Trashed", &format_time_ago(trashed_at), palette));
+        rows.push(detail_row(
+            "Trashed",
+            &format_timestamp(trashed_at, date_format),
+            palette,
+        ));
     }
     if body.height == 0 || body.width == 0 {
         state.item_details_scroll_max = 0;
@@ -366,6 +380,13 @@ fn render_large_icon(
             ..area
         },
     );
+}
+
+pub(super) fn format_timestamp(time: SystemTime, date_format: DateFormat) -> String {
+    match date_format {
+        DateFormat::Relative => format_time_ago(time),
+        DateFormat::Absolute => format_time_absolute(time),
+    }
 }
 
 fn detail_row(label: &str, value: &str, palette: Palette) -> Line<'static> {
