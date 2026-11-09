@@ -45,6 +45,7 @@ impl TerminalEnvGuard {
             "KONSOLE_DBUS_WINDOW",
             "TMUX",
             "ZELLIJ",
+            "STY",
         ];
 
         let saved = VARS
@@ -110,6 +111,51 @@ fn rio_identifiers_require_exact_names() {
     let lookup = |name: &str| (name == "TERM_PROGRAM").then(|| "xterm-rio".to_string());
     assert_eq!(classify_from_env(&lookup), TerminalIdentity::Other);
     assert_eq!(classify_supported_tmux_env(&lookup), None);
+}
+
+#[test]
+fn contour_requires_its_exact_term_program_marker() {
+    for value in ["contour", "CONTOUR"] {
+        let lookup = |name: &str| (name == "TERM_PROGRAM").then(|| value.to_string());
+        assert_eq!(classify_from_env(&lookup), TerminalIdentity::Contour);
+    }
+    let lookup = |name: &str| (name == "TERM_PROGRAM").then(|| "contoured".to_string());
+    assert_eq!(classify_from_env(&lookup), TerminalIdentity::Other);
+}
+
+#[test]
+fn contour_selects_a_protocol_per_supported_host() {
+    assert_eq!(
+        select_image_protocol_with_multiplexer(TerminalIdentity::Contour, false, false, false),
+        ImageProtocol::Sixel,
+        "direct Contour uses its native Sixel implementation"
+    );
+    assert_eq!(
+        select_image_protocol_with_multiplexer(TerminalIdentity::Contour, false, true, false),
+        ImageProtocol::KittyDirectGraphics,
+        "Zellij provides the compatible Kitty direct implementation"
+    );
+    assert_eq!(
+        select_image_protocol_with_multiplexer(TerminalIdentity::Contour, false, false, true),
+        ImageProtocol::None,
+        "GNU Screen remains unsupported"
+    );
+}
+
+#[test]
+fn detect_terminal_identity_recovers_contour_from_live_tmux_client_env() {
+    let id = detect_terminal_identity_with(
+        |name| match name {
+            "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+            "TERM" => Some("tmux-256color".to_string()),
+            "TERM_PROGRAM" => Some("tmux".to_string()),
+            _ => None,
+        },
+        || Some("xterm-256color".to_string()),
+        |name| (name == "TERM_PROGRAM").then(|| "contour".to_string()),
+        no_tmux_env_lookup,
+    );
+    assert_eq!(id, TerminalIdentity::Contour);
 }
 
 #[test]

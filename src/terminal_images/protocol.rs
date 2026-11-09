@@ -93,6 +93,10 @@ fn classify_from_env(env_lookup: &impl Fn(&str) -> Option<String>) -> TerminalId
         TerminalIdentity::Warp
     } else if term_program == "iterm.app" {
         TerminalIdentity::ITerm2
+    } else if term_program == "contour" {
+        // Contour exports TERM_PROGRAM specifically so applications can
+        // identify it. TERM remains xterm-compatible by configuration.
+        TerminalIdentity::Contour
     } else if term.contains("alacritty")
         || term_program.contains("alacritty")
         || env_lookup("ALACRITTY_SOCKET").is_some()
@@ -153,6 +157,8 @@ fn classify_tmux_recovered_identity(
         Some(TerminalIdentity::Warp)
     } else if term_program == "iterm.app" {
         Some(TerminalIdentity::ITerm2)
+    } else if term_program == "contour" {
+        Some(TerminalIdentity::Contour)
     } else if konsole_dbus_set {
         Some(TerminalIdentity::Konsole)
     } else if term == "foot" || term == "foot-extra" {
@@ -288,17 +294,28 @@ pub(crate) fn select_image_protocol(
     identity: TerminalIdentity,
     image_previews_override: bool,
 ) -> ImageProtocol {
-    select_image_protocol_with_zellij(
+    select_image_protocol_with_multiplexer(
         identity,
         image_previews_override,
         env::var_os("ZELLIJ").is_some(),
+        env::var_os("STY").is_some(),
     )
 }
 
+#[cfg(test)]
 fn select_image_protocol_with_zellij(
     identity: TerminalIdentity,
     image_previews_override: bool,
     in_zellij: bool,
+) -> ImageProtocol {
+    select_image_protocol_with_multiplexer(identity, image_previews_override, in_zellij, false)
+}
+
+fn select_image_protocol_with_multiplexer(
+    identity: TerminalIdentity,
+    image_previews_override: bool,
+    in_zellij: bool,
+    in_screen: bool,
 ) -> ImageProtocol {
     match identity {
         // Zellij currently implements Kitty graphics, but not Unicode placeholders.
@@ -322,6 +339,12 @@ fn select_image_protocol_with_zellij(
         TerminalIdentity::WezTerm | TerminalIdentity::ITerm2 => ImageProtocol::ItermInline,
         // Foot and Windows Terminal ≥ 1.22 both support Sixel graphics.
         TerminalIdentity::Foot | TerminalIdentity::WindowsTerminal => ImageProtocol::Sixel,
+        // Contour renders Sixel directly and tmux can transport it either
+        // natively or through DCS passthrough. Zellij's compatible path is
+        // Kitty direct; GNU Screen remains unsupported.
+        TerminalIdentity::Contour if in_zellij => ImageProtocol::KittyDirectGraphics,
+        TerminalIdentity::Contour if in_screen => ImageProtocol::None,
+        TerminalIdentity::Contour => ImageProtocol::Sixel,
         // ELIO_IMAGE_PREVIEWS=1 force-enables KittyGraphics on unrecognised terminals
         // for testing. Alacritty is excluded — it does not support image protocols.
         TerminalIdentity::Other if image_previews_override => ImageProtocol::KittyGraphics,
