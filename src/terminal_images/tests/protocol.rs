@@ -138,8 +138,24 @@ fn contour_selects_a_protocol_per_supported_host() {
     assert_eq!(
         select_image_protocol_with_multiplexer(TerminalIdentity::Contour, false, false, true),
         ImageProtocol::None,
-        "tmux and GNU Screen are unsupported until a reliable transport exists"
+        "GNU Screen remains unsupported"
     );
+}
+
+#[test]
+fn detect_terminal_identity_recovers_contour_from_live_tmux_client_env() {
+    let id = detect_terminal_identity_with(
+        |name| match name {
+            "TMUX" => Some("/tmp/tmux-1000/default,123,4".to_string()),
+            "TERM" => Some("tmux-256color".to_string()),
+            "TERM_PROGRAM" => Some("tmux".to_string()),
+            _ => None,
+        },
+        || Some("xterm-256color".to_string()),
+        |name| (name == "TERM_PROGRAM").then(|| "contour".to_string()),
+        no_tmux_env_lookup,
+    );
+    assert_eq!(id, TerminalIdentity::Contour);
 }
 
 #[test]

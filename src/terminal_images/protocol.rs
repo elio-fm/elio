@@ -157,6 +157,8 @@ fn classify_tmux_recovered_identity(
         Some(TerminalIdentity::Warp)
     } else if term_program == "iterm.app" {
         Some(TerminalIdentity::ITerm2)
+    } else if term_program == "contour" {
+        Some(TerminalIdentity::Contour)
     } else if konsole_dbus_set {
         Some(TerminalIdentity::Konsole)
     } else if term == "foot" || term == "foot-extra" {
@@ -296,7 +298,7 @@ pub(crate) fn select_image_protocol(
         identity,
         image_previews_override,
         env::var_os("ZELLIJ").is_some(),
-        env::var_os("TMUX").is_some() || env::var_os("STY").is_some(),
+        env::var_os("STY").is_some(),
     )
 }
 
@@ -313,7 +315,7 @@ fn select_image_protocol_with_multiplexer(
     identity: TerminalIdentity,
     image_previews_override: bool,
     in_zellij: bool,
-    in_tmux_or_screen: bool,
+    in_screen: bool,
 ) -> ImageProtocol {
     match identity {
         // Zellij currently implements Kitty graphics, but not Unicode placeholders.
@@ -337,11 +339,11 @@ fn select_image_protocol_with_multiplexer(
         TerminalIdentity::WezTerm | TerminalIdentity::ITerm2 => ImageProtocol::ItermInline,
         // Foot and Windows Terminal ≥ 1.22 both support Sixel graphics.
         TerminalIdentity::Foot | TerminalIdentity::WindowsTerminal => ImageProtocol::Sixel,
-        // Contour itself renders Sixel reliably in a direct session. Zellij's
-        // Kitty direct implementation is the compatible option there; tmux and
-        // GNU Screen have no working graphics transport for Contour yet.
+        // Contour renders Sixel directly and tmux can transport it either
+        // natively or through DCS passthrough. Zellij's compatible path is
+        // Kitty direct; GNU Screen remains unsupported.
         TerminalIdentity::Contour if in_zellij => ImageProtocol::KittyDirectGraphics,
-        TerminalIdentity::Contour if in_tmux_or_screen => ImageProtocol::None,
+        TerminalIdentity::Contour if in_screen => ImageProtocol::None,
         TerminalIdentity::Contour => ImageProtocol::Sixel,
         // ELIO_IMAGE_PREVIEWS=1 force-enables KittyGraphics on unrecognised terminals
         // for testing. Alacritty is excluded — it does not support image protocols.
