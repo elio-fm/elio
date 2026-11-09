@@ -36,6 +36,7 @@ pub(crate) enum TerminalIdentity {
     Konsole,
     Foot,
     WindowsTerminal,
+    Contour,
     Alacritty,
     #[default]
     Other,

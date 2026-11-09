@@ -45,6 +45,7 @@ impl TerminalEnvGuard {
             "KONSOLE_DBUS_WINDOW",
             "TMUX",
             "ZELLIJ",
+            "STY",
         ];
 
         let saved = VARS
@@ -110,6 +111,35 @@ fn rio_identifiers_require_exact_names() {
     let lookup = |name: &str| (name == "TERM_PROGRAM").then(|| "xterm-rio".to_string());
     assert_eq!(classify_from_env(&lookup), TerminalIdentity::Other);
     assert_eq!(classify_supported_tmux_env(&lookup), None);
+}
+
+#[test]
+fn contour_requires_its_exact_term_program_marker() {
+    for value in ["contour", "CONTOUR"] {
+        let lookup = |name: &str| (name == "TERM_PROGRAM").then(|| value.to_string());
+        assert_eq!(classify_from_env(&lookup), TerminalIdentity::Contour);
+    }
+    let lookup = |name: &str| (name == "TERM_PROGRAM").then(|| "contoured".to_string());
+    assert_eq!(classify_from_env(&lookup), TerminalIdentity::Other);
+}
+
+#[test]
+fn contour_uses_sixel_only_outside_multiplexers() {
+    assert_eq!(
+        select_image_protocol_with_multiplexer(TerminalIdentity::Contour, false, false, false),
+        ImageProtocol::Sixel
+    );
+    for (in_zellij, in_other_multiplexer) in [(true, false), (false, true)] {
+        assert_eq!(
+            select_image_protocol_with_multiplexer(
+                TerminalIdentity::Contour,
+                false,
+                in_zellij,
+                in_other_multiplexer,
+            ),
+            ImageProtocol::None
+        );
+    }
 }
 
 #[test]

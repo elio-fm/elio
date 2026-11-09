@@ -116,6 +116,7 @@ cargo install elio
 | [iTerm2](https://iterm2.com/) | iTerm2 Inline Protocol | ✓ Auto-detected |
 | [foot](https://codeberg.org/dnkl/foot) | Sixel | ✓ Auto-detected |
 | [Windows Terminal](https://github.com/microsoft/terminal) | Sixel | ✓ Auto-detected |
+| [Contour](https://contour-terminal.org/) | Sixel | ✓ Direct only |
 | Alacritty | — | Not supported |
 | Other | Kitty Graphics Protocol | Set `ELIO_IMAGE_PREVIEWS=1` to enable |
 

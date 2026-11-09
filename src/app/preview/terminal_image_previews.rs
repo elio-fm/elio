@@ -247,7 +247,9 @@ impl App {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
             && matches!(
                 self.preview.terminal_images.identity,
-                TerminalIdentity::Foot | TerminalIdentity::WindowsTerminal
+                TerminalIdentity::Foot
+                    | TerminalIdentity::WindowsTerminal
+                    | TerminalIdentity::Contour
             )
     }
 
