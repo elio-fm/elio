@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added multi-tab browsing with up to 10 tabs, and configurable `new_tab`, `close_tab`, next/previous-tab, and `switch_tab_1`–`switch_tab_10` bindings. ([#268], [#360])
 - Added `[ui] date_format` to choose relative or absolute timestamps for items. ([#381])
-- Added direct-session Sixel previews for Contour; previews remain disabled inside terminal multiplexers.
+- Added Contour previews in direct sessions and Zellij; previews remain disabled in tmux and GNU Screen.
 
 ### Changed
 

@@ -124,22 +124,22 @@ fn contour_requires_its_exact_term_program_marker() {
 }
 
 #[test]
-fn contour_uses_sixel_only_outside_multiplexers() {
+fn contour_selects_a_protocol_per_supported_host() {
     assert_eq!(
         select_image_protocol_with_multiplexer(TerminalIdentity::Contour, false, false, false),
-        ImageProtocol::Sixel
+        ImageProtocol::Sixel,
+        "direct Contour uses its native Sixel implementation"
     );
-    for (in_zellij, in_other_multiplexer) in [(true, false), (false, true)] {
-        assert_eq!(
-            select_image_protocol_with_multiplexer(
-                TerminalIdentity::Contour,
-                false,
-                in_zellij,
-                in_other_multiplexer,
-            ),
-            ImageProtocol::None
-        );
-    }
+    assert_eq!(
+        select_image_protocol_with_multiplexer(TerminalIdentity::Contour, false, true, false),
+        ImageProtocol::KittyDirectGraphics,
+        "Zellij provides the compatible Kitty direct implementation"
+    );
+    assert_eq!(
+        select_image_protocol_with_multiplexer(TerminalIdentity::Contour, false, false, true),
+        ImageProtocol::None,
+        "tmux and GNU Screen are unsupported until a reliable transport exists"
+    );
 }
 
 #[test]

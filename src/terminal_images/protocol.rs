@@ -313,7 +313,7 @@ fn select_image_protocol_with_multiplexer(
     identity: TerminalIdentity,
     image_previews_override: bool,
     in_zellij: bool,
-    in_other_multiplexer: bool,
+    in_tmux_or_screen: bool,
 ) -> ImageProtocol {
     match identity {
         // Zellij currently implements Kitty graphics, but not Unicode placeholders.
@@ -337,10 +337,12 @@ fn select_image_protocol_with_multiplexer(
         TerminalIdentity::WezTerm | TerminalIdentity::ITerm2 => ImageProtocol::ItermInline,
         // Foot and Windows Terminal ≥ 1.22 both support Sixel graphics.
         TerminalIdentity::Foot | TerminalIdentity::WindowsTerminal => ImageProtocol::Sixel,
-        // Contour's Sixel path is verified only in a direct terminal session.
-        // tmux, Zellij, and GNU Screen all interfere with its modal redraws.
-        TerminalIdentity::Contour if !in_zellij && !in_other_multiplexer => ImageProtocol::Sixel,
-        TerminalIdentity::Contour => ImageProtocol::None,
+        // Contour itself renders Sixel reliably in a direct session. Zellij's
+        // Kitty direct implementation is the compatible option there; tmux and
+        // GNU Screen have no working graphics transport for Contour yet.
+        TerminalIdentity::Contour if in_zellij => ImageProtocol::KittyDirectGraphics,
+        TerminalIdentity::Contour if in_tmux_or_screen => ImageProtocol::None,
+        TerminalIdentity::Contour => ImageProtocol::Sixel,
         // ELIO_IMAGE_PREVIEWS=1 force-enables KittyGraphics on unrecognised terminals
         // for testing. Alacritty is excluded — it does not support image protocols.
         TerminalIdentity::Other if image_previews_override => ImageProtocol::KittyGraphics,
