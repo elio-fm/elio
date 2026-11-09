@@ -7,7 +7,9 @@ use std::{
 
 use crate::app::App;
 use crate::preview::OverlayPresentState;
-use crate::terminal_images::{self, ImageProtocol, TerminalIdentity, TerminalWindowSize};
+use crate::terminal_images::{
+    self, ImageProtocol, SixelTransport, TerminalIdentity, TerminalWindowSize,
+};
 
 /// How long terminal geometry must stay unchanged before image payloads are
 /// (re)transmitted. Tiling window managers resize the terminal in an animated
@@ -137,6 +139,25 @@ impl App {
             .map(|settled_at| settled_at.saturating_duration_since(Instant::now()))
     }
 
+    pub(crate) fn process_sixel_modal_repaint_timer(&mut self) -> bool {
+        let Some(repaint_at) = self.preview.terminal_images.sixel_modal_repaint_at else {
+            return false;
+        };
+        if Instant::now() < repaint_at {
+            return false;
+        }
+        self.preview.terminal_images.sixel_modal_repaint_at = None;
+        self.preview.terminal_images.sixel_modal_repaint_pending = false;
+        true
+    }
+
+    pub(crate) fn pending_sixel_modal_repaint_timer(&self) -> Option<Duration> {
+        self.preview
+            .terminal_images
+            .sixel_modal_repaint_at
+            .map(|repaint_at| repaint_at.saturating_duration_since(Instant::now()))
+    }
+
     pub(crate) fn queue_terminal_image_geometry_clear(&mut self) {
         if matches!(
             self.preview.terminal_images.protocol,
@@ -206,6 +227,11 @@ impl App {
 
     pub(crate) fn uses_sixel_image_protocol(&self) -> bool {
         self.preview.terminal_images.protocol == ImageProtocol::Sixel
+    }
+
+    pub(crate) fn uses_native_tmux_sixel_transport(&self) -> bool {
+        self.uses_sixel_image_protocol()
+            && self.preview.terminal_images.sixel_transport == SixelTransport::TmuxNative
     }
 
     pub(crate) fn uses_iterm_inline_protocol_inside_tmux(&self) -> bool {
@@ -538,6 +564,21 @@ impl App {
             return Ok(Vec::new());
         }
         if protocol == ImageProtocol::Sixel
+            && terminal_images::inside_tmux()
+            && !popup_open
+            && self.preview.terminal_images.pending_sixel_repaint
+            && self.preview.terminal_images.sixel_modal_repaint_pending
+            && self
+                .preview
+                .terminal_images
+                .sixel_modal_repaint_at
+                .is_none()
+        {
+            self.preview.terminal_images.sixel_modal_repaint_at =
+                Some(Instant::now() + Duration::from_millis(1));
+            return Ok(Vec::new());
+        }
+        if protocol == ImageProtocol::Sixel
             && popup_open
             && (self.static_image_overlay_displayed() || self.pdf_overlay_displayed())
         {
@@ -732,6 +773,8 @@ impl App {
         }
 
         self.preview.terminal_images.pending_sixel_repaint = true;
+        self.preview.terminal_images.sixel_modal_repaint_pending = true;
+        self.preview.terminal_images.sixel_modal_repaint_at = None;
         let erase = collisions
             .iter()
             .copied()

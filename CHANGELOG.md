@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Made bulk action overlays and bulk rename in the editor follow the file browser's active sort order when opened.
 - Changed relative modification dates older than two years to use years instead of months.
 
+### Fixed
+
+- Fixed Sixel previews redrawing incorrectly after closing overlays in tmux.
+
 ## [1.15.0] - 2026-11-02
 
 ### Added
