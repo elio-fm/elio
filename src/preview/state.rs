@@ -430,6 +430,8 @@ pub(crate) struct TerminalImageState {
     pub(crate) pending_resize_clear: bool,
     pub(crate) pending_iterm_popup_restore: bool,
     pub(crate) pending_sixel_repaint: bool,
+    pub(crate) sixel_modal_repaint_pending: bool,
+    pub(crate) sixel_modal_repaint_at: Option<Instant>,
     pub(crate) resize_settled_at: Option<Instant>,
 }
 

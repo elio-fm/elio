@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::Result;
 use crossterm::{
-    cursor::{RestorePosition, SavePosition},
+    cursor::{Hide, RestorePosition, SavePosition, Show},
     execute,
     terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate},
 };
@@ -19,6 +19,7 @@ use std::{
     io::{self, Write},
     sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError},
     thread,
+    time::Duration,
 };
 
 /// The TUI terminal, backed by [`ThreadedWriter`] so frame output never blocks
@@ -178,7 +179,11 @@ impl Drop for ThreadedWriter {
     }
 }
 
-pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> Result<bool> {
+pub(super) fn draw_terminal_frame(
+    terminal: &mut AppTerminal,
+    app: &mut App,
+    drainer: &Drainer,
+) -> Result<bool> {
     let synchronized = app.supports_synchronized_terminal_updates();
     if synchronized {
         execute!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
@@ -262,18 +267,39 @@ pub(super) fn draw_terminal_frame(terminal: &mut AppTerminal, app: &mut App) -> 
                 )
             }
         };
-        write_bytes_preserving_cursor(terminal.backend_mut(), &stale_item_details_icon)?;
-        write_bytes_preserving_cursor(terminal.backend_mut(), &image_behind_modal)?;
+        let sync_tmux_sixel_cursor = app.uses_native_tmux_sixel_transport();
+        write_preview_bytes_preserving_cursor(
+            terminal.backend_mut(),
+            &stale_item_details_icon,
+            sync_tmux_sixel_cursor,
+            drainer,
+        )?;
+        write_preview_bytes_preserving_cursor(
+            terminal.backend_mut(),
+            &image_behind_modal,
+            sync_tmux_sixel_cursor,
+            drainer,
+        )?;
         write_bytes_preserving_cursor(terminal.backend_mut(), &sixel_collision_erase)?;
         draw_cells_preserving_cursor(terminal.backend_mut(), &popup_restore)?;
         write_bytes_preserving_cursor(terminal.backend_mut(), &modal_erase)?;
         if !skip_overlay_present && !app.browser_wheel_burst_active() {
             let overlay_bytes = app.present_preview_overlay()?;
-            write_bytes_preserving_cursor(terminal.backend_mut(), &overlay_bytes)?;
+            write_preview_bytes_preserving_cursor(
+                terminal.backend_mut(),
+                &overlay_bytes,
+                sync_tmux_sixel_cursor,
+                drainer,
+            )?;
         }
         let item_details_icon =
             app.present_item_details_icon(!popup_restore.is_empty() || !modal_erase.is_empty())?;
-        write_bytes_preserving_cursor(terminal.backend_mut(), &item_details_icon)?;
+        write_preview_bytes_preserving_cursor(
+            terminal.backend_mut(),
+            &item_details_icon,
+            sync_tmux_sixel_cursor,
+            drainer,
+        )?;
         terminal.backend_mut().flush()?;
         Ok(dirty)
     })();
@@ -299,6 +325,46 @@ fn write_bytes_preserving_cursor<W: Write>(writer: &mut W, bytes: &[u8]) -> io::
     writer.write_all(bytes)?;
     execute!(writer, RestorePosition)?;
     Ok(())
+}
+
+fn write_preview_bytes_preserving_cursor(
+    writer: &mut CrosstermBackend<ThreadedWriter>,
+    bytes: &[u8],
+    sync_tmux_sixel_cursor: bool,
+    drainer: &Drainer,
+) -> io::Result<()> {
+    if !sync_tmux_sixel_cursor {
+        return write_bytes_preserving_cursor(writer, bytes);
+    }
+    let Some((cursor_move, sixel_dcs)) = split_sixel_placement(bytes) else {
+        return write_bytes_preserving_cursor(writer, bytes);
+    };
+
+    execute!(writer, SavePosition)?;
+    for _ in 0..3 {
+        writer.write_all(cursor_move)?;
+        execute!(writer, Show)?;
+    }
+    writer.flush()?;
+    drainer.drain();
+    thread::sleep(Duration::from_millis(1));
+    writer.write_all(sixel_dcs)?;
+    execute!(writer, Hide, RestorePosition)
+}
+
+fn split_sixel_placement(bytes: &[u8]) -> Option<(&[u8], &[u8])> {
+    let csi = bytes.strip_prefix(b"\x1b[")?;
+    let end = csi.iter().position(|&byte| byte == b'H')? + 3;
+    let parameters = &bytes[2..end - 1];
+    if parameters.is_empty()
+        || !parameters
+            .split(|&byte| byte == b';')
+            .all(|part| !part.is_empty() && part.iter().all(u8::is_ascii_digit))
+        || !bytes.get(end..)?.starts_with(b"\x1bP")
+    {
+        return None;
+    }
+    Some((&bytes[..end], &bytes[end..]))
 }
 
 fn draw_cells_preserving_cursor<W: Write>(

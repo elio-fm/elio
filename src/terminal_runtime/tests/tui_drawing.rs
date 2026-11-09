@@ -1,4 +1,4 @@
-use super::collect_buffer_cells;
+use super::{collect_buffer_cells, split_sixel_placement};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -45,4 +45,18 @@ fn collect_buffer_cells_captures_popup_cells_with_styles() {
     assert_eq!(cells[0].2.fg, Color::LightGreen);
     assert_eq!(cells[0].2.bg, Color::Rgb(1, 2, 3));
     assert!(cells[0].2.modifier.contains(Modifier::BOLD));
+}
+
+#[test]
+fn split_sixel_placement_separates_cursor_move_from_dcs() {
+    let bytes = b"\x1b[12;34H\x1bP0;1;0qpayload\x1b\\";
+    let (cursor_move, dcs) = split_sixel_placement(bytes).expect("valid sixel placement");
+
+    assert_eq!(cursor_move, b"\x1b[12;34H");
+    assert_eq!(dcs, b"\x1bP0;1;0qpayload\x1b\\");
+}
+
+#[test]
+fn split_sixel_placement_rejects_non_sixel_output() {
+    assert!(split_sixel_placement(b"\x1b[12;34Htext").is_none());
 }

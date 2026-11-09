@@ -580,6 +580,10 @@ fn run_app(
             dirty = true;
         }
 
+        if app.process_sixel_modal_repaint_timer() {
+            dirty = true;
+        }
+
         if app.process_sidebar_refresh() {
             dirty = true;
         }
@@ -595,7 +599,7 @@ fn run_app(
         }
 
         if dirty {
-            dirty = draw_terminal_frame(terminal, &mut app)?;
+            dirty = draw_terminal_frame(terminal, &mut app, drainer)?;
         }
 
         let wants_search_cursor = app.search_is_open()
@@ -647,6 +651,7 @@ fn run_app(
                 app.pending_pdf_preview_timer(),
                 app.pending_image_preview_timer(),
                 app.pending_terminal_image_resize_settle_timer(),
+                app.pending_sixel_modal_repaint_timer(),
                 app.pending_preview_refresh_timer(),
                 app.pending_preview_prefetch_timer(),
                 app.pending_directory_stats_timer(),
