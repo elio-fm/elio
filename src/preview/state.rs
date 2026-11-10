@@ -213,6 +213,17 @@ pub(crate) struct PdfSession {
     pub(crate) total_pages: Option<usize>,
 }
 
+/// The paginated-preview position owned by one browser tab.
+///
+/// Rendered previews and document metadata remain shared application caches;
+/// only the current position belongs to a tab.
+#[derive(Default)]
+pub(crate) struct PagedPreviewTabState {
+    pub(crate) comic_session: Option<ComicSession>,
+    pub(crate) epub_session: Option<EpubSession>,
+    pub(crate) pdf_session: Option<PdfSession>,
+}
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct PdfDocumentKey {
     pub(crate) path: PathBuf,

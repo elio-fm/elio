@@ -20,7 +20,7 @@ use crate::fuzzy_finder::FuzzyFinderState;
 use crate::goto_menu::GotoMenu;
 use crate::opening::open_with::ApplicationSelection;
 use crate::places::PlacesState;
-use crate::preview::PreviewRuntime;
+use crate::preview::{PagedPreviewTabState, PreviewRuntime};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ClickState {
@@ -161,6 +161,9 @@ pub(crate) enum PendingTerminalTask {
 pub struct App {
     pub(crate) file_browser: FileBrowserState,
     pub(crate) tabs: BrowserTabs,
+    /// Paginated-preview position for each browser tab. The active tab's
+    /// position is held in `preview` while it is active.
+    pub(crate) paged_preview_tabs: Vec<PagedPreviewTabState>,
     pub(crate) places: PlacesState,
     pub(crate) preview: PreviewRuntime,
     pub(crate) file_operations: FileOperationsState,
@@ -204,6 +207,7 @@ impl App {
                 crate::config::ui().show_hidden || reveal_hidden_start_focus,
             ),
             tabs: BrowserTabs::new(),
+            paged_preview_tabs: vec![PagedPreviewTabState::default()],
             places: PlacesState::new(),
             preview: PreviewRuntime::new(),
             file_operations: FileOperationsState::default(),
