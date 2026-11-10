@@ -50,10 +50,10 @@ pub(crate) use self::state::PreviewCacheKey;
 pub use self::state::PreviewMetricsSnapshot;
 pub(crate) use self::state::{
     ComicSession, DisplayedPdfPreview, DisplayedStaticImagePreview, EpubSession,
-    OverlayPresentState, PdfDocumentKey, PdfOverlayRequest, PdfPageKey, PdfSession,
-    PreparedStaticImage, PreviewDirectoryStatsState, PreviewLineCountKey, PreviewLoadState,
-    PreviewRefreshMode, PreviewRuntime, StaticImageOverlayMode, StaticImageOverlayPreparation,
-    StaticImageOverlayRequest, StaticImagePreloadViewport,
+    OverlayPresentState, PagedPreviewTabState, PdfDocumentKey, PdfOverlayRequest, PdfPageKey,
+    PdfSession, PreparedStaticImage, PreviewDirectoryStatsState, PreviewLineCountKey,
+    PreviewLoadState, PreviewRefreshMode, PreviewRuntime, StaticImageOverlayMode,
+    StaticImageOverlayPreparation, StaticImageOverlayRequest, StaticImagePreloadViewport,
 };
 use self::text_rendering::expand_tabs;
 pub(crate) use self::text_rendering::{line_number_span, line_number_width};
