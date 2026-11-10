@@ -3,10 +3,12 @@ use crate::app::App;
 use crate::preview::OverlayPresentState;
 use crate::preview::images::SixelDcsKey;
 use crate::terminal_images::{
-    ImageProtocol, place_sixel_from_dcs, place_terminal_image, preview_log,
+    ImageProtocol, area_pixel_size, encode_sixel_dcs, place_sixel_from_dcs, place_terminal_image,
+    preview_log,
 };
 use anyhow::{Context, Result};
 use ratatui::layout::Rect;
+use std::sync::Arc;
 
 impl App {
     pub(crate) fn present_pdf_overlay(
@@ -71,10 +73,17 @@ impl App {
                     return Ok(OverlayPresentState::Waiting);
                 };
                 let dcs_key = SixelDcsKey::new(&rendered, placement.image_area, window_size);
-                let Some(dcs) = self.preview.image.cached_sixel_dcs(&dcs_key) else {
-                    preview_log("present_pdf_overlay: sixel dcs not ready → Waiting");
-                    let _ = self.ensure_pdf_render(&render_key);
-                    return Ok(OverlayPresentState::Waiting);
+                let dcs: Arc<[u8]> = match self.preview.image.cached_sixel_dcs(&dcs_key) {
+                    Some(cached) => cached,
+                    None => {
+                        let (width_px, height_px) =
+                            area_pixel_size(placement.image_area, window_size);
+                        let dcs = encode_sixel_dcs(&rendered, width_px, height_px)?;
+                        self.preview
+                            .image
+                            .remember_sixel_dcs(dcs_key, Arc::clone(&dcs));
+                        dcs
+                    }
                 };
                 place_sixel_from_dcs(
                     &dcs,

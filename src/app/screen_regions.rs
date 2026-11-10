@@ -174,6 +174,8 @@ impl App {
     pub fn set_screen_regions(&mut self, mut screen_regions: ScreenRegions) -> bool {
         let duplicate_preview_was_rendered = self.duplicate_finder.session.is_some()
             && self.input.screen_regions.preview_panel.is_some();
+        let preview_image_geometry_changed =
+            self.input.screen_regions.preview_content_area != screen_regions.preview_content_area;
         let previous_code_line_limit = self.active_preview_entry().map(|entry| {
             self.preview_code_line_limit_for_entry_with_rows(
                 &entry,
@@ -190,6 +192,10 @@ impl App {
         if duplicate_preview_was_rendered && !duplicate_preview_is_rendered {
             self.queue_terminal_image_geometry_clear();
             self.clear_image_preview_selection_activation();
+            dirty = true;
+        }
+        if preview_image_geometry_changed {
+            self.queue_terminal_image_geometry_clear();
             dirty = true;
         }
         dirty |= self.sync_duplicate_scroll();

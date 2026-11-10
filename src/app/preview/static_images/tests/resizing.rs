@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::ScreenRegions;
 
 #[test]
 fn kitty_resize_requests_full_screen_clear_for_displayed_overlay() {
@@ -92,6 +93,33 @@ fn sixel_resize_requests_full_screen_clear_for_displayed_overlay() {
     assert!(!app.static_image_overlay_displayed());
     assert!(app.preview.image.displayed_excluded.is_empty());
     assert!(!app.take_pending_resize_clear());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn preview_geometry_change_requests_full_screen_clear_for_displayed_sixel_overlay() {
+    let (mut app, root, _image_path) =
+        build_selected_static_image_app("sixel-preview-geometry-clear", "demo.png");
+    let request = ready_static_image_overlay(&mut app);
+    app.preview.terminal_images.protocol = ImageProtocol::Sixel;
+    app.preview.image.displayed = Some(DisplayedStaticImagePreview::from_request(
+        &request,
+        request.area,
+        request.area,
+    ));
+
+    app.set_screen_regions(ScreenRegions {
+        preview_content_area: Some(Rect {
+            y: request.area.y.saturating_add(1),
+            height: request.area.height.saturating_sub(1),
+            ..request.area
+        }),
+        ..ScreenRegions::default()
+    });
+
+    assert!(app.take_pending_resize_clear());
+    assert!(!app.static_image_overlay_displayed());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
