@@ -1,6 +1,8 @@
 use super::super::*;
 use super::helpers::*;
+use crate::app::ScreenRegions;
 use crate::filesystem::{Entry, EntryKind};
+use image::{Rgba, RgbaImage};
 
 #[test]
 fn pdf_preview_page_navigation_clamps_to_document_bounds() {
@@ -55,6 +57,81 @@ fn present_pdf_overlay_waits_for_selection_activation_before_queueing_probe() {
 
     assert!(app.preview.pdf.pending_page_probes.is_empty());
     assert!(!app.job_scheduler.has_pending_work());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn preview_geometry_change_requests_full_screen_clear_for_displayed_sixel_pdf() {
+    let (mut app, root) = build_selected_pdf_app("sixel-preview-geometry-clear");
+    app.preview.terminal_images.protocol = ImageProtocol::Sixel;
+    let request = app
+        .active_pdf_overlay_request()
+        .expect("PDF overlay request should be available");
+    app.preview.pdf.page_dimensions.insert(
+        PdfPageKey::from_request(&request),
+        PdfPageDimensions {
+            width_pts: 612.0,
+            height_pts: 792.0,
+        },
+    );
+    let placement = app
+        .overlay_placement_for_request(&request)
+        .expect("PDF placement should be available");
+    app.preview.pdf.displayed = Some(DisplayedPdfPreview::from_request(&request, placement));
+
+    app.set_screen_regions(ScreenRegions {
+        preview_content_area: Some(Rect {
+            y: request.area.y.saturating_add(1),
+            height: request.area.height.saturating_sub(1),
+            ..request.area
+        }),
+        ..ScreenRegions::default()
+    });
+
+    assert!(app.take_pending_resize_clear());
+    assert!(!app.pdf_overlay_displayed());
+
+    fs::remove_dir_all(root).expect("failed to remove temp root");
+}
+
+#[test]
+fn present_pdf_overlay_encodes_missing_sixel_dcs_for_cached_render() {
+    let (mut app, root) = build_pdf_overlay_test_app("sixel-cached-render-dcs");
+    app.preview.terminal_images.protocol = ImageProtocol::Sixel;
+    let request = app
+        .active_pdf_overlay_request()
+        .expect("PDF overlay request should be available");
+    app.preview.pdf.page_dimensions.insert(
+        PdfPageKey::from_request(&request),
+        PdfPageDimensions {
+            width_pts: 612.0,
+            height_pts: 792.0,
+        },
+    );
+    let placement = app
+        .overlay_placement_for_request(&request)
+        .expect("PDF placement should be available");
+    let render_key = app.pdf_render_key_from_request(&request, placement);
+    let rendered = root.join("cached-page.png");
+    RgbaImage::from_pixel(8, 8, Rgba([32, 128, 224, 255]))
+        .save(&rendered)
+        .expect("test PNG should be written");
+    app.remember_rendered_pdf(
+        render_key,
+        rendered,
+        Some(RenderedImageDimensions {
+            width_px: 8,
+            height_px: 8,
+        }),
+    );
+
+    let output = app
+        .present_preview_overlay()
+        .expect("cached PDF should be presented with Sixel");
+
+    assert!(!output.is_empty());
+    assert!(app.pdf_overlay_displayed());
 
     fs::remove_dir_all(root).expect("failed to remove temp root");
 }
