@@ -287,7 +287,39 @@ fn terminal_supports_osc52() -> bool {
     if std::env::var_os("ELIO_TEST_OSC52_CAPTURE").is_some() {
         return true;
     }
-    std::env::var_os("ELIO_CLIPBOARD_OSC52").is_some()
+    if std::env::var_os("ELIO_CLIPBOARD_OSC52").is_some() {
+        return true;
+    }
+    // SSH commonly replaces or omits TERM_PROGRAM, so the remote process
+    // cannot reliably identify the user's local terminal by its name.
+    if std::env::var_os("SSH_TTY").is_some() {
+        return true;
+    }
+
+    let term = std::env::var("TERM")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let term_program = std::env::var("TERM_PROGRAM")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    std::env::var_os("KITTY_WINDOW_ID").is_some()
+        || term.contains("xterm-kitty")
+        || term_program == "kitty"
+        || term.contains("ghostty")
+        || term_program == "ghostty"
+        || term == "foot"
+        || term == "foot-extra"
+        || term.contains("wezterm")
+        || term_program == "wezterm"
+        || term_program == "iterm.app"
+        || term_program.contains("warp")
+        || std::env::var_os("WARP_SESSION_ID").is_some()
+        || term.contains("alacritty")
+        || term_program.contains("alacritty")
+        || std::env::var_os("ALACRITTY_SOCKET").is_some()
+        || std::env::var_os("VTE_VERSION").is_some()
+        || std::env::var_os("WT_SESSION").is_some()
 }
 
 #[cfg(any(
