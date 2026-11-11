@@ -19,6 +19,29 @@ fn tabs_default_to_opening_new_tabs_in_the_active_directory() {
 }
 
 #[test]
+fn tabs_switch_tab_creates_missing_defaults_to_false_and_accepts_true() {
+    for source in ["", "[tabs]", "[tabs]\nswitch_tab_creates_missing = false"] {
+        assert!(
+            !Config::from_str(source)
+                .expect("config should parse")
+                .tabs
+                .switch_tab_creates_missing
+        );
+    }
+    assert!(
+        Config::from_str("[tabs]\nswitch_tab_creates_missing = true")
+            .expect("config should parse")
+            .tabs
+            .switch_tab_creates_missing
+    );
+    for value in ["1", "\"true\"", "[]"] {
+        assert!(
+            Config::from_str(&format!("[tabs]\nswitch_tab_creates_missing = {value}")).is_err()
+        );
+    }
+}
+
+#[test]
 fn tabs_accept_a_path_destination_with_a_command_fallback() {
     let workspace = std::env::temp_dir().join("elio-tabs-workspace");
     let workspace_toml = toml_path(&workspace);

@@ -161,6 +161,12 @@ impl App {
         };
         if let Err(error) = result {
             self.status = error.to_string();
+            self.pending_missing_tab_target = None;
+        } else if self.pending_new_tab_command.is_none()
+            && let Err(error) = self.continue_missing_tab_creation()
+        {
+            self.status = error.to_string();
+            self.pending_missing_tab_target = None;
         }
         true
     }
@@ -235,7 +241,17 @@ impl App {
     }
 
     pub(crate) fn activate_tab(&mut self, index: usize) -> Result<()> {
-        if self.chooser_mode() || index >= self.tabs.len() || self.tabs.is_active(index) {
+        if self.chooser_mode() {
+            return Ok(());
+        }
+        if index >= self.tabs.len() && crate::config::tabs().switch_tab_creates_missing {
+            if self.pending_new_tab_command.is_some() {
+                return Ok(());
+            }
+            self.pending_missing_tab_target = Some(index);
+            self.continue_missing_tab_creation()?;
+        }
+        if index >= self.tabs.len() || self.tabs.is_active(index) {
             return Ok(());
         }
         self.store_active_paged_preview_state();
@@ -243,6 +259,20 @@ impl App {
         if self.tabs.activate(&mut self.file_browser, index) {
             self.activate_current_tab()?;
             self.status.clear();
+        }
+        Ok(())
+    }
+
+    fn continue_missing_tab_creation(&mut self) -> Result<()> {
+        while let Some(target) = self.pending_missing_tab_target {
+            if self.tabs.len() > target || !self.tabs.can_open() {
+                self.pending_missing_tab_target = None;
+                break;
+            }
+            self.new_tab()?;
+            if self.pending_new_tab_command.is_some() {
+                break;
+            }
         }
         Ok(())
     }
