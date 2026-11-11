@@ -204,6 +204,15 @@ pub struct App {
 }
 
 impl App {
+    pub(crate) fn quit(&mut self) {
+        self.should_quit = true;
+    }
+
+    pub(crate) fn quit_without_cd(&mut self) {
+        self.should_change_directory_on_quit = false;
+        self.should_quit = true;
+    }
+
     pub fn new() -> Result<Self> {
         let cwd = env::current_dir().context("failed to read current directory")?;
         Self::new_at(cwd)

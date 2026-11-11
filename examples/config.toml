@@ -20,6 +20,9 @@
 # new_tab_destination = { path = "~/Downloads" }
 # new_tab_destination = { command = "git rev-parse --show-toplevel", fallback = { path = "~" } }
 # switch_tab_creates_missing = true # For example, if tabs 1 and 2 exist, switch_tab_4 creates tabs 3 and 4.
+# close_tab closes the active tab unless it is the last one. These options make it exit in that case:
+# close_last_tab = "quit"             # Exit like quit (cd on exit when shell integration is installed).
+# close_last_tab = "quit_without_cd"  # Exit like quit_without_cd.
 
 # Terminal used by elio's file chooser portal.
 # `elio portal enable` detects and sets this automatically when possible.

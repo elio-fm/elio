@@ -686,11 +686,8 @@ impl App {
     pub(crate) fn dispatch_action(&mut self, action: crate::config::Action) -> Result<()> {
         use crate::config::Action;
         match action {
-            Action::Quit => self.should_quit = true,
-            Action::QuitWithoutCd => {
-                self.should_change_directory_on_quit = false;
-                self.should_quit = true;
-            }
+            Action::Quit => self.quit(),
+            Action::QuitWithoutCd => self.quit_without_cd(),
             Action::Cancel => self.cancel_browser_state(),
             Action::ClearSelection => self.clear_selection(),
             Action::Yank => self.yank(),

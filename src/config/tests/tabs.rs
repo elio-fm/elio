@@ -1,6 +1,6 @@
 use super::super::{
     Config, TabsConfig,
-    tabs::{NewTabDestination, TabDestination},
+    tabs::{CloseLastTabBehavior, NewTabDestination, TabDestination},
 };
 use std::path::Path;
 
@@ -38,6 +38,34 @@ fn tabs_switch_tab_creates_missing_defaults_to_false_and_accepts_true() {
         assert!(
             Config::from_str(&format!("[tabs]\nswitch_tab_creates_missing = {value}")).is_err()
         );
+    }
+}
+
+#[test]
+fn tabs_close_last_tab_defaults_to_keeping_it_open_and_accepts_quit_modes() {
+    for source in ["", "[tabs]", "[tabs]\nclose_last_tab = \"keep_open\""] {
+        assert_eq!(
+            Config::from_str(source)
+                .expect("config should parse")
+                .tabs
+                .close_last_tab,
+            CloseLastTabBehavior::KeepOpen
+        );
+    }
+    for (value, expected) in [
+        ("quit", CloseLastTabBehavior::Quit),
+        ("quit_without_cd", CloseLastTabBehavior::QuitWithoutCd),
+    ] {
+        assert_eq!(
+            Config::from_str(&format!("[tabs]\nclose_last_tab = \"{value}\""))
+                .expect("config should parse")
+                .tabs
+                .close_last_tab,
+            expected
+        );
+    }
+    for value in ["\"close\"", "true", "[]"] {
+        assert!(Config::from_str(&format!("[tabs]\nclose_last_tab = {value}")).is_err());
     }
 }
 
