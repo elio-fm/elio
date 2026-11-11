@@ -74,13 +74,15 @@ fn configured_new_tab_path_uses_its_fallback_when_unavailable() {
     let root = temp_root();
     let initial = root.join("initial");
     let fallback = root.join("fallback");
+    let unavailable = root.join("unavailable");
     fs::create_dir_all(&initial).expect("initial directory should be created");
     fs::create_dir_all(&fallback).expect("fallback directory should be created");
     let fallback_toml = toml::Value::String(fallback.display().to_string()).to_string();
+    let unavailable_toml = toml::Value::String(unavailable.display().to_string()).to_string();
     fs::write(
         root.join("config.toml"),
         format!(
-            "[tabs]\nnew_tab_destination = {{ path = \"/not-a-real-elio-directory\", fallback = {{ path = {fallback_toml} }} }}\n"
+            "[tabs]\nnew_tab_destination = {{ path = {unavailable_toml}, fallback = {{ path = {fallback_toml} }} }}\n"
         ),
     )
     .expect("config should be written");
