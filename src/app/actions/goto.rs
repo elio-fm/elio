@@ -1,5 +1,8 @@
 use super::super::App;
-use crate::background_jobs::{job_requests::GotoCommandRequest, job_results::GotoCommandBuild};
+use crate::background_jobs::{
+    job_requests::{DestinationCommandRecipient, DestinationCommandRequest},
+    job_results::DestinationCommandBuild,
+};
 use crate::goto_menu::{GotoDestination, build_goto_menu};
 use anyhow::Result;
 
@@ -84,15 +87,18 @@ impl App {
                 self.set_dir(path)?;
             }
             GotoDestination::Command { title, command } => {
-                self.goto_command_token = self.goto_command_token.wrapping_add(1);
-                let token = self.goto_command_token;
+                self.destination_command_token = self.destination_command_token.wrapping_add(1);
+                let token = self.destination_command_token;
                 self.pending_goto_command = Some(token);
-                let submitted = self.job_scheduler.submit_goto_command(GotoCommandRequest {
-                    token,
-                    title: title.clone(),
-                    command,
-                    cwd: self.file_browser.cwd.clone(),
-                });
+                let submitted =
+                    self.job_scheduler
+                        .submit_destination_command(DestinationCommandRequest {
+                            token,
+                            recipient: DestinationCommandRecipient::Goto,
+                            label: title.clone(),
+                            command,
+                            cwd: self.file_browser.cwd.clone(),
+                        });
                 if !submitted {
                     self.pending_goto_command = None;
                     self.status = format!("{title}: command failed");
@@ -106,7 +112,7 @@ impl App {
         Ok(())
     }
 
-    pub(crate) fn apply_goto_command_job_result(&mut self, build: GotoCommandBuild) -> bool {
+    pub(crate) fn apply_goto_command_job_result(&mut self, build: DestinationCommandBuild) -> bool {
         if self.pending_goto_command != Some(build.token) {
             return false;
         }
@@ -115,10 +121,10 @@ impl App {
             Ok(path) => {
                 self.overlays.goto = None;
                 if let Err(error) = self.set_dir(path) {
-                    self.status = format!("{}: {error}", build.title);
+                    self.status = format!("{}: {error}", build.label);
                 }
             }
-            Err(error) => self.status = format!("{}: {error}", build.title),
+            Err(error) => self.status = format!("{}: {error}", build.label),
         }
         true
     }

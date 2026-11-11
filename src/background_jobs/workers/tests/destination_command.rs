@@ -1,7 +1,4 @@
-use super::super::{
-    command_destination::{command_start_error, parse_command_output},
-    resolve_command_destination,
-};
+use super::{command_start_error, parse_command_output, resolve_command_destination};
 use std::io;
 
 const INVALID_DIRECTORY: &str = "command did not return a valid directory";
@@ -16,7 +13,7 @@ fn parses_a_single_absolute_directory_path() {
 
 #[test]
 fn rejects_invalid_command_output() {
-    let missing = std::env::temp_dir().join("elio-goto-command-missing-directory");
+    let missing = std::env::temp_dir().join("elio-destination-command-missing-directory");
     let missing_output = format!("{}\n", missing.display());
 
     assert_eq!(parse_command_output(b""), Err(INVALID_DIRECTORY));

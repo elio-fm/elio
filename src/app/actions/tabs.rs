@@ -1,6 +1,28 @@
-use super::super::App;
-use crate::file_browser::{FileBrowserState, MAX_TABS};
+use super::super::{
+    App,
+    state::{NewTabTemplate, PendingNewTabCommand},
+};
+use crate::{
+    background_jobs::{
+        job_requests::{DestinationCommandRecipient, DestinationCommandRequest},
+        job_results::DestinationCommandBuild,
+    },
+    config::{NewTabDestination, TabDestination},
+    file_browser::{FileBrowserState, MAX_TABS},
+};
 use anyhow::Result;
+use std::{
+    path::PathBuf,
+    time::{Duration, Instant},
+};
+
+const NEW_TAB_COMMAND_STATUS_DELAY: Duration = Duration::from_millis(300);
+
+struct NewTabPath {
+    cwd: PathBuf,
+    focus: Option<PathBuf>,
+    in_trash: bool,
+}
 
 impl App {
     pub(crate) fn new_tab(&mut self) -> Result<()> {
@@ -11,23 +33,180 @@ impl App {
             self.status = format!("Maximum of {MAX_TABS} tabs reached");
             return Ok(());
         }
+        if self.pending_new_tab_command.is_some() {
+            return Ok(());
+        }
 
+        let template = self.new_tab_template();
+        let destination = crate::config::tabs().new_tab_destination.clone();
+        match destination {
+            Some(destination) => self.open_configured_new_tab(destination, template),
+            None => {
+                let destination =
+                    NewTabPath::active_directory(template.cwd.clone(), template.in_trash);
+                self.open_new_tab_at(template, destination)
+            }
+        }
+    }
+
+    fn new_tab_template(&self) -> NewTabTemplate {
+        NewTabTemplate {
+            cwd: self.file_browser.cwd.clone(),
+            start_in_grid: self.file_browser.view_mode == crate::file_browser::ViewMode::Grid,
+            zoom_level: self.file_browser.zoom_level,
+            sort_mode: self.file_browser.sort_mode,
+            show_hidden: self.file_browser.show_hidden,
+            in_trash: self.file_browser.in_trash,
+        }
+    }
+
+    fn open_configured_new_tab(
+        &mut self,
+        destination: NewTabDestination,
+        template: NewTabTemplate,
+    ) -> Result<()> {
+        self.open_new_tab_destination(destination.destination, destination.fallback, template)
+    }
+
+    fn open_new_tab_destination(
+        &mut self,
+        destination: TabDestination,
+        fallback: Option<TabDestination>,
+        template: NewTabTemplate,
+    ) -> Result<()> {
+        match destination {
+            TabDestination::Path(path) => match NewTabPath::from_path(path) {
+                Some(destination) => self.open_new_tab_at(template, destination),
+                None => self.open_new_tab_fallback(fallback, template),
+            },
+            TabDestination::Command(command) => {
+                self.destination_command_token = self.destination_command_token.wrapping_add(1);
+                let token = self.destination_command_token;
+                let cwd = template.cwd.clone();
+                self.pending_new_tab_command = Some(PendingNewTabCommand {
+                    token,
+                    fallback,
+                    template,
+                    submitted_at: Instant::now(),
+                    status_shown: false,
+                });
+                self.status.clear();
+                if self
+                    .job_scheduler
+                    .submit_destination_command(DestinationCommandRequest {
+                        token,
+                        recipient: DestinationCommandRecipient::NewTab,
+                        label: "New tab".to_string(),
+                        command,
+                        cwd,
+                    })
+                {
+                    Ok(())
+                } else {
+                    let pending = self
+                        .pending_new_tab_command
+                        .take()
+                        .expect("pending tab command was just stored");
+                    self.open_new_tab_fallback(pending.fallback, pending.template)
+                }
+            }
+        }
+    }
+
+    fn open_new_tab_fallback(
+        &mut self,
+        fallback: Option<TabDestination>,
+        template: NewTabTemplate,
+    ) -> Result<()> {
+        match fallback {
+            Some(destination) => self.open_new_tab_destination(destination, None, template),
+            None => {
+                let destination =
+                    NewTabPath::active_directory(template.cwd.clone(), template.in_trash);
+                self.open_new_tab_at(template, destination)
+            }
+        }
+    }
+
+    pub(crate) fn apply_new_tab_command_job_result(
+        &mut self,
+        build: DestinationCommandBuild,
+    ) -> bool {
+        if self
+            .pending_new_tab_command
+            .as_ref()
+            .is_none_or(|pending| pending.token != build.token)
+        {
+            return false;
+        }
+        let pending = self
+            .pending_new_tab_command
+            .take()
+            .expect("matching pending tab command was checked");
+        if !self.tabs.can_open() {
+            self.status = format!("Maximum of {MAX_TABS} tabs reached");
+            return true;
+        }
+
+        let result = match build.result {
+            Ok(path) => self.open_new_tab_at(
+                pending.template,
+                NewTabPath {
+                    in_trash: crate::places::path_is_trash(&path),
+                    cwd: path,
+                    focus: None,
+                },
+            ),
+            Err(_) => self.open_new_tab_fallback(pending.fallback, pending.template),
+        };
+        if let Err(error) = result {
+            self.status = error.to_string();
+        }
+        true
+    }
+
+    pub(crate) fn show_pending_new_tab_command_status(&mut self, now: Instant) -> bool {
+        let should_show = self
+            .pending_new_tab_command
+            .as_mut()
+            .is_some_and(|pending| {
+                if pending.status_shown
+                    || now.saturating_duration_since(pending.submitted_at)
+                        < NEW_TAB_COMMAND_STATUS_DELAY
+                {
+                    return false;
+                }
+                pending.status_shown = true;
+                true
+            });
+        if should_show {
+            self.status = "Opening a new tab".to_string();
+        }
+        should_show
+    }
+
+    fn open_new_tab_at(&mut self, template: NewTabTemplate, destination: NewTabPath) -> Result<()> {
         self.store_active_paged_preview_state();
         self.invalidate_active_tab_work();
         let mut browser = FileBrowserState::new(
-            self.file_browser.cwd.clone(),
-            self.file_browser.view_mode == crate::file_browser::ViewMode::Grid,
-            self.file_browser.zoom_level,
-            self.file_browser.show_hidden,
+            destination.cwd,
+            template.start_in_grid,
+            template.zoom_level,
+            template.show_hidden,
         );
-        browser.sort_mode = self.file_browser.sort_mode;
-        browser.in_trash = self.file_browser.in_trash;
+        browser.sort_mode = template.sort_mode;
+        browser.in_trash = destination.in_trash;
         self.tabs.open_after_active(&mut self.file_browser, browser);
         self.paged_preview_tabs
             .insert(self.tabs.active_index(), Default::default());
         debug_assert_eq!(self.tabs.len(), self.paged_preview_tabs.len());
         self.activate_current_tab()?;
-        self.status = format!("Opened tab {}", self.tabs.active_index() + 1);
+        if let Some(path) = destination.focus
+            && let Some(load) = self.file_browser.directory_runtime.pending_load.as_mut()
+        {
+            load.reselect_path = Some(path);
+        }
+        self.status.clear();
         Ok(())
     }
 
@@ -63,7 +242,7 @@ impl App {
         self.invalidate_active_tab_work();
         if self.tabs.activate(&mut self.file_browser, index) {
             self.activate_current_tab()?;
-            self.status = format!("Switched to tab {}", index + 1);
+            self.status.clear();
         }
         Ok(())
     }
@@ -76,7 +255,7 @@ impl App {
         self.invalidate_active_tab_work();
         if self.tabs.cycle(&mut self.file_browser, delta) {
             self.activate_current_tab()?;
-            self.status = format!("Switched to tab {}", self.tabs.active_index() + 1);
+            self.status.clear();
         }
         Ok(())
     }
@@ -119,6 +298,33 @@ impl App {
         self.preview.comic.displayed_page_source = None;
         self.preview.pdf.activation_ready_at = None;
         self.preview.pdf.last_navigation_direction = 0;
+    }
+}
+
+impl NewTabPath {
+    fn active_directory(cwd: PathBuf, in_trash: bool) -> Self {
+        Self {
+            cwd,
+            focus: None,
+            in_trash,
+        }
+    }
+
+    fn from_path(path: PathBuf) -> Option<Self> {
+        let metadata = std::fs::metadata(&path).ok()?;
+        if metadata.is_dir() {
+            return Some(Self {
+                in_trash: crate::places::path_is_trash(&path),
+                cwd: path,
+                focus: None,
+            });
+        }
+        let cwd = path.parent()?.to_path_buf();
+        cwd.is_dir().then_some(Self {
+            in_trash: crate::places::path_is_trash(&cwd),
+            cwd,
+            focus: Some(path),
+        })
     }
 }
 
@@ -184,6 +390,36 @@ mod tests {
                 .map(|session| session.current_page),
             Some(page)
         );
+    }
+
+    #[test]
+    fn new_tab_command_status_waits_three_hundred_milliseconds() {
+        let root = temp_root();
+        let mut app = App::new_at(root.clone()).expect("app should load temporary root");
+        let submitted_at = Instant::now();
+        app.pending_new_tab_command = Some(PendingNewTabCommand {
+            token: 1,
+            fallback: None,
+            template: app.new_tab_template(),
+            submitted_at,
+            status_shown: false,
+        });
+
+        assert!(!app.show_pending_new_tab_command_status(
+            submitted_at + NEW_TAB_COMMAND_STATUS_DELAY - Duration::from_millis(1)
+        ));
+        assert!(app.status.is_empty());
+        assert!(
+            app.show_pending_new_tab_command_status(submitted_at + NEW_TAB_COMMAND_STATUS_DELAY)
+        );
+        assert_eq!(app.status, "Opening a new tab");
+        assert!(!app.show_pending_new_tab_command_status(
+            submitted_at + NEW_TAB_COMMAND_STATUS_DELAY + Duration::from_millis(1)
+        ));
+
+        app.file_browser.directory_runtime.watch = None;
+        drop(app);
+        fs::remove_dir_all(root).expect("temporary root should be removed");
     }
 
     #[test]
