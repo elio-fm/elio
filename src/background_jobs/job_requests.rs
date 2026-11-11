@@ -113,10 +113,17 @@ pub(crate) struct GitStatusRequest {
     pub(crate) cwd: PathBuf,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DestinationCommandRecipient {
+    Goto,
+    NewTab,
+}
+
 #[derive(Clone, Debug)]
-pub(crate) struct GotoCommandRequest {
+pub(crate) struct DestinationCommandRequest {
     pub(crate) token: u64,
-    pub(crate) title: String,
+    pub(crate) recipient: DestinationCommandRecipient,
+    pub(crate) label: String,
     pub(crate) command: String,
     pub(crate) cwd: PathBuf,
 }

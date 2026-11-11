@@ -4,6 +4,7 @@ mod open;
 mod places;
 mod portal;
 mod preview;
+mod tabs;
 mod ui;
 
 fn toml_string(value: &str) -> String {

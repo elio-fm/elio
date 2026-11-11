@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added multi-tab browsing with up to 10 tabs, and configurable `new_tab`, `close_tab`, next/previous-tab, and `switch_tab_1`–`switch_tab_10` bindings. ([#268], [#360])
+- Added `[tabs] new_tab_destination` to choose where new tabs open using a path or command, with an optional fallback.
 - Added `[ui] date_format` to choose relative or absolute timestamps for items. ([#381])
 - Added image previews in Contour. ([#372])
 

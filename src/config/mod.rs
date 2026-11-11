@@ -6,6 +6,7 @@ mod open;
 mod places;
 mod portal;
 mod preview;
+mod tabs;
 #[cfg(test)]
 mod tests;
 mod ui;
@@ -24,6 +25,7 @@ pub(crate) use self::{
     places::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},
     portal::{ConfigurePortalTerminal, PortalConfig, ensure_portal_terminal},
     preview::PreviewConfig,
+    tabs::{NewTabDestination, TabDestination, TabsConfig},
     ui::{DateFormat, UiConfig},
 };
 
@@ -40,6 +42,10 @@ pub(crate) fn ui() -> UiConfig {
 
 pub(crate) fn preview() -> PreviewConfig {
     loading::active_config().preview
+}
+
+pub(crate) fn tabs() -> &'static TabsConfig {
+    &loading::active_config().tabs
 }
 
 pub(crate) fn goto() -> &'static GotoConfig {

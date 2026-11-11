@@ -1,6 +1,6 @@
 use super::{
     GotoConfig, KeyBindings, LayoutConfig, OpenConfig, PlacesConfig, PortalConfig, PreviewConfig,
-    UiConfig,
+    TabsConfig, UiConfig,
 };
 #[cfg(unix)]
 use crate::elevated_session::InvocationContext;
@@ -16,6 +16,7 @@ static ACTIVE_CONFIG: OnceLock<Config> = OnceLock::new();
 pub(super) struct Config {
     pub(super) ui: UiConfig,
     pub(super) preview: PreviewConfig,
+    pub(super) tabs: TabsConfig,
     pub(super) goto: GotoConfig,
     pub(super) places: PlacesConfig,
     pub(super) layout: LayoutConfig,
@@ -28,6 +29,7 @@ pub(super) struct Config {
 struct ConfigFile {
     ui: Option<super::ui::UiConfigOverride>,
     preview: Option<super::preview::PreviewConfigOverride>,
+    tabs: Option<super::tabs::TabsConfigOverride>,
     goto: Option<super::goto::GotoConfigOverride>,
     places: Option<super::places::PlacesConfigOverride>,
     layout: Option<super::layout::LayoutConfigOverride>,
@@ -166,6 +168,7 @@ impl Config {
         Self {
             ui: UiConfig::default(),
             preview: PreviewConfig::default(),
+            tabs: TabsConfig::default(),
             goto: GotoConfig::default(),
             places: PlacesConfig::default(),
             layout: LayoutConfig::default(),
@@ -183,6 +186,9 @@ impl Config {
         }
         if let Some(preview) = parsed.preview {
             resolved.preview.apply_override(preview);
+        }
+        if let Some(tabs) = parsed.tabs {
+            resolved.tabs = TabsConfig::from_override(tabs, &resolved.tabs);
         }
         if let Some(goto) = parsed.goto {
             resolved.goto = GotoConfig::from_override(goto, &resolved.goto);

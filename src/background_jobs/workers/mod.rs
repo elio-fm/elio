@@ -11,6 +11,7 @@ pub(super) use crate::file_operations::{
 pub(super) mod archive_creation;
 pub(super) mod archive_extraction;
 pub(super) mod copy_move;
+pub(super) mod destination_command;
 pub(super) mod directory_fingerprint;
 pub(super) mod directory_item_counts;
 pub(super) mod directory_loading;
@@ -18,7 +19,6 @@ pub(super) mod directory_statistics;
 pub(super) mod duplicate_finder;
 pub(super) mod fuzzy_finder;
 pub(super) mod git_status;
-pub(super) mod goto_command;
 pub(super) mod pdf_page_inspection;
 pub(super) mod pdf_page_rendering;
 pub(super) mod preview_building;

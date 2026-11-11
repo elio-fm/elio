@@ -1,7 +1,9 @@
 use super::helpers::temp_path;
 use crate::{
     app::App,
-    background_jobs::job_results::GotoCommandBuild,
+    background_jobs::{
+        job_requests::DestinationCommandRecipient, job_results::DestinationCommandBuild,
+    },
     goto_menu::{GotoDestination, GotoMenu, GotoMenuEntry},
 };
 use std::fs;
@@ -20,9 +22,10 @@ fn failed_goto_command_keeps_the_menu_open_with_a_concise_status() {
     )]));
     app.pending_goto_command = Some(4);
 
-    assert!(app.apply_goto_command_job_result(GotoCommandBuild {
+    assert!(app.apply_goto_command_job_result(DestinationCommandBuild {
         token: 4,
-        title: "Project root".to_string(),
+        recipient: DestinationCommandRecipient::Goto,
+        label: "Project root".to_string(),
         result: Err("command failed"),
     }));
 
@@ -39,9 +42,10 @@ fn stale_goto_command_results_are_ignored() {
     let mut app = App::new_at(root.clone()).expect("app should be created");
     app.pending_goto_command = Some(5);
 
-    assert!(!app.apply_goto_command_job_result(GotoCommandBuild {
+    assert!(!app.apply_goto_command_job_result(DestinationCommandBuild {
         token: 4,
-        title: "Project root".to_string(),
+        recipient: DestinationCommandRecipient::Goto,
+        label: "Project root".to_string(),
         result: Err("command failed"),
     }));
     assert!(app.status.is_empty());

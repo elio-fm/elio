@@ -117,9 +117,10 @@ pub(crate) struct GitStatusBuild {
 }
 
 #[derive(Debug)]
-pub(crate) struct GotoCommandBuild {
+pub(crate) struct DestinationCommandBuild {
     pub(crate) token: u64,
-    pub(crate) title: String,
+    pub(crate) recipient: crate::background_jobs::job_requests::DestinationCommandRecipient,
+    pub(crate) label: String,
     pub(crate) result: Result<PathBuf, &'static str>,
 }
 
@@ -262,7 +263,7 @@ pub(crate) enum JobResult {
     DirectoryItemCount(DirectoryItemCountBuild),
     DirectoryStats(DirectoryStatsBuild),
     GitStatus(GitStatusBuild),
-    GotoCommand(GotoCommandBuild),
+    DestinationCommand(DestinationCommandBuild),
     PreviewLineCount(PreviewLineCountBuild),
     ImagePrepare(ImagePrepareBuild),
     PdfProbe(PdfProbeBuild),

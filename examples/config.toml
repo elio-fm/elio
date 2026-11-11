@@ -12,6 +12,14 @@
 # [preview]
 # tab_width = 4  # tab-stop width in columns for text/code previews (1–16, clamped)
 
+# Choose where new tabs start. Omit this setting to use the active directory.
+# Use `{ path = "..." }` or `{ command = "..." }`; `fallback` is optional and
+# uses the same forms. Paths support `~`; commands run in the active directory.
+#
+# [tabs]
+# new_tab_destination = { path = "~/Downloads" }
+# new_tab_destination = { command = "git rev-parse --show-toplevel", fallback = { path = "~" } }
+
 # Terminal used by elio's file chooser portal.
 # `elio portal enable` detects and sets this automatically when possible.
 # Supported values: kitty, ghostty, foot, footclient, wezterm, alacritty, rio,

@@ -10,6 +10,7 @@ use ratatui::layout::Rect;
 use super::screen_regions::{ScreenRegions, ScrollbarDrag};
 use crate::background_jobs::JobScheduler;
 use crate::chooser::ChooserState;
+use crate::config::TabDestination;
 use crate::duplicate_finder::DuplicateFinderState;
 use crate::file_browser::{BrowserTabs, FileBrowserState};
 #[cfg(unix)]
@@ -158,6 +159,23 @@ pub(crate) enum PendingTerminalTask {
     Zoxide,
 }
 
+pub(crate) struct NewTabTemplate {
+    pub(crate) cwd: PathBuf,
+    pub(crate) start_in_grid: bool,
+    pub(crate) zoom_level: u8,
+    pub(crate) sort_mode: crate::filesystem::SortMode,
+    pub(crate) show_hidden: bool,
+    pub(crate) in_trash: bool,
+}
+
+pub(crate) struct PendingNewTabCommand {
+    pub(crate) token: u64,
+    pub(crate) fallback: Option<TabDestination>,
+    pub(crate) template: NewTabTemplate,
+    pub(crate) submitted_at: Instant,
+    pub(crate) status_shown: bool,
+}
+
 pub struct App {
     pub(crate) file_browser: FileBrowserState,
     pub(crate) tabs: BrowserTabs,
@@ -174,7 +192,8 @@ pub struct App {
     pub(crate) input: InputRuntime,
     pub(crate) status: String,
     pub(crate) pending_goto_command: Option<u64>,
-    pub(crate) goto_command_token: u64,
+    pub(crate) pending_new_tab_command: Option<PendingNewTabCommand>,
+    pub(crate) destination_command_token: u64,
     pub(crate) should_quit: bool,
     pub(crate) should_change_directory_on_quit: bool,
     pub(crate) chooser: ChooserState,
@@ -254,7 +273,8 @@ impl App {
             },
             status: String::new(),
             pending_goto_command: None,
-            goto_command_token: 0,
+            pending_new_tab_command: None,
+            destination_command_token: 0,
             should_quit: false,
             should_change_directory_on_quit: true,
             chooser: ChooserState::default(),

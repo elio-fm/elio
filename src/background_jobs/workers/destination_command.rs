@@ -1,7 +1,13 @@
+use super::*;
 use std::{
     io::{self, Read},
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -13,7 +19,69 @@ const COMMAND_COULD_NOT_START: &str = "command could not start";
 const COMMAND_TIMED_OUT: &str = "command timed out";
 const INVALID_DIRECTORY: &str = "command did not return a valid directory";
 
-pub(crate) fn resolve_command_destination(
+pub(in crate::background_jobs) struct DestinationCommandPool {
+    request_tx: Option<mpsc::Sender<DestinationCommandRequest>>,
+    pending: Arc<AtomicUsize>,
+    worker: Option<thread::JoinHandle<()>>,
+}
+
+impl DestinationCommandPool {
+    pub(in crate::background_jobs) fn new(result_tx: mpsc::Sender<JobResult>) -> Self {
+        let (request_tx, request_rx) = mpsc::channel::<DestinationCommandRequest>();
+        let pending = Arc::new(AtomicUsize::new(0));
+        let worker_pending = Arc::clone(&pending);
+        let worker = thread::spawn(move || {
+            while let Ok(request) = request_rx.recv() {
+                let result = resolve_command_destination(&request.command, &request.cwd);
+                worker_pending.fetch_sub(1, Ordering::Relaxed);
+                if result_tx
+                    .send(JobResult::DestinationCommand(DestinationCommandBuild {
+                        token: request.token,
+                        recipient: request.recipient,
+                        label: request.label,
+                        result,
+                    }))
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+        Self {
+            request_tx: Some(request_tx),
+            pending,
+            worker: Some(worker),
+        }
+    }
+
+    pub(in crate::background_jobs) fn submit(&self, request: DestinationCommandRequest) -> bool {
+        let Some(request_tx) = &self.request_tx else {
+            return false;
+        };
+        self.pending.fetch_add(1, Ordering::Relaxed);
+        if request_tx.send(request).is_ok() {
+            true
+        } else {
+            self.pending.fetch_sub(1, Ordering::Relaxed);
+            false
+        }
+    }
+
+    pub(in crate::background_jobs) fn has_pending_work(&self) -> bool {
+        self.pending.load(Ordering::Relaxed) > 0
+    }
+}
+
+impl Drop for DestinationCommandPool {
+    fn drop(&mut self) {
+        self.request_tx = None;
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
+pub(in crate::background_jobs) fn resolve_command_destination(
     command: &str,
     cwd: &Path,
 ) -> Result<PathBuf, &'static str> {
@@ -33,7 +101,7 @@ pub(crate) fn resolve_command_destination(
     let stdout = child
         .stdout
         .take()
-        .expect("stdout is piped when starting a Go To command");
+        .expect("stdout is piped when starting a destination command");
     let reader = thread::spawn(move || {
         let mut output = Vec::new();
         stdout
@@ -69,7 +137,7 @@ pub(crate) fn resolve_command_destination(
     parse_command_output(&output)
 }
 
-pub(in crate::goto_menu) fn command_start_error(error: &io::Error) -> &'static str {
+fn command_start_error(error: &io::Error) -> &'static str {
     match error.kind() {
         io::ErrorKind::NotFound => "command not found",
         io::ErrorKind::PermissionDenied => "command permission denied",
@@ -77,7 +145,7 @@ pub(in crate::goto_menu) fn command_start_error(error: &io::Error) -> &'static s
     }
 }
 
-pub(in crate::goto_menu) fn parse_command_output(output: &[u8]) -> Result<PathBuf, &'static str> {
+fn parse_command_output(output: &[u8]) -> Result<PathBuf, &'static str> {
     let output = std::str::from_utf8(output).map_err(|_| INVALID_DIRECTORY)?;
     let output = output.strip_suffix('\n').unwrap_or(output);
     let output = output.strip_suffix('\r').unwrap_or(output);
@@ -89,11 +157,12 @@ pub(in crate::goto_menu) fn parse_command_output(output: &[u8]) -> Result<PathBu
     }
 
     let path = PathBuf::from(output);
-    if !path.is_absolute() {
-        return Err(INVALID_DIRECTORY);
-    }
-    if !path.is_dir() {
+    if !path.is_absolute() || !path.is_dir() {
         return Err(INVALID_DIRECTORY);
     }
     Ok(path)
 }
+
+#[cfg(test)]
+#[path = "tests/destination_command.rs"]
+mod tests;

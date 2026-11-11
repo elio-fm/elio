@@ -1,5 +1,5 @@
 use super::super::App;
-use crate::background_jobs::job_results::JobResult;
+use crate::background_jobs::{job_requests::DestinationCommandRecipient, job_results::JobResult};
 use std::time::{Duration, Instant};
 
 const JOB_RESULT_APPLY_MAX_PER_TICK: usize = 12;
@@ -7,7 +7,8 @@ const JOB_RESULT_APPLY_TIME_BUDGET: Duration = Duration::from_millis(2);
 
 impl App {
     pub fn process_background_jobs(&mut self) -> bool {
-        let mut dirty = self.process_folder_sizes();
+        let mut dirty = self.show_pending_new_tab_command_status(Instant::now());
+        dirty |= self.process_folder_sizes();
         let started_at = Instant::now();
         let mut processed = 0usize;
 
@@ -38,7 +39,12 @@ impl App {
                 }
                 JobResult::DirectoryStats(build) => self.apply_directory_stats_job_result(build),
                 JobResult::GitStatus(build) => self.apply_git_status_job_result(build),
-                JobResult::GotoCommand(build) => self.apply_goto_command_job_result(build),
+                JobResult::DestinationCommand(build) => match build.recipient {
+                    DestinationCommandRecipient::Goto => self.apply_goto_command_job_result(build),
+                    DestinationCommandRecipient::NewTab => {
+                        self.apply_new_tab_command_job_result(build)
+                    }
+                },
                 JobResult::PreviewLineCount(build) => {
                     self.apply_preview_line_count_job_result(build)
                 }
