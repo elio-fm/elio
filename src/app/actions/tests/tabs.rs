@@ -70,6 +70,73 @@ fn switching_to_a_missing_tab_does_nothing_by_default() {
 }
 
 #[test]
+fn closing_the_last_tab_keeps_it_open_by_default() {
+    let root = temp_root();
+    let mut app = App::new_at(root.clone()).expect("app should load temporary root");
+
+    app.close_tab(0)
+        .expect("closing the last tab should keep it open by default");
+
+    assert_eq!(app.tabs.len(), 1);
+    assert!(!app.should_quit);
+    assert_eq!(app.status, "Cannot close the last tab");
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("temporary root should be removed");
+}
+
+#[test]
+fn configured_close_last_tab_uses_the_selected_quit_mode() {
+    const SETTING_ENV: &str = "ELIO_TEST_CLOSE_LAST_TAB";
+    let mode = std::env::var(SETTING_ENV).ok();
+    if mode.is_none() {
+        for mode in ["quit", "quit_without_cd"] {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    concat!(
+                        module_path!(),
+                        "::configured_close_last_tab_uses_the_selected_quit_mode"
+                    )
+                    .trim_start_matches("elio::"),
+                ])
+                .env(SETTING_ENV, mode)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "configured close-last-tab {mode}:\n{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+        }
+        return;
+    }
+
+    let mode = mode.expect("isolated test mode should be set");
+    let root = temp_root();
+    fs::write(
+        root.join("config.toml"),
+        format!("[tabs]\nclose_last_tab = \"{mode}\"\n"),
+    )
+    .expect("config should be written");
+    crate::config::initialize(Some(&root.join("config.toml"))).expect("config should load");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temporary root");
+    app.close_tab(0)
+        .expect("configured last-tab close should request quit");
+
+    assert!(app.should_quit);
+    assert_eq!(app.should_change_directory_on_quit, mode == "quit");
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("temporary root should be removed");
+}
+
+#[test]
 fn configured_switch_tab_creates_missing_tabs_using_new_tab_destination() {
     const SETTING_ENV: &str = "ELIO_TEST_SWITCH_TAB_CREATES_MISSING";
     if std::env::var_os(SETTING_ENV).is_none() {

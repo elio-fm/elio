@@ -7,7 +7,7 @@ use crate::{
         job_requests::{DestinationCommandRecipient, DestinationCommandRequest},
         job_results::DestinationCommandBuild,
     },
-    config::{NewTabDestination, TabDestination},
+    config::{CloseLastTabBehavior, NewTabDestination, TabDestination},
     file_browser::{FileBrowserState, MAX_TABS},
 };
 use anyhow::Result;
@@ -221,7 +221,13 @@ impl App {
             return Ok(());
         }
         if self.tabs.len() == 1 {
-            self.status = "Cannot close the only tab".to_string();
+            match crate::config::tabs().close_last_tab {
+                CloseLastTabBehavior::KeepOpen => {
+                    self.status = "Cannot close the last tab".to_string();
+                }
+                CloseLastTabBehavior::Quit => self.quit(),
+                CloseLastTabBehavior::QuitWithoutCd => self.quit_without_cd(),
+            }
             return Ok(());
         }
 

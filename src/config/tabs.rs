@@ -9,6 +9,16 @@ use std::{collections::BTreeMap, path::PathBuf};
 pub(crate) struct TabsConfig {
     pub(crate) new_tab_destination: Option<NewTabDestination>,
     pub(crate) switch_tab_creates_missing: bool,
+    pub(crate) close_last_tab: CloseLastTabBehavior,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum CloseLastTabBehavior {
+    #[default]
+    KeepOpen,
+    Quit,
+    QuitWithoutCd,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -27,6 +37,7 @@ pub(crate) enum TabDestination {
 pub(super) struct TabsConfigOverride {
     new_tab_destination: Option<toml::Value>,
     switch_tab_creates_missing: Option<bool>,
+    close_last_tab: Option<CloseLastTabBehavior>,
     #[serde(flatten)]
     unknown: BTreeMap<String, toml::Value>,
 }
@@ -44,6 +55,9 @@ impl TabsConfig {
         }
         if let Some(switch_tab_creates_missing) = overrides.switch_tab_creates_missing {
             resolved.switch_tab_creates_missing = switch_tab_creates_missing;
+        }
+        if let Some(close_last_tab) = overrides.close_last_tab {
+            resolved.close_last_tab = close_last_tab;
         }
         resolved
     }
