@@ -19,6 +19,7 @@
 # [tabs]
 # new_tab_destination = { path = "~/Downloads" }
 # new_tab_destination = { command = "git rev-parse --show-toplevel", fallback = { path = "~" } }
+# switch_tab_creates_missing = true # For example, if tabs 1 and 2 exist, switch_tab_4 creates tabs 3 and 4.
 
 # Terminal used by elio's file chooser portal.
 # `elio portal enable` detects and sets this automatically when possible.

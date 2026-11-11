@@ -8,6 +8,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct TabsConfig {
     pub(crate) new_tab_destination: Option<NewTabDestination>,
+    pub(crate) switch_tab_creates_missing: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -25,6 +26,7 @@ pub(crate) enum TabDestination {
 #[derive(Deserialize, Default)]
 pub(super) struct TabsConfigOverride {
     new_tab_destination: Option<toml::Value>,
+    switch_tab_creates_missing: Option<bool>,
     #[serde(flatten)]
     unknown: BTreeMap<String, toml::Value>,
 }
@@ -39,6 +41,9 @@ impl TabsConfig {
         if let Some(destination) = overrides.new_tab_destination {
             resolved.new_tab_destination =
                 NewTabDestination::from_toml_value(&destination, "tabs.new_tab_destination");
+        }
+        if let Some(switch_tab_creates_missing) = overrides.switch_tab_creates_missing {
+            resolved.switch_tab_creates_missing = switch_tab_creates_missing;
         }
         resolved
     }
