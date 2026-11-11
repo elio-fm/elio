@@ -1,15 +1,22 @@
 use super::super::super::App;
 use std::{
     fs,
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
+
+static TEMP_ROOT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn temp_root() -> std::path::PathBuf {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system time should be after unix epoch")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("elio-tabs-{unique}"));
+    let sequence = TEMP_ROOT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "elio-tabs-{}-{unique}-{sequence}",
+        std::process::id()
+    ));
     fs::create_dir_all(&root).expect("temporary root should be created");
     root.canonicalize().unwrap_or(root)
 }
