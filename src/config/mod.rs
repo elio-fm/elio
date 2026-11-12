@@ -25,7 +25,7 @@ pub(crate) use self::{
     places::{BuiltinPlace, PlaceEntrySpec, PlacesConfig},
     portal::{ConfigurePortalTerminal, PortalConfig, ensure_portal_terminal},
     preview::PreviewConfig,
-    tabs::{CloseLastTabBehavior, NewTabDestination, TabDestination, TabsConfig},
+    tabs::{CloseLastTabBehavior, NewTabDestination, NewTabPosition, TabDestination, TabsConfig},
     ui::{DateFormat, UiConfig},
 };
 

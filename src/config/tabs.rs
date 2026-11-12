@@ -8,8 +8,17 @@ use std::{collections::BTreeMap, path::PathBuf};
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct TabsConfig {
     pub(crate) new_tab_destination: Option<NewTabDestination>,
+    pub(crate) new_tab_position: NewTabPosition,
     pub(crate) switch_tab_creates_missing: bool,
     pub(crate) close_last_tab: CloseLastTabBehavior,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum NewTabPosition {
+    #[default]
+    End,
+    AfterCurrent,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -36,6 +45,7 @@ pub(crate) enum TabDestination {
 #[derive(Deserialize, Default)]
 pub(super) struct TabsConfigOverride {
     new_tab_destination: Option<toml::Value>,
+    new_tab_position: Option<NewTabPosition>,
     switch_tab_creates_missing: Option<bool>,
     close_last_tab: Option<CloseLastTabBehavior>,
     #[serde(flatten)]
@@ -52,6 +62,9 @@ impl TabsConfig {
         if let Some(destination) = overrides.new_tab_destination {
             resolved.new_tab_destination =
                 NewTabDestination::from_toml_value(&destination, "tabs.new_tab_destination");
+        }
+        if let Some(position) = overrides.new_tab_position {
+            resolved.new_tab_position = position;
         }
         if let Some(switch_tab_creates_missing) = overrides.switch_tab_creates_missing {
             resolved.switch_tab_creates_missing = switch_tab_creates_missing;

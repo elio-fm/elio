@@ -53,6 +53,74 @@ fn new_tab_keeps_the_current_directory_and_closing_returns_to_the_previous_tab()
 }
 
 #[test]
+fn configured_new_tab_position_controls_new_and_missing_tab_placement() {
+    const SETTING_ENV: &str = "ELIO_TEST_NEW_TAB_POSITION";
+    let position = std::env::var(SETTING_ENV).ok();
+    if position.is_none() {
+        for position in ["end", "after_current"] {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    concat!(
+                        module_path!(),
+                        "::configured_new_tab_position_controls_new_and_missing_tab_placement"
+                    )
+                    .trim_start_matches("elio::"),
+                ])
+                .env(SETTING_ENV, position)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "configured new-tab position {position}:\n{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+        }
+        return;
+    }
+
+    let position = position.expect("isolated test position should be set");
+    let root = temp_root();
+    fs::write(
+        root.join("config.toml"),
+        format!("[tabs]\nnew_tab_position = \"{position}\"\nswitch_tab_creates_missing = true\n"),
+    )
+    .expect("config should be written");
+    crate::config::initialize(Some(&root.join("config.toml"))).expect("config should load");
+
+    let mut app = App::new_at(root.clone()).expect("app should load temporary root");
+    app.new_tab().expect("second tab should open");
+    app.activate_tab(0).expect("first tab should activate");
+    app.new_tab().expect("third tab should open");
+
+    assert_eq!(app.tabs.len(), 3);
+    assert_eq!(
+        app.tabs.active_index(),
+        if position == "end" { 2 } else { 1 }
+    );
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+
+    let mut app = App::new_at(root.clone()).expect("app should load temporary root");
+    app.new_tab().expect("second tab should open");
+    app.file_browser.show_hidden = true;
+    app.activate_tab(0).expect("first tab should activate");
+    app.activate_tab(2)
+        .expect("switching to tab three should create a missing tab");
+
+    assert_eq!(app.tabs.len(), 3);
+    assert_eq!(app.tabs.active_index(), 2);
+    assert_eq!(app.file_browser.show_hidden, position == "after_current");
+
+    app.file_browser.directory_runtime.watch = None;
+    drop(app);
+    fs::remove_dir_all(root).expect("temporary root should be removed");
+}
+
+#[test]
 fn switching_to_a_missing_tab_does_nothing_by_default() {
     let root = temp_root();
     let mut app = App::new_at(root.clone()).expect("app should load temporary root");

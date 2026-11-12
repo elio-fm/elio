@@ -37,6 +37,35 @@ fn closing_an_inactive_tab_keeps_the_active_browser_and_renumbers_it() {
 }
 
 #[test]
+fn opening_at_the_end_preserves_existing_tab_positions() {
+    let mut tabs = BrowserTabs::new();
+    let mut active = browser("/one");
+    tabs.open_after_active(&mut active, browser("/two"));
+    tabs.open_after_active(&mut active, browser("/three"));
+    assert!(tabs.activate(&mut active, 0));
+
+    tabs.open_at_end(&mut active, browser("/four"));
+
+    assert_eq!(tabs.active_index(), 3);
+    assert_eq!(
+        tabs.cwd_at(&active, 0),
+        Some(PathBuf::from("/one").as_path())
+    );
+    assert_eq!(
+        tabs.cwd_at(&active, 1),
+        Some(PathBuf::from("/two").as_path())
+    );
+    assert_eq!(
+        tabs.cwd_at(&active, 2),
+        Some(PathBuf::from("/three").as_path())
+    );
+    assert_eq!(
+        tabs.cwd_at(&active, 3),
+        Some(PathBuf::from("/four").as_path())
+    );
+}
+
+#[test]
 fn cycling_wraps_and_a_single_tab_cannot_be_closed() {
     let mut tabs = BrowserTabs::new();
     let mut active = browser("/one");
