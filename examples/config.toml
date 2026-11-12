@@ -19,6 +19,7 @@
 # [tabs]
 # new_tab_destination = { path = "~/Downloads" }
 # new_tab_destination = { command = "git rev-parse --show-toplevel", fallback = { path = "~" } }
+# new_tab_position = "end" # "end" adds new tabs at the end; "after_current" adds them after the active tab.
 # switch_tab_creates_missing = true # For example, if tabs 1 and 2 exist, switch_tab_4 creates tabs 3 and 4.
 # close_tab closes the active tab unless it is the last one. These options make it exit in that case:
 # close_last_tab = "quit"             # Exit like quit (cd on exit when shell integration is installed).

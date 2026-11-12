@@ -80,6 +80,13 @@ impl BrowserTabs {
         self.tabs.insert(self.active, None);
     }
 
+    pub(crate) fn open_at_end(&mut self, active: &mut FileBrowserState, new: FileBrowserState) {
+        debug_assert!(self.can_open());
+        self.tabs[self.active] = Some(std::mem::replace(active, new));
+        self.active = self.tabs.len();
+        self.tabs.push(None);
+    }
+
     pub(crate) fn activate(&mut self, active: &mut FileBrowserState, index: usize) -> bool {
         if index >= self.len() || index == self.active {
             return false;

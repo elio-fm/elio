@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added multi-tab browsing with up to 10 tabs, and configurable `new_tab`, `close_tab`, next/previous-tab, and `switch_tab_1`–`switch_tab_10` bindings. ([#268], [#360])
 - Added `[tabs] new_tab_destination` to choose where new tabs open using a path or command, with an optional fallback.
+- Added `[tabs] new_tab_position` to choose whether new tabs open at the end or after the active tab.
 - Added `[tabs] switch_tab_creates_missing` to create missing tabs when switching tabs. ([#384])
 - Added `[tabs] close_last_tab` to let `close_tab` exit when used on the last tab, with or without changing directory. ([#384])
 - Added `[ui] date_format` to choose relative or absolute timestamps for items. ([#381])

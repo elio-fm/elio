@@ -7,7 +7,7 @@ use crate::{
         job_requests::{DestinationCommandRecipient, DestinationCommandRequest},
         job_results::DestinationCommandBuild,
     },
-    config::{CloseLastTabBehavior, NewTabDestination, TabDestination},
+    config::{CloseLastTabBehavior, NewTabDestination, NewTabPosition, TabDestination},
     file_browser::{FileBrowserState, MAX_TABS},
 };
 use anyhow::Result;
@@ -202,7 +202,12 @@ impl App {
         );
         browser.sort_mode = template.sort_mode;
         browser.in_trash = destination.in_trash;
-        self.tabs.open_after_active(&mut self.file_browser, browser);
+        match crate::config::tabs().new_tab_position {
+            NewTabPosition::End => self.tabs.open_at_end(&mut self.file_browser, browser),
+            NewTabPosition::AfterCurrent => {
+                self.tabs.open_after_active(&mut self.file_browser, browser)
+            }
+        }
         self.paged_preview_tabs
             .insert(self.tabs.active_index(), Default::default());
         debug_assert_eq!(self.tabs.len(), self.paged_preview_tabs.len());
