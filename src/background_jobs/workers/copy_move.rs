@@ -246,7 +246,7 @@ fn run_paste(
         }
 
         let ok = match request.op {
-            ClipOp::Yank => match copy_recursive(src, &dest) {
+            ClipOp::Yank => match copy_recursive(src, &dest, false) {
                 Ok(()) => true,
                 Err(e) => {
                     errors.push(format!("\"{}\" could not be copied: {e}", file_name));
@@ -256,7 +256,7 @@ fn run_paste(
             ClipOp::Cut => match fs::rename(src, &dest) {
                 Ok(()) => true,
                 Err(e) if e.kind() == std::io::ErrorKind::CrossesDevices => {
-                    match copy_recursive(src, &dest) {
+                    match copy_recursive(src, &dest, true) {
                         Ok(()) => {
                             let del = if src.is_dir() {
                                 fs::remove_dir_all(src)
@@ -368,10 +368,10 @@ fn format_copy_name(stem: &str, ext: Option<&str>, suffix: Option<u32>) -> Strin
 }
 
 /// Recursively copy `src` to `dest`.
-fn copy_recursive(src: &Path, dest: &Path) -> anyhow::Result<()> {
+fn copy_recursive(src: &Path, dest: &Path, keep_symlinks: bool) -> anyhow::Result<()> {
     let metadata = fs::symlink_metadata(src)
         .map_err(|e| anyhow::anyhow!("Cannot read \"{}\": {e}", src.display()))?;
-    if metadata.file_type().is_symlink() && !src.exists() {
+    if metadata.file_type().is_symlink() && (keep_symlinks || !src.exists()) {
         return copy_symlink(src, dest);
     }
     if source_contains_destination(src, dest) {
@@ -385,8 +385,15 @@ fn copy_recursive(src: &Path, dest: &Path) -> anyhow::Result<()> {
         {
             let child = entry_result
                 .map_err(|e| anyhow::anyhow!("Cannot read entry in \"{}\": {e}", src.display()))?;
-            copy_recursive(&child.path(), &dest.join(child.file_name()))?;
+            copy_recursive(&child.path(), &dest.join(child.file_name()), keep_symlinks)?;
         }
+        // Set after the children are in place, so a read-only folder can still be filled.
+        let permissions = fs::metadata(src)
+            .map_err(|e| anyhow::anyhow!("Cannot read \"{}\": {e}", src.display()))?
+            .permissions();
+        fs::set_permissions(dest, permissions).map_err(|e| {
+            anyhow::anyhow!("Cannot set permissions on \"{}\": {e}", dest.display())
+        })?;
     } else {
         fs::copy(src, dest).map_err(|e| {
             anyhow::anyhow!(

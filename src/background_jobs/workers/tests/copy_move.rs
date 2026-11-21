@@ -56,7 +56,7 @@ fn copy_recursive_refuses_directory_into_itself() {
     let dest = source.join("source");
     fs::create_dir_all(&source).expect("failed to create source dir");
     fs::write(source.join("file.txt"), "data").expect("failed to write source file");
-    let error = copy_recursive(&source, &dest).expect_err("copy should be rejected");
+    let error = copy_recursive(&source, &dest, false).expect_err("copy should be rejected");
     assert!(
         error
             .to_string()
@@ -86,5 +86,33 @@ fn source_contains_destination_only_blocks_directory_descendants() {
         &source_file,
         &source_file.join("child")
     ));
+    fs::remove_dir_all(&root).expect("failed to remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_recursive_for_move_keeps_symlinks_and_folder_permissions() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+
+    let root = temp_path("move-links");
+    let source = root.join("source");
+    let dest = root.join("dest");
+    fs::create_dir_all(source.join("private")).expect("failed to create source dir");
+    fs::write(source.join("real.txt"), "data").expect("failed to write source file");
+    symlink("real.txt", source.join("link")).expect("failed to create symlink");
+    fs::set_permissions(source.join("private"), fs::Permissions::from_mode(0o700))
+        .expect("failed to set permissions");
+
+    copy_recursive(&source, &dest, true).expect("copy should succeed");
+
+    assert_eq!(
+        fs::read_link(dest.join("link")).expect("link should stay a symlink"),
+        PathBuf::from("real.txt")
+    );
+    let mode = fs::metadata(dest.join("private"))
+        .expect("private dir should exist")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o700);
     fs::remove_dir_all(&root).expect("failed to remove temp root");
 }
