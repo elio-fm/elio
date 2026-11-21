@@ -86,7 +86,6 @@ fn try_init_terminal() -> Result<(AppTerminal, Drainer, kitty_dnd::KittyDndRunti
         terminal_output,
         "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h"
     )?;
-    write!(terminal_output, "\x1b[>4;1m")?;
     set_kitty_elio_active(&mut terminal_output, true)?;
 
     if kitty_dnd.is_enabled() {
@@ -99,6 +98,8 @@ fn try_init_terminal() -> Result<(AppTerminal, Drainer, kitty_dnd::KittyDndRunti
 
     terminal_output.flush()?;
     push_keyboard_enhancement_if_supported(&mut terminal_output)?;
+    enable_modify_other_keys_fallback(&mut terminal_output)?;
+    terminal_output.flush()?;
 
     let writer = ThreadedWriter::new(frame_output);
     let drainer = writer.drainer();
@@ -148,7 +149,7 @@ fn suspend_terminal(
     if kitty_dnd.is_enabled() {
         write!(backend, "{}", kitty_dnd::disable_sequence())?;
     }
-    write!(backend, "\x1b[>4;0m")?;
+    disable_modify_other_keys_fallback(backend)?;
     write!(backend, "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l")?;
     backend.flush()?;
     pop_keyboard_enhancement_if_supported(terminal.backend_mut())?;
@@ -187,7 +188,7 @@ fn resume_terminal(
             EnableFocusChange,
         )?;
         write!(backend, "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h")?;
-        write!(backend, "\x1b[>4;1m")?;
+        enable_modify_other_keys_fallback(backend)?;
         set_kitty_elio_active(backend, true)?;
         if kitty_dnd.is_enabled() {
             write!(
@@ -215,7 +216,7 @@ fn restore_terminal(
     if kitty_dnd.is_enabled() {
         write!(backend, "{}", kitty_dnd::disable_sequence())?;
     }
-    write!(backend, "\x1b[>4;0m")?;
+    disable_modify_other_keys_fallback(backend)?;
     write!(backend, "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l")?;
     backend.flush()?;
     pop_keyboard_enhancement_if_supported(terminal.backend_mut())?;
@@ -237,7 +238,7 @@ fn restore_terminal(
 fn cleanup_terminal_state() -> io::Result<()> {
     if let Ok((mut terminal_output, _)) = terminal_output_handles() {
         let _ = set_kitty_elio_active(&mut terminal_output, false);
-        let _ = write!(terminal_output, "\x1b[>4;0m");
+        let _ = disable_modify_other_keys_fallback(&mut terminal_output);
         let _ = write!(terminal_output, "{}", kitty_dnd::disable_sequence());
         let _ = write!(
             terminal_output,
@@ -257,13 +258,37 @@ fn cleanup_terminal_state() -> io::Result<()> {
     Ok(())
 }
 
-fn push_keyboard_enhancement_if_supported<W: Write>(writer: &mut W) -> io::Result<()> {
-    if !io::stdout().is_terminal() {
+static KEYBOARD_ENHANCEMENT_SUPPORTED: OnceLock<bool> = OnceLock::new();
+
+/// Whether the terminal speaks the kitty keyboard protocol. Queried once, on
+/// first use, and cached for the rest of the session.
+fn keyboard_enhancement_supported() -> bool {
+    io::stdout().is_terminal()
+        && *KEYBOARD_ENHANCEMENT_SUPPORTED
+            .get_or_init(|| matches!(supports_keyboard_enhancement(), Ok(true)))
+}
+
+/// xterm's modifyOtherKeys is only a fallback for terminals without the kitty
+/// keyboard protocol, which supersedes it (kitty logs a warning when both are
+/// requested).
+fn enable_modify_other_keys_fallback<W: Write>(writer: &mut W) -> io::Result<()> {
+    if keyboard_enhancement_supported() {
         return Ok(());
     }
+    write!(writer, "\x1b[>4;1m")
+}
 
-    static SUPPORTED: OnceLock<bool> = OnceLock::new();
-    if !*SUPPORTED.get_or_init(|| matches!(supports_keyboard_enhancement(), Ok(true))) {
+/// Only reads the cached result, so cleanup never queries the terminal. When
+/// support is unknown, resetting modifyOtherKeys is harmless.
+fn disable_modify_other_keys_fallback<W: Write>(writer: &mut W) -> io::Result<()> {
+    if KEYBOARD_ENHANCEMENT_SUPPORTED.get() == Some(&true) {
+        return Ok(());
+    }
+    write!(writer, "\x1b[>4;0m")
+}
+
+fn push_keyboard_enhancement_if_supported<W: Write>(writer: &mut W) -> io::Result<()> {
+    if !keyboard_enhancement_supported() {
         return Ok(());
     }
 
