@@ -130,12 +130,11 @@ pub(super) fn render_raster_to_png_with_ffmpeg(
     }
 
     let mut command = Command::new("ffmpeg");
-    command
-        .arg("-v")
-        .arg("error")
-        .arg("-y")
-        .arg("-i")
-        .arg(input_path);
+    command.arg("-v").arg("error").arg("-y");
+    if options.format == StaticImageFormat::Heif {
+        command.arg("-noautorotate");
+    }
+    command.arg("-i").arg(input_path);
     let scale = scale_filter(target_width_px, target_height_px);
     if let Some(filter) = options
         .heif_render_info
@@ -154,7 +153,12 @@ pub(super) fn render_raster_to_png_with_ffmpeg(
         } else {
             "-vf"
         });
-        command.arg(scale);
+        let filter = options
+            .heif_render_info
+            .and_then(HeifRenderInfo::transform_filter)
+            .map(|transform| format!("{transform},{scale}"))
+            .unwrap_or(scale);
+        command.arg(filter);
     }
     command.arg("-frames:v").arg("1");
     command.args(ffmpeg_raster_render_args(options.force_render_to_cache));
