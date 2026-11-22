@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed Sixel previews redrawing incorrectly after closing overlays in tmux.
 - Fixed text clipboard copying over SSH when terminal identification variables are unavailable. ([#392])
 - Fixed a Kitty warning caused by enabling `modifyOtherKeys` alongside keyboard enhancement. ([#404])
+- Fixed HEIC image previews displaying with incorrect orientation. ([#403])
 
 ## [1.15.0] - 2026-11-02
 
@@ -449,6 +450,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
 [#404]: https://github.com/elio-fm/elio/issues/404
+[#403]: https://github.com/elio-fm/elio/issues/403
 [#392]: https://github.com/elio-fm/elio/issues/392
 [#384]: https://github.com/elio-fm/elio/issues/384
 [#381]: https://github.com/elio-fm/elio/issues/381

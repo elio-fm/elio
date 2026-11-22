@@ -31,7 +31,7 @@ const STATIC_IMAGE_INLINE_EXTERNAL_PREPARE_MAX_BYTES: u64 = 16 * 1024 * 1024;
 /// payload to make their UI unresponsive.
 pub(crate) const STATIC_IMAGE_SOURCE_PASSTHROUGH_MAX_BYTES: u64 = 700 * 1024;
 const STATIC_IMAGE_RENDER_CACHE_VERSION: usize = 6;
-const HEIF_RENDER_CACHE_VERSION: usize = 2;
+const HEIF_RENDER_CACHE_VERSION: usize = 3;
 
 /// Parameters needed to pre-encode a Sixel image alongside its rendered file.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
