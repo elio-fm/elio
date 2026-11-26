@@ -93,6 +93,19 @@ fn term_program_and_term_classify_the_supported_set() {
 
 #[test]
 fn nearest_recognized_parent_terminal_takes_priority() {
+    for (command, expected) in [
+        ("/usr/bin/lxterminal", TerminalAdapter::Lxterminal),
+        ("/usr/bin/contour", TerminalAdapter::Contour),
+    ] {
+        assert_eq!(
+            detect(&[("TERM", "xterm-256color")], &["bash", command]),
+            Some(expected)
+        );
+        assert_eq!(
+            detect(&[("TERM_PROGRAM", expected.name())], &[]),
+            Some(expected)
+        );
+    }
     assert_eq!(
         detect(
             &[("TERM", "screen")],

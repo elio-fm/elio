@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `[tabs] close_last_tab` to let `close_tab` exit when used on the last tab, with or without changing directory. ([#384])
 - Added `[ui] date_format` to choose relative or absolute timestamps for items. ([#381])
 - Added image previews in Contour. ([#372])
+- Added FileChooser portal support for LXTerminal and Contour. ([#410])
 
 ### Changed
 
@@ -449,6 +450,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/elio-fm/elio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/elio-fm/elio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/elio-fm/elio/releases/tag/v1.0.0
+[#410]: https://github.com/elio-fm/elio/issues/410
 [#404]: https://github.com/elio-fm/elio/issues/404
 [#403]: https://github.com/elio-fm/elio/issues/403
 [#392]: https://github.com/elio-fm/elio/issues/392
