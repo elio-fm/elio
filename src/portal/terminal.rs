@@ -21,6 +21,8 @@ pub enum TerminalAdapter {
     #[serde(rename = "gnome-terminal")]
     Gnome,
     Xterm,
+    Lxterminal,
+    Contour,
 }
 
 impl TerminalAdapter {
@@ -36,6 +38,8 @@ impl TerminalAdapter {
             "konsole" => Some(Self::Konsole),
             "gnome-terminal" => Some(Self::Gnome),
             "xterm" => Some(Self::Xterm),
+            "lxterminal" => Some(Self::Lxterminal),
+            "contour" => Some(Self::Contour),
             _ => None,
         }
     }
@@ -52,6 +56,8 @@ impl TerminalAdapter {
             Self::Konsole => "konsole",
             Self::Gnome => "gnome-terminal",
             Self::Xterm => "xterm",
+            Self::Lxterminal => "lxterminal",
+            Self::Contour => "contour",
         }
     }
 
@@ -120,6 +126,8 @@ impl TerminalAdapter {
                 APP_ID.into(),
                 "-e".into(),
             ],
+            Self::Lxterminal => vec!["--title".into(), TITLE.into(), "-e".into()],
+            Self::Contour => vec!["--class".into(), APP_ID.into()],
         };
         args.extend_from_slice(child);
         args
@@ -211,6 +219,8 @@ fn classify_name(name: &str) -> Option<TerminalAdapter> {
         "konsole" => Some(TerminalAdapter::Konsole),
         "gnome-terminal" | "gnome-terminal-server" => Some(TerminalAdapter::Gnome),
         "xterm" => Some(TerminalAdapter::Xterm),
+        "lxterminal" => Some(TerminalAdapter::Lxterminal),
+        "contour" => Some(TerminalAdapter::Contour),
         _ => None,
     }
 }

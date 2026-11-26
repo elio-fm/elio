@@ -91,6 +91,14 @@ fn chooser_args_give_portal_windows_a_stable_identity() {
                 "-e",
             ][..],
         ),
+        (
+            TerminalAdapter::Lxterminal,
+            &["--title", "elio File Chooser", "-e"][..],
+        ),
+        (
+            TerminalAdapter::Contour,
+            &["--class", "io.github.elio_fm.elio.filechooser"][..],
+        ),
     ];
 
     for (terminal, prefix) in cases {
@@ -124,6 +132,8 @@ fn supported_config_names_round_trip() {
         "konsole",
         "gnome-terminal",
         "xterm",
+        "lxterminal",
+        "contour",
     ] {
         assert_eq!(TerminalAdapter::from_name(name).unwrap().name(), name);
     }

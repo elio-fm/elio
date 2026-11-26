@@ -26,6 +26,8 @@ fn portal_terminal_accepts_the_canonical_names() {
         ("rio", TerminalAdapter::Rio),
         ("konsole", TerminalAdapter::Konsole),
         ("gnome-terminal", TerminalAdapter::Gnome),
+        ("lxterminal", TerminalAdapter::Lxterminal),
+        ("contour", TerminalAdapter::Contour),
         ("xterm", TerminalAdapter::Xterm),
     ];
 
